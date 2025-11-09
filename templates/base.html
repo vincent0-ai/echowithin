@@ -1,0 +1,24 @@
+
+<html>
+
+<head>
+    <title>Echo within</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename = "styles.css")}}">
+    <h1>Echo Within</h1>
+</head>
+{%block body%} {%endblock%}
+<body>
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for message in messages %}
+                {{message}}
+            {% endfor %}
+        {%endif%}
+    {% endwith%}
+
+
+</body>
+
+{%block content%} {%endblock%}
+
+</html>

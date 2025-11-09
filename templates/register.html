@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h2>Register</h2>
+<br>
+{% endblock %}
+{%block content%}
+    <div class="login">
+        <form method="POST" action="{{url_for("register")}}">
+        <label for="username">Username</label>
+        <input type="text" name="username" placeholder="Username" required>
+        
+        <label for="password">Password</label>
+        <input type="password" name="password" placeholder="Password" required>
+
+        <button type="submit">Submit</button>
+
+    </div>
+{% endblock%}

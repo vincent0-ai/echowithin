@@ -1,20 +1,27 @@
 
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <title>Echo within</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename = "styles.css")}}">
-    <h1>Echo Within</h1>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="{{ url_for('static', filename = "coffee-bean.png")}}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename = "style.css")}}">
+    <script src="{{ url_for('static', filename = "script.js")}}" defer></script>
+    <title>Login Screen</title>
 </head>
+
+
 {%block body%} {%endblock%}
 <body>
-    {% with messages = get_flashed_messages() %}
+    <div class="flash-messages">
+    {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            {% for message in messages %}
-                {{message}}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
             {% endfor %}
         {%endif%}
     {% endwith%}
+    </div>
 
 
 </body>

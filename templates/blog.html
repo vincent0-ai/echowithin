@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="navbar">
+    <a href="#" class="nav-brand">EchoWithin</a>
+    <div class="nav-links">
+        <a href="#">Home</a>
+        <a href="#">About</a>
+        {% if 'username' in session %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="blog-container">
+    <header class="blog-header">
+        <h1>Share Your Thoughts</h1>
+        <p>A place for our community to connect and share.</p>
+    </header>
+
+    <div class="create-post-section">
+        <h2>Create a New Post</h2>
+        <form action="#" method="POST" class="post-form">
+            <input type="text" name="title" placeholder="Post Title" class="form-input" required>
+            <textarea name="content" placeholder="What's on your mind, {{ session.get('username', 'guest') }}?" rows="6" class="form-input" required></textarea>
+            <button type="submit" class="form-button">Publish Post</button>
+        </form>
+    </div>
+
+    <div class="posts-section">
+        <h2>Recent Posts</h2>
+        <div class="posts-list">
+            {# This is where you would loop through posts from your database #}
+            {# Example: {% for post in posts %} #}
+            <div class="post-item">
+                <h3>The Journey Begins</h3>
+                <p>This is the first post on our new blog! We're excited to see what our community will share. The possibilities are endless...</p>
+                <div class="post-meta">Posted by <strong>Admin</strong> on Oct 26, 2023</div>
+            </div>
+            {# {% endfor %} #}
+        </div>
+    </div>
+</div>
+{% endblock %}

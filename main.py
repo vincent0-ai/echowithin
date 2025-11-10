@@ -7,13 +7,9 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from secret import SECRET 
-from flask_bootstrap import Bootstrap4
 
  # Initialise Flask
 app = Flask(__name__)
-
-# Initialise Bootstrap
-#bootstrap = Bootstrap4(app)
 
 #Initialise the Login Manager
 login_manager = LoginManager(app)
@@ -50,20 +46,20 @@ def register():
         if username and password:
             user = users_conf.find_one({'username': username})
             if user:
-                flash("Try using a different username")
-                return render_template("register.html")
+                flash("Try using a different username", "danger")
+                return render_template("auth.html")
             else:
                 password = generate_password_hash(password)
                 user = users_conf.insert_one({
                     'username' : username,
                     'password' : password
                 })
-                flash("Proceed to log in")
+                flash("Proceed to log in", "success")
             return redirect(url_for("login"))
         else:
-            flash('Username and password are required')
-            return render_template("register.html")
-    return render_template("register.html")
+            flash('Username and password are required', "danger")
+            return render_template("auth.html")
+    return render_template("auth.html")
     
 
 
@@ -80,24 +76,30 @@ def login():
             session['username'] = user['username']
             return redirect(url_for('home'))
         else:
-            flash("Wrong details provided")
-    return render_template("login.html")
+            flash("Wrong details provided", "danger")
+    return render_template("auth.html")
 
 
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
-    if current_user.is_authenticated:
+    if 'user_id' in session:
         username=session.get('username')
         return render_template("home.html", username=username)
     return render_template("dashboard.html")
 
 @app.route('/home')
 def home():
-    if current_user.is_authenticated:
+    if 'user_id' in session:
         username=session.get('username')
         return render_template("home.html", username=username)
     return redirect(url_for("dashboard"))
+
+@app.route("/blog")
+def blog():
+    if 'user_id' not in session:
+        return redirect(url_for("login"))
+    return render_template("blog.html")
 
 
 @app.route('/logout')
@@ -118,5 +120,3 @@ def page_not_found(e):
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-

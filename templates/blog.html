@@ -12,7 +12,7 @@
 
     <div class="create-post-section">
         <h2>Create a New Post</h2>
-        <form action="#" method="POST" class="post-form">
+        <form action="{{url_for('post')}}" method="POST" class="post-form">
             <input type="text" name="title" placeholder="Post Title" class="form-input" required>
             <textarea name="content" placeholder="What's on your mind, {{ session.get('username', 'guest') }}?" rows="6" class="form-input" required></textarea>
             <button type="submit" class="form-button">Publish Post</button>
@@ -22,14 +22,13 @@
     <div class="posts-section">
         <h2>Recent Posts</h2>
         <div class="posts-list">
-            {# This is where you would loop through posts from your database #}
-            {# Example: {% for post in posts %} #}
+            {% for post in posts %}
             <div class="post-item">
-                <h3>The Journey Begins</h3>
-                <p>This is the first post on our new blog! We're excited to see what our community will share. The possibilities are endless...</p>
-                <div class="post-meta">Posted by <strong>Admin</strong> on Oct 26, 2023</div>
+                <h3>{{post.title}}</h3>
+                <p>{{post.content}}</p>
+                <div class="post-meta">Posted by <strong>{{post.author}}</strong> on {{post.timestamp}}</div>
             </div>
-            {# {% endfor %} #}
+            {% endfor %}
         </div>
     </div>
 </div>

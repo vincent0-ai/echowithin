@@ -1,5 +1,5 @@
 # Import necessary modules needed
-
+import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash
 from flask_login import LoginManager, UserMixin, login_required, logout_user, current_user
 import os
@@ -21,6 +21,7 @@ app.config["SECRET_KEY"] = SECRET
 client = MongoClient('localhost', 27017)
 db = client['hotspot']
 users_conf = db['users']
+posts_conf = db['posts']
 
 
 
@@ -100,7 +101,30 @@ def home():
 def blog():
     if 'user_id' not in session:
         return redirect(url_for("login"))
-    return render_template("blog.html", active_page='blog')
+    posts = posts_conf.find()
+    return render_template("blog.html", posts=posts, active_page='blog')
+
+@app.route("/post", methods=['POST'])
+def post():
+    if 'user_id' in session:
+        if request.method=="POST":
+            title=request.form.get("title")
+            content=request.form.get("content")
+            username=session.get('username')
+            if title and content:  
+                posts_conf.insert_one({
+                    'title': title,
+                    'content': content,
+                    'author': username,
+                    'timestamp': datetime.datetime.now().strftime("%B %d, %Y %I:%M %p")
+                })
+                flash("Post created successfully!", "success")
+            else:
+                flash("Title and content cannot be empty.", "danger")
+        return redirect(url_for("blog"))
+    return redirect(url_for("login"))
+    
+
 
 
 @app.route('/logout')

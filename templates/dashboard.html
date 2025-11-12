@@ -1,6 +1,25 @@
 {% extends "base.html" %}
 
+{% block title %} <title>Welcome to EchoWithin</title> {% endblock %}
+
 {% block content%}
-<h4>Create an account<br><a href="{{url_for("register")}}">Register</a></h4>
-<h4>You have an account ?<br><a href="{{url_for("login")}}">Login</a></h4>
+<div class="main-content-area text-center">
+    <header class="page-header">
+        <h1>Welcome to EchoWithin</h1>
+        <p>A place to share your thoughts and connect with a like-minded community.</p>
+    </header>
+
+    <div class="action-cards">
+        <div class="card">
+            <h3>Join the Conversation</h3>
+            <p>Create an account to start posting, commenting, and connecting.</p>
+            <a href="{{url_for('register')}}" class="form-button">Register Now</a>
+        </div>
+        <div class="card">
+            <h3>Already a Member?</h3>
+            <p>Login to your account to catch up on the latest posts.</p>
+            <a href="{{url_for('login')}}" class="form-button">Login</a>
+        </div>
+    </div>
+</div>
 {%endblock%}

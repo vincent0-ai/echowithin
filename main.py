@@ -74,10 +74,11 @@ def login():
         if user and password and check_password_hash(user["password"], password):
             session['user_id'] = str(user['_id'])
             session['username'] = user['username']
+            flash(f"Welcome back, {user['username']}!", "success")
             return redirect(url_for('home'))
         else:
             flash("Wrong details provided", "danger")
-    return render_template("auth.html")
+    return render_template("auth.html", active_page='login')
 
 
 @app.route('/')
@@ -85,21 +86,21 @@ def login():
 def dashboard():
     if 'user_id' in session:
         username=session.get('username')
-        return render_template("home.html", username=username)
-    return render_template("dashboard.html")
+        return redirect(url_for('home'))
+    return render_template("dashboard.html", active_page='dashboard')
 
 @app.route('/home')
 def home():
     if 'user_id' in session:
         username=session.get('username')
-        return render_template("home.html", username=username)
+        return render_template("home.html", username=username, active_page='home')
     return redirect(url_for("dashboard"))
 
 @app.route("/blog")
 def blog():
     if 'user_id' not in session:
         return redirect(url_for("login"))
-    return render_template("blog.html")
+    return render_template("blog.html", active_page='blog')
 
 
 @app.route('/logout')

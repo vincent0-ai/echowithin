@@ -7,13 +7,28 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename = "coffee-bean.png")}}" type="image/x-icon">
     <link rel="stylesheet" href="{{ url_for('static', filename = "style.css")}}">
     <script src="{{ url_for('static', filename = "script.js")}}" defer></script>
-    <title>Login Screen</title>
+    {% block title %}<title>Login/Register</title>{% endblock %}
 </head>
 
-
-{%block body%} {%endblock%}
 <body>
-    <div class="flash-messages">
+    <div class="navbar">
+        <a href="{{ url_for('dashboard') }}" class="nav-brand">EchoWithin</a>
+        <div class="nav-links">
+            {% if 'username' in session %}
+                <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
+                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                <a href="#">About</a>
+                <a href="{{ url_for('logout') }}">Logout</a>
+            {% else %}
+                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if active_page == 'dashboard' }}">Home</a>
+                <a href="#">About</a>
+                <a href="{{ url_for('login') }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="flash-messages">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -22,10 +37,29 @@
         {%endif%}
     {% endwith%}
     </div>
-
-
+        {%block content%} {%endblock%}
+    </div>
 </body>
 
-{%block content%} {%endblock%}
+<script>
+    // Wait for the entire page to load before running the script
+    window.addEventListener('load', () => {
+        // Select all elements with the class 'alert' inside 'flash-messages'
+        const flashMessages = document.querySelectorAll('.flash-messages .alert');
+
+        // Set a timeout to make them disappear after 5 seconds
+        setTimeout(() => {
+            flashMessages.forEach(message => {
+                // Add a smooth fade-out transition
+                message.style.transition = 'opacity 0.5s ease-out';
+                message.style.opacity = '0';
+                // After the fade-out, remove the element from the page
+                setTimeout(() => {
+                    message.remove();
+                }, 500); // This should match the transition duration
+            });
+        }, 5000); // 5000 milliseconds = 5 seconds
+    });
+</script>
 
 </html>

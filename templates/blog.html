@@ -1,18 +1,8 @@
 {% extends "base.html" %}
 
+{% block title %} <title>Blog</title> {% endblock %}
+
 {% block content %}
-<div class="navbar">
-    <a href="#" class="nav-brand">EchoWithin</a>
-    <div class="nav-links">
-        <a href="#">Home</a>
-        <a href="#">About</a>
-        {% if 'username' in session %}
-            <a href="{{ url_for('logout') }}">Logout</a>
-        {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
-        {% endif %}
-    </div>
-</div>
 
 <div class="blog-container">
     <header class="blog-header">

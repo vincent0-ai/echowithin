@@ -6,9 +6,10 @@ import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
-from secret import SECRET, MAIL_SERVER, MAIL_PORT, MAIL_USE_SSL, MAIL_USERNAME, MAIL_PASSWORD
 from flask_mail import Mail, Message
+from ratelimit import limits
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from dotenv import load_dotenv
 
  # Initialise Flask
 app = Flask(__name__)
@@ -16,30 +17,30 @@ app = Flask(__name__)
 #Initialise the Login Manager
 login_manager = LoginManager(app)
 
+# Initialise the env
+load_dotenv()
+
 #setup the secret key
-app.config["SECRET_KEY"] = SECRET
+app.config["SECRET_KEY"] = os.getenv('SECRET')
 
 # Configure Flask-Mail
-app.config['MAIL_SERVER'] = MAIL_SERVER
-app.config['MAIL_PORT'] = MAIL_PORT
-app.config['MAIL_USE_SSL'] = MAIL_USE_SSL
-app.config['MAIL_USERNAME'] = MAIL_USERNAME
-app.config['MAIL_PASSWORD'] = MAIL_PASSWORD
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
+app.config['MAIL_PORT'] = os.getenv('MAIL_PORT')
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['TIME'] = os.getenv('TIME')
 mail = Mail(app)
 
 # Initialise serializer for token generation
 s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
 
-# Dictionary to track failed login attempts by IP
-failed_login_attempts = {}
-MAX_FAILED_ATTEMPTS = 5
-BLOCK_DURATION_SECONDS = 900 # 15 minutes
 
-#setup and initialise the mongodb database
+#setup and initialise the mongodb databases
 client = MongoClient('localhost', 27017)
 db = client['hotspot']
 users_conf = db['users']
 posts_conf = db['posts']
+logs_conf = db['logs']
 
 
 
@@ -95,47 +96,28 @@ def register():
 
 
 @app.route("/login", methods=['GET', 'POST'])
+@limits(calls=15, period=TIME)
 def login():
-    client_ip = request.remote_addr
-
-    # Check if the IP is currently blocked
-    if client_ip in failed_login_attempts:
-        attempt_info = failed_login_attempts[client_ip]
-        if attempt_info['attempts'] >= MAX_FAILED_ATTEMPTS:
-            time_since_last_attempt = datetime.datetime.now().timestamp() - attempt_info['timestamp']
-            if time_since_last_attempt < BLOCK_DURATION_SECONDS:
-                remaining_time = int(BLOCK_DURATION_SECONDS - time_since_last_attempt)
-                minutes, seconds = divmod(remaining_time, 60)
-                flash(f"Too many failed login attempts. Please try again in {minutes} minutes and {seconds} seconds.", "danger")
-                return render_template("auth.html", active_page='login')
-            else:
-                # If block duration has passed, reset the counter for this IP
-                del failed_login_attempts[client_ip]
 
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
         
+        client_ip = request.remote_addr
+        logs_conf.insert_one({
+        'ip' : client_ip 
+        })
+
         user = users_conf.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
                 flash('Please confirm your email address first!', 'warning')
                 return redirect(url_for('login'))
-
-            # On successful login, clear any failed attempt records for this IP
-            if client_ip in failed_login_attempts:
-                del failed_login_attempts[client_ip]
-
             session['user_id'] = str(user['_id'])
             session['username'] = user['username']
             flash(f"Welcome back, {user['username']}!", "success")
             return redirect(url_for('home'))
         else:
-            # On failed login, record the attempt
-            if client_ip not in failed_login_attempts:
-                failed_login_attempts[client_ip] = {'attempts': 0, 'timestamp': 0}
-            failed_login_attempts[client_ip]['attempts'] += 1
-            failed_login_attempts[client_ip]['timestamp'] = datetime.datetime.now().timestamp()
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login')
 

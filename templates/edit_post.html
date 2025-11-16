@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+ 
+{% block content %}
+<div class="create-post-section">
+        <h2>Create a New Post</h2>
+        <form action="{{url_for('update_post', post_id=post._id)}}" method="POST" class="post-form">
+            <input type="text" name="title" placeholder={{ post.title }} class="form-input" required>
+            <textarea name="content" placeholder={{ post.content }} rows="6" class="form-input" required></textarea>
+            <button type="submit" class="form-button">Publish Post</button>
+        </form>
+</div>
+{% endblock %}

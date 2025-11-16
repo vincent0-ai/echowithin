@@ -1,14 +1,14 @@
 # Import necessary modules needed
 import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash
-from flask_login import LoginManager, UserMixin
+import math
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from functools import wraps
 import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
-from flask_mail import Mail, Message
 from ratelimit import limits
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from dotenv import load_dotenv
 
  # Initialise Flask
@@ -16,23 +16,28 @@ app = Flask(__name__)
 
 #Initialise the Login Manager
 login_manager = LoginManager(app)
+login_manager.login_view = 'login'  # snyk:disable=security-issue
+
+# Secure session cookie settings
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from accessing the cookie
+app.config['SESSION_COOKIE_SECURE'] = False # Only send cookie over HTTPS (set to False in local dev if not using HTTPS)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
 # Initialise the env
 load_dotenv()
 
-#setup the secret key
-app.config["SECRET_KEY"] = os.getenv('SECRET')
+def get_env_variable(name: str) -> str:
+    """Get an environment variable or raise an exception."""
+    try:
+        return os.environ[name]
+    except KeyError:
+        message = f"Expected environment variable '{name}' not set."
+        raise Exception(message)
 
-# Configure Flask-Mail
-app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
-app.config['MAIL_PORT'] = os.getenv('MAIL_PORT')
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
-app.config['TIME'] = os.getenv('TIME')
-mail = Mail(app)
+# Setup the secret key
+app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
-# Initialise serializer for token generation
-s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
+TIME = int(get_env_variable('TIME'))
 
 
 #setup and initialise the mongodb databases
@@ -44,13 +49,27 @@ logs_conf = db['logs']
 
 
 
-# Currently i don't know what this class and the next function is doing.
-# I just figured out that it is essential for the program to run.
+# This class represents a user. Flask-Login uses it to manage the user's session.
 ###################### START #################################
 class User(UserMixin):
     def __init__(self, user_data):
+        # Store user-specific properties
         self.id = str(user_data["_id"])
         self.username = user_data["username"]
+        self.is_admin = user_data.get('is_admin', False)
+        self._is_active = user_data.get('is_confirmed', False)
+
+    def get_admin(self):
+        return self.is_admin
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_admin:
+            flash("You do not have permission to access this page.", "danger")
+            return redirect(url_for('dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -59,15 +78,23 @@ def load_user(user_id):
 ######################## STOP ####################################
 
 @app.route('/register', methods=['GET', 'POST'])
+@limits(calls=15, period=TIME)
 def register():
     if request.method == "POST":
         username = request.form.get("username")
         email = request.form.get("email")
         password = request.form.get("password")
+
+        client_ip = request.remote_addr
+        logs_conf.insert_one({
+        'ip' : client_ip,
+        'username': username,
+        'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
+        })
         if username and password and email:
             existing_user = users_conf.find_one({'$or': [{'username': username}, {'email': email}]})
             if existing_user:
-                flash("Try using a different username", "danger")
+                flash("Try using a different username or email", "danger")
                 return redirect(url_for('register'))
             else:
                 password = generate_password_hash(password)
@@ -76,18 +103,10 @@ def register():
                     'email': email,
                     'password' : password,
                     'is_confirmed': False,
-                    'confirmed_on': None
+                    'is_admin': False
                 })
 
-                # Send confirmation email
-                token = s.dumps(email, salt='email-confirm')
-                confirm_url = url_for('confirm_email', token=token, _external=True)
-                html = render_template('activate.html', confirm_url=confirm_url)
-                msg = Message('Confirm Your Email - EchoWithin', sender=MAIL_USERNAME, recipients=[email])
-                msg.html = html
-                mail.send(msg)
-
-                flash("A confirmation email has been sent to your email address. Please confirm to log in.", "info")
+                flash("Please wait as your details are being confirmed", "info")
                 return redirect(url_for("login"))
         else:
             flash('Username and password are required', "danger")
@@ -105,112 +124,179 @@ def login():
         
         client_ip = request.remote_addr
         logs_conf.insert_one({
-        'ip' : client_ip 
+        'ip' : client_ip,
+        'username': username,
+        'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
         })
 
         user = users_conf.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
-                flash('Please confirm your email address first!', 'warning')
+                flash('Please wait as your details are being confirmed', "danger")
                 return redirect(url_for('login'))
-            session['user_id'] = str(user['_id'])
-            session['username'] = user['username']
+                
+            
+            user_obj = User(user)
+            login_user(user_obj) 
+            if current_user.is_admin and current_user.is_authenticated:
+                flash('You have logged in as admin', 'success')
+                return redirect(url_for('admin_posts'))
             flash(f"Welcome back, {user['username']}!", "success")
-            return redirect(url_for('home'))
+            return redirect(request.args.get('next') or url_for('home'))
         else:
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login')
 
-@app.route('/confirm/<token>')
-def confirm_email(token):
-    try:
-        email = s.loads(token, salt='email-confirm', max_age=3600) # Token expires in 1 hour
-    except SignatureExpired:
-        flash('The confirmation link has expired.', 'danger')
-        return redirect(url_for('resend_confirmation'))
-    except:
-        flash('The confirmation link is invalid.', 'danger')
-        return redirect(url_for('register'))
-
-    user = users_conf.find_one_and_update(
-        {'email': email},
-        {'$set': {'is_confirmed': True, 'confirmed_on': datetime.datetime.now()}}
-    )
-
-    flash('Your account has been confirmed! Please log in.', 'success')
-    return redirect(url_for('login'))
-
-
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
-    if 'user_id' in session:
-        username=session.get('username')
+    if current_user.is_authenticated:
         return redirect(url_for('home'))
     return render_template("dashboard.html", active_page='dashboard')
 
 @app.route('/home')
+@login_required
 def home():
-    if 'user_id' in session:
-        username=session.get('username')
-        return render_template("home.html", username=username, active_page='home')
-    return redirect(url_for("dashboard"))
+    return render_template("home.html", username=current_user.username, active_page='home')
 
 @app.route("/blog")
+@login_required
 def blog():
-    if 'user_id' not in session:
-        return redirect(url_for("login"))
-    posts = posts_conf.find()
-    return render_template("blog.html", posts=posts, active_page='blog')
+    # Search logic
+    query = request.args.get('query', None)
+    search_filter = {}
+    if query:
+        # Using regex for a case-insensitive search on title and content
+        search_filter = {
+            "$or": [
+                {"title": {"$regex": query, "$options": "i"}},
+                {"content": {"$regex": query, "$options": "i"}}
+            ]
+        }
+
+    # Pagination logic
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 5 # You can adjust this number
+
+    # Get total number of posts to calculate total pages
+    total_posts = posts_conf.count_documents(search_filter)
+    total_pages = math.ceil(total_posts / posts_per_page)
+
+    # Calculate the number of documents to skip
+    skip = (page - 1) * posts_per_page
+
+    # Fetch a slice of posts for the current page, sorted by newest first
+    posts = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    return render_template("blog.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, query=query)
 
 @app.route("/post", methods=['POST'])
+@login_required
 def post():
-    if 'user_id' in session:
-        if request.method=="POST":
-            title=request.form.get("title")
-            content=request.form.get("content")
-            username=session.get('username')
-            if title and content:  
-                posts_conf.insert_one({
-                    'title': title,
-                    'content': content,
-                    'author': username,
-                    'timestamp': datetime.datetime.now().strftime("%B %d, %Y %I:%M %p")
-                })
-                flash("Post created successfully!", "success")
-            else:
-                flash("Title and content cannot be empty.", "danger")
-        return redirect(url_for("blog"))
-    return redirect(url_for("login"))
+    if request.method=="POST":
+        title=request.form.get("title")
+        content=request.form.get("content")
+        if title and content:  
+            posts_conf.insert_one({
+                'author_id': ObjectId(current_user.id),
+                'title': title,
+                'content': content,
+                'author': current_user.username,
+                'timestamp': datetime.datetime.now(),
+            })
+            flash("Post created successfully!", "success")
+        else:
+            flash("Title and content cannot be empty.", "danger")
+    return redirect(url_for("blog"))
     
 
-@app.route('/resend_confirmation', methods=['GET', 'POST'])
-def resend_confirmation():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        user = users_conf.find_one({'email': email})
+@app.route('/edit_post/<post_id>', methods=['GET'])
+@login_required
+def edit_post(post_id):
+    post = posts_conf.find_one({'_id': ObjectId(post_id)})
 
-        if user and not user.get('is_confirmed'):
-            token = s.dumps(email, salt='email-confirm')
-            confirm_url = url_for('confirm_email', token=token, _external=True)
-            html = render_template('activate.html', confirm_url=confirm_url)
-            msg = Message('Confirm Your Email - EchoWithin', sender=MAIL_USERNAME, recipients=email)
-            msg.html = html
-            mail.send(msg)
-            flash('A new confirmation email has been sent.', 'info')
-            return redirect(url_for('login'))
-        elif user and user.get('is_confirmed'):
-            flash('Your account is already confirmed. Please log in.', 'info')
-            return redirect(url_for('login'))
+    if not post:
+        flash("Post not found.", "danger")
+        return redirect(url_for('blog'))
+
+    # Ensure the current user is the author of the post
+    if post.get('author') != current_user.username:
+        flash("You are not authorized to edit this post.", "danger")
+        return redirect(url_for('blog'))
+
+    return render_template('edit_post.html', post=post, active_page='blog')
+
+@app.route('/update_post/<post_id>', methods=['POST'])
+@login_required
+def update_post(post_id):
+    post = posts_conf.find_one({'_id': ObjectId(post_id)})
+
+    if not post or post.get('author') != current_user.username:
+        flash("You are not authorized to perform this action.", "danger")
+        return redirect(url_for('blog'))
+
+    title = request.form.get("title")
+    content = request.form.get("content")
+
+    if title and content:
+        posts_conf.update_one(
+            {'_id': ObjectId(post_id)},
+            {'$set': {
+                'title': title,
+                'content': content,
+                'timestamp': datetime.datetime.now(),
+            }}
+        )
+        flash("Post updated successfully!", "success")
+    else:
+        flash("Title and content cannot be empty.", "danger")
+    
+    return redirect(url_for('blog'))
+
+@app.route('/delete_post/<post_id>', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    posts_conf.delete_one({'_id': ObjectId(post_id), 'author_id': ObjectId(current_user.id)})
+    flash('Post deleted successfully.', 'success')
+    return redirect(url_for('blog'))
+
+@app.route('/admin/posts')
+@login_required
+@admin_required
+def admin_posts():
+    # Pagination logic
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 10 # Show more posts on admin page
+
+    total_posts = posts_conf.count_documents({})
+    total_pages = math.ceil(total_posts / posts_per_page)
+
+    skip = (page - 1) * posts_per_page
+
+    # Fetch all posts, sorted by newest first
+    posts = posts_conf.find({}).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    
+    return render_template("admin_posts.html", posts=posts, active_page='admin_posts', page=page, total_pages=total_pages)
+
+@app.route('/admin/delete_post/<post_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_post(post_id):
+    try:
+        result = posts_conf.delete_one({'_id': ObjectId(post_id)})
+        if result.deleted_count == 1:
+            flash('Post deleted successfully by admin.', 'success')
         else:
-            flash('Email address not found.', 'danger')
-    return render_template('resend_confirmation.html', active_page='resend')
-
+            flash('Post not found.', 'warning')
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+    return redirect(url_for('admin_posts'))
+@app.route('/about')
+def about():
+    return render_template("about.html")
 
 @app.route('/logout')
 def logout():
-    session.pop('user_id', None)
-    session.pop('username', None)
+    logout_user() # Use Flask-Login to properly log the user out
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
@@ -221,7 +307,5 @@ def logout():
 def page_not_found(e):
     return redirect(url_for("dashboard")), 404
 
-
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)

@@ -1,6 +1,6 @@
 # EchoWithin - Flask User Authentication Project
 
-EchoWithin is a simple web application built with Flask that demonstrates a complete user authentication system. It includes user registration, login, logout, and session management, using MongoDB as the database and Bootstrap 4 for front-end styling.
+EchoWithin is a simple web application built with Flask that demonstrates a complete user authentication system. It includes user registration, login, logout, and session management, using MongoDB as the database.
 
 ## Features
 
@@ -9,7 +9,6 @@ EchoWithin is a simple web application built with Flask that demonstrates a comp
 - Persistent user sessions using Flask-Login
 - Protected routes accessible only to authenticated users
 - Integration with MongoDB for data storage
-- Clean and responsive UI with Bootstrap 4
 
 ## Prerequisites
 
@@ -48,10 +47,10 @@ Follow these steps to get your development environment set up and running.
 
 3.  **Install Dependencies**
 
-    Install all the required Python packages using the provided `requirements.txt` file (or create one with the packages `Flask`, `Flask-Login`, `pymongo`, `flask-bootstrap4`).
+    Install all the required Python packages using the provided `requirements.txt` file (or create one with the packages `Flask`, `Flask-Login`, `pymongo`)
 
     ```bash
-    pip install Flask Flask-Login pymongo flask-bootstrap4
+    pip install Flask Flask-Login pymongo
     ```
 
 4.  **Create the Secret Key File**

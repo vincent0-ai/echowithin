@@ -47,6 +47,48 @@
                     </form>
                 </div>
                 {% endif %}
+
+                {# --- Like and Comment Feature Start --- #}
+                <div class="post-interaction">
+                    {# Add Comment Form #}
+                    <div class="comment-form-container">
+                        <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST">
+                            <textarea name="content" placeholder="Share your perspective" rows="3" required></textarea>
+                            <div class="comment-stance">
+                                <label><input type="radio" name="stance" value="agree" checked>Agree</label>
+                                <label><input type="radio" name="stance" value="disagree">Disagree</label>
+                            </div>
+                            <button type="submit">Comment</button>
+                        </form>
+                    </div>
+
+                    {# Display Comments in Debate Format #}
+                    <div class="debate-container">
+                        <div class="debate-side agree-side">
+                            <h4>In Agreement</h4>
+                            {% for comment in post.comments if comment.stance == 'agree' %}
+                                <div class="comment">
+                                    <p>{{ comment.content }}</p>
+                                    <small>by {{ comment.author }}</small>
+                                </div>
+                            {% else %}
+                                <p class="no-comments">No agreeing comments yet.</p>
+                            {% endfor %}
+                        </div>
+                        <div class="debate-side disagree-side">
+                            <h4>In Disagreement</h4>
+                            {% for comment in post.comments if comment.stance == 'disagree' %}
+                                <div class="comment">
+                                    <p>{{ comment.content }}</p>
+                                    <small> by {{ comment.author }}</small>
+                                </div>
+                            {% else %}
+                                <p class="no-comments">No disagreeing comments yet.</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {# --- Like and Comment Feature End --- #}
             </div>
             {% else %}
             <p>No posts found. Try a different search or create a new post!</p>

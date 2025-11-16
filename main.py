@@ -252,6 +252,30 @@ def update_post(post_id):
     
     return redirect(url_for('blog'))
 
+@app.route('/add_comment/<post_id>', methods=['POST'])
+@login_required
+def add_comment(post_id):
+    post = posts_conf.find_one({'_id': ObjectId(post_id)})
+    if post:
+        content = request.form.get("content")
+        stance = request.form.get("stance")
+        if content and stance:
+            posts_conf.update_one(
+                {'_id': ObjectId(post_id)},
+                {'$push': {
+                    'comments': {
+                        'author': current_user.username,
+                        'content': content,
+                        'stance': stance,
+                        'likes': []
+                    }
+                }}
+            )
+            flash("Comment added successfully!", "success")
+        else:
+            flash("Comment and stance cannot be empty.", "danger")
+    return redirect(url_for('blog'))
+
 @app.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
 def delete_post(post_id):

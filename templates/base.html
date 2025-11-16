@@ -12,7 +12,10 @@
 
 <body>
     <div class="navbar">
-        <a href="{{ url_for('dashboard') }}" class="nav-brand">EchoWithin</a>
+        <a href="{{ url_for('dashboard') }}" class="nav-brand">
+            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="EchoWithin Logo" class="nav-logo">
+            EchoWithin
+        </a>
         <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
             <span></span>
             <span></span>

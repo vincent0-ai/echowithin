@@ -115,6 +115,10 @@ main{
 body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
+    background-image: url('logo2.jpg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
     color: #333;
     line-height: 1.6;
     min-height: 100vh;
@@ -171,6 +175,14 @@ body {
 .nav-brand {
     font-size: 1.5rem;
     font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav-logo {
+    height: 40px;
+    width: auto;
 }
 
 /* Default desktop navigation styles */

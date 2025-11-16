@@ -1,12 +1,28 @@
 {% extends "base.html" %}
- 
+
 {% block content %}
-<div class="create-post-section">
-        <h2>Create a New Post</h2>
-        <form action="{{url_for('update_post', post_id=post._id)}}" method="POST" class="post-form">
-            <input type="text" name="title" placeholder={{ post.title }} class="form-input" required>
-            <textarea name="content" placeholder={{ post.content }} rows="6" class="form-input" required></textarea>
-            <button type="submit" class="form-button">Publish Post</button>
-        </form>
+<div class="blog-container">
+    <div class="create-post-section">
+        {% if action == 'comment' %}
+            <h2>Add a Comment</h2>
+            <p><strong>Post:</strong> {{ post.title }}</p>
+            <p>{{ post.content }}</p>
+            <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST" class="post-form">
+                <textarea name="content" placeholder="Share your perspective" rows="6" class="form-input" required></textarea>
+                <div class="comment-stance">
+                    <label><input type="radio" name="stance" value="agree" checked>Agree</label>
+                    <label><input type="radio" name="stance" value="disagree">Disagree</label>
+                </div>
+                <button type="submit" class="form-button">Add Comment</button>
+            </form>
+        {% else %}
+            <h2>Edit Post</h2>
+            <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form">
+                <input type="text" name="title" value="{{ post.title }}" class="form-input" required>
+                <textarea name="content" rows="6" class="form-input" required>{{ post.content }}</textarea>
+                <button type="submit" class="form-button">Update Post</button>
+            </form>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

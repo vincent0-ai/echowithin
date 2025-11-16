@@ -218,12 +218,14 @@ def edit_post(post_id):
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
 
-    # Ensure the current user is the author of the post
-    if post.get('author') != current_user.username:
+    action = request.args.get('action')
+
+    # If action is 'comment', allow any logged-in user; otherwise, restrict to author
+    if action != 'comment' and post.get('author') != current_user.username:
         flash("You are not authorized to edit this post.", "danger")
         return redirect(url_for('blog'))
 
-    return render_template('edit_post.html', post=post, active_page='blog')
+    return render_template('edit_post.html', post=post, active_page='blog', action=action)
 
 @app.route('/update_post/<post_id>', methods=['POST'])
 @login_required
@@ -262,14 +264,19 @@ def add_comment(post_id):
         if content and stance:
             posts_conf.update_one(
                 {'_id': ObjectId(post_id)},
-                {'$push': {
-                    'comments': {
-                        'author': current_user.username,
-                        'content': content,
-                        'stance': stance,
-                        'likes': []
+                {
+                    '$push': {
+                        'comments': {
+                            'comment_id': ObjectId(),
+                            'author': current_user.username,
+                            'content': content,
+                            'stance': stance
+                        }
+                    },
+                    '$set': {
+                        'timestamp': datetime.datetime.now()
                     }
-                }}
+                }
             )
             flash("Comment added successfully!", "success")
         else:
@@ -314,6 +321,25 @@ def admin_delete_post(post_id):
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
     return redirect(url_for('admin_posts'))
+
+@app.route('/admin/delete_comment/<post_id>/<comment_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_comment(post_id, comment_id):
+    try:
+        result = posts_conf.update_one(
+            {'_id': ObjectId(post_id)},
+            {'$pull': {'comments': {'comment_id': ObjectId(comment_id)}}}
+        )
+        if result.modified_count == 1:
+            flash('Comment deleted successfully by admin.', 'success')
+        else:
+            flash('Comment not found or already deleted.', 'warning')
+    except Exception as e:
+        flash(f'An error occurred while deleting the comment: {e}', 'danger')
+    
+    return redirect(url_for('admin_posts'))
+
 @app.route('/about')
 def about():
     return render_template("about.html")

@@ -13,7 +13,12 @@
 <body>
     <div class="navbar">
         <a href="{{ url_for('dashboard') }}" class="nav-brand">EchoWithin</a>
-        <div class="nav-links">
+        <button class="hamburger" id="hamburger" aria-label="Toggle navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
             {% if current_user.is_authenticated %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
@@ -26,6 +31,7 @@
             {% endif %}
         </div>
     </div>
+    <div class="overlay" id="overlay"></div>
     
     <div class="container">
         <div class="flash-messages">
@@ -39,6 +45,10 @@
     </div>
         {%block content%} {%endblock%}
     </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 EchoWithin. All rights reserved.</p>
+    </footer>
 </body>
 
 <script>

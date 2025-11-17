@@ -1,20 +1,22 @@
-# Import necessary modules needed
 import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash
 import math
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
+from flask_mail import Mail, Message
 import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from ratelimit import limits
 from dotenv import load_dotenv
+import secrets
+import time
+import hashlib
+from waitress import serve
 
- # Initialise Flask
 app = Flask(__name__)
 
-#Initialise the Login Manager
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'  # snyk:disable=security-issue
 
@@ -23,7 +25,6 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from acces
 app.config['SESSION_COOKIE_SECURE'] = False # Only send cookie over HTTPS (set to False in local dev if not using HTTPS)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
-# Initialise the env
 load_dotenv()
 
 def get_env_variable(name: str) -> str:
@@ -37,20 +38,24 @@ def get_env_variable(name: str) -> str:
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
+app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
+app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
+app.config['MAIL_USE_SSL'] = True
+app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  # Move to .env in production
+
+mail = Mail(app)
+
 TIME = int(get_env_variable('TIME'))
 
 
-#setup and initialise the mongodb databases
 client = MongoClient('localhost', 27017)
-db = client['hotspot']
+db = client['echowithin_db']
 users_conf = db['users']
 posts_conf = db['posts']
 logs_conf = db['logs']
+auth_conf = db['auth']
 
-
-
-# This class represents a user. Flask-Login uses it to manage the user's session.
-###################### START #################################
 class User(UserMixin):
     def __init__(self, user_data):
         # Store user-specific properties
@@ -58,6 +63,10 @@ class User(UserMixin):
         self.username = user_data["username"]
         self.is_admin = user_data.get('is_admin', False)
         self._is_active = user_data.get('is_confirmed', False)
+
+    @property
+    def is_active(self):
+        return self._is_active
 
     def get_admin(self):
         return self.is_admin
@@ -75,7 +84,29 @@ def admin_required(f):
 def load_user(user_id):
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})
     return User(user_data) if user_data else None
-######################## STOP ####################################
+
+
+
+def send_code(email, gen_code=None, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            msg = Message(
+                subject="Your EchoWithin Verification Code",
+                sender='echowithin@echowithin.xyz',
+                recipients=[email]
+            )
+            msg.html = render_template("verify.html", code=gen_code)
+            mail.send(msg)
+            app.logger.info(f"Verification email sent to {email}")
+            return True
+        except Exception as e:
+            app.logger.error(f"Attempt {attempt+1} failed to send email to {email}: {e}")
+            time.sleep(delay)
+    else:
+        app.logger.error(f"Failed to send verification email to {email} after {retries} attempts.")
+
+
+
 
 @app.route('/register', methods=['GET', 'POST'])
 @limits(calls=15, period=TIME)
@@ -92,27 +123,74 @@ def register():
         'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
         })
         if username and password and email:
-            existing_user = users_conf.find_one({'$or': [{'username': username}, {'email': email}]})
+            existing_user = users_conf.find_one({'$or': [{'email': email}, {'username': username}]})
+            gen_code = None  # Initialize gen_code
+
             if existing_user:
-                flash("Try using a different username or email", "danger")
-                return redirect(url_for('register'))
-            else:
+                if existing_user.get('is_confirmed'):
+                    flash("This email is already registered and confirmed. Please login.", "danger")
+                    return redirect(url_for('login'))
+                elif existing_user['email'] == email:
+                    # User exists but is not confirmed, resend code
+                    flash("This email is already registered. We've sent you a new confirmation code.", "info")
+                else: # Username is taken
+                    flash("This username is already taken. Try using a different username.", "danger")
+                    return redirect(url_for('register'))
+            else: # New user
                 password = generate_password_hash(password)
                 users_conf.insert_one({
                     'username' : username,
                     'email': email,
                     'password' : password,
                     'is_confirmed': False,
-                    'is_admin': False
+                    'is_admin': False,
                 })
+                flash("Account created successfully. Please check your email for the confirmation code.", "success")
 
-                flash("Please wait as your details are being confirmed", "info")
-                return redirect(url_for("login"))
+            # Generate and store a new code for new users or unconfirmed existing users
+            gen_code = str(secrets.randbelow(10**6)).zfill(6)
+            hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+            auth_conf.update_one(
+                {'email': email},
+                {'$set': {'hashed_code': hashed}},
+                upsert=True
+            )
+            send_code(email, gen_code)
+            return redirect(url_for("confirm", email=email))
         else:
             flash('Username and password are required', "danger")
     return render_template("auth.html", active_page='register')
     
-
+@app.route("/confirm/<email>", methods=['GET', 'POST'])
+@limits(calls=15, period=TIME)
+def confirm(email):
+    user = users_conf.find_one({"email": email})
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("register"))
+    if user.get('is_confirmed'):
+        flash("Your email is already confirmed. Please login.", "info")
+        return redirect(url_for("login"))
+    if request.method == 'POST':
+        confirm_code = request.form.get("code")
+        if confirm_code:
+            hashed_obj = auth_conf.find_one({'email': email})
+            if hashed_obj and hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():
+                users_conf.update_one(
+                    {'email': email},
+                    {'$set': {'is_confirmed': True}}
+                )
+                auth_conf.delete_one({'email': email})  # Clean up auth_conf after confirmation
+                flash("Your email has been confirmed successfully. Please login.", "success")
+                return redirect(url_for("login"))
+            else:
+                flash("The confirmation code is incorrect.", "danger")
+        else:
+            flash("Please enter the confirmation code.", "danger")
+    return render_template("confirm.html", email=email, active_page='confirm')
+            
+        
+                    
 
 @app.route("/login", methods=['GET', 'POST'])
 @limits(calls=15, period=TIME)
@@ -132,7 +210,7 @@ def login():
         user = users_conf.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
-                flash('Please wait as your details are being confirmed', "danger")
+                flash('Please confirm your account first', "danger")
                 return redirect(url_for('login'))
                 
             
@@ -167,12 +245,8 @@ def blog():
     search_filter = {}
     if query:
         # Using regex for a case-insensitive search on title and content
-        search_filter = {
-            "$or": [
-                {"title": {"$regex": query, "$options": "i"}},
-                {"content": {"$regex": query, "$options": "i"}}
-            ]
-        }
+        # Use a text index for much faster searching
+        search_filter = { "$text": { "$search": query } }
 
     # Pagination logic
     page = request.args.get('page', 1, type=int)
@@ -356,6 +430,3 @@ def logout():
 @app.errorhandler(404)
 def page_not_found(e):
     return redirect(url_for("dashboard")), 404
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)

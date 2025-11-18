@@ -92,7 +92,7 @@ def send_code(email, gen_code=None, retries=3, delay=2):
         try:
             msg = Message(
                 subject="Your EchoWithin Verification Code",
-                sender='echowithin@echowithin.xyz',
+                sender=get_env_variable('MAIL_USERNAME'),
                 recipients=[email]
             )
             msg.html = render_template("verify.html", code=gen_code)

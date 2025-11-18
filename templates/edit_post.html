@@ -6,7 +6,12 @@
         {% if action == 'comment' %}
             <h2>Add a Comment</h2>
             <p><strong>Post:</strong> {{ post.title }}</p>
-            <p>{{ post.content }}</p>
+            {% if post.image_filename %}
+                <div class="post-image-container">
+                    <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
+                </div>
+            {% endif %}
+            <p>{{ post.content | safe }}</p>
             <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST" class="post-form">
                 <textarea name="content" placeholder="Share your perspective" rows="6" class="form-input" required></textarea>
                 <div class="comment-stance">
@@ -17,9 +22,19 @@
             </form>
         {% else %}
             <h2>Edit Post</h2>
-            <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form">
+            <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form" enctype="multipart/form-data">
                 <input type="text" name="title" value="{{ post.title }}" class="form-input" required>
                 <textarea name="content" rows="6" class="form-input" required>{{ post.content }}</textarea>
+                {% if post.image_filename %}
+                    <div class="form-group">
+                        <label>Current Image:</label>
+                        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
+                    </div>
+                {% endif %}
+                <div class="form-group">
+                    <label for="image">Upload a New Image (Optional, will replace the old one):</label>
+                    <input type="file" name="image" class="form-input-file" accept="image/png, image/jpeg, image/gif">
+                </div>
                 <button type="submit" class="form-button">Update Post</button>
             </form>
         {% endif %}

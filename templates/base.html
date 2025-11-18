@@ -23,8 +23,8 @@
                 <a href="{{ url_for('logout') }}">Logout</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
             {% else %}
-                <a href="{{ url_for('dashboard') }}" class="{{ 'active' if active_page == 'dashboard' }}">Home</a>
                 <a href="{{ url_for('login') }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
+                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
             {% endif %}
         </nav>
@@ -67,6 +67,50 @@
                 }, 500); // This should match the transition duration
             });
         }, 5000); // 5000 milliseconds = 5 seconds
+    });
+
+    // Script for toggling comment sections on the blog page
+    document.addEventListener('DOMContentLoaded', () => {
+        const commentToggleButtons = document.querySelectorAll('.toggle-comments-btn');
+        const readMoreButtons = document.querySelectorAll('.read-more-btn');
+
+        readMoreButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Find the parent <p> tag
+                const parentP = button.closest('p');
+                if (parentP) {
+                    const truncatedContent = parentP.querySelector('.truncated-content');
+                    const fullContent = parentP.querySelector('.full-content');
+
+                    if (fullContent.style.display !== 'none') {
+                        // Switch to truncated
+                        truncatedContent.style.display = 'inline';
+                        fullContent.style.display = 'none';
+                        button.textContent = 'Read More';
+                    } else {
+                        // Switch to full
+                        truncatedContent.style.display = 'none';
+                        fullContent.style.display = 'inline';
+                        button.textContent = 'Read Less';
+                    }
+                }
+            });
+        });
+
+        commentToggleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const postId = button.getAttribute('data-post-id');
+                const commentsSection = document.getElementById(`comments-${postId}`);
+
+                if (commentsSection) {
+                    const isVisible = commentsSection.style.display === 'block';
+                    commentsSection.style.display = isVisible ? 'none' : 'block';
+                    // Optional: Change button text
+                    const commentCount = button.dataset.commentCount;
+                    button.textContent = isVisible ? `View ${commentCount} Comment${commentCount != '1' ? 's' : ''}` : 'Hide Comments';
+                }
+            });
+        });
     });
 </script>
 

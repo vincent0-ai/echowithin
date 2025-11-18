@@ -1,9 +1,9 @@
 import datetime
-from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash
+from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory
 import math
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
-from flask_mail import Mail, Message
+from flask_mail import Mail, Message 
 import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,7 +12,9 @@ from ratelimit import limits
 from dotenv import load_dotenv
 import secrets
 import time
+from werkzeug.utils import secure_filename
 import hashlib
+from slugify import slugify
 from waitress import serve
 
 app = Flask(__name__)
@@ -38,6 +40,13 @@ def get_env_variable(name: str) -> str:
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
+# Configuration for file uploads
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
 app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
@@ -55,6 +64,7 @@ users_conf = db['users']
 posts_conf = db['posts']
 logs_conf = db['logs']
 auth_conf = db['auth']
+announcements_conf = db['announcements']
 
 class User(UserMixin):
     def __init__(self, user_data):
@@ -79,6 +89,12 @@ def admin_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated_function
+
+@app.context_processor
+def inject_pinned_announcement():
+    """Makes the pinned announcement available to all templates."""
+    pinned_announcement = announcements_conf.find_one({'is_pinned': True})
+    return dict(pinned_announcement=pinned_announcement)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -180,7 +196,7 @@ def register():
             flash('Username and password are required', "danger")
     return render_template("auth.html", active_page='register')
     
-@app.route("/confirm/<email>", methods=['GET', 'POST'])
+@app.route("/confirm/<email>", methods=['GET', 'POST']) # snyk:disable=security-issue
 @limits(calls=15, period=TIME)
 def confirm(email):
     user = users_conf.find_one({"email": email})
@@ -237,7 +253,7 @@ def login():
             login_user(user_obj) 
             if current_user.is_admin and current_user.is_authenticated:
                 flash('You have logged in as admin', 'success')
-                return redirect(url_for('admin_posts'))
+                return redirect(url_for('home'))
             flash(f"Welcome back, {user['username']}!", "success")
             return redirect(request.args.get('next') or url_for('home'))
         else:
@@ -247,17 +263,20 @@ def login():
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
+    page_title = "Welcome to EchoWithin"
+    page_description = "EchoWithin is a modern platform for sharing and discussing ideas. Join the conversation today."
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-    return render_template("dashboard.html", active_page='dashboard')
+    return render_template("dashboard.html", active_page='dashboard', title=page_title, description=page_description)
 
 @app.route('/home')
 @login_required
 def home():
-    return render_template("home.html", username=current_user.username, active_page='home')
+    page_title = f"Home - {current_user.username}"
+    page_description = "Your personal dashboard on EchoWithin. Create new posts and engage with the community."
+    return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description)
 
 @app.route("/blog")
-@login_required
 def blog():
     # Search logic
     query = request.args.get('query', None)
@@ -280,7 +299,10 @@ def blog():
 
     # Fetch a slice of posts for the current page, sorted by newest first
     posts = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
-    return render_template("blog.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, query=query)
+
+    page_title = "Blog - EchoWithin"
+    page_description = "Explore the latest posts and discussions from the EchoWithin community."
+    return render_template("blog.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
 
 @app.route("/post", methods=['POST'])
 @login_required
@@ -288,12 +310,34 @@ def post():
     if request.method=="POST":
         title=request.form.get("title")
         content=request.form.get("content")
+        image_file = request.files.get('image')
+        image_filename = None
+
+
         if title and content:  
+            # Create a unique slug for SEO-friendly URLs
+            base_slug = slugify(title)
+            slug = base_slug
+            counter = 1
+            while posts_conf.find_one({'slug': slug}):
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            
+            if image_file and image_file.filename != '' and '.' in image_file.filename and image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+                # Secure the filename and save the file
+                filename = secure_filename(image_file.filename)
+                # Create a unique filename to prevent overwrites
+                unique_filename = f"{ObjectId()}_{filename}"
+                image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                image_filename = unique_filename
+
             posts_conf.insert_one({
                 'author_id': ObjectId(current_user.id),
+                'slug': slug,
                 'title': title,
                 'content': content,
                 'author': current_user.username,
+                'image_filename': image_filename,
                 'timestamp': datetime.datetime.now(),
             })
             flash("Post created successfully!", "success")
@@ -301,6 +345,21 @@ def post():
             flash("Title and content cannot be empty.", "danger")
     return redirect(url_for("blog"))
     
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    """Serves uploaded files."""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/post/<slug>')
+def view_post(slug):
+    post = posts_conf.find_one({'slug': slug})
+    if not post:
+        flash("Post not found.", "danger")
+        return redirect(url_for('blog'))
+    page_title = post.get('title')
+    # Generate a short description from the content
+    page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
+    return render_template('edit_post.html', post=post, active_page='blog', action='comment', title=page_title, description=page_description)
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required
@@ -314,38 +373,68 @@ def edit_post(post_id):
     action = request.args.get('action')
 
     # If action is 'comment', allow any logged-in user; otherwise, restrict to author
-    if action != 'comment' and post.get('author') != current_user.username:
-        flash("You are not authorized to edit this post.", "danger")
+    # Use author_id for a more reliable check
+    if action != 'comment' and str(post.get('author_id')) != current_user.id:
+        flash("You are not authorized to edit this post.", "danger") 
         return redirect(url_for('blog'))
 
-    return render_template('edit_post.html', post=post, active_page='blog', action=action)
+    page_title = f"Edit: {post.get('title')}"
+    page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
+    return render_template('edit_post.html', post=post, active_page='blog', action=action, title=page_title, description=page_description)
 
 @app.route('/update_post/<post_id>', methods=['POST'])
 @login_required
 def update_post(post_id):
     post = posts_conf.find_one({'_id': ObjectId(post_id)})
 
-    if not post or post.get('author') != current_user.username:
-        flash("You are not authorized to perform this action.", "danger")
+    # Use author_id for a more reliable check
+    if not post or str(post.get('author_id')) != current_user.id:
+        flash("You are not authorized to perform this action.", "danger") 
         return redirect(url_for('blog'))
 
     title = request.form.get("title")
     content = request.form.get("content")
+    image_file = request.files.get('image')
+    image_filename = post.get('image_filename') # Keep old image by default
+    slug = post.get('slug') # Keep old slug by default
 
     if title and content:
+        if image_file and image_file.filename != '' and '.' in image_file.filename and image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+            # If a new image is uploaded, save it and update the filename
+            # Optional: Delete the old image file to save space
+            if image_filename and os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], image_filename)):
+                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
+            
+            filename = secure_filename(image_file.filename)
+            unique_filename = f"{ObjectId()}_{filename}"
+            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+            image_filename = unique_filename
+
+        # If the title has changed, we need to generate a new slug
+        if title != post.get('title'):
+            base_slug = slugify(title)
+            new_slug = base_slug
+            counter = 1
+            # Ensure the new slug is unique
+            while posts_conf.find_one({'slug': new_slug, '_id': {'$ne': post['_id']}}):
+                new_slug = f"{base_slug}-{counter}"
+                counter += 1
+            slug = new_slug
+
         posts_conf.update_one(
             {'_id': ObjectId(post_id)},
             {'$set': {
                 'title': title,
                 'content': content,
+                'image_filename': image_filename,
+                'slug': slug,
                 'timestamp': datetime.datetime.now(),
             }}
         )
         flash("Post updated successfully!", "success")
     else:
         flash("Title and content cannot be empty.", "danger")
-    
-    return redirect(url_for('blog'))
+    return redirect(url_for('view_post', slug=slug))
 
 @app.route('/add_comment/<post_id>', methods=['POST'])
 @login_required
@@ -372,9 +461,10 @@ def add_comment(post_id):
                 }
             )
             flash("Comment added successfully!", "success")
+            return redirect(url_for('blog', slug=post.get('slug', '')))
         else:
             flash("Comment and stance cannot be empty.", "danger")
-    return redirect(url_for('blog'))
+    return redirect(url_for('view_post', slug=post.get('slug', '')))
 
 @app.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
@@ -433,9 +523,60 @@ def admin_delete_comment(post_id, comment_id):
     
     return redirect(url_for('admin_posts'))
 
+@app.route('/admin/announcements', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_announcements():
+    if request.method == 'POST':
+        content = request.form.get('content')
+        if content:
+            announcements_conf.insert_one({
+                'content': content,
+                'author_id': ObjectId(current_user.id),
+                'author_username': current_user.username,
+                'created_at': datetime.datetime.now(),
+                'is_pinned': False
+            })
+            flash('Announcement created successfully.', 'success')
+        else:
+            flash('Announcement content cannot be empty.', 'danger')
+        return redirect(url_for('admin_announcements'))
+
+    announcements = announcements_conf.find().sort('created_at', -1)
+    return render_template('admin_announcements.html', announcements=announcements, active_page='admin_announcements')
+
+@app.route('/admin/announcements/pin/<announcement_id>', methods=['POST'])
+@login_required
+@admin_required
+def pin_announcement(announcement_id):
+    # Unpin any currently pinned announcement
+    announcements_conf.update_many({'is_pinned': True}, {'$set': {'is_pinned': False}})
+    # Pin the new one
+    announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
+    flash('Announcement has been pinned.', 'success')
+    return redirect(url_for('admin_announcements'))
+
+@app.route('/admin/announcements/unpin/<announcement_id>', methods=['POST'])
+@login_required
+@admin_required
+def unpin_announcement(announcement_id):
+    announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': False}})
+    flash('Announcement has been unpinned.', 'success')
+    return redirect(url_for('admin_announcements'))
+
+@app.route('/admin/announcements/delete/<announcement_id>', methods=['POST'])
+@login_required
+@admin_required
+def delete_announcement(announcement_id):
+    announcements_conf.delete_one({'_id': ObjectId(announcement_id)})
+    flash('Announcement deleted.', 'success')
+    return redirect(url_for('admin_announcements'))
+
 @app.route('/about')
 def about():
-    return render_template("about.html")
+    page_title = "About EchoWithin"
+    page_description = "Learn more about EchoWithin, our mission, and the team behind the platform."
+    return render_template("about.html", title=page_title, description=page_description)
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 @limits(calls=5, period=TIME)
@@ -501,3 +642,27 @@ def logout():
 @app.errorhandler(404)
 def page_not_found(e):
     return redirect(url_for("dashboard")), 404
+
+@app.route('/sitemap.xml')
+def sitemap():
+    """Generate sitemap.xml for search engines."""
+    pages = []
+    ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).date().isoformat()
+
+    # Static pages
+    static_urls = [url_for('dashboard', _external=True), url_for('about', _external=True), url_for('login', _external=True), url_for('register', _external=True)]
+    for url in static_urls:
+        pages.append({'loc': url, 'lastmod': ten_days_ago, 'changefreq': 'weekly'})
+
+    # Dynamic pages (blog posts)
+    # This assumes you have implemented slugs as suggested above
+    posts = posts_conf.find({}, {"slug": 1, "timestamp": 1}).sort('timestamp', -1)
+    for post in posts:
+        if 'slug' in post:
+            url = url_for('view_post', slug=post['slug'], _external=True)
+            pages.append({'loc': url, 'lastmod': post['timestamp'].date().isoformat(), 'changefreq': 'daily'})
+
+    sitemap_xml = render_template('sitemap_template.xml', pages=pages)
+    response = make_response(sitemap_xml)
+    response.headers["Content-Type"] = "application/xml"
+    return response

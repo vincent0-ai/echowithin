@@ -289,12 +289,15 @@ body {
     margin-top: 1rem;
 }
 
-.edit-btn, .delete-btn, .comment-btn {
+/* Base button styling for links and buttons */
+.btn {
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.9rem;
+    text-align: center;
+    display: inline-block; /* Important for <a> tags */
     transition: background-color 0.3s;
 }
 
@@ -456,6 +459,43 @@ body {
     background-color: #ccc;
 }
 
+/* --- Image Styling for Blog Posts --- */
+
+.post-image-container {
+    width: 100%;
+    margin: 1rem 0; /* Adds some space above and below the image */
+    overflow: hidden; /* Ensures any strange image overflow is clipped */
+    border-radius: 8px; /* Gives the image container soft, rounded corners */
+}
+
+.post-image {
+    width: 100%; /* Makes the image fill its container horizontally */
+    height: auto; /* Maintains the image's aspect ratio */
+    max-height: 500px; /* Prevents very tall images from taking up too much space */
+    object-fit: cover; /* Ensures the image covers the area, cropping if necessary, without distortion */
+    display: block; /* Removes any extra space below the image */
+    border: 1px solid #eee; /* Adds a subtle border */
+}
+
+.edit-post-image-preview {
+    max-width: 250px;
+    height: auto;
+    display: block;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+/* Read More Link Styling */
+.read-more-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-decoration: underline;
+    transition: color 0.3s;
+}
+
 /* Footer Styles */
 .footer {
     background-color: var(--primary-color);
@@ -605,6 +645,12 @@ body {
 
     .post-meta {
         font-size: 0.8rem;
+    }
+
+    .post-actions {
+        flex-direction: row; /* Keep buttons horizontal */
+        flex-wrap: wrap;     /* Allow buttons to wrap if space is limited */
+        align-items: center; /* Vertically align items if they wrap */
     }
 
     .debate-side {

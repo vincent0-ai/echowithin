@@ -21,3 +21,5 @@ const showRegister = () => {
 
 loginTab.addEventListener('click', showLogin);
 registerTab.addEventListener('click', showRegister);
+
+// Hamburger menu toggle removed as per user request

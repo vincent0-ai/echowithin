@@ -105,6 +105,25 @@ def send_code(email, gen_code=None, retries=3, delay=2):
     else:
         app.logger.error(f"Failed to send verification email to {email} after {retries} attempts.")
 
+def send_reset_code(email, reset_token=None, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            msg = Message(
+                subject="EchoWithin Password Reset",
+                sender='echowithin@echowithin.xyz',
+                recipients=[email]
+            )
+            reset_url = url_for('reset_password', token=reset_token, _external=True)
+            msg.html = render_template("reset_email.html", reset_url=reset_url)
+            mail.send(msg)
+            app.logger.info(f"Password reset email sent to {email}")
+            return True
+        except Exception as e:
+            app.logger.error(f"Attempt {attempt+1} failed to send reset email to {email}: {e}")
+            time.sleep(delay)
+    else:
+        app.logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
+
 
 
 
@@ -417,6 +436,58 @@ def admin_delete_comment(post_id, comment_id):
 @app.route('/about')
 def about():
     return render_template("about.html")
+
+@app.route('/forgot_password', methods=['GET', 'POST'])
+@limits(calls=5, period=TIME)
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        if email:
+            user = users_conf.find_one({'email': email})
+            if user:
+                reset_token = secrets.token_urlsafe(32)
+                hashed_token = hashlib.sha256(reset_token.encode()).hexdigest()
+                expiry = datetime.datetime.now() + datetime.timedelta(hours=1)
+                auth_conf.update_one(
+                    {'email': email},
+                    {'$set': {'reset_token': hashed_token, 'reset_expiry': expiry}},
+                    upsert=True
+                )
+                send_reset_code(email, reset_token)
+                flash("If an account with that email exists, we've sent you a password reset link.", "info")
+            else:
+                flash("If an account with that email exists, we've sent you a password reset link.", "info")
+        else:
+            flash("Please enter your email address.", "danger")
+    return render_template('forgot_password.html', active_page='forgot_password')
+
+@app.route('/reset_password/<token>', methods=['GET', 'POST'])
+@limits(calls=10, period=TIME)
+def reset_password(token):
+    hashed_token = hashlib.sha256(token.encode()).hexdigest()
+    auth_record = auth_conf.find_one({'reset_token': hashed_token})
+    if not auth_record or auth_record.get('reset_expiry') < datetime.datetime.now():
+        flash("Invalid or expired reset token.", "danger")
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        if password and confirm_password:
+            if password == confirm_password:
+                hashed_password = generate_password_hash(password)
+                users_conf.update_one(
+                    {'email': auth_record['email']},
+                    {'$set': {'password': hashed_password}}
+                )
+                auth_conf.delete_one({'reset_token': hashed_token})
+                flash("Your password has been reset successfully. Please login.", "success")
+                return redirect(url_for('login'))
+            else:
+                flash("Passwords do not match.", "danger")
+        else:
+            flash("Please fill in all fields.", "danger")
+    return render_template('reset_password.html', token=token, active_page='reset_password')
 
 @app.route('/logout')
 def logout():

@@ -11,11 +11,12 @@ import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
-from ratelimit import limits
+from ratelimit import limits, RateLimitException
 from dotenv import load_dotenv
 import secrets
 from jigsawstack import JigsawStack
 import time
+from waitress import serve
 import requests
 from werkzeug.utils import secure_filename
 import hashlib
@@ -837,6 +838,13 @@ def logout():
 def page_not_found(e):
     return redirect(url_for("dashboard")), 404
 
+@app.errorhandler(RateLimitException)
+def handle_ratelimit_exception(e):
+    """Custom handler for rate limit exceeded exceptions."""
+    period_remaining = math.ceil(e.period_remaining)
+    app.logger.warning(f"Rate limit exceeded for IP {request.remote_addr}. Blocked for {period_remaining} seconds.")
+    return render_template('429.html', period_remaining=period_remaining), 429
+
 @app.route('/sitemap.xml')
 def sitemap():
     """Generate sitemap.xml for search engines."""
@@ -860,3 +868,4 @@ def sitemap():
     response = make_response(sitemap_xml)
     response.headers["Content-Type"] = "application/xml"
     return response
+

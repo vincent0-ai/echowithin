@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>Too Many Requests</title>
+{% endblock %}
+
+{% block content %}
+<div class="blog-container">
+    <div class="blog-header">
+        <h1>Too Many Requests</h1>
+        <p>You have made too many requests in a short period of time.</p>
+        {% if period_remaining %}
+            <p>Please wait for <strong>{{ period_remaining }} seconds</strong> before trying again.</p>
+        {% else %}
+            <p>Please wait a few moments before trying again.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

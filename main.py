@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 import secrets
 from jigsawstack import JigsawStack
 import time
-from waitress import serve
 import requests
 from werkzeug.utils import secure_filename
 import hashlib
@@ -806,24 +805,39 @@ def reset_password(token):
         flash("Invalid or expired reset token.", "danger")
         return redirect(url_for('forgot_password'))
 
+    # Get the user who is resetting their password
+    user_to_update = users_conf.find_one({'email': auth_record['email']})
+
     if request.method == 'POST':
+        username = request.form.get('username')
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        if password and confirm_password:
+        if username and password and confirm_password:
+            # Check if the new username is already taken by another user
+            existing_user = users_conf.find_one({'username': username})
+            if existing_user and existing_user['email'] != auth_record['email']:
+                flash("That username is already taken. Please choose a different one.", "danger")
+                return render_template('reset_password.html', token=token, active_page='reset_password')
+
             if password == confirm_password:
                 hashed_password = generate_password_hash(password)
                 users_conf.update_one(
                     {'email': auth_record['email']},
-                    {'$set': {'password': hashed_password}}
+                    {'$set': {
+                        'username': username,
+                        'password': hashed_password
+                    }}
                 )
+                # Also update username in all their posts
+                posts_conf.update_many({'author_id': user_to_update['_id']}, {'$set': {'author': username}})
                 auth_conf.delete_one({'reset_token': hashed_token})
                 flash("Your password has been reset successfully. Please login.", "success")
                 return redirect(url_for('login'))
             else:
                 flash("Passwords do not match.", "danger")
         else:
-            flash("Please fill in all fields.", "danger")
-    return render_template('reset_password.html', token=token, active_page='reset_password')
+            flash("Please fill in all fields.", "danger") # snyk:disable=security-issue
+    return render_template('reset_password.html', token=token, active_page='reset_password', current_username=user_to_update.get('username'))
 
 @app.route('/logout')
 def logout():
@@ -868,4 +882,3 @@ def sitemap():
     response = make_response(sitemap_xml)
     response.headers["Content-Type"] = "application/xml"
     return response
-

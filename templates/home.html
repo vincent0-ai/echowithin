@@ -7,14 +7,53 @@
     <header class="blog-header">
         <h1>Welcome Back, {{ username }}!</h1>
         <p>EchoWithin is a podcast group where the unspoken but real are uncovered.</p>
-        <p>Learn and sharpen your skills with people while engaging in debates or just posting your mind.</p>
+        <p>Built for authentic and real human perspective. We encourage meaningful debates and respectful engagement across all topics</p>
+        <p>At echowithin, we value original human thought. Please avoid posting AI generated content.</p>
+        <p>We want your real ideas, experiences and perspectives to echo within our community.</p>
     </header>
+
+    <div class="community-stats">
+        <div class="stat-card">
+            <h3>Total Members</h3>
+            <p class="stat-number">{{ total_members }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Total Posts</h3>
+            <p class="stat-number">{{ total_posts }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Total Comments</h3>
+            <p class="stat-number">{{ total_comments }}</p>
+        </div>
+        <div class="stat-card">
+            <h3>Most Active Member</h3>
+            {% if most_active_member %}
+                <p class="stat-text"><strong>{{ most_active_member._id }}</strong></p>
+                <p class="stat-subtext">with {{ most_active_member.post_count }} posts</p>
+            {% else %}
+                <p class="stat-text">No activity yet!</p>
+            {% endif %}
+        </div>
+        <div class="stat-card trending-card">
+            <h3>Trending Posts</h3>
+            <ul class="trending-list">
+                {% for post in trending_posts %}
+                    <li>
+                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                        <span>({{ post.comment_count }} comments)</span>
+                    </li>
+                {% else %}
+                    <li>No trending posts yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
 
     <div class="action-cards">
         <div class="card">
             <h3>Explore our Blog</h3>
             <p>Read the latest posts from our community or share your own thoughts.</p>
-            <a href="{{ url_for('blog') }}" class="form-button">Go to Blog</a>
+            <a href="{{ url_for('blog') }}" class="form-button">Explore Blog</a>
         </div>
     </div>
 </div>

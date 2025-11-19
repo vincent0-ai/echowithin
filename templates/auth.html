@@ -1,38 +1,106 @@
-
-{% extends "base.html" %}
-
-{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication - EchoWithin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
 <body>
     <main>
         <div class="auth-container">
             <div class="auth-tabs">
-                <button class="tab-button active" id="login-tab">Login</button>
-                <button class="tab-button" id="register-tab">Register</button>
+                <button class="tab-button active" data-form="login-form">Login</button>
+                <button class="tab-button" data-form="register-form">Register</button>
             </div>
+
             <div class="auth-forms">
-                <form class="auth-form active" id="login-form" method="POST" action="{{ url_for('login') }}">
+                <!-- Login Form -->
+                <form id="login-form" class="auth-form active" method="POST" action="{{ url_for('login') }}">
                     <h2 class="form-title">Welcome Back</h2>
                     <div class="inputs">
-                        <input class="form-input" type="text" name="username" placeholder="Username" required>
-                        <input class="form-input" type="password" name="password" placeholder="Password" required>
+                        <input type="text" name="username" class="form-input" placeholder="Username" required>
+                        <div class="password-input-container">
+                            <input type="password" name="password" class="form-input password-input" placeholder="Password" required>
+                            <i class="far fa-eye password-toggle-icon"></i>
+                        </div>
                     </div>
                     <button type="submit" class="form-button">Login</button>
                     <div class="form-footer">
-                        <a href="{{ url_for('forgot_password') }}">Forgot Password?</a>
+                        <p>Don't have an account? <a href="#" class="switch-tab" data-form="register-form">Sign up</a></p>
                     </div>
                 </form>
-                <form class="auth-form" id="register-form" method="POST" action="{{ url_for('register') }}">
-                    <h2 class="form-title">Join Us</h2>
+
+                <!-- Registration Form -->
+                <form id="register-form" class="auth-form" method="POST" action="{{ url_for('register') }}">
+                    <h2 class="form-title">Create Account</h2>
                     <div class="inputs">
-                        <input class="form-input" type="text" name="username" placeholder="Username" required>
-                        <input class="form-input" type="email" name="email" placeholder="Email" required>
-                        <input class="form-input" type="password" name="password" placeholder="Password" required>
+                        <input type="text" name="username" class="form-input" placeholder="Username" required>
+                        <input type="email" name="email" class="form-input" placeholder="Email" required>
+                        <div class="password-input-container">
+                            <input type="password" name="password" class="form-input password-input" placeholder="Password" required>
+                            <i class="far fa-eye password-toggle-icon"></i>
+                        </div>
                     </div>
                     <button type="submit" class="form-button">Register</button>
+                    <div class="form-footer">
+                        <p>Already have an account? <a href="#" class="switch-tab" data-form="login-form">Log in</a></p>
+                    </div>
                 </form>
             </div>
         </div>
     </main>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const switchLinks = document.querySelectorAll('.switch-tab');
+            const forms = document.querySelectorAll('.auth-form');
+
+            function switchForm(formId) {
+                tabButtons.forEach(button => {
+                    button.classList.toggle('active', button.dataset.form === formId);
+                });
+                forms.forEach(form => {
+                    form.classList.toggle('active', form.id === formId);
+                });
+            }
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    switchForm(button.dataset.form);
+                });
+            });
+
+            switchLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    switchForm(link.dataset.form);
+                });
+            });
+
+            // Password Toggle Functionality
+            const passwordToggles = document.querySelectorAll('.password-toggle-icon');
+
+            passwordToggles.forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const passwordInput = this.previousElementSibling;
+                    // toggle the type attribute
+                    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    passwordInput.setAttribute('type', type);
+                    // toggle the eye slash icon
+                    this.classList.toggle('fa-eye-slash');
+                });
+            });
+
+            // Preserve form tab on page reload (e.g., after a form submission error)
+            const urlParams = new URLSearchParams(window.location.search);
+            const formToShow = urlParams.get('form');
+            if (formToShow === 'register') {
+                switchForm('register-form');
+            }
+        });
+    </script>
 </body>
-{% endblock %}
+</html>

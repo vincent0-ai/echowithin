@@ -1,6 +1,7 @@
 import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory
 import math
+from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
 from flask_mail import Mail, Message 
@@ -11,7 +12,9 @@ from bson.objectid import ObjectId
 from ratelimit import limits
 from dotenv import load_dotenv
 import secrets
+from jigsawstack import JigsawStack
 import time
+import requests
 from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
@@ -20,6 +23,7 @@ from waitress import serve
 app = Flask(__name__)
 
 login_manager = LoginManager(app)
+rq = RQ(app)
 login_manager.login_view = 'login'  # snyk:disable=security-issue
 
 # Secure session cookie settings
@@ -52,6 +56,9 @@ app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
 app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  # Move to .env in production
+
+# Configure Redis connection for RQ background jobs
+app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # e.g., 'redis://localhost:6379/0'
 
 mail = Mail(app)
 
@@ -100,6 +107,58 @@ def inject_pinned_announcement():
 def load_user(user_id):
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})
     return User(user_data) if user_data else None
+
+def check_image_for_nsfw(image_path):
+    """
+    Checks an image for NSFW content using the Sightengine API.
+    Returns True if NSFW, False otherwise. This has been updated to use JigsawStack.
+    """
+    try:
+        # Initialize the JigsawStack client
+        client = JigsawStack(api_key=get_env_variable('JIGSAW_API_KEY'))
+        
+        # Perform the NSFW check using the SDK
+        # The SDK handles opening and sending the file
+        response = client.image.nsfw(image_path=image_path)
+        
+        # The response is a Pydantic model, access the result like this:
+        return response.nsfw.is_nsfw
+
+    except Exception as e:
+        # Catch exceptions from the JigsawStack library (e.g., API errors, network issues)
+        app.logger.error(f"Error calling JigsawStack API via SDK: {e}")
+        return False # Fail open on API error, assuming the image is safe
+
+
+@rq.job
+def process_image_for_nsfw(post_id_str, image_path, image_filename):
+    """
+    This function runs in the background to check an image for NSFW content.
+    """
+    # Imports must be inside the function for the RQ worker
+    from main import app, posts_conf, check_image_for_nsfw
+    from bson.objectid import ObjectId
+    import os
+
+    with app.app_context():
+        post_id = ObjectId(post_id_str)
+        app.logger.info(f"Starting NSFW check for post {post_id} on image {image_filename}")
+
+        is_nsfw = check_image_for_nsfw(image_path)
+
+        if is_nsfw:
+            app.logger.warning(f"NSFW content detected in {image_filename} for post {post_id}. Deleting image.")
+            try:
+                os.remove(image_path)
+            except OSError as e:
+                app.logger.error(f"Error removing NSFW image file {image_path}: {e}")
+            
+            # Update post to remove image reference and set status
+            posts_conf.update_one({'_id': post_id}, {'$set': {'image_filename': None, 'image_status': 'removed_nsfw'}})
+        else:
+            app.logger.info(f"Image {image_filename} for post {post_id} is safe.")
+            # Mark the image as checked and safe
+            posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
 
 
 
@@ -274,7 +333,47 @@ def dashboard():
 def home():
     page_title = f"Home - {current_user.username}"
     page_description = "Your personal dashboard on EchoWithin. Create new posts and engage with the community."
-    return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description)
+
+    # --- Community Stats ---
+    total_members = users_conf.count_documents({})
+    total_posts = posts_conf.count_documents({})
+
+    # Calculate total comments
+    total_comments_pipeline = [
+        {'$match': {'comments': {'$exists': True, '$ne': []}}},
+        {'$project': {'comment_count': {'$size': '$comments'}}},
+        {'$group': {'_id': None, 'total': {'$sum': '$comment_count'}}}
+    ]
+    total_comments_result = list(posts_conf.aggregate(total_comments_pipeline))
+    total_comments = total_comments_result[0]['total'] if total_comments_result else 0
+
+    # Find the most active member (by post count)
+    most_active_member_pipeline = [
+        {'$group': {'_id': '$author', 'post_count': {'$sum': 1}}},
+        {'$sort': {'post_count': -1}},
+        {'$limit': 1}
+    ]
+    most_active_member_result = list(posts_conf.aggregate(most_active_member_pipeline))
+    most_active_member = most_active_member_result[0] if most_active_member_result else None
+
+    # Find trending posts (most commented) using an aggregation pipeline
+    trending_posts = list(posts_conf.aggregate([
+        {
+            '$project': {
+                'title': 1,
+                'slug': 1,
+                'comment_count': {'$size': {'$ifNull': ['$comments', []]}} # snyk:disable=nosql-injection
+            }
+        },
+        {'$sort': {'comment_count': -1}},
+        {'$limit': 3}
+    ]))
+
+    return render_template("home.html", username=current_user.username, active_page='home', 
+                           title=page_title, description=page_description,
+                           total_members=total_members, total_posts=total_posts,
+                           total_comments=total_comments, most_active_member=most_active_member,
+                           trending_posts=trending_posts)
 
 @app.route("/blog")
 def blog():
@@ -326,20 +425,28 @@ def post():
             if image_file and image_file.filename != '' and '.' in image_file.filename and image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
                 # Secure the filename and save the file
                 filename = secure_filename(image_file.filename)
-                # Create a unique filename to prevent overwrites
                 unique_filename = f"{ObjectId()}_{filename}"
-                image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
+                image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                image_file.save(image_path)
                 image_filename = unique_filename
 
-            posts_conf.insert_one({
+            new_post_data = {
                 'author_id': ObjectId(current_user.id),
                 'slug': slug,
                 'title': title,
                 'content': content,
                 'author': current_user.username,
                 'image_filename': image_filename,
+                'image_status': 'processing' if image_filename else 'none', # Add image status
                 'timestamp': datetime.datetime.now(),
-            })
+            }
+            result = posts_conf.insert_one(new_post_data)
+
+            # If an image was uploaded, queue the background job for NSFW check
+            if image_filename:
+                post_id_str = str(result.inserted_id)
+                process_image_for_nsfw.queue(post_id_str, image_path, image_filename)
+
             flash("Post created successfully!", "success")
         else:
             flash("Title and content cannot be empty.", "danger")
@@ -407,10 +514,15 @@ def update_post(post_id):
             
             filename = secure_filename(image_file.filename)
             unique_filename = f"{ObjectId()}_{filename}"
-            image_file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_filename))
-            image_filename = unique_filename
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            image_file.save(image_path)
 
-        # If the title has changed, we need to generate a new slug
+            # Queue the background job for the new image
+            process_image_for_nsfw.queue(post_id, image_path, unique_filename)
+            image_filename = unique_filename
+            image_status = 'processing'
+
+        # If the title has changed, generate a new slug
         if title != post.get('title'):
             base_slug = slugify(title)
             new_slug = base_slug
@@ -427,11 +539,12 @@ def update_post(post_id):
                 'title': title,
                 'content': content,
                 'image_filename': image_filename,
+                'image_status': image_status if 'image_status' in locals() else post.get('image_status', 'none'),
                 'slug': slug,
                 'timestamp': datetime.datetime.now(),
             }}
         )
-        flash("Post updated successfully!", "success")
+        flash("Post updated successfully! The image is being processed.", "success")
     else:
         flash("Title and content cannot be empty.", "danger")
     return redirect(url_for('view_post', slug=slug))
@@ -666,3 +779,9 @@ def sitemap():
     response = make_response(sitemap_xml)
     response.headers["Content-Type"] = "application/xml"
     return response
+
+if __name__ == '__main__':
+    # For development, use the Flask dev server:
+    # app.run(debug=True, host='0.0.0.0', port=8080)
+    # For production, use waitress:
+    serve(app, host='0.0.0.0', port=8080)

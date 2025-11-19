@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template, url_for, redirect, s
 import logging
 import math
 from flask_rq2 import RQ
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user 
 from functools import wraps
 from flask_mail import Mail, Message 
 import os
@@ -95,6 +95,9 @@ posts_conf = db['posts']
 logs_conf = db['logs']
 auth_conf = db['auth']
 announcements_conf = db['announcements']
+
+# Ensure a text index exists on the posts collection for search functionality
+posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
 class User(UserMixin):
     def __init__(self, user_data):

@@ -25,10 +25,7 @@ from logging.handlers import RotatingFileHandler
 app = Flask(__name__)
 
 # --- Logging Setup ---
-# Only configure file logging if not in debug mode
 if not app.debug:
-    # Create a rotating file handler to manage log file size
-    # This will create up to 5 backup files of 10MB each.
     file_handler = RotatingFileHandler('echowithin.log', maxBytes=1024 * 1024 * 10, backupCount=5)
     
     # Set the logging level (e.g., INFO, WARNING, ERROR)

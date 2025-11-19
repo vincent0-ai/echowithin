@@ -8,8 +8,10 @@
 <div class="blog-container">
     <div class="create-post-section">
         {% if action == 'comment' %}
-            <h2>Add a Comment</h2>
-            <p><strong>Post:</strong> {{ post.title }}</p>
+            <h2>{{ post.title }}</h2>
+            <p class="post-meta">
+                By <a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a> on {{ post.timestamp.strftime('%B %d, %Y') }}
+            </p>
             {% if post.image_filename %}
                 <div class="post-image-container">
                     <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">

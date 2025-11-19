@@ -240,39 +240,45 @@ def register():
         'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
         })
         if username and password and email:
-            existing_user = users_conf.find_one({'$or': [{'email': email}, {'username': username}]})
-            gen_code = None  # Initialize gen_code
+            # 1. Check if username is already taken
+            if users_conf.find_one({'username': username}):
+                flash("This username is already taken. Please choose a different one.", "danger")
+                return redirect(url_for('register', form='register'))
 
-            if existing_user:
-                if existing_user.get('is_confirmed'):
-                    flash("This email is already registered and confirmed. Please login.", "danger")
+            # 2. Check if email is already registered
+            existing_user_by_email = users_conf.find_one({'email': email})
+            if existing_user_by_email:
+                # If the user is already confirmed, direct them to login
+                if existing_user_by_email.get('is_confirmed'):
+                    flash("This email is already registered. Please log in.", "info")
                     return redirect(url_for('login'))
-                elif existing_user['email'] == email:
-                    # User exists but is not confirmed, resend code
-                    flash("This email is already registered. We've sent you a new confirmation code.", "info")
-                else: # Username is taken
-                    flash("This username is already taken. Try using a different username.", "danger")
-                    return redirect(url_for('register'))
-            else: # New user
-                password = generate_password_hash(password)
-                users_conf.insert_one({
-                    'username' : username,
-                    'email': email,
-                    'password' : password,
-                    'is_confirmed': False,
-                    'is_admin': False,
-                })
-                flash("Account created successfully. Please check your email for the confirmation code.", "success")
+                else:
+                    # If not confirmed, resend the confirmation code
+                    flash("This email is already registered but not confirmed. We've sent you a new confirmation code.", "info")
+                    gen_code = str(secrets.randbelow(10**6)).zfill(6)
+                    hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+                    auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
+                    send_code(email, gen_code)
+                    return redirect(url_for("confirm", email=email))
 
-            # Generate and store a new code for new users or unconfirmed existing users
+            # 3. If both username and email are new, create the new user
+            hashed_password = generate_password_hash(password)
+            users_conf.insert_one({
+                'username': username,
+                'email': email,
+                'password': hashed_password,
+                'is_confirmed': False,
+                'is_admin': False,
+                'join_date': datetime.datetime.now()
+            })
+
+            # Send confirmation code for the new user
             gen_code = str(secrets.randbelow(10**6)).zfill(6)
             hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-            auth_conf.update_one(
-                {'email': email},
-                {'$set': {'hashed_code': hashed}},
-                upsert=True
-            )
+            auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
             send_code(email, gen_code)
+            
+            flash("Account created successfully! Please check your email for the confirmation code.", "success")
             return redirect(url_for("confirm", email=email))
         else:
             flash('Username and password are required', "danger")
@@ -714,6 +720,27 @@ def about():
     page_title = "About EchoWithin"
     page_description = "Learn more about EchoWithin, our mission, and the team behind the platform."
     return render_template("about.html", title=page_title, description=page_description)
+
+@app.route('/profile/<username>')
+@login_required
+def profile(username):
+    # Find the user by username
+    user = users_conf.find_one({'username': username})
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('home'))
+
+    # Find all posts by this user's ID
+    user_posts = list(posts_conf.find({'author_id': user['_id']}).sort('timestamp', -1))
+    
+    page_title = f"Profile: {user['username']}"
+    page_description = f"View the profile and posts by {user['username']} on EchoWithin."
+
+    return render_template('profile.html', 
+                           user=user, 
+                           user_posts=user_posts,
+                           title=page_title,
+                           description=page_description)
 
 @app.route('/contact', methods=['POST'])
 @limits(calls=5, period=TIME) # Rate limit to 5 submissions per period (e.g., 15 mins)

@@ -1,5 +1,6 @@
 import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory
+import logging
 import math
 from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
@@ -19,8 +20,30 @@ from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
 from waitress import serve
+from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
+
+# --- Logging Setup ---
+# Only configure file logging if not in debug mode
+if not app.debug:
+    # Create a rotating file handler to manage log file size
+    # This will create up to 5 backup files of 10MB each.
+    file_handler = RotatingFileHandler('echowithin.log', maxBytes=1024 * 1024 * 10, backupCount=5)
+    
+    # Set the logging level (e.g., INFO, WARNING, ERROR)
+    file_handler.setLevel(logging.INFO)
+    
+    # Define the format for the log messages
+    formatter = logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    )
+    file_handler.setFormatter(formatter)
+    
+    # Add the handler to the app's logger
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('EchoWithin application startup')
 
 login_manager = LoginManager(app)
 rq = RQ(app)

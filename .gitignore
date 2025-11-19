@@ -3,3 +3,4 @@ secret.py
 __pycache__/
 TODO.md
 static/uploads/
+*.log

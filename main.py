@@ -19,7 +19,6 @@ import requests
 from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
-from waitress import serve
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
@@ -85,7 +84,7 @@ mail = Mail(app)
 TIME = int(get_env_variable('TIME'))
 
 
-client = MongoClient('localhost', 27017)
+client = MongoClient(get_env_variable('MONGODB_CONNECTION'))
 db = client['echowithin_db']
 users_conf = db['users']
 posts_conf = db['posts']
@@ -861,5 +860,4 @@ def sitemap():
     response.headers["Content-Type"] = "application/xml"
     return response
 
-if __name__ == '__main__':
-    serve(app, host='0.0.0.0', port=8080)
+

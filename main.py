@@ -2,6 +2,7 @@ import datetime
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory
 import logging
 import math
+import redis
 from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user 
 from functools import wraps
@@ -859,5 +860,3 @@ def sitemap():
     response = make_response(sitemap_xml)
     response.headers["Content-Type"] = "application/xml"
     return response
-
-

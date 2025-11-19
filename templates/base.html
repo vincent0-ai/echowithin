@@ -20,6 +20,7 @@
         <nav class="nav-links" id="nav-links">
             {% if current_user.is_authenticated %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
+                <a href="{{ url_for('profile', username=current_user.username) }}" class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('logout') }}">Logout</a>

@@ -739,11 +739,12 @@ def profile(username):
     return render_template('profile.html', 
                            user=user, 
                            user_posts=user_posts,
-                           title=page_title,
-                           description=page_description)
+                           title=page_title, 
+                           description=page_description,
+                           active_page='profile')
 
 @app.route('/contact', methods=['POST'])
-@limits(calls=5, period=TIME) # Rate limit to 5 submissions per period (e.g., 15 mins)
+@limits(calls=5, period=TIME) 
 def contact_developer():
     if request.method == 'POST':
         name = request.form.get('name')

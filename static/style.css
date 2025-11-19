@@ -669,6 +669,23 @@ body {
     color: #777;
 }
 
+.profile-details {
+    margin-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.profile-detail-item {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+}
+
+.detail-value {
+    color: #555;
+}
+
 .post-item-simple {
     padding: 1rem 0;
     border-bottom: 1px solid #eee;

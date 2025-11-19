@@ -81,7 +81,7 @@ app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  # Move to .env in production
 
 # Configure Redis connection for RQ background jobs
-app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # e.g., 'redis://localhost:6379/0'
+app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # 
 
 mail = Mail(app)
 
@@ -567,7 +567,8 @@ def update_post(post_id):
                 'timestamp': datetime.datetime.now(),
             }}
         )
-        flash("Post updated successfully! The image is being processed.", "success")
+        flash("Post updated successfully!", "success")
+        return redirect(url_for('blog', slug=slug))
     else:
         flash("Title and content cannot be empty.", "danger")
     return redirect(url_for('view_post', slug=slug))
@@ -714,6 +715,35 @@ def about():
     page_description = "Learn more about EchoWithin, our mission, and the team behind the platform."
     return render_template("about.html", title=page_title, description=page_description)
 
+@app.route('/contact', methods=['POST'])
+@limits(calls=5, period=TIME) # Rate limit to 5 submissions per period (e.g., 15 mins)
+def contact_developer():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        sender_email = request.form.get('email')
+        subject = request.form.get('subject')
+        message_body = request.form.get('message')
+
+        if not all([name, sender_email, subject, message_body]):
+            flash("Please fill out all fields in the contact form.", "danger")
+            return redirect(url_for('about'))
+
+        try:
+            msg = Message(
+                subject=f"EchoWithin Contact Form: {subject}",
+                sender=get_env_variable('MAIL_USERNAME'), # Your app's email
+                recipients=[get_env_variable('MY_EMAIL')] # Your personal email
+            )
+            # Set the reply-to header so you can reply directly to the user
+            msg.reply_to = sender_email
+            msg.body = f"You have a new message from {name} ({sender_email}):\n\n{message_body}"
+            mail.send(msg)
+            flash("Your message has been sent successfully. Thank you!", "success")
+        except Exception as e:
+            app.logger.error(f"Failed to send contact form email: {e}")
+            flash("Sorry, there was an error sending your message. Please try again later.", "danger")
+    return redirect(url_for('about'))
+
 @app.route('/forgot_password', methods=['GET', 'POST'])
 @limits(calls=5, period=TIME)
 def forgot_password():
@@ -770,7 +800,7 @@ def reset_password(token):
 def logout():
     logout_user() # Use Flask-Login to properly log the user out
     flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
+    return redirect(url_for('dashboard'))
 
 
 # Handles any possible errors
@@ -804,7 +834,4 @@ def sitemap():
     return response
 
 if __name__ == '__main__':
-    # For development, use the Flask dev server:
-    # app.run(debug=True, host='0.0.0.0', port=8080)
-    # For production, use waitress:
     serve(app, host='0.0.0.0', port=8080)

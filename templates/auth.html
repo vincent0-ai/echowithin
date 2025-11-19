@@ -1,13 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authentication - EchoWithin</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}
+    <title>Authentication</title>
+{% endblock %}
+
+{% block content %}
+
     <main>
         <div class="auth-container">
             <div class="auth-tabs">
@@ -102,5 +100,5 @@
             }
         });
     </script>
-</body>
-</html>
+
+{% endblock %}

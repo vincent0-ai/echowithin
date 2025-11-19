@@ -652,6 +652,19 @@ body {
     line-height: 1.7;
 }
 
+/* Contact Form on About Page */
+.contact-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1rem;
+}
 /* Responsive Styles */
 
 /* Tablet Styles (max-width: 768px) */

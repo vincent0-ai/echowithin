@@ -21,9 +21,17 @@
         <p>We encourage that you speak your mind rather than using AI to generate to prove your point.</p>
         <p>Enjoy your stay!</p>
         <br>
-        <h4>Contact the Developer</h4>
-        <h4>vinnyochi13249@gmail.com</h4>
-        <h4>+254768072566</h4>
+        <div class="contact-section">
+            <h4>Contact the Developer</h4>
+            <p>Have a question, suggestion or feedback? Use the form below to send a message directly to the developer.</p>
+            <form action="{{ url_for('contact_developer') }}" method="POST" class="contact-form">
+                <input type="text" name="name" class="form-input" placeholder="Your Name" required>
+                <input type="email" name="email" class="form-input" placeholder="Your Email" required>
+                <input type="text" name="subject" class="form-input" placeholder="Subject" required>
+                <textarea name="message" class="form-input" rows="5" placeholder="Your Message" required></textarea>
+                <button type="submit" class="form-button">Send Message</button>
+            </form>
+        </div>
     </div>
     <div class="social-media-section">
         <h4>Follow Us on Social Media</h4>

@@ -52,7 +52,7 @@
                     <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
                         {% if post.image_url %}
                             {# Display image from Cloudinary #}
-                            {% if post.image_status == 'safe' %}
+                            {% if post.image_status == 'safe' or post.image_status == 'processing' %}
                                 <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
                             {% elif post.image_status == 'removed_nsfw' %}
                                 <div class="nsfw-placeholder">Image removed due to sensitive content.</div>

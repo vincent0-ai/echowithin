@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %} <title>Home</title> {% endblock %}
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+{% endblock %}
 
 {% block content %}
 <div class="blog-container">
-    <header class="blog-header">
-        <h1>Welcome Back, {{ username }}!</h1>
-        <p>EchoWithin is a podcast group where the unspoken but real are uncovered.</p>
-        <p>Built for authentic and real human perspective. We encourage meaningful debates and respectful engagement across all topics</p>
-        <p>At echowithin, we value original human thought. Please avoid posting AI generated content.</p>
-        <p>We want your real ideas, experiences and perspectives to echo within our community.</p>
-    </header>
+    <div class="blog-header">
+        <h1>Welcome, {{ username }}!</h1>
+        <p>This is your dashboard. See what's happening in the community.</p>
+    </div>
 
-    <div class="community-stats">
+    <!-- Community Stats Section -->
+    <section class="community-stats">
         <div class="stat-card">
             <h3>Total Members</h3>
             <p class="stat-number">{{ total_members }}</p>
@@ -28,33 +29,33 @@
         <div class="stat-card">
             <h3>Most Active Member</h3>
             {% if most_active_member %}
-                <p class="stat-text"><strong>{{ most_active_member._id }}</strong></p>
+                <p class="stat-text">{{ most_active_member._id }}</p>
                 <p class="stat-subtext">with {{ most_active_member.post_count }} posts</p>
             {% else %}
-                <p class="stat-text">No activity yet!</p>
+                <p class="stat-subtext">No activity yet.</p>
             {% endif %}
         </div>
+        
+        <!-- Trending Posts Card -->
         <div class="stat-card trending-card">
             <h3>Trending Posts</h3>
-            <ul class="trending-list">
-                {% for post in trending_posts %}
-                    <li>
-                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                        <span>({{ post.comment_count }} comments)</span>
-                    </li>
-                {% else %}
-                    <li>No trending posts yet.</li>
-                {% endfor %}
-            </ul>
+            {% if trending_posts %}
+                <ul class="trending-list">
+                    {% for post in trending_posts %}
+                        <li>
+                            <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                            <span class="stat-subtext">({{ post.comment_count }} comments)</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="stat-subtext">No trending posts right now.</p>
+            {% endif %}
         </div>
-    </div>
+    </section>
 
-    <div class="action-cards">
-        <div class="card">
-            <h3>Explore our Blog</h3>
-            <p>Read the latest posts from our community or share your own thoughts.</p>
-            <a href="{{ url_for('blog') }}" class="form-button">Explore Blog</a>
-        </div>
+    <div class="explore-section" style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color);">
+        <a href="{{ url_for('blog') }}" class="btn comment-btn" style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">Explore The Blog</a>
     </div>
 </div>
 {% endblock %}

@@ -1,154 +1,118 @@
 {% extends "base.html" %}
 
-{% block title %} <title>Blog</title> {% endblock %}
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+{% endblock %}
 
 {% block content %}
-
 <div class="blog-container">
-    <header class="blog-header">
-        <h4>Does it echo within you?</h4>
-        <h1>Share Your Thoughts</h1>
-        {% if current_user.is_admin %}
-            <div class="admin-links">
-                <h4><a href="{{ url_for('admin_posts') }}" class="admin-link">Manage Posts</a></h4>
-                <h4><a href="{{ url_for('admin_announcements') }}" class="admin-link">Manage Announcements</a></h4>
-            </div>
-        {% endif %}
-    </header>
+    <div class="blog-header">
+        <h1>EchoWithin Blog</h1>
+        <h4>Share your real ideas, experiences, and perspectives.</h4>
+        
+        <!-- Search Form -->
+        <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem;">
+            <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="width: 70%;">
+            <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
+        </form>
 
-    {# Display Pinned Announcement if it exists #}
-    {% if pinned_announcement %}
-    <div class="pinned-announcement">
-        <strong>Announcement:</strong> {{ pinned_announcement.content }}
-        <small> (Posted by {{ pinned_announcement.author_username }})</small>
+        {% if current_user.is_authenticated and current_user.is_admin %}
+        <div class="admin-actions">
+            <a href="{{ url_for('admin_posts') }}" class="btn edit-btn">Manage Posts</a>
+            <a href="{{ url_for('admin_announcements') }}" class="btn edit-btn">Manage Announcements</a>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 
     {% if current_user.is_authenticated %}
     <div class="create-post-section">
-        <h2>Create a New Post</h2>
-        <form action="{{url_for('post')}}" method="POST" class="post-form" enctype="multipart/form-data">
-            <input type="text" name="title" placeholder="Post Title" class="form-input" required>
-            <textarea name="content" placeholder="What's on your mind, {{ current_user.username }}?" rows="6" class="form-input" required></textarea>
-            <div class="form-group">
+        <h3>Create a New Post</h3>
+        <form action="{{ url_for('post') }}" method="POST" class="post-form" enctype="multipart/form-data">
+            <input type="text" name="title" class="form-input" placeholder="Post Title" required>
+            <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="5" required></textarea>
+            <div>
                 <label for="image">Upload an Image (Optional):</label>
-                <input type="file" name="image" class="form-input-file" accept="image/png, image/jpeg, image/gif">
+                <input type="file" name="image" class="form-input" accept="image/*">
             </div>
-            <button type="submit" class="form-button">Publish Post</button>
+            <button type="submit" class="form-button">Post</button>
         </form>
     </div>
-    {% else %}
-    <p class="login-prompt"><a href="{{ url_for('login', next=request.path) }}"><strong>Log in</strong></a> or <a href="{{ url_for('register') }}"><strong>register</strong></a> to create a post and join the discussion.</p>
     {% endif %}
 
     <div class="posts-section">
-        <div class="search-section">
-            <form action="{{ url_for('blog') }}" method="GET" class="search-form">
-                <input type="text" name="query" placeholder="Search posts..." class="form-input" value="{{ query or '' }}">
-                <button type="submit" class="form-button">Search</button>
-            </form>
-        </div>
-
-        <h2>Recent Posts</h2>
-        <div class="posts-list">
+        <h2>{% if query %}Search Results for "{{ query }}"{% else %}Latest Posts{% endif %}</h2>
+        {% if posts %}
             {% for post in posts %}
             <div class="post-item">
                 <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{post.title}}</a></h3>
-                {% if post.image_filename %}
-                    <div class="post-image-container">
-                        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
+
+                <!-- Image Display Logic -->
+                {% if post.image_url or post.image_filename %}
+                    <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+                        {% if post.image_url %}
+                            {# Display image from Cloudinary #}
+                            {% if post.image_status == 'safe' %}
+                                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
+                            {% elif post.image_status == 'removed_nsfw' %}
+                                <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
+                            {% endif %}
+                        {% elif post.image_filename %}
+                            {# Fallback for old posts: Display image from local uploads #}
+                            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
+                        {% endif %}
                     </div>
                 {% endif %}
-                <div class="post-content">
-                    {% if post.content|length > 350 %}
-                        <p>
-                            <span class="truncated-content">{{ post.content | truncate(350, True) | safe }}</span>
-                            <span class="full-content" style="display: none;">{{ post.content | safe }}</span>
-                            <button class="read-more-btn" data-post-id="{{ post._id }}">Read More</button>
-                        </p>
+
+                <div class="post-content-wrapper">
+                    {% if post.content|length > 150 %}
+                        <p class="post-content-truncated">{{ post.content|truncate(150, true) }}</p>
+                        <p class="post-content-full">{{ post.content }}</p>
+                        <a href="#" class="read-more-link read-more-toggle">Read More</a>
                     {% else %}
-                        <p>{{ post.content | safe }}</p>
+                        <p>{{ post.content }}</p>
                     {% endif %}
                 </div>
+
                 <div class="post-meta">
-                    Posted by <strong>{{post.author}} on {{ post.timestamp.strftime("%B %d, %Y %I:%M %p") }}</strong>
+                    Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%B %d, %Y') }}
                 </div>
-                {% if current_user.is_authenticated %}
                 <div class="post-actions">
-                    {% if post.author_id|string == current_user.id %}
-                    <a href="{{ url_for('edit_post', post_id=post._id) }}" class="btn edit-btn">Edit</a>
-                    <form action="{{ url_for('delete_post', post_id=post._id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this post?');" style="display: inline;">
-                        <button type="submit" class="btn delete-btn">Delete</button>
-                    </form>
+                    {% set comment_count = post.comments|length if post.comments else 0 %}
+                    <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn comment-btn">
+                        Comments
+                        <span class="comment-count-badge">{{ comment_count }}</span>
+                    </a>
+
+                    {% if current_user.is_authenticated and post.author_id|string == current_user.id %}
+                        <a href="{{ url_for('edit_post', post_id=post._id, action='edit') }}" class="btn edit-btn">Edit</a>
+                        <form action="{{ url_for('delete_post', post_id=post._id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this post?');" style="display: inline;">
+                            <button type="submit" class="btn delete-btn">Delete</button>
+                        </form>
                     {% endif %}
-                    <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn comment-btn">Comment</a>
                 </div>
-                {% endif %}
-
-                {# --- Comment Stats & Toggle Button --- #}
-                {% set comment_count = (post.comments | length) if post.comments else 0 %}
-                <div class="comment-toggle-section">
-                    <button class="toggle-comments-btn" data-post-id="{{ post._id }}" data-comment-count="{{ comment_count }}">
-                        View {{ comment_count }} Comment{{'s' if comment_count != 1 else ''}}
-                    </button>
-                </div>
-
-                {# --- Comment Display Start --- #}
-                <div id="comments-{{ post._id }}" class="post-interaction" style="display: none;">
-                    {# Display Comments in Debate Format #}
-                    <div class="debate-container">
-                        <div class="debate-side agree-side">
-                            <h4>In Agreement</h4>
-                            {% set agree_comments = post.comments|selectattr('stance', 'equalto', 'agree')|list %}
-                            {% for comment in agree_comments %}
-                                <div class="comment">
-                                    <p>{{ comment.content }}</p>
-                                    <small>by {{ comment.author }}</small>
-                                </div>
-                            {% else %}
-                                <p class="no-comments">No agreeing comments yet.</p>
-                            {% endfor %} 
-                        </div>
-                        <div class="debate-side disagree-side">
-                            <h4>In Disagreement</h4>
-                            {% set disagree_comments = post.comments|selectattr('stance', 'equalto', 'disagree')|list %}
-                            {% for comment in disagree_comments %}
-                                <div class="comment">
-                                    <p>{{ comment.content }}</p>
-                                    <small> by {{ comment.author }}</small>
-                                </div>
-                            {% else %}
-                                <p class="no-comments">No disagreeing comments yet.</p>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                {# --- Comment Display End --- #}
             </div>
-            {% else %}
-            <p>No posts found. Try a different search or create a new post!</p>
             {% endfor %}
-        </div>
-
-        {# Pagination Links #}
-        {% if total_pages > 1 %}
-        <nav aria-label="Page navigation" class="pagination-nav">
-          <ul class="pagination">
-            {# Link to the Previous Page #}
-            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('blog', page=page-1, query=query) }}">Previous Page</a>
-            </li>
-         
-            {# Link to the Next Page #}
-            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('blog', page=page+1, query=query) }}">Next Page</a>
-            </li>
-            <li class="page-item">
-              <a class="page-link" href="{{ url_for('blog') }}">Home</a>
-            </li>
-          </ul>
-        </nav>
+        {% else %}
+            <p>No posts found. {% if not query and current_user.is_authenticated %}Why not create the first one?{% endif %}</p>
         {% endif %}
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav class="pagination-nav">
+        <ul class="pagination">
+            {% if page > 1 %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('blog', page=page-1, query=query) }}">Previous</a></li>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('blog', page=p, query=query) }}">{{ p }}</a></li>
+            {% endfor %}
+            {% if page < total_pages %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('blog', page=page+1, query=query) }}">Next</a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 </div>
 {% endblock %}

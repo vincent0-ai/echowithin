@@ -1,11 +1,14 @@
-# EchoWithin - Flask User Authentication Project
+# EchoWithin - A Community Discussion Platform
 
-EchoWithin is a simple web application built with Flask that demonstrates a complete user authentication system. It includes user registration, login, logout, and session management, using MongoDB as the database.
+EchoWithin is a podcast group and community platform where the unspoken but real are uncovered. Built for authentic and real human perspective, we encourage meaningful debates and respectful engagement across all topics. At EchoWithin, we value original human thought and want your real ideas, experiences, and perspectives to echo within our community.
+
+This web application, built with Flask and MongoDB, provides the digital space for this community to thrive.
 
 ## Features
 
 - User Registration with password hashing
 - User Login and Logout
+- Community blog for posts and discussions
 - Persistent user sessions using Flask-Login
 - Protected routes accessible only to authenticated users
 - Integration with MongoDB for data storage

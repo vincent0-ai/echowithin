@@ -181,25 +181,25 @@ def check_image_for_nsfw(image_path):
         return False # Fail open on API error, assuming the image is safe
 
 
-@rq.job
-def process_image_for_nsfw(post_id_str, image_url, public_id):
+def process_image_for_nsfw(post_id, image_url, public_id):
     """
-    This function runs in the background to check an image for NSFW content.
-    It now uses the image URL from Cloudinary.
+    This function checks an image for NSFW content synchronously.
+    It uses JigsawStack for NSFW detection.
     """
-    # Imports must be inside the function for the RQ worker
-    from main import app, posts_conf
-    from bson.objectid import ObjectId
-    import cloudinary.uploader
+    app.logger.info(f"Starting NSFW check for post {post_id} on image URL: {image_url}")
 
-    with app.app_context():
-        post_id = ObjectId(post_id_str)
-        app.logger.info(f"Starting NSFW check for post {post_id} on image URL: {image_url}")
-
-        # Cloudinary's built-in NSFW detection is more efficient
-        # We tell Cloudinary to check the already uploaded image.
-        response = cloudinary.uploader.explicit(public_id, type="upload", moderation="aws_rek")
-        is_nsfw = response.get("moderation", [{}])[0].get("status") == "rejected"
+    try:
+        # Use JigsawStack for NSFW detection via API
+        api_response = requests.post(
+            'https://api.jigsawstack.com/v1/ai/nsfw',
+            json={"image_url": image_url},
+            headers={"x-api-key": get_env_variable('JIGSAW_API_KEY')}
+        )
+        if api_response.status_code == 200:
+            data = api_response.json()
+            is_nsfw = data.get('is_nsfw', False)
+        else:
+            is_nsfw = False
 
         if is_nsfw:
             app.logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging as NSFW.")
@@ -208,6 +208,10 @@ def process_image_for_nsfw(post_id_str, image_url, public_id):
         else:
             app.logger.info(f"Image {public_id} for post {post_id} is safe.")
             posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
+    except Exception as e:
+        app.logger.error(f"Error during NSFW check for post {post_id}: {e}")
+        # Fail open: assume safe
+        posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
 
 
 
@@ -504,10 +508,9 @@ def post():
             }
             result = posts_conf.insert_one(new_post_data)
 
-            # If an image was uploaded, queue the background job for NSFW check
+            # If an image was uploaded, perform synchronous NSFW check
             if image_url and image_public_id:
-                post_id_str = str(result.inserted_id)
-                process_image_for_nsfw.queue(post_id_str, image_url, image_public_id)
+                process_image_for_nsfw(result.inserted_id, image_url, image_public_id)
 
             flash("Post created successfully!", "success")
         else:
@@ -574,8 +577,8 @@ def update_post(post_id):
                 image_url = upload_result.get('secure_url')
                 image_public_id = upload_result.get('public_id')
                 image_status = 'processing'
-                # Queue the background job for the new image
-                process_image_for_nsfw.queue(post_id, image_url, image_public_id)
+                # Check the new image for NSFW synchronously
+                process_image_for_nsfw(ObjectId(post_id), image_url, image_public_id)
             except Exception as e:
                 app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
 

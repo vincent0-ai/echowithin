@@ -20,6 +20,8 @@ import requests
 from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
+import cloudinary
+import cloudinary.uploader
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
@@ -51,6 +53,9 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from acces
 app.config['SESSION_COOKIE_SECURE'] = False # Only send cookie over HTTPS (set to False in local dev if not using HTTPS)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
+# Configure permanent session lifetime for "Remember Me"
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
+# Load environment variables from .env file
 load_dotenv()
 
 def get_env_variable(name: str) -> str:
@@ -64,18 +69,22 @@ def get_env_variable(name: str) -> str:
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
-# Configuration for file uploads
+# Configuration for file uploads (now handled by Cloudinary)
+# UPLOAD_FOLDER is kept for backward compatibility with old posts.
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# --- Cloudinary Configuration ---
+cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_key = get_env_variable('CLOUDINARY_API_KEY'), api_secret = get_env_variable('CLOUDINARY_API_SECRET'))
+
 app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
 app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  # Move to .env in production
+app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  
 
 # Configure Redis connection for RQ background jobs
 app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # 
@@ -120,6 +129,25 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def owner_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        post_id = kwargs.get('post_id')
+        if not post_id:
+            # This case should ideally not be reached if routes are set up correctly
+            flash("Post ID is missing.", "danger")
+            return redirect(url_for('home'))
+
+        post = posts_conf.find_one({'_id': ObjectId(post_id)})
+
+        # Check if post exists and if the current user is the author
+        if not post or str(post.get('author_id')) != current_user.id:
+            flash("You are not authorized to perform this action.", "danger")
+            return redirect(url_for('blog'))
+
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.context_processor
 def inject_pinned_announcement():
     """Makes the pinned announcement available to all templates."""
@@ -154,33 +182,31 @@ def check_image_for_nsfw(image_path):
 
 
 @rq.job
-def process_image_for_nsfw(post_id_str, image_path, image_filename):
+def process_image_for_nsfw(post_id_str, image_url, public_id):
     """
     This function runs in the background to check an image for NSFW content.
+    It now uses the image URL from Cloudinary.
     """
     # Imports must be inside the function for the RQ worker
-    from main import app, posts_conf, check_image_for_nsfw
+    from main import app, posts_conf
     from bson.objectid import ObjectId
-    import os
+    import cloudinary.uploader
 
     with app.app_context():
         post_id = ObjectId(post_id_str)
-        app.logger.info(f"Starting NSFW check for post {post_id} on image {image_filename}")
+        app.logger.info(f"Starting NSFW check for post {post_id} on image URL: {image_url}")
 
-        is_nsfw = check_image_for_nsfw(image_path)
+        # Cloudinary's built-in NSFW detection is more efficient
+        # We tell Cloudinary to check the already uploaded image.
+        response = cloudinary.uploader.explicit(public_id, type="upload", moderation="aws_rek")
+        is_nsfw = response.get("moderation", [{}])[0].get("status") == "rejected"
 
         if is_nsfw:
-            app.logger.warning(f"NSFW content detected in {image_filename} for post {post_id}. Deleting image.")
-            try:
-                os.remove(image_path)
-            except OSError as e:
-                app.logger.error(f"Error removing NSFW image file {image_path}: {e}")
-            
-            # Update post to remove image reference and set status
-            posts_conf.update_one({'_id': post_id}, {'$set': {'image_filename': None, 'image_status': 'removed_nsfw'}})
+            app.logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging as NSFW.")
+            cloudinary.uploader.add_tag('nsfw', [public_id])
+            posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'removed_nsfw'}})
         else:
-            app.logger.info(f"Image {image_filename} for post {post_id} is safe.")
-            # Mark the image as checked and safe
+            app.logger.info(f"Image {public_id} for post {post_id} is safe.")
             posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
 
 
@@ -267,19 +293,19 @@ def register():
                 'username': username,
                 'email': email,
                 'password': hashed_password,
-                'is_confirmed': False,
+                'is_confirmed': True, # Set to True to bypass email confirmation
                 'is_admin': False,
                 'join_date': datetime.datetime.now()
             })
 
-            # Send confirmation code for the new user
-            gen_code = str(secrets.randbelow(10**6)).zfill(6)
-            hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-            auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
-            send_code(email, gen_code)
+            # --- Email confirmation is now bypassed ---
+            # gen_code = str(secrets.randbelow(10**6)).zfill(6)
+            # hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+            # auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
+            # send_code(email, gen_code)
             
-            flash("Account created successfully! Please check your email for the confirmation code.", "success")
-            return redirect(url_for("confirm", email=email))
+            flash("Account created successfully! You can now log in.", "success")
+            return redirect(url_for("login"))
         else:
             flash('Username and password are required', "danger")
     return render_template("auth.html", active_page='register')
@@ -322,6 +348,7 @@ def login():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+        remember = request.form.get("remember") == "on" # Check if the "Remember Me" box was checked
         
         client_ip = request.remote_addr
         logs_conf.insert_one({
@@ -338,7 +365,7 @@ def login():
                 
             
             user_obj = User(user)
-            login_user(user_obj) 
+            login_user(user_obj, remember=remember) # Pass the remember flag to login_user
             if current_user.is_admin and current_user.is_authenticated:
                 flash('You have logged in as admin', 'success')
                 return redirect(url_for('home'))
@@ -439,7 +466,8 @@ def post():
         title=request.form.get("title")
         content=request.form.get("content")
         image_file = request.files.get('image')
-        image_filename = None
+        image_url = None
+        image_public_id = None
 
 
         if title and content:  
@@ -451,13 +479,17 @@ def post():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             
-            if image_file and image_file.filename != '' and '.' in image_file.filename and image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
-                # Secure the filename and save the file
-                filename = secure_filename(image_file.filename)
-                unique_filename = f"{ObjectId()}_{filename}"
-                image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-                image_file.save(image_path)
-                image_filename = unique_filename
+            if image_file and image_file.filename != '' and '.' in image_file.filename and \
+               image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+                try:
+                    # Upload to Cloudinary
+                    upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
+                    image_url = upload_result.get('secure_url')
+                    image_public_id = upload_result.get('public_id')
+                except Exception as e:
+                    app.logger.error(f"Cloudinary upload failed: {e}")
+                    flash("There was an error uploading the image.", "danger")
+                    return redirect(url_for("blog"))
 
             new_post_data = {
                 'author_id': ObjectId(current_user.id),
@@ -465,16 +497,17 @@ def post():
                 'title': title,
                 'content': content,
                 'author': current_user.username,
-                'image_filename': image_filename,
-                'image_status': 'processing' if image_filename else 'none', # Add image status
+                'image_url': image_url,
+                'image_public_id': image_public_id,
+                'image_status': 'processing' if image_url else 'none', # Add image status
                 'timestamp': datetime.datetime.now(),
             }
             result = posts_conf.insert_one(new_post_data)
 
             # If an image was uploaded, queue the background job for NSFW check
-            if image_filename:
+            if image_url and image_public_id:
                 post_id_str = str(result.inserted_id)
-                process_image_for_nsfw.queue(post_id_str, image_path, image_filename)
+                process_image_for_nsfw.queue(post_id_str, image_url, image_public_id)
 
             flash("Post created successfully!", "success")
         else:
@@ -483,7 +516,7 @@ def post():
     
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
-    """Serves uploaded files."""
+    """Serves locally uploaded files for backward compatibility."""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/post/<slug>')
@@ -499,20 +532,16 @@ def view_post(slug):
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required
+@owner_required
 def edit_post(post_id):
     post = posts_conf.find_one({'_id': ObjectId(post_id)})
 
-    if not post:
-        flash("Post not found.", "danger")
-        return redirect(url_for('blog'))
-
     action = request.args.get('action')
 
-    # If action is 'comment', allow any logged-in user; otherwise, restrict to author
-    # Use author_id for a more reliable check
-    if action != 'comment' and str(post.get('author_id')) != current_user.id:
-        flash("You are not authorized to edit this post.", "danger") 
-        return redirect(url_for('blog'))
+    # The decorator handles the ownership check.
+    # We only need to check if the action is 'edit'.
+    if action != 'edit':
+        return redirect(url_for('view_post', slug=post.get('slug')))
 
     page_title = f"Edit: {post.get('title')}"
     page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
@@ -520,36 +549,35 @@ def edit_post(post_id):
 
 @app.route('/update_post/<post_id>', methods=['POST'])
 @login_required
+@owner_required
 def update_post(post_id):
     post = posts_conf.find_one({'_id': ObjectId(post_id)})
-
-    # Use author_id for a more reliable check
-    if not post or str(post.get('author_id')) != current_user.id:
-        flash("You are not authorized to perform this action.", "danger") 
-        return redirect(url_for('blog'))
 
     title = request.form.get("title")
     content = request.form.get("content")
     image_file = request.files.get('image')
-    image_filename = post.get('image_filename') # Keep old image by default
+    image_url = post.get('image_url') # Keep old image by default
+    image_public_id = post.get('image_public_id')
     slug = post.get('slug') # Keep old slug by default
+    image_status = post.get('image_status', 'none')
 
     if title and content:
-        if image_file and image_file.filename != '' and '.' in image_file.filename and image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
-            # If a new image is uploaded, save it and update the filename
-            # Optional: Delete the old image file to save space
-            if image_filename and os.path.exists(os.path.join(app.config['UPLOAD_FOLDER'], image_filename)):
-                os.remove(os.path.join(app.config['UPLOAD_FOLDER'], image_filename))
-            
-            filename = secure_filename(image_file.filename)
-            unique_filename = f"{ObjectId()}_{filename}"
-            image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-            image_file.save(image_path)
+        if image_file and image_file.filename != '' and '.' in image_file.filename and \
+           image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+            try:
+                # Delete the old image from Cloudinary if it exists
+                if image_public_id:
+                    cloudinary.uploader.destroy(image_public_id)
 
-            # Queue the background job for the new image
-            process_image_for_nsfw.queue(post_id, image_path, unique_filename)
-            image_filename = unique_filename
-            image_status = 'processing'
+                # Upload the new image
+                upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
+                image_url = upload_result.get('secure_url')
+                image_public_id = upload_result.get('public_id')
+                image_status = 'processing'
+                # Queue the background job for the new image
+                process_image_for_nsfw.queue(post_id, image_url, image_public_id)
+            except Exception as e:
+                app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
 
         # If the title has changed, generate a new slug
         if title != post.get('title'):
@@ -567,8 +595,9 @@ def update_post(post_id):
             {'$set': {
                 'title': title,
                 'content': content,
-                'image_filename': image_filename,
-                'image_status': image_status if 'image_status' in locals() else post.get('image_status', 'none'),
+                'image_url': image_url,
+                'image_public_id': image_public_id,
+                'image_status': image_status,
                 'slug': slug,
                 'timestamp': datetime.datetime.now(),
             }}
@@ -612,7 +641,19 @@ def add_comment(post_id):
 @app.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
 def delete_post(post_id):
-    posts_conf.delete_one({'_id': ObjectId(post_id), 'author_id': ObjectId(current_user.id)})
+    post_to_delete = posts_conf.find_one({'_id': ObjectId(post_id)})
+
+    # Explicitly check for ownership before deleting
+    if not post_to_delete or str(post_to_delete.get('author_id')) != current_user.id:
+        flash("You are not authorized to delete this post.", "danger")
+        return redirect(url_for('blog'))
+    
+    # Delete the image from Cloudinary if it exists
+    if post_to_delete.get('image_public_id'):
+        cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+
+    posts_conf.delete_one({'_id': ObjectId(post_id)})
+
     flash('Post deleted successfully.', 'success')
     return redirect(url_for('blog'))
 
@@ -639,7 +680,14 @@ def admin_posts():
 @admin_required
 def admin_delete_post(post_id):
     try:
+        post_to_delete = posts_conf.find_one({'_id': ObjectId(post_id)})
+        if post_to_delete and post_to_delete.get('image_public_id'):
+            try:
+                cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+            except Exception as e:
+                app.logger.error(f"Admin failed to delete Cloudinary image {post_to_delete['image_public_id']}: {e}")
         result = posts_conf.delete_one({'_id': ObjectId(post_id)})
+
         if result.deleted_count == 1:
             flash('Post deleted successfully by admin.', 'success')
         else:
@@ -724,6 +772,12 @@ def about():
 @app.route('/profile/<username>')
 @login_required
 def profile(username):
+    # --- Authorization Check ---
+    # Ensure the logged-in user can only access their own profile.
+    if username != current_user.username:
+        flash("You are not authorized to view this profile.", "danger")
+        return redirect(url_for('profile', username=current_user.username))
+
     # Find the user by username
     user = users_conf.find_one({'username': username})
     if not user:

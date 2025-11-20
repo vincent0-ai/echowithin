@@ -157,6 +157,19 @@ main{
     color: var(--primary-dark-color);
 }
 
+/* Remember Me & Forgot Password section */
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.remember-me {
+    display: flex;
+    align-items: center;
+}
 /* General Body Styles */
 body {
     background-color: var(--background-color);
@@ -342,6 +355,25 @@ body {
     background-color: #2a1810;
 }
 
+.add-comment-btn {
+    background-color: var(--info-color);
+    color: var(--text-light-color);
+    margin-top: 1rem;
+}
+
+.add-comment-btn:hover {
+    background-color: #1e88e5;
+}
+
+.admin-actions {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
 .post-interaction {
     margin-top: 1rem;
     border-top: 1px solid #eee;
@@ -518,6 +550,20 @@ body {
     margin-bottom: 15px;
     border-radius: 4px;
     border: 1px solid #ddd;
+}
+
+.nsfw-placeholder {
+    background-color: #333;
+    color: white;
+    text-align: center;
+    padding: 3rem 1rem;
+    border-radius: 8px;
+    font-style: italic;
+}
+
+.post-content-full {
+    display: none; /* Hidden by default */
+    white-space: pre-wrap; /* Respects newlines in the post content */
 }
 
 /* Read More Link Styling */

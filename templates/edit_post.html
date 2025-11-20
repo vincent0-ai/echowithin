@@ -1,49 +1,128 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{% if action == 'comment' %}Comment on: {{ post.title }}{% else %}Edit: {{ post.title }}{% endif %}</title>
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block content %}
 <div class="blog-container">
-    <div class="create-post-section">
-        {% if action == 'comment' %}
-            <h2>{{ post.title }}</h2>
-            <p class="post-meta">
-                By <a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a> on {{ post.timestamp.strftime('%B %d, %Y') }}
-            </p>
-            {% if post.image_filename %}
-                <div class="post-image-container">
-                    <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
-                </div>
-            {% endif %}
-            <p>{{ post.content | safe }}</p>
-            <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST" class="post-form">
-                <textarea name="content" placeholder="Share your perspective" rows="6" class="form-input" required></textarea>
-                <div class="comment-stance">
-                    <label><input type="radio" name="stance" value="agree" checked>Agree</label>
-                    <label><input type="radio" name="stance" value="disagree">Disagree</label>
-                </div>
-                <button type="submit" class="form-button">Add Comment</button>
-            </form>
-        {% else %}
-            <h2>Edit Post</h2>
+    {% if action == 'edit' %}
+        <!-- Edit Post Form -->
+        <div class="create-post-section">
+            <h3>Edit Post</h3>
             <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form" enctype="multipart/form-data">
-                <input type="text" name="title" value="{{ post.title }}" class="form-input" required>
-                <textarea name="content" rows="6" class="form-input" required>{{ post.content }}</textarea>
-                {% if post.image_filename %}
-                    <div class="form-group">
-                        <label>Current Image:</label>
-                        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
-                    </div>
-                {% endif %}
-                <div class="form-group">
-                    <label for="image">Upload a New Image (Optional, will replace the old one):</label>
-                    <input type="file" name="image" class="form-input-file" accept="image/png, image/jpeg, image/gif">
+                <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}" required>
+                <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10" required>{{ post.content }}</textarea>
+                
+                <div>
+                    <label for="image">Upload a New Image (Optional):</label>
+                    {% if post.image_url or post.image_filename %}
+                        <p>Current image:</p>
+                        {% if post.image_url %}
+                            <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
+                        {% else %}
+                            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
+                        {% endif %}
+                    {% endif %}
+                    <input type="file" name="image" class="form-input" accept="image/*">
                 </div>
+
                 <button type="submit" class="form-button">Update Post</button>
             </form>
-        {% endif %}
-    </div>
+        </div>
+
+    {% elif action == 'comment' %}
+        <!-- View Post and Comments -->
+        <div class="post-item" style="border-left: none; box-shadow: none; padding: 0;">
+            <h1>{{ post.title }}</h1>
+            <div class="post-meta">
+                Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%B %d, %Y') }}
+            </div>
+
+            <!-- Image Display Logic -->
+            {% if post.image_url or post.image_filename %}
+                <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+                    {% if post.image_url %}
+                        {% if post.image_status == 'safe' %}
+                            <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
+                        {% elif post.image_status == 'removed_nsfw' %}
+                            <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
+                        {% endif %}
+                    {% elif post.image_filename %}
+                        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <div class="post-content" style="white-space: pre-wrap;">{{ post.content }}</div>
+
+            {% if current_user.is_authenticated %}
+                <button id="add-comment-btn" class="btn add-comment-btn">Add a Comment</button>
+            {% endif %}
+
+            <div class="post-interaction">
+                {% if current_user.is_authenticated %}
+                <div class="comment-form-container" id="comment-form">
+                    <h4>Leave a Comment</h4>
+                    <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST">
+                        <textarea name="content" placeholder="Share your thoughts..." required></textarea>
+                        <div class="comment-stance">
+                            <label><input type="radio" name="stance" value="agree" required> Agree</label>
+                            <label><input type="radio" name="stance" value="disagree"> Disagree</label>
+                        </div>
+                        <button type="submit">Submit Comment</button>
+                    </form>
+                </div>
+                {% else %}
+                <p>Please <a href="{{ url_for('login', next=request.path) }}">log in</a> to leave a comment.</p>
+                {% endif %}
+
+                <div class="debate-container">
+                    <div class="debate-side agree-side">
+                        <h4>In Agreement</h4>
+                        {% set agree_comments = post.comments|selectattr('stance', 'equalto', 'agree')|list %}
+                        {% if agree_comments %}
+                            {% for comment in agree_comments %}
+                            <div class="comment">
+                                <p>{{ comment.content }}</p>
+                                <small>by <strong>{{ comment.author }}</strong></small>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="no-comments">No one has agreed yet.</p>
+                        {% endif %}
+                    </div>
+                    <div class="debate-side disagree-side">
+                        <h4>In Disagreement</h4>
+                        {% set disagree_comments = post.comments|selectattr('stance', 'equalto', 'disagree')|list %}
+                        {% if disagree_comments %}
+                            {% for comment in disagree_comments %}
+                            <div class="comment">
+                                <p>{{ comment.content }}</p>
+                                <small>by <strong>{{ comment.author }}</strong></small>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="no-comments">No one has disagreed yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const addCommentBtn = document.getElementById('add-comment-btn');
+        const commentForm = document.getElementById('comment-form');
+
+        if (addCommentBtn && commentForm) {
+            addCommentBtn.addEventListener('click', function() {
+                commentForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            });
+        }
+    });
+</script>
 {% endblock %}

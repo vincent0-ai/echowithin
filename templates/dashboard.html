@@ -1,26 +1,33 @@
 {% extends "base.html" %}
 
-{% block title %} <title>Dashboard</title> {% endblock %}
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+{% endblock %}
 
-{% block content%}
-<div class="blog-container">
-    <header class="blog-header">
-        <h1>Welcome to EchoWithin</h1>
-        <p>Motto: Unspoken but real</p>
+{% block content %}
+<div class="blog-container" style="text-align: center;">
+    <div class="blog-header">
+        <h1>EchoWithin</h1>
+        <p>A podcast group where the unspoken but real are uncovered.</p>
+    </div>
 
-    </header>
+    <div class="about-content" style="margin-bottom: 2rem;">
+        <p>Built for authentic and real human perspective. We encourage meaningful debates and respectful engagement across all topics.</p>
+        <p style="margin-top: 1rem;">At EchoWithin, we value original human thought. Please avoid posting AI-generated content. We want your real ideas, experiences, and perspectives to echo within our community.</p>
+    </div>
 
-    <div class="action-cards">
-        <div class="card">
-            <h3>Join the Conversation</h3>
-            <p>Create an account to start posting, commenting, and connecting with like-minded individuals in our community.</p>
-            <a href="{{url_for('register')}}" class="form-button">Register Now</a>
+    <div class="action-cards" style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+        <div class="card" style="flex: 1; min-width: 250px; text-align: center;">
+            <h3>Explore the Discussions</h3>
+            <p>See what the community is talking about.</p>
+            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">View Blog</a>
         </div>
-        <div class="card">
-            <h3>Already a Member?</h3>
-            <p>Login to your account to catch up on the latest posts.</p>
-            <a href="{{url_for('login')}}" class="form-button">Login</a>
+        <div class="card" style="flex: 1; min-width: 250px; text-align: center;">
+            <h3>Join the Conversation</h3>
+            <p>Create an account or log in to share your perspective.</p>
+            <a href="{{ url_for('login') }}" class="btn edit-btn" style="margin-top: 1rem;">Login or Register</a>
         </div>
     </div>
 </div>
-{%endblock%}
+{% endblock %}

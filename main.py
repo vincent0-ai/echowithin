@@ -847,19 +847,30 @@ def admin_announcements():
 @login_required
 @admin_required
 def pin_announcement(announcement_id):
-    # Unpin any currently pinned announcement
-    announcements_conf.update_many({'is_pinned': True}, {'$set': {'is_pinned': False}})
-    # Pin the new one
-    announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
-    flash('Announcement has been pinned.', 'success')
+    try:
+        def _pin_transaction(session):
+            # This logic runs as an atomic transaction.
+            # 1. Unpin any currently pinned announcement.
+            announcements_conf.update_many({'is_pinned': True}, {'$set': {'is_pinned': False}}, session=session)
+            # 2. Pin the new one.
+            announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}}, session=session)
+
+        # Start a client session for transaction
+        with client.start_session() as session:
+            session.with_transaction(_pin_transaction)
+        flash('Announcement has been pinned.', 'success')
+    except Exception as e:
+        app.logger.error(f"Error pinning announcement {announcement_id}: {e}")
+        flash('An error occurred while pinning the announcement.', 'danger')
     return redirect(url_for('admin_announcements'))
 
 @app.route('/admin/announcements/unpin/<announcement_id>', methods=['POST'])
 @login_required
 @admin_required
 def unpin_announcement(announcement_id):
-    announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': False}})
-    flash('Announcement has been unpinned.', 'success')
+    result = announcements_conf.update_one({'_id': ObjectId(announcement_id), 'is_pinned': True}, {'$set': {'is_pinned': False}})
+    if result.modified_count > 0:
+        flash('Announcement has been unpinned.', 'success')
     return redirect(url_for('admin_announcements'))
 
 @app.route('/admin/announcements/delete/<announcement_id>', methods=['POST'])

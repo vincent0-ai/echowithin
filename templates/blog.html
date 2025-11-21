@@ -40,6 +40,12 @@
     </div>
     {% endif %}
 
+    <!-- Pinned Announcement Section -->
+    {% if pinned_announcement %}
+    <p class="pinned-announcement-section alert alert-info" role="alert" style="padding: 0.5rem 1rem; margin-bottom: 1.5rem; font-size: 0.9rem;">
+        <strong>Announcement:</strong> {{ pinned_announcement.content }}</p>
+    {% endif %}
+
     <div class="posts-section">
         <h2>{% if query %}Search Results for "{{ query }}"{% else %}Latest Posts{% endif %}</h2>
         {% if posts %}

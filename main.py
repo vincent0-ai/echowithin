@@ -425,12 +425,17 @@ def google_callback():
     email = user_info['email']
     name = user_info.get('name', email.split('@')[0])
 
-    # Check if user exists
+    # Check if a user with this email already exists
     user = users_conf.find_one({'email': email})
     if user:
-        # Existing user, log them in
+        # If the user exists and is confirmed, log them in directly.
+        if not user.get('is_confirmed'):
+            flash("Your account is not confirmed. Please check your email for a confirmation link or register again to receive a new one.", "warning")
+            return redirect(url_for('login'))
+
         user_obj = User(user)
-        login_user(user_obj)
+        # Use 'remember=True' to persist the session across browser restarts
+        login_user(user_obj, remember=True)
         flash(f"Welcome back, {user['username']}!", "success")
         return redirect(url_for('home'))
     else:

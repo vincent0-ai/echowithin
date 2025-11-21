@@ -28,10 +28,14 @@ import cloudinary
 import cloudinary.uploader
 from logging.handlers import RotatingFileHandler
 from requests_oauthlib import OAuth2Session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 
-# --- Logging Setup ---
+# Use ProxyFix to handle headers from reverse proxies (like Render)
+# This is important for url_for to generate correct https links.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 if not app.debug:
     file_handler = RotatingFileHandler('echowithin.log', maxBytes=1024 * 1024 * 10, backupCount=5)
     
@@ -55,7 +59,7 @@ login_manager.login_view = 'login'  # snyk:disable=security-issue
 
 # Secure session cookie settings
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from accessing the cookie
-app.config['SESSION_COOKIE_SECURE'] = False # Only send cookie over HTTPS (set to False in local dev if not using HTTPS)
+app.config['SESSION_COOKIE_SECURE'] = True # Only send cookie over HTTPS (set to True in production)
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
 # Configure permanent session lifetime for "Remember Me"

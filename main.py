@@ -4,11 +4,15 @@ import logging
 import math
 import redis
 from flask_rq2 import RQ
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user 
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
-from flask_mail import Mail, Message 
+from flask_mail import Mail, Message
 import os
 from pymongo import MongoClient
+
+# Allow OAuthlib to work with insecure transport for local development.
+# This MUST be removed in production.
+#os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from ratelimit import limits, RateLimitException
@@ -23,6 +27,7 @@ from slugify import slugify
 import cloudinary
 import cloudinary.uploader
 from logging.handlers import RotatingFileHandler
+from requests_oauthlib import OAuth2Session
 
 app = Flask(__name__)
 
@@ -58,6 +63,8 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 # Load environment variables from .env file
 load_dotenv()
 
+
+
 def get_env_variable(name: str) -> str:
     """Get an environment variable or raise an exception."""
     try:
@@ -65,6 +72,10 @@ def get_env_variable(name: str) -> str:
     except KeyError:
         message = f"Expected environment variable '{name}' not set."
         raise Exception(message)
+
+# Google OAuth configuration
+GOOGLE_CLIENT_ID = get_env_variable('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = get_env_variable('GOOGLE_CLIENT_SECRET')
 
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
@@ -197,7 +208,7 @@ def process_image_for_nsfw(post_id, image_url, public_id):
         )
         if api_response.status_code == 200:
             data = api_response.json()
-            is_nsfw = data.get('is_nsfw', False)
+            is_nsfw = data.get('nsfw', {}).get('is_nsfw', False)
         else:
             is_nsfw = False
 
@@ -238,7 +249,7 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
         try:
             msg = Message(
                 subject="EchoWithin Password Reset",
-                sender='echowithin@echowithin.xyz',
+                sender=get_env_variable('MAIL_USERNAME'),
                 recipients=[email]
             )
             reset_url = url_for('reset_password', token=reset_token, _external=True)
@@ -379,6 +390,99 @@ def login():
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login')
 
+@app.route('/google_login')
+def google_login():
+    # Define the scopes required to access user's email and profile information
+    scope = ['openid', 'email', 'profile']
+    google = OAuth2Session(GOOGLE_CLIENT_ID, scope=scope, redirect_uri=url_for('google_callback', _external=True))
+    authorization_url, state = google.authorization_url(
+        'https://accounts.google.com/o/oauth2/auth',
+        prompt='consent' # Force the consent screen to be shown on first login.
+    )
+    session['oauth_state'] = state
+    return redirect(authorization_url)
+
+@app.route('/google_callback')
+def google_callback():
+    # Recreate the session with the same redirect_uri to fetch the token
+    google = OAuth2Session(
+        GOOGLE_CLIENT_ID,
+        state=session.get('oauth_state'),
+        redirect_uri=url_for('google_callback', _external=True))
+    token = google.fetch_token(
+        'https://oauth2.googleapis.com/token',
+        client_secret=GOOGLE_CLIENT_SECRET,
+        authorization_response=request.url
+    )
+    google = OAuth2Session(GOOGLE_CLIENT_ID, token=token)
+    response = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
+    user_info = response.json()
+
+    email = user_info['email']
+    name = user_info.get('name', email.split('@')[0])
+
+    # Check if user exists
+    user = users_conf.find_one({'email': email})
+    if user:
+        # Existing user, log them in
+        user_obj = User(user)
+        login_user(user_obj)
+        flash(f"Welcome back, {user['username']}!", "success")
+        return redirect(url_for('home'))
+    else:
+        # New user, create account
+        # Store Google info in session and redirect to a completion page
+        session['google_signup_info'] = {
+            'email': email,
+            'name': name
+        }
+        return redirect(url_for('google_signup'))
+
+@app.route('/google_signup', methods=['GET', 'POST'])
+def google_signup():
+    if 'google_signup_info' not in session:
+        flash("No Google sign-up data found. Please try signing in with Google again.", "warning")
+        return redirect(url_for('login'))
+
+    google_info = session['google_signup_info']
+    email = google_info['email']
+
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        if not username or not password:
+            flash("Username and password are required.", "danger")
+            return render_template('google_signup.html', email=email, suggested_username=username)
+
+        if users_conf.find_one({'username': username}):
+            flash("This username is already taken. Please choose another.", "danger")
+            return render_template('google_signup.html', email=email, suggested_username=username)
+
+        hashed_password = generate_password_hash(password)
+        users_conf.insert_one({
+            'username': username,
+            'email': email,
+            'password': hashed_password,
+            'is_confirmed': True,
+            'is_admin': False,
+            'join_date': datetime.datetime.now()
+        })
+
+        # Clean up session
+        session.pop('google_signup_info', None)
+
+        # Log the new user in
+        user = users_conf.find_one({'email': email})
+        user_obj = User(user)
+        login_user(user_obj)
+        flash(f"Account created successfully! Welcome, {username}!", "success")
+        return redirect(url_for('home'))
+
+    # For GET request, suggest a username
+    suggested_username = google_info['name'].replace(' ', '_').lower()
+    return render_template('google_signup.html', email=email, suggested_username=suggested_username)
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
@@ -503,7 +607,7 @@ def post():
                 'author': current_user.username,
                 'image_url': image_url,
                 'image_public_id': image_public_id,
-                'image_status': 'processing' if image_url else 'none', # Add image status
+                'image_status': 'safe' if image_url else 'none', # Add image status
                 'timestamp': datetime.datetime.now(),
             }
             result = posts_conf.insert_one(new_post_data)
@@ -576,7 +680,7 @@ def update_post(post_id):
                 upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
                 image_url = upload_result.get('secure_url')
                 image_public_id = upload_result.get('public_id')
-                image_status = 'processing'
+                image_status = 'safe'
                 # Check the new image for NSFW synchronously
                 process_image_for_nsfw(ObjectId(post_id), image_url, image_public_id)
             except Exception as e:

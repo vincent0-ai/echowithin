@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>Complete Your Registration</title>
+{% endblock %}
+
+{% block content %}
+<main>
+    <div class="auth-container">
+        <div class="auth-forms">
+            <form id="google-signup-form" class="auth-form active" method="POST" action="{{ url_for('google_signup') }}">
+                <h2 class="form-title">Complete Your Account</h2>
+                <p class="form-subtitle">Your email is linked via Google. Please set a username and password to finish creating your account.</p>
+                <div class="inputs">
+                    <div class="form-input-group">
+                        <label for="email">Email (from Google)</label>
+                        <input type="email" name="email" class="form-input" value="{{ email }}" readonly>
+                    </div>
+                    <div class="form-input-group">
+                        <label for="username">Username</label>
+                        <input type="text" name="username" class="form-input" value="{{ suggested_username }}" placeholder="Choose a username" required>
+                    </div>
+                    <div class="form-input-group password-input-container">
+                        <label for="password">Password</label>
+                        <input type="password" name="password" class="form-input password-input" placeholder="Create a password" required>
+                    </div>
+                </div>
+                <button type="submit" class="form-button">Create Account</button>
+            </form>
+        </div>
+    </div>
+</main>
+{% endblock %}

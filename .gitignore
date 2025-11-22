@@ -4,3 +4,5 @@ __pycache__/
 TODO.md
 static/uploads/
 *.log
+venv/
+.DS_Store

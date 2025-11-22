@@ -55,7 +55,7 @@
                 </div>
             {% endif %}
 
-            <div class="post-content" style="white-space: pre-wrap;">{{ post.content }}</div>
+            <div class="post-content" style="white-space: pre-wrap;">{{ post.content|linkify|safe }}</div>
 
             {% if current_user.is_authenticated %}
                 <button id="add-comment-btn" class="btn add-comment-btn">Add a Comment</button>
@@ -85,7 +85,7 @@
                         {% if agree_comments %}
                             {% for comment in agree_comments %}
                             <div class="comment">
-                                <p>{{ comment.content }}</p>
+                                <p>{{ comment.content|linkify|safe }}</p>
                                 <small>by <strong>{{ comment.author }}</strong></small>
                             </div>
                             {% endfor %}
@@ -99,7 +99,7 @@
                         {% if disagree_comments %}
                             {% for comment in disagree_comments %}
                             <div class="comment">
-                                <p>{{ comment.content }}</p>
+                                <p>{{ comment.content|linkify|safe }}</p>
                                 <small>by <strong>{{ comment.author }}</strong></small>
                             </div>
                             {% endfor %}

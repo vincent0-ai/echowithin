@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify, render_template, url_for, redirect, s
 import logging
 import math
 import redis
+import bleach
 from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
@@ -119,6 +120,12 @@ announcements_conf = db['announcements']
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
+
+@app.template_filter('linkify')
+def linkify_filter(text):
+    """A Jinja2 filter to turn URLs in text into clickable links."""
+    return bleach.linkify(text)
+
 
 class User(UserMixin):
     def __init__(self, user_data):

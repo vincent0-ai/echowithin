@@ -6,3 +6,4 @@ static/uploads/
 *.log
 venv/
 .DS_Store
+FEATURES_ADDED.md

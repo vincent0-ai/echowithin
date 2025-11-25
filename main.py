@@ -88,7 +88,9 @@ app.config["SECRET_KEY"] = get_env_variable('SECRET')
 # Configuration for file uploads (now handled by Cloudinary)
 # UPLOAD_FOLDER is kept for backward compatibility with old posts.
 UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov'}
+MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10 MB limit for uploaded videos
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -590,8 +592,11 @@ def post():
         title=request.form.get("title")
         content=request.form.get("content")
         image_file = request.files.get('image')
+        video_file = request.files.get('video')
         image_url = None
         image_public_id = None
+        video_url = None
+        video_public_id = None
 
 
         if title and content:  
@@ -603,8 +608,9 @@ def post():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             
+            # Handle image upload
             if image_file and image_file.filename != '' and '.' in image_file.filename and \
-               image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+               image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
                 try:
                     # Upload to Cloudinary
                     upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
@@ -615,6 +621,34 @@ def post():
                     flash("There was an error uploading the image.", "danger")
                     return redirect(url_for("blog"))
 
+            # Handle video upload (enforce extension and size limit)
+            if video_file and video_file.filename != '' and '.' in video_file.filename:
+                video_ext = video_file.filename.rsplit('.', 1)[1].lower()
+                if video_ext not in ALLOWED_VIDEO_EXTENSIONS:
+                    flash('Unsupported video format. Allowed: mp4, webm, ogg, mov', 'danger')
+                    return redirect(url_for('blog'))
+                try:
+                    # Determine size of uploaded file safely
+                    stream = video_file.stream
+                    stream.seek(0, os.SEEK_END)
+                    size = stream.tell()
+                    stream.seek(0)
+                except Exception:
+                    size = None
+
+                if size is not None and size > MAX_VIDEO_SIZE:
+                    flash('Video exceeds maximum allowed size of 10 MB.', 'danger')
+                    return redirect(url_for('blog'))
+
+                try:
+                    upload_result = cloudinary.uploader.upload(video_file, resource_type='video', folder='echowithin_posts')
+                    video_url = upload_result.get('secure_url')
+                    video_public_id = upload_result.get('public_id')
+                except Exception as e:
+                    app.logger.error(f"Cloudinary video upload failed: {e}")
+                    flash("There was an error uploading the video.", "danger")
+                    return redirect(url_for('blog'))
+
             new_post_data = {
                 'author_id': ObjectId(current_user.id),
                 'slug': slug,
@@ -624,6 +658,9 @@ def post():
                 'image_url': image_url,
                 'image_public_id': image_public_id,
                 'image_status': 'safe' if image_url else 'none', # Add image status
+                'video_url': video_url,
+                'video_public_id': video_public_id,
+                'video_status': 'uploaded' if video_url else 'none',
                 'timestamp': datetime.datetime.now(),
             }
             result = posts_conf.insert_one(new_post_data)
@@ -679,14 +716,19 @@ def update_post(post_id):
     title = request.form.get("title")
     content = request.form.get("content")
     image_file = request.files.get('image')
+    video_file = request.files.get('video')
     image_url = post.get('image_url') # Keep old image by default
     image_public_id = post.get('image_public_id')
+    video_url = post.get('video_url')
+    video_public_id = post.get('video_public_id')
     slug = post.get('slug') # Keep old slug by default
     image_status = post.get('image_status', 'none')
+    video_status = post.get('video_status', 'none')
 
     if title and content:
+        # Handle image replacement
         if image_file and image_file.filename != '' and '.' in image_file.filename and \
-           image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+           image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
             try:
                 # Delete the old image from Cloudinary if it exists
                 if image_public_id:
@@ -701,6 +743,37 @@ def update_post(post_id):
                 process_image_for_nsfw(ObjectId(post_id), image_url, image_public_id)
             except Exception as e:
                 app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
+
+        # Handle video replacement
+        if video_file and video_file.filename != '' and '.' in video_file.filename:
+            video_ext = video_file.filename.rsplit('.', 1)[1].lower()
+            if video_ext not in ALLOWED_VIDEO_EXTENSIONS:
+                flash('Unsupported video format. Allowed: mp4, webm, ogg, mov', 'danger')
+                return redirect(url_for('view_post', slug=slug))
+            try:
+                # Determine size
+                stream = video_file.stream
+                stream.seek(0, os.SEEK_END)
+                size = stream.tell()
+                stream.seek(0)
+            except Exception:
+                size = None
+
+            if size is not None and size > MAX_VIDEO_SIZE:
+                flash('Video exceeds maximum allowed size of 10 MB.', 'danger')
+                return redirect(url_for('view_post', slug=slug))
+
+            try:
+                # Delete old video if exists
+                if video_public_id:
+                    cloudinary.uploader.destroy(video_public_id, resource_type='video')
+
+                upload_result = cloudinary.uploader.upload(video_file, resource_type='video', folder='echowithin_posts')
+                video_url = upload_result.get('secure_url')
+                video_public_id = upload_result.get('public_id')
+                video_status = 'uploaded'
+            except Exception as e:
+                app.logger.error(f"Cloudinary video upload/delete failed during update: {e}")
 
         # If the title has changed, generate a new slug
         if title != post.get('title'):
@@ -721,6 +794,9 @@ def update_post(post_id):
                 'image_url': image_url,
                 'image_public_id': image_public_id,
                 'image_status': image_status,
+                'video_url': video_url,
+                'video_public_id': video_public_id,
+                'video_status': video_status,
                 'slug': slug,
                 'timestamp': datetime.datetime.now(),
             }}
@@ -773,7 +849,17 @@ def delete_post(post_id):
     
     # Delete the image from Cloudinary if it exists
     if post_to_delete.get('image_public_id'):
-        cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+        try:
+            cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+        except Exception as e:
+            app.logger.error(f"Failed to delete Cloudinary image {post_to_delete.get('image_public_id')}: {e}")
+
+    # Delete the video from Cloudinary if it exists
+    if post_to_delete.get('video_public_id'):
+        try:
+            cloudinary.uploader.destroy(post_to_delete['video_public_id'], resource_type='video')
+        except Exception as e:
+            app.logger.error(f"Failed to delete Cloudinary video {post_to_delete.get('video_public_id')}: {e}")
 
     posts_conf.delete_one({'_id': ObjectId(post_id)})
 
@@ -804,11 +890,17 @@ def admin_posts():
 def admin_delete_post(post_id):
     try:
         post_to_delete = posts_conf.find_one({'_id': ObjectId(post_id)})
-        if post_to_delete and post_to_delete.get('image_public_id'):
-            try:
-                cloudinary.uploader.destroy(post_to_delete['image_public_id'])
-            except Exception as e:
-                app.logger.error(f"Admin failed to delete Cloudinary image {post_to_delete['image_public_id']}: {e}")
+        if post_to_delete:
+            if post_to_delete.get('image_public_id'):
+                try:
+                    cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+                except Exception as e:
+                    app.logger.error(f"Admin failed to delete Cloudinary image {post_to_delete.get('image_public_id')}: {e}")
+            if post_to_delete.get('video_public_id'):
+                try:
+                    cloudinary.uploader.destroy(post_to_delete.get('video_public_id'), resource_type='video')
+                except Exception as e:
+                    app.logger.error(f"Admin failed to delete Cloudinary video {post_to_delete.get('video_public_id')}: {e}")
         result = posts_conf.delete_one({'_id': ObjectId(post_id)})
 
         if result.deleted_count == 1:

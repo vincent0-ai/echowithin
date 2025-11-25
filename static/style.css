@@ -27,6 +27,7 @@ a{
     text-decoration: none;
 }
 
+/* General Main Content Styles */
 main{
     display: flex;
     justify-content: center;
@@ -34,6 +35,7 @@ main{
     height: 100vh;
 }
 
+/* Auth Page Specific Styles */
 .auth-container {
     width: 400px;
     background-color: white;
@@ -46,7 +48,7 @@ main{
 .auth-tabs {
     display: flex;
     background-color: var(--primary-color);
-}
+} /* This was the auth tab button, now we have a general one */
 
 .tab-button {
     flex: 1;
@@ -60,7 +62,7 @@ main{
     transition: background-color 0.3s;
 }
 
-.tab-button.active, .tab-button:hover {
+.auth-tabs .tab-button.active, .auth-tabs .tab-button:hover {
     background-color: var(--primary-dark-color);
 }
 
@@ -739,6 +741,21 @@ body {
 .post-item-simple:last-child {
     border-bottom: none;
 }
+
+
+/* --- Video Styling for Blog Posts --- */
+
+.post-video,
+.edit-post-video-preview {
+    width: 100%; /* Makes the video fill its container horizontally */
+    max-height: 500px; /* Limits the maximum height of the video */
+    height: auto; /* Maintains aspect ratio */
+    object-fit: contain; /* Ensures the whole video is visible, letterboxing if necessary */
+    display: block; /* Removes any extra space below the video */
+    background-color: #000; /* Adds a black background for any letterboxing */
+    border-radius: 8px; /* Matches the style of the image container */
+    border: 1px solid #eee; /* Adds a subtle border */
+}
 /* Contact Form on About Page */
 .contact-section {
     margin-top: 2rem;
@@ -834,6 +851,49 @@ body {
         padding: 0.5rem;
         font-size: 0.9rem;
     }
+}
+
+/* --- Tabbed Interface for Blog --- */
+.tab-container {
+    width: 100%;
+    margin-top: 2rem;
+}
+
+.tab-buttons {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 1.5rem;
+}
+
+.tab-buttons .tab-button {
+    padding: 0.75rem 1.5rem;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    font-size: 1.1rem;
+    color: #777;
+    position: relative;
+    top: 2px; /* Aligns bottom border with container's border */
+    border-bottom: 2px solid transparent;
+    transition: color 0.3s, border-color 0.3s;
+}
+
+.tab-buttons .tab-button:hover {
+    color: var(--primary-dark-color);
+}
+
+.tab-buttons .tab-button.active {
+    color: var(--primary-color);
+    font-weight: 600;
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+    display: none; /* Hide all tab content by default */
+}
+
+.tab-content.active {
+    display: block; /* Show only the active tab's content */
 }
 
 /* Mobile Styles (max-width: 480px) */

@@ -34,12 +34,12 @@
                     {% if post.video_url or post.video_filename %}
                         <p>Current video:</p>
                         {% if post.video_url %}
-                            <video controls class="edit-post-video-preview" style="width: 100%; height: auto;">
+                            <video controls class="edit-post-video-preview">
                                 <source src="{{ post.video_url }}" type="video/{{ post.video_url.rsplit('.', 1)[1] if post.video_url and '.' in post.video_url else 'mp4' }}">
                                 Your browser does not support the video tag.
                             </video>
                         {% else %}
-                            <video controls class="edit-post-video-preview" style="width: 100%; height: auto;">
+                            <video controls class="edit-post-video-preview">
                                 <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
                                 Your browser does not support the video tag.
                             </video>
@@ -62,19 +62,19 @@
         <div class="post-item" style="border-left: none; box-shadow: none; padding: 0;">
             <h1>{{ post.title }}</h1>
             <div class="post-meta">
-                Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%B %d, %Y') }}
+                Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
             </div>
 
             <!-- Media Display Logic: show video if present, otherwise image -->
             {% if post.video_url or post.video_filename %}
                 <div class="post-media-container">
                     {% if post.video_url %}
-                        <video class="post-video" controls preload="metadata" style="width: 100%; height: auto;">
+                        <video class="post-video" controls preload="metadata">
                             <source src="{{ post.video_url }}" type="video/{{ post.video_url.rsplit('.', 1)[1] if post.video_url and '.' in post.video_url else 'mp4' }}">
                             Your browser does not support the video tag.
                         </video>
                     {% elif post.video_filename %}
-                        <video class="post-video" controls preload="metadata" style="width: 100%; height: auto;">
+                        <video class="post-video" controls preload="metadata">
                             <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>

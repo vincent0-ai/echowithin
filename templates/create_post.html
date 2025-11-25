@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block content %}
+<div class="blog-container">
+    <div class="blog-header">
+        <h1>Create a New Post</h1>
+        <h4>Share your real ideas, experiences, and perspectives.</h4>
+        <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">&larr; Back to Blog</a>
+    </div>
+
+    <div class="create-post-section">
+        <form action="{{ url_for('post') }}" method="POST" class="post-form" id="create-post-form" enctype="multipart/form-data">
+            <input type="text" name="title" class="form-input" placeholder="Post Title" required>
+            <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10" required></textarea>
+            <div>
+                <label for="image">Upload an Image (Optional):</label>
+                <input type="file" name="image" class="form-input" accept="image/*">
+            </div>
+            <div>
+                <label for="video">Upload a Video (Optional, max 10 MB):</label>
+                <input type="file" name="video" class="form-input" accept="video/*">
+            </div>
+            <button type="submit" class="form-button" id="create-post-submit-btn">Post</button>
+            <button type="button" class="form-button delete-btn" id="cancel-upload-btn" style="display: none; margin-left: 10px;">Cancel</button>
+            <small id="upload-status" style="display: none; margin-top: 10px;"></small>
+            <div id="progress-container" style="display: none; width: 100%; background-color: #ddd; border-radius: 5px; margin-top: 10px;">
+                <div id="progress-bar" style="width: 0%; height: 24px; background-color: #4CAF50; text-align: center; line-height: 24px; color: white; border-radius: 5px;">0%</div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const createPostForm = document.getElementById('create-post-form');
+    let xhr; // Define xhr in a scope accessible to the cancel handler
+    const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check (matches server)
+
+    if (createPostForm) {
+        createPostForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Stop the default form submission
+
+            const videoInput = this.querySelector('input[name="video"]');
+            const submitButton = document.getElementById('create-post-submit-btn');
+            const cancelButton = document.getElementById('cancel-upload-btn');
+            const statusElement = document.getElementById('upload-status');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+
+            if (videoInput.files.length > 0) {
+                const videoFile = videoInput.files[0];
+
+                // Client-side basic checks
+                if (videoFile.size > MAX_VIDEO_SIZE) {
+                    statusElement.textContent = 'Video exceeds maximum allowed size of 10 MB.';
+                    statusElement.style.display = 'block';
+                    return;
+                }
+
+                // Disable button and show status
+                submitButton.disabled = true;
+                submitButton.textContent = 'Uploading...';
+                statusElement.textContent = 'Uploading video...';
+                statusElement.style.display = 'block';
+                cancelButton.style.display = 'inline-block';
+                progressContainer.style.display = 'block';
+
+                // Create FormData and append all fields, including the video file
+                const formData = new FormData();
+                formData.append('title', this.querySelector('input[name="title"]').value);
+                formData.append('content', this.querySelector('textarea[name="content"]').value);
+                if (this.querySelector('input[name="image"]').files.length > 0) {
+                    formData.append('image', this.querySelector('input[name="image"]').files[0]);
+                }
+                formData.append('video', videoFile, videoFile.name);
+
+                xhr = new XMLHttpRequest();
+                xhr.open('POST', this.action, true);
+
+                // Update progress bar
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percentComplete + '%';
+                        progressBar.textContent = percentComplete + '%';
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        window.location.href = xhr.responseURL;
+                    } else {
+                        statusElement.textContent = 'Upload failed. Server responded with an error.';
+                        resetUploadUI();
+                    }
+                };
+
+                xhr.onabort = function() {
+                    statusElement.textContent = 'Upload cancelled.';
+                    resetUploadUI();
+                };
+
+                xhr.onerror = function() {
+                    statusElement.textContent = 'Upload failed due to a network error.';
+                    resetUploadUI();
+                };
+
+                cancelButton.onclick = function() {
+                    if (xhr) xhr.abort();
+                };
+
+                xhr.send(formData);
+            } else {
+                // If no video, submit the form normally
+                this.submit();
+            }
+        });
+
+        function resetUploadUI(message) {
+            const submitButton = document.getElementById('create-post-submit-btn');
+            const cancelButton = document.getElementById('cancel-upload-btn');
+            const progressContainer = document.getElementById('progress-container');
+            const videoInput = createPostForm.querySelector('input[name="video"]');
+            const statusElement = document.getElementById('upload-status');
+
+            if (message) {
+                statusElement.textContent = message;
+                statusElement.style.display = 'block';
+            }
+            submitButton.disabled = false;
+            submitButton.textContent = 'Post';
+            cancelButton.style.display = 'none';
+            progressContainer.style.display = 'none';
+            // Clear the file input to prevent re-uploading the same file
+            videoInput.value = '';
+        }
+    }
+});
+</script>
+{% endblock %}

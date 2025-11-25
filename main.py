@@ -559,31 +559,78 @@ def home():
 
 @app.route("/blog")
 def blog():
-    # Search logic
+    # --- Search Logic ---
     query = request.args.get('query', None)
-    search_filter = {}
     if query:
-        # Using regex for a case-insensitive search on title and content
-        # Use a text index for much faster searching
+        # If there's a search query, perform the search and return only search results.
         search_filter = { "$text": { "$search": query } }
+        page = request.args.get('page', 1, type=int)
+        posts_per_page = 5
+        total_posts = posts_conf.count_documents(search_filter)
+        total_pages = math.ceil(total_posts / posts_per_page)
+        skip = (page - 1) * posts_per_page
+        search_results = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+        
+        page_title = f"Search results for '{query}'"
+        page_description = f"Displaying search results for '{query}' on EchoWithin."
+        return render_template("blog.html", posts=search_results, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
 
-    # Pagination logic
-    page = request.args.get('page', 1, type=int)
-    posts_per_page = 5 # You can adjust this number
+    # --- Default Blog Page Logic (No Search) ---
 
-    # Get total number of posts to calculate total pages
-    total_posts = posts_conf.count_documents(search_filter)
-    total_pages = math.ceil(total_posts / posts_per_page)
+    # 1. Fetch Latest Posts (sorted by creation/update time)
+    latest_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
 
-    # Calculate the number of documents to skip
-    skip = (page - 1) * posts_per_page
+    # 2. Fetch Most Active Posts (sorted by comment count)
+    active_posts_pipeline = [
+        {
+            '$project': {
+                'title': 1,
+                'slug': 1,
+                'author': 1,
+                'timestamp': 1,
+                'image_url': 1,
+                'content': 1,
+                'comment_count': {'$size': {'$ifNull': ['$comments', []]}}
+            }
+        },
+        {'$sort': {'comment_count': -1}},
+        {'$limit': 5}
+    ]
+    active_posts = list(posts_conf.aggregate(active_posts_pipeline))
 
-    # Fetch a slice of posts for the current page, sorted by newest first
-    posts = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
-    return render_template("blog.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
+    return render_template("blog.html", latest_posts=latest_posts, active_posts=active_posts, active_page='blog', title=page_title, description=page_description)
+
+@app.route("/blog/all")
+@login_required
+def all_posts():
+    """Displays a paginated list of all blog posts."""
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 5
+
+    total_posts = posts_conf.count_documents({})
+    total_pages = math.ceil(total_posts / posts_per_page)
+
+    skip = (page - 1) * posts_per_page
+
+    # Fetch a slice of all posts for the current page, sorted by newest first
+    posts = posts_conf.find({}).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+
+    page_title = "All Posts - EchoWithin"
+    page_description = "Browse through all posts from the EchoWithin community."
+    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description)
+
+
+@app.route('/create_post', methods=['GET'])
+@login_required
+def create_post():
+    """Renders the page for creating a new post."""
+    page_title = "Create a New Post - EchoWithin"
+    page_description = "Share your ideas, experiences, and perspectives with the EchoWithin community."
+    return render_template("create_post.html", active_page='blog', title=page_title, description=page_description)
+
 
 @app.route("/post", methods=['POST'])
 @login_required
@@ -1144,11 +1191,18 @@ def sitemap():
     """Generate sitemap.xml for search engines."""
     pages = []
     ten_days_ago = (datetime.datetime.now() - datetime.timedelta(days=10)).date().isoformat()
+    now = datetime.datetime.now()
+    one_week_ago = (now - datetime.timedelta(days=7)).date().isoformat()
 
     # Static pages
     static_urls = [url_for('dashboard', _external=True), url_for('about', _external=True), url_for('login', _external=True), url_for('register', _external=True)]
     for url in static_urls:
         pages.append({'loc': url, 'lastmod': ten_days_ago, 'changefreq': 'weekly'})
+        pages.append({'loc': url, 'lastmod': one_week_ago, 'changefreq': 'weekly', 'priority': '0.8'})
+
+    # Add the main blog page with high priority
+    blog_url = url_for('blog', _external=True)
+    pages.append({'loc': blog_url, 'lastmod': now.date().isoformat(), 'changefreq': 'daily', 'priority': '0.9'})
 
     # Dynamic pages (blog posts)
     # This assumes you have implemented slugs as suggested above
@@ -1157,6 +1211,18 @@ def sitemap():
         if 'slug' in post:
             url = url_for('view_post', slug=post['slug'], _external=True)
             pages.append({'loc': url, 'lastmod': post['timestamp'].date().isoformat(), 'changefreq': 'daily'})
+            post_time = post['timestamp']
+            
+            # Calculate priority based on how recent the post is.
+            # Newer posts get higher priority.
+            days_since_update = (now - post_time).days
+            if days_since_update < 7:
+                priority = '1.0' # Very recent
+            elif days_since_update < 30:
+                priority = '0.9' # Recent
+            else:
+                priority = '0.7' # Older
+            pages.append({'loc': url, 'lastmod': post_time.date().isoformat(), 'changefreq': 'daily', 'priority': priority})
 
     sitemap_xml = render_template('sitemap_template.xml', pages=pages)
     response = make_response(sitemap_xml)

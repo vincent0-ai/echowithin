@@ -12,6 +12,9 @@
             <div class="profile-detail-item">
                 <span class="detail-value">{{ user.email }}</span>
             </div>
+            <div class="profile-detail-item">
+                <a class="btn" href="{{ url_for('profile_settings', username=user.username) }}">Account Settings</a>
+            </div>
         </div>
         {% if user.join_date %}
             <p class="profile-meta">Member since: {{ user.join_date.strftime('%B %d, %Y') }}</p>

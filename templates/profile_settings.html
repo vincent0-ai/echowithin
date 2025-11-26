@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}
+  <title>Account Settings - {{ user.username }}</title>
+{% endblock %}
+
+{% block content %}
+<div class="blog-container">
+  <h1>Account Settings</h1>
+  <div class="settings-panel">
+    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}">
+      <div class="form-row">
+        <label for="notify_new_posts">
+          <input type="checkbox" id="notify_new_posts" name="notify_new_posts" value="1" {% if user.get('notify_new_posts', True) %}checked{% endif %}>
+          Receive email notifications for new posts
+        </label>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">By default, you receive email notifications for new posts. Uncheck to disable.</p>
+      </div>
+
+      <div class="form-row">
+        <button type="submit" class="btn small-btn">Save Settings</button>
+        <a class="btn" href="{{ url_for('profile', username=user.username) }}">Back to Profile</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

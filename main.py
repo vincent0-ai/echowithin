@@ -277,6 +277,56 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
         app.logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
 
 
+@rq.job
+def send_new_post_notifications(post_id_str):
+    """Background job: send a new-post notification email to opted-in users."""
+    try:
+        # Convert id and fetch post
+        post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
+        if not post:
+            app.logger.error(f"Post {post_id_str} not found for notification job")
+            return
+
+        # Build absolute URL for the post
+        with app.app_context():
+            # Use url_for with _external=True; requires SERVER_NAME config or test_request_context
+            try:
+                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
+            except RuntimeError:
+                # Fallback: build URL manually if url_for fails (no SERVER_NAME configured)
+                # Construct base URL from environment or default
+                base_url = os.environ.get('FLASK_URL', 'http://localhost:5000')
+                post_url = f"{base_url}/post/{post.get('slug')}"
+                app.logger.warning(f"Using fallback URL for post: {post_url}")
+            
+            subject = f"New post on EchoWithin: {post.get('title')}"
+
+            # Find confirmed users who have NOT opted out (default is True)
+            # Users without the field are treated as opted-in
+            recipients_cursor = users_conf.find(
+                {'is_confirmed': True, '$or': [{'notify_new_posts': True}, {'notify_new_posts': {'$exists': False}}]},
+                {'email': 1, 'username': 1}
+            )
+
+            # Send individually to preserve personalization and unsubscribe control
+            for u in recipients_cursor:
+                try:
+                    recipient_email = u.get('email')
+                    recipient_name = u.get('username') or ''
+                    msg = Message(
+                        subject=subject,
+                        sender=get_env_variable('MAIL_USERNAME'),
+                        recipients=[recipient_email]
+                    )
+                    msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
+                    mail.send(msg)
+                    app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
+                except Exception as e:
+                    app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
+    except Exception as e:
+        app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}")
+
+
 
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -324,6 +374,7 @@ def register():
                 'is_confirmed': True, # Set to True to bypass email confirmation
                 'is_admin': False,
                 'join_date': datetime.datetime.now()
+                , 'notify_new_posts': True
             })
 
             # --- Email confirmation is now bypassed ---
@@ -484,7 +535,8 @@ def google_signup():
             'password': hashed_password,
             'is_confirmed': True,
             'is_admin': False,
-            'join_date': datetime.datetime.now()
+            'join_date': datetime.datetime.now(),
+            'notify_new_posts': True
         })
 
         # Clean up session
@@ -715,6 +767,15 @@ def post():
             # If an image was uploaded, perform synchronous NSFW check
             if image_url and image_public_id:
                 process_image_for_nsfw(result.inserted_id, image_url, image_public_id)
+
+            # Enqueue background job to notify users who opted in
+            try:
+                post_id_str = str(result.inserted_id)
+                app.logger.info(f"Enqueuing notification job for post {post_id_str}")
+                job = send_new_post_notifications.queue(post_id_str)
+                app.logger.info(f"Successfully enqueued job {job.id} for post {post_id_str}")
+            except Exception as e:
+                app.logger.error(f"Failed to enqueue new-post notification job: {e}", exc_info=True)
 
             flash("Post created successfully!", "success")
         else:
@@ -1069,6 +1130,61 @@ def profile(username):
                            title=page_title, 
                            description=page_description,
                            active_page='profile')
+
+
+@app.route('/profile/<username>/notifications', methods=['POST'])
+@login_required
+def update_notifications(username):
+    # Only allow users to update their own settings
+    if username != current_user.username:
+        flash("You are not authorized to update this profile.", "danger")
+        return redirect(url_for('profile', username=current_user.username))
+
+    user = users_conf.find_one({'username': username})
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('home'))
+
+    # Checkbox posts 'notify_new_posts' when checked
+    notify_val = request.form.get('notify_new_posts')
+    notify_flag = True if notify_val in ('1', 'true', 'on') else False
+
+    try:
+        users_conf.update_one({'_id': user['_id']}, {'$set': {'notify_new_posts': notify_flag}})
+        flash('Notification preferences updated.', 'success')
+    except Exception as e:
+        app.logger.error(f"Failed to update notification preference for {username}: {e}")
+        flash('Failed to update preferences. Please try again later.', 'danger')
+
+    return redirect(url_for('profile', username=username))
+
+
+@app.route('/profile/<username>/settings', methods=['GET', 'POST'])
+@login_required
+def profile_settings(username):
+    # Only allow users to access their own settings
+    if username != current_user.username:
+        flash("You are not authorized to access this page.", "danger")
+        return redirect(url_for('profile', username=current_user.username))
+
+    user = users_conf.find_one({'username': username})
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        notify_val = request.form.get('notify_new_posts')
+        notify_flag = True if notify_val in ('1', 'true', 'on') else False
+        try:
+            users_conf.update_one({'_id': user['_id']}, {'$set': {'notify_new_posts': notify_flag}})
+            flash('Settings updated.', 'success')
+        except Exception as e:
+            app.logger.error(f"Failed to update settings for {username}: {e}")
+            flash('Failed to update settings. Please try again later.', 'danger')
+        return redirect(url_for('profile_settings', username=username))
+
+    # For GET, render settings page
+    return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
 
 @app.route('/contact', methods=['POST'])
 @limits(calls=5, period=TIME) 

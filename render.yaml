@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: echowithin-web
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --bind 0.0.0.0:5000
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12
+    domains:
+      - echowithin.xyz
+
+  - type: background_worker
+    name: echowithin-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: rq worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12

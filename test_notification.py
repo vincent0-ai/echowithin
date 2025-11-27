@@ -15,7 +15,7 @@ load_dotenv()
 # Add the project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app, send_new_post_notifications, posts_conf, users_conf
+from main import app, send_new_post_notifications_sync as send_new_post_notifications, posts_conf, users_conf
 
 
 def test_notification_job(post_id_str=None):

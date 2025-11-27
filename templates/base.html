@@ -13,10 +13,17 @@
 
 <body>
     <div class="navbar">
-        <a href="{{ url_for('dashboard') }}" class="nav-brand">
-            <img src="{{ url_for('static', filename='logo.jpg') }}" alt="EchoWithin Logo" class="nav-logo">
-            EchoWithin
-        </a>
+        <div class="nav-left">
+            <a href="{{ url_for('dashboard') }}" class="nav-brand">
+                <img src="{{ url_for('static', filename='logo.jpg') }}" alt="EchoWithin Logo" class="nav-logo">
+                EchoWithin
+            </a>
+            <div class="nav-socials" aria-hidden="false">
+                <a href="https://web.facebook.com/profile.php?id=61581191858783" target="_blank" rel="noopener noreferrer" title="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                <a href="https://www.tiktok.com/@echowithin2025?_t=ZM-8zyR66ekbou&_r=1" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+            </div>
+        </div>
         <nav class="nav-links" id="nav-links">
             {% if current_user.is_authenticated %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>

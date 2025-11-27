@@ -245,6 +245,26 @@ body {
     width: auto;
 }
 
+/* Group brand + socials so icons can sit beside the title on mobile */
+.nav-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav-socials {
+    display: flex; /* show on desktop next to brand */
+    gap: 0.5rem;
+    margin-left: 0; /* sit immediately after brand on desktop */
+}
+
+.nav-socials a {
+    color: white;
+    font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+}
+
 /* Default desktop navigation styles */
 .nav-links {
     display: flex;
@@ -925,6 +945,28 @@ body {
 
     .nav-brand {
         font-size: 1.2rem;
+    }
+
+    /* Show social icons next to brand on small screens */
+    .nav-left {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* push socials to the right edge of the screen */
+    .nav-socials {
+        display: flex;
+        gap: 0.6rem;
+        align-items: center;
+        margin-left: auto;
+        padding-right: 0.5rem; /* start slightly from the right edge */
+    }
+
+    .nav-socials a {
+        font-size: 1.05rem;
+        color: white;
     }
 
     .container {

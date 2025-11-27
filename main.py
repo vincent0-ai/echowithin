@@ -281,56 +281,6 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
         app.logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
 
 
-@rq.job
-def send_new_post_notifications(post_id_str):
-    """Background job: send a new-post notification email to opted-in users."""
-    try:
-        # Convert id and fetch post
-        post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
-        if not post:
-            app.logger.error(f"Post {post_id_str} not found for notification job")
-            return
-
-        # Build absolute URL for the post
-        with app.app_context():
-            # Use url_for with _external=True; requires SERVER_NAME config or test_request_context
-            try:
-                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
-            except RuntimeError:
-                # Fallback: build URL manually if url_for fails (no SERVER_NAME configured)
-                # Construct base URL from environment or default
-                base_url = os.environ.get('FLASK_URL', 'http://localhost:5000')
-                post_url = f"{base_url}/post/{post.get('slug')}"
-                app.logger.warning(f"Using fallback URL for post: {post_url}")
-            
-            subject = f"New post on EchoWithin: {post.get('title')}"
-
-            # Find confirmed users who have NOT opted out (default is True)
-            # Users without the field are treated as opted-in
-            recipients_cursor = users_conf.find(
-                {'is_confirmed': True, '$or': [{'notify_new_posts': True}, {'notify_new_posts': {'$exists': False}}]},
-                {'email': 1, 'username': 1}
-            )
-
-            # Send individually to preserve personalization and unsubscribe control
-            for u in recipients_cursor:
-                try:
-                    recipient_email = u.get('email')
-                    recipient_name = u.get('username') or ''
-                    msg = Message(
-                        subject=subject,
-                        sender=get_env_variable('MAIL_USERNAME'),
-                        recipients=[recipient_email]
-                    )
-                    msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
-                    mail.send(msg)
-                    app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
-                except Exception as e:
-                    app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
-    except Exception as e:
-        app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}")
-
-
 def send_new_post_notifications_sync(post_id_str):
     """Synchronous notification sender suitable for calling from a thread.
     This duplicates the RQ job logic but runs in-process without Redis.
@@ -346,7 +296,7 @@ def send_new_post_notifications_sync(post_id_str):
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'http://localhost:5000')
+                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
             subject = f"New post on EchoWithin: {post.get('title')}"

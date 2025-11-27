@@ -8,6 +8,7 @@ from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
 from flask_mail import Mail, Message
+from concurrent.futures import ThreadPoolExecutor
 import os
 from pymongo import MongoClient
 
@@ -108,6 +109,9 @@ app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')
 app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # 
 
 mail = Mail(app)
+
+# Thread pool for in-process async notification tasks (fallback/no-Redis mode)
+executor = ThreadPoolExecutor(max_workers=4)
 
 TIME = int(get_env_variable('TIME'))
 
@@ -325,6 +329,49 @@ def send_new_post_notifications(post_id_str):
                     app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
     except Exception as e:
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}")
+
+
+def send_new_post_notifications_sync(post_id_str):
+    """Synchronous notification sender suitable for calling from a thread.
+    This duplicates the RQ job logic but runs in-process without Redis.
+    """
+    try:
+        post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
+        if not post:
+            app.logger.error(f"Post {post_id_str} not found for sync notification")
+            return
+
+        # Build absolute URL for the post
+        with app.app_context():
+            try:
+                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
+            except RuntimeError:
+                base_url = os.environ.get('FLASK_URL', 'http://localhost:5000')
+                post_url = f"{base_url}/post/{post.get('slug')}"
+
+            subject = f"New post on EchoWithin: {post.get('title')}"
+
+            recipients_cursor = users_conf.find(
+                {'is_confirmed': True, '$or': [{'notify_new_posts': True}, {'notify_new_posts': {'$exists': False}}]},
+                {'email': 1, 'username': 1}
+            )
+
+            for u in recipients_cursor:
+                try:
+                    recipient_email = u.get('email')
+                    recipient_name = u.get('username') or ''
+                    msg = Message(
+                        subject=subject,
+                        sender=get_env_variable('MAIL_USERNAME'),
+                        recipients=[recipient_email]
+                    )
+                    msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
+                    mail.send(msg)
+                    app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
+                except Exception as e:
+                    app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
+    except Exception as e:
+        app.logger.error(f"Error in send_new_post_notifications_sync for {post_id_str}: {e}", exc_info=True)
 
 
 
@@ -768,14 +815,14 @@ def post():
             if image_url and image_public_id:
                 process_image_for_nsfw(result.inserted_id, image_url, image_public_id)
 
-            # Enqueue background job to notify users who opted in
+            # Dispatch background notification task (in-process) to avoid Redis dependency
             try:
                 post_id_str = str(result.inserted_id)
-                app.logger.info(f"Enqueuing notification job for post {post_id_str}")
-                job = send_new_post_notifications.queue(post_id_str)
-                app.logger.info(f"Successfully enqueued job {job.id} for post {post_id_str}")
+                app.logger.info(f"Dispatching notification task (thread) for post {post_id_str}")
+                future = executor.submit(send_new_post_notifications_sync, post_id_str)
+                app.logger.info(f"Submitted notification task Future for post {post_id_str}")
             except Exception as e:
-                app.logger.error(f"Failed to enqueue new-post notification job: {e}", exc_info=True)
+                app.logger.error(f"Failed to submit notification task: {e}", exc_info=True)
 
             flash("Post created successfully!", "success")
         else:

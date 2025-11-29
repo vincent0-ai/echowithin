@@ -15,7 +15,7 @@ load_dotenv()
 # Add the project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app, send_new_post_notifications_sync as send_new_post_notifications, posts_conf, users_conf
+from main import app, send_new_post_notifications, posts_conf, users_conf
 
 
 def test_notification_job(post_id_str=None):
@@ -66,7 +66,10 @@ def test_notification_job(post_id_str=None):
     
     try:
         with app.app_context():
-            send_new_post_notifications(post_id_str)
+            # To test the function directly without RQ, we call its underlying function
+            # The .func attribute is available on the decorated job object
+            # This is useful for unit testing the job's logic synchronously.
+            send_new_post_notifications.func(post_id_str)
         print("-" * 60)
         print("✓ Notification job completed successfully!")
         print("\nCheck your email inbox for the notification.")

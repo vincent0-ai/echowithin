@@ -8,3 +8,4 @@ static/uploads/
 venv/
 .DS_Store
 FEATURES_ADDED.md
+worker.py

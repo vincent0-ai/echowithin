@@ -106,12 +106,19 @@ app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  
 
 # Configure Redis connection for RQ background jobs
-app.config['RQ_REDIS_URL'] = get_env_variable('REDIS_URL') # 
+REDIS_HOST = get_env_variable('REDIS_HOST')
+REDIS_PORT = get_env_variable('REDIS_PORT')
+REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD') # Password can be optional
 
+if REDIS_PASSWORD:
+    # Format with password
+    redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+else:
+    # Format without password
+    redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+
+app.config['RQ_REDIS_URL'] = redis_url
 mail = Mail(app)
-
-# Thread pool for in-process async notification tasks (fallback/no-Redis mode)
-executor = ThreadPoolExecutor(max_workers=4)
 
 TIME = int(get_env_variable('TIME'))
 
@@ -209,12 +216,13 @@ def check_image_for_nsfw(image_path):
         return False # Fail open on API error, assuming the image is safe
 
 
+@rq.job
 def process_image_for_nsfw(post_id, image_url, public_id):
     """
-    This function checks an image for NSFW content synchronously.
-    It uses JigsawStack for NSFW detection.
+    This function runs as a background job to check an image for NSFW content.
+    It uses JigsawStack for NSFW detection and updates the post status.
     """
-    app.logger.info(f"Starting NSFW check for post {post_id} on image URL: {image_url}")
+    app.logger.info(f"Starting NSFW check job for post {post_id} on image URL: {image_url}")
 
     try:
         # Use JigsawStack for NSFW detection via API
@@ -230,16 +238,16 @@ def process_image_for_nsfw(post_id, image_url, public_id):
             is_nsfw = False
 
         if is_nsfw:
-            app.logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging as NSFW.")
+            app.logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging image and updating post.")
             cloudinary.uploader.add_tag('nsfw', [public_id])
-            posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'removed_nsfw'}})
+            posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'removed_nsfw'}})
         else:
-            app.logger.info(f"Image {public_id} for post {post_id} is safe.")
-            posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
+            app.logger.info(f"Image {public_id} for post {post_id} is safe. Updating post status.")
+            posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'safe'}})
     except Exception as e:
-        app.logger.error(f"Error during NSFW check for post {post_id}: {e}")
+        app.logger.error(f"Error during NSFW check job for post {post_id}: {e}")
         # Fail open: assume safe
-        posts_conf.update_one({'_id': post_id}, {'$set': {'image_status': 'safe'}})
+        posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'safe'}})
 
 
 
@@ -281,14 +289,13 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
         app.logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
 
 
-def send_new_post_notifications_sync(post_id_str):
-    """Synchronous notification sender suitable for calling from a thread.
-    This duplicates the RQ job logic but runs in-process without Redis.
-    """
+@rq.job
+def send_new_post_notifications(post_id_str):
+    """Sends new post notification emails to opted-in users as a background job."""
     try:
         post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
         if not post:
-            app.logger.error(f"Post {post_id_str} not found for sync notification")
+            app.logger.error(f"Post {post_id_str} not found for notification job")
             return
 
         # Build absolute URL for the post
@@ -321,7 +328,7 @@ def send_new_post_notifications_sync(post_id_str):
                 except Exception as e:
                     app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
     except Exception as e:
-        app.logger.error(f"Error in send_new_post_notifications_sync for {post_id_str}: {e}", exc_info=True)
+        app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
 
 
@@ -753,7 +760,7 @@ def post():
                 'author': current_user.username,
                 'image_url': image_url,
                 'image_public_id': image_public_id,
-                'image_status': 'safe' if image_url else 'none', # Add image status
+                'image_status': 'processing' if image_url else 'none', # Set status to processing
                 'video_url': video_url,
                 'video_public_id': video_public_id,
                 'video_status': 'uploaded' if video_url else 'none',
@@ -761,18 +768,21 @@ def post():
             }
             result = posts_conf.insert_one(new_post_data)
 
-            # If an image was uploaded, perform synchronous NSFW check
+            # If an image was uploaded, enqueue the background NSFW check
             if image_url and image_public_id:
-                process_image_for_nsfw(result.inserted_id, image_url, image_public_id)
+                try:
+                    job = process_image_for_nsfw.queue(str(result.inserted_id), image_url, image_public_id)
+                    app.logger.info(f"Enqueued NSFW check job {job.id} for post {result.inserted_id}")
+                except Exception as e:
+                    app.logger.error(f"Failed to enqueue NSFW check job: {e}", exc_info=True)
 
-            # Dispatch background notification task (in-process) to avoid Redis dependency
+            # Enqueue background notification task to RQ
             try:
                 post_id_str = str(result.inserted_id)
-                app.logger.info(f"Dispatching notification task (thread) for post {post_id_str}")
-                future = executor.submit(send_new_post_notifications_sync, post_id_str)
-                app.logger.info(f"Submitted notification task Future for post {post_id_str}")
+                job = send_new_post_notifications.queue(post_id_str)
+                app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
             except Exception as e:
-                app.logger.error(f"Failed to submit notification task: {e}", exc_info=True)
+                app.logger.error(f"Failed to enqueue notification job: {e}", exc_info=True)
 
             flash("Post created successfully!", "success")
         else:
@@ -843,9 +853,13 @@ def update_post(post_id):
                 upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
                 image_url = upload_result.get('secure_url')
                 image_public_id = upload_result.get('public_id')
-                image_status = 'safe'
-                # Check the new image for NSFW synchronously
-                process_image_for_nsfw(ObjectId(post_id), image_url, image_public_id)
+                image_status = 'processing' # Set to processing
+                # Enqueue the background NSFW check for the new image
+                try:
+                    job = process_image_for_nsfw.queue(post_id, image_url, image_public_id)
+                    app.logger.info(f"Enqueued NSFW check job {job.id} for updated post {post_id}")
+                except Exception as e:
+                    app.logger.error(f"Failed to enqueue NSFW check job on update: {e}", exc_info=True)
             except Exception as e:
                 app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
 

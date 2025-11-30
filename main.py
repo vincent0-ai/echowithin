@@ -770,11 +770,10 @@ def post():
                     job = process_image_for_nsfw.queue(str(result.inserted_id), image_url, image_public_id) # snyk:disable=disable-command-line-argument-injection
                     app.logger.info(f"Enqueued NSFW check job {job.id} for post {result.inserted_id}") # snyk:disable=disable-command-line-argument-injection
                 except redis.exceptions.ConnectionError as e:
-                    app.logger.error(f"Failed to enqueue NSFW check job due to Redis connection error: {e}")
                     app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check job. Error: {e}")
                     # Fallback: Run the job in a background thread
                     with app.app_context():
-                        ThreadPoolExecutor().submit(process_image_for_nsfw.func, str(result.inserted_id), image_url, image_public_id)
+                        ThreadPoolExecutor().submit(process_image_for_nsfw, str(result.inserted_id), image_url, image_public_id)
 
             # Enqueue background notification task to RQ
             try:
@@ -782,11 +781,10 @@ def post():
                 job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
                 app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
             except redis.exceptions.ConnectionError as e:
-                app.logger.error(f"Failed to enqueue notification job due to Redis connection error: {e}")
                 app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
                 # Fallback: Run the job in a background thread
                 with app.app_context():
-                    ThreadPoolExecutor().submit(send_new_post_notifications.func, post_id_str)
+                    ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
 
             flash("Post created successfully!", "success")
         else:

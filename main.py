@@ -108,14 +108,10 @@ app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')
 # Configure Redis connection for RQ background jobs
 REDIS_HOST = get_env_variable('REDIS_HOST')
 REDIS_PORT = get_env_variable('REDIS_PORT')
-REDIS_PASSWORD = os.environ.get('REDIS_PASSWORD') # Password can be optional
+REDIS_PASSWORD = get_env_variable('REDIS_PASSWORD') # Password can be optional
 
-if REDIS_PASSWORD:
-    # Format with password
-    redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
-else:
-    # Format without password
-    redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+# Format with password 
+redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 app.config['RQ_REDIS_URL'] = redis_url
 mail = Mail(app)

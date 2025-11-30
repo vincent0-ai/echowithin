@@ -371,23 +371,23 @@ def register():
                 'username': username,
                 'email': email,
                 'password': hashed_password,
-                'is_confirmed': True, # Set to True to bypass email confirmation
+                'is_confirmed': False, # Set to False to require email confirmation
                 'is_admin': False,
                 'join_date': datetime.datetime.now()
                 , 'notify_new_posts': True
             })
 
-            # --- Email confirmation is now bypassed ---
-            # gen_code = str(secrets.randbelow(10**6)).zfill(6)
-            # hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-            # auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
-            # send_code(email, gen_code)
+            # --- Send email confirmation ---
+            gen_code = str(secrets.randbelow(10**6)).zfill(6)
+            hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+            auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
+            send_code(email, gen_code)
             
-            flash("Account created successfully! You can now log in.", "success")
-            return redirect(url_for("login"))
+            flash("Account created successfully! Please check your email for a confirmation code.", "success")
+            return redirect(url_for("confirm", email=email))
         else:
             flash('Username and password are required', "danger")
-    return render_template("auth.html", active_page='register')
+    return render_template("auth.html", active_page='register', form='register')
     
 @app.route("/confirm/<email>", methods=['GET', 'POST']) # snyk:disable=security-issue
 @limits(calls=15, period=TIME)
@@ -1306,7 +1306,7 @@ def logout():
 
 @app.errorhandler(404)
 def page_not_found(e):
-    return redirect(url_for("dashboard")), 404
+    return render_template("404.html"), 404
 
 @app.errorhandler(RateLimitException)
 def handle_ratelimit_exception(e):

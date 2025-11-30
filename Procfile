@@ -1,2 +1,2 @@
-web: gunicorn main:app --bind 0.0.0.0:5000
-worker: rq worker
+web: gunicorn -w 4 -b 0.0.0.0:8000 main:app
+worker: rq worker --url redis://:Developer@EchoWithin.@srv-captain--echy:6379 default

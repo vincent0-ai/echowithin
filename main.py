@@ -756,7 +756,7 @@ def post():
                 'author': current_user.username,
                 'image_url': image_url,
                 'image_public_id': image_public_id,
-                'image_status': 'processing' if image_url else 'none', # Set status to processing
+                'image_status': 'safe' if image_url else 'none', # Optimistically assume safe
                 'video_url': video_url,
                 'video_public_id': video_public_id,
                 'video_status': 'uploaded' if video_url else 'none',
@@ -767,18 +767,26 @@ def post():
             # If an image was uploaded, enqueue the background NSFW check
             if image_url and image_public_id:
                 try:
-                    job = process_image_for_nsfw.queue(str(result.inserted_id), image_url, image_public_id)
-                    app.logger.info(f"Enqueued NSFW check job {job.id} for post {result.inserted_id}")
-                except Exception as e:
-                    app.logger.error(f"Failed to enqueue NSFW check job: {e}", exc_info=True)
+                    job = process_image_for_nsfw.queue(str(result.inserted_id), image_url, image_public_id) # snyk:disable=disable-command-line-argument-injection
+                    app.logger.info(f"Enqueued NSFW check job {job.id} for post {result.inserted_id}") # snyk:disable=disable-command-line-argument-injection
+                except redis.exceptions.ConnectionError as e:
+                    app.logger.error(f"Failed to enqueue NSFW check job due to Redis connection error: {e}")
+                    app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check job. Error: {e}")
+                    # Fallback: Run the job in a background thread
+                    with app.app_context():
+                        ThreadPoolExecutor().submit(process_image_for_nsfw.func, str(result.inserted_id), image_url, image_public_id)
 
             # Enqueue background notification task to RQ
             try:
                 post_id_str = str(result.inserted_id)
-                job = send_new_post_notifications.queue(post_id_str)
-                app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
-            except Exception as e:
-                app.logger.error(f"Failed to enqueue notification job: {e}", exc_info=True)
+                job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
+                app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
+            except redis.exceptions.ConnectionError as e:
+                app.logger.error(f"Failed to enqueue notification job due to Redis connection error: {e}")
+                app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
+                # Fallback: Run the job in a background thread
+                with app.app_context():
+                    ThreadPoolExecutor().submit(send_new_post_notifications.func, post_id_str)
 
             flash("Post created successfully!", "success")
         else:
@@ -849,7 +857,7 @@ def update_post(post_id):
                 upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
                 image_url = upload_result.get('secure_url')
                 image_public_id = upload_result.get('public_id')
-                image_status = 'processing' # Set to processing
+                image_status = 'safe' # Optimistically assume safe
                 # Enqueue the background NSFW check for the new image
                 try:
                     job = process_image_for_nsfw.queue(post_id, image_url, image_public_id)

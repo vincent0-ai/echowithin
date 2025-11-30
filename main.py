@@ -1295,6 +1295,16 @@ def reset_password(token):
             flash("Please fill in all fields.", "danger") # snyk:disable=security-issue
     return render_template('reset_password.html', token=token, active_page='reset_password', current_username=user_to_update.get('username'))
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serves the favicon."""
+    favicon_path = os.path.join(app.root_path, 'static', 'favicon.ico')
+    if os.path.exists(favicon_path):
+        return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+    else:
+        # If no favicon exists, return a 204 No Content response to prevent 404 errors in the log.
+        return '', 204
+
 @app.route('/logout')
 def logout():
     logout_user() # Use Flask-Login to properly log the user out

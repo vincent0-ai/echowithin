@@ -817,9 +817,9 @@ def edit_post(post_id):
     page_title = f"Edit: {post.get('title')}"
     page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
     
-    # Get Remark42 config from environment variables to ensure it's available
-    remark42_host = os.environ.get('REMARK42_HOST')
-    remark42_site_id = os.environ.get('REMARK42_SITE_ID')
+    # Get Remark42 config from environment variables to ensure it's available in the template
+    remark42_host = get_env_variable('REMARK42_HOST')
+    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
 
     return render_template('edit_post.html', post=post, active_page='blog', 
                            action=action, title=page_title, description=page_description,

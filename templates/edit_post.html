@@ -109,35 +109,39 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const remarkHost = "{{ remark42_host|safe }}";
-        const remarkSiteId = "{{ remark42_site_id|safe }}";
+    {% if action == 'comment' %}
+        document.addEventListener('DOMContentLoaded', function() {
+            const remarkHost = "{{ remark42_host|safe }}";
+            const remarkSiteId = "{{ remark42_site_id|safe }}";
+            const postUrl = "{{ url_for('view_post', slug=post.slug, _external=True) }}";
 
-        if (remarkHost && remarkSiteId) {
-            // Remark42 configuration
-            var remark_config = {
-                host: remarkHost,
-                site_id: remarkSiteId,
-                url: window.location.origin + window.location.pathname,
-                theme: 'dark', // Options: 'light', 'dark'
-                components: ['embed', 'counter'] // Load both the embeddable widget and the counter
-            };
+            if (remarkHost && remarkSiteId) {
+                // Remark42 configuration
+                var remark_config = {
+                    host: remarkHost,
+                    site_id: remarkSiteId,
+                    url: postUrl,
+                    theme: 'dark', // Options: 'light', 'dark'
+                    components: ['embed', 'counter'] // Load both the embeddable widget and the counter
+                };
 
-            (function(c) {
-                for(var i = 0; i < c.length; i++){
-                    var d = document, s = d.createElement('script');
-                    s.src = remark_config.host + '/web/' + c[i] + '.js';
-                    s.defer = true;
-                    (d.head || d.body).appendChild(s);
-                }
-            })(remark_config.components || ['embed']);
-        }
-    });
+                (function(c) {
+                    for(var i = 0; i < c.length; i++){
+                        var d = document, s = d.createElement('script');
+                        s.src = remark_config.host + '/web/' + c[i] + '.js';
+                        s.defer = true;
+                        (d.head || d.body).appendChild(s);
+                    }
+                })(remark_config.components || ['embed']);
+            }
+        });
+    {% endif %}
 </script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
     const editPostForm = document.getElementById('edit-post-form');
+    {% if action == 'edit' %}
     let xhr; // Define xhr in a scope accessible to the cancel handler
     const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check
 
@@ -231,6 +235,7 @@
         // Clear the file input
         videoInput.value = '';
     }
+    {% endif %}
 });
 </script>
 {% endblock %}

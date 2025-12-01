@@ -13,7 +13,7 @@
                 <span class="detail-value">{{ user.email }}</span>
             </div>
             <div class="profile-detail-item">
-                <button class="btn" onclick="window.location.href='{{ url_for('profile_settings', username=user.username) }}'"><strong>Account Settings</strong></button>
+                <button class="btn" onclick="window.location.href='{{ url_for('profile_settings', username=user.username) }}'" style="background-color: maroon; color: white;"><strong>Account Settings</strong></button>
             </div>
         </div>
         {% if user.join_date %}

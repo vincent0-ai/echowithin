@@ -47,10 +47,9 @@
             Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
         </div>
         <div class="post-actions">
-            {% set comment_count = post.comments|length if post.comments else post.comment_count if post.comment_count is defined else 0 %}
             <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn comment-btn">
                 Comments
-                <span class="comment-count-badge">{{ comment_count }}</span>
+                <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span>
             </a>
 
             {% if current_user.is_authenticated and post.author_id|string == current_user.id %}

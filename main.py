@@ -388,7 +388,7 @@ def send_ntfy_notification(message, title, tags=""):
             headers['Tags'] = tags
 
         requests.post(
-            f"https://ntfy.sh/{ntfy_topic}",
+            f"https://{ntfy_topic}",
             data=message.encode('utf-8'),
             headers=headers
         )

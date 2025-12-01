@@ -88,13 +88,8 @@
             </div>
 
             <div id="active-posts" class="tab-content">
-                {% if active_posts %}
-                    {% for post in active_posts %}
-                        {{ render_post_item(post, current_user) }}
-                    {% endfor %}
-                {% else %}
-                    <p>No active posts yet. Be the first to start a conversation!</p>
-                {% endif %}
+                <!-- This container will be filled by JavaScript -->
+                <div class="loading-spinner" style="text-align: center; padding: 2rem;">Loading active posts...</div>
             </div>
         </div>
         <div style="text-align: center; margin-top: 2rem;">
@@ -118,12 +113,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Activate the clicked button and its corresponding content
             button.classList.add('active');
-            const activeContent = document.getElementById(targetTab);
-            if (activeContent) {
-                activeContent.classList.add('active');
+            document.getElementById(targetTab).classList.add('active');
+
+            // If the active posts tab is opened for the first time, fetch the data
+            if (targetTab === 'active-posts' && !button.hasAttribute('data-loaded')) {
+                fetchActivePosts();
+                button.setAttribute('data-loaded', 'true'); // Prevent multiple fetches
             }
         });
     });
+
+    function fetchActivePosts() {
+        const activePostsContainer = document.getElementById('active-posts');
+
+        fetch('{{ url_for("get_all_posts_json") }}')
+            .then(response => response.json())
+            .then(posts => {
+                if (!posts || posts.length === 0) {
+                    activePostsContainer.innerHTML = '<p>No posts to display yet.</p>';
+                    return;
+                }
+
+                // Use Remark42's API to get comment counts for all posts
+                window.REMARK42.get_counts(posts.map(p => p.url))
+                    .then(counts => {
+                        // Add comment counts to each post object
+                        const postsWithCounts = posts.map(post => {
+                            const countData = counts.find(c => c.url === post.url);
+                            return { ...post, comment_count: countData ? countData.count : 0 };
+                        });
+
+                        // Sort posts by comment count in descending order
+                        postsWithCounts.sort((a, b) => b.comment_count - a.comment_count);
+
+                        // Generate and display the HTML for the sorted posts
+                        let html = '';
+                        postsWithCounts.slice(0, 10).forEach(post => { // Show top 10 active posts
+                            html += `{%- from '_macros.html' import render_post_item -%}{{ render_post_item(post, current_user) | replace('\n', '') | safe }}`;
+                        });
+                        activePostsContainer.innerHTML = html || '<p>No active posts to display.</p>';
+                    });
+            })
+            .catch(error => {
+                activePostsContainer.innerHTML = '<p>Could not load active posts. Please try again later.</p>';
+                console.error('Error fetching active posts:', error);
+            });
+    }
 });
 </script>
 

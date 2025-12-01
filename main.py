@@ -713,8 +713,30 @@ def all_posts():
 
     page_title = "All Posts - EchoWithin"
     page_description = "Browse through all posts from the EchoWithin community."
-    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description)
+    remark42_host = get_env_variable('REMARK42_HOST')
+    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
+    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description, remark42_host=remark42_host, remark42_site_id=remark42_site_id)
 
+
+@app.route('/api/posts')
+def get_all_posts_json():
+    """Returns all posts as a JSON object for client-side rendering."""
+    try:
+        # Fetch all posts with necessary fields
+        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_status': 1, 'video_url': 1}))
+        
+        # Convert ObjectId and datetime to strings and add the post URL
+        for post in all_posts:
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            # Format timestamp to be consistent with server-rendered posts
+            post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p')
+            post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+
+        return jsonify(all_posts)
+    except Exception as e:
+        app.logger.error(f"Error in get_all_posts_json: {e}")
+        return jsonify({"error": "Could not retrieve posts"}), 500
 
 @app.route('/create_post', methods=['GET'])
 @login_required

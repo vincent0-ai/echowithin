@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="blog-container">
+<div class="content-wrapper">
   <h1>Account Settings</h1>
   <div class="settings-panel">
     <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}">

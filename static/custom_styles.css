@@ -1,0 +1,28 @@
+/* /static/custom_styles.css */
+
+/* This class provides a consistent gradient background and container style for all main content pages. */
+/* On larger screens, we constrain the width for better readability. */
+.content-wrapper {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    max-width: 900px; /* Constrain width on larger screens for better readability */
+    margin: 0 auto; /* Center the container */
+}
+
+/* Ensure text within the container has good contrast */
+.content-wrapper h1, .content-wrapper h2, .content-wrapper h3, .content-wrapper h4, .content-wrapper p, .content-wrapper div, .content-wrapper a:not(.btn) {
+    color: #333;
+}
+
+/* On mobile devices, make the container full-width for better use of space. */
+@media (max-width: 768px) {
+    .content-wrapper {
+        /* Remove horizontal padding and rounding to go edge-to-edge */
+        padding-left: 0;
+        padding-right: 0;
+        border-radius: 0;
+        box-shadow: none; /* Optional: remove shadow on mobile for a flatter look */
+    }
+}

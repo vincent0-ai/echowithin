@@ -29,6 +29,7 @@ from slugify import slugify
 import cloudinary
 import cloudinary.uploader
 from logging.handlers import RotatingFileHandler
+from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -39,14 +40,15 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 if not app.debug:
-    file_handler = RotatingFileHandler('echowithin.log', maxBytes=1024 * 1024 * 10, backupCount=5)
+    log_file_path = 'echowithin.log'
+    file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024 * 10, backupCount=5)
     
     # Set the logging level (e.g., INFO, WARNING, ERROR)
     file_handler.setLevel(logging.INFO)
     
     # Define the format for the log messages
-    formatter = logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    formatter = jsonlogger.JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
     )
     file_handler.setFormatter(formatter)
     
@@ -326,6 +328,39 @@ def send_new_post_notifications(post_id_str):
     except Exception as e:
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
+
+@rq.job
+def send_log_email_job():
+    """
+    A background job that sends the contents of the log file via email
+    and then rotates the log file.
+    """
+    log_file_path = 'echowithin.log'
+    if not os.path.exists(log_file_path) or os.path.getsize(log_file_path) == 0:
+        app.logger.info("Log file is empty or does not exist. Skipping email.")
+        return
+
+    try:
+        with app.app_context():
+            developer_email = get_env_variable('MY_EMAIL')
+            msg = Message(
+                subject=f"EchoWithin Weekly Log Report - {datetime.date.today().isoformat()}",
+                sender=get_env_variable('MAIL_USERNAME'),
+                recipients=[developer_email]
+            )
+            msg.body = "Attached is the latest log file from the EchoWithin application."
+
+            with open(log_file_path, 'rb') as f:
+                msg.attach(
+                    "echowithin.log",
+                    "text/plain",
+                    f.read()
+                )
+            
+            mail.send(msg)
+            app.logger.info(f"Log file email sent to {developer_email}.")
+    except Exception as e:
+        app.logger.error(f"Failed to send log file email: {e}", exc_info=True)
 
 
 

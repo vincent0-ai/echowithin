@@ -175,11 +175,6 @@ main{
 /* General Body Styles */
 body {
     background-color: var(--background-color);
-    background-image: url('logo2.jpg');
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-    background-position: center;
     color: var(--text-dark-color);
     line-height: 1.6;
     min-height: 100vh;

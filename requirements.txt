@@ -49,6 +49,7 @@ pylint-plugin-utils==0.9.0
 pymongo==4.15.4
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1
+python-json-logger==4.0.0
 python-slugify==8.0.4
 pytz==2025.2
 PyYAML==6.0.3
@@ -61,7 +62,8 @@ rq==2.6.0
 rq-scheduler==0.14.0
 semver==3.0.4
 setoptconf-tmp==0.3.1
-setuptools<81.0.0
+schedule==1.2.1
+setuptools==80.9.0
 six==1.17.0
 snowballstemmer==3.0.1
 text-unidecode==1.3

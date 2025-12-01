@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>500 - Internal Server Error</title>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper" style="text-align: center; padding: 40px 20px;">
+    <div class="error-page-container">
+        <h1 style="font-size: 3rem; margin-bottom: 1rem;">500</h1>
+        <h2>Internal Server Error</h2>
+        <p style="font-size: 1.1rem; margin-top: 1rem; margin-bottom: 2rem;">
+            Sorry, something went wrong on our end. We have been notified and are working to fix it.
+        </p>
+        <a href="{{ url_for('home') }}" class="btn comment-btn">Go to Homepage</a>
+    </div>
+</div>
+{% endblock %}

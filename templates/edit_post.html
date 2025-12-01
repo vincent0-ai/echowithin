@@ -109,8 +109,8 @@
 </div>
 
 <script>
-    {% if action == 'comment' %}
-        document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if action == 'comment' %}
             const remarkHost = "{{ remark42_host|safe }}";
             const remarkSiteId = "{{ remark42_site_id|safe }}";
             const postUrl = "{{ url_for('view_post', slug=post.slug, _external=True) }}";
@@ -134,12 +134,8 @@
                     }
                 })(remark_config.components || ['embed']);
             }
-        });
-    {% endif %}
-</script>
+        {% endif %}
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
     const editPostForm = document.getElementById('edit-post-form');
     {% if action == 'edit' %}
     let xhr; // Define xhr in a scope accessible to the cancel handler

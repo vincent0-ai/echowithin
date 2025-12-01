@@ -42,6 +42,7 @@ prospector==1.17.3
 pycodestyle==2.14.0
 pydocstyle==6.3.0
 pyflakes==3.4.0
+PyJWT==2.10.1
 pylint==3.3.9
 pylint-celery==0.3
 pylint-django==2.6.1
@@ -60,9 +61,9 @@ requests-oauthlib==2.0.0
 requirements-detector==1.4.0
 rq==2.6.0
 rq-scheduler==0.14.0
+schedule==1.2.1
 semver==3.0.4
 setoptconf-tmp==0.3.1
-schedule==1.2.1
 setuptools==80.9.0
 six==1.17.0
 snowballstemmer==3.0.1

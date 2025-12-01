@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 from pymongo import MongoClient
 
+import jwt
 # Allow OAuthlib to work with insecure transport for local development.
 # This MUST be removed in production.
 #os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -153,6 +154,26 @@ class User(UserMixin):
     def get_admin(self):
         return self.is_admin
 
+def generate_sso_token(user):
+    """Generates a JWT for Remark42 Simple SSO."""
+    if not user or not user.is_authenticated:
+        return None
+
+    try:
+        # This secret MUST match the `AUTH_SIMPLE_SECRET` on your Remark42 server.
+        sso_secret = get_env_variable('REMARK42_SSO_SECRET')
+
+        payload = {
+            "id": user.id,
+            "name": user.username,
+            "email": users_conf.find_one({"_id": ObjectId(user.id)}).get('email', ''), # Fetch email
+            "iat": datetime.datetime.utcnow(),
+            "exp": datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+        }
+        return jwt.encode(payload, sso_secret, algorithm="HS256")
+    except Exception as e:
+        app.logger.error(f"Failed to generate SSO token for user {user.id}: {e}")
+        return None
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -792,6 +813,9 @@ def view_post(slug):
     # Get Remark42 config from environment variables
     remark42_host = get_env_variable('REMARK42_HOST')
     remark42_site_id = get_env_variable('REMARK42_SITE_ID')
+
+    # Generate SSO token if a user is logged in
+    sso_token = generate_sso_token(current_user)
     return render_template('edit_post.html', 
                            post=post, 
                            active_page='blog', 
@@ -799,7 +823,8 @@ def view_post(slug):
                            title=page_title, 
                            description=page_description,
                            remark42_host=remark42_host,
-                           remark42_site_id=remark42_site_id)
+                           remark42_site_id=remark42_site_id,
+                           sso_token=sso_token)
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required

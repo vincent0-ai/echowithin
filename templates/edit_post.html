@@ -3,6 +3,24 @@
 {% block title %}
     <title>{{ title }}</title>
     <meta name="description" content="{{ description }}">
+    <style>
+        /* Custom styles for Remark42 to match the application theme */
+        :root {
+            /* General */
+            --remark-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+            --remark-bg-color: #1e1e1e; /* A slightly lighter black for the comment section background */
+            --remark-text-color: #d4d4d4; /* Light gray for main text */
+            --remark-border-color: #333333; /* Dark gray for borders */
+
+            /* Links and Accents */
+            --remark-link-color: #4CAF50; /* Using the green from the upload progress bar */
+            --remark-link-hover-color: #66bb6a;
+
+            /* Input Fields */
+            --remark-input-bg-color: #2a2a2a;
+            --remark-input-border-color: #444444;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -116,7 +134,13 @@
             site_id: "{{ remark42_site_id|safe }}",
             url: "{{ url_for('view_post', slug=post.slug, _external=True) }}",
             theme: 'dark',
-            components: ['embed', 'counter']
+            components: ['embed', 'counter'],
+            // Add the simple_sso provider if a token is available
+            {% if sso_token %}
+            simple_sso: {
+                token: "{{ sso_token|safe }}"
+            }
+            {% endif %}
         };
     {% endif %}
 </script>

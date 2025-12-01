@@ -606,43 +606,11 @@ def home():
     # --- Community Stats ---
     total_members = users_conf.count_documents({})
     total_posts = posts_conf.count_documents({})
-
-    # Calculate total comments
-    total_comments_pipeline = [
-        {'$match': {'comments': {'$exists': True, '$ne': []}}},
-        {'$project': {'comment_count': {'$size': '$comments'}}},
-        {'$group': {'_id': None, 'total': {'$sum': '$comment_count'}}}
-    ]
-    total_comments_result = list(posts_conf.aggregate(total_comments_pipeline))
-    total_comments = total_comments_result[0]['total'] if total_comments_result else 0
-
-    # Find the most active member (by post count)
-    most_active_member_pipeline = [
-        {'$group': {'_id': '$author', 'post_count': {'$sum': 1}}},
-        {'$sort': {'post_count': -1}},
-        {'$limit': 1}
-    ]
-    most_active_member_result = list(posts_conf.aggregate(most_active_member_pipeline))
-    most_active_member = most_active_member_result[0] if most_active_member_result else None
-
-    # Find trending posts (most commented) using an aggregation pipeline
-    trending_posts = list(posts_conf.aggregate([
-        {
-            '$project': {
-                'title': 1,
-                'slug': 1,
-                'comment_count': {'$size': {'$ifNull': ['$comments', []]}} # snyk:disable=nosql-injection
-            }
-        },
-        {'$sort': {'comment_count': -1}},
-        {'$limit': 3}
-    ]))
-
+ 
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           total_comments=total_comments, most_active_member=most_active_member,
-                           trending_posts=trending_posts)
+                           )
 
 @app.route("/blog")
 def blog():
@@ -667,28 +635,9 @@ def blog():
     # 1. Fetch Latest Posts (sorted by creation/update time)
     latest_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
 
-    # 2. Fetch Most Active Posts (sorted by comment count)
-    active_posts_pipeline = [
-        {
-            '$project': {
-                'title': 1,
-                'slug': 1,
-                'author': 1,
-                'timestamp': 1,
-                'image_url': 1,
-                'content': 1,
-                'comment_count': {'$size': {'$ifNull': ['$comments', []]}}
-            }
-        },
-        {'$sort': {'comment_count': -1}},
-        {'$limit': 5}
-    ]
-    active_posts = list(posts_conf.aggregate(active_posts_pipeline))
-
-
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
-    return render_template("blog.html", latest_posts=latest_posts, active_posts=active_posts, active_page='blog', title=page_title, description=page_description)
+    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description)
 
 @app.route("/blog/all")
 @login_required
@@ -840,7 +789,17 @@ def view_post(slug):
     page_title = post.get('title')
     # Generate a short description from the content
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
-    return render_template('edit_post.html', post=post, active_page='blog', action='comment', title=page_title, description=page_description)
+    # Get Remark42 config from environment variables
+    remark42_host = get_env_variable('REMARK42_HOST')
+    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
+    return render_template('edit_post.html', 
+                           post=post, 
+                           active_page='blog', 
+                           action='comment', 
+                           title=page_title, 
+                           description=page_description,
+                           remark42_host=remark42_host,
+                           remark42_site_id=remark42_site_id)
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required
@@ -857,7 +816,15 @@ def edit_post(post_id):
 
     page_title = f"Edit: {post.get('title')}"
     page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
-    return render_template('edit_post.html', post=post, active_page='blog', action=action, title=page_title, description=page_description)
+    
+    # Get Remark42 config from environment variables to ensure it's available
+    remark42_host = os.environ.get('REMARK42_HOST')
+    remark42_site_id = os.environ.get('REMARK42_SITE_ID')
+
+    return render_template('edit_post.html', post=post, active_page='blog', 
+                           action=action, title=page_title, description=page_description,
+                           remark42_host=remark42_host,
+                           remark42_site_id=remark42_site_id)
 
 @app.route('/update_post/<post_id>', methods=['POST'])
 @login_required
@@ -963,36 +930,6 @@ def update_post(post_id):
         flash("Title and content cannot be empty.", "danger")
     return redirect(url_for('view_post', slug=slug))
 
-@app.route('/add_comment/<post_id>', methods=['POST'])
-@login_required
-def add_comment(post_id):
-    post = posts_conf.find_one({'_id': ObjectId(post_id)})
-    if post:
-        content = request.form.get("content")
-        stance = request.form.get("stance")
-        if content and stance:
-            posts_conf.update_one(
-                {'_id': ObjectId(post_id)},
-                {
-                    '$push': {
-                        'comments': {
-                            'comment_id': ObjectId(),
-                            'author': current_user.username,
-                            'content': content,
-                            'stance': stance
-                        }
-                    },
-                    '$set': {
-                        'timestamp': datetime.datetime.now()
-                    }
-                }
-            )
-            flash("Comment added successfully!", "success")
-            return redirect(url_for('blog', slug=post.get('slug', '')))
-        else:
-            flash("Comment and stance cannot be empty.", "danger")
-    return redirect(url_for('view_post', slug=post.get('slug', '')))
-
 @app.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
 def delete_post(post_id):
@@ -1065,24 +1002,6 @@ def admin_delete_post(post_id):
             flash('Post not found.', 'warning')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
-    return redirect(url_for('admin_posts'))
-
-@app.route('/admin/delete_comment/<post_id>/<comment_id>', methods=['POST'])
-@login_required
-@admin_required
-def admin_delete_comment(post_id, comment_id):
-    try:
-        result = posts_conf.update_one(
-            {'_id': ObjectId(post_id)},
-            {'$pull': {'comments': {'comment_id': ObjectId(comment_id)}}}
-        )
-        if result.modified_count == 1:
-            flash('Comment deleted successfully by admin.', 'success')
-        else:
-            flash('Comment not found or already deleted.', 'warning')
-    except Exception as e:
-        flash(f'An error occurred while deleting the comment: {e}', 'danger')
-    
     return redirect(url_for('admin_posts'))
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])

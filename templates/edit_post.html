@@ -9,7 +9,7 @@
 <div class="content-wrapper">
     {% if action == 'edit' %}
         <!-- Edit Post Form -->
-        <div class="create-post-section">
+        <div class="create-post-section" style="padding: 20px;">
             <h3>Edit Post</h3>
             <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form" id="edit-post-form" enctype="multipart/form-data">
                 <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}" required>
@@ -59,7 +59,7 @@
 
     {% elif action == 'comment' %}
         <!-- View Post and Comments -->
-        <div class="post-item" style="border-left: none; box-shadow: none; padding: 0;">
+        <div class="post-item" style="border-left: none; box-shadow: none; padding: 20px;">
             <h1>{{ post.title }}</h1>
             <div class="post-meta">
                 Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
@@ -96,77 +96,47 @@
 
             <div class="post-content" style="white-space: pre-wrap;">{{ post.content|linkify|safe }}</div>
 
-            {% if current_user.is_authenticated %}
-                <button id="add-comment-btn" class="btn add-comment-btn">Add a Comment</button>
-            {% endif %}
-
-            <div class="post-interaction">
-                {% if current_user.is_authenticated %}
-                <div class="comment-form-container" id="comment-form">
-                    <h4>Leave a Comment</h4>
-                    <form action="{{ url_for('add_comment', post_id=post._id) }}" method="POST">
-                        <textarea name="content" placeholder="Share your thoughts..." required></textarea>
-                        <div class="comment-stance">
-                            <label><input type="radio" name="stance" value="agree" required> Agree</label>
-                            <label><input type="radio" name="stance" value="disagree"> Disagree</label>
-                        </div>
-                        <button type="submit">Submit Comment</button>
-                    </form>
-                </div>
-                {% else %}
-                <p>Please <a href="{{ url_for('login', next=request.path) }}">log in</a> to leave a comment.</p>
-                {% endif %}
-
-                <div class="debate-container">
-                    <div class="debate-side agree-side">
-                        <h4>In Agreement</h4>
-                        {% set agree_comments = post.comments|selectattr('stance', 'equalto', 'agree')|list %}
-                        {% if agree_comments %}
-                            {% for comment in agree_comments %}
-                            <div class="comment">
-                                <p>{{ comment.content|linkify|safe }}</p>
-                                <small>by <strong>{{ comment.author }}</strong></small>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <p class="no-comments">No one has agreed yet.</p>
-                        {% endif %}
-                    </div>
-                    <div class="debate-side disagree-side">
-                        <h4>In Disagreement</h4>
-                        {% set disagree_comments = post.comments|selectattr('stance', 'equalto', 'disagree')|list %}
-                        {% if disagree_comments %}
-                            {% for comment in disagree_comments %}
-                            <div class="comment">
-                                <p>{{ comment.content|linkify|safe }}</p>
-                                <small>by <strong>{{ comment.author }}</strong></small>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <p class="no-comments">No one has disagreed yet.</p>
-                        {% endif %}
-                    </div>
-                </div>
+            <!-- Remark42 Comment Section -->
+            <div class="comments-section" style="margin-top: 30px;">
+                <h3>
+                    Comments <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span>
+                </h3>
+                <div id="remark42"></div>
             </div>
+            
         </div>
     {% endif %}
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const addCommentBtn = document.getElementById('add-comment-btn');
-        const commentForm = document.getElementById('comment-form');
+        const remarkHost = "{{ remark42_host|safe }}";
+        const remarkSiteId = "{{ remark42_site_id|safe }}";
 
-        if (addCommentBtn && commentForm) {
-            addCommentBtn.addEventListener('click', function() {
-                commentForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
+        if (remarkHost && remarkSiteId) {
+            // Remark42 configuration
+            var remark_config = {
+                host: remarkHost,
+                site_id: remarkSiteId,
+                url: window.location.origin + window.location.pathname,
+                theme: 'dark', // Options: 'light', 'dark'
+                components: ['embed', 'counter'] // Load both the embeddable widget and the counter
+            };
+
+            (function(c) {
+                for(var i = 0; i < c.length; i++){
+                    var d = document, s = d.createElement('script');
+                    s.src = remark_config.host + '/web/' + c[i] + '.js';
+                    s.defer = true;
+                    (d.head || d.body).appendChild(s);
+                }
+            })(remark_config.components || ['embed']);
         }
     });
 </script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {
     const editPostForm = document.getElementById('edit-post-form');
     let xhr; // Define xhr in a scope accessible to the cancel handler
     const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check

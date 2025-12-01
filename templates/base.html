@@ -9,6 +9,18 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename = "style.css")}}">
     <script src="{{ url_for('static', filename = "script.js")}}" defer></script>
+    <style>
+        /* Style for the Remark42 comment counter to make it visible */
+        .remark42__counter {
+            display: inline-block;
+            background-color: #e0e0e0;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin-left: 6px;
+        }
+    </style>
     {% block title %}<title>Auth</title>{% endblock %}
 </head>
 

@@ -148,8 +148,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         // Generate and display the HTML for the sorted posts
                         let html = '';
-                        postsWithCounts.slice(0, 10).forEach(post => { // Show top 10 active posts
-                            html += `{%- from '_macros.html' import render_post_item -%}{{ render_post_item(post, current_user) | replace('\n', '') | safe }}`;
+                        const topPosts = postsWithCounts.slice(0, 10); // Show top 10 active posts
+                        topPosts.forEach(post => {
+                            html += renderPostItemJS(post, '{{ current_user.id if current_user.is_authenticated else "" }}');
                         });
                         activePostsContainer.innerHTML = html || '<p>No active posts to display.</p>';
                     });
@@ -158,6 +159,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 activePostsContainer.innerHTML = '<p>Could not load active posts. Please try again later.</p>';
                 console.error('Error fetching active posts:', error);
             });
+    }
+
+    /**
+     * Renders the HTML for a single post item using JavaScript.
+     * This is a client-side equivalent of the `render_post_item` Jinja macro.
+     */
+    function renderPostItemJS(post, currentUserId) {
+        const postUrl = `/post/${post.slug}`;
+        const editUrl = `/edit_post/${post._id}?action=edit`;
+        const deleteUrl = `/delete_post/${post._id}`;
+        const isOwner = currentUserId && post.author_id === currentUserId;
+
+        let mediaHtml = '';
+        if (post.video_url) {
+            mediaHtml = `<div class="post-media-container"><video class="post-video" controls preload="metadata"><source src="${post.video_url}" type="video/mp4"></video></div>`;
+        } else if (post.image_url) {
+            mediaHtml = `<div class="post-image-container"><img src="${post.image_url}" alt="Post image for ${post.title}" class="post-image"></div>`;
+        }
+
+        let ownerActionsHtml = '';
+        if (isOwner) {
+            ownerActionsHtml = `
+                <a href="${editUrl}" class="btn edit-btn">Edit</a>
+                <form action="${deleteUrl}" method="POST" onsubmit="return confirm('Are you sure you want to delete this post?');" style="display: inline;">
+                    <button type="submit" class="btn delete-btn">Delete</button>
+                </form>
+            `;
+        }
+
+        return `
+            <div class="post-item">
+                <h3><a href="${postUrl}">${post.title}</a></h3>
+                ${mediaHtml}
+                <p>${post.content.substring(0, 150)}...</p>
+                <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
+                <div class="post-actions">
+                    <a href="${postUrl}" class="btn comment-btn">
+                        Comments <span class="remark42__counter" data-remark-url="${post.url}"></span>
+                    </a>
+                    ${ownerActionsHtml}
+                </div>
+            </div>
+        `;
     }
 });
 </script>

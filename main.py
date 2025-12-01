@@ -153,6 +153,15 @@ class User(UserMixin):
     def get_admin(self):
         return self.is_admin
 
+@app.before_request
+def redirect_www_to_non_www():
+    """Redirects www requests to non-www to ensure canonical URLs."""
+    if request.host.startswith('www.'):
+        new_host = request.host.replace('www.', '', 1)
+        new_url = request.url.replace(request.host, new_host, 1)
+        return redirect(new_url, code=301)
+
+
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):

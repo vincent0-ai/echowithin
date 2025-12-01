@@ -109,33 +109,20 @@
 </div>
 
 <script>
+    // This configuration block must be defined before the Remark42 script is loaded.
+    {% if action == 'comment' and remark42_host and remark42_site_id %}
+        var remark_config = {
+            host: "{{ remark42_host|safe }}",
+            site_id: "{{ remark42_site_id|safe }}",
+            url: "{{ url_for('view_post', slug=post.slug, _external=True) }}",
+            theme: 'dark',
+            components: ['embed', 'counter']
+        };
+    {% endif %}
+</script>
+
+<script>
     document.addEventListener('DOMContentLoaded', function() {
-        {% if action == 'comment' %}
-            const remarkHost = "{{ remark42_host|safe }}";
-            const remarkSiteId = "{{ remark42_site_id|safe }}";
-            const postUrl = "{{ url_for('view_post', slug=post.slug, _external=True) }}";
-
-            if (remarkHost && remarkSiteId) {
-                // Remark42 configuration
-                var remark_config = {
-                    host: remarkHost,
-                    site_id: remarkSiteId,
-                    url: postUrl,
-                    theme: 'dark', // Options: 'light', 'dark'
-                    components: ['embed', 'counter'] // Load both the embeddable widget and the counter
-                };
-
-                (function(c) {
-                    for(var i = 0; i < c.length; i++){
-                        var d = document, s = d.createElement('script');
-                        s.src = remark_config.host + '/web/' + c[i] + '.js';
-                        s.defer = true;
-                        (d.head || d.body).appendChild(s);
-                    }
-                })(remark_config.components || ['embed']);
-            }
-        {% endif %}
-
     const editPostForm = document.getElementById('edit-post-form');
     {% if action == 'edit' %}
     let xhr; // Define xhr in a scope accessible to the cancel handler
@@ -234,4 +221,10 @@
     {% endif %}
 });
 </script>
+
+{# Load the Remark42 script directly if we are on the comment page #}
+{% if action == 'comment' and remark42_host and remark42_site_id %}
+    <script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
+    <script src="{{ remark42_host|safe }}/web/counter.js" defer></script>
+{% endif %}
 {% endblock %}

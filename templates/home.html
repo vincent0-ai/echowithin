@@ -23,10 +23,6 @@
             <p class="stat-number">{{ total_posts }}</p>
         </div>
         <div class="stat-card">
-            <h3>Total Comments</h3>
-            <p class="stat-number">{{ total_comments }}</p>
-        </div>
-        <div class="stat-card">
             <h3>Most Active Member</h3>
             {% if most_active_member %}
                 <p class="stat-text">{{ most_active_member._id }}</p>
@@ -44,7 +40,9 @@
                     {% for post in trending_posts %}
                         <li>
                             <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                            <span class="stat-subtext">({{ post.comment_count }} comments)</span>
+                            <span class="stat-subtext">
+                                (<span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span> comments)
+                            </span>
                         </li>
                     {% endfor %}
                 </ul>
@@ -58,4 +56,18 @@
         <a href="{{ url_for('blog') }}" class="btn comment-btn" style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">Explore The Blog</a>
     </div>
 </div>
+
+<script>
+    // This configuration block must be defined before the Remark42 counter script is loaded.
+    var remark_config = {
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        components: ['counter'] // Only load the counter component
+    };
+</script>
+
+{# Load the Remark42 counter script to update all comment counts on the page #}
+{% if remark42_host and remark42_site_id %}
+    <script src="{{ remark42_host|safe }}/web/counter.js" defer></script>
+{% endif %}
 {% endblock %}

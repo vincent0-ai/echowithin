@@ -126,4 +126,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<script>
+    // This configuration block must be defined before the Remark42 counter script is loaded.
+    var remark_config = {
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        components: ['counter'] // Only load the counter component on the blog index
+    };
+</script>
+
+{# Load the Remark42 counter script to update all comment counts on the page #}
+{% if remark42_host and remark42_site_id %}
+    <script src="{{ remark42_host|safe }}/web/counter.js" defer></script>
+{% endif %}
+
 {% endblock %}

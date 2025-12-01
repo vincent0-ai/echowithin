@@ -243,6 +243,5 @@
 {# Load the Remark42 script directly if we are on the comment page #}
 {% if action == 'comment' and remark42_host and remark42_site_id %}
     <script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
-    <script src="{{ remark42_host|safe }}/web/counter.js" defer></script>
 {% endif %}
 {% endblock %}

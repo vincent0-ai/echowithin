@@ -363,6 +363,28 @@ def send_log_email_job():
         app.logger.error(f"Failed to send log file email: {e}", exc_info=True)
 
 
+@rq.job
+def send_ntfy_notification(message, title, tags=""):
+    """Sends a push notification to an ntfy topic as a background job."""
+    ntfy_topic = get_env_variable('NTFY_TOPIC')
+    if not ntfy_topic:
+        app.logger.info("NTFY_TOPIC not set, skipping notification.")
+        return
+
+    try:
+        headers = {}
+        if title:
+            headers['Title'] = title
+        if tags:
+            headers['Tags'] = tags
+
+        requests.post(
+            f"https://ntfy.sh/{ntfy_topic}",
+            data=message.encode('utf-8'),
+            headers=headers
+        )
+    except Exception as e:
+        app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
 
 @app.route('/register', methods=['GET', 'POST'])
 @limits(calls=15, period=TIME)
@@ -419,6 +441,13 @@ def register():
             send_code(email, gen_code)
             
             flash("Account created successfully! Please check your email for a confirmation code.", "success")
+
+            # --- Send ntfy notification for new user ---
+            try:
+                send_ntfy_notification.queue(f"User '{username}' has registered.", "New User on EchoWithin", "partying_face")
+            except Exception as e:
+                app.logger.error(f"Failed to enqueue ntfy notification for new user: {e}")
+
             return redirect(url_for("confirm", email=email))
         else:
             flash('Username and password are required', "danger")
@@ -606,11 +635,28 @@ def home():
     # --- Community Stats ---
     total_members = users_conf.count_documents({})
     total_posts = posts_conf.count_documents({})
+
+    # --- Most Active Member Calculation ---
+    most_active_pipeline = [
+        {"$group": {"_id": "$author", "post_count": {"$sum": 1}}},
+        {"$sort": {"post_count": -1}},
+        {"$limit": 1}
+    ]
+    most_active_result = list(posts_conf.aggregate(most_active_pipeline))
+    most_active_member = most_active_result[0] if most_active_result else None
+
+    # Fetch trending posts (e.g., 5 most recent posts)
+    trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+
+    # Get Remark42 config for comment counters
+    remark42_host = get_env_variable('REMARK42_HOST')
+    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
  
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           )
+                           most_active_member=most_active_member, trending_posts=trending_posts, 
+                           remark42_host=remark42_host, remark42_site_id=remark42_site_id)
 
 @app.route("/blog")
 def blog():
@@ -637,7 +683,9 @@ def blog():
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
-    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description)
+    remark42_host = get_env_variable('REMARK42_HOST')
+    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
+    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description, remark42_host=remark42_host, remark42_site_id=remark42_site_id)
 
 @app.route("/blog/all")
 @login_required
@@ -769,6 +817,13 @@ def post():
                 # Fallback: Run the job in a background thread
                 with app.app_context():
                     ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+            
+            # --- Send ntfy notification for new post ---
+            try:
+                ntfy_message = f"\"{title}\" by {current_user.username}"
+                send_ntfy_notification.queue(ntfy_message, "New Post Created", "tada")
+            except Exception as e:
+                app.logger.error(f"Failed to enqueue ntfy notification for new post: {e}")
 
             flash("Post created successfully!", "success")
         else:
@@ -865,6 +920,13 @@ def update_post(post_id):
                 except Exception as e:
                     app.logger.error(f"Failed to enqueue NSFW check job on update: {e}", exc_info=True)
             except Exception as e:
+                # --- Send ntfy notification for NSFW content ---
+                try:
+                    message = f"NSFW content detected in post '{post.get('title')}' by {post.get('author')}. Image has been flagged."
+                    send_ntfy_notification.queue(message, "NSFW Content Detected", "see_no_evil")
+                except Exception as ntfy_e:
+                    app.logger.error(f"Failed to enqueue ntfy notification for NSFW content: {ntfy_e}")
+
                 app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
 
         # Handle video replacement
@@ -1278,6 +1340,16 @@ def handle_ratelimit_exception(e):
     period_remaining = math.ceil(e.period_remaining)
     app.logger.warning(f"Rate limit exceeded for IP {request.remote_addr}. Blocked for {period_remaining} seconds.")
     return render_template('429.html', period_remaining=period_remaining), 429
+
+@app.errorhandler(500)
+def internal_server_error(e):
+    """Handler for 500 errors, sends an ntfy notification."""
+    app.logger.error(f"Internal Server Error: {e}", exc_info=True)
+    try:
+        send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+    except Exception as ntfy_e:
+        app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
+    return render_template("500.html"), 500
 
 @app.route('/sitemap.xml')
 def sitemap():

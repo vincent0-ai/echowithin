@@ -44,7 +44,11 @@
         </div>
 
         <div class="post-meta">
-            Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+            Posted by <strong>{{ post.author }}</strong> on 
+            {# The timestamp might be a datetime object (server-rendered) or a string (client-rendered) #}
+            {% if post.timestamp.strftime %}
+                {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+            {% else %}{{ post.timestamp }}{% endif %}
         </div>
         <div class="post-actions">
             <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn comment-btn">

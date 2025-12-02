@@ -6,25 +6,30 @@
 {% endblock %}
 
 {% block content %}
-<style>
-    .pagination .page-link {
-        color: white; /* Make pagination link text white */
-    }
-    .pagination .page-item.active .page-link {
-        background-color: #800000; /* Maroon background */
-        border-color: #800000;
-        color: white; /* White text for active page */
-    }
-</style>
-
 <div class="content-wrapper">
     <div class="blog-header">
         <h1>All Posts</h1>
-        <h4>Browse through every post from the community.</h4>
-        <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">&larr; Back to Blog Home</a>
+        {% if selected_tag %}
+            <h4>Showing posts tagged with: <strong>{{ selected_tag }}</strong></h4>
+        {% else %}
+            <h4>Browse through all posts from the EchoWithin community.</h4>
+        {% endif %}
     </div>
 
-    {# Import the macro from blog.html to render post items consistently #}
+    <!-- Tag Filter Form -->
+    <div class="tag-filter-container" style="margin-bottom: 2rem; text-align: center;">
+        <form action="{{ url_for('all_posts') }}" method="GET" style="display: inline-block;">
+            <label for="tag-select" style="margin-right: 0.5rem;">Filter by Tag:</label>
+            <select name="tag" id="tag-select" class="form-input" onchange="this.form.submit()" style="width: auto; min-width: 150px;">
+                <option value="">All Tags</option>
+                {% for tag in all_tags %}
+                    <option value="{{ tag }}" {% if tag == selected_tag %}selected{% endif %}>{{ tag }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+
+    {# Import the reusable macro from its dedicated file #}
     {% from '_macros.html' import render_post_item %}
 
     <div class="posts-section">
@@ -33,7 +38,7 @@
                 {{ render_post_item(post, current_user) }}
             {% endfor %}
         {% else %}
-            <p>No posts have been made yet.</p>
+            <p>No posts found for the selected tag. <a href="{{ url_for('all_posts') }}">View all posts</a>.</p>
         {% endif %}
     </div>
 
@@ -41,13 +46,30 @@
     {% if total_pages > 1 %}
     <nav class="pagination-nav">
         <ul class="pagination">
-            {% if page > 1 %}<li class="page-item"><a class="page-link" href="{{ url_for('all_posts', page=page-1) }}">Previous</a></li>{% endif %}
+            {% if page > 1 %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('all_posts', page=page-1, tag=selected_tag) }}">Previous</a></li>
+            {% endif %}
             {% for p in range(1, total_pages + 1) %}
-            <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('all_posts', page=p) }}">{{ p }}</a></li>
+            <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('all_posts', page=p, tag=selected_tag) }}">{{ p }}</a></li>
             {% endfor %}
-            {% if page < total_pages %}<li class="page-item"><a class="page-link" href="{{ url_for('all_posts', page=page+1) }}">Next</a></li>{% endif %}
+            {% if page < total_pages %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('all_posts', page=page+1, tag=selected_tag) }}">Next</a></li>
+            {% endif %}
         </ul>
     </nav>
     {% endif %}
 </div>
+
+{# Load Remark42 script to enable comment counters on this page #}
+{% if remark42_host and remark42_site_id %}
+<script>
+    // This configuration block must be defined before the Remark42 script is loaded.
+    var remark_config = {
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        components: ['counter'] // Only load the counter component
+    };
+</script>
+<script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
+{% endif %}
 {% endblock %}

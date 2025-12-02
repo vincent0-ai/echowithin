@@ -6,14 +6,21 @@
 <div class="blog-container">
     <header class="blog-header">
         <h1>Admin Post Management</h1>
+        <a href="{{ url_for('blog') }}" class="btn edit-btn" style="margin-top: 1rem;">&larr; Back to Blog</a>
     </header>
 
+    <!-- Search Form -->
+    <form action="{{ url_for('admin_posts') }}" method="GET" class="search-form" style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
+        <input type="text" name="query" class="form-input" placeholder="Search by title or content..." value="{{ query or '' }}" style="width: 70%;">
+        <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
+    </form>
+
     <div class="posts-section">
-        <h2>All Posts</h2>
+        <h2>{{ 'Search Results' if query else 'All Posts' }}</h2>
         <div class="posts-list">
             {% for post in posts %}
             <div class="post-item">
-                <h3>{{ post.title }}</h3>
+                <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
                 <p>{{ post.content[:150] ~ '...' if post.content|length > 150 else post.content }}</p>
                 <div class="post-meta">
                     Posted by <strong>{{ post.author }}</strong>
@@ -25,7 +32,7 @@
                 </div>
             </div>
             {% else %}
-            <p>No posts in the database yet.</p>
+            <p>No posts found.</p>
             {% endfor %}
         </div>
 
@@ -35,15 +42,15 @@
           <ul class="pagination">
             {# Link to the Previous Page #}
             <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin_posts', page=page-1) }}">Previous</a>
+              <a class="page-link" href="{{ url_for('admin_posts', page=page-1, query=query) }}">Previous</a>
             </li>
         
             {# Link to the Next Page #}
             <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin_posts', page=page+1) }}">Next</a>
+              <a class="page-link" href="{{ url_for('admin_posts', page=page+1, query=query) }}">Next</a>
             </li>
 
-            <li class="page-item">
+            <li class="page-item" style="margin-left: auto;">
               <a class="page-link" href="{{ url_for('blog') }}">Home</a>
             </li>
           </ul>

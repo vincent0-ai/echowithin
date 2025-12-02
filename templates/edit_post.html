@@ -33,6 +33,11 @@
                 <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}" required>
                 <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10" required>{{ post.content }}</textarea>
                 
+                <div class="form-group">
+                    <label for="tags">Tags (comma-separated)</label>
+                    <input type="text" id="tags" name="tags" class="form-input" placeholder="e.g., technology, health, meme" value="{{ post.tags|join(', ') if post.tags }}">
+                </div>
+                
                 <div>
                     <label for="image">Upload a New Image (Optional):</label>
                     <label for="image">Upload a New Image (Optional, max 10 MB):</label>

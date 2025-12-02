@@ -65,6 +65,7 @@ schedule==1.2.1
 semver==3.0.4
 setoptconf-tmp==0.3.1
 setuptools==80.9.0
+cachetools==6.2.2
 six==1.17.0
 snowballstemmer==3.0.1
 text-unidecode==1.3

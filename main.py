@@ -22,6 +22,7 @@ from ratelimit import limits, RateLimitException
 from dotenv import load_dotenv
 import secrets
 from jigsawstack import JigsawStack
+from cachetools import cached, TTLCache
 import time
 import requests
 from werkzeug.utils import secure_filename
@@ -356,6 +357,74 @@ def send_new_post_notifications(post_id_str):
                     app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
     except Exception as e:
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
+
+
+REMARK42_HOST = os.environ.get("REMARK42_HOST")
+REMARK42_SITE_ID = os.environ.get("REMARK42_SITE_ID")
+
+# --- Caching for Comment Counts ---
+# Cache comment counts for 5 minutes (300 seconds) to reduce API calls.
+comment_count_cache = TTLCache(maxsize=1, ttl=300)
+def get_comment_count(post_url: str) -> int:
+    """Fetch Remark42 comment count for a post URL."""
+    if not REMARK42_HOST or not REMARK42_SITE_ID:
+        return 0
+    try:
+        res = requests.get(
+            f"{REMARK42_HOST}/api/v1/find?site={REMARK42_SITE_ID}&url={post_url}",
+            timeout=2
+        )
+        if res.status_code == 200:
+            comments = res.json().get("comments", [])
+            return len(comments)
+    except Exception:
+        pass
+    return 0
+
+@cached(comment_count_cache)
+def get_batch_comment_counts(post_urls: tuple) -> dict:
+    """
+    Fetches comment counts for a tuple of URLs in a single batch request.
+    This function is cached to avoid hitting the Remark42 API on every page load.
+    The `post_urls` argument must be a tuple for it to be hashable by the cache.
+    """
+    counts_map = {}
+    if not REMARK42_HOST or not REMARK42_SITE_ID:
+        return counts_map
+    try:
+        params = [('site', REMARK42_SITE_ID)] + [('url', url) for url in post_urls]
+        res = requests.get(f"{REMARK42_HOST}/api/v1/counts", params=params, timeout=2)
+        if res.status_code == 200:
+            return {item['url']: item['count'] for item in res.json()}
+    except Exception as e:
+        app.logger.warning(f"Could not fetch batch comment counts from Remark42: {e}")
+    return counts_map
+def prepare_posts(posts):
+    """
+    Add `url` and `comment_count` attributes to a list of posts for rendering.
+    Call this before passing posts to render_template.
+    """
+    if not posts:
+        return []
+
+    # Step 1: Add URLs to each post and collect them for a batch request.
+    post_urls = []
+    # We use a dictionary to handle potential duplicate posts without making duplicate URL entries
+    url_map = {}
+    for post in posts:
+        post_url = url_for("view_post", slug=post.get('slug'), _external=True)
+        post['url'] = post_url
+        if post_url not in url_map:
+            url_map[post_url] = True
+
+    # Step 2: Fetch all comment counts from the cache or a new batch request.
+    counts_map = get_batch_comment_counts(tuple(sorted(url_map.keys())))
+
+    # Step 3: Assign the fetched counts to each post.
+    for post in posts:
+        post['comment_count'] = counts_map.get(post['url'], 0)
+
+    return posts
 
 
 @rq.job
@@ -704,11 +773,13 @@ def blog():
     # --- Default Blog Page Logic (No Search) ---
 
     # 1. Fetch Latest Posts (sorted by creation/update time)
-    latest_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+    latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
+    with app.app_context():
+        latest_posts_prepared = prepare_posts(list(latest_posts_cursor))
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
-    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description)
+    return render_template("blog.html", latest_posts=latest_posts_prepared, active_page='blog', title=page_title, description=page_description)
 
 @app.route("/blog/all")
 @login_required

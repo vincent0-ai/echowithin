@@ -210,6 +210,12 @@ def inject_remark42_config():
     except:
         return dict(remark42_host=None, remark42_site_id=None)
 
+@app.context_processor
+def inject_current_year():
+    """Makes the current year available to all templates."""
+    return {'current_year': datetime.date.today().year}
+
+
 @login_manager.user_loader
 def load_user(user_id):
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})

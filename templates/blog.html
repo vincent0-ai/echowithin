@@ -153,6 +153,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             html += renderPostItemJS(post, '{{ current_user.id if current_user.is_authenticated else "" }}');
                         });
                         activePostsContainer.innerHTML = html || '<p>No active posts to display.</p>';
+
+                        // After adding new posts to the DOM, re-run the observer setup
+                        // to make sure their counters are initialized when they scroll into view.
+                        if (window.setupRemark42Observers) {
+                            window.setupRemark42Observers();
+                        }
                     });
             })
             .catch(error => {

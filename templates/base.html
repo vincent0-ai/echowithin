@@ -164,45 +164,44 @@
 <script>
     // Remark42 counter configuration
     var remark_config = {
-        host: "{{ remark42_host }}",
+        host: '{{ remark42_host }}',
         site_id: '{{ remark42_site_id }}',
         components: ['counter'] // Load only the counter component
     };
 
-    // Function to load the Remark42 script
+    /**
+     * Sets up IntersectionObservers to initialize Remark42 counters when posts scroll into view.
+     * This function is designed to be called after the Remark42 counter script has loaded.
+     */
+    window.setupRemark42Observers = function() {
+        if (!window.REMARK42 || !window.REMARK42.counter) {
+            console.error("Remark42 counter script not available.");
+            return;
+        }
+
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    // Initialize counters for the visible post item
+                    window.REMARK42.counter.init({ node: entry.target });
+                    // Stop observing to prevent re-initialization
+                    obs.unobserve(entry.target);
+                }
+            });
+        }, { rootMargin: '0px 0px 200px 0px' }); // Pre-load counters 200px before they are visible
+
+        // Observe all .post-item elements currently on the page
+        document.querySelectorAll('.post-item').forEach(item => observer.observe(item));
+    };
+
+    // Asynchronously load the Remark42 script and set up observers on load
     (function(c) {
-        for (var i = 0; i < c.length; i++) {
-            var d = document, s = d.createElement('script');
-            s.src = remark_config.host + '/web/' + c[i] + '.js';
-            s.defer = true;
-            (d.head || d.body).appendChild(s);
-        }
+        var d = document, s = d.createElement('script');
+        s.src = remark_config.host + '/web/' + c[0] + '.js';
+        s.defer = true;
+        s.onload = window.setupRemark42Observers; // Key change: Set up observers after script loads
+        (d.head || d.body).appendChild(s);
     })(remark_config.components || ['embed']);
-
-    // Use IntersectionObserver to initialize counters for posts as they scroll into view.
-    // This ensures that counters for dynamically loaded or lazy-loaded posts are updated.
-    document.addEventListener('DOMContentLoaded', () => {
-        // Check if the REMARK42 object and its counter component are available.
-        if (window.REMARK42 && window.REMARK42.counter) {
-            const observer = new IntersectionObserver((entries, obs) => {
-                entries.forEach(entry => {
-                    // When a post-item becomes visible on the screen
-                    if (entry.isIntersecting) {
-                        // Tell Remark42 to initialize counters within this specific element.
-                        window.REMARK42.counter.init({
-                            node: entry.target
-                        });
-                        // Stop observing this element since we've already processed it.
-                        obs.unobserve(entry.target);
-                    }
-                });
-            }, { rootMargin: '0px 0px 200px 0px' }); // `rootMargin` triggers the load a bit before it's on screen
-
-            // Start observing all post items on the page.
-            const postItems = document.querySelectorAll('.post-item');
-            postItems.forEach(item => observer.observe(item));
-        }
-    });
 </script>
 {% endif %}
 </html>

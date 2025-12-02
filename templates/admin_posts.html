@@ -26,7 +26,7 @@
                     Posted by <strong>{{ post.author }}</strong>
                 </div>
                 <div class="post-actions">
-                    <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST" onsubmit="return confirm('ADMIN ACTION: Are you sure you want to permanently delete this post?');" style="display: inline;">
+                    <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST" data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">
                         <button type="submit" class="delete-btn">Delete Post</button>
                     </form>
                 </div>

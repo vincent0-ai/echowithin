@@ -209,19 +209,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
         return `
             <div class="post-item">
-                <h3><a href="${postUrl}">${post.title}</a></h3>
+                <h3><a href="${post.url}">${post.title}</a></h3>
                 ${mediaHtml}
                 <p>${post.content.substring(0, 150)}...</p>
                 <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
                 <div class="post-actions">
-                    <a href="${postUrl}" class="btn comment-btn">
-                        Comments <span class="remark42__counter" data-remark-url="${post.url}"></span>
+                    <a href="${post.url}" class="btn comment-btn">
+                        Comments <span class="comment-count-display">${post.comment_count !== undefined ? post.comment_count : 0}</span>
+                        <span class="remark42__counter" data-remark-url="${post.url}" style="display: none;"></span>
                     </a>
                     ${ownerActionsHtml}
                 </div>
             </div>
         `;
     }
+});
+
+// This script handles updating the server-rendered comment count with the live JS one.
+document.addEventListener('DOMContentLoaded', function() {
+    // Function to update the visible count when the hidden remark42 counter changes.
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'childList' && mutation.target.classList.contains('remark42__counter')) {
+                const jsCounter = mutation.target;
+                const displayCounter = jsCounter.previousElementSibling; // The .comment-count-display span
+                if (displayCounter && displayCounter.classList.contains('comment-count-display')) {
+                    displayCounter.textContent = jsCounter.textContent;
+                }
+            }
+        });
+    });
+    // Observe changes in the entire document body to catch counters being added/updated.
+    observer.observe(document.body, { childList: true, subtree: true });
 });
 </script>
 

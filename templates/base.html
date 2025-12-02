@@ -320,6 +320,46 @@
             }
         });
 
+        // --- Custom Confirmation for Remark42 actions ---
+        function addRemark42Confirmations(targetNode) {
+            // Selector for Remark42 action buttons (delete, pin, etc.)
+            const actionButtons = targetNode.querySelectorAll('.remark42__control-button:not([data-confirm-added])');
+
+            actionButtons.forEach(button => {
+                let confirmMessage = '';
+                // Determine the message based on the button's class/purpose
+                if (button.classList.contains('remark42__control-button_delete')) {
+                    confirmMessage = 'Are you sure you want to delete this comment?';
+                } else if (button.classList.contains('remark42__control-button_pin')) {
+                    // Check if it's already pinned to show the correct message
+                    const isPinned = button.closest('.remark42__comment-header_pinned');
+                    confirmMessage = isPinned ? 'Are you sure you want to unpin this comment?' : 'Are you sure you want to pin this comment?';
+                }
+
+                if (confirmMessage) {
+                    button.setAttribute('data-confirm-added', 'true'); // Mark as handled
+                    button.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+
+                        showCustomConfirm(confirmMessage, (confirmed) => {
+                            if (confirmed) {
+                                // If confirmed, re-trigger the original click event
+                                button.removeAttribute('data-confirm-added'); // Allow re-triggering
+                                button.click();
+                                button.setAttribute('data-confirm-added', 'true'); // Re-mark
+                            }
+                        });
+                    }, true); // Use capture phase to intercept the click first
+                }
+            });
+        }
+
+        // Use MutationObserver to detect when Remark42 comments are loaded/changed
+        const remark42Observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => addRemark42Confirmations(mutation.target));
+        });
+        remark42Observer.observe(document.body, { childList: true, subtree: true });
     });
 </script>
 

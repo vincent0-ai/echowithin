@@ -135,11 +135,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 // Use Remark42's API to get comment counts for all posts
-                window.REMARK42.get_counts(posts.map(p => p.url))
+                const postUrls = posts.map(p => `/post/${p.slug}`);
+                window.REMARK42.get_counts(postUrls)
                     .then(counts => {
                         // Add comment counts to each post object
                         const postsWithCounts = posts.map(post => {
-                            const countData = counts.find(c => c.url === post.url);
+                            const countData = counts.find(c => c.url === `/post/${post.slug}`);
                             return { ...post, comment_count: countData ? countData.count : 0 };
                         });
 
@@ -196,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
                 <div class="post-actions">
                     <a href="${postUrl}" class="btn comment-btn">
-                        Comments <span class="remark42__counter" data-remark-url="${post.url}"></span>
+                        Comments <span class="remark42__counter" data-remark-url="${postUrl}"></span>
                     </a>
                     ${ownerActionsHtml}
                 </div>

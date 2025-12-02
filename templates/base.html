@@ -178,6 +178,31 @@
             (d.head || d.body).appendChild(s);
         }
     })(remark_config.components || ['embed']);
+
+    // Use IntersectionObserver to initialize counters for posts as they scroll into view.
+    // This ensures that counters for dynamically loaded or lazy-loaded posts are updated.
+    document.addEventListener('DOMContentLoaded', () => {
+        // Check if the REMARK42 object and its counter component are available.
+        if (window.REMARK42 && window.REMARK42.counter) {
+            const observer = new IntersectionObserver((entries, obs) => {
+                entries.forEach(entry => {
+                    // When a post-item becomes visible on the screen
+                    if (entry.isIntersecting) {
+                        // Tell Remark42 to initialize counters within this specific element.
+                        window.REMARK42.counter.init({
+                            node: entry.target
+                        });
+                        // Stop observing this element since we've already processed it.
+                        obs.unobserve(entry.target);
+                    }
+                });
+            }, { rootMargin: '0px 0px 200px 0px' }); // `rootMargin` triggers the load a bit before it's on screen
+
+            // Start observing all post items on the page.
+            const postItems = document.querySelectorAll('.post-item');
+            postItems.forEach(item => observer.observe(item));
+        }
+    });
 </script>
 {% endif %}
 </html>

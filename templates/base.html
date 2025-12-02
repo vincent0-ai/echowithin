@@ -162,19 +162,21 @@
 
 {% if remark42_host and remark42_site_id %}
 <script>
-    // Remark42 counter configuration
-    var remark_config = {
-        host: "{{ remark42_host|safe }}",
-        site_id: "{{ remark42_site_id|safe }}",
-        components: ['counter']
-    };
+    document.addEventListener('DOMContentLoaded', function() {
+        // Remark42 counter configuration
+        var remark_config = {
+            host: "{{ remark42_host|safe }}",
+            site_id: "{{ remark42_site_id|safe }}",
+            components: ['counter']
+        };
 
-    (function(c) {
-        var d = document, s = d.createElement('script');
-        s.src = remark_config.host + '/web/' + c[0] + '.js';
-        s.defer = true;
-        (d.head || d.body).appendChild(s);
-    })(remark_config.components || ['embed']); // Default to 'embed' for safety, though 'counter' is primary.
+        (function(c) {
+            var d = document, s = d.createElement('script');
+            s.src = remark_config.host + '/web/' + c[0] + '.js';
+            s.defer = true;
+            (d.head || d.body).appendChild(s);
+        })(remark_config.components || ['embed']); // Default to 'embed' for safety, though 'counter' is primary.
+    });
 </script>
 {% endif %}
 </html>

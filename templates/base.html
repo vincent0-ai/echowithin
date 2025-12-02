@@ -20,11 +20,103 @@
             font-size: 0.8em;
             margin-left: 6px;
         }
+
+        /* Custom Modal Styles */
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .custom-modal {
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .custom-modal-content p {
+            margin-bottom: 20px;
+            font-size: 1.1rem;
+            color: #333;
+        }
+        .custom-modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        .custom-modal-actions .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* Tag Styles */
+        .post-tags {
+            margin-top: 10px;
+        }
+        .tag-badge {
+            display: inline-block;
+            background-color: #f0f0f0;
+            color: #555;
+            padding: 4px 8px;
+            margin-right: 5px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+    </style>
+    <style>
+        /* Add padding on mobile for better readability */
+        @media (max-width: 768px) {
+            .content-wrapper {
+                padding: 0 1rem;
+            }
+        }
+    </style>
+    <style>
+        /* Footer Styles */
+        .footer {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            padding: 2rem 1rem;
+            text-align: center;
+            border-top: 1px solid #e7e7e7;
+            margin-top: auto; /* Pushes footer to the bottom */
+        }
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .footer-links {
+            margin: 0.5rem 0;
+        }
+        .footer-links a {
+            color: #495057;
+            text-decoration: none;
+            margin: 0 10px;
+            transition: color 0.2s;
+        }
+        .footer-links a:hover {
+            color: #000;
+        }
+        .footer-socials a {
+            font-size: 1.5rem;
+        }
     </style>
     {% block title %}<title>Auth</title>{% endblock %}
 </head>
 
 <body>
+    <div class="page-container">
     <div class="navbar">
         <div class="nav-left">
             <a href="{{ url_for('dashboard') }}" class="nav-brand">
@@ -67,8 +159,33 @@
         {%block content%} {%endblock%}
     </div>
 
+    <!-- Custom Confirmation Modal -->
+    <div id="custom-confirm-overlay" class="custom-modal-overlay">
+        <div class="custom-modal">
+            <div class="custom-modal-content">
+                <p id="custom-confirm-msg">Are you sure?</p>
+            </div>
+            <div class="custom-modal-actions">
+                <button id="custom-confirm-cancel" class="btn edit-btn">Cancel</button>
+                <button id="custom-confirm-ok" class="btn delete-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-socials nav-socials" style="margin-bottom: 1rem;">
+                <a href="https://web.facebook.com/profile.php?id=61581191858783" target="_blank" rel="noopener noreferrer" title="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                <a href="https://www.tiktok.com/@echowithin2025?_t=ZM-8zyR66ekbou&_r=1" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+            </div>
+            <div class="footer-links">
+                <a href="{{ url_for('home') }}">Home</a> | <a href="{{ url_for('blog') }}">Blog</a> | <a href="{{ url_for('about') }}">About</a>
+            </div>
+            <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
+        </div>
     </footer>
+    </div>
 </body>
 
 <script>
@@ -157,6 +274,52 @@
                 }
             });
         });
+
+        // --- Custom Confirmation Modal Logic ---
+        const confirmOverlay = document.getElementById('custom-confirm-overlay');
+        const confirmMsg = document.getElementById('custom-confirm-msg');
+        const confirmOk = document.getElementById('custom-confirm-ok');
+        const confirmCancel = document.getElementById('custom-confirm-cancel');
+        let confirmCallback = null;
+
+        function showCustomConfirm(message, callback) {
+            confirmMsg.textContent = message;
+            confirmOverlay.style.display = 'flex';
+            confirmCallback = callback;
+        }
+
+        confirmOk.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback(true);
+            }
+            confirmOverlay.style.display = 'none';
+        });
+
+        confirmCancel.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback(false);
+            }
+            confirmOverlay.style.display = 'none';
+        });
+
+        // Close modal if clicking on the overlay
+        confirmOverlay.addEventListener('click', (e) => {
+            if (e.target === confirmOverlay) confirmCancel.click();
+        });
+
+        // --- Event delegation for custom confirms on any form ---
+        document.body.addEventListener('submit', function(e) {
+            // Target forms for deletion or other confirmation actions
+            const form = e.target;
+            const confirmMessage = form.getAttribute('data-confirm');
+            if (form && confirmMessage) {
+                e.preventDefault(); // Stop the form from submitting immediately
+                showCustomConfirm(confirmMessage, (confirmed) => {
+                    if (confirmed) form.submit(); // If user confirms, submit the form
+                });
+            }
+        });
+
     });
 </script>
 
@@ -176,6 +339,39 @@
             s.defer = true;
             (d.head || d.body).appendChild(s);
         })(remark_config.components || ['embed']); // Default to 'embed' for safety, though 'counter' is primary.
+
+        // New script to fetch and display comment counts for server-rendered posts
+        function updateCommentCounts() {
+            if (typeof window.REMARK42 === 'undefined' || typeof window.REMARK42.get_counts !== 'function') {
+                // If Remark42 API is not ready, wait and try again.
+                setTimeout(updateCommentCounts, 200);
+                return;
+            }
+
+            const counters = document.querySelectorAll('.remark42__counter');
+            if (counters.length === 0) return;
+
+            const urls = Array.from(counters).map(counter => counter.getAttribute('data-remark-url'));
+            
+            window.REMARK42.get_counts(urls)
+                .then(counts => {
+                    counts.forEach(item => {
+                        // Find the corresponding counter span on the page
+                        const counterSpan = document.querySelector(`.remark42__counter[data-remark-url="${item.url}"]`);
+                        if (counterSpan) {
+                            // Update the text of the span with the count
+                            counterSpan.textContent = item.count;
+
+                            // Also add the count as a data-attribute to the parent button for potential future use
+                            const button = counterSpan.closest('a.comment-btn');
+                            if (button) {
+                                button.setAttribute('data-comment-count', item.count);
+                            }
+                        }
+                    });
+                });
+        }
+        updateCommentCounts();
     });
 </script>
 {% endif %}

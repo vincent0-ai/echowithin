@@ -20,6 +20,7 @@
         {% if current_user.is_authenticated and current_user.is_admin %}
         <div class="admin-actions">
             <a href="{{ url_for('admin_posts') }}" class="btn edit-btn">Manage Posts</a>
+            <a href="{{ url_for('admin_users') }}" class="btn edit-btn">Manage Users</a>
             <a href="{{ url_for('admin_announcements') }}" class="btn edit-btn">Manage Announcements</a>
         </div>
         {% endif %}
@@ -123,6 +124,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // --- Event delegation for custom confirms ---
+    // This handles both server-rendered forms and dynamically added client-rendered forms.
+    document.body.addEventListener('submit', function(e) {
+        // Target forms for deletion
+        if (e.target && e.target.matches('.delete-post-form')) {
+            e.preventDefault(); // Stop the form from submitting immediately
+            const form = e.target;
+
+            showCustomConfirm('Are you sure you want to delete this post?', (confirmed) => {
+                if (confirmed) {
+                    // If user confirms, submit the form programmatically
+                    form.submit();
+                }
+            });
+        }
+    });
+
+
     function fetchActivePosts() {
         const activePostsContainer = document.getElementById('active-posts');
 
@@ -182,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isOwner) {
             ownerActionsHtml = `
                 <a href="${editUrl}" class="btn edit-btn">Edit</a>
-                <form action="${deleteUrl}" method="POST" onsubmit="return confirm('Are you sure you want to delete this post?');" style="display: inline;">
+                <form action="${deleteUrl}" method="POST" class="delete-post-form" style="display: inline;">
                     <button type="submit" class="btn delete-btn">Delete</button>
                 </form>
             `;
@@ -205,5 +224,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+{# Load Remark42 script to enable comment counters on this page #}
+{% if remark42_host and remark42_site_id %}
+<script>
+    // This configuration block must be defined before the Remark42 script is loaded.
+    var remark_config = {
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        components: ['counter'] // Only load the counter component
+    };
+</script>
+<script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
+{% endif %}
 
 {% endblock %}

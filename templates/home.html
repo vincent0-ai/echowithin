@@ -57,4 +57,17 @@
     </div>
 </div>
 
+{# Load Remark42 script to enable comment counters on this page #}
+{% if remark42_host and remark42_site_id %}
+<script>
+    // This configuration block must be defined before the Remark42 script is loaded.
+    var remark_config = {
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        components: ['counter'] // Only load the counter component
+    };
+</script>
+<script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
+{% endif %}
+
 {% endblock %}

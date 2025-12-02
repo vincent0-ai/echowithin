@@ -164,42 +164,19 @@
 <script>
     // Remark42 counter configuration
     var remark_config = {
-        host: '{{ remark42_host }}',
-        site_id: '{{ remark42_site_id }}',
-        components: ['counter'] // Load only the counter component
+        host: "{{ remark42_host|safe }}",
+        site_id: "{{ remark42_site_id|safe }}",
+        // By loading the 'embed' component, Remark42 will automatically
+        // find and initialize all counters on the page, even those
+        // added dynamically. This is more robust than using 'counter.js' alone.
+        components: ['embed']
     };
 
-    /**
-     * Sets up IntersectionObservers to initialize Remark42 counters when posts scroll into view.
-     * This function is designed to be called after the Remark42 counter script has loaded.
-     */
-    window.setupRemark42Observers = function() {
-        if (!window.REMARK42 || !window.REMARK42.counter) {
-            console.error("Remark42 counter script not available.");
-            return;
-        }
-
-        const observer = new IntersectionObserver((entries, obs) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    // Initialize counters for the visible post item
-                    window.REMARK42.counter.init({ node: entry.target });
-                    // Stop observing to prevent re-initialization
-                    obs.unobserve(entry.target);
-                }
-            });
-        }, { rootMargin: '0px 0px 200px 0px' }); // Pre-load counters 200px before they are visible
-
-        // Observe all .post-item elements currently on the page
-        document.querySelectorAll('.post-item').forEach(item => observer.observe(item));
-    };
-
-    // Asynchronously load the Remark42 script and set up observers on load
+    // Asynchronously load the main Remark42 script.
     (function(c) {
         var d = document, s = d.createElement('script');
         s.src = remark_config.host + '/web/' + c[0] + '.js';
         s.defer = true;
-        s.onload = window.setupRemark42Observers; // Key change: Set up observers after script loads
         (d.head || d.body).appendChild(s);
     })(remark_config.components || ['embed']);
 </script>

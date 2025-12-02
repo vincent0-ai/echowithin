@@ -390,7 +390,8 @@ def send_ntfy_notification(message, title, tags=""):
         requests.post(
             f"https://{ntfy_topic}",
             data=message.encode('utf-8'),
-            headers=headers
+            headers=headers,
+            verify=False  # Skip SSL verification for self-hosted ntfy
         )
     except Exception as e:
         app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)

@@ -9,3 +9,5 @@ venv/
 .DS_Store
 FEATURES_ADDED.md
 worker.py
+test_*.py
+mock_*.py

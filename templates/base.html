@@ -166,19 +166,15 @@
     var remark_config = {
         host: "{{ remark42_host|safe }}",
         site_id: "{{ remark42_site_id|safe }}",
-        // By loading the 'embed' component, Remark42 will automatically
-        // find and initialize all counters on the page, even those
-        // added dynamically. This is more robust than using 'counter.js' alone.
-        components: ['embed']
+        components: ['counter']
     };
 
-    // Asynchronously load the main Remark42 script.
     (function(c) {
         var d = document, s = d.createElement('script');
         s.src = remark_config.host + '/web/' + c[0] + '.js';
         s.defer = true;
         (d.head || d.body).appendChild(s);
-    })(remark_config.components || ['embed']);
+    })(remark_config.components || ['embed']); // Default to 'embed' for safety, though 'counter' is primary.
 </script>
 {% endif %}
 </html>

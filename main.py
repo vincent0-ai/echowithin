@@ -11,10 +11,6 @@ from flask_mail import Mail, Message
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pymongo import MongoClient
-
-# Allow OAuthlib to work with insecure transport for local development.
-# This MUST be removed in production.
-#os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from bson.son import SON
@@ -159,12 +155,34 @@ class User(UserMixin):
         return self.is_admin
 
 @app.before_request
-def redirect_www_to_non_www():
-    """Redirects www requests to non-www to ensure canonical URLs."""
-    if request.host.startswith('www.'):
-        new_host = request.host.replace('www.', '', 1)
-        new_url = request.url.replace(request.host, new_host, 1)
-        return redirect(new_url, code=301)
+def canonical_redirects():
+    """Force HTTPS and non-www canonical URLs."""
+
+    # REAL host (especially behind proxies like CapRover)
+    host = request.headers.get("X-Forwarded-Host", request.host)
+
+    url = request.url
+
+    # Start with current request URL
+    new_url = url
+
+    # 1. Force non-www
+    if host.startswith("www."):
+        new_host = host.replace("www.", "", 1)
+        new_url = new_url.replace(host, new_host, 1)
+        host = new_host  # update host for next checks
+
+    # 2. Force HTTPS (CapRover passes X-Forwarded-Proto)
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+    if proto != "https":
+        new_url = new_url.replace("http://", "https://", 1)
+
+    # If nothing changed → NO redirect required
+    if new_url == url:
+        return
+
+    return redirect(new_url, code=301)
+
 
 
 def admin_required(f):

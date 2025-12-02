@@ -199,6 +199,16 @@ def inject_pinned_announcement():
     pinned_announcement = announcements_conf.find_one({'is_pinned': True})
     return dict(pinned_announcement=pinned_announcement)
 
+@app.context_processor
+def inject_remark42_config():
+    """Makes Remark42 configuration available to all templates."""
+    try:
+        remark42_host = get_env_variable('REMARK42_HOST')
+        remark42_site_id = get_env_variable('REMARK42_SITE_ID')
+        return dict(remark42_host=remark42_host, remark42_site_id=remark42_site_id)
+    except:
+        return dict(remark42_host=None, remark42_site_id=None)
+
 @login_manager.user_loader
 def load_user(user_id):
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})
@@ -661,15 +671,10 @@ def home():
     # Fetch trending posts (e.g., 5 most recent posts)
     trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
 
-    # Get Remark42 config for comment counters
-    remark42_host = get_env_variable('REMARK42_HOST')
-    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
- 
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           most_active_member=most_active_member, trending_posts=trending_posts, 
-                           remark42_host=remark42_host, remark42_site_id=remark42_site_id)
+                           most_active_member=most_active_member, trending_posts=trending_posts)
 
 @app.route("/blog")
 def blog():
@@ -696,9 +701,7 @@ def blog():
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
-    remark42_host = get_env_variable('REMARK42_HOST')
-    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
-    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description, remark42_host=remark42_host, remark42_site_id=remark42_site_id)
+    return render_template("blog.html", latest_posts=latest_posts, active_page='blog', title=page_title, description=page_description)
 
 @app.route("/blog/all")
 @login_required
@@ -717,9 +720,7 @@ def all_posts():
 
     page_title = "All Posts - EchoWithin"
     page_description = "Browse through all posts from the EchoWithin community."
-    remark42_host = get_env_variable('REMARK42_HOST')
-    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
-    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description, remark42_host=remark42_host, remark42_site_id=remark42_site_id)
+    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description)
 
 
 @app.route('/api/posts')
@@ -880,16 +881,12 @@ def view_post(slug):
     # Generate a short description from the content
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
     # Get Remark42 config from environment variables
-    remark42_host = get_env_variable('REMARK42_HOST')
-    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
     return render_template('edit_post.html', 
                            post=post, 
                            active_page='blog', 
                            action='comment', 
                            title=page_title, 
-                           description=page_description,
-                           remark42_host=remark42_host,
-                           remark42_site_id=remark42_site_id)
+                           description=page_description)
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required
@@ -907,14 +904,9 @@ def edit_post(post_id):
     page_title = f"Edit: {post.get('title')}"
     page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
     
-    # Get Remark42 config from environment variables to ensure it's available in the template
-    remark42_host = get_env_variable('REMARK42_HOST')
-    remark42_site_id = get_env_variable('REMARK42_SITE_ID')
-
     return render_template('edit_post.html', post=post, active_page='blog', 
                            action=action, title=page_title, description=page_description,
-                           remark42_host=remark42_host,
-                           remark42_site_id=remark42_site_id)
+                           )
 
 @app.route('/update_post/<post_id>', methods=['POST'])
 @login_required

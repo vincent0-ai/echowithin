@@ -69,6 +69,9 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 # Configure permanent session lifetime for "Remember Me"
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 # Load environment variables from .env file
+
+# Ensure all external URLs are generated with https
+app.config['PREFERRED_URL_SCHEME'] = 'https'
 load_dotenv()
 
 

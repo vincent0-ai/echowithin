@@ -53,7 +53,7 @@
         <div class="post-actions">
             <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn comment-btn">
                 Comments
-                <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug) }}"></span>
+                <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span>
             </a>
 
             {% if current_user.is_authenticated and post.author_id|string == current_user.id %}

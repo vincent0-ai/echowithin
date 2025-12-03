@@ -3,24 +3,6 @@
 {% block title %}
     <title>{{ title }}</title>
     <meta name="description" content="{{ description }}">
-    <style>
-        /* Custom styles for Remark42 to match the application theme */
-        :root {
-            /* General (Light Theme) */
-            --remark-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-            --remark-bg-color: #ffffff; /* White background */
-            --remark-text-color: #212529; /* Dark text for readability */
-            --remark-border-color: #dee2e6; /* Light gray for borders */
-
-            /* Links and Accents */
-            --remark-link-color: #4CAF50; /* Using the green from the upload progress bar */
-            --remark-link-hover-color: #45a049; /* A slightly darker green for hover */
-
-            /* Input Fields */
-            --remark-input-bg-color: #ffffff;
-            --remark-input-border-color: #ced4da;
-        }
-    </style>
 {% endblock %}
 
 {% block content %}
@@ -33,8 +15,51 @@
             <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10" required>{{ post.content }}</textarea>
             
             <div class="form-group">
-                <label for="tags">Tags (comma-separated)</label>
-                <input type="text" id="tags" name="tags" class="form-input" placeholder="e.g., technology, health, meme" value="{{ post.tags|join(', ') if post.tags }}">
+                <label for="tags">Tags</label>
+                <select id="tags" name="tags" class="form-input" multiple size="8">
+                    <optgroup label="General Topics">
+                        <option value="Education" {% if 'Education' in post.tags %}selected{% endif %}>Education</option>
+                        <option value="Law" {% if 'Law' in post.tags %}selected{% endif %}>Law</option>
+                        <option value="Legal" {% if 'Legal' in post.tags %}selected{% endif %}>Legal</option>
+                        <option value="Politics" {% if 'Politics' in post.tags %}selected{% endif %}>Politics</option>
+                        <option value="Business" {% if 'Business' in post.tags %}selected{% endif %}>Business</option>
+                        <option value="Science" {% if 'Science' in post.tags %}selected{% endif %}>Science</option>
+                        <option value="Philosophy" {% if 'Philosophy' in post.tags %}selected{% endif %}>Philosophy</option>
+                        <option value="History" {% if 'History' in post.tags %}selected{% endif %}>History</option>
+                        <option value="Environment" {% if 'Environment' in post.tags %}selected{% endif %}>Environment</option>
+                    </optgroup>
+                    <optgroup label="Tech & Innovation">
+                        <option value="Technology" {% if 'Technology' in post.tags %}selected{% endif %}>Technology</option>
+                        <option value="Programming" {% if 'Programming' in post.tags %}selected{% endif %}>Programming</option>
+                        <option value="Cybersecurity" {% if 'Cybersecurity' in post.tags %}selected{% endif %}>Cybersecurity</option>
+                        <option value="Linux" {% if 'Linux' in post.tags %}selected{% endif %}>Linux</option>
+                        <option value="Python" {% if 'Python' in post.tags %}selected{% endif %}>Python</option>
+                        <option value="Web Development" {% if 'Web Development' in post.tags %}selected{% endif %}>Web Development</option>
+                        <option value="Crypto" {% if 'Crypto' in post.tags %}selected{% endif %}>Crypto</option>
+                        <option value="Blockchain" {% if 'Blockchain' in post.tags %}selected{% endif %}>Blockchain</option>
+                        <option value="AI" {% if 'AI' in post.tags %}selected{% endif %}>AI</option>
+                    </optgroup>
+                    <optgroup label="Vibe & Tone">
+                        <option value="Motivation" {% if 'Motivation' in post.tags %}selected{% endif %}>Motivation</option>
+                        <option value="Meme" {% if 'Meme' in post.tags %}selected{% endif %}>Meme</option>
+                        <option value="Rant" {% if 'Rant' in post.tags %}selected{% endif %}>Rant</option>
+                        <option value="Opinion" {% if 'Opinion' in post.tags %}selected{% endif %}>Opinion</option>
+                        <option value="Storytime" {% if 'Storytime' in post.tags %}selected{% endif %}>Storytime</option>
+                        <option value="Deep Dive" {% if 'Deep Dive' in post.tags %}selected{% endif %}>Deep Dive</option>
+                        <option value="Quick Read" {% if 'Quick Read' in post.tags %}selected{% endif %}>Quick Read</option>
+                    </optgroup>
+                    <optgroup label="Lifestyle & Student Life">
+                        <option value="University Life" {% if 'University Life' in post.tags %}selected{% endif %}>University Life</option>
+                        <option value="Productivity" {% if 'Productivity' in post.tags %}selected{% endif %}>Productivity</option>
+                        <option value="Mental Health" {% if 'Mental Health' in post.tags %}selected{% endif %}>Mental Health</option>
+                        <option value="Career" {% if 'Career' in post.tags %}selected{% endif %}>Career</option>
+                        <option value="Gaming" {% if 'Gaming' in post.tags %}selected{% endif %}>Gaming</option>
+                        <option value="Music" {% if 'Music' in post.tags %}selected{% endif %}>Music</option>
+                        <option value="Art" {% if 'Art' in post.tags %}selected{% endif %}>Art</option>
+                        <option value="Travel" {% if 'Travel' in post.tags %}selected{% endif %}>Travel</option>
+                        <option value="Food" {% if 'Food' in post.tags %}selected{% endif %}>Food</option>
+                    </optgroup>
+                </select>
             </div>
             
             <div>
@@ -174,6 +199,16 @@
         progressContainer.style.display = 'none';
         // Clear the file input
         videoInput.value = '';
+    }
+
+    // Initialize Choices.js for the tags dropdown on the edit page
+    const tagsElement = document.getElementById('tags');
+    if (tagsElement) {
+        const choices = new Choices(tagsElement, {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'Select tags...',
+        });
     }
 });
 </script>

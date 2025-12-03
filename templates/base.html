@@ -8,10 +8,13 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename = "style.css")}}">
+    <!-- Choices.js CSS for custom dropdowns -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+
     <script src="{{ url_for('static', filename = "script.js")}}" defer></script>
     <style>
-        /* Style for the Remark42 comment counter to make it visible */
-        .remark42__counter {
+        /* Comment counter styles (server-provided counts shown via .comment-count-display) */
+        .comment-count-display {
             display: inline-block;
             background-color: #e0e0e0;
             color: #333;
@@ -119,6 +122,9 @@
 
 <body>
     <div class="page-container">
+    <!-- Choices.js SCRIPT for custom dropdowns -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
     <div class="navbar">
         <div class="nav-left">
             <a href="{{ url_for('dashboard') }}" class="nav-brand">
@@ -173,6 +179,8 @@
             </div>
         </div>
     </div>
+    <!-- Toast container for custom alerts -->
+    <div id="custom-toast-container" style="position: fixed; top: 20px; right: 20px; z-index:1200; display:flex; flex-direction:column; gap:10px;"></div>
 
     <footer class="footer">
         <div class="footer-content">
@@ -290,6 +298,31 @@
             confirmCallback = callback;
         }
 
+        // Expose confirm function globally for other scripts
+        window.showCustomConfirm = showCustomConfirm;
+
+        // Custom toast alerts
+        const toastContainer = document.getElementById('custom-toast-container');
+        function showCustomAlert(message, type='info', duration=3500) {
+            const toast = document.createElement('div');
+            toast.className = 'custom-toast';
+            toast.style.background = (type === 'error' || type === 'danger') ? '#8b0000' : (type === 'success' ? '#2c7a2c' : '#333');
+            toast.style.color = '#fff';
+            toast.style.padding = '10px 14px';
+            toast.style.borderRadius = '6px';
+            toast.style.boxShadow = '0 3px 10px rgba(0,0,0,0.2)';
+            toast.style.fontSize = '0.95rem';
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.4s ease-out, transform 0.4s';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-8px)';
+                setTimeout(() => toast.remove(), 400);
+            }, duration);
+        }
+        window.showCustomAlert = showCustomAlert;
+
         confirmOk.addEventListener('click', () => {
             if (confirmCallback) {
                 confirmCallback(true);
@@ -322,99 +355,8 @@
             }
         });
 
-        // --- Custom Confirmation for Remark42 actions ---
-        function addRemark42Confirmations(targetNode) {
-            // Selector for Remark42 action buttons (delete, pin, etc.)
-            const actionButtons = targetNode.querySelectorAll('.remark42__control-button:not([data-confirm-added])');
-
-            actionButtons.forEach(button => {
-                let confirmMessage = '';
-                // Determine the message based on the button's class/purpose
-                if (button.classList.contains('remark42__control-button_delete')) {
-                    confirmMessage = 'Are you sure you want to delete this comment?';
-                } else if (button.classList.contains('remark42__control-button_pin')) {
-                    // Check if it's already pinned to show the correct message
-                    const isPinned = button.closest('.remark42__comment-header_pinned');
-                    confirmMessage = isPinned ? 'Are you sure you want to unpin this comment?' : 'Are you sure you want to pin this comment?';
-                }
-
-                if (confirmMessage) {
-                    button.setAttribute('data-confirm-added', 'true'); // Mark as handled
-                    button.addEventListener('click', function(event) {
-                        event.preventDefault();
-                        event.stopImmediatePropagation();
-
-                        showCustomConfirm(confirmMessage, (confirmed) => {
-                            if (confirmed) {
-                                // If confirmed, re-trigger the original click event
-                                button.removeAttribute('data-confirm-added'); // Allow re-triggering
-                                button.click();
-                                button.setAttribute('data-confirm-added', 'true'); // Re-mark
-                            }
-                        });
-                    }, true); // Use capture phase to intercept the click first
-                }
-            });
-        }
-
-        // Use MutationObserver to detect when Remark42 comments are loaded/changed
-        const remark42Observer = new MutationObserver(mutations => {
-            mutations.forEach(mutation => addRemark42Confirmations(mutation.target));
-        });
-        remark42Observer.observe(document.body, { childList: true, subtree: true });
+        // (Removed Remark42 custom confirmation integration)
     });
 </script>
 
-{% if remark42_host and remark42_site_id %}
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Remark42 counter configuration
-        var remark_config = {
-            host: "{{ remark42_host|safe }}",
-            site_id: "{{ remark42_site_id|safe }}",
-            components: ['counter']
-        };
-
-        (function(c) {
-            var d = document, s = d.createElement('script');
-            s.src = remark_config.host + '/web/' + c[0] + '.js';
-            s.defer = true;
-            (d.head || d.body).appendChild(s);
-        })(remark_config.components || ['embed']); // Default to 'embed' for safety, though 'counter' is primary.
-
-        // New script to fetch and display comment counts for server-rendered posts
-        function updateCommentCounts() {
-            if (typeof window.REMARK42 === 'undefined' || typeof window.REMARK42.get_counts !== 'function') {
-                // If Remark42 API is not ready, wait and try again.
-                setTimeout(updateCommentCounts, 200);
-                return;
-            }
-
-            const counters = document.querySelectorAll('.remark42__counter');
-            if (counters.length === 0) return;
-
-            const urls = Array.from(counters).map(counter => counter.getAttribute('data-remark-url'));
-            
-            window.REMARK42.get_counts(urls)
-                .then(counts => {
-                    counts.forEach(item => {
-                        // Find the corresponding counter span on the page
-                        const counterSpan = document.querySelector(`.remark42__counter[data-remark-url="${item.url}"]`);
-                        if (counterSpan) {
-                            // Update the text of the span with the count
-                            counterSpan.textContent = item.count;
-
-                            // Also add the count as a data-attribute to the parent button for potential future use
-                            const button = counterSpan.closest('a.comment-btn');
-                            if (button) {
-                                button.setAttribute('data-comment-count', item.count);
-                            }
-                        }
-                    });
-                });
-        }
-        updateCommentCounts();
-    });
-</script>
-{% endif %}
 </html>

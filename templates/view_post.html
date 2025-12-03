@@ -1,36 +1,26 @@
 {% extends "base.html" %}
 
-
-
-{% block head_meta %}
-    {#
-      This CSP allows the Remark42 iframe to be loaded.
-      'frame-src' is set to your Remark42 host.
-    #}
-    <meta http-equiv="Content-Security-Policy" content="frame-src {{ remark42_host }};">
-{% endblock %}
-
 {% block title %}
     <title>{{ title }}</title>
     <meta name="description" content="{{ description }}">
-    <style>
-        /* Custom styles for Remark42 to match the application theme */
-        :root {
-            /* General (Light Theme) */
-            --remark-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
-            --remark-bg-color: #ffffff; /* White background */
-            --remark-text-color: #212529; /* Dark text for readability */
-            --remark-border-color: #dee2e6; /* Light gray for borders */
+{% endblock %}
 
-            /* Links and Accents */
-            --remark-link-color: #4CAF50; /* Using the green from the upload progress bar */
-            --remark-link-hover-color: #45a049; /* A slightly darker green for hover */
-
-            /* Input Fields */
-            --remark-input-bg-color: #ffffff;
-            --remark-input-border-color: #ced4da;
-        }
-    </style>
+{% block head_meta %}
+<style>
+    .comment-replies { margin-left: 32px; border-left: 2px solid #f4f4f4; padding-left: 12px; }
+    .comment-item { margin-bottom: 6px; }
+    .comment-actions button { margin-right: 6px; background: transparent; border: 1px solid #ddd; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+    .comment-actions button:hover { background: #f6f6f6; }
+    .comment-actions .action-link { margin-right: 10px; color: #0a58ca; text-decoration: none; font-size: 0.9rem; }
+    .comment-actions .action-link:hover { text-decoration: underline; }
+    /* Hide reply comment items by default (they will have data-parent attr) */
+    .comment-item[data-parent] { display: none; margin-left: 28px; }
+    /* Post comment button (maroon) */
+    #comment-submit { background: #800000; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+    #comment-submit:hover { opacity: 0.95; }
+    #comment-form textarea, .reply-form textarea, .edit-form textarea { border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+    #comment-form button, .reply-form button, .edit-form button { margin-top: 6px; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -41,7 +31,6 @@
             Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
         </div>
 
-        <!-- Media Display Logic: show video if present, otherwise image -->
         {% if post.video_url %}
             <div class="post-media-container">
                 <video class="post-video" controls preload="metadata">
@@ -61,31 +50,430 @@
 
         <div class="post-content" style="white-space: pre-wrap; margin-top: 1rem;">{{ post.content|linkify|safe }}</div>
 
-        <!-- Remark42 Comment Section -->
         <div class="comments-section" style="margin-top: 30px;">
-            <h3>
-                Comments <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span>
-            </h3>
-            <div id="remark42"></div>
+            <h3>Comments ({{ comment_count or 0 }})</h3>
+
+            {# reply_counts mapping provided by server (reply_counts[comment_id] -> int) #}
+
+            {% if current_user.is_authenticated %}
+                <form id="comment-form">
+                    <textarea id="comment-content" name="content" rows="3" style="width:100%;" placeholder="Write a comment..."></textarea>
+                    <button id="comment-submit" type="submit">Post Comment</button>
+                </form>
+            {% else %}
+                <p><a href="{{ url_for('login') }}">Log in</a> to post comments.</p>
+            {% endif %}
+
+            <div id="comments-list" style="margin-top: 1rem;">
+                {% for c in comments %}
+                    {# compute reply count for this comment (number of items with parent_id == c._id) #}
+                    {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
+                    <div class="comment-item" data-id="{{ c._id }}" {% if c.parent_id %}data-parent="{{ c.parent_id }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
+                        <div class="comment-meta">
+                            <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
+                            {% if c.created_at %}
+                                — {% if c.created_at.strftime %}{{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }}{% else %}{{ c.created_at }}{% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>
+                        <div class="comment-actions" style="margin-top:6px;">
+                            {% if c.parent_id %}
+                                {% if current_user.is_authenticated and not c.is_deleted %}
+                                    <a href="#" class="reply-btn action-link" data-id="{{ c._id }}">Reply</a>
+                                {% endif %}
+                            {% else %}
+                                {% if current_user.is_authenticated and not c.is_deleted %}
+                                    <button class="reply-btn" data-id="{{ c._id }}">Reply</button>
+                                {% endif %}
+                                {% if reply_count and reply_count > 0 %}
+                                    <a href="#" class="toggle-replies action-link" data-id="{{ c._id }}">Show replies ({{ reply_count }})</a>
+                                {% endif %}
+                            {% endif %}
+                        {% if not c.is_deleted and current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
+                            {% if c.parent_id %}
+                                <a href="#" class="edit-btn action-link" data-id="{{ c._id }}">Edit</a>
+                                <a href="#" class="delete-comment action-link" data-id="{{ c._id }}">Delete</a>
+                            {% else %}
+                                <button class="edit-btn" data-id="{{ c._id }}">Edit</button>
+                                <button class="delete-comment" data-id="{{ c._id }}">Delete</button>
+                            {% endif %}
+                        {% endif %}
+                        </div>
+                        <div class="comment-replies" style="margin-top:8px; margin-left:18px;"></div>
+                    </div>
+                {% endfor %}
+            </div>
+            {% if has_more %}
+                <div style="text-align:center; margin-top:8px;"><button id="load-more-comments">Load more comments</button></div>
+            {% endif %}
         </div>
     </div>
 </div>
 
 <script>
-    // This configuration block must be defined before the Remark42 script is loaded.
-    {% if remark42_host and remark42_site_id %}
-        var remark_config = {
-            host: "{{ remark42_host|safe }}",
-            site_id: "{{ remark42_site_id|safe }}",
-            url: "{{ url_for('view_post', slug=post.slug, _external=True) }}",
-            theme: 'light',
-            components: ['embed', 'counter']
-        };
-    {% endif %}
-</script>
+document.addEventListener('DOMContentLoaded', function() {
+    const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
+    const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+    const form = document.getElementById('comment-form');
+    let currentPage = {{ comment_page | default(1) }};
+    const perPage = {{ per_page | default(10) }};
 
-{# Load the Remark42 script directly if we are on the comment page #}
-{% if remark42_host and remark42_site_id %}
-    <script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
-{% endif %}
+    function createCommentElement(comment) {
+        const el = document.createElement('div');
+        el.className = 'comment-item';
+        el.setAttribute('data-id', comment.id);
+        if (comment.parent_id) el.setAttribute('data-parent', comment.parent_id);
+        el.style.borderBottom = '1px solid #eee';
+        el.style.padding = '8px 0';
+
+        const meta = document.createElement('div');
+        meta.className = 'comment-meta';
+        const date = comment.created_at ? new Date(comment.created_at).toLocaleString() : '';
+        meta.innerHTML = `<strong>${comment.author_username}</strong> — ${date}`;
+
+        const body = document.createElement('div');
+        body.className = 'comment-body';
+        body.style.marginTop = '4px';
+        body.innerHTML = comment.content;
+
+        el.appendChild(meta);
+        el.appendChild(body);
+
+        // Actions: Reply (if logged in), Edit/Delete (if owner or admin)
+        const actions = document.createElement('div');
+        actions.className = 'comment-actions';
+        actions.style.marginTop = '6px';
+
+        if (CURRENT_USER_ID) {
+            if (comment.parent_id) {
+                const replyLink = document.createElement('a');
+                replyLink.href = '#';
+                replyLink.className = 'reply-btn action-link';
+                replyLink.setAttribute('data-id', comment.id);
+                replyLink.textContent = 'Reply';
+                actions.appendChild(replyLink);
+            } else {
+                const replyBtn = document.createElement('button');
+                replyBtn.className = 'reply-btn';
+                replyBtn.setAttribute('data-id', comment.id);
+                replyBtn.textContent = 'Reply';
+                actions.appendChild(replyBtn);
+                // placeholder for toggle link; client appended replies might update counts
+            }
+        }
+
+        const canModify = IS_ADMIN || (CURRENT_USER_ID && comment.author_id && comment.author_id === CURRENT_USER_ID);
+        if (canModify) {
+            if (comment.parent_id) {
+                const editLink = document.createElement('a');
+                editLink.href = '#';
+                editLink.className = 'edit-btn action-link';
+                editLink.setAttribute('data-id', comment.id);
+                editLink.textContent = 'Edit';
+                actions.appendChild(editLink);
+
+                const delLink = document.createElement('a');
+                delLink.href = '#';
+                delLink.className = 'delete-comment action-link';
+                delLink.setAttribute('data-id', comment.id);
+                delLink.textContent = 'Delete';
+                actions.appendChild(delLink);
+            } else {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'edit-btn';
+                editBtn.setAttribute('data-id', comment.id);
+                editBtn.textContent = 'Edit';
+                actions.appendChild(editBtn);
+
+                const del = document.createElement('button');
+                del.className = 'delete-comment';
+                del.setAttribute('data-id', comment.id);
+                del.style.marginLeft = '8px';
+                del.textContent = 'Delete';
+                actions.appendChild(del);
+            }
+        }
+
+        el.appendChild(actions);
+
+        const repliesContainer = document.createElement('div');
+        repliesContainer.className = 'comment-replies';
+        repliesContainer.style.marginTop = '8px';
+        repliesContainer.style.marginLeft = '18px';
+        el.appendChild(repliesContainer);
+
+        return el;
+    }
+
+    async function appendComments(comments, toBottom=true) {
+        const list = document.getElementById('comments-list');
+        for (const c of comments) {
+            const el = createCommentElement(c);
+            if (c.parent_id) {
+                const parent = document.querySelector(`[data-id="${c.parent_id}"]`);
+                if (parent) {
+                    const replies = parent.querySelector('.comment-replies');
+                    if (replies) {
+                        replies.appendChild(el);
+                        continue;
+                    }
+                }
+            }
+            if (toBottom) list.appendChild(el);
+            else list.insertBefore(el, list.firstChild);
+        }
+    }
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const contentField = document.getElementById('comment-content');
+            const content = contentField.value;
+            if (!content || !content.trim()) return;
+
+            const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content })
+            });
+            if (resp.ok) {
+                const newComment = await resp.json();
+                // Append new comment to the list (bottom) or under parent
+                appendComments([newComment], true);
+                // Clear textarea
+                contentField.value = '';
+                // Increment local count display
+                const header = document.querySelector('.comments-section h3');
+                if (header) {
+                    const m = header.textContent.match(/Comments \((\d+)\)/);
+                    if (m) {
+                        const n = parseInt(m[1], 10) + 1;
+                        header.textContent = `Comments (${n})`;
+                    }
+                }
+            } else {
+                const data = await resp.json();
+                alert(data.error || 'Failed to post comment');
+            }
+        });
+    }
+
+    document.getElementById('comments-list')?.addEventListener('click', async (e) => {
+        // Toggle replies
+        if (e.target && e.target.classList.contains('toggle-replies')) {
+            e.preventDefault();
+            const pid = e.target.getAttribute('data-id');
+            const replies = document.querySelectorAll(`.comment-item[data-parent="${pid}"]`);
+            if (!replies || replies.length === 0) return;
+            const first = replies[0];
+            const hidden = getComputedStyle(first).display === 'none';
+            if (hidden) {
+                replies.forEach(el => el.style.display = 'block');
+                e.target.textContent = e.target.textContent.replace(/^Show replies/, 'Hide replies');
+            } else {
+                replies.forEach(el => el.style.display = 'none');
+                e.target.textContent = e.target.textContent.replace(/^Hide replies/, 'Show replies');
+            }
+            return;
+        }
+        // Delete
+        if (e.target && e.target.classList.contains('delete-comment')) {
+            e.preventDefault();
+            const id = e.target.getAttribute('data-id');
+            if (typeof window.showCustomConfirm === 'function') {
+                window.showCustomConfirm('Delete this comment?', async (confirmed) => {
+                    if (!confirmed) return;
+                    const resp = await fetch('/api/comments/' + id, { method: 'DELETE' });
+                    if (resp.ok) {
+                        // Decide whether to remove the comment node entirely or show a placeholder.
+                        // If the comment has any non-deleted replies, keep a placeholder so replies remain nested.
+                        const item = e.target.closest('.comment-item');
+                        if (item) {
+                            const id = item.getAttribute('data-id');
+                            // find replies that are not already marked deleted
+                            const repliesSelector = `.comment-item[data-parent="${id}"]:not([data-deleted="1"])`;
+                            const liveReplies = document.querySelectorAll(repliesSelector);
+                            if (!liveReplies || liveReplies.length === 0) {
+                                // No existing replies: remove the comment element completely
+                                item.remove();
+                            } else {
+                                // There are replies: replace body with placeholder and keep the node
+                                const body = item.querySelector('.comment-body');
+                                if (body) body.innerHTML = '<em>Comment deleted</em>';
+                                // remove action buttons
+                                const actions = item.querySelector('.comment-actions');
+                                if (actions) actions.remove();
+                                item.setAttribute('data-deleted', '1');
+                            }
+                        }
+                        // Decrement header count
+                        const header = document.querySelector('.comments-section h3');
+                        if (header) {
+                            const m = header.textContent.match(/Comments \((\d+)\)/);
+                            if (m) {
+                                const n = Math.max(0, parseInt(m[1], 10) - 1);
+                                header.textContent = `Comments (${n})`;
+                            }
+                        }
+                        if (typeof window.showCustomAlert === 'function') window.showCustomAlert('Comment deleted.', 'success');
+                    } else {
+                        if (typeof window.showCustomAlert === 'function') window.showCustomAlert('Could not delete comment', 'danger');
+                        else alert('Could not delete comment');
+                    }
+                });
+            } else {
+                if (!confirm('Delete this comment?')) return;
+            }
+            return;
+        }
+
+        // Reply
+        if (e.target && e.target.classList.contains('reply-btn')) {
+            e.preventDefault();
+            const parentId = e.target.getAttribute('data-id');
+            // If a reply form already exists under this parent, focus it
+            const parentEl = document.querySelector(`[data-id="${parentId}"]`);
+            if (!parentEl) return;
+            const replies = parentEl.querySelector('.comment-replies');
+            if (!replies) return;
+            // Prevent multiple reply boxes
+            if (replies.querySelector('.reply-form')) return;
+
+            const form = document.createElement('form');
+            form.className = 'reply-form';
+            form.style.marginTop = '8px';
+            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><button type="submit">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
+            replies.insertBefore(form, replies.firstChild);
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const content = form.querySelector('.reply-content').value;
+                if (!content || !content.trim()) return;
+                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, parent_id: parentId })
+                });
+                if (resp.ok) {
+                    const newComment = await resp.json();
+                    appendComments([newComment], true);
+                    // Ensure replies are visible for this parent after posting
+                    try {
+                        const parentEl = document.querySelector(`[data-id="${parentId}"]`);
+                        if (parentEl) {
+                            // show any reply items
+                            document.querySelectorAll(`.comment-item[data-parent="${parentId}"]`).forEach(el => el.style.display = 'block');
+                            // update toggle link text if present
+                            const toggle = parentEl.querySelector('.toggle-replies');
+                            if (toggle) {
+                                const m = toggle.textContent.match(/Show replies \((\d+)\)/);
+                                if (m) {
+                                    const n = parseInt(m[1], 10) + 1;
+                                    toggle.textContent = `Hide replies (${n})`;
+                                } else {
+                                    // if it was already 'Hide replies (n)', try to increment
+                                    const mm = toggle.textContent.match(/Hide replies \((\d+)\)/);
+                                    if (mm) {
+                                        const nn = parseInt(mm[1], 10) + 1;
+                                        toggle.textContent = `Hide replies (${nn})`;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn('Failed to update reply toggle', err);
+                    }
+                    form.remove();
+                    // Increment header count
+                    const header = document.querySelector('.comments-section h3');
+                    if (header) {
+                        const m = header.textContent.match(/Comments \((\d+)\)/);
+                        if (m) {
+                            const n = parseInt(m[1], 10) + 1;
+                            header.textContent = `Comments (${n})`;
+                        }
+                    }
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || 'Failed to post reply');
+                }
+            });
+
+            form.querySelector('.cancel-reply').addEventListener('click', () => form.remove());
+            return;
+        }
+
+        // Edit
+        if (e.target && e.target.classList.contains('edit-btn')) {
+            e.preventDefault();
+            const cid = e.target.getAttribute('data-id');
+            const commentEl = document.querySelector(`[data-id="${cid}"]`);
+            if (!commentEl) return;
+            const bodyEl = commentEl.querySelector('.comment-body');
+            const oldHtml = bodyEl.innerHTML;
+            // Prevent multiple edit boxes
+            if (commentEl.querySelector('.edit-form')) return;
+
+            const editForm = document.createElement('form');
+            editForm.className = 'edit-form';
+            editForm.style.marginTop = '8px';
+            editForm.innerHTML = `<textarea rows="3" style="width:100%;" class="edit-content">${bodyEl.textContent}</textarea><button type="submit">Save</button> <button type="button" class="cancel-edit">Cancel</button>`;
+            bodyEl.style.display = 'none';
+            bodyEl.parentNode.insertBefore(editForm, bodyEl.nextSibling);
+
+            editForm.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const newContent = editForm.querySelector('.edit-content').value;
+                if (!newContent || !newContent.trim()) return;
+                const resp = await fetch('/api/comments/' + cid, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newContent })
+                });
+                if (resp.ok) {
+                    const updated = await resp.json();
+                    bodyEl.innerHTML = updated.content;
+                    bodyEl.style.display = '';
+                    editForm.remove();
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || 'Failed to edit comment');
+                }
+            });
+
+            editForm.querySelector('.cancel-edit').addEventListener('click', () => {
+                editForm.remove();
+                bodyEl.style.display = '';
+            });
+            return;
+        }
+    });
+
+    const loadMoreBtn = document.getElementById('load-more-comments');
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', async (e) => {
+            loadMoreBtn.disabled = true;
+            const nextPage = currentPage + 1;
+            try {
+                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}?page=' + nextPage + '&per_page=' + perPage);
+                if (!resp.ok) throw new Error('Failed to load');
+                const data = await resp.json();
+                if (data.comments && data.comments.length) {
+                    await appendComments(data.comments, true);
+                    currentPage = data.page;
+                }
+                if (!data.has_more) {
+                    loadMoreBtn.remove();
+                } else {
+                    loadMoreBtn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Unable to load more comments');
+                loadMoreBtn.disabled = false;
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

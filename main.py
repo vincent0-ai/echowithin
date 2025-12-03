@@ -373,17 +373,19 @@ def send_new_post_notifications(post_id_str):
 
 REMARK42_HOST = get_env_variable("REMARK42_HOST")
 REMARK42_SITE_ID = get_env_variable("REMARK42_SITE_ID")
+REMARK42_INTERNAL = get_env_variable("REMARK42_INTERNAL")
+
 
 # --- Caching for Comment Counts ---
 # Cache comment counts for 5 minutes (300 seconds) to reduce API calls.
 comment_count_cache = TTLCache(maxsize=1, ttl=300)
 def get_comment_count(post_url: str) -> int:
     """Fetch Remark42 comment count for a post URL."""
-    if not REMARK42_HOST or not REMARK42_SITE_ID:
+    if not REMARK42_INTERNAL or not REMARK42_SITE_ID:
         return 0
     try:
         res = requests.get(
-            f"{REMARK42_HOST}/api/v1/find?site={REMARK42_SITE_ID}&url={post_url}",
+            f"{REMARK42_INTERNAL}/api/v1/find?site={REMARK42_SITE_ID}&url={post_url}",
             timeout=2
         )
         if res.status_code == 200:
@@ -401,12 +403,12 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
     The `post_urls` argument must be a tuple for it to be hashable by the cache.
     """
     counts_map = {}
-    if not REMARK42_HOST or not REMARK42_SITE_ID:
-        app.logger.info("Remark42 host or site ID not configured. Skipping batch comment count fetch.")
+    if not REMARK42_INTERNAL or not REMARK42_SITE_ID:
+        app.logger.info("Remark42 internal URL or site ID not configured. Skipping batch comment count fetch.")
         return counts_map
     try:
         params = [('site', REMARK42_SITE_ID)] + [('url', url) for url in post_urls]
-        res = requests.get(f"{REMARK42_HOST}/api/v1/counts", params=params, timeout=3)
+        res = requests.get(f"{REMARK42_INTERNAL}/api/v1/counts", params=params, timeout=3)
         if res.status_code == 200:
             return {item['url']: item['count'] for item in res.json()}
     except Exception as e:

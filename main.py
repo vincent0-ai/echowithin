@@ -104,6 +104,12 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
+# --- Temporary Uploads for Background Processing ---
+TEMP_UPLOAD_FOLDER = 'temp_uploads'
+app.config['TEMP_UPLOAD_FOLDER'] = TEMP_UPLOAD_FOLDER
+if not os.path.exists(TEMP_UPLOAD_FOLDER):
+    os.makedirs(TEMP_UPLOAD_FOLDER)
+
 # --- Cloudinary Configuration ---
 cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_key = get_env_variable('CLOUDINARY_API_KEY'), api_secret = get_env_variable('CLOUDINARY_API_SECRET'))
 
@@ -921,6 +927,84 @@ def create_post():
     page_description = "Share your ideas, experiences, and perspectives with the EchoWithin community."
     return render_template("create_post.html", active_page='blog', title=page_title, description=page_description)
 
+@rq.job
+def process_post_media(post_id_str, temp_image_paths, temp_video_path):
+    """
+    Background job to upload media to Cloudinary, update the post,
+    and trigger subsequent jobs.
+    """
+    app.logger.info(f"Starting media processing job for post {post_id_str}")
+    image_urls = []
+    image_public_ids = []
+    video_url = None
+    video_public_id = None
+
+    try:
+        # 1. Upload Images
+        for path in temp_image_paths:
+            try:
+                upload_result = cloudinary.uploader.upload(path, folder="echowithin_posts")
+                url = upload_result.get('secure_url')
+                pid = upload_result.get('public_id')
+                if url: image_urls.append(url)
+                if pid: image_public_ids.append(pid)
+            except Exception as e:
+                app.logger.error(f"Cloudinary image upload failed for {path} in job for post {post_id_str}: {e}")
+
+        # 2. Upload Video
+        if temp_video_path:
+            try:
+                upload_result = cloudinary.uploader.upload(temp_video_path, resource_type='video', folder='echowithin_posts')
+                video_url = upload_result.get('secure_url')
+                video_public_id = upload_result.get('public_id')
+            except Exception as e:
+                app.logger.error(f"Cloudinary video upload failed for {temp_video_path} in job for post {post_id_str}: {e}")
+
+        # 3. Update Post in DB
+        update_data = {
+            'image_urls': image_urls,
+            'image_public_ids': image_public_ids,
+            'video_url': video_url,
+            'video_public_id': video_public_id,
+            'status': 'published', # Mark post as fully processed
+            'image_status': 'safe' if image_urls else 'none',
+            'video_status': 'uploaded' if video_url else 'none',
+        }
+        # For backward compatibility
+        if image_urls:
+            update_data['image_url'] = image_urls[0]
+            update_data['image_public_id'] = image_public_ids[0]
+
+        posts_conf.update_one({'_id': ObjectId(post_id_str)}, {'$set': update_data})
+        app.logger.info(f"Successfully processed media and updated post {post_id_str}")
+
+        # 4. Trigger subsequent jobs (NSFW check, notifications)
+        if image_urls:
+            try:
+                # Check the first image for NSFW content
+                job = process_image_for_nsfw.queue(post_id_str, image_urls[0], image_public_ids[0])
+                app.logger.info(f"Enqueued NSFW check job {job.id} for post {post_id_str}")
+            except Exception as e:
+                app.logger.error(f"Failed to enqueue NSFW job for post {post_id_str}: {e}")
+
+        try:
+            job = send_new_post_notifications.queue(post_id_str)
+            app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
+        except Exception as e:
+            app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
+
+    except Exception as e:
+        app.logger.error(f"Error in process_post_media job for {post_id_str}: {e}", exc_info=True)
+        # Mark post as failed
+        posts_conf.update_one({'_id': ObjectId(post_id_str)}, {'$set': {'status': 'processing_failed'}})
+    finally:
+        # 5. Cleanup temporary files
+        for path in temp_image_paths:
+            if os.path.exists(path):
+                os.remove(path)
+        if temp_video_path and os.path.exists(temp_video_path):
+            os.remove(temp_video_path)
+        app.logger.info(f"Cleaned up temporary files for post {post_id_str}")
 
 @app.route("/post", methods=['POST'])
 @login_required
@@ -932,13 +1016,9 @@ def post():
         # Support multiple image uploads from the form input named 'images'
         images_files = request.files.getlist('images') if request.files else []
         video_file = request.files.get('video')
-        image_url = None
-        image_public_id = None
-        image_urls = []
-        image_public_ids = []
-        video_url = None
-        video_public_id = None
 
+        temp_image_paths = []
+        temp_video_path = None
 
         if title and content:  
             # Create a unique slug for SEO-friendly URLs
@@ -949,62 +1029,26 @@ def post():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             
-            # Handle image uploads (support multiple files)
-            if images_files:
-                try:
-                    for img_file in images_files:
-                        if not img_file or not img_file.filename:
-                            continue
-                        if '.' not in img_file.filename:
-                            continue
-                        ext = img_file.filename.rsplit('.', 1)[1].lower()
-                        if ext not in ALLOWED_IMAGE_EXTENSIONS:
-                            continue
-                        upload_result = cloudinary.uploader.upload(img_file, folder="echowithin_posts")
-                        url = upload_result.get('secure_url')
-                        pid = upload_result.get('public_id')
-                        if url:
-                            image_urls.append(url)
-                        if pid:
-                            image_public_ids.append(pid)
-                except Exception as e:
-                    app.logger.error(f"Cloudinary upload failed: {e}")
-                    flash("There was an error uploading one or more images.", "danger")
-                    return redirect(url_for("blog"))
+            # Save files temporarily for background processing
+            for img_file in images_files:
+                if img_file and img_file.filename and '.' in img_file.filename and img_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
+                    filename = secure_filename(f"{secrets.token_hex(8)}-{img_file.filename}")
+                    path = os.path.join(app.config['TEMP_UPLOAD_FOLDER'], filename)
+                    img_file.save(path)
+                    temp_image_paths.append(path)
 
-            # Handle video upload (enforce extension and size limit)
-            if video_file and video_file.filename != '' and '.' in video_file.filename:
-                video_ext = video_file.filename.rsplit('.', 1)[1].lower()
-                if video_ext not in ALLOWED_VIDEO_EXTENSIONS:
-                    flash('Unsupported video format. Allowed: mp4, webm, ogg, mov', 'danger')
-                    return redirect(url_for('blog'))
+            if video_file and video_file.filename and '.' in video_file.filename and video_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_VIDEO_EXTENSIONS:
                 try:
-                    # Determine size of uploaded file safely
                     stream = video_file.stream
                     stream.seek(0, os.SEEK_END)
                     size = stream.tell()
                     stream.seek(0)
-                except Exception:
-                    size = None
-
-                if size is not None and size > MAX_VIDEO_SIZE:
-                    flash('Video exceeds maximum allowed size of 10 MB.', 'danger')
-                    return redirect(url_for('blog'))
-
-                try:
-                    upload_result = cloudinary.uploader.upload(video_file, resource_type='video', folder='echowithin_posts')
-                    video_url = upload_result.get('secure_url')
-                    video_public_id = upload_result.get('public_id')
-                except Exception as e:
-                    app.logger.error(f"Cloudinary video upload failed: {e}")
-                    flash("There was an error uploading the video.", "danger")
-                    return redirect(url_for('blog'))
-
-            # For backward compatibility, keep `image_url`/`image_public_id` as the first image if present
-            if image_urls:
-                image_url = image_urls[0]
-            if image_public_ids:
-                image_public_id = image_public_ids[0]
+                    if size <= MAX_VIDEO_SIZE:
+                        filename = secure_filename(f"{secrets.token_hex(8)}-{video_file.filename}")
+                        path = os.path.join(app.config['TEMP_UPLOAD_FOLDER'], filename)
+                        video_file.save(path)
+                        temp_video_path = path
+                except Exception: pass # Fail silently on size check error
 
             new_post_data = {
                 'author_id': ObjectId(current_user.id),
@@ -1013,41 +1057,32 @@ def post():
                 'content': content,
                 'tags': tags,
                 'author': current_user.username,
-                'image_url': image_url,
-                'image_public_id': image_public_id,
-                'image_urls': image_urls,
-                'image_public_ids': image_public_ids,
-                'image_status': 'safe' if image_urls else 'none', # Optimistically assume safe
-                'video_url': video_url,
-                'video_public_id': video_public_id,
-                'video_status': 'uploaded' if video_url else 'none',
+                'status': 'processing_media' if temp_image_paths or temp_video_path else 'published',
                 'view_count': 0, # Initialize view count
                 'timestamp': datetime.datetime.now(),
             }
             result = posts_conf.insert_one(new_post_data)
+            post_id_str = str(result.inserted_id)
 
-            # If an image was uploaded, enqueue the background NSFW check
-            if image_url and image_public_id:
+            # Enqueue the media processing job if there are files
+            if temp_image_paths or temp_video_path:
                 try:
-                    job = process_image_for_nsfw.queue(str(result.inserted_id), image_url, image_public_id) # snyk:disable=disable-command-line-argument-injection
-                    app.logger.info(f"Enqueued NSFW check job {job.id} for post {result.inserted_id}") # snyk:disable=disable-command-line-argument-injection
+                    job = process_post_media.queue(post_id_str, temp_image_paths, temp_video_path)
+                    app.logger.info(f"Enqueued media processing job {job.id} for post {post_id_str}")
                 except redis.exceptions.ConnectionError as e:
-                    app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check job. Error: {e}")
+                    app.logger.warning(f"Redis connection failed. Falling back to thread for media processing. Error: {e}")
                     # Fallback: Run the job in a background thread
                     with app.app_context():
-                        ThreadPoolExecutor().submit(process_image_for_nsfw, str(result.inserted_id), image_url, image_public_id)
+                        ThreadPoolExecutor().submit(process_post_media, post_id_str, temp_image_paths, temp_video_path)
+                except Exception as e: # Catch other potential errors
+                    app.logger.error(f"Failed to process media for post {post_id_str}: {e}")
+                    # If enqueuing fails for a non-connection reason, delete the post to avoid orphans
+                    posts_conf.delete_one({'_id': ObjectId(post_id_str)})
+                    flash("Could not create post due to a server issue. Please try again.", "danger")
+                    return redirect(url_for("blog"))
+            else: # If no media, enqueue notifications directly
+                send_new_post_notifications.queue(post_id_str)
 
-            # Enqueue background notification task to RQ
-            #try:
-                #post_id_str = str(result.inserted_id)
-                #job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
-                #app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
-            #except redis.exceptions.ConnectionError as e:
-                #app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
-                # Fallback: Run the job in a background thread
-                #with app.app_context():
-                    #ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
-            
             # --- Send ntfy notification for new post ---
             try:
                 ntfy_message = f"\"{title}\" by {current_user.username}"
@@ -1132,14 +1167,43 @@ def view_post(slug):
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
 def api_record_post_view(post_id):
-    """Increment the view count for a post and return the updated count as JSON.
+    """Increment the view count for a post once per user per day.
 
     This endpoint is intended to be called by client-side JS when a user first
-    views a post during their session. It increments `view_count` atomically.
+    visits the view_post page. It ensures that each user only increments the 
+    view count once per day, regardless of how they arrive at the post (clicking title,
+    comment button, or direct access).
     """
     try:
-        # Atomically increment the view count
-        res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+        # If user is not authenticated, use a guest identifier
+        user_identifier = str(current_user.id) if current_user.is_authenticated else request.remote_addr
+        
+        # Get today's date at midnight (start of day)
+        now = datetime.datetime.now()
+        today_start = datetime.datetime(now.year, now.month, now.day)
+        today_end = today_start + datetime.timedelta(days=1)
+        
+        # Check if this user has already viewed this post today
+        view_record = logs_conf.find_one({
+            'type': 'post_view',
+            'post_id': ObjectId(post_id),
+            'user_identifier': user_identifier,
+            'timestamp': {'$gte': today_start, '$lt': today_end}
+        })
+        
+        # Only increment if they haven't viewed it today
+        if not view_record:
+            # Record the view in logs
+            logs_conf.insert_one({
+                'type': 'post_view',
+                'post_id': ObjectId(post_id),
+                'user_identifier': user_identifier,
+                'timestamp': datetime.datetime.now()
+            })
+            
+            # Atomically increment the view count on the post
+            res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+        
         # Fetch the latest count
         post = posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
         view_count = post.get('view_count', 0) if post else 0

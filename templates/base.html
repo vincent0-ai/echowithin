@@ -277,6 +277,12 @@
                     truncated.style.display = 'none';
                     toggle.innerHTML = 'Read Less';
                 }
+
+                // Record a view when the read more toggle is clicked
+                const postId = toggle.dataset.postId;
+                if (postId && typeof window.recordPostView === 'function') {
+                    window.recordPostView(postId);
+                }
             });
         });
 
@@ -284,20 +290,8 @@
         function recordPostView(postId) {
             if (!postId) return;
 
-            // Use sessionStorage to track viewed posts during the current session
-            let viewedPosts = JSON.parse(sessionStorage.getItem('viewedPosts') || '[]');
-
-            // If we've already viewed this post in this session, do nothing
-            if (viewedPosts.includes(postId)) {
-                return;
-            }
-
-            // Mark as viewed for this session
-            viewedPosts.push(postId);
-            sessionStorage.setItem('viewedPosts', JSON.stringify(viewedPosts));
-
+            // Track views per user per day in the database
             // Send a request to the server to increment the view count
-            // NOTE: You need to create this API endpoint on your backend.
             fetch(`/api/posts/${postId}/view`, { method: 'POST' })
                 .then(response => response.json())
                 .then(data => {

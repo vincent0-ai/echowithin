@@ -558,8 +558,12 @@ def register():
             # --- Send ntfy notification for new user ---
             try:
                 send_ntfy_notification.queue(f"User '{username}' has registered.", "New User on EchoWithin", "partying_face")
+            except redis.exceptions.ConnectionError as e:
+                app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
+                with app.app_context():
+                    ThreadPoolExecutor().submit(send_ntfy_notification, f"User '{username}' has registered.", "New User on EchoWithin", "partying_face")
             except Exception as e:
-                app.logger.error(f"Failed to enqueue ntfy notification for new user: {e}")
+                app.logger.error(f"Failed to enqueue ntfy notification for new user '{username}': {e}")
 
             return redirect(url_for("confirm", email=email))
         else:
@@ -979,16 +983,24 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         if image_urls:
             try:
                 # Check the first image for NSFW content
-                job = process_image_for_nsfw.queue(post_id_str, image_urls[0], image_public_ids[0])
-                app.logger.info(f"Enqueued NSFW check job {job.id} for post {post_id_str}")
+                process_image_for_nsfw.queue(post_id_str, image_urls[0], image_public_ids[0])
+                app.logger.info(f"Enqueued NSFW check job for post {post_id_str}")
+            except redis.exceptions.ConnectionError as e:
+                app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check. Error: {e}")
+                with app.app_context():
+                    ThreadPoolExecutor().submit(process_image_for_nsfw, post_id_str, image_urls[0], image_public_ids[0])
             except Exception as e:
                 app.logger.error(f"Failed to enqueue NSFW job for post {post_id_str}: {e}")
 
         try:
-            job = send_new_post_notifications.queue(post_id_str)
-            app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
+            send_new_post_notifications.queue(post_id_str)
+            app.logger.info(f"Enqueued notification job for post {post_id_str}")
+        except redis.exceptions.ConnectionError as e:
+            app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
+            with app.app_context():
+                ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
         except Exception as e:
-            app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
+            app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}", exc_info=True)
 
     except Exception as e:
         app.logger.error(f"Error in process_post_media job for {post_id_str}: {e}", exc_info=True)
@@ -1064,8 +1076,8 @@ def post():
             # Enqueue the media processing job if there are files
             if temp_image_paths or temp_video_path:
                 try:
-                    job = process_post_media.queue(post_id_str, temp_image_paths, temp_video_path)
-                    app.logger.info(f"Enqueued media processing job {job.id} for post {post_id_str}")
+                    process_post_media.queue(post_id_str, temp_image_paths, temp_video_path)
+                    app.logger.info(f"Enqueued media processing job for post {post_id_str}")
                 except redis.exceptions.ConnectionError as e:
                     app.logger.warning(f"Redis connection failed. Falling back to thread for media processing. Error: {e}")
                     # Fallback: Run the job in a background thread
@@ -1079,8 +1091,8 @@ def post():
                     return redirect(url_for("blog"))
             else: # If no media, enqueue notifications directly
                 try:
-                    job = send_new_post_notifications.queue(post_id_str)
-                    app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
+                    send_new_post_notifications.queue(post_id_str)
+                    app.logger.info(f"Enqueued notification job for post {post_id_str}")
                 except redis.exceptions.ConnectionError as e:
                     app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
                     with app.app_context():
@@ -1092,6 +1104,10 @@ def post():
             try:
                 ntfy_message = f"\"{title}\" by {current_user.username}"
                 send_ntfy_notification.queue(ntfy_message, "New Post Created", "tada")
+            except redis.exceptions.ConnectionError as e:
+                app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
+                with app.app_context():
+                    ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New Post Created", "tada")
             except Exception as e:
                 app.logger.error(f"Failed to enqueue ntfy notification for new post: {e}")
 
@@ -1454,6 +1470,10 @@ def update_post(post_id):
                 try:
                     message = f"NSFW content detected in post '{post.get('title')}' by {post.get('author')}. Image has been flagged."
                     send_ntfy_notification.queue(message, "NSFW Content Detected", "see_no_evil")
+                except redis.exceptions.ConnectionError as ntfy_e:
+                    app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {ntfy_e}")
+                    with app.app_context():
+                        ThreadPoolExecutor().submit(send_ntfy_notification, message, "NSFW Content Detected", "see_no_evil")
                 except Exception as ntfy_e:
                     app.logger.error(f"Failed to enqueue ntfy notification for NSFW content: {ntfy_e}")
 
@@ -1962,6 +1982,10 @@ def internal_server_error(e):
         app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)
         try:
             send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+        except redis.exceptions.ConnectionError as ntfy_e:
+            app.logger.warning(f"Redis connection failed. Falling back to thread for 500 error ntfy notification. Error: {ntfy_e}")
+            with app.app_context():
+                ThreadPoolExecutor().submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
         except Exception as ntfy_e:
             app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
     except Exception as log_e:

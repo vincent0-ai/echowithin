@@ -53,15 +53,7 @@
         <div class="comments-section" style="margin-top: 30px;">
             <h3>Comments ({{ comment_count or 0 }})</h3>
 
-            {% macro reply_count_for(comment, comments_list) %}
-                {% set _cnt = 0 %}
-                {% for __c in comments_list %}
-                    {% if __c.parent_id and (__c.parent_id|string) == (comment._id|string) %}
-                        {% set _cnt = _cnt + 1 %}
-                    {% endif %}
-                {% endfor %}
-                {{ _cnt }}
-            {% endmacro %}
+            {# reply_counts mapping provided by server (reply_counts[comment_id] -> int) #}
 
             {% if current_user.is_authenticated %}
                 <form id="comment-form">
@@ -75,21 +67,23 @@
             <div id="comments-list" style="margin-top: 1rem;">
                 {% for c in comments %}
                     {# compute reply count for this comment (number of items with parent_id == c._id) #}
-                    {% set reply_count = reply_count_for(c, comments) | int %}
+                    {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
                     <div class="comment-item" data-id="{{ c._id }}" {% if c.parent_id %}data-parent="{{ c.parent_id }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
                         <div class="comment-meta"><strong>{{ c.author_username }}</strong> — {{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }}</div>
                         <div class="comment-body" style="margin-top:4px;">{{ c.content|linkify|safe }}</div>
                         <div class="comment-actions" style="margin-top:6px;">
-                        {% if current_user.is_authenticated %}
                             {% if c.parent_id %}
-                                <a href="#" class="reply-btn action-link" data-id="{{ c._id }}">Reply</a>
+                                {% if current_user.is_authenticated %}
+                                    <a href="#" class="reply-btn action-link" data-id="{{ c._id }}">Reply</a>
+                                {% endif %}
                             {% else %}
-                                <button class="reply-btn" data-id="{{ c._id }}">Reply</button>
+                                {% if current_user.is_authenticated %}
+                                    <button class="reply-btn" data-id="{{ c._id }}">Reply</button>
+                                {% endif %}
                                 {% if reply_count and reply_count > 0 %}
                                     <a href="#" class="toggle-replies action-link" data-id="{{ c._id }}">Show replies ({{ reply_count }})</a>
                                 {% endif %}
                             {% endif %}
-                        {% endif %}
                         {% if current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
                             {% if c.parent_id %}
                                 <a href="#" class="edit-btn action-link" data-id="{{ c._id }}">Edit</a>
@@ -286,9 +280,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!confirmed) return;
                     const resp = await fetch('/api/comments/' + id, { method: 'DELETE' });
                     if (resp.ok) {
-                        // Remove the comment element from DOM
+                        // Instead of removing the comment, mark it as deleted so replies remain nested
                         const item = e.target.closest('.comment-item');
-                        if (item) item.remove();
+                        if (item) {
+                            const body = item.querySelector('.comment-body');
+                            if (body) body.innerHTML = '<em>Comment deleted</em>';
+                            // remove action buttons
+                            const actions = item.querySelector('.comment-actions');
+                            if (actions) actions.remove();
+                            item.setAttribute('data-deleted', '1');
+                        }
                         // Decrement header count
                         const header = document.querySelector('.comments-section h3');
                         if (header) {

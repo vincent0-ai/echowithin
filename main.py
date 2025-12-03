@@ -465,7 +465,8 @@ def send_log_email_job():
 @rq.job
 def send_ntfy_notification(message, title, tags=""):
     """Sends a push notification to an ntfy topic as a background job."""
-    ntfy_topic = get_env_variable('NTFY_TOPIC')
+    # Use os.environ.get to avoid raising an exception when not configured
+    ntfy_topic = os.environ.get('NTFY_TOPIC')
     if not ntfy_topic:
         app.logger.info("NTFY_TOPIC not set, skipping notification.")
         return
@@ -477,13 +478,23 @@ def send_ntfy_notification(message, title, tags=""):
         if tags:
             headers['Tags'] = tags
 
-        requests.post(
+        # Optional basic auth for ntfy (if the topic requires auth)
+        ntfy_user = os.environ.get('NTFY_USERNAME')
+        ntfy_pass = os.environ.get('NTFY_PASSWORD')
+        auth = (ntfy_user, ntfy_pass) if ntfy_user and ntfy_pass else None
+
+        resp = requests.post(
             f"https://ntfy.sh/{ntfy_topic}",
             data=message.encode('utf-8'),
             headers=headers,
-            timeout=5
+            timeout=5,
+            auth=auth
         )
-        app.logger.info(f"Successfully sent ntfy notification to topic: {ntfy_topic}")
+
+        if resp.ok:
+            app.logger.info(f"Successfully sent ntfy notification to topic: {ntfy_topic} (status {resp.status_code})")
+        else:
+            app.logger.error(f"ntfy send failed for topic {ntfy_topic}: status={resp.status_code}, body={resp.text}")
     except Exception as e:
         app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
 
@@ -1030,7 +1041,43 @@ def view_post(slug):
         # Pagination: load first page of comments for server-render
         comment_page = 1
         per_page = 10
+        # Load visible comments for this page (not deleted)
         comments = list(comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((comment_page-1)*per_page).limit(per_page))
+        # Compute reply counts for the post (group by parent_id across the whole post)
+        reply_counts = {}
+        try:
+            pipeline = [
+                {'$match': {'post_slug': slug, 'is_deleted': False, 'parent_id': {'$ne': None}}},
+                {'$group': {'_id': '$parent_id', 'count': {'$sum': 1}}}
+            ]
+            agg = list(comments_conf.aggregate(pipeline))
+            for doc in agg:
+                reply_counts[str(doc['_id'])] = doc.get('count', 0)
+        except Exception as e:
+            app.logger.debug(f"Failed to compute reply counts for post {slug}: {e}")
+
+        # Ensure that if a visible comment refers to a deleted parent, we fetch that parent
+        try:
+            parent_ids = [c.get('parent_id') for c in comments if c.get('parent_id')]
+            # parent_ids may be ObjectId instances; filter and fetch any missing parent docs
+            missing_parent_ids = []
+            if parent_ids:
+                for pid in parent_ids:
+                    # if parent not in our current comments list, we'll fetch it
+                    if not any((str(c.get('_id')) == str(pid)) for c in comments):
+                        missing_parent_ids.append(pid)
+            if missing_parent_ids:
+                parents = list(comments_conf.find({'_id': {'$in': missing_parent_ids}}))
+                # Append parent placeholders so replies have their parent present in DOM
+                # Avoid duplicates
+                existing_ids = set(str(c.get('_id')) for c in comments)
+                for p in parents:
+                    if str(p.get('_id')) not in existing_ids:
+                        comments.append(p)
+                # Keep comments ordered by created_at
+                comments.sort(key=lambda x: x.get('created_at') or datetime.datetime.min)
+        except Exception as e:
+            app.logger.debug(f"Failed to fetch missing parent comments for post {slug}: {e}")
         has_more = comment_count > comment_page * per_page
     except Exception as e:
         app.logger.error(f"Failed to load comments for post {slug}: {e}")
@@ -1043,7 +1090,7 @@ def view_post(slug):
     page_title = post.get('title', 'View Post')
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts)
 
 
 def _serialize_comment(doc):
@@ -1397,6 +1444,41 @@ def admin_delete_post(post_id):
             flash('Post not found.', 'warning')
     except Exception as e:
         flash(f'An error occurred: {e}', 'danger')
+    return redirect(url_for('admin_posts'))
+
+
+@app.route('/admin/ntfy_test', methods=['POST'])
+@login_required
+@admin_required
+def admin_ntfy_test():
+    """Admin-only endpoint to test sending an ntfy message synchronously and report results."""
+    msg = request.form.get('message') or 'EchoWithin ntfy test'
+    title = request.form.get('title') or 'EchoWithin Test'
+    tags = request.form.get('tags') or ''
+    try:
+        ntfy_topic = os.environ.get('NTFY_TOPIC')
+        if not ntfy_topic:
+            flash('NTFY_TOPIC not configured on server', 'danger')
+            return redirect(url_for('admin_posts'))
+
+        headers = {}
+        if title:
+            headers['Title'] = title
+        if tags:
+            headers['Tags'] = tags
+
+        ntfy_user = os.environ.get('NTFY_USERNAME')
+        ntfy_pass = os.environ.get('NTFY_PASSWORD')
+        auth = (ntfy_user, ntfy_pass) if ntfy_user and ntfy_pass else None
+
+        resp = requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers=headers, timeout=10, auth=auth)
+        if resp.ok:
+            flash(f'ntfy sent (status {resp.status_code})', 'success')
+        else:
+            flash(f'ntfy send failed: {resp.status_code} - {resp.text}', 'danger')
+    except Exception as e:
+        app.logger.error(f'ntfy test failed: {e}', exc_info=True)
+        flash('ntfy test failed (see server logs)', 'danger')
     return redirect(url_for('admin_posts'))
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])

@@ -9,6 +9,16 @@
         <a href="{{ url_for('blog') }}" class="btn edit-btn" style="margin-top: 1rem;">&larr; Back to Blog</a>
     </header>
 
+    <!-- Ntfy Test Form -->
+    <div style="margin-top:1rem; margin-bottom:1rem;">
+      <form action="{{ url_for('admin_ntfy_test') }}" method="POST" style="display:flex; gap:0.5rem; align-items:center;">
+        <input type="text" name="title" placeholder="Title" value="EchoWithin Test" style="padding:6px;">
+        <input type="text" name="message" placeholder="Message" value="This is a test notification" style="padding:6px; width:40%;">
+        <input type="text" name="tags" placeholder="Tags (comma-separated)" style="padding:6px; width:20%;">
+        <button type="submit" class="btn comment-btn">Send Ntfy Test</button>
+      </form>
+    </div>
+
     <!-- Search Form -->
     <form action="{{ url_for('admin_posts') }}" method="GET" class="search-form" style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
         <input type="text" name="query" class="form-input" placeholder="Search by title or content..." value="{{ query or '' }}" style="width: 70%;">

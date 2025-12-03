@@ -86,11 +86,6 @@ def get_env_variable(name: str) -> str:
 GOOGLE_CLIENT_ID = get_env_variable('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = get_env_variable('GOOGLE_CLIENT_SECRET')
 
-# Remark42 configuration
-REMARK42_HOST = get_env_variable("REMARK42_HOST")
-REMARK42_SITE_ID = get_env_variable("REMARK42_SITE_ID")
-REMARK42_INTERNAL = get_env_variable("REMARK42_INTERNAL")
-
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 

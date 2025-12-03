@@ -868,7 +868,7 @@ def get_all_posts_json():
     """Returns all posts as a JSON object for client-side rendering."""
     try:
         # Fetch all posts with necessary fields
-        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_status': 1, 'video_url': 1}))
+        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1}))
         
         # Convert ObjectId and datetime to strings and add the post URL
         for post in all_posts:
@@ -899,7 +899,7 @@ def get_top_posts_json():
         results = []
         for doc in agg:
             slug = doc['_id']
-            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'video_url':1})
+            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'image_public_ids':1, 'image_status':1, 'video_url':1})
             if not post:
                 continue
             post['_id'] = str(post['_id'])

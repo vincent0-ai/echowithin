@@ -24,21 +24,6 @@
                 Your browser does not support the video tag.
             </video>
         </div>
-
-    {% elif post.image_url %}
-        <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
-            {% if post.image_status in ['safe', 'processing'] %}
-                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ post.image_url }}">
-            {% elif post.image_status == 'removed_nsfw' %}
-                <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
-            {% endif %}
-        </div>
-
-    {% elif post.image_filename %}
-        <div class="post-image-container">
-            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
-        </div>
-
     {% elif post.image_urls %}
         {# Support multiple image URLs (list). Render a gallery if more than one. #}
         {% set images = post.image_urls %}
@@ -53,7 +38,7 @@
         {% else %}
             <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
                 {% if post.image_status in ['safe', 'processing'] %}
-                    <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image">
+                    <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ images[0] }}">
                 {% elif post.image_status == 'removed_nsfw' %}
                     <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
                 {% endif %}
@@ -73,9 +58,23 @@
             </div>
         {% else %}
             <div class="post-image-container">
-                <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image">
+                <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
             </div>
         {% endif %}
+
+    {% elif post.image_url %}
+        <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+            {% if post.image_status in ['safe', 'processing'] %}
+                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ post.image_url }}">
+            {% elif post.image_status == 'removed_nsfw' %}
+                <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
+            {% endif %}
+        </div>
+
+    {% elif post.image_filename %}
+        <div class="post-image-container">
+            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
+        </div>
     {% endif %}
 
     {# --- Content (unchanged) --- #}

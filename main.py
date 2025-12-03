@@ -155,34 +155,28 @@ class User(UserMixin):
         return self.is_admin
 
 @app.before_request
-def canonical_redirects():
-    """Force HTTPS and non-www canonical URLs."""
+def enforce_canonical_domain_and_https():
+    host = request.headers.get('X-Forwarded-Host', request.host)
+    scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-    # REAL host (especially behind proxies like CapRover)
-    host = request.headers.get("X-Forwarded-Host", request.host)
+    canonical_host = "echowithin.xyz"
+    canonical_scheme = "https"
 
-    url = request.url
+    needs_redirect = False
 
-    # Start with current request URL
-    new_url = url
+    # Fix host (remove www)
+    if host != canonical_host:
+        host = canonical_host
+        needs_redirect = True
 
-    # 1. Force non-www
-    if host.startswith("www."):
-        new_host = host.replace("www.", "", 1)
-        new_url = new_url.replace(host, new_host, 1)
-        host = new_host  # update host for next checks
+    # Fix scheme
+    if scheme != canonical_scheme:
+        scheme = canonical_scheme
+        needs_redirect = True
 
-    # 2. Force HTTPS (CapRover passes X-Forwarded-Proto)
-    proto = request.headers.get("X-Forwarded-Proto", request.scheme)
-    if proto != "https":
-        new_url = new_url.replace("http://", "https://", 1)
-
-    # If nothing changed → NO redirect required
-    if new_url == url:
-        return
-
-    return redirect(new_url, code=301)
-
+    if needs_redirect:
+        new_url = f"{scheme}://{host}{request.full_path}"
+        return redirect(new_url, code=301)
 
 
 def admin_required(f):
@@ -377,8 +371,8 @@ def send_new_post_notifications(post_id_str):
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
 
-REMARK42_HOST = os.environ.get("REMARK42_HOST")
-REMARK42_SITE_ID = os.environ.get("REMARK42_SITE_ID")
+REMARK42_HOST = get_env_variable("REMARK42_HOST")
+REMARK42_SITE_ID = get_env_variable("REMARK42_SITE_ID")
 
 # --- Caching for Comment Counts ---
 # Cache comment counts for 5 minutes (300 seconds) to reduce API calls.
@@ -408,10 +402,11 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
     """
     counts_map = {}
     if not REMARK42_HOST or not REMARK42_SITE_ID:
+        app.logger.info("Remark42 host or site ID not configured. Skipping batch comment count fetch.")
         return counts_map
     try:
         params = [('site', REMARK42_SITE_ID)] + [('url', url) for url in post_urls]
-        res = requests.get(f"{REMARK42_HOST}/api/v1/counts", params=params, timeout=2)
+        res = requests.get(f"https://{REMARK42_HOST.replace('https://', '').replace('http://', '')}/api/v1/counts", params=params, timeout=2)
         if res.status_code == 200:
             return {item['url']: item['count'] for item in res.json()}
     except Exception as e:
@@ -495,11 +490,12 @@ def send_ntfy_notification(message, title, tags=""):
             headers['Tags'] = tags
 
         requests.post(
-            f"https://{ntfy_topic}",
+            f"https://ntfy.sh/{ntfy_topic}",
             data=message.encode('utf-8'),
             headers=headers,
-            verify=False  # Skip SSL verification for self-hosted ntfy
+            timeout=5
         )
+        app.logger.info(f"Successfully sent ntfy notification to topic: {ntfy_topic}")
     except Exception as e:
         app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
 
@@ -622,6 +618,11 @@ def login():
             if not user.get('is_confirmed'):
                 flash('Please confirm your account first', "danger")
                 return redirect(url_for('login'))
+
+            # Check if the user is banned
+            if user.get('is_banned'):
+                flash('Your account has been suspended. Please contact support.', 'danger')
+                return redirect(url_for('login'))
                 
             
             user_obj = User(user)
@@ -673,7 +674,13 @@ def google_callback():
         if not user.get('is_confirmed'):
             flash("Your account is not confirmed. Please check your email for a confirmation link or register again to receive a new one.", "warning")
             return redirect(url_for('login'))
-
+        
+        # Check if the user is banned
+        if user.get('is_banned'):
+                flash('Your account has been suspended. Please contact support.', 'danger')
+                return redirect(url_for('login'))
+                
+            
         user_obj = User(user)
         # Use 'remember=True' to persist the session across browser restarts
         login_user(user_obj, remember=True)
@@ -1344,10 +1351,6 @@ def delete_user(user_id):
     flash(f"User '{username}' and all their posts have been permanently deleted.", "success")
     return redirect(url_for('admin_users'))
 
-# You will also need to add a check to your login route to prevent banned users from logging in.
-# Find your login view function and add a check for `user.get('is_banned')`.
-# I have not included this change as it requires modifying an existing function, but it is a necessary step.
-
 @app.route('/about')
 def about():
     page_title = "About EchoWithin"
@@ -1566,11 +1569,15 @@ def handle_ratelimit_exception(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     """Handler for 500 errors, sends an ntfy notification."""
-    app.logger.error(f"Internal Server Error: {e}", exc_info=True)
     try:
-        send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
-    except Exception as ntfy_e:
-        app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
+        # Log the original error first
+        app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)
+        try:
+            send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+        except Exception as ntfy_e:
+            app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
+    except Exception as log_e:
+        print(f"CRITICAL: Failed to log 500 error: {log_e}", file=sys.stderr)
     return render_template("500.html"), 500
 
 @app.route('/sitemap.xml')

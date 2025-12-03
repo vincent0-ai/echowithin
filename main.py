@@ -406,7 +406,7 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
         return counts_map
     try:
         params = [('site', REMARK42_SITE_ID)] + [('url', url) for url in post_urls]
-        res = requests.get(f"https://{REMARK42_HOST.replace('https://', '').replace('http://', '')}/api/v1/counts", params=params, timeout=2)
+        res = requests.get(f"{REMARK42_HOST}/api/v1/counts", params=params, timeout=3)
         if res.status_code == 200:
             return {item['url']: item['count'] for item in res.json()}
     except Exception as e:

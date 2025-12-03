@@ -1078,7 +1078,15 @@ def post():
                     flash("Could not create post due to a server issue. Please try again.", "danger")
                     return redirect(url_for("blog"))
             else: # If no media, enqueue notifications directly
-                send_new_post_notifications.queue(post_id_str)
+                try:
+                    job = send_new_post_notifications.queue(post_id_str)
+                    app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}")
+                except redis.exceptions.ConnectionError as e:
+                    app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
+                    with app.app_context():
+                        ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+                except Exception as e:
+                    app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
 
             # --- Send ntfy notification for new post ---
             try:

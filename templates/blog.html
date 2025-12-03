@@ -141,22 +141,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                window.REMARK42.get_counts(posts.map(p => p.url))
-                    .then(counts => {
-                        const enriched = posts.map(p => {
-                            const c = counts.find(i => i.url === p.url);
-                            return { ...p, comment_count: c ? c.count : 0 };
+                function processPostsWithCounts() {
+                    window.REMARK42.get_counts(posts.map(p => p.url))
+                        .then(counts => {
+                            const enriched = posts.map(p => {
+                                const c = counts.find(i => i.url === p.url);
+                                return { ...p, comment_count: c ? c.count : 0 };
+                            });
+
+                            enriched.sort((a,b) => b.comment_count - a.comment_count);
+
+                            let html = '';
+                            enriched.slice(0,10).forEach(p => {
+                                html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
+                            });
+
+                            container.innerHTML = html;
                         });
-
-                        enriched.sort((a,b) => b.comment_count - a.comment_count);
-
-                        let html = '';
-                        enriched.slice(0,10).forEach(p => {
-                            html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
-                        });
-
-                        container.innerHTML = html;
-                    });
+                }
+                if (window.REMARK42) {
+                    processPostsWithCounts();
+                } else {
+                    window.addEventListener('REMARK42.ready', processPostsWithCounts);
+                }
             });
     }
 

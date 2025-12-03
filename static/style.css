@@ -316,6 +316,41 @@ body {
     gap: 1rem;
 }
 
+/* Header layout: title + views badge aligned horizontally */
+.post-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.post-title {
+    flex: 1 1 auto;
+    min-width: 0; /* allow truncation inside flex */
+    margin: 0;
+}
+
+.post-title a {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--primary-dark-color);
+}
+
+.post-views {
+    flex: 0 0 auto;
+    background-color: rgba(0,0,0,0.05);
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: #555;
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
 .post-meta {
     font-size: 0.85rem;
     color: #777;
@@ -513,6 +548,19 @@ body {
     cursor: not-allowed;
 }
 
+/* Ensure pagination link text is always readable (white on primary color),
+   and use a darker text for disabled state for contrast */
+.pagination .page-link,
+.pagination .page-link * {
+    color: var(--text-light-color) !important;
+}
+
+.page-item.disabled .page-link {
+    background-color: #ccc;
+    cursor: not-allowed;
+    color: #555; /* darker text for disabled state */
+}
+
 .page-item.disabled .page-link:hover {
     background-color: #ccc;
 }
@@ -554,6 +602,84 @@ body {
     color: white;
     font-style: italic;
 }
+
+/* Gallery styles for multiple images */
+.post-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.5rem;
+}
+
+.post-gallery-item {
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+.gallery-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+.gallery-thumb:hover { transform: scale(1.03); }
+
+/* Lightbox modal */
+.lightbox-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.8);
+    z-index: 1200;
+}
+
+.lightbox-modal img {
+    max-width: 95%;
+    max-height: 90%;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+
+.lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    color: #fff;
+    font-size: 1.6rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.lightbox-prev,
+.lightbox-next {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #fff;
+    font-size: 2.2rem;
+    background: rgba(0,0,0,0.3);
+    border: none;
+    width: 48px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.lightbox-prev { left: 16px; }
+.lightbox-next { right: 16px; }
+
+.lightbox-prev:hover, .lightbox-next:hover, .lightbox-close:hover { background: rgba(0,0,0,0.5); }
 
 .edit-post-image-preview {
     max-width: 250px;

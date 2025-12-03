@@ -63,16 +63,26 @@
             </div>
             
             <div>
-                <label for="image">Upload a New Image (Optional, max 10 MB):</label>
-                {% if post.image_url or post.image_filename %}
-                    <p>Current image:</p>
-                    {% if post.image_url %}
-                        <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
-                    {% else %}
-                        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
-                    {% endif %}
+                <label for="images">Upload New Images (Optional — you may select multiple):</label>
+                {% if post.image_urls or post.image_url or post.image_filenames or post.image_filename %}
+                    <p>Current image(s):</p>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                        {% if post.image_urls %}
+                            {% for img in post.image_urls %}
+                                <img src="{{ img }}" alt="Current image {{ loop.index }}" class="edit-post-image-preview">
+                            {% endfor %}
+                        {% elif post.image_url %}
+                            <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
+                        {% elif post.image_filenames %}
+                            {% for f in post.image_filenames %}
+                                <img src="{{ url_for('uploaded_file', filename=f) }}" alt="Current image {{ loop.index }}" class="edit-post-image-preview">
+                            {% endfor %}
+                        {% elif post.image_filename %}
+                            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
+                        {% endif %}
+                    </div>
                 {% endif %}
-                <input type="file" name="image" class="form-input" accept="image/*">
+                <input type="file" name="images" class="form-input" accept="image/*" multiple>
             </div>
 
             <div>

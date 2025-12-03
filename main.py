@@ -929,10 +929,13 @@ def post():
         title=request.form.get("title")
         content=request.form.get("content")
         tags = request.form.getlist("tags") # Use getlist for multi-select
-        image_file = request.files.get('image')
+        # Support multiple image uploads from the form input named 'images'
+        images_files = request.files.getlist('images') if request.files else []
         video_file = request.files.get('video')
         image_url = None
         image_public_id = None
+        image_urls = []
+        image_public_ids = []
         video_url = None
         video_public_id = None
 
@@ -946,17 +949,27 @@ def post():
                 slug = f"{base_slug}-{counter}"
                 counter += 1
             
-            # Handle image upload
-            if image_file and image_file.filename != '' and '.' in image_file.filename and \
-               image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
+            # Handle image uploads (support multiple files)
+            if images_files:
                 try:
-                    # Upload to Cloudinary
-                    upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
-                    image_url = upload_result.get('secure_url')
-                    image_public_id = upload_result.get('public_id')
+                    for img_file in images_files:
+                        if not img_file or not img_file.filename:
+                            continue
+                        if '.' not in img_file.filename:
+                            continue
+                        ext = img_file.filename.rsplit('.', 1)[1].lower()
+                        if ext not in ALLOWED_IMAGE_EXTENSIONS:
+                            continue
+                        upload_result = cloudinary.uploader.upload(img_file, folder="echowithin_posts")
+                        url = upload_result.get('secure_url')
+                        pid = upload_result.get('public_id')
+                        if url:
+                            image_urls.append(url)
+                        if pid:
+                            image_public_ids.append(pid)
                 except Exception as e:
                     app.logger.error(f"Cloudinary upload failed: {e}")
-                    flash("There was an error uploading the image.", "danger")
+                    flash("There was an error uploading one or more images.", "danger")
                     return redirect(url_for("blog"))
 
             # Handle video upload (enforce extension and size limit)
@@ -987,6 +1000,12 @@ def post():
                     flash("There was an error uploading the video.", "danger")
                     return redirect(url_for('blog'))
 
+            # For backward compatibility, keep `image_url`/`image_public_id` as the first image if present
+            if image_urls:
+                image_url = image_urls[0]
+            if image_public_ids:
+                image_public_id = image_public_ids[0]
+
             new_post_data = {
                 'author_id': ObjectId(current_user.id),
                 'slug': slug,
@@ -996,7 +1015,9 @@ def post():
                 'author': current_user.username,
                 'image_url': image_url,
                 'image_public_id': image_public_id,
-                'image_status': 'safe' if image_url else 'none', # Optimistically assume safe
+                'image_urls': image_urls,
+                'image_public_ids': image_public_ids,
+                'image_status': 'safe' if image_urls else 'none', # Optimistically assume safe
                 'video_url': video_url,
                 'video_public_id': video_public_id,
                 'video_status': 'uploaded' if video_url else 'none',
@@ -1294,10 +1315,13 @@ def update_post(post_id):
     title = request.form.get("title")
     content = request.form.get("content")
     tags = request.form.getlist("tags") # Use getlist for multi-select
-    image_file = request.files.get('image')
+    # Support multiple images on update via 'images' input
+    images_files = request.files.getlist('images') if request.files else []
     video_file = request.files.get('video')
     image_url = post.get('image_url') # Keep old image by default
     image_public_id = post.get('image_public_id')
+    image_urls = post.get('image_urls', []) if post else []
+    image_public_ids = post.get('image_public_ids', []) if post else []
     video_url = post.get('video_url')
     video_public_id = post.get('video_public_id')
     slug = post.get('slug') # Keep old slug by default
@@ -1306,24 +1330,56 @@ def update_post(post_id):
 
     if title and content:
         # Handle image replacement
-        if image_file and image_file.filename != '' and '.' in image_file.filename and \
-           image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
+        # If new images were provided, replace existing images (delete old public_ids and upload new ones)
+        if images_files and any(f and f.filename for f in images_files):
             try:
-                # Delete the old image from Cloudinary if it exists
-                if image_public_id:
-                    cloudinary.uploader.destroy(image_public_id)
+                # Delete old images from Cloudinary if exists (support list or single)
+                old_publics = []
+                if isinstance(image_public_id, list):
+                    old_publics = image_public_id
+                elif image_public_id:
+                    old_publics = [image_public_id]
+                elif image_public_ids:
+                    old_publics = image_public_ids
+                for pid in old_publics:
+                    try:
+                        cloudinary.uploader.destroy(pid)
+                    except Exception:
+                        app.logger.debug(f"Failed to delete old Cloudinary image {pid}")
 
-                # Upload the new image
-                upload_result = cloudinary.uploader.upload(image_file, folder="echowithin_posts")
-                image_url = upload_result.get('secure_url')
-                image_public_id = upload_result.get('public_id')
-                image_status = 'safe' # Optimistically assume safe
-                # Enqueue the background NSFW check for the new image
+                # Upload new images
+                new_urls = []
+                new_publics = []
+                for img_file in images_files:
+                    if not img_file or not img_file.filename:
+                        continue
+                    if '.' not in img_file.filename:
+                        continue
+                    ext = img_file.filename.rsplit('.', 1)[1].lower()
+                    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+                        continue
+                    upload_result = cloudinary.uploader.upload(img_file, folder="echowithin_posts")
+                    url = upload_result.get('secure_url')
+                    pid = upload_result.get('public_id')
+                    if url:
+                        new_urls.append(url)
+                    if pid:
+                        new_publics.append(pid)
+
+                # Update the variables used to save back to DB
+                if new_urls:
+                    image_urls = new_urls
+                    image_url = new_urls[0]
+                if new_publics:
+                    image_public_ids = new_publics
+                    image_public_id = new_publics[0]
+                image_status = 'safe'
+                # Enqueue NSFW check for each new image (fire-and-forget)
                 try:
-                    job = process_image_for_nsfw.queue(post_id, image_url, image_public_id)
-                    app.logger.info(f"Enqueued NSFW check job {job.id} for updated post {post_id}")
+                    for url, pid in zip(new_urls, new_publics):
+                        process_image_for_nsfw.queue(post_id, url, pid)
                 except Exception as e:
-                    app.logger.error(f"Failed to enqueue NSFW check job on update: {e}", exc_info=True)
+                    app.logger.debug(f"Failed to enqueue NSFW checks for updated images: {e}")
             except Exception as e:
                 # --- Send ntfy notification for NSFW content ---
                 try:
@@ -1384,6 +1440,8 @@ def update_post(post_id):
                 'tags': tags,
                 'image_url': image_url,
                 'image_public_id': image_public_id,
+                'image_urls': image_urls,
+                'image_public_ids': image_public_ids,
                 'image_status': image_status,
                 'video_url': video_url,
                 'video_public_id': video_public_id,

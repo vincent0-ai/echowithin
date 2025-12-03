@@ -1,6 +1,12 @@
 {% macro render_post_item(post, current_user) %}
 <div class="post-item">
-    <h3><a href="{{ post.url }}">{{ post.title }}</a></h3>
+    <div class="post-header">
+        <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link" data-post-id="{{ post._id|string }}">{{ post.title }}</a></h3>
+        <div class="post-views">
+            <i class="fa-regular fa-eye"></i>
+            <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
+        </div>
+    </div>
 
     {# --- Media Display Logic (matches JS version) --- #}
     {% if post.video_url %}
@@ -18,11 +24,48 @@
                 Your browser does not support the video tag.
             </video>
         </div>
+    {% elif post.image_urls %}
+        {# Support multiple image URLs (list). Render a gallery if more than one. #}
+        {% set images = post.image_urls %}
+        {% if images|length > 1 %}
+            <div class="post-gallery">
+                {% for img in images %}
+                    <div class="post-gallery-item">
+                        <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+                {% if post.image_status in ['safe', 'processing'] %}
+                    <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ images[0] }}">
+                {% elif post.image_status == 'removed_nsfw' %}
+                    <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+    {% elif post.image_filenames %}
+        {# Support list of uploaded filenames #}
+        {% set files = post.image_filenames %}
+        {% if files|length > 1 %}
+            <div class="post-gallery">
+                {% for fname in files %}
+                    <div class="post-gallery-item">
+                        <img src="{{ url_for('uploaded_file', filename=fname) }}" data-full-url="{{ url_for('uploaded_file', filename=fname) }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="post-image-container">
+                <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
+            </div>
+        {% endif %}
 
     {% elif post.image_url %}
         <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
             {% if post.image_status in ['safe', 'processing'] %}
-                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
+                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ post.image_url }}">
             {% elif post.image_status == 'removed_nsfw' %}
                 <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
             {% endif %}
@@ -30,7 +73,7 @@
 
     {% elif post.image_filename %}
         <div class="post-image-container">
-            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image">
+            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
         </div>
     {% endif %}
 
@@ -39,7 +82,7 @@
         {% if post.content|length > 150 %}
             <p class="post-content-truncated">{{ post.content|truncate(150, true)|linkify|safe }}</p>
             <p class="post-content-full">{{ post.content|linkify|safe }}</p>
-            <a href="#" class="read-more-link read-more-toggle">Read More</a>
+            <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
         {% else %}
             <p>{{ post.content|linkify|safe }}</p>
         {% endif %}
@@ -57,7 +100,7 @@
 
     {# --- Actions: Comment count + Edit/Delete --- #}
     <div class="post-actions" style="margin-top: 10px;">
-        <a href="{{ post.url }}" class="btn comment-btn">
+        <a href="{{ post.url }}" class="btn comment-btn record-view-link" data-post-id="{{ post._id|string }}">
             Comments
             <span class="comment-count-display">
                 {{ post.comment_count if post.comment_count is defined else 0 }}

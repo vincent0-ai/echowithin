@@ -9,10 +9,31 @@
 <style>
     .comment-replies { margin-left: 32px; border-left: 2px solid #f4f4f4; padding-left: 12px; }
     .comment-item { margin-bottom: 6px; }
-    .comment-actions button { margin-right: 6px; background: transparent; border: 1px solid #ddd; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
-    .comment-actions button:hover { background: #f6f6f6; }
-    .comment-actions .action-link { margin-right: 10px; color: #0a58ca; text-decoration: none; font-size: 0.9rem; }
-    .comment-actions .action-link:hover { text-decoration: underline; }
+    
+    /* Unify all comment action buttons and links */
+    .comment-actions .reply-btn,
+    .comment-actions .edit-btn,
+    .comment-actions .delete-comment,
+    .comment-actions .toggle-replies,
+    .comment-actions .action-link {
+        background: none;
+        border: none;
+        color: var(--info-color); /* Light blue from your root variables */
+        padding: 0;
+        margin-right: 12px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        text-decoration: none;
+    }
+    .comment-actions .reply-btn:hover,
+    .comment-actions .edit-btn:hover,
+    .comment-actions .delete-comment:hover,
+    .comment-actions .toggle-replies:hover,
+    .comment-actions .action-link:hover {
+        text-decoration: underline;
+        color: #1e88e5; /* A slightly darker blue on hover */
+    }
+
     /* Hide reply comment items by default (they will have data-parent attr) */
     .comment-item[data-parent] { display: none; margin-left: 28px; }
     /* Post comment button (maroon) */
@@ -20,13 +41,28 @@
     #comment-submit:hover { opacity: 0.95; }
     #comment-form textarea, .reply-form textarea, .edit-form textarea { border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
     #comment-form button, .reply-form button, .edit-form button { margin-top: 6px; }
+
+    /* Styles for comment text size */
+    .comment-meta {
+        font-size: 0.8rem; /* Smaller font for username and date */
+        color: #666;
+    }
+    .comment-body {
+        font-size: 0.95rem; /* Slightly smaller font for the comment content */
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
-    <div class="post-item" style="border-left: none; box-shadow: none; padding: 20px; background-color: white;">
-        <h1>{{ post.title }}</h1>
+    <div class="post-item" style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
+            <div class="post-header" style="align-items: flex-start; gap: 0.6rem;">
+                <h1 class="post-title single-post-title" style="margin:0;">{{ post.title }}</h1>
+                <div class="post-views">
+                    <i class="fa-regular fa-eye"></i>
+                    <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
+                </div>
+            </div>
         <div class="post-meta">
             Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
         </div>
@@ -38,14 +74,40 @@
                     Your browser does not support the video tag.
                 </video>
             </div>
-        {% elif post.image_url %}
-            <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
-                {% if post.image_status == 'safe' %}
-                    <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
-                {% elif post.image_status == 'removed_nsfw' %}
-                    <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
-                {% endif %}
-            </div>
+        {% elif post.image_urls %}
+            {% set images = post.image_urls %}
+            {% if images|length > 1 %}
+                <div class="post-gallery">
+                    {% for img in images %}
+                        <div class="post-gallery-item">
+                            <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+                    {% if post.image_status == 'safe' %}
+                        <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ images[0] }}">
+                    {% elif post.image_status == 'removed_nsfw' %}
+                        <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% elif post.image_filenames %}
+            {% set files = post.image_filenames %}
+            {% if files|length > 1 %}
+                <div class="post-gallery">
+                    {% for fname in files %}
+                        <div class="post-gallery-item">
+                            <img src="{{ url_for('uploaded_file', filename=fname) }}" data-full-url="{{ url_for('uploaded_file', filename=fname) }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="post-image-container">
+                    <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
+                </div>
+            {% endif %}
         {% endif %}
 
         <div class="post-content" style="white-space: pre-wrap; margin-top: 1rem;">{{ post.content|linkify|safe }}</div>
@@ -68,7 +130,7 @@
                 {% for c in comments %}
                     {# compute reply count for this comment (number of items with parent_id == c._id) #}
                     {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
-                    <div class="comment-item" data-id="{{ c._id }}" {% if c.parent_id %}data-parent="{{ c.parent_id }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
+                    <div class="comment-item" data-id="{{ c._id|string }}" {% if c.parent_id %}data-parent="{{ c.parent_id|string }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
                         <div class="comment-meta">
                             <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
                             {% if c.created_at %}
@@ -79,23 +141,23 @@
                         <div class="comment-actions" style="margin-top:6px;">
                             {% if c.parent_id %}
                                 {% if current_user.is_authenticated and not c.is_deleted %}
-                                    <a href="#" class="reply-btn action-link" data-id="{{ c._id }}">Reply</a>
+                                    <a href="#" class="reply-btn action-link" data-id="{{ c._id|string }}">Reply</a>
                                 {% endif %}
                             {% else %}
                                 {% if current_user.is_authenticated and not c.is_deleted %}
-                                    <button class="reply-btn" data-id="{{ c._id }}">Reply</button>
+                                    <button class="reply-btn" data-id="{{ c._id|string }}">Reply</button>
                                 {% endif %}
                                 {% if reply_count and reply_count > 0 %}
-                                    <a href="#" class="toggle-replies action-link" data-id="{{ c._id }}">Show replies ({{ reply_count }})</a>
+                                    <a href="#" class="toggle-replies action-link" data-id="{{ c._id|string }}">Show replies ({{ reply_count }})</a>
                                 {% endif %}
                             {% endif %}
                         {% if not c.is_deleted and current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
                             {% if c.parent_id %}
-                                <a href="#" class="edit-btn action-link" data-id="{{ c._id }}">Edit</a>
-                                <a href="#" class="delete-comment action-link" data-id="{{ c._id }}">Delete</a>
+                                <a href="#" class="edit-btn action-link" data-id="{{ c._id|string }}">Edit</a>
+                                <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
                             {% else %}
-                                <button class="edit-btn" data-id="{{ c._id }}">Edit</button>
-                                <button class="delete-comment" data-id="{{ c._id }}">Delete</button>
+                                <button class="edit-btn" data-id="{{ c._id|string }}">Edit</button>
+                                <button class="delete-comment" data-id="{{ c._id|string }}">Delete</button>
                             {% endif %}
                         {% endif %}
                         </div>
@@ -474,6 +536,78 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // On page load, record a view for this post
+    if (typeof window.recordPostView === 'function') {
+        window.recordPostView('{{ post._id|string }}');
+    }
+
+    // Lightbox support for single-post view (gallery or single image)
+    (function setupLightboxView(){
+        let modal = document.querySelector('.lightbox-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.className = 'lightbox-modal';
+            modal.innerHTML = `
+                <button class="lightbox-close" aria-label="Close">&times;</button>
+                <button class="lightbox-prev" aria-label="Previous">&#10094;</button>
+                <button class="lightbox-next" aria-label="Next">&#10095;</button>
+                <img src="" alt="" />
+            `;
+            document.body.appendChild(modal);
+        }
+        const modalImg = modal.querySelector('img');
+        const closeBtn = modal.querySelector('.lightbox-close');
+        const prevBtn = modal.querySelector('.lightbox-prev');
+        const nextBtn = modal.querySelector('.lightbox-next');
+
+        let currentGallery = [];
+        let currentIndex = 0;
+
+        function openLightboxWithGallery(gallery, index) {
+            currentGallery = gallery || [];
+            currentIndex = index || 0;
+            modalImg.src = currentGallery[currentIndex] || '';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            prevBtn.style.display = currentGallery.length > 1 ? 'block' : 'none';
+            nextBtn.style.display = currentGallery.length > 1 ? 'block' : 'none';
+        }
+
+        function closeLightbox(){
+            modal.style.display = 'none';
+            modalImg.src = '';
+            currentGallery = [];
+            currentIndex = 0;
+            document.body.style.overflow = '';
+        }
+
+        document.body.addEventListener('click', function(e){
+            const t = e.target;
+            if (t.matches('.gallery-thumb')) {
+                e.preventDefault();
+                const galleryContainer = t.closest('.post-gallery') || document;
+                const thumbs = Array.from(galleryContainer.querySelectorAll('.gallery-thumb'));
+                const gallery = thumbs.map(x => x.dataset.fullUrl || x.src).filter(Boolean);
+                const index = thumbs.indexOf(t);
+                openLightboxWithGallery(gallery, index);
+                return;
+            }
+            if (t.matches('.post-image')) {
+                const src = t.dataset.fullUrl || t.src;
+                openLightboxWithGallery([src], 0);
+                return;
+            }
+            if (t.classList && (t.classList.contains('lightbox-close') || t === modal)) {
+                closeLightbox();
+            }
+        });
+
+        closeBtn.addEventListener('click', closeLightbox);
+        prevBtn.addEventListener('click', function(ev){ ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
+        nextBtn.addEventListener('click', function(ev){ ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
+        document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') closeLightbox(); if (ev.key === 'ArrowLeft' && currentGallery.length>1) { currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } if (ev.key === 'ArrowRight' && currentGallery.length>1) { currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } });
+    })();
 });
 </script>
 {% endblock %}

@@ -69,22 +69,27 @@
                     {# compute reply count for this comment (number of items with parent_id == c._id) #}
                     {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
                     <div class="comment-item" data-id="{{ c._id }}" {% if c.parent_id %}data-parent="{{ c.parent_id }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
-                        <div class="comment-meta"><strong>{{ c.author_username }}</strong> — {{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }}</div>
-                        <div class="comment-body" style="margin-top:4px;">{{ c.content|linkify|safe }}</div>
+                        <div class="comment-meta">
+                            <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
+                            {% if c.created_at %}
+                                — {% if c.created_at.strftime %}{{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }}{% else %}{{ c.created_at }}{% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>
                         <div class="comment-actions" style="margin-top:6px;">
                             {% if c.parent_id %}
-                                {% if current_user.is_authenticated %}
+                                {% if current_user.is_authenticated and not c.is_deleted %}
                                     <a href="#" class="reply-btn action-link" data-id="{{ c._id }}">Reply</a>
                                 {% endif %}
                             {% else %}
-                                {% if current_user.is_authenticated %}
+                                {% if current_user.is_authenticated and not c.is_deleted %}
                                     <button class="reply-btn" data-id="{{ c._id }}">Reply</button>
                                 {% endif %}
                                 {% if reply_count and reply_count > 0 %}
                                     <a href="#" class="toggle-replies action-link" data-id="{{ c._id }}">Show replies ({{ reply_count }})</a>
                                 {% endif %}
                             {% endif %}
-                        {% if current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
+                        {% if not c.is_deleted and current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
                             {% if c.parent_id %}
                                 <a href="#" class="edit-btn action-link" data-id="{{ c._id }}">Edit</a>
                                 <a href="#" class="delete-comment action-link" data-id="{{ c._id }}">Delete</a>
@@ -280,15 +285,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!confirmed) return;
                     const resp = await fetch('/api/comments/' + id, { method: 'DELETE' });
                     if (resp.ok) {
-                        // Instead of removing the comment, mark it as deleted so replies remain nested
+                        // Decide whether to remove the comment node entirely or show a placeholder.
+                        // If the comment has any non-deleted replies, keep a placeholder so replies remain nested.
                         const item = e.target.closest('.comment-item');
                         if (item) {
-                            const body = item.querySelector('.comment-body');
-                            if (body) body.innerHTML = '<em>Comment deleted</em>';
-                            // remove action buttons
-                            const actions = item.querySelector('.comment-actions');
-                            if (actions) actions.remove();
-                            item.setAttribute('data-deleted', '1');
+                            const id = item.getAttribute('data-id');
+                            // find replies that are not already marked deleted
+                            const repliesSelector = `.comment-item[data-parent="${id}"]:not([data-deleted="1"])`;
+                            const liveReplies = document.querySelectorAll(repliesSelector);
+                            if (!liveReplies || liveReplies.length === 0) {
+                                // No existing replies: remove the comment element completely
+                                item.remove();
+                            } else {
+                                // There are replies: replace body with placeholder and keep the node
+                                const body = item.querySelector('.comment-body');
+                                if (body) body.innerHTML = '<em>Comment deleted</em>';
+                                // remove action buttons
+                                const actions = item.querySelector('.comment-actions');
+                                if (actions) actions.remove();
+                                item.setAttribute('data-deleted', '1');
+                            }
                         }
                         // Decrement header count
                         const header = document.querySelector('.comments-section h3');

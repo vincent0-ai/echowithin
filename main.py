@@ -769,7 +769,25 @@ def home():
     most_active_member = most_active_result[0] if most_active_result else None
 
     # Fetch trending posts (e.g., 5 most recent posts)
-    trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+    # Fetch top trending posts by comment count (5)
+    try:
+        pipeline = [
+            {'$match': {'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 5}
+        ]
+        agg = list(comments_conf.aggregate(pipeline))
+        trending_posts = []
+        for doc in agg:
+            slug = doc['_id']
+            p = posts_conf.find_one({'slug': slug})
+            if p:
+                trending_posts.append(p)
+    except Exception:
+        # Fallback: most recent posts
+        trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+
     with app.app_context():
         trending_posts = prepare_posts(trending_posts)
 
@@ -910,16 +928,13 @@ def post():
     if request.method=="POST":
         title=request.form.get("title")
         content=request.form.get("content")
-        tags_string = request.form.get("tags", "")
+        tags = request.form.getlist("tags") # Use getlist for multi-select
         image_file = request.files.get('image')
         video_file = request.files.get('video')
         image_url = None
         image_public_id = None
         video_url = None
         video_public_id = None
-
-        # Process tags: split by comma, strip whitespace, and remove empty strings
-        tags = [tag.strip() for tag in tags_string.split(',') if tag.strip()]
 
 
         if title and content:  
@@ -1258,7 +1273,7 @@ def update_post(post_id):
 
     title = request.form.get("title")
     content = request.form.get("content")
-    tags_string = request.form.get("tags", "")
+    tags = request.form.getlist("tags") # Use getlist for multi-select
     image_file = request.files.get('image')
     video_file = request.files.get('video')
     image_url = post.get('image_url') # Keep old image by default
@@ -1268,9 +1283,6 @@ def update_post(post_id):
     slug = post.get('slug') # Keep old slug by default
     image_status = post.get('image_status', 'none')
     video_status = post.get('video_status', 'none')
-
-    # Process tags
-    tags = [tag.strip() for tag in tags_string.split(',') if tag.strip()]
 
     if title and content:
         # Handle image replacement

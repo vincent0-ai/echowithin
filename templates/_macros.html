@@ -1,5 +1,5 @@
 {% macro render_post_item(post, current_user) %}
-<div class="post-item">
+<div class="post-item" style="position: relative;">
     <div class="post-views" style="position: absolute; top: 10px; right: 10px; background-color: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; color: #555;">
         <i class="fa-regular fa-eye"></i>
         <span id="view-count-{{ post._id|string }}">

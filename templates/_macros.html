@@ -1,5 +1,11 @@
 {% macro render_post_item(post, current_user) %}
 <div class="post-item">
+    <div class="post-views" style="position: absolute; top: 10px; right: 10px; background-color: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; color: #555;">
+        <i class="fa-regular fa-eye"></i>
+        <span id="view-count-{{ post._id|string }}">
+            {{ post.view_count if post.view_count is defined else 0 }}
+        </span>
+    </div>
     <h3><a href="{{ post.url }}">{{ post.title }}</a></h3>
 
     {# --- Media Display Logic (matches JS version) --- #}
@@ -39,7 +45,7 @@
         {% if post.content|length > 150 %}
             <p class="post-content-truncated">{{ post.content|truncate(150, true)|linkify|safe }}</p>
             <p class="post-content-full">{{ post.content|linkify|safe }}</p>
-            <a href="#" class="read-more-link read-more-toggle">Read More</a>
+            <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
         {% else %}
             <p>{{ post.content|linkify|safe }}</p>
         {% endif %}

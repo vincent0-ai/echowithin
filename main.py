@@ -1000,6 +1000,7 @@ def post():
                 'video_url': video_url,
                 'video_public_id': video_public_id,
                 'video_status': 'uploaded' if video_url else 'none',
+                'view_count': 0, # Initialize view count
                 'timestamp': datetime.datetime.now(),
             }
             result = posts_conf.insert_one(new_post_data)
@@ -1016,15 +1017,15 @@ def post():
                         ThreadPoolExecutor().submit(process_image_for_nsfw, str(result.inserted_id), image_url, image_public_id)
 
             # Enqueue background notification task to RQ
-            try:
-                post_id_str = str(result.inserted_id)
-                job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
-                app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
-            except redis.exceptions.ConnectionError as e:
-                app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
+            #try:
+                #post_id_str = str(result.inserted_id)
+                #job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
+                #app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
+            #except redis.exceptions.ConnectionError as e:
+                #app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
                 # Fallback: Run the job in a background thread
-                with app.app_context():
-                    ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+                #with app.app_context():
+                    #ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
             
             # --- Send ntfy notification for new post ---
             try:
@@ -1106,6 +1107,25 @@ def view_post(slug):
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
 
     return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts)
+
+
+@app.route('/api/posts/<post_id>/view', methods=['POST'])
+def api_record_post_view(post_id):
+    """Increment the view count for a post and return the updated count as JSON.
+
+    This endpoint is intended to be called by client-side JS when a user first
+    views a post during their session. It increments `view_count` atomically.
+    """
+    try:
+        # Atomically increment the view count
+        res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+        # Fetch the latest count
+        post = posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
+        view_count = post.get('view_count', 0) if post else 0
+        return jsonify({'success': True, 'view_count': view_count})
+    except Exception as e:
+        app.logger.error(f"Failed to record view for post {post_id}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to record view'}), 500
 
 
 def _serialize_comment(doc):
@@ -1459,39 +1479,6 @@ def admin_delete_post(post_id):
     return redirect(url_for('admin_posts'))
 
 
-@app.route('/admin/ntfy_test', methods=['POST'])
-@login_required
-@admin_required
-def admin_ntfy_test():
-    """Admin-only endpoint to test sending an ntfy message synchronously and report results."""
-    msg = request.form.get('message') or 'EchoWithin ntfy test'
-    title = request.form.get('title') or 'EchoWithin Test'
-    tags = request.form.get('tags') or ''
-    try:
-        ntfy_topic = os.environ.get('NTFY_TOPIC')
-        if not ntfy_topic:
-            flash('NTFY_TOPIC not configured on server', 'danger')
-            return redirect(url_for('admin_posts'))
-
-        headers = {}
-        if title:
-            headers['Title'] = title
-        if tags:
-            headers['Tags'] = tags
-
-        ntfy_user = os.environ.get('NTFY_USERNAME')
-        ntfy_pass = os.environ.get('NTFY_PASSWORD')
-        auth = (ntfy_user, ntfy_pass) if ntfy_user and ntfy_pass else None
-
-        resp = requests.post(f"https://ntfy.sh/{ntfy_topic}", data=msg.encode('utf-8'), headers=headers, timeout=10, auth=auth)
-        if resp.ok:
-            flash(f'ntfy sent (status {resp.status_code})', 'success')
-        else:
-            flash(f'ntfy send failed: {resp.status_code} - {resp.text}', 'danger')
-    except Exception as e:
-        app.logger.error(f'ntfy test failed: {e}', exc_info=True)
-        flash('ntfy test failed (see server logs)', 'danger')
-    return redirect(url_for('admin_posts'))
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])
 @login_required

@@ -10,7 +10,7 @@
     <div class="blog-header">
         <h1>EchoWithin Blog</h1>
         <h4>Share your real ideas, experiences, and perspectives.</h4>
-        
+
         <!-- Search Form -->
         <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem;">
             <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="width: 70%;">
@@ -38,11 +38,9 @@
         <strong>Announcement:</strong> {{ pinned_announcement.content }}</p>
     {% endif %}
 
-    {# Import the reusable macro from its dedicated file #}
     {% from '_macros.html' import render_post_item %}
 
     {% if query %}
-        <!-- Search Results Section -->
         <div class="posts-section">
             <h2>Search Results for "{{ query }}"</h2>
             {% if posts %}
@@ -54,7 +52,6 @@
             {% endif %}
         </div>
 
-        <!-- Pagination for Search Results -->
         {% if total_pages > 1 %}
         <nav class="pagination-nav">
             <ul class="pagination">
@@ -62,7 +59,9 @@
                 <li class="page-item"><a class="page-link" href="{{ url_for('blog', page=page-1, query=query) }}">Previous</a></li>
                 {% endif %}
                 {% for p in range(1, total_pages + 1) %}
-                <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="{{ url_for('blog', page=p, query=query) }}">{{ p }}</a></li>
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('blog', page=p, query=query) }}">{{ p }}</a>
+                </li>
                 {% endfor %}
                 {% if page < total_pages %}
                 <li class="page-item"><a class="page-link" href="{{ url_for('blog', page=page+1, query=query) }}">Next</a></li>
@@ -89,169 +88,131 @@
             </div>
 
             <div id="active-posts" class="tab-content">
-                <!-- This container will be filled by JavaScript -->
-                <div class="loading-spinner" style="text-align: center; padding: 2rem;">Loading active posts...</div>
+                <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading active posts...</div>
             </div>
         </div>
-        <div style="text-align: center; margin-top: 2rem;">
-            <a href="{{ url_for('all_posts') }}" class="btn comment-btn">View All Posts &rarr;</a>
+
+        <div style="text-align:center; margin-top:2rem;">
+            <a href="{{ url_for('all_posts') }}" class="btn comment-btn">View All Posts →</a>
         </div>
     {% endif %}
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const tabButtons = document.querySelectorAll('.tab-container .tab-button');
-    const tabContents = document.querySelectorAll('.tab-container .tab-content');
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
 
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
-            const targetTab = button.getAttribute('data-tab');
+            const tab = button.dataset.tab;
 
-            // Deactivate all buttons and content
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
+            tabButtons.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
 
-            // Activate the clicked button and its corresponding content
             button.classList.add('active');
-            document.getElementById(targetTab).classList.add('active');
+            document.getElementById(tab).classList.add('active');
 
-            // If the active posts tab is opened for the first time, fetch the data
-            if (targetTab === 'active-posts' && !button.hasAttribute('data-loaded')) {
+            if (tab === 'active-posts' && !button.dataset.loaded) {
                 fetchActivePosts();
-                button.setAttribute('data-loaded', 'true'); // Prevent multiple fetches
+                button.dataset.loaded = "true";
             }
         });
     });
 
-    // --- Event delegation for custom confirms ---
-    // This handles both server-rendered forms and dynamically added client-rendered forms.
+    // Delete Post Handler (works in JS-rendered posts too)
     document.body.addEventListener('submit', function(e) {
-        // Target forms for deletion
-        if (e.target && e.target.matches('.delete-post-form')) {
-            e.preventDefault(); // Stop the form from submitting immediately
-            const form = e.target;
-
-            showCustomConfirm('Are you sure you want to delete this post?', (confirmed) => {
-                if (confirmed) {
-                    // If user confirms, submit the form programmatically
-                    form.submit();
-                }
+        if (e.target.matches('.delete-post-form')) {
+            e.preventDefault();
+            showCustomConfirm('Are you sure you want to delete this post?', confirmed => {
+                if (confirmed) e.target.submit();
             });
         }
     });
 
-
     function fetchActivePosts() {
-        const activePostsContainer = document.getElementById('active-posts');
+        const container = document.getElementById('active-posts');
 
         fetch('{{ url_for("get_all_posts_json") }}')
-            .then(response => response.json())
+            .then(r => r.json())
             .then(posts => {
-                if (!posts || posts.length === 0) {
-                    activePostsContainer.innerHTML = '<p>No posts to display yet.</p>';
+                if (!posts.length) {
+                    container.innerHTML = '<p>No posts to display yet.</p>';
                     return;
                 }
 
-                // Use Remark42's API to get comment counts for all posts
                 window.REMARK42.get_counts(posts.map(p => p.url))
                     .then(counts => {
-                        // Add comment counts to each post object
-                        const postsWithCounts = posts.map(post => {
-                            const countData = counts.find(c => c.url === post.url);
-                            return { ...post, comment_count: countData ? countData.count : 0 };
+                        const enriched = posts.map(p => {
+                            const c = counts.find(i => i.url === p.url);
+                            return { ...p, comment_count: c ? c.count : 0 };
                         });
 
-                        // Sort posts by comment count in descending order
-                        postsWithCounts.sort((a, b) => b.comment_count - a.comment_count);
+                        enriched.sort((a,b) => b.comment_count - a.comment_count);
 
-                        // Generate and display the HTML for the sorted posts
                         let html = '';
-                        const topPosts = postsWithCounts.slice(0, 10); // Show top 10 active posts
-                        topPosts.forEach(post => {
-                            html += renderPostItemJS(post, '{{ current_user.id if current_user.is_authenticated else "" }}');
+                        enriched.slice(0,10).forEach(p => {
+                            html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
                         });
-                        activePostsContainer.innerHTML = html || '<p>No active posts to display.</p>';
+
+                        container.innerHTML = html;
                     });
-            })
-            .catch(error => {
-                activePostsContainer.innerHTML = '<p>Could not load active posts. Please try again later.</p>';
-                console.error('Error fetching active posts:', error);
             });
     }
 
-    /**
-     * Renders the HTML for a single post item using JavaScript.
-     * This is a client-side equivalent of the `render_post_item` Jinja macro.
-     */
     function renderPostItemJS(post, currentUserId) {
-        const postUrl = `/post/${post.slug}`;
-        const editUrl = `/edit_post/${post._id}?action=edit`;
-        const deleteUrl = `/delete_post/${post._id}`;
         const isOwner = currentUserId && post.author_id === currentUserId;
 
-        let mediaHtml = '';
-        if (post.video_url) {
-            mediaHtml = `<div class="post-media-container"><video class="post-video" controls preload="metadata"><source src="${post.video_url}" type="video/mp4"></video></div>`;
-        } else if (post.image_url) {
-            mediaHtml = `<div class="post-image-container"><img src="${post.image_url}" alt="Post image for ${post.title}" class="post-image"></div>`;
-        }
+        const media = post.video_url
+            ? `<div class="post-media-container"><video class="post-video" controls preload="metadata"><source src="${post.video_url}" type="video/mp4"></video></div>`
+            : post.image_url
+            ? `<div class="post-image-container"><img src="${post.image_url}" alt="" class="post-image"></div>`
+            : '';
 
-        let ownerActionsHtml = '';
-        if (isOwner) {
-            ownerActionsHtml = `
-                <a href="${editUrl}" class="btn edit-btn">Edit</a>
-                <form action="${deleteUrl}" method="POST" class="delete-post-form" style="display: inline;">
-                    <button type="submit" class="btn delete-btn">Delete</button>
-                </form>
-            `;
-        }
+        const ownerControls = isOwner ? `
+            <a href="/edit_post/${post._id}?action=edit" class="btn edit-btn">Edit</a>
+            <form action="/delete_post/${post._id}" method="POST" class="delete-post-form" style="display:inline;">
+                <button type="submit" class="btn delete-btn">Delete</button>
+            </form>` : '';
 
         return `
-            <div class="post-item">
-                <h3><a href="${post.url}">${post.title}</a></h3>
-                ${mediaHtml}
-                <p>${post.content.substring(0, 150)}...</p>
-                <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
-                <div class="post-actions">
-                    <a href="${post.url}" class="btn comment-btn">
-                        Comments <span class="comment-count-display">${post.comment_count !== undefined ? post.comment_count : 0}</span>
-                        <span class="remark42__counter" data-remark-url="${post.url}" style="display: none;"></span>
-                    </a>
-                    ${ownerActionsHtml}
-                </div>
-            </div>
-        `;
-    }
-});
+        <div class="post-item">
+            <h3><a href="${post.url}">${post.title}</a></h3>
+            ${media}
+            <p>${post.content.substring(0,150)}...</p>
+            <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
 
-// This script handles updating the server-rendered comment count with the live JS one.
-document.addEventListener('DOMContentLoaded', function() {
-    // Function to update the visible count when the hidden remark42 counter changes.
-    const observer = new MutationObserver(mutations => {
-        mutations.forEach(mutation => {
-            if (mutation.type === 'childList' && mutation.target.classList.contains('remark42__counter')) {
-                const jsCounter = mutation.target;
-                const displayCounter = jsCounter.previousElementSibling; // The .comment-count-display span
-                if (displayCounter && displayCounter.classList.contains('comment-count-display')) {
-                    displayCounter.textContent = jsCounter.textContent;
-                }
+            <div class="post-actions">
+                <a href="${post.url}" class="btn comment-btn">
+                    Comments <span class="comment-count-display">${post.comment_count || 0}</span>
+                    <span class="remark42__counter" data-remark-url="${post.url}" style="display:none;"></span>
+                </a>
+                ${ownerControls}
+            </div>
+        </div>`;
+    }
+
+    // Sync hidden remark42 counters → displayed counters
+    const observer = new MutationObserver(m => {
+        m.forEach(change => {
+            const target = change.target;
+            if (target.classList.contains('remark42__counter')) {
+                const display = target.previousElementSibling;
+                if (display) display.textContent = target.textContent;
             }
         });
     });
-    // Observe changes in the entire document body to catch counters being added/updated.
-    observer.observe(document.body, { childList: true, subtree: true });
+
+    observer.observe(document.body, { childList:true, subtree:true });
 });
 </script>
 
-{# Load Remark42 script to enable comment counters on this page #}
 {% if remark42_host and remark42_site_id %}
 <script>
-    // This configuration block must be defined before the Remark42 script is loaded.
     var remark_config = {
         host: "{{ remark42_host|safe }}",
         site_id: "{{ remark42_site_id|safe }}",
-        components: ['counter'] // Only load the counter component
+        components: ['counter']
     };
 </script>
 <script src="{{ remark42_host|safe }}/web/embed.js" defer></script>

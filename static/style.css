@@ -45,11 +45,6 @@ main{
     margin: 2rem auto;
 }
 
-.auth-tabs {
-    display: flex;
-    background-color: var(--primary-color);
-} /* This was the auth tab button, now we have a general one */
-
 .tab-button {
     flex: 1;
     padding: 1rem;

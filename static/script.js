@@ -19,5 +19,8 @@ const showRegister = () => {
     loginForm.classList.remove('active');
 };
 
-loginTab.addEventListener('click', showLogin);
-registerTab.addEventListener('click', showRegister);
+// Only add event listeners if the tab elements exist on the page
+if (loginTab && registerTab) {
+    loginTab.addEventListener('click', showLogin);
+    registerTab.addEventListener('click', showRegister);
+}

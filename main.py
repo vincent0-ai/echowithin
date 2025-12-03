@@ -159,29 +159,29 @@ class User(UserMixin):
     def get_admin(self):
         return self.is_admin
 
-@app.before_request
-def enforce_canonical_domain_and_https():
-    host = request.headers.get('X-Forwarded-Host', request.host)
-    scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+# @app.before_request
+# def enforce_canonical_domain_and_https():
+#     host = request.headers.get('X-Forwarded-Host', request.host)
+#     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-    canonical_host = "echowithin.xyz"
-    canonical_scheme = "https"
+#     canonical_host = "echowithin.xyz"
+#     canonical_scheme = "https"
 
-    needs_redirect = False
+#     needs_redirect = False
 
-    # Fix host (remove www)
-    if host != canonical_host:
-        host = canonical_host
-        needs_redirect = True
+#     # Fix host (remove www)
+#     if host != canonical_host:
+#         host = canonical_host
+#         needs_redirect = True
 
-    # Fix scheme
-    if scheme != canonical_scheme:
-        scheme = canonical_scheme
-        needs_redirect = True
+#     # Fix scheme
+#     if scheme != canonical_scheme:
+#         scheme = canonical_scheme
+#         needs_redirect = True
 
-    if needs_redirect:
-        new_url = f"{scheme}://{host}{request.full_path}"
-        return redirect(new_url, code=301)
+#     if needs_redirect:
+#         new_url = f"{scheme}://{host}{request.full_path}"
+#         return redirect(new_url, code=301)
 
 
 def admin_required(f):
@@ -1011,16 +1011,10 @@ def view_post(slug):
     if not post:
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
-    page_title = post.get('title')
-    # Generate a short description from the content
+    page_title = post.get('title', 'View Post')
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
-    # Get Remark42 config from environment variables
-    return render_template('edit_post.html', 
-                           post=post, 
-                           active_page='blog', 
-                           action='comment', 
-                           title=page_title, 
-                           description=page_description)
+
+    return render_template('view_post.html', post=post, active_page='blog', title=page_title, description=page_description)
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required

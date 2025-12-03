@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+    <style>
+        /* Custom styles for Remark42 to match the application theme */
+        :root {
+            /* General (Light Theme) */
+            --remark-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+            --remark-bg-color: #ffffff; /* White background */
+            --remark-text-color: #212529; /* Dark text for readability */
+            --remark-border-color: #dee2e6; /* Light gray for borders */
+
+            /* Links and Accents */
+            --remark-link-color: #4CAF50; /* Using the green from the upload progress bar */
+            --remark-link-hover-color: #45a049; /* A slightly darker green for hover */
+
+            /* Input Fields */
+            --remark-input-bg-color: #ffffff;
+            --remark-input-border-color: #ced4da;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="post-item" style="border-left: none; box-shadow: none; padding: 20px; background-color: white;">
+        <h1>{{ post.title }}</h1>
+        <div class="post-meta">
+            Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+        </div>
+
+        <!-- Media Display Logic: show video if present, otherwise image -->
+        {% if post.video_url %}
+            <div class="post-media-container">
+                <video class="post-video" controls preload="metadata">
+                    <source src="{{ post.video_url }}" type="video/{{ post.video_url.rsplit('.', 1)[1] if '.' in post.video_url else 'mp4' }}">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+        {% elif post.image_url %}
+            <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+                {% if post.image_status == 'safe' %}
+                    <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image">
+                {% elif post.image_status == 'removed_nsfw' %}
+                    <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        <div class="post-content" style="white-space: pre-wrap; margin-top: 1rem;">{{ post.content|linkify|safe }}</div>
+
+        <!-- Remark42 Comment Section -->
+        <div class="comments-section" style="margin-top: 30px;">
+            <h3>
+                Comments <span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span>
+            </h3>
+            <div id="remark42"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // This configuration block must be defined before the Remark42 script is loaded.
+    {% if remark42_host and remark42_site_id %}
+        var remark_config = {
+            host: "{{ remark42_host|safe }}",
+            site_id: "{{ remark42_site_id|safe }}",
+            url: "{{ url_for('view_post', slug=post.slug, _external=True) }}",
+            theme: 'light',
+            components: ['embed', 'counter']
+        };
+    {% endif %}
+</script>
+
+{# Load the Remark42 script directly if we are on the comment page #}
+{% if remark42_host and remark42_site_id %}
+    <script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
+{% endif %}
+{% endblock %}

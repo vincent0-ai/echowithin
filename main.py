@@ -621,6 +621,7 @@ def login():
 
             # Check if the user is banned
             if user.get('is_banned'):
+                logout_user()
                 flash('Your account has been suspended. Please contact support.', 'danger')
                 return redirect(url_for('login'))
                 
@@ -634,7 +635,7 @@ def login():
             return redirect(request.args.get('next') or url_for('home'))
         else:
             flash("Wrong details provided", "danger")
-    return render_template("auth.html", active_page='login')
+    return render_template("auth.html", active_page='login', form='login')
 
 @app.route('/google_login')
 def google_login():
@@ -677,6 +678,7 @@ def google_callback():
         
         # Check if the user is banned
         if user.get('is_banned'):
+                logout_user()
                 flash('Your account has been suspended. Please contact support.', 'danger')
                 return redirect(url_for('login'))
                 

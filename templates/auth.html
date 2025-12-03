@@ -8,14 +8,16 @@
 
     <main>
         <div class="auth-container">
-            <div class="auth-tabs">
-                <button class="tab-button active" data-form="login-form">Login</button>
-                <button class="tab-button" data-form="register-form">Register</button>
-            </div>
+            <nav class="auth-tabs">
+                <div class="auth-tabs-wrapper">
+                    <button class="tab-button {% if form == 'login' %}active{% endif %}" data-form="login-form">Login</button>
+                    <button class="tab-button {% if form == 'register' %}active{% endif %}" data-form="register-form">Register</button>
+                </div>
+            </nav>
 
             <div class="auth-forms">
                 <!-- Login Form -->
-                <form id="login-form" class="auth-form active" method="POST" action="{{ url_for('login') }}">
+                <form id="login-form" class="auth-form {% if form == 'login' %}active{% endif %}" method="POST" action="{{ url_for('login') }}">
                     <h2 class="form-title">Welcome Back</h2>
                     <div class="inputs">
                         <input type="text" name="username" class="form-input" placeholder="Username" required>
@@ -44,7 +46,7 @@
                 </form>
 
                 <!-- Registration Form -->
-                <form id="register-form" class="auth-form" method="POST" action="{{ url_for('register') }}">
+                <form id="register-form" class="auth-form {% if form == 'register' %}active{% endif %}" method="POST" action="{{ url_for('register') }}">
                     <h2 class="form-title">Create Account</h2>
                     <div class="inputs">
                         <input type="text" name="username" class="form-input" placeholder="Username" required>
@@ -110,12 +112,14 @@
                 });
             });
 
-            // Preserve form tab on page reload (e.g., after a form submission error)
-            const urlParams = new URLSearchParams(window.location.search);
-            const formToShow = urlParams.get('form');
-            if (formToShow === 'register') {
+            // Preserve form tab on page reload if specified in URL
+            // This is useful for redirects after failed form submissions.
+            const currentForm = new URLSearchParams(window.location.search).get('form');
+            if (currentForm === 'register') {
                 switchForm('register-form');
-            }
+            } else if (currentForm === 'login') {
+                switchForm('login-form');
+            } 
         });
     </script>
 

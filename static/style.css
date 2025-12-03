@@ -45,20 +45,46 @@ main{
     margin: 2rem auto;
 }
 
-.tab-button {
+.auth-tabs {
+    background-color: var(--primary-color);
+    display: flex;
+    border-bottom: 3px solid var(--primary-dark-color);
+}
+
+.auth-tabs-wrapper {
+    display: flex;
+    width: 100%;
+}
+
+.auth-tabs .tab-button {
     flex: 1;
     padding: 1rem;
-    background: none;
+    background-color: var(--primary-color);
     border: none;
     color: var(--text-light-color);
     font-size: 1.1rem;
     font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
+    position: relative;
+    border-bottom: 3px solid transparent;
 }
 
-.auth-tabs .tab-button.active, .auth-tabs .tab-button:hover {
-    background-color: var(--primary-dark-color);
+.auth-tabs .tab-button:hover {
+    background-color: rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+.auth-tabs .tab-button:focus {
+    outline: 2px solid rgba(255, 255, 255, 0.5);
+    outline-offset: -2px;
+}
+
+.auth-tabs .tab-button.active {
+    background-color: white;
+    color: var(--primary-color);
+    border-bottom: 3px solid var(--primary-color);
+    font-weight: bold;
 }
 
 .auth-forms {

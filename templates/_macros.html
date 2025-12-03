@@ -62,11 +62,6 @@
             <span class="comment-count-display">
                 {{ post.comment_count if post.comment_count is defined else 0 }}
             </span>
-
-            {# Hidden live counter (matches JS version exactly) #}
-            <span class="remark42__counter"
-                  data-remark-url="{{ post.url }}"
-                  style="display: none;"></span>
         </a>
 
         {% if current_user.is_authenticated and (post.author_id|string == current_user.id) %}

@@ -133,37 +133,23 @@ document.addEventListener('DOMContentLoaded', function() {
     function fetchActivePosts() {
         const container = document.getElementById('active-posts');
 
-        fetch('{{ url_for("get_all_posts_json") }}')
+        fetch('{{ url_for("get_top_posts_json") }}')
             .then(r => r.json())
             .then(posts => {
-                if (!posts.length) {
+                if (!posts || !posts.length) {
                     container.innerHTML = '<p>No posts to display yet.</p>';
                     return;
                 }
 
-                function processPostsWithCounts() {
-                    window.REMARK42.get_counts(posts.map(p => p.url))
-                        .then(counts => {
-                            const enriched = posts.map(p => {
-                                const c = counts.find(i => i.url === p.url);
-                                return { ...p, comment_count: c ? c.count : 0 };
-                            });
+                let html = '';
+                posts.forEach(p => {
+                    html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
+                });
 
-                            enriched.sort((a,b) => b.comment_count - a.comment_count);
-
-                            let html = '';
-                            enriched.slice(0,10).forEach(p => {
-                                html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
-                            });
-
-                            container.innerHTML = html;
-                        });
-                }
-                if (window.REMARK42) {
-                    processPostsWithCounts();
-                } else {
-                    window.addEventListener('REMARK42.ready', processPostsWithCounts);
-                }
+                container.innerHTML = html;
+            })
+            .catch(() => {
+                container.innerHTML = '<p>Unable to load active posts.</p>';
             });
     }
 
@@ -196,37 +182,16 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="post-actions">
                 <a href="${post.url}" class="btn comment-btn">
                     Comments <span class="comment-count-display">${post.comment_count || 0}</span>
-                    <span class="remark42__counter" data-remark-url="${post.url}" style="display:none;"></span>
                 </a>
                 ${ownerControls}
             </div>
         </div>`;
     }
 
-    // Sync hidden remark42 counters → displayed counters
-    const observer = new MutationObserver(m => {
-        m.forEach(change => {
-            const target = change.target;
-            if (target.classList.contains('remark42__counter')) {
-                const display = target.previousElementSibling;
-                if (display) display.textContent = target.textContent;
-            }
-        });
-    });
-
-    observer.observe(document.body, { childList:true, subtree:true });
+    // No external comment provider: comment counts come from the server.
 });
 </script>
 
-{% if remark42_host and remark42_site_id %}
-<script>
-    var remark_config = {
-        host: "{{ remark42_host|safe }}",
-        site_id: "{{ remark42_site_id|safe }}",
-        components: ['counter']
-    };
-</script>
-<script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
-{% endif %}
+{# Remark42 removed: using internal comment counts instead #}
 
 {% endblock %}

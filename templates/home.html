@@ -40,9 +40,7 @@
                     {% for post in trending_posts %}
                         <li>
                             <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                            <span class="stat-subtext">
-                                (<span class="remark42__counter" data-remark-url="{{ url_for('view_post', slug=post.slug, _external=True) }}"></span> comments)
-                            </span>
+                            <span class="stat-subtext">({{ post.comment_count if post.comment_count is defined else 0 }} comments)</span>
                         </li>
                     {% endfor %}
                 </ul>
@@ -58,16 +56,6 @@
 </div>
 
 {# Load Remark42 script to enable comment counters on this page #}
-{% if remark42_host and remark42_site_id %}
-<script>
-    // This configuration block must be defined before the Remark42 script is loaded.
-    var remark_config = {
-        host: "{{ remark42_host|safe }}",
-        site_id: "{{ remark42_site_id|safe }}",
-        components: ['counter'] // Only load the counter component
-    };
-</script>
-<script src="{{ remark42_host|safe }}/web/embed.js" defer></script>
-{% endif %}
+{# Remark42 removed: use server-provided comment_count on posts #}
 
 {% endblock %}

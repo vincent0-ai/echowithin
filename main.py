@@ -134,6 +134,7 @@ posts_conf = db['posts']
 logs_conf = db['logs']
 auth_conf = db['auth']
 announcements_conf = db['announcements']
+comments_conf = db['comments']
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
@@ -218,15 +219,7 @@ def inject_pinned_announcement():
     pinned_announcement = announcements_conf.find_one({'is_pinned': True})
     return dict(pinned_announcement=pinned_announcement)
 
-@app.context_processor
-def inject_remark42_config():
-    """Makes Remark42 configuration available to all templates."""
-    try:
-        remark42_host = get_env_variable('REMARK42_HOST')
-        remark42_site_id = get_env_variable('REMARK42_SITE_ID')
-        return dict(remark42_host=remark42_host, remark42_site_id=remark42_site_id)
-    except:
-        return dict(remark42_host=None, remark42_site_id=None)
+## Remark42 removed: internal comments will be used instead.
 
 @app.context_processor
 def inject_current_year():
@@ -378,51 +371,32 @@ def send_new_post_notifications(post_id_str):
 
 # Cache counts for 5 minutes
 comment_count_cache = TTLCache(maxsize=512, ttl=300)
-def get_comment_count(post_url: str) -> int:
-    """Fetch comment count for one post."""
-
-    if not REMARK42_INTERNAL or not REMARK42_SITE_ID:
-        return 0
-    try:
-        res = requests.get(
-            f"{REMARK42_INTERNAL}/api/v1/counts",
-            params={"site": REMARK42_SITE_ID, "url": post_url},
-            timeout=2
-        )
-        if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                return data[0].get("count", 0)
-    except Exception:
-        pass
-    return 0
-
 @cached(comment_count_cache)
 def get_batch_comment_counts(post_urls: tuple) -> dict:
-    """
-    Fetch comment counts for multiple URLs in a single batch.
-    Cached for 5 minutes.
+    """Return a mapping from post slug (extracted from URL) to internal comment counts.
+
+    This queries the local `comments` collection once for all given slugs.
     """
     counts_map = {}
-
-    if not REMARK42_INTERNAL or not REMARK42_SITE_ID:
-        app.logger.info("Remark42 not configured. Skipping batch request.")
-        return counts_map
     try:
-        # Build query
-        params = [("site", REMARK42_SITE_ID)]
-        params.extend(("url", u) for u in post_urls)
+        # Extract slugs from the provided URLs by splitting on '/post/'
+        slugs = []
+        for u in post_urls:
+            if '/post/' in u:
+                slugs.append(u.split('/post/')[-1])
 
-        res = requests.get(
-            f"{REMARK42_INTERNAL}/api/v1/counts",
-            params=params,
-            timeout=3
-        )
-        if res.status_code == 200:
-            # Response is an array: [{url, count}, ...]
-            return {item["url"]: item["count"] for item in res.json()}
+        if not slugs:
+            return counts_map
+
+        pipeline = [
+            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+        ]
+        agg = list(comments_conf.aggregate(pipeline))
+        for doc in agg:
+            counts_map[doc['_id']] = doc.get('count', 0)
     except Exception as e:
-        app.logger.warning(f"Could not fetch batch comment counts from Remark42: {e}")
+        app.logger.warning(f"Could not fetch batch comment counts from internal collection: {e}")
 
     return counts_map
 
@@ -441,13 +415,15 @@ def prepare_posts(posts):
         post["url"] = post_url
         urls.add(post_url)
 
-    # ---- Step 2: Batch-retrieve comment counts ----
-    # get_batch_comment_counts() should return a dict: {url: count}
+    # ---- Step 2: Batch-retrieve comment counts from internal comments collection ----
     counts_map = get_batch_comment_counts(tuple(sorted(urls)))
 
     # ---- Step 3: Assign comment counts back into posts ----
     for post in posts:
-        post["comment_count"] = counts_map.get(post["url"], 0)
+        # Extract slug to look up counts_map (we stored counts by slug)
+        slug = post.get('slug')
+        # get_batch_comment_counts used slugs as keys
+        post["comment_count"] = counts_map.get(slug, 0)
 
     return posts
 
@@ -783,6 +759,8 @@ def home():
 
     # Fetch trending posts (e.g., 5 most recent posts)
     trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+    with app.app_context():
+        trending_posts = prepare_posts(trending_posts)
 
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
@@ -801,7 +779,9 @@ def blog():
         total_posts = posts_conf.count_documents(search_filter)
         total_pages = math.ceil(total_posts / posts_per_page)
         skip = (page - 1) * posts_per_page
-        search_results = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+        search_results = list(posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page))
+        with app.app_context():
+            search_results = prepare_posts(search_results)
         
         page_title = f"Search results for '{query}'"
         page_description = f"Displaying search results for '{query}' on EchoWithin."
@@ -837,7 +817,9 @@ def all_posts():
     skip = (page - 1) * posts_per_page
 
     # Fetch a slice of all posts for the current page, sorted by newest first
-    posts = posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
+    with app.app_context():
+        posts = prepare_posts(posts)
 
     # Get all unique tags for the dropdown
     all_tags = posts_conf.distinct('tags')
@@ -871,6 +853,36 @@ def get_all_posts_json():
     except Exception as e:
         app.logger.error(f"Error in get_all_posts_json: {e}")
         return jsonify({"error": "Could not retrieve posts"}), 500
+
+
+@app.route('/api/posts/top-by-comments')
+def get_top_posts_json():
+    """Return top posts sorted by internal comment counts."""
+    try:
+        # Aggregate comment counts per post_slug
+        pipeline = [
+            {'$match': {'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 20}
+        ]
+        agg = list(comments_conf.aggregate(pipeline))
+        results = []
+        for doc in agg:
+            slug = doc['_id']
+            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'video_url':1})
+            if not post:
+                continue
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
+            post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+            post['comment_count'] = doc.get('count', 0)
+            results.append(post)
+        return jsonify(results)
+    except Exception as e:
+        app.logger.error(f"Error in get_top_posts_json: {e}")
+        return jsonify({'error': 'Could not retrieve top posts'}), 500
 
 @app.route('/create_post', methods=['GET'])
 @login_required
@@ -1011,10 +1023,165 @@ def view_post(slug):
     if not post:
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
+
+    # Add comment count and fetch recent comments
+    try:
+        comment_count = comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
+        # Pagination: load first page of comments for server-render
+        comment_page = 1
+        per_page = 10
+        comments = list(comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((comment_page-1)*per_page).limit(per_page))
+        has_more = comment_count > comment_page * per_page
+    except Exception as e:
+        app.logger.error(f"Failed to load comments for post {slug}: {e}")
+        comment_count = 0
+        comments = []
+        comment_page = 1
+        per_page = 10
+        has_more = False
+
     page_title = post.get('title', 'View Post')
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
 
-    return render_template('view_post.html', post=post, active_page='blog', title=page_title, description=page_description)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description)
+
+
+def _serialize_comment(doc):
+    return {
+        'id': str(doc.get('_id')),
+        'post_slug': doc.get('post_slug'),
+        'author_id': str(doc.get('author_id')) if doc.get('author_id') else None,
+        'author_username': doc.get('author_username'),
+        'content': doc.get('content'),
+        'created_at': doc.get('created_at').isoformat() if doc.get('created_at') else None,
+        'edited_at': doc.get('edited_at').isoformat() if doc.get('edited_at') else None,
+        'is_deleted': doc.get('is_deleted', False),
+        'parent_id': str(doc.get('parent_id')) if doc.get('parent_id') else None,
+    }
+
+
+@app.route('/api/posts/<slug>/comments', methods=['GET', 'POST'])
+def api_post_comments(slug):
+    if request.method == 'GET':
+        try:
+            # Pagination support
+            page = int(request.args.get('page', 1))
+            per_page = int(request.args.get('per_page', 10))
+            if per_page <= 0: per_page = 10
+            if page <= 0: page = 1
+
+            total = comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
+            cursor = comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((page-1)*per_page).limit(per_page)
+            comments = [ _serialize_comment(c) for c in cursor ]
+            has_more = total > page * per_page
+            return jsonify({'comments': comments, 'total': total, 'page': page, 'per_page': per_page, 'has_more': has_more})
+        except Exception as e:
+            app.logger.error(f"Failed to list comments for {slug}: {e}")
+            return jsonify({'error': 'Could not retrieve comments'}), 500
+
+    # POST -> create new comment
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    content = request.form.get('content') or (request.json and request.json.get('content'))
+    parent_id_str = request.form.get('parent_id') or (request.json and request.json.get('parent_id'))
+    # Attach parent_id if provided (replying to a comment)
+    if not content or not content.strip():
+        return jsonify({'error': 'Empty comment'}), 400
+
+    comment = {
+        'post_slug': slug,
+        'post_id': None,
+        'author_id': ObjectId(current_user.id),
+        'author_username': current_user.username,
+        'content': content.strip(),
+        'created_at': datetime.datetime.now(),
+        'is_deleted': False,
+        'parent_id': None,
+    }
+    # Fill in parent_id if provided
+    if parent_id_str:
+        try:
+            comment['parent_id'] = ObjectId(parent_id_str)
+        except Exception:
+            comment['parent_id'] = None
+
+    # Fill post_id for easier querying
+    try:
+        p = posts_conf.find_one({'slug': slug}, {'_id': 1})
+        if p:
+            comment['post_id'] = p.get('_id')
+    except Exception:
+        pass
+    try:
+        res = comments_conf.insert_one(comment)
+        comment['_id'] = res.inserted_id
+        # Invalidate cached comment counts so lists update immediately
+        try:
+            comment_count_cache.clear()
+        except Exception:
+            pass
+        return jsonify(_serialize_comment(comment)), 201
+    except Exception as e:
+        app.logger.error(f"Failed to insert comment for {slug}: {e}")
+        return jsonify({'error': 'Failed to create comment'}), 500
+
+
+@app.route('/api/comments/<comment_id>', methods=['DELETE'])
+@login_required
+def api_delete_comment(comment_id):
+    try:
+        comment = comments_conf.find_one({'_id': ObjectId(comment_id)})
+        if not comment:
+            return jsonify({'error': 'Comment not found'}), 404
+
+        # Allow deletion by author or admin
+        if str(comment.get('author_id')) != current_user.id and not current_user.is_admin:
+            return jsonify({'error': 'Not authorized'}), 403
+
+        comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'is_deleted': True}})
+        try:
+            comment_count_cache.clear()
+        except Exception:
+            pass
+        return jsonify({'status': 'deleted'})
+    except Exception as e:
+        app.logger.error(f"Failed to delete comment {comment_id}: {e}")
+        return jsonify({'error': 'Failed to delete comment'}), 500
+
+
+@app.route('/api/comments/<comment_id>', methods=['PUT', 'PATCH'])
+@login_required
+def api_edit_comment(comment_id):
+    """Edit a comment. Only the author or an admin may edit."""
+    content = None
+    if request.json:
+        content = request.json.get('content')
+    else:
+        content = request.form.get('content')
+
+    if not content or not content.strip():
+        return jsonify({'error': 'Empty content'}), 400
+
+    try:
+        comment = comments_conf.find_one({'_id': ObjectId(comment_id)})
+        if not comment:
+            return jsonify({'error': 'Comment not found'}), 404
+
+        # Permission: author or admin
+        if str(comment.get('author_id')) != current_user.id and not current_user.is_admin:
+            return jsonify({'error': 'Not authorized'}), 403
+
+        comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'content': content.strip(), 'edited_at': datetime.datetime.now()}})
+        updated = comments_conf.find_one({'_id': ObjectId(comment_id)})
+        try:
+            comment_count_cache.clear()
+        except Exception:
+            pass
+        return jsonify(_serialize_comment(updated))
+    except Exception as e:
+        app.logger.error(f"Failed to edit comment {comment_id}: {e}")
+        return jsonify({'error': 'Failed to edit comment'}), 500
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required

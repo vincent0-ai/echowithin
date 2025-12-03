@@ -168,7 +168,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderPostItemJS(post, currentUserId) {
-        const isOwner = currentUserId && post.author_id === currentUserId;
+        // Fix 1: Use loose equality (==) for ID comparison in case of int/string mismatch
+        const isOwner = currentUserId && post.author_id == currentUserId;
+
+        // Fix 2: Strip HTML tags to prevent XSS and broken UI in previews
+        const plainTextContent = post.content.replace(/<[^>]+>/g, '');
 
         const media = post.video_url
             ? `<div class="post-media-container"><video class="post-video" controls preload="metadata"><source src="${post.video_url}" type="video/mp4"></video></div>`
@@ -186,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="post-item">
             <h3><a href="${post.url}">${post.title}</a></h3>
             ${media}
-            <p>${post.content.substring(0,150)}...</p>
+            <p>${plainTextContent.substring(0,150)}...</p>
             <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
 
             <div class="post-actions">

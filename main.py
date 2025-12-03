@@ -1038,15 +1038,15 @@ def post():
                         ThreadPoolExecutor().submit(process_image_for_nsfw, str(result.inserted_id), image_url, image_public_id)
 
             # Enqueue background notification task to RQ
-            #try:
-                #post_id_str = str(result.inserted_id)
-                #job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
-                #app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
-            #except redis.exceptions.ConnectionError as e:
-                #app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
+            try:
+                post_id_str = str(result.inserted_id)
+                job = send_new_post_notifications.queue(post_id_str) # snyk:disable=disable-command-line-argument-injection
+                app.logger.info(f"Enqueued notification job {job.id} for post {post_id_str}") # snyk:disable=disable-command-line-argument-injection
+            except redis.exceptions.ConnectionError as e:
+                app.logger.warning(f"Redis connection failed. Falling back to thread for notification job. Error: {e}")
                 # Fallback: Run the job in a background thread
-                #with app.app_context():
-                    #ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+                with app.app_context():
+                    ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
             
             # --- Send ntfy notification for new post ---
             try:

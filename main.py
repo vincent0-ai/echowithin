@@ -1669,6 +1669,13 @@ def about():
     page_description = "Learn more about EchoWithin, our mission, and the team behind the platform."
     return render_template("about.html", title=page_title, description=page_description)
 
+
+@app.route('/terms')
+def terms():
+    page_title = "Terms and Conditions"
+    page_description = "Terms and Conditions for using EchoWithin."
+    return render_template('terms.html', title=page_title, description=page_description)
+
 @app.route('/profile/<username>')
 @login_required
 def profile(username):

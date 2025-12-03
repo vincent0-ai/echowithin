@@ -379,11 +379,13 @@
             }
         });
 
-        // Add event listener for "Read More" clicks to record a view
+        // Record views only when navigating to a post via links marked with `.record-view-link`.
+        // This avoids counting expansions like "Read More" as full post views.
         document.body.addEventListener('click', function(e) {
-            if (e.target.matches('.read-more-toggle')) {
-                recordPostView(e.target.dataset.postId);
-            }
+            const anchor = e.target.closest('a.record-view-link');
+            if (!anchor) return;
+            const postId = anchor.dataset.postId;
+            if (postId) recordPostView(postId);
         });
         // (Removed Remark42 custom confirmation integration)
     });

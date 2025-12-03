@@ -174,13 +174,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         return `
         <div class="post-item" style="position: relative;">
-            <h3><a href="${post.url}">${post.title}</a></h3>
+            <h3><a href="${post.url}" class="record-view-link" data-post-id="${post._id}">${post.title}</a></h3>
             ${media}
             <p>${plainTextContent.substring(0,150)}...</p>
             <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
 
             <div class="post-actions">
-                <a href="${post.url}" class="btn comment-btn">
+                <a href="${post.url}" class="btn comment-btn record-view-link" data-post-id="${post._id}">
                     Comments <span class="comment-count-display">${post.comment_count || 0}</span>
                 </a>
                 ${ownerControls}

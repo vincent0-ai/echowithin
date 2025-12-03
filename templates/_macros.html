@@ -6,7 +6,7 @@
             {{ post.view_count if post.view_count is defined else 0 }}
         </span>
     </div>
-    <h3><a href="{{ post.url }}">{{ post.title }}</a></h3>
+    <h3><a href="{{ post.url }}" class="record-view-link" data-post-id="{{ post._id|string }}">{{ post.title }}</a></h3>
 
     {# --- Media Display Logic (matches JS version) --- #}
     {% if post.video_url %}
@@ -63,7 +63,7 @@
 
     {# --- Actions: Comment count + Edit/Delete --- #}
     <div class="post-actions" style="margin-top: 10px;">
-        <a href="{{ post.url }}" class="btn comment-btn">
+        <a href="{{ post.url }}" class="btn comment-btn record-view-link" data-post-id="{{ post._id|string }}">
             Comments
             <span class="comment-count-display">
                 {{ post.comment_count if post.comment_count is defined else 0 }}

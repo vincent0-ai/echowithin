@@ -19,6 +19,10 @@
   <h3>Users</h3>
   <p>Total confirmed users: <span id="total-users"></span></p>
   <p>Active users (window): <span id="active-users"></span></p>
+    <h3>Traffic (visits)</h3>
+    <canvas id="trafficChart" width="800" height="200"></canvas>
+    <h4>Top IPs</h4>
+    <ul id="top-ips"></ul>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -50,6 +54,25 @@ async function loadMetrics(){
 
   document.getElementById('total-users').textContent = data.total_users;
   document.getElementById('active-users').textContent = data.active_users;
+    // Load traffic data
+    try{
+      const tRes = await fetch('/admin/traffic');
+      const tData = await tRes.json();
+      const tLabels = tData.visits_per_day.map(x=>x._id);
+      const tCounts = tData.visits_per_day.map(x=>x.count);
+      const ctx3 = document.getElementById('trafficChart').getContext('2d');
+      new Chart(ctx3, {type:'bar', data:{labels:tLabels,datasets:[{label:'Visits',data:tCounts,backgroundColor:'rgba(102,126,234,0.6)'}]}});
+
+      const topIpsEl = document.getElementById('top-ips');
+      topIpsEl.innerHTML = '';
+      (tData.top_ips || []).forEach(ip=>{
+        const li = document.createElement('li');
+        li.textContent = `${ip._id} — ${ip.count} hits`;
+        topIpsEl.appendChild(li);
+      });
+    }catch(e){
+      console.debug('Failed to load traffic metrics', e);
+    }
 }
 
 loadMetrics();

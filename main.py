@@ -32,6 +32,8 @@ from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
 from meilisearch import Client as MeiliClient
+from PIL import Image
+from io import BytesIO
 
 app = Flask(__name__)
 
@@ -152,49 +154,76 @@ if MEILI_URL and MEILI_MASTER_KEY:
         meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
         # create or get posts index
         try:
+            # Try to get an existing Index object
             meili_index = meili_client.get_index('posts')
         except Exception:
-            meili_index = meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
+            # If the index does not exist, create it. Some Meili client versions
+            # return a TaskInfo dict from create_index; ensure we obtain an Index
+            try:
+                meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
+            except Exception as ce:
+                app.logger.debug(f'create_index returned error (continuing): {ce}')
+            # Obtain the Index object (this method returns an Index wrapper)
+            try:
+                meili_index = meili_client.index('posts')
+            except Exception as ie:
+                app.logger.error(f'Failed to obtain Meili index object: {ie}')
+                meili_index = None
 
         # Configure searchable and filterable attributes (these methods return tasks; we don't chain them)
         try:
-            meili_index.update_searchable_attributes(['title', 'content'])
+            if hasattr(meili_index, 'update_searchable_attributes'):
+                meili_index.update_searchable_attributes(['title', 'content'])
+            else:
+                app.logger.debug('meili_index missing update_searchable_attributes; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to update searchable attributes: {e}')
         try:
-            meili_index.update_filterable_attributes(['author_username', 'tags', 'created_at'])
+            if hasattr(meili_index, 'update_filterable_attributes'):
+                meili_index.update_filterable_attributes(['author_username', 'tags', 'created_at'])
+            else:
+                app.logger.debug('meili_index missing update_filterable_attributes; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to update filterable attributes: {e}')
         
         # Configure typo tolerance: allow up to 2 typos for queries
         try:
-            meili_index.update_typo_tolerance({
-                'enabled': True,
-                'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
-            })
-            app.logger.debug('Typo tolerance configured: 1 typo for words ≥5 chars, 2 typos for words ≥9 chars')
+            if hasattr(meili_index, 'update_typo_tolerance'):
+                meili_index.update_typo_tolerance({
+                    'enabled': True,
+                    'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
+                })
+                app.logger.debug('Typo tolerance configured: 1 typo for words ≥5 chars, 2 typos for words ≥9 chars')
+            else:
+                app.logger.debug('meili_index missing update_typo_tolerance; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure typo tolerance: {e}')
         
         # Configure ranking rules: prioritize relevance, then recency
         try:
-            meili_index.update_ranking_rules([
-                'sort',
-                'words',
-                'typo',
-                'proximity',
-                'attribute',
-                'exactness',
-                'created_at:desc'  # Most recent posts ranked higher
-            ])
-            app.logger.debug('Ranking rules configured: relevance-based with recency boost')
+            if hasattr(meili_index, 'update_ranking_rules'):
+                meili_index.update_ranking_rules([
+                    'sort',
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'exactness',
+                    'created_at:desc'  # Most recent posts ranked higher
+                ])
+                app.logger.debug('Ranking rules configured: relevance-based with recency boost')
+            else:
+                app.logger.debug('meili_index missing update_ranking_rules; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure ranking rules: {e}')
         
         # Configure sortable attributes for user-initiated sorting
         try:
-            meili_index.update_sortable_attributes(['created_at', 'title'])
-            app.logger.debug('Sortable attributes configured: created_at, title')
+            if hasattr(meili_index, 'update_sortable_attributes'):
+                meili_index.update_sortable_attributes(['created_at', 'title'])
+                app.logger.debug('Sortable attributes configured: created_at, title')
+            else:
+                app.logger.debug('meili_index missing update_sortable_attributes; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure sortable attributes: {e}')
         app.logger.info('Connected to Meilisearch and configured index `posts`.')
@@ -547,7 +576,9 @@ def search():
             search_params = {
                 'limit': per_page,
                 'offset': (page - 1) * per_page,
-                'attributesToHighlight': ['title', 'content']
+                'attributesToHighlight': ['title', 'content'],
+                'highlightPreTag': '<mark>',
+                'highlightPostTag': '</mark>'
             }
             if filter_expr:
                 search_params['filter'] = filter_expr
@@ -567,13 +598,21 @@ def search():
             total = search_result.get('estimatedTotalHits', search_result.get('nbHits', 0))
             hits = search_result.get('hits', [])
             for h in hits:
+                # Prefer the highlighted/formatted fields when available
+                formatted = h.get('_formatted', {})
+                title_html = formatted.get('title') or h.get('title')
+                content_html = formatted.get('content') or h.get('content') or ''
+                excerpt = content_html
+                # Truncate safely (keep HTML — front-end uses |safe)
+                if len(excerpt) > 400:
+                    excerpt = excerpt[:400]
                 results.append({
                     'id': h.get('id'),
-                    'title': h.get('title'),
+                    'title': title_html,
                     'slug': h.get('slug'),
                     'author': h.get('author_username'),
                     'created_at': h.get('created_at'),
-                    'excerpt': (h.get('_formatted', {}).get('content') or '')[:300]
+                    'excerpt': excerpt
                 })
         except Exception as e:
             app.logger.error(f'Meili search error: {e}')
@@ -690,6 +729,37 @@ def admin_export_csv():
     return resp
 
 
+@app.route('/admin/traffic')
+@login_required
+@admin_required
+def admin_traffic():
+    """Return basic traffic metrics aggregated from `logs_conf` (visits, top IPs)."""
+    try:
+        days = int(request.args.get('days', 30))
+        now = datetime.datetime.utcnow()
+        start = now - datetime.timedelta(days=days)
+
+        pipeline_visits = [
+            {'$match': {'timestamp': {'$gte': start}}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}}, 'count': {'$sum': 1}}},
+            {'$sort': SON([('_id', 1)])}
+        ]
+        visits_per_day = list(logs_conf.aggregate(pipeline_visits))
+
+        # Top IPs
+        top_ips = list(logs_conf.aggregate([
+            {'$match': {'timestamp': {'$gte': start}}},
+            {'$group': {'_id': '$ip', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 10}
+        ]))
+
+        return jsonify({'visits_per_day': visits_per_day, 'top_ips': top_ips})
+    except Exception as e:
+        app.logger.error(f'Error building admin traffic: {e}')
+        return jsonify({'error': 'failed to compute traffic metrics'}), 500
+
+
 @app.route('/admin/reindex_meili', methods=['POST'])
 @login_required
 @admin_required
@@ -720,6 +790,49 @@ def reindex_meili_job():
         app.logger.error(f'Meilisearch reindex job failed: {e}', exc_info=True)
 
     return counts_map
+
+
+@app.route('/feed.xml')
+def feed():
+    """RSS feed (RSS 2.0) for recent published posts."""
+    try:
+        posts = list(posts_conf.find({'status': 'published'}).sort('created_at', -1).limit(50))
+        items = []
+        for p in posts:
+            items.append({
+                'title': p.get('title'),
+                'link': url_for('view_post', slug=p.get('slug'), _external=True),
+                'guid': str(p.get('_id')),
+                'pubDate': p.get('created_at').strftime('%a, %d %b %Y %H:%M:%S GMT') if p.get('created_at') else '',
+                'description': (p.get('content') or '')[:400]
+            })
+        return render_template('feed.xml', items=items), 200, {'Content-Type': 'application/rss+xml; charset=utf-8'}
+    except Exception as e:
+        app.logger.error(f'Failed to build RSS feed: {e}')
+        abort(500)
+
+
+@app.route('/sitemap.xml')
+def sitemap():
+    """Dynamically generate sitemap using `sitemap_template.xml`."""
+    try:
+        pages = []
+        # Static routes
+        static_paths = ['home', 'blog', 'about', 'terms']
+        for p in static_paths:
+            try:
+                pages.append({'loc': url_for(p, _external=True), 'lastmod': datetime.datetime.utcnow().date().isoformat(), 'changefreq': 'weekly', 'priority': '0.7'})
+            except Exception:
+                pass
+
+        # Posts
+        for post in posts_conf.find({'status': 'published'}, {'slug': 1, 'created_at': 1}).sort('created_at', -1).limit(5000):
+            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': post.get('created_at').date().isoformat() if post.get('created_at') else datetime.datetime.utcnow().date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
+
+        return render_template('sitemap_template.xml', pages=pages), 200, {'Content-Type': 'application/xml; charset=utf-8'}
+    except Exception as e:
+        app.logger.error(f'Failed to build sitemap: {e}')
+        abort(500)
 
 def prepare_posts(posts):
     """
@@ -1261,9 +1374,27 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
     video_public_id = None
 
     try:
-        # 1. Upload Images
+        # 1. Resize (simple) and upload Images
         for path in temp_image_paths:
             try:
+                # Resize image to max width/height while preserving aspect ratio to save bandwidth/storage
+                try:
+                    with Image.open(path) as im:
+                        # Convert PNG with transparency to RGB if necessary for JPEG optimization
+                        im_format = im.format
+                        max_size = (1600, 1600)
+                        im.thumbnail(max_size, Image.LANCZOS)
+                        # Overwrite temp file with optimized version
+                        if im.mode in ("RGBA", "LA"):
+                            # Preserve transparency for formats that support it
+                            im.save(path, format=im_format, optimize=True)
+                        else:
+                            # Save as JPEG-like optimization when possible
+                            im = im.convert('RGB')
+                            im.save(path, format='JPEG', quality=85, optimize=True)
+                except Exception as ie:
+                    app.logger.debug(f"Image resize/optimize skipped for {path}: {ie}")
+
                 upload_result = cloudinary.uploader.upload(path, folder="echowithin_posts")
                 url = upload_result.get('secure_url')
                 pid = upload_result.get('public_id')

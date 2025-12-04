@@ -275,7 +275,7 @@ def reindex_all_posts_to_meili(batch_size: int = 1000):
             docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
             if not docs:
                 break
-            meili_index.add_documents([_post_to_meili_doc(p) for p in docs])
+            meili_index.add_documents([_post_to_meili_doc(p) for p in docs], primary_key='id')
             last_id = docs[-1]["_id"]
     except Exception as e:
         app.logger.error(f'Error during reindex_all_posts_to_meili: {e}')

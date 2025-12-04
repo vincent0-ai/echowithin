@@ -26,10 +26,12 @@ import hashlib
 from slugify import slugify
 import cloudinary
 import cloudinary.uploader
+import json
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
+from meilisearch import Client as MeiliClient
 
 app = Flask(__name__)
 
@@ -139,6 +141,116 @@ comments_conf = db['comments']
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
+
+# --- Meilisearch setup for fast full-text search ---
+MEILI_URL = get_env_variable('MEILI_URL')
+MEILI_MASTER_KEY = get_env_variable('MEILI_MASTER_KEY')
+meili_client = None
+meili_index = None
+if MEILI_URL and MEILI_MASTER_KEY:
+    try:
+        meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
+        # create or get posts index
+        try:
+            meili_index = meili_client.get_index('posts')
+        except Exception:
+            meili_index = meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
+
+        # Configure searchable and filterable attributes (these methods return tasks; we don't chain them)
+        try:
+            meili_index.update_searchable_attributes(['title', 'content'])
+        except Exception as e:
+            app.logger.debug(f'Failed to update searchable attributes: {e}')
+        try:
+            meili_index.update_filterable_attributes(['author_username', 'tags', 'created_at'])
+        except Exception as e:
+            app.logger.debug(f'Failed to update filterable attributes: {e}')
+        
+        # Configure typo tolerance: allow up to 2 typos for queries
+        try:
+            meili_index.update_typo_tolerance({
+                'enabled': True,
+                'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
+            })
+            app.logger.debug('Typo tolerance configured: 1 typo for words ≥5 chars, 2 typos for words ≥9 chars')
+        except Exception as e:
+            app.logger.debug(f'Failed to configure typo tolerance: {e}')
+        
+        # Configure ranking rules: prioritize relevance, then recency
+        try:
+            meili_index.update_ranking_rules([
+                'sort',
+                'words',
+                'typo',
+                'proximity',
+                'attribute',
+                'exactness',
+                'created_at:desc'  # Most recent posts ranked higher
+            ])
+            app.logger.debug('Ranking rules configured: relevance-based with recency boost')
+        except Exception as e:
+            app.logger.debug(f'Failed to configure ranking rules: {e}')
+        
+        # Configure sortable attributes for user-initiated sorting
+        try:
+            meili_index.update_sortable_attributes(['created_at', 'title'])
+            app.logger.debug('Sortable attributes configured: created_at, title')
+        except Exception as e:
+            app.logger.debug(f'Failed to configure sortable attributes: {e}')
+        app.logger.info('Connected to Meilisearch and configured index `posts`.')
+    except Exception as e:
+        app.logger.error(f'Failed to initialize Meilisearch client: {e}')
+
+
+def _post_to_meili_doc(post_doc: dict) -> dict:
+    """Convert a MongoDB post document to Meilisearch document shape."""
+    return {
+        'id': str(post_doc.get('_id')),
+        'title': post_doc.get('title', ''),
+        'content': post_doc.get('content', ''),
+        'slug': post_doc.get('slug'),
+        'author_id': str(post_doc.get('author_id')) if post_doc.get('author_id') else None,
+        'author_username': post_doc.get('author_username') or post_doc.get('author', ''),
+        'tags': post_doc.get('tags', []),
+        'created_at': post_doc.get('created_at').isoformat() if post_doc.get('created_at') else None,
+    }
+
+
+def index_post_to_meili(post_id: str):
+    """Index a single post into Meilisearch. Safe no-op if Meili not configured."""
+    if not meili_index:
+        return False
+    try:
+        post = posts_conf.find_one({'_id': ObjectId(post_id)})
+        if not post:
+            return False
+        doc = _post_to_meili_doc(post)
+        meili_index.add_documents([doc])
+        return True
+    except Exception as e:
+        app.logger.error(f'Error indexing post {post_id} to Meili: {e}')
+        return False
+
+
+def reindex_all_posts_to_meili(batch_size: int = 1000):
+    """Reindex all posts into Meilisearch in batches."""
+    if not meili_index:
+        raise RuntimeError('Meilisearch not configured')
+    cursor = posts_conf.find({}, no_cursor_timeout=True)
+    batch = []
+    try:
+        for p in cursor:
+            batch.append(_post_to_meili_doc(p))
+            if len(batch) >= batch_size:
+                meili_index.add_documents(batch)
+                batch = []
+        if batch:
+            meili_index.add_documents(batch)
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
 @app.template_filter('linkify')
 def linkify_filter(text):
@@ -399,6 +511,215 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
     except Exception as e:
         app.logger.warning(f"Could not fetch batch comment counts from internal collection: {e}")
 
+
+# ----------------- Search endpoints -----------------
+@app.route('/search')
+def search():
+    query = request.args.get('q', '')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 10))
+    # Facet filters
+    tags_filter = request.args.getlist('tags')
+    author_filter = request.args.get('author')
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    # Sorting option: 'relevance' (default), 'newest', 'oldest', 'title_asc', 'title_desc'
+    sort = request.args.get('sort', 'relevance')
+
+    results = []
+    total = 0
+    if meili_index and query:
+        try:
+            # Build Meilisearch filter expression if any filters provided
+            filter_expr = None
+            filter_clauses = []
+            if tags_filter:
+                tag_clauses = [f'tags = "{t}"' for t in tags_filter]
+                filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
+            if author_filter:
+                filter_clauses.append(f'author_username = "{author_filter}"')
+            if date_from:
+                filter_clauses.append(f'created_at >= "{date_from}"')
+            if date_to:
+                filter_clauses.append(f'created_at <= "{date_to}"')
+            if filter_clauses:
+                filter_expr = ' AND '.join(filter_clauses)
+
+            search_params = {
+                'limit': per_page,
+                'offset': (page - 1) * per_page,
+                'attributesToHighlight': ['title', 'content']
+            }
+            if filter_expr:
+                search_params['filter'] = filter_expr
+            
+            # Apply sorting
+            if sort == 'newest':
+                search_params['sort'] = ['created_at:desc']
+            elif sort == 'oldest':
+                search_params['sort'] = ['created_at:asc']
+            elif sort == 'title_asc':
+                search_params['sort'] = ['title:asc']
+            elif sort == 'title_desc':
+                search_params['sort'] = ['title:desc']
+            # 'relevance' is default (no sort param needed)
+
+            search_result = meili_index.search(query, search_params)
+            total = search_result.get('estimatedTotalHits', search_result.get('nbHits', 0))
+            hits = search_result.get('hits', [])
+            for h in hits:
+                results.append({
+                    'id': h.get('id'),
+                    'title': h.get('title'),
+                    'slug': h.get('slug'),
+                    'author': h.get('author_username'),
+                    'created_at': h.get('created_at'),
+                    'excerpt': (h.get('_formatted', {}).get('content') or '')[:300]
+                })
+        except Exception as e:
+            app.logger.error(f'Meili search error: {e}')
+    else:
+        # Fallback to simple Mongo search (very limited)
+        if query:
+            cursor = posts_conf.find({'$text': {'$search': query}}, {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).limit(per_page)
+            for p in cursor:
+                results.append({'id': str(p.get('_id')), 'title': p.get('title'), 'slug': p.get('slug'), 'author': p.get('author'), 'created_at': p.get('timestamp'), 'excerpt': p.get('content', '')[:300]})
+            total = len(results)
+
+    # Provide available tags and authors for filter UI
+    try:
+        available_tags = sorted([t for t in posts_conf.distinct('tags') if t])
+    except Exception:
+        available_tags = []
+    try:
+        available_authors = sorted([u.get('username') for u in users_conf.find({}, {'username':1}) if u.get('username')])
+    except Exception:
+        available_authors = []
+
+    return render_template('search_results.html', query=query, results=results, total=total, page=page, per_page=per_page, available_tags=available_tags, available_authors=available_authors, selected_tags=tags_filter, selected_author=author_filter, date_from=date_from, date_to=date_to, sort=sort)
+
+
+# ----------------- Admin analytics -----------------
+@app.route('/admin/dashboard')
+@login_required
+@admin_required
+def admin_dashboard():
+    return render_template('admin_dashboard.html')
+
+
+@app.route('/admin/metrics')
+@login_required
+@admin_required
+def admin_metrics():
+    # Posts per day for last 30 days
+    try:
+        days = int(request.args.get('days', 30))
+        now = datetime.datetime.utcnow()
+        start = now - datetime.timedelta(days=days)
+
+        pipeline_posts = [
+            {'$match': {'created_at': {'$gte': start}}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}, 'count': {'$sum': 1}}},
+            {'$sort': SON([('_id', 1)])}
+        ]
+        posts_per_day = list(posts_conf.aggregate(pipeline_posts))
+
+        pipeline_comments = [
+            {'$match': {'created_at': {'$gte': start}, 'is_deleted': False}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}, 'count': {'$sum': 1}}},
+            {'$sort': SON([('_id', 1)])}
+        ]
+        comments_per_day = list(comments_conf.aggregate(pipeline_comments))
+
+        total_users = users_conf.count_documents({'is_confirmed': True})
+        active_users = users_conf.count_documents({'last_active': {'$gte': start}})
+
+        top_posts = list(comments_conf.aggregate([
+            {'$match': {'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 10}
+        ]))
+
+        return jsonify({
+            'posts_per_day': posts_per_day,
+            'comments_per_day': comments_per_day,
+            'total_users': total_users,
+            'active_users': active_users,
+            'top_posts_by_comments': top_posts
+        })
+    except Exception as e:
+        app.logger.error(f'Error building admin metrics: {e}')
+        return jsonify({'error': 'failed to compute metrics'}), 500
+
+
+@app.route('/admin/export_csv')
+@login_required
+@admin_required
+def admin_export_csv():
+    metric = request.args.get('metric', 'posts_per_day')
+    days = int(request.args.get('days', 30))
+    now = datetime.datetime.utcnow()
+    start = now - datetime.timedelta(days=days)
+
+    import csv
+    output = []
+    if metric == 'posts_per_day':
+        pipeline = [
+            {'$match': {'created_at': {'$gte': start}}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}, 'count': {'$sum': 1}}},
+            {'$sort': SON([('_id', 1)])}
+        ]
+        rows = list(posts_conf.aggregate(pipeline))
+        output.append(['date', 'posts'])
+        for r in rows:
+            output.append([r['_id'], r['count']])
+    else:
+        return jsonify({'error': 'unsupported metric'}), 400
+
+    # Build CSV
+    si = []
+    from io import StringIO
+    buf = StringIO()
+    writer = csv.writer(buf)
+    for row in output:
+        writer.writerow(row)
+    csv_data = buf.getvalue()
+    resp = make_response(csv_data)
+    resp.headers['Content-Type'] = 'text/csv'
+    resp.headers['Content-Disposition'] = f'attachment; filename="{metric}.csv"'
+    return resp
+
+
+@app.route('/admin/reindex_meili', methods=['POST'])
+@login_required
+@admin_required
+def admin_reindex_meili():
+    if not meili_index:
+        return jsonify({'error': 'Meilisearch not configured'}), 500
+    try:
+        # Enqueue reindex as an RQ background job to avoid blocking the request
+        try:
+            reindex_meili_job.queue()
+            return jsonify({'status': 'queued', 'message': 'Reindex queued as background job'})
+        except Exception:
+            # Fallback: run synchronously if enqueuing fails
+            reindex_all_posts_to_meili()
+            return jsonify({'status': 'completed', 'message': 'Reindex completed (synchronous fallback)'})
+    except Exception as e:
+        app.logger.error(f'Error reindexing: {e}')
+        return jsonify({'error': 'reindex failed'}), 500
+
+
+@rq.job
+def reindex_meili_job():
+    """Background job to reindex all posts into Meilisearch."""
+    try:
+        reindex_all_posts_to_meili()
+        app.logger.info('Meilisearch reindex job finished')
+    except Exception as e:
+        app.logger.error(f'Meilisearch reindex job failed: {e}', exc_info=True)
+
     return counts_map
 
 def prepare_posts(posts):
@@ -423,8 +744,8 @@ def prepare_posts(posts):
     for post in posts:
         # Extract slug to look up counts_map (we stored counts by slug)
         slug = post.get('slug')
-        # get_batch_comment_counts used slugs as keys
-        post["comment_count"] = counts_map.get(slug, 0)
+        # get_batch_comment_counts used slugs as keys; ensure counts_map is not None
+        post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
 
     return posts
 
@@ -979,6 +1300,15 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         posts_conf.update_one({'_id': ObjectId(post_id_str)}, {'$set': update_data})
         app.logger.info(f"Successfully processed media and updated post {post_id_str}")
 
+        # Index post into Meilisearch after media processing so image fields are present
+        try:
+            if meili_index:
+                # Index synchronously here (it's quick); if you prefer, enqueue an RQ job instead
+                index_post_to_meili(post_id_str)
+                app.logger.info(f"Indexed post {post_id_str} to Meilisearch after media processing")
+        except Exception as e:
+            app.logger.error(f"Failed to index post {post_id_str} after media processing: {e}")
+
         # 4. Trigger subsequent jobs (NSFW check, notifications)
         if image_urls:
             try:
@@ -1024,6 +1354,8 @@ def post():
         tags = request.form.getlist("tags") # Use getlist for multi-select
         # Support multiple image uploads from the form input named 'images'
         images_files = request.files.getlist('images') if request.files else []
+        # Support image alt texts via form input `image_alts[]` (optional)
+        image_alts = request.form.getlist('image_alts') if request.form else []
         video_file = request.files.get('video')
 
         temp_image_paths = []
@@ -1059,6 +1391,17 @@ def post():
                         temp_video_path = path
                 except Exception: pass # Fail silently on size check error
 
+            # Ensure we have an image_alts list matching any images (fill placeholders if missing)
+            normalized_alts = []
+            for i in range(len(images_files)):
+                try:
+                    alt = image_alts[i].strip()
+                except Exception:
+                    alt = ''
+                if not alt:
+                    alt = f"{title} image {i+1}"
+                normalized_alts.append(alt)
+
             new_post_data = {
                 'author_id': ObjectId(current_user.id),
                 'slug': slug,
@@ -1069,6 +1412,7 @@ def post():
                 'status': 'processing_media' if temp_image_paths or temp_video_path else 'published',
                 'view_count': 0, # Initialize view count
                 'timestamp': datetime.datetime.now(),
+                'image_alts': normalized_alts,
             }
             result = posts_conf.insert_one(new_post_data)
             post_id_str = str(result.inserted_id)
@@ -1099,6 +1443,12 @@ def post():
                         ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
                 except Exception as e:
                     app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
+                # If no media, index immediately
+                try:
+                    if meili_index:
+                        index_post_to_meili(post_id_str)
+                except Exception as e:
+                    app.logger.debug(f"Meili index skipped for {post_id_str}: {e}")
 
             # --- Send ntfy notification for new post ---
             try:
@@ -1183,7 +1533,67 @@ def view_post(slug):
     page_title = post.get('title', 'View Post')
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts)
+    # Prepare SEO meta fields
+    meta_url = url_for('view_post', slug=slug, _external=True)
+    meta_image = None
+    if post.get('image_urls'):
+        meta_image = post.get('image_urls')[0]
+    elif post.get('image_url'):
+        meta_image = post.get('image_url')
+
+    # JSON-LD structured data for the post
+    try:
+        jsonld = {
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            "headline": post.get('title'),
+            "image": [meta_image] if meta_image else [],
+            "author": {
+                "@type": "Person",
+                "name": post.get('author')
+            },
+            "datePublished": post.get('timestamp').isoformat() if post.get('timestamp') else None,
+            "url": meta_url,
+            "description": page_description
+        }
+        jsonld_str = json.dumps(jsonld)
+    except Exception:
+        jsonld_str = ''
+
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str)
+
+
+@app.route('/feed.xml')
+def rss_feed():
+    """Serve an RSS feed of the latest published posts."""
+    try:
+        latest = list(posts_conf.find({'status': 'published'}).sort('timestamp', -1).limit(20))
+        feed_items = []
+        site_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
+        for p in latest:
+            title = p.get('title', '')
+            link = f"{site_url}/post/{p.get('slug')}"
+            desc = (p.get('content','')[:300] + '...') if len(p.get('content',''))>300 else p.get('content','')
+            pubDate = p.get('timestamp').strftime('%a, %d %b %Y %H:%M:%S +0000') if p.get('timestamp') else ''
+            feed_items.append({'title': title, 'link': link, 'description': desc, 'pubDate': pubDate})
+
+        rss = ['<?xml version="1.0" encoding="UTF-8"?>', '<rss version="2.0">', '<channel>', '<title>EchoWithin</title>', f'<link>{site_url}</link>', '<description>Latest posts from EchoWithin</description>']
+        for it in feed_items:
+            rss.append('<item>')
+            rss.append(f"<title>{it['title']}</title>")
+            rss.append(f"<link>{it['link']}</link>")
+            rss.append(f"<description><![CDATA[{it['description']}]]></description>")
+            if it['pubDate']:
+                rss.append(f"<pubDate>{it['pubDate']}</pubDate>")
+            rss.append('</item>')
+        rss.append('</channel>')
+        rss.append('</rss>')
+        resp = make_response('\n'.join(rss))
+        resp.headers['Content-Type'] = 'application/rss+xml; charset=utf-8'
+        return resp
+    except Exception as e:
+        app.logger.error(f"Failed to build RSS feed: {e}")
+        abort(500)
 
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])

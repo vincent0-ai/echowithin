@@ -117,6 +117,8 @@
     </style>
     {# Block for Content Security Policy or other meta tags #}
     {% block head_meta %}{% endblock %}
+        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+        <meta name="theme-color" content="#ffffff">
     {% block title %}<title>Auth</title>{% endblock %}
 </head>
 
@@ -198,6 +200,15 @@
 </body>
 
 <script>
+    // Register service worker for PWA offline support
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('{{ url_for('static', filename='service-worker.js') }}')
+                .then(function(reg) { console.log('Service worker registered.', reg); })
+                .catch(function(err) { console.warn('Service worker registration failed:', err); });
+        });
+    }
+
     // Wait for the entire page to load before running the script
     window.addEventListener('load', () => {
         // Select all elements with the class 'alert' inside 'flash-messages'

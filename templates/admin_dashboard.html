@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+  <h1>Admin Dashboard</h1>
+  <div>
+    <button id="reindex-btn" class="btn btn-primary">Reindex Search</button>
+    <a id="export-csv" class="btn btn-secondary" href="/admin/export_csv?metric=posts_per_day">Export Posts CSV</a>
+  </div>
+
+  <h3>Posts per Day</h3>
+  <canvas id="postsChart" width="800" height="300"></canvas>
+
+  <h3>Comments per Day</h3>
+  <canvas id="commentsChart" width="800" height="300"></canvas>
+
+  <h3>Top Posts by Comments</h3>
+  <ul id="top-posts"></ul>
+
+  <h3>Users</h3>
+  <p>Total confirmed users: <span id="total-users"></span></p>
+  <p>Active users (window): <span id="active-users"></span></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+async function loadMetrics(){
+  const res = await fetch('/admin/metrics');
+  const data = await res.json();
+
+  // Posts chart
+  const postsLabels = data.posts_per_day.map(x=>x._id);
+  const postsCounts = data.posts_per_day.map(x=>x.count);
+  const ctx1 = document.getElementById('postsChart').getContext('2d');
+  new Chart(ctx1, {type:'line', data:{labels:postsLabels,datasets:[{label:'Posts',data:postsCounts,borderColor:'blue',fill:false}]}});
+
+  // Comments chart
+  const comLabels = data.comments_per_day.map(x=>x._id);
+  const comCounts = data.comments_per_day.map(x=>x.count);
+  const ctx2 = document.getElementById('commentsChart').getContext('2d');
+  new Chart(ctx2, {type:'line', data:{labels:comLabels,datasets:[{label:'Comments',data:comCounts,borderColor:'green',fill:false}]}});
+
+  // Top posts
+  const topList = document.getElementById('top-posts');
+  topList.innerHTML = '';
+  (data.top_posts_by_comments || []).forEach(p=>{
+    const li = document.createElement('li');
+    li.textContent = `${p._id} — ${p.count} comments`;
+    topList.appendChild(li);
+  });
+
+  document.getElementById('total-users').textContent = data.total_users;
+  document.getElementById('active-users').textContent = data.active_users;
+}
+
+loadMetrics();
+
+document.getElementById('reindex-btn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('reindex-btn');
+  btn.disabled = true;
+  btn.textContent = 'Reindexing...';
+  const res = await fetch('/admin/reindex_meili', {method:'POST'});
+  const json = await res.json();
+  alert(JSON.stringify(json));
+  btn.disabled = false;
+  btn.textContent = 'Reindex Search';
+});
+</script>
+{% endblock %}

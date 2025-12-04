@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+  .search-header {
+    background: linear-gradient(135deg, #667eea 0%, maroon 100%);
+    color: white;
+    padding: 3rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+  .search-header h1 {
+    margin: 0 0 1rem 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+  }
+  .search-form {
+    background: #f8f9fa;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 2rem;
+  }
+  .form-group-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.5rem;
+    font-size: 0.95rem;
+  }
+  .form-control, .form-control[multiple] {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0.6rem;
+    font-size: 0.95rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .form-control:focus, .form-control[multiple]:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    outline: none;
+  }
+  .btn-search {
+    background: linear-gradient(135deg, #667eea 0%, maroon 100%);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-search:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+  .btn-reset {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 0.75rem 1.5rem;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-reset:hover {
+    background: #e0e0e0;
+  }
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f0f0f0;
+  }
+  .results-count {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+  }
+  .search-result-item {
+    background: white;
+    border-left: 4px solid #667eea;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: all 0.3s;
+  }
+  .search-result-item:hover {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+  }
+  .search-result-item h3 {
+    margin: 0 0 0.75rem 0;
+    color: #333;
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .search-result-item h3 a {
+    color: #667eea;
+    text-decoration: none;
+  }
+  .search-result-item h3 a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+  }
+  .result-meta {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    color: #666;
+    flex-wrap: wrap;
+  }
+  .result-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .result-excerpt {
+    color: #555;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .no-results {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    color: #856404;
+    padding: 2rem;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 1.1rem;
+  }
+  .pagination-container {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+  }
+  .pagination-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ddd;
+    background: white;
+    color: #667eea;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+  .pagination-btn:hover {
+    background: #667eea;
+    color: white;
+  }
+  .pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+
+<div class="container">
+  <div class="search-header">
+    <h1><i class="fa-solid fa-magnifying-glass"></i> Advanced Search</h1>
+    <p style="margin: 0; font-size: 1.1rem; opacity: 0.95;">Find posts using filters and smart search</p>
+  </div>
+
+  <form method="get" action="/search" class="search-form">
+    <!-- Main search input -->
+    <div class="mb-3">
+      <label for="q" class="form-group-label">Search Query</label>
+      <input id="q" name="q" value="{{ query }}" placeholder="Enter keywords..." class="form-control" style="padding: 0.75rem; font-size: 1rem;" />
+    </div>
+
+    <!-- Filters row -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
+        <label for="tags" class="form-group-label">Tags</label>
+        <select id="tags" name="tags" class="form-control">
+          <option value="">All Tags</option>
+          {% for t in available_tags %}
+            <option value="{{ t }}" {% if t in selected_tags %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label for="author" class="form-group-label">Author</label>
+        <select id="author" name="author" class="form-control">
+          <option value="">All Authors</option>
+          {% for a in available_authors %}
+            <option value="{{ a }}" {% if a==selected_author %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-2">
+        <label for="date_from" class="form-group-label">Published From</label>
+        <input id="date_from" name="date_from" type="date" value="{{ date_from }}" class="form-control" />
+      </div>
+
+      <div class="col-md-2">
+        <label for="date_to" class="form-group-label">Published To</label>
+        <input id="date_to" name="date_to" type="date" value="{{ date_to }}" class="form-control" />
+      </div>
+
+      <div class="col-md-2">
+        <label for="sort" class="form-group-label">Sort By</label>
+        <select id="sort" name="sort" class="form-control">
+          <option value="relevance" {% if sort=='relevance' %}selected{% endif %}>Relevance</option>
+          <option value="newest" {% if sort=='newest' %}selected{% endif %}>Newest First</option>
+          <option value="oldest" {% if sort=='oldest' %}selected{% endif %}>Oldest First</option>
+          <option value="title_asc" {% if sort=='title_asc' %}selected{% endif %}>Title (A-Z)</option>
+          <option value="title_desc" {% if sort=='title_desc' %}selected{% endif %}>Title (Z-A)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn-search"><i class="fa-solid fa-search"></i> Search</button>
+      <button type="reset" class="btn-reset"><i class="fa-solid fa-redo"></i> Clear Filters</button>
+      <a href="/blog" class="btn-reset" style="text-decoration: none; display: inline-block;"><i class="fa-solid fa-arrow-left"></i> Back to Blog</a>
+    </div>
+  </form>
+
+  <!-- Results section -->
+  {% if query or selected_tags or selected_author or date_from or date_to %}
+    <div class="results-header">
+      <div class="results-count">
+        <i class="fa-solid fa-list"></i> {{ total }} result{{ 's' if total != 1 else '' }} found
+      </div>
+    </div>
+
+    {% if results %}
+      <div class="search-results">
+        {% for r in results %}
+          <div class="search-result-item">
+            <h3><a href="/post/{{ r.slug }}">{{ r.title }}</a></h3>
+            <div class="result-meta">
+              {% if r.author %}
+                <span class="result-meta-item">
+                  <i class="fa-solid fa-user" style="color: #667eea;"></i>
+                  <strong>{{ r.author }}</strong>
+                </span>
+              {% endif %}
+              {% if r.created_at %}
+                <span class="result-meta-item">
+                  <i class="fa-solid fa-calendar" style="color: #667eea;"></i>
+                  {{ r.created_at if r.created_at is string else r.created_at.strftime('%b %d, %Y') }}
+                </span>
+              {% endif %}
+            </div>
+            <p class="result-excerpt">{{ r.excerpt|safe }}...</p>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination (optional) -->
+      {% if total > per_page %}
+        <div class="pagination-container">
+          {% if page > 1 %}
+            <a href="/search?q={{ query }}&page={{ page - 1 }}" class="pagination-btn"><i class="fa-solid fa-chevron-left"></i> Previous</a>
+          {% else %}
+            <button class="pagination-btn" disabled><i class="fa-solid fa-chevron-left"></i> Previous</button>
+          {% endif %}
+          <span style="padding: 0.5rem 1rem; color: #666;">Page {{ page }}</span>
+          {% if results|length == per_page %}
+            <a href="/search?q={{ query }}&page={{ page + 1 }}" class="pagination-btn">Next <i class="fa-solid fa-chevron-right"></i></a>
+          {% else %}
+            <button class="pagination-btn" disabled>Next <i class="fa-solid fa-chevron-right"></i></button>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="no-results">
+        <p><i class="fa-solid fa-search" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i></p>
+        <strong>No posts found</strong><br>
+        <small>Try adjusting your search terms or filters</small>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="no-results" style="background: #e7f3ff; border-color: #0066cc; color: #0066cc;">
+      <p><i class="fa-solid fa-info-circle" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i></p>
+      <strong>Enter a search query or select filters to begin</strong>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

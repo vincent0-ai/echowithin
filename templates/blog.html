@@ -12,9 +12,14 @@
         <h4>Share your real ideas, experiences, and perspectives.</h4>
 
         <!-- Search Form -->
-        <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem;">
-            <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="width: 70%;">
-            <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
+        <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+            <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="width: 70%; min-width: 200px;">
+            <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">
+                <i class="fa-solid fa-search"></i> Search
+            </button>
+            <a href="{{ url_for('search') }}" class="form-button" style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; color: #fff; background: maroon border: none;">
+                <i class="fa-solid fa-sliders"></i> Advanced Search
+            </a>
         </form>
 
         {% if current_user.is_authenticated and current_user.is_admin %}
@@ -22,6 +27,9 @@
             <a href="{{ url_for('admin_posts') }}" class="btn edit-btn">Manage Posts</a>
             <a href="{{ url_for('admin_users') }}" class="btn edit-btn">Manage Users</a>
             <a href="{{ url_for('admin_announcements') }}" class="btn edit-btn">Manage Announcements</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn edit-btn">
+                    <i class="fa-solid fa-chart-line"></i> Dashboard
+                </a>
         </div>
         {% endif %}
 

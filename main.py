@@ -241,7 +241,8 @@ def _post_to_meili_doc(post_doc: dict) -> dict:
         'author_id': str(post_doc.get('author_id')) if post_doc.get('author_id') else None,
         'author_username': post_doc.get('author_username') or post_doc.get('author', ''),
         'tags': post_doc.get('tags', []),
-        'created_at': post_doc.get('created_at').isoformat() if post_doc.get('created_at') else None,
+        'created_at': (post_doc.get('created_at') or post_doc.get('timestamp')).isoformat() 
+                      if post_doc.get('created_at') or post_doc.get('timestamp') else None,
     }
 
 
@@ -651,7 +652,7 @@ def admin_metrics():
     # Posts per day for last 30 days
     try:
         days = int(request.args.get('days', 30))
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         start = now - datetime.timedelta(days=days)
 
         pipeline_posts = [
@@ -696,7 +697,7 @@ def admin_metrics():
 def admin_export_csv():
     metric = request.args.get('metric', 'posts_per_day')
     days = int(request.args.get('days', 30))
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc)
     start = now - datetime.timedelta(days=days)
 
     import csv
@@ -735,7 +736,7 @@ def admin_traffic():
     """Return basic traffic metrics aggregated from `logs_conf` (visits, top IPs)."""
     try:
         days = int(request.args.get('days', 30))
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc)
         start = now - datetime.timedelta(days=days)
 
         pipeline_visits = [
@@ -798,11 +799,13 @@ def feed():
         posts = list(posts_conf.find({'status': 'published'}).sort('created_at', -1).limit(50))
         items = []
         for p in posts:
+            pub_date = p.get('timestamp') or p.get('created_at')
             items.append({
                 'title': p.get('title'),
                 'link': url_for('view_post', slug=p.get('slug'), _external=True),
                 'guid': str(p.get('_id')),
                 'pubDate': p.get('created_at').strftime('%a, %d %b %Y %H:%M:%S GMT') if p.get('created_at') else '',
+                'pubDate': pub_date.strftime('%a, %d %b %Y %H:%M:%S GMT') if pub_date else '',
                 'description': (p.get('content') or '')[:400]
             })
         return render_template('feed.xml', items=items), 200, {'Content-Type': 'application/rss+xml; charset=utf-8'}
@@ -820,13 +823,15 @@ def sitemap():
         static_paths = ['home', 'blog', 'about', 'terms']
         for p in static_paths:
             try:
-                pages.append({'loc': url_for(p, _external=True), 'lastmod': datetime.datetime.utcnow().date().isoformat(), 'changefreq': 'weekly', 'priority': '0.7'})
+                pages.append({'loc': url_for(p, _external=True), 'lastmod': datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'weekly', 'priority': '0.7'})
             except Exception:
                 pass
 
         # Posts
         for post in posts_conf.find({'status': 'published'}, {'slug': 1, 'created_at': 1}).sort('created_at', -1).limit(5000):
-            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': post.get('created_at').date().isoformat() if post.get('created_at') else datetime.datetime.utcnow().date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
+            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': post.get('created_at').date().isoformat() if post.get('created_at') else datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
+            last_mod = post.get('created_at') or post.get('timestamp')
+            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': last_mod.date().isoformat() if last_mod else datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
 
         return render_template('sitemap_template.xml', pages=pages), 200, {'Content-Type': 'application/xml; charset=utf-8'}
     except Exception as e:
@@ -1866,7 +1871,23 @@ def api_delete_comment(comment_id):
         if str(comment.get('author_id')) != current_user.id and not current_user.is_admin:
             return jsonify({'error': 'Not authorized'}), 403
 
-        comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'is_deleted': True}})
+        # Check if the comment has replies
+        has_replies = comments_conf.count_documents({'parent_id': ObjectId(comment_id), 'is_deleted': False}) > 0
+
+        if has_replies:
+            # Soft-delete: keep the comment as a placeholder for replies, but clear its content.
+            comments_conf.update_one(
+                {'_id': ObjectId(comment_id)},
+                {'$set': {
+                    'is_deleted': True,
+                    'content': '[deleted]',
+                    'author_username': '[deleted]'
+                }}
+            )
+        else:
+            # Hard-delete: no replies, so we can remove it completely.
+            comments_conf.delete_one({'_id': ObjectId(comment_id)})
+
         try:
             comment_count_cache.clear()
         except Exception:

@@ -566,20 +566,29 @@ def search():
     total = 0
     if meili_index and (query or tags_filter or author_filter or date_from or date_to):
         try:
-            # # Build Meilisearch filter expression if any filters provided
-            # filter_expr = None
-            # filter_clauses = []
-            # if tags_filter:
-            #     tag_clauses = [f'tags = "{t}"' for t in tags_filter]
-            #     filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
-            # if author_filter:
-            #     filter_clauses.append(f'author_username = "{author_filter}"')
-            # if date_from:
-            #     filter_clauses.append(f'created_at >= "{date_from}"')
-            # if date_to:
-            #     filter_clauses.append(f'created_at <= "{date_to}"')
-            # if filter_clauses:
-            #     filter_expr = ' AND '.join(filter_clauses)
+            # Build Meilisearch filter expression if any filters provided
+            filter_expr = None
+            filter_clauses = []
+            if tags_filter:
+                # e.g., 'tags = "python" OR tags = "flask"'
+                tag_clauses = [f'tags = "{t}"' for t in tags_filter]
+                filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
+            if author_filter:
+                filter_clauses.append(f'author_username = "{author_filter}"')
+            if date_from:
+                try:
+                    # Convert YYYY-MM-DD to start-of-day timestamp
+                    dt_from = datetime.datetime.strptime(date_from, '%Y-%m-%d')
+                    filter_clauses.append(f'created_at >= {int(dt_from.timestamp())}')
+                except ValueError: pass # Ignore invalid date formats
+            if date_to:
+                try:
+                    # Convert YYYY-MM-DD to end-of-day timestamp
+                    dt_to = datetime.datetime.strptime(date_to, '%Y-%m-%d') + datetime.timedelta(days=1, seconds=-1)
+                    filter_clauses.append(f'created_at <= {int(dt_to.timestamp())}')
+                except ValueError: pass # Ignore invalid date formats
+            if filter_clauses:
+                filter_expr = ' AND '.join(filter_clauses)
 
             search_params = {
                 'limit': per_page,
@@ -588,8 +597,8 @@ def search():
                 'highlightPreTag': '<mark>',
                 'highlightPostTag': '</mark>'
             }
-            # if filter_expr:
-            #     search_params['filter'] = filter_expr
+            if filter_expr:
+                search_params['filter'] = filter_expr
             
             # Apply sorting
             if sort == 'newest':

@@ -241,8 +241,8 @@ def _post_to_meili_doc(post_doc: dict) -> dict:
         'author_id': str(post_doc.get('author_id')) if post_doc.get('author_id') else None,
         'author_username': post_doc.get('author_username') or post_doc.get('author', ''),
         'tags': post_doc.get('tags', []),
-        'created_at': (post_doc.get('created_at') or post_doc.get('timestamp')).isoformat() 
-                      if post_doc.get('created_at') or post_doc.get('timestamp') else None,
+        # Store created_at as a Unix timestamp for efficient filtering/sorting
+        'created_at': int((post_doc.get('created_at') or post_doc.get('timestamp') or datetime.datetime.now(datetime.timezone.utc)).timestamp()),
     }
 
 

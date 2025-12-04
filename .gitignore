@@ -3,6 +3,7 @@ secret.py
 __pycache__/
 TODO.md
 *.md
+app/
 static/uploads/
 *.log
 venv/

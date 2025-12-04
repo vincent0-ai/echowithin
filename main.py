@@ -1382,7 +1382,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
                         # Convert PNG with transparency to RGB if necessary for JPEG optimization
                         im_format = im.format
                         max_size = (1600, 1600)
-                        im.thumbnail(max_size, Image.LANCZOS)
+                        im.thumbnail(max_size, Image.Resampling.LANCZOS)
                         # Overwrite temp file with optimized version
                         if im.mode in ("RGBA", "LA"):
                             # Preserve transparency for formats that support it

@@ -546,7 +546,6 @@ def search():
     query = request.args.get('q', '')
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 10))
-    # Facet filters
     tags_filter = request.args.getlist('tags')
     author_filter = request.args.get('author')
     date_from = request.args.get('date_from')

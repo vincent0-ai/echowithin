@@ -1242,16 +1242,20 @@ def home():
         agg = list(comments_conf.aggregate(pipeline))
         trending_posts = []
         for doc in agg:
-            slug = doc['_id']
-            p = posts_conf.find_one({'slug': slug})
-            if p:
-                trending_posts.append(p)
+            if doc.get('_id'):  # Ensure slug is not None
+                p = posts_conf.find_one({'slug': doc['_id']})
+                if p:
+                    # Attach the comment count and URL directly
+                    p['comment_count'] = doc.get('count', 0)
+                    with app.app_context():
+                        p['url'] = url_for("view_post", slug=p.get("slug"), _external=True)
+                    trending_posts.append(p)
     except Exception:
         # Fallback: most recent posts
-        trending_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
-
-    with app.app_context():
-        trending_posts = prepare_posts(trending_posts)
+        # In the fallback case, we still need to prepare the posts
+        fallback_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
+        with app.app_context():
+            trending_posts = prepare_posts(fallback_posts)
 
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,

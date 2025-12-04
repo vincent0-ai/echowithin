@@ -1741,39 +1741,6 @@ def view_post(slug):
     return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str)
 
 
-@app.route('/feed.xml')
-def rss_feed():
-    """Serve an RSS feed of the latest published posts."""
-    try:
-        latest = list(posts_conf.find({'status': 'published'}).sort('timestamp', -1).limit(20))
-        feed_items = []
-        site_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
-        for p in latest:
-            title = p.get('title', '')
-            link = f"{site_url}/post/{p.get('slug')}"
-            desc = (p.get('content','')[:300] + '...') if len(p.get('content',''))>300 else p.get('content','')
-            pubDate = p.get('timestamp').strftime('%a, %d %b %Y %H:%M:%S +0000') if p.get('timestamp') else ''
-            feed_items.append({'title': title, 'link': link, 'description': desc, 'pubDate': pubDate})
-
-        rss = ['<?xml version="1.0" encoding="UTF-8"?>', '<rss version="2.0">', '<channel>', '<title>EchoWithin</title>', f'<link>{site_url}</link>', '<description>Latest posts from EchoWithin</description>']
-        for it in feed_items:
-            rss.append('<item>')
-            rss.append(f"<title>{it['title']}</title>")
-            rss.append(f"<link>{it['link']}</link>")
-            rss.append(f"<description><![CDATA[{it['description']}]]></description>")
-            if it['pubDate']:
-                rss.append(f"<pubDate>{it['pubDate']}</pubDate>")
-            rss.append('</item>')
-        rss.append('</channel>')
-        rss.append('</rss>')
-        resp = make_response('\n'.join(rss))
-        resp.headers['Content-Type'] = 'application/rss+xml; charset=utf-8'
-        return resp
-    except Exception as e:
-        app.logger.error(f"Failed to build RSS feed: {e}")
-        abort(500)
-
-
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
 def api_record_post_view(post_id):
     """Increment the view count for a post once per user per day.

@@ -963,6 +963,17 @@ body {
         padding: 1.5rem; /* Reduce padding for tablets */
     }
 
+    /* Add padding to the main content area of the search results page */
+    .search-results-page-container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    /* Add padding to the main content area of the admin dashboard */
+    .admin-dashboard-page-container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
     .blog-container {
         max-width: 100vw;
         padding: 0.5rem 0.5rem 0.5rem 0; /* remove left padding so content can reach edge */
@@ -1145,6 +1156,12 @@ body {
         flex-direction: row; /* Keep buttons horizontal */
         flex-wrap: wrap;     /* Allow buttons to wrap if space is limited */
         align-items: center; /* Vertically align items if they wrap */
+    }
+    
+    /* Adjust admin buttons on blog posts for smaller screens */
+    .admin-actions .btn {
+        padding: 0.25rem 0.5rem; /* Make padding smaller */
+        font-size: 0.8rem;      /* Make font smaller */
     }
 
     .social-links {

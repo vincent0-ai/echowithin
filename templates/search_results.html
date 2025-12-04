@@ -161,11 +161,11 @@
   
   /* Add this new rule to define the color highlighting */
   .highlighted-match {
-    /* Use your primary color for the text */
-    color: var(--primary-color, maroon); 
+    /* Set the text color to the primary maroon color */
+    color: var(--primary-color, #3e2217); 
     font-weight: bold;
-    /* Ensure no background color is applied */
-    background-color: transparent; 
+    /* Remove any background color */
+    background-color: transparent;
   }
 
 
@@ -263,7 +263,7 @@
       <div class="search-results">
         {% for r in results %}
           <div class="search-result-item">
-            <h3><a href="/post/{{ r.slug }}">{{ r.title }}</a></h3>
+            <h3><a href="/post/{{ r.slug }}">{{ r.title|safe }}</a></h3>
             <div class="result-meta">
               {% if r.author %}
                 <span class="result-meta-item">

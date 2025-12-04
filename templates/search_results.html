@@ -157,6 +157,22 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  /* Mobile-specific adjustments */
+  @media (max-width: 767px) {
+    .search-header {
+      padding: 2rem 1rem;
+    }
+    .search-form {
+      padding: 1.5rem;
+    }
+    .search-result-item {
+      padding: 1rem;
+    }
+    .no-results {
+      padding: 1.5rem;
+    }
+  }
 </style>
 
 <div class="container search-results-page-container">

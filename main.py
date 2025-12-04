@@ -236,21 +236,20 @@ def reindex_all_posts_to_meili(batch_size: int = 1000):
     """Reindex all posts into Meilisearch in batches."""
     if not meili_index:
         raise RuntimeError('Meilisearch not configured')
-    cursor = posts_conf.find({}, no_cursor_timeout=True)
-    batch = []
+    # Atlas tiers disallow noCursorTimeout cursors. Use paginated reads
+    # based on `_id` ranges to avoid long-lived server-side cursors.
     try:
-        for p in cursor:
-            batch.append(_post_to_meili_doc(p))
-            if len(batch) >= batch_size:
-                meili_index.add_documents(batch)
-                batch = []
-        if batch:
-            meili_index.add_documents(batch)
-    finally:
-        try:
-            cursor.close()
-        except Exception:
-            pass
+        last_id = None
+        while True:
+            query = {} if last_id is None else {"_id": {"$gt": last_id}}
+            docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
+            if not docs:
+                break
+            meili_index.add_documents([_post_to_meili_doc(p) for p in docs])
+            last_id = docs[-1]["_id"]
+    except Exception as e:
+        app.logger.error(f'Error during reindex_all_posts_to_meili: {e}')
+        raise
 
 @app.template_filter('linkify')
 def linkify_filter(text):

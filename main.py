@@ -556,7 +556,7 @@ def search():
 
     results = []
     total = 0
-    if meili_index and query:
+    if meili_index and (query or tags_filter or author_filter or date_from or date_to):
         try:
             # Build Meilisearch filter expression if any filters provided
             filter_expr = None

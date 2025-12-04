@@ -570,10 +570,11 @@ def search():
             filter_expr = None
             filter_clauses = []
             if tags_filter:
-                # e.g., 'tags = "python" OR tags = "flask"'
-                tag_clauses = [f'tags = "{t}"' for t in tags_filter]
-                filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
-            if author_filter:
+                # Filter out empty strings that might come from the form
+                tag_clauses = [f'tags = "{t}"' for t in tags_filter if t]
+                if tag_clauses:
+                    filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
+            if author_filter: # Only add filter if author is not an empty string
                 filter_clauses.append(f'author_username = "{author_filter}"')
             if date_from:
                 try:
@@ -1373,6 +1374,32 @@ def get_top_posts_json():
     except Exception as e:
         app.logger.error(f"Error in get_top_posts_json: {e}")
         return jsonify({'error': 'Could not retrieve top posts'}), 500
+
+@app.route('/api/posts/<post_id>/status')
+def get_post_status(post_id):
+    """Returns the processing status and media URLs for a given post."""
+    try:
+        post = posts_conf.find_one(
+            {'_id': ObjectId(post_id)},
+            {
+                'status': 1,
+                'image_urls': 1,
+                'video_url': 1,
+                'image_status': 1,
+                'video_status': 1,
+                'title': 1 # For alt text
+            }
+        )
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+
+        # Convert ObjectId to string for JSON serialization
+        post['_id'] = str(post['_id'])
+
+        return jsonify(post)
+    except Exception as e:
+        app.logger.error(f"Error fetching status for post {post_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/create_post', methods=['GET'])
 @login_required

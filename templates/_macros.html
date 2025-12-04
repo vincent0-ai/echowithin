@@ -8,7 +8,13 @@
         </div>
     </div>
 
-    {# --- Media Display Logic (matches JS version) --- #}
+        {% if post.status == 'processing_media' %}
+            <div class="media-processing-placeholder">
+                <div class="spinner"></div>
+                <p>Your media is being processed...</p>
+            </div>
+        {% else %}
+    {# --- Existing Media Display Logic --- #}
     {% if post.video_url %}
         <div class="post-media-container">
             <video class="post-video" controls preload="metadata">
@@ -76,6 +82,8 @@
             <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
         </div>
     {% endif %}
+        {% endif %}
+    {% endif %}
 
     {# --- Content (unchanged) --- #}
     <div class="post-content-wrapper">
@@ -120,4 +128,76 @@
         {% endif %}
     </div>
 </div>
+{% endmacro %}
+
+{% macro post_polling_script() %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const postsToPoll = document.querySelectorAll('.post-media-container[data-status="processing_media"]');
+
+    postsToPoll.forEach(container => {
+        const postId = container.getAttribute('data-post-id');
+        if (postId) {
+            pollPostStatus(postId, container);
+        }
+    });
+
+    function pollPostStatus(postId, container) {
+        let attempts = 0;
+        const maxAttempts = 30; // Poll for 5 minutes (30 * 10s)
+        const interval = 10000; // 10 seconds
+
+        const poller = setInterval(() => {
+            if (attempts >= maxAttempts) {
+                clearInterval(poller);
+                container.innerHTML = '<div class="media-processing-placeholder"><p>Media processing timed out. Please refresh the page.</p></div>';
+                return;
+            }
+
+            fetch(`/api/posts/${postId}/status`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(post => {
+                    if (post.status === 'published') {
+                        clearInterval(poller);
+                        updatePostMedia(post, container);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error polling post status:', error);
+                    // Optional: stop polling on error or just continue
+                });
+
+            attempts++;
+        }, interval);
+    }
+
+    function updatePostMedia(post, container) {
+        let mediaHtml = '';
+        const altText = `Post image for ${post.title}`;
+
+        if (post.video_url) {
+            mediaHtml = `
+                <video class="post-video" controls preload="metadata">
+                    <source src="${post.video_url}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            `;
+        } else if (post.image_urls && post.image_urls.length > 0) {
+            if (post.image_urls.length > 1) {
+                // Simplified gallery for now, can be expanded
+                mediaHtml = post.image_urls.map(url => `<img src="${url}" alt="${altText}" class="post-image" style="max-width: 48%; margin: 1%;">`).join('');
+            } else {
+                mediaHtml = `<img src="${post.image_urls[0]}" alt="${altText}" class="post-image">`;
+            }
+        }
+
+        container.innerHTML = mediaHtml;
+    }
+});
+</script>
 {% endmacro %}

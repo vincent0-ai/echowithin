@@ -77,6 +77,4 @@ waitress==3.0.2
 webencodings==0.5.1
 Werkzeug==3.1.4
 yarl==1.22.0
-
-# Meilisearch client for fast full-text search
-meilisearch==1.2.0
+meilisearch==0.38.0

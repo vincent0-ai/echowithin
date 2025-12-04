@@ -310,29 +310,29 @@ class User(UserMixin):
     def get_admin(self):
         return self.is_admin
 
-# @app.before_request
-# def enforce_canonical_domain_and_https():
-#     host = request.headers.get('X-Forwarded-Host', request.host)
-#     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+@app.before_request
+def enforce_canonical_domain_and_https():
+    host = request.headers.get('X-Forwarded-Host', request.host)
+    scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-#     canonical_host = "echowithin.xyz"
-#     canonical_scheme = "https"
+    canonical_host = "echowithin.xyz"
+    canonical_scheme = "https"
 
-#     needs_redirect = False
+    needs_redirect = False
 
-#     # Fix host (remove www)
-#     if host != canonical_host:
-#         host = canonical_host
-#         needs_redirect = True
+    # Fix host (remove www)
+    if host != canonical_host:
+        host = canonical_host
+        needs_redirect = True
 
-#     # Fix scheme
-#     if scheme != canonical_scheme:
-#         scheme = canonical_scheme
-#         needs_redirect = True
+    # Fix scheme
+    if scheme != canonical_scheme:
+        scheme = canonical_scheme
+        needs_redirect = True
 
-#     if needs_redirect:
-#         new_url = f"{scheme}://{host}{request.full_path}"
-#         return redirect(new_url, code=301)
+    if needs_redirect:
+        new_url = f"{scheme}://{host}{request.full_path}"
+        return redirect(new_url, code=301)
 
 
 def admin_required(f):

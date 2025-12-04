@@ -595,7 +595,7 @@ def search():
                 'limit': per_page,
                 'offset': (page - 1) * per_page,
                 'attributesToHighlight': ['title', 'content'],
-                'highlightPreTag': '<span style="background-color: yellow;">',
+                'highlightPreTag': '<span class="highlighted-match">',
                 'highlightPostTag': '</span>'
             }
             if filter_expr:

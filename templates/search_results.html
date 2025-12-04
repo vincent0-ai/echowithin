@@ -3,7 +3,7 @@
 {% block content %}
 <style>
   .search-header {
-    background: linear-gradient(135deg, #667eea 0%, maroon 100%);
+    background: maroon;
     color: white;
     padding: 3rem 1rem;
     border-radius: 8px;
@@ -157,6 +157,17 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  
+  /* Add this new rule to define the color highlighting */
+  .highlighted-match {
+    /* Use your primary color for the text */
+    color: var(--primary-color, maroon); 
+    font-weight: bold;
+    /* Ensure no background color is applied */
+    background-color: transparent; 
+  }
+
 
   /* Mobile-specific adjustments */
   @media (max-width: 767px) {

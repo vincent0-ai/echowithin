@@ -286,6 +286,14 @@ def linkify_filter(text):
     """A Jinja2 filter to turn URLs in text into clickable links."""
     return bleach.linkify(text)
 
+@app.template_filter('from_timestamp')
+def from_timestamp_filter(timestamp):
+    """A Jinja2 filter to convert a Unix timestamp to a datetime object."""
+    try:
+        return datetime.datetime.fromtimestamp(int(timestamp), tz=datetime.timezone.utc)
+    except (ValueError, TypeError):
+        return timestamp # Return original value if conversion fails
+
 
 class User(UserMixin):
     def __init__(self, user_data):
@@ -558,20 +566,20 @@ def search():
     total = 0
     if meili_index and (query or tags_filter or author_filter or date_from or date_to):
         try:
-            # Build Meilisearch filter expression if any filters provided
-            filter_expr = None
-            filter_clauses = []
-            if tags_filter:
-                tag_clauses = [f'tags = "{t}"' for t in tags_filter]
-                filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
-            if author_filter:
-                filter_clauses.append(f'author_username = "{author_filter}"')
-            if date_from:
-                filter_clauses.append(f'created_at >= "{date_from}"')
-            if date_to:
-                filter_clauses.append(f'created_at <= "{date_to}"')
-            if filter_clauses:
-                filter_expr = ' AND '.join(filter_clauses)
+            # # Build Meilisearch filter expression if any filters provided
+            # filter_expr = None
+            # filter_clauses = []
+            # if tags_filter:
+            #     tag_clauses = [f'tags = "{t}"' for t in tags_filter]
+            #     filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
+            # if author_filter:
+            #     filter_clauses.append(f'author_username = "{author_filter}"')
+            # if date_from:
+            #     filter_clauses.append(f'created_at >= "{date_from}"')
+            # if date_to:
+            #     filter_clauses.append(f'created_at <= "{date_to}"')
+            # if filter_clauses:
+            #     filter_expr = ' AND '.join(filter_clauses)
 
             search_params = {
                 'limit': per_page,
@@ -580,8 +588,8 @@ def search():
                 'highlightPreTag': '<mark>',
                 'highlightPostTag': '</mark>'
             }
-            if filter_expr:
-                search_params['filter'] = filter_expr
+            # if filter_expr:
+            #     search_params['filter'] = filter_expr
             
             # Apply sorting
             if sort == 'newest':
@@ -611,7 +619,7 @@ def search():
                     'title': title_html,
                     'slug': h.get('slug'),
                     'author': h.get('author_username'),
-                    'created_at': h.get('created_at'),
+                    'created_at': datetime.datetime.fromtimestamp(h.get('created_at'), tz=datetime.timezone.utc) if h.get('created_at') else None,
                     'excerpt': excerpt
                 })
         except Exception as e:

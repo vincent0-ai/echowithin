@@ -83,6 +83,9 @@
             <div class="tab-buttons">
                 <button class="tab-button active" data-tab="latest-posts">Latest Posts</button>
                 <button class="tab-button" data-tab="active-posts">Most Active</button>
+                {% if current_user.is_authenticated %}
+                <button class="tab-button" data-tab="related-posts">Related Posts</button>
+                {% endif %}
             </div>
 
             <div id="latest-posts" class="tab-content active">
@@ -98,6 +101,12 @@
             <div id="active-posts" class="tab-content">
                 <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading active posts...</div>
             </div>
+
+            {% if current_user.is_authenticated %}
+            <div id="related-posts" class="tab-content">
+                <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading related posts...</div>
+            </div>
+            {% endif %}
         </div>
 
         <div style="text-align:center; margin-top:2rem;">
@@ -124,6 +133,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tab === 'active-posts' && !button.dataset.loaded) {
                 fetchActivePosts();
                 button.dataset.loaded = "true";
+            }
+            if (tab === 'related-posts' && !button.dataset.loaded) {
+                fetchRelatedPosts();
+                button.dataset.loaded = 'true';
             }
         });
     });
@@ -161,6 +174,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    function fetchRelatedPosts() {
+        const container = document.getElementById('related-posts');
+
+        fetch('{{ url_for("get_related_posts_json") }}')
+            .then(r => r.json())
+            .then(posts => {
+                if (!posts || !posts.length) {
+                    container.innerHTML = '<p>No related posts found at this time.</p>';
+                    return;
+                }
+
+                let html = '';
+                posts.forEach(p => {
+                    html += renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}');
+                });
+
+                container.innerHTML = html;
+            })
+            .catch(() => container.innerHTML = '<p>Unable to load related posts.</p>');
+    }
+
     function renderPostItemJS(post, currentUserId) {
         // Fix 1: Use loose equality (==) for ID comparison in case of int/string mismatch
         const isOwner = currentUserId && post.author_id == currentUserId;
@@ -195,9 +229,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return `
         <div class="post-item" style="position: relative;">
             <h3><a href="${post.url}" class="record-view-link" data-post-id="${post._id}">${post.title}</a></h3>
-            ${media}
+            <div class="post-content-wrapper">
+                ${media}
+            </div>
             <p>${plainTextContent.substring(0,150)}...</p>
-            <div class="post-meta">Posted by <strong>${post.author}</strong> on ${post.timestamp}</div>
+            <div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>
 
             <div class="post-actions">
                 <a href="${post.url}" class="btn comment-btn record-view-link" data-post-id="${post._id}">

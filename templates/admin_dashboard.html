@@ -118,7 +118,10 @@ async function loadActiveNow() {
 
         (data.active_users || []).forEach(u => {
             const li = document.createElement('li');
-            li.textContent = `${u.username} (Last seen: ${u.last_active})`;
+            const link = document.createElement('a');
+            link.href = `/profile/${u.username}`;
+            link.textContent = `${u.username} (Last seen: ${u.last_active})`;
+            li.appendChild(link);
             activeList.appendChild(li);
         });
     } catch (e) {

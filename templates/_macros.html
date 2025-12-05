@@ -97,7 +97,7 @@
 
     {# --- Timestamp --- #}
     <div class="post-meta">
-        Posted by <strong>{{ post.author }}</strong> on
+        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
         {% if post.timestamp.strftime %}
             {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
         {% else %}

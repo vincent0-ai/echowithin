@@ -6,35 +6,47 @@
 
 {% block content %}
 <div class="content-wrapper">
-    <div class="profile-header">
-        <h1>{{ user.username }}</h1>
-        <div class="profile-details">
-            <div class="profile-detail-item">
-                <span class="detail-value">{{ user.email }}</span>
+    <div class="profile-container">
+        <div class="profile-sidebar">
+            <img src="{{ user.profile_picture_url or url_for('static', filename='images/default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
+            <h1 class="profile-username">{{ user.username }}</h1>
+            {% if user.bio %}
+                <p class="profile-bio">{{ user.bio }}</p>
+            {% endif %}
+            <div class="profile-meta">
+                {% if user.website %}
+                    <div class="profile-meta-item">
+                        <i class="fas fa-link"></i> <a href="{{ user.website }}" target="_blank" rel="noopener noreferrer">{{ user.website | replace('https://', '') | replace('http://', '') }}</a>
+                    </div>
+                {% endif %}
+                {% if user.join_date %}
+                    <div class="profile-meta-item">
+                        <i class="fas fa-calendar-alt"></i> Member since {{ user.join_date.strftime('%B %Y') }}
+                    </div>
+                {% endif %}
             </div>
-            <div class="profile-detail-item">
-                <button class="btn" onclick="window.location.href='{{ url_for('profile_settings', username=user.username) }}'" style="background-color: maroon; color: white;"><strong>Account Settings</strong></button>
-            </div>
+            {% if current_user and current_user.username == user.username %}
+                <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn" style="width: 100%; margin-top: 1rem;">
+                    <i class="fas fa-cog"></i> Edit Profile
+                </a>
+            {% endif %}
         </div>
-        {% if user.join_date %}
-            <p class="profile-meta">Member since: {{ user.join_date.strftime('%B %d, %Y') }}</p>
-        {% endif %}
-    </div>
 
-    <div class="posts-section">
-        <h3>Posts by {{ user.username }}</h3>
-        {% if user_posts %}
-            <div class="profile-posts-list">
-            {% for post in user_posts %}
-                <div class="post-item-simple">
-                    <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
-                    <p class="post-meta">Posted on {{ post.timestamp.strftime('%B %d, %Y') }}</p>
+        <div class="profile-main-content">
+            <h2 class="section-title">Posts by {{ user.username }}</h2>
+            {% if user_posts %}
+                <div class="profile-posts-list">
+                {% for post in user_posts %}
+                    <div class="post-item-simple">
+                        <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
+                        <p class="post-meta">Posted on {{ post.timestamp.strftime('%B %d, %Y') }}</p>
+                    </div>
+                {% endfor %}
                 </div>
-            {% endfor %}
+            {% else %}
+                <p>{{ user.username }} has not created any posts yet.</p>
+            {% endif %}
             </div>
-        {% else %}
-            <p>{{ user.username }} has not created any posts yet.</p>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

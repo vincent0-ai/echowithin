@@ -556,6 +556,7 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
             counts_map[doc['_id']] = doc.get('count', 0)
     except Exception as e:
         app.logger.warning(f"Could not fetch batch comment counts from internal collection: {e}")
+    return counts_map
 
 
 # ----------------- Search endpoints -----------------

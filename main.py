@@ -1267,37 +1267,39 @@ def home():
     most_active_result = list(posts_conf.aggregate(most_active_pipeline))
     most_active_member = most_active_result[0] if most_active_result else None
 
-    # Fetch trending posts (e.g., 5 most recent posts)
-    # Fetch top trending posts by comment count (5)
+    # --- Hot Posts Calculation ---
+    hot_posts = []
     try:
-        pipeline = [
-            {'$match': {'is_deleted': False}},
-            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 5}
-        ]
-        agg = list(comments_conf.aggregate(pipeline))
-        trending_posts = []
-        for doc in agg:
-            if doc.get('_id'):  # Ensure slug is not None
-                p = posts_conf.find_one({'slug': doc['_id']})
-                if p:
-                    # Attach the comment count and URL directly
-                    p['comment_count'] = doc.get('count', 0)
-                    with app.app_context():
-                        p['url'] = url_for("view_post", slug=p.get("slug"), _external=True)
-                    trending_posts.append(p)
-    except Exception:
-        # Fallback: most recent posts
-        # In the fallback case, we still need to prepare the posts
-        fallback_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(5))
-        with app.app_context():
-            trending_posts = prepare_posts(fallback_posts)
+        # Consider posts from the last 7 days for the "hot" ranking
+        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+        recent_posts = list(posts_conf.find({'created_at': {'$gte': seven_days_ago}}))
 
+        # Get all slugs to fetch comment counts in one go
+        slugs = [p['slug'] for p in recent_posts if p.get('slug')]
+        comment_counts = {doc['_id']: doc.get('count', 0) for doc in comments_conf.aggregate([
+            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+        ])}
+
+        # Calculate score for each post
+        for post in recent_posts:
+            comment_count = comment_counts.get(post['slug'], 0)
+            post['hot_score'] = calculate_hot_score(post, comment_count)
+            post['comment_count'] = comment_count
+            hot_posts.append(post)
+
+        # Sort by score and take the top 5
+        hot_posts.sort(key=lambda p: p['hot_score'], reverse=True)
+        hot_posts = hot_posts[:5]
+        with app.app_context():
+            hot_posts = prepare_posts(hot_posts) # Adds 'url' to each post
+    except Exception as e:
+        app.logger.error(f"Failed to calculate hot posts: {e}")
+        hot_posts = []
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           most_active_member=most_active_member, trending_posts=trending_posts)
+                           most_active_member=most_active_member, hot_posts=hot_posts)
 
 @app.route("/blog")
 def blog():
@@ -1387,6 +1389,27 @@ def get_all_posts_json():
         return jsonify({"error": "Could not retrieve posts"}), 500
 
 
+def calculate_hot_score(post, comment_count):
+    """
+    Calculates a 'hot' score for a post based on comments, views, and age.
+    A higher score means the post is 'hotter'.
+    """
+    post_time = post.get('created_at') or post.get('timestamp')
+    if not post_time:
+        return 0
+
+    # Ensure post_time is timezone-aware for correct calculation
+    if post_time.tzinfo is None:
+        post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+
+    age_in_hours = (datetime.datetime.now(datetime.timezone.utc) - post_time).total_seconds() / 3600
+    views = post.get('view_count', 0)
+    
+    # Simple scoring: comments are weighted more heavily than views.
+    # The score decays over time using a gravity factor in the denominator.
+    score = (comment_count * 5) + views
+    return score / ((age_in_hours + 2) ** 1.8) # Gravity factor
+
 @app.route('/api/posts/top-by-comments')
 def get_top_posts_json():
     """Return top posts sorted by internal comment counts."""
@@ -1415,6 +1438,44 @@ def get_top_posts_json():
     except Exception as e:
         app.logger.error(f"Error in get_top_posts_json: {e}")
         return jsonify({'error': 'Could not retrieve top posts'}), 500
+
+
+@app.route('/api/posts/hot')
+def get_hot_posts_json():
+    """Return 'hot' posts using a ranking algorithm."""
+    try:
+        # Fetch recent posts to calculate scores on (e.g., last 7 days)
+        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+        recent_posts = list(posts_conf.find(
+            {'created_at': {'$gte': seven_days_ago}},
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1}
+        ))
+
+        # Get comment counts for these posts
+        slugs = [p['slug'] for p in recent_posts if p.get('slug')]
+        comment_counts = {doc['_id']: doc.get('count', 0) for doc in comments_conf.aggregate([
+            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+        ])}
+
+        # Calculate hot score for each post
+        scored_posts = []
+        for post in recent_posts:
+            comment_count = comment_counts.get(post['slug'], 0)
+            post['hot_score'] = calculate_hot_score(post, comment_count)
+            post['comment_count'] = comment_count
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            post['timestamp'] = (post.get('created_at') or post.get('timestamp')).strftime('%b %d, %Y at %I:%M %p')
+            post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+            scored_posts.append(post)
+
+        # Sort by hot score and return top 20
+        scored_posts.sort(key=lambda p: p['hot_score'], reverse=True)
+        return jsonify(scored_posts[:20])
+    except Exception as e:
+        app.logger.error(f"Error in get_hot_posts_json: {e}")
+        return jsonify({'error': 'Could not retrieve hot posts'}), 500
 
 @app.route('/api/posts/<post_id>/status')
 def get_post_status(post_id):

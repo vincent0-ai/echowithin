@@ -1149,16 +1149,24 @@ def google_callback():
         flash("Authentication session expired or was already used. Please try logging in again.", "warning")
         return redirect(url_for('login'))
 
+    # Pop the state from the session immediately to prevent reuse (e.g., in a PWA/browser race condition)
+    oauth_state = session.pop('oauth_state', None)
+
     # Recreate the session with the same redirect_uri to fetch the token
     google = OAuth2Session(
         GOOGLE_CLIENT_ID,
-        state=session.get('oauth_state'),
+        state=oauth_state,
         redirect_uri=url_for('google_callback', _external=True))
-    token = google.fetch_token(
-        'https://oauth2.googleapis.com/token',
-        client_secret=GOOGLE_CLIENT_SECRET,
-        authorization_response=request.url
-    )
+    try:
+        token = google.fetch_token(
+            'https://oauth2.googleapis.com/token',
+            client_secret=GOOGLE_CLIENT_SECRET,
+            authorization_response=request.url
+        )
+    except Exception as e:
+        app.logger.error(f"Failed to fetch Google OAuth token: {e}", exc_info=True)
+        flash("Authentication failed. Please try again.", "danger")
+        return redirect(url_for('login'))
     google = OAuth2Session(GOOGLE_CLIENT_ID, token=token)
     response = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
     user_info = response.json()
@@ -2785,6 +2793,20 @@ def handle_ratelimit_exception(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     """Handler for 500 errors, sends an ntfy notification."""
+    try:
+        # Log the original error first
+        app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)
+        try:
+            send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+        except redis.exceptions.ConnectionError as ntfy_e:
+            app.logger.warning(f"Redis connection failed. Falling back to thread for 500 error ntfy notification. Error: {ntfy_e}")
+            with app.app_context():
+                ThreadPoolExecutor().submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+        except Exception as ntfy_e:
+            app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
+    except Exception as log_e:
+        print(f"CRITICAL: Failed to log 500 error: {log_e}", file=sys.stderr)
+    return render_template("500.html"), 500
     try:
         # Log the original error first
         app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)

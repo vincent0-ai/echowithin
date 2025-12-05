@@ -180,6 +180,12 @@ main{
     color: var(--primary-dark-color);
 }
 
+.google-button img {
+    width: 191px; /* Standard width for this button */
+    height: 46px; /* Standard height */
+    border-radius: 4px; /* Optional: match other button styles */
+}
+
 /* Remember Me & Forgot Password section */
 .form-options {
     display: flex;

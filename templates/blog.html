@@ -7,16 +7,27 @@
 
 {% block content %}
 <div class="content-wrapper">
+    <style>
+        @media (max-width: 768px) {
+            .content-wrapper {
+                padding-left: 0;
+                padding-right: 0;
+            }
+        }
+    </style>
+
     <div class="blog-header">
         <h1>EchoWithin Blog</h1>
         <h4>Share your real ideas, experiences, and perspectives.</h4>
 
         <!-- Search Form -->
-        <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
-            <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="width: 70%; min-width: 200px;">
-            <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">
-                <i class="fa-solid fa-search"></i> Search
-            </button>
+        <form action="{{ url_for('blog') }}" method="GET" class="search-form" style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <div class="search-input-group" style="display: flex; flex-grow: 1; max-width: 500px;">
+                <input type="text" name="query" class="form-input" placeholder="Search posts..." value="{{ query or '' }}" style="flex-grow: 1; min-width: 150px; border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                <button type="submit" class="form-button" style="width: auto; padding: 0 1rem; border-top-left-radius: 0; border-bottom-left-radius: 0;">
+                    <i class="fa-solid fa-search"></i> Search
+                </button>
+            </div>
             <a href="{{ url_for('search') }}" class="form-button" style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; color: #fff; background: maroon border: none;">
                 <i class="fa-solid fa-sliders"></i> Advanced Search
             </a>

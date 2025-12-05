@@ -23,7 +23,7 @@
       <div class="form-group">
         <label>Profile Picture</label>
         {% if user.profile_picture_url %}
-          <img src="{{ user.profile_picture_url }}" alt="Current profile picture" class="edit-post-image-preview">
+          <img src="{{ user.profile_picture_url + '?v=' + now_timestamp }}" alt="Current profile picture" class="edit-post-image-preview">
         {% endif %}
         <label for="profile_picture">Update Profile Picture</label>
         <input type="file" id="profile_picture" name="profile_picture" class="form-input" accept="image/*">

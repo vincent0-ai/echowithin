@@ -1267,30 +1267,46 @@ def home():
     most_active_result = list(posts_conf.aggregate(most_active_pipeline))
     most_active_member = most_active_result[0] if most_active_result else None
 
-    # --- Hot Posts Calculation ---
+    # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
     hot_posts = []
     try:
-        # Consider posts from the last 7 days for the "hot" ranking
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-        recent_posts = list(posts_conf.find({'created_at': {'$gte': seven_days_ago}}))
-
-        # Get all slugs to fetch comment counts in one go
-        slugs = [p['slug'] for p in recent_posts if p.get('slug')]
-        comment_counts = {doc['_id']: doc.get('count', 0) for doc in comments_conf.aggregate([
-            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': False}},
-            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
-        ])}
-
-        # Calculate score for each post
-        for post in recent_posts:
-            comment_count = comment_counts.get(post['slug'], 0)
-            post['hot_score'] = calculate_hot_score(post, comment_count)
-            post['comment_count'] = comment_count
-            hot_posts.append(post)
-
-        # Sort by score and take the top 5
-        hot_posts.sort(key=lambda p: p['hot_score'], reverse=True)
-        hot_posts = hot_posts[:5]
+        
+        # This pipeline performs the entire hot post calculation in the database.
+        hot_posts_pipeline = [
+            # 1. Find recent posts
+            {'$match': {'created_at': {'$gte': seven_days_ago}}},
+            # 2. Join with comments collection to get comment counts
+            {'$lookup': {
+                'from': 'comments',
+                'localField': 'slug',
+                'foreignField': 'post_slug',
+                'as': 'comments'
+            }},
+            # 3. Add fields for calculation
+            {'$addFields': {
+                'comment_count': {'$size': '$comments'},
+                'age_in_hours': {
+                    '$divide': [
+                        {'$subtract': [datetime.datetime.now(datetime.timezone.utc), '$created_at']},
+                        3600 * 1000 # milliseconds in an hour
+                    ]
+                }
+            }},
+            # 4. Calculate the hot score
+            {'$addFields': {
+                'hot_score': {
+                    '$divide': [
+                        {'$add': [{'$multiply': ['$comment_count', 5]}, {'$ifNull': ['$view_count', 0]}]},
+                        {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.8]}
+                    ]
+                }
+            }},
+            # 5. Sort by score and limit to the top 5
+            {'$sort': {'hot_score': -1}},
+            {'$limit': 5}
+        ]
+        hot_posts = list(posts_conf.aggregate(hot_posts_pipeline))
         with app.app_context():
             hot_posts = prepare_posts(hot_posts) # Adds 'url' to each post
     except Exception as e:

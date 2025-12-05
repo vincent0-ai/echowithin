@@ -1310,6 +1310,15 @@ def home():
         hot_posts = list(posts_conf.aggregate(hot_posts_pipeline))
         with app.app_context():
             hot_posts = prepare_posts(hot_posts) # Adds 'url' to each post
+
+        # Fallback for new sites: if not enough hot posts, show latest posts.
+        if len(hot_posts) < 5:
+            app.logger.info("Not enough hot posts found, falling back to latest posts for homepage.")
+            latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
+            with app.app_context():
+                # Overwrite hot_posts with the latest posts
+                hot_posts = prepare_posts(list(latest_posts_cursor))
+
     except Exception as e:
         app.logger.error(f"Failed to calculate hot posts: {e}")
         hot_posts = []

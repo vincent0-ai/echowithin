@@ -311,6 +311,16 @@ class User(UserMixin):
         return self.is_admin
 
 @app.before_request
+def update_last_active():
+    """Update a user's last active timestamp on each request."""
+    if current_user.is_authenticated:
+        users_conf.update_one(
+            {'_id': ObjectId(current_user.id)},
+            {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+
+
+@app.before_request
 def enforce_canonical_domain_and_https():
     host = request.headers.get('X-Forwarded-Host', request.host)
     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
@@ -708,6 +718,29 @@ def admin_metrics():
         app.logger.error(f'Error building admin metrics: {e}')
         return jsonify({'error': 'failed to compute metrics'}), 500
 
+@app.route('/admin/active_users')
+@login_required
+@admin_required
+def admin_active_users():
+    """API endpoint to get users active in the last 5 minutes."""
+    try:
+        # Define "active" as having made a request in the last 5 minutes
+        five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+        
+        active_users_cursor = users_conf.find(
+            {'last_active': {'$gte': five_minutes_ago}},
+            {'username': 1, 'last_active': 1, '_id': 0} # Projection
+        ).sort('last_active', -1)
+        
+        active_users_list = list(active_users_cursor)
+        
+        for user in active_users_list:
+            user['last_active'] = user['last_active'].strftime('%Y-%m-%d %H:%M:%S UTC')
+
+        return jsonify({'active_users': active_users_list})
+    except Exception as e:
+        app.logger.error(f'Error fetching real-time active users: {e}')
+        return jsonify({'error': 'failed to fetch active users'}), 500
 
 @app.route('/admin/export_csv')
 @login_required

@@ -2152,6 +2152,12 @@ def update_post(post_id):
                 'timestamp': datetime.datetime.now(),
             }}
         )
+        # Re-index the post in Meilisearch to reflect the changes
+        try:
+            if meili_index:
+                index_post_to_meili(post_id)
+        except Exception as e:
+            app.logger.error(f"Failed to re-index post {post_id} after update: {e}")
         flash("Post updated successfully!", "success")
         return redirect(url_for('blog', slug=slug))
     else:

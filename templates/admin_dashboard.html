@@ -23,12 +23,10 @@
   <p>Active users (window): <span id="active-users"></span></p>
     <h3>Traffic (visits)</h3>
     <h3>Currently Active Users (<span id="active-now-count">0</span>)</h3>
-    <p class="text-muted small">Users active in the last 5 minutes. Refreshes every 30 seconds.</p>
+    <p class="text-muted small">Users active in the last 5 minutes.</p>
     <ul id="active-now-list"></ul>
 
     <canvas id="trafficChart" width="800" height="200"></canvas>
-    <h4>Top IPs</h4>
-    <ul id="top-ips"></ul>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -69,13 +67,6 @@ async function loadMetrics(){
       const ctx3 = document.getElementById('trafficChart').getContext('2d');
       new Chart(ctx3, {type:'bar', data:{labels:tLabels,datasets:[{label:'Visits',data:tCounts,backgroundColor:'rgba(102,126,234,0.6)'}]}});
 
-      const topIpsEl = document.getElementById('top-ips');
-      topIpsEl.innerHTML = '';
-      (tData.top_ips || []).forEach(ip=>{
-        const li = document.createElement('li');
-        li.textContent = `${ip._id} — ${ip.count} hits`;
-        topIpsEl.appendChild(li);
-      });
     }catch(e){
       console.debug('Failed to load traffic metrics', e);
     }

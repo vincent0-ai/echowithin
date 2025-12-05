@@ -7,7 +7,7 @@ const URLS_TO_CACHE = [
   '/static/style.css',
   '/static/custom_styles.css',
   '/static/script.js',
-  '/static/logo.jpg',
+  '/static/logo.png',
   '/static/coffee-bean.png'
 ];
 

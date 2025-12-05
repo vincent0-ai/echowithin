@@ -100,14 +100,13 @@ ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov'}
 MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10 MB limit for uploaded videos
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # --- Temporary Uploads for Background Processing ---
 TEMP_UPLOAD_FOLDER = 'temp_uploads'
 app.config['TEMP_UPLOAD_FOLDER'] = TEMP_UPLOAD_FOLDER
-if not os.path.exists(TEMP_UPLOAD_FOLDER):
-    os.makedirs(TEMP_UPLOAD_FOLDER)
+os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
+
 
 # --- Cloudinary Configuration ---
 cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_key = get_env_variable('CLOUDINARY_API_KEY'), api_secret = get_env_variable('CLOUDINARY_API_SECRET'))

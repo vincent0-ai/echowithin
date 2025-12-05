@@ -180,6 +180,7 @@ if MEILI_URL and MEILI_MASTER_KEY:
         try:
             if hasattr(meili_index, 'update_filterable_attributes'):
                 meili_index.update_filterable_attributes(['author_username', 'tags', 'created_at'])
+                meili_index.update_filterable_attributes(['id', 'author_username', 'tags', 'created_at'])
             else:
                 app.logger.debug('meili_index missing update_filterable_attributes; skipping')
         except Exception as e:

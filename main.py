@@ -1110,6 +1110,12 @@ def google_login():
 
 @app.route('/google_callback')
 def google_callback():
+    # If state is not in session, it's a possible replay attack or the user
+    # has already completed the flow. Redirect to login to be safe.
+    if 'oauth_state' not in session:
+        flash("Authentication session expired or was already used. Please try logging in again.", "warning")
+        return redirect(url_for('login'))
+
     # Recreate the session with the same redirect_uri to fetch the token
     google = OAuth2Session(
         GOOGLE_CLIENT_ID,

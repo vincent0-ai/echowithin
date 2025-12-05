@@ -2,10 +2,10 @@
 
 {% block title %} <title>Admin Dashboard</title> {% endblock %}
 {% block content %} 
-<div class="container admin-dashboard-page-container">
+<div class="container admin-dashboard-page-container py-4">
   <h1>Admin Dashboard</h1>
-  <div>
-    <button id="reindex-btn" class="btn btn-primary">Reindex Search</button>
+  <div class="d-flex flex-column flex-sm-row gap-2 mb-4">
+    <button id="reindex-btn" class="btn btn-primary ">Reindex Search</button>
     <a id="export-csv" class="btn btn-secondary" href="/admin/export_csv?metric=posts_per_day">Export Posts CSV</a>
   </div>
 

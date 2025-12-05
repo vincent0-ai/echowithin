@@ -50,6 +50,7 @@
             {% else %}
                 <p>{{ user.username }} has not created any posts yet.</p>
             {% endif %}
+            {% if user_posts %}
             <nav class="pagination-nav" style="margin-top: 2rem;">
                 <ul class="pagination">
                     {% if page > 1 %}

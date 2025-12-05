@@ -1226,6 +1226,17 @@ def google_signup():
             'notify_new_posts': True
         })
 
+        # --- Send ntfy notification for new user from Google signup ---
+        try:
+            ntfy_message = f"User '{username}' has registered via Google."
+            send_ntfy_notification.queue(ntfy_message, "New User on EchoWithin", "partying_face")
+        except redis.exceptions.ConnectionError as e:
+            app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
+            with app.app_context():
+                ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New User on EchoWithin", "partying_face")
+        except Exception as e:
+            app.logger.error(f"Failed to enqueue ntfy notification for new Google user '{username}': {e}")
+
         # Clean up session
         session.pop('google_signup_info', None)
 

@@ -34,10 +34,10 @@
         
         <!-- Trending Posts Card -->
         <div class="stat-card trending-card">
-            <h3>Trending Posts</h3>
-            {% if trending_posts %}
+            <h3>Top Posts</h3>
+            {% if hot_posts %}
                 <ul class="trending-list">
-                    {% for post in trending_posts %}
+                    {% for post in hot_posts %}
                         <li>
                             <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
                             <span class="stat-subtext">({{ post.comment_count if post.comment_count is defined else 0 }} comments)</span>

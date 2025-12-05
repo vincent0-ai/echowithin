@@ -1518,20 +1518,31 @@ def get_hot_posts_json():
 @login_required
 def get_related_posts_json():
     """
-    Returns posts related to the current user's activity.
-    Initial logic: finds posts sharing tags with posts the user has authored.
+    Returns posts related to a user's activity, finding posts that share
+    tags with posts the user has either authored or commented on.
     """
     try:
-        # 1. Find tags from posts the current user has created.
-        user_posts = posts_conf.find({'author_id': ObjectId(current_user.id)}, {'tags': 1})
         interest_tags = set()
+
+        # 1. Find tags from posts the current user has authored.
+        user_posts = posts_conf.find({'author_id': ObjectId(current_user.id)}, {'tags': 1})
         for post in user_posts:
             interest_tags.update(post.get('tags', []))
+
+        # 2. Find tags from posts the current user has commented on.
+        commented_post_slugs = comments_conf.distinct('post_slug', {'author_id': ObjectId(current_user.id)})
+        if commented_post_slugs:
+            commented_on_posts = posts_conf.find(
+                {'slug': {'$in': commented_post_slugs}},
+                {'tags': 1}
+            )
+            for post in commented_on_posts:
+                interest_tags.update(post.get('tags', []))
 
         if not interest_tags:
             return jsonify([])
 
-        # 2. Find recent posts that have these tags but are not from the current user.
+        # 3. Find recent posts that have these tags but are not from the current user.
         related_posts_cursor = posts_conf.find(
             {'tags': {'$in': list(interest_tags)}, 'author_id': {'$ne': ObjectId(current_user.id)}},
             {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'video_url':1}
@@ -2557,20 +2568,34 @@ def profile(username):
         flash("User not found.", "danger")
         return redirect(url_for('home'))
 
-    # Find all posts by this user's ID
-    user_posts_cursor = posts_conf.find({'author_id': user['_id']}).sort('timestamp', -1)
+    # --- Pagination for user posts ---
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 5 # Or another number
+    filter_query = {'author_id': user['_id']}
+
+    total_posts = posts_conf.count_documents(filter_query)
+    total_comments = comments_conf.count_documents({'author_id': user['_id'], 'is_deleted': False})
+    total_pages = math.ceil(total_posts / posts_per_page)
+    skip = (page - 1) * posts_per_page
+
+    # Find posts by this user's ID with pagination
+    user_posts_cursor = posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
     with app.app_context():
         user_posts = prepare_posts(list(user_posts_cursor))
 
     page_title = f"Profile: {user['username']}"
     page_description = f"View the profile and posts by {user['username']} on EchoWithin."
 
-    return render_template('profile.html', 
-                           user=user, 
+    return render_template('profile.html',
+                           user=user,
                            user_posts=user_posts,
-                           title=page_title, 
+                           title=page_title,
                            description=page_description,
-                           active_page='profile')
+                           active_page='profile',
+                           page=page,
+                           total_pages=total_pages,
+                           total_posts=total_posts,
+                           total_comments=total_comments)
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])

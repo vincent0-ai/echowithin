@@ -13,6 +13,10 @@
             {% if user.bio %}
                 <p class="profile-bio">{{ user.bio }}</p>
             {% endif %}
+            <div class="profile-stats">
+                <div class="stat-item"><strong>{{ total_posts }}</strong> Posts</div>
+                <div class="stat-item"><strong>{{ total_comments }}</strong> Comments</div>
+            </div>
             <div class="profile-meta">
                 {% if user.website %}
                     <div class="profile-meta-item">
@@ -46,7 +50,25 @@
             {% else %}
                 <p>{{ user.username }} has not created any posts yet.</p>
             {% endif %}
-            </div>
+            <nav class="pagination-nav" style="margin-top: 2rem;">
+                <ul class="pagination">
+                    {% if page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('profile', username=user.username, page=page-1) }}">Previous</a>
+                    </li>
+                    {% endif %}
+                    {% for p in range(1, total_pages + 1) %}
+                    <li class="page-item {% if p == page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('profile', username=user.username, page=p) }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+                    {% if page < total_pages %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('profile', username=user.username, page=page+1) }}">Next</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
     </div>
 </div>
 {% endblock %}

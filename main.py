@@ -1289,8 +1289,8 @@ def home():
                 'comment_count': {'$size': '$comments'},
                 'age_in_hours': {
                     '$divide': [
-                        {'$subtract': [datetime.datetime.now(datetime.timezone.utc), '$created_at']},
-                        3600 * 1000 # milliseconds in an hour
+                        {'$subtract': ["$$NOW", '$created_at']},
+                        3600000 # milliseconds in an hour
                     ]
                 }
             }},

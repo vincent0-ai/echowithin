@@ -603,7 +603,10 @@ def search():
             search_params = {
                 'limit': per_page,
                 'offset': (page - 1) * per_page,
-                'attributesToHighlight': ['title', 'content'],
+                'attributesToHighlight': ['title', 'content'], # Highlight matches in these fields
+                'attributesToCrop': ['content'], # Create a snippet from the 'content' field
+                'cropLength': 40, # Number of words to keep around the match
+                'cropMarker': '...', # Text to indicate the content is cropped
                 'highlightPreTag': '<span class="highlighted-match">',
                 'highlightPostTag': '</span>'
             }
@@ -628,11 +631,7 @@ def search():
                 # Prefer the highlighted/formatted fields when available
                 formatted = h.get('_formatted', {})
                 title_html = formatted.get('title') or h.get('title')
-                content_html = formatted.get('content') or h.get('content') or ''
-                excerpt = content_html
-                # Truncate safely (keep HTML — front-end uses |safe)
-                if len(excerpt) > 400:
-                    excerpt = excerpt[:400]
+                excerpt = formatted.get('content') or h.get('content', '')[:300]
                 results.append({
                     'id': h.get('id'),
                     'title': title_html,

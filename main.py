@@ -1514,6 +1514,42 @@ def get_hot_posts_json():
         app.logger.error(f"Error in get_hot_posts_json: {e}")
         return jsonify({'error': 'Could not retrieve hot posts'}), 500
 
+@app.route('/api/posts/related')
+@login_required
+def get_related_posts_json():
+    """
+    Returns posts related to the current user's activity.
+    Initial logic: finds posts sharing tags with posts the user has authored.
+    """
+    try:
+        # 1. Find tags from posts the current user has created.
+        user_posts = posts_conf.find({'author_id': ObjectId(current_user.id)}, {'tags': 1})
+        interest_tags = set()
+        for post in user_posts:
+            interest_tags.update(post.get('tags', []))
+
+        if not interest_tags:
+            return jsonify([])
+
+        # 2. Find recent posts that have these tags but are not from the current user.
+        related_posts_cursor = posts_conf.find(
+            {'tags': {'$in': list(interest_tags)}, 'author_id': {'$ne': ObjectId(current_user.id)}},
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'video_url':1}
+        ).sort('timestamp', -1).limit(10)
+
+        related_posts = list(related_posts_cursor)
+        for post in related_posts:
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
+            post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+            post['comment_count'] = comments_conf.count_documents({'post_slug': post['slug'], 'is_deleted': False})
+
+        return jsonify(related_posts)
+    except Exception as e:
+        app.logger.error(f"Error in get_related_posts_json for user {current_user.id}: {e}")
+        return jsonify({'error': 'Could not retrieve related posts'}), 500
+
 @app.route('/api/posts/<post_id>/status')
 def get_post_status(post_id):
     """Returns the processing status and media URLs for a given post."""
@@ -1799,16 +1835,26 @@ def view_post(slug):
     related_posts = []
     if meili_index:
         try:
-            # Use Meili's similar posts feature
+            # Enhanced Related Posts Logic:
+            # Search for posts with similar tags and title, then filter out the current post.
             post_id_str = str(post['_id'])
-            # Get 4 results, as the original post might be included
-            search_result = meili_index.get_similar(post_id_str, {'limit': 4})
-            
-            hits = search_result.get('hits', [])
-            # Filter out the original post itself and take the top 3
-            related_posts = [p for p in hits if p.get('id') != post_id_str][:3]
+            search_query = post.get('title', '')
+            search_params = {
+                'limit': 4, # Fetch 4 to have a buffer in case the original post is in the results
+                'filter': f'id != {post_id_str}' # Exclude the current post from results
+            }
 
-            # Convert timestamp back to datetime for the template filter
+            # If the post has tags, add them to the search query for better relevance.
+            if post.get('tags'):
+                tags_str = " ".join(post.get('tags'))
+                search_query = f"{tags_str} {search_query}"
+
+            search_result = meili_index.search(search_query, search_params)
+            hits = search_result.get('hits', [])
+            # Since we filtered in the query, we can just take the top 3 hits.
+            related_posts = hits[:3]
+
+            # Convert timestamp back to a datetime object for use in the template.
             for p in related_posts:
                 if p.get('created_at'):
                     p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)

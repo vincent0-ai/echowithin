@@ -931,6 +931,7 @@ body {
     gap: 1rem;
     margin-top: 1rem;
 }
+
 /* Responsive Styles */
 
 /* Tablet Styles (max-width: 768px) */
@@ -955,8 +956,16 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        flex-wrap: wrap;
         gap: 1rem;
+
+        white-space: nowrap;     /* Prevent wrapping */
+        flex-wrap: nowrap;       /* Force all items to stay on one line */
+        overflow-x: auto;        /* Allow horizontal scroll if links exceed screen width */
+        scrollbar-width: none;   /* Hide scrollbar (Firefox) */
+    }
+
+    .nav-links::-webkit-scrollbar {
+        display: none;           /* Hide scrollbar (Chrome) */
     }
 
     .container {

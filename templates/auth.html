@@ -35,6 +35,9 @@
                     </div>
 
                     <button type="submit" class="form-button">Login</button>
+                    <div class="form-separator">
+                        <span>or</span>
+                    </div>
                     <div class="google-signin">
                         <a href="{{ url_for('google_login') }}" class="google-button">
                             <img src="https://developers.google.com/identity/images/btn_google_signin_dark_normal_web.png" alt="Sign in with Google">
@@ -60,6 +63,9 @@
                         <p>By continuing, you agree to our <a href="{{ url_for('terms') }}" target="_blank">Terms of Service</a>.</p>
                     </div>
                     <button type="submit" class="form-button">Register</button>
+                    <div class="form-separator">
+                        <span>or</span>
+                    </div>
                     <div class="google-signin">
                         <a href="{{ url_for('google_login') }}" class="google-button">
                             <img src="https://developers.google.com/identity/images/btn_google_signup_dark_normal_web.png" alt="Sign up with Google">

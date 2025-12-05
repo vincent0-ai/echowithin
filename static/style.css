@@ -186,6 +186,27 @@ main{
     border-radius: 4px; /* Optional: match other button styles */
 }
 
+/* Separator for 'or' text */
+.form-separator {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: #aaa;
+    width: 100%;
+    margin: 0.5rem 0; /* Adjust spacing */
+}
+
+.form-separator::before,
+.form-separator::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #ddd;
+}
+
+.form-separator span {
+    padding: 0 10px;
+}
+
 /* Remember Me & Forgot Password section */
 .form-options {
     display: flex;

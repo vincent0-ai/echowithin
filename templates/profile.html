@@ -8,7 +8,7 @@
 <div class="content-wrapper">
     <div class="profile-container">
         <div class="profile-sidebar"> 
-            <img src="{{ user.profile_picture_url + '?v=' + now_timestamp if user.profile_picture_url else url_for('static', filename='images/default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
+            <img src="{{ user.profile_picture_url + '?v=' + now_timestamp if user.profile_picture_url else url_for('static', filename='default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
             <h1 class="profile-username">{{ user.username }}</h1>
             {% if user.bio %}
                 <p class="profile-bio">{{ user.bio }}</p>

@@ -2625,7 +2625,7 @@ def profile_settings(username):
                 try:
                     # Delete old profile image from Cloudinary if it exists
                     if user.get('profile_image_public_id'):
-                        cloudinary.uploader.destroy(user['profile_image_public_id'])
+                        cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
 
                     # Upload new image
                     upload_result = cloudinary.uploader.upload(profile_image_file, folder="echowithin_avatars")

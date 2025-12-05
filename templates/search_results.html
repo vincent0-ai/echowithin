@@ -270,13 +270,13 @@
       {% if total > per_page %}
         <div class="pagination-container">
           {% if page > 1 %}
-            <a href="/search?q={{ query }}&page={{ page - 1 }}" class="pagination-btn"><i class="fa-solid fa-chevron-left"></i> Previous</a>
+            <a href="/search?q={{ query }}&page={{ page - 1 }}{% for t in selected_tags %}&tags={{ t }}{% endfor %}{% if selected_author %}&author={{ selected_author }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="pagination-btn"><i class="fa-solid fa-chevron-left"></i> Previous</a>
           {% else %}
             <button class="pagination-btn" disabled><i class="fa-solid fa-chevron-left"></i> Previous</button>
           {% endif %}
           <span style="padding: 0.5rem 1rem; color: #666;">Page {{ page }}</span>
           {% if results|length == per_page %}
-            <a href="/search?q={{ query }}&page={{ page + 1 }}" class="pagination-btn">Next <i class="fa-solid fa-chevron-right"></i></a>
+            <a href="/search?q={{ query }}&page={{ page + 1 }}{% for t in selected_tags %}&tags={{ t }}{% endfor %}{% if selected_author %}&author={{ selected_author }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if sort %}&sort={{ sort }}{% endif %}" class="pagination-btn">Next <i class="fa-solid fa-chevron-right"></i></a>
           {% else %}
             <button class="pagination-btn" disabled>Next <i class="fa-solid fa-chevron-right"></i></button>
           {% endif %}

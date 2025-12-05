@@ -10,13 +10,13 @@
   </div>
 
   <h3>Posts per Day</h3>
-  <canvas id="postsChart" width="800" height="300"></canvas>
+  <div class="chart-container"><canvas id="postsChart"></canvas></div>
 
   <h3>Comments per Day</h3>
-  <canvas id="commentsChart" width="800" height="300"></canvas>
+  <div class="chart-container"><canvas id="commentsChart"></canvas></div>
 
   <h3>Top Posts by Comments</h3>
-  <ul id="top-posts"></ul>
+  <ul id="top-posts" class="mb-4"></ul>
 
   <h3>Users</h3>
   <p>Total confirmed users: <span id="total-users"></span></p>
@@ -25,10 +25,19 @@
     <h3>Currently Active Users (<span id="active-now-count">0</span>)</h3>
     <ul id="active-now-list"></ul>
 
-    <canvas id="trafficChart" width="800" height="200"></canvas>
+    <div class="chart-container"><canvas id="trafficChart"></canvas></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  .chart-container {
+    position: relative;
+    margin-bottom: 2rem;
+    height: 300px; /* Default height for charts */
+    width: 100%;
+  }
+</style>
+
 <script>
 async function loadMetrics(){
   const res = await fetch('/admin/metrics');
@@ -38,13 +47,30 @@ async function loadMetrics(){
   const postsLabels = data.posts_per_day.map(x=>x._id);
   const postsCounts = data.posts_per_day.map(x=>x.count);
   const ctx1 = document.getElementById('postsChart').getContext('2d');
-  new Chart(ctx1, {type:'line', data:{labels:postsLabels,datasets:[{label:'Posts',data:postsCounts,borderColor:'blue',fill:false}]}});
+  new Chart(ctx1, {
+    type:'line', 
+    data:{labels:postsLabels,datasets:[{label:'Posts',data:postsCounts,borderColor:'blue',fill:false}]},
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
 
   // Comments chart
   const comLabels = data.comments_per_day.map(x=>x._id);
   const comCounts = data.comments_per_day.map(x=>x.count);
   const ctx2 = document.getElementById('commentsChart').getContext('2d');
-  new Chart(ctx2, {type:'line', data:{labels:comLabels,datasets:[{label:'Comments',data:comCounts,borderColor:'green',fill:false}]}});
+  new Chart(ctx2, {
+    type:'line', 
+    data:{
+      labels:comLabels,
+      datasets:[{label:'Comments',data:comCounts,borderColor:'green',fill:false}]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  });
 
   // Top posts
   const topList = document.getElementById('top-posts');
@@ -64,7 +90,16 @@ async function loadMetrics(){
       const tLabels = tData.visits_per_day.map(x=>x._id);
       const tCounts = tData.visits_per_day.map(x=>x.count);
       const ctx3 = document.getElementById('trafficChart').getContext('2d');
-      new Chart(ctx3, {type:'bar', data:{labels:tLabels,datasets:[{label:'Visits',data:tCounts,backgroundColor:'rgba(102,126,234,0.6)'}]}});
+      new Chart(ctx3, {
+        type:'bar', 
+        data:{
+          labels:tLabels,
+          datasets:[{label:'Visits',data:tCounts,backgroundColor:'rgba(102,126,234,0.6)'}]},
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
 
     }catch(e){
       console.debug('Failed to load traffic metrics', e);

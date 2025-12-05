@@ -2288,10 +2288,12 @@ def admin_posts():
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
 
-    # Fetch all posts, sorted by newest first
-    posts = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
-    
-    return render_template("admin_posts.html", posts=list(posts), active_page='admin_posts', page=page, total_pages=total_pages, query=query)
+    # Fetch posts and prepare them with comment counts
+    posts_cursor = posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    with app.app_context():
+        posts = prepare_posts(list(posts_cursor))
+
+    return render_template("admin_posts.html", posts=posts, active_page='admin_posts', page=page, total_pages=total_pages, query=query)
 
 @app.route('/admin/delete_post/<post_id>', methods=['POST'])
 @login_required
@@ -2476,8 +2478,10 @@ def profile(username):
         return redirect(url_for('home'))
 
     # Find all posts by this user's ID
-    user_posts = list(posts_conf.find({'author_id': user['_id']}).sort('timestamp', -1))
-    
+    user_posts_cursor = posts_conf.find({'author_id': user['_id']}).sort('timestamp', -1)
+    with app.app_context():
+        user_posts = prepare_posts(list(user_posts_cursor))
+
     page_title = f"Profile: {user['username']}"
     page_description = f"View the profile and posts by {user['username']} on EchoWithin."
 

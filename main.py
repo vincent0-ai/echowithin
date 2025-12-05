@@ -1795,6 +1795,26 @@ def view_post(slug):
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
 
+    # --- Fetch Related Posts using Meilisearch ---
+    related_posts = []
+    if meili_index:
+        try:
+            # Use Meili's similar posts feature
+            post_id_str = str(post['_id'])
+            # Get 4 results, as the original post might be included
+            search_result = meili_index.get_similar(post_id_str, {'limit': 4})
+            
+            hits = search_result.get('hits', [])
+            # Filter out the original post itself and take the top 3
+            related_posts = [p for p in hits if p.get('id') != post_id_str][:3]
+
+            # Convert timestamp back to datetime for the template filter
+            for p in related_posts:
+                if p.get('created_at'):
+                    p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
+        except Exception as e:
+            app.logger.error(f"Failed to get similar posts for {post_id_str}: {e}")
+
     # Add comment count and fetch recent comments
     try:
         comment_count = comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
@@ -1877,7 +1897,7 @@ def view_post(slug):
     except Exception:
         jsonld_str = ''
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts)
 
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
@@ -2484,14 +2504,7 @@ def terms():
     return render_template('terms.html', title=page_title, description=page_description)
 
 @app.route('/profile/<username>')
-@login_required
 def profile(username):
-    # --- Authorization Check ---
-    # Ensure the logged-in user can only access their own profile.
-    if username != current_user.username:
-        flash("You are not authorized to view this profile.", "danger")
-        return redirect(url_for('profile', username=current_user.username))
-
     # Find the user by username
     user = users_conf.find_one({'username': username})
     if not user:
@@ -2514,40 +2527,13 @@ def profile(username):
                            active_page='profile')
 
 
-@app.route('/profile/<username>/notifications', methods=['POST'])
-@login_required
-def update_notifications(username):
-    # Only allow users to update their own settings
-    if username != current_user.username:
-        flash("You are not authorized to update this profile.", "danger")
-        return redirect(url_for('profile', username=current_user.username))
-
-    user = users_conf.find_one({'username': username})
-    if not user:
-        flash("User not found.", "danger")
-        return redirect(url_for('home'))
-
-    # Checkbox posts 'notify_new_posts' when checked
-    notify_val = request.form.get('notify_new_posts')
-    notify_flag = True if notify_val in ('1', 'true', 'on') else False
-
-    try:
-        users_conf.update_one({'_id': user['_id']}, {'$set': {'notify_new_posts': notify_flag}})
-        flash('Notification preferences updated.', 'success')
-    except Exception as e:
-        app.logger.error(f"Failed to update notification preference for {username}: {e}")
-        flash('Failed to update preferences. Please try again later.', 'danger')
-
-    return redirect(url_for('profile', username=username))
-
-
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
 @login_required
 def profile_settings(username):
     # Only allow users to access their own settings
     if username != current_user.username:
         flash("You are not authorized to access this page.", "danger")
-        return redirect(url_for('profile', username=current_user.username))
+        return redirect(url_for('home'))
 
     user = users_conf.find_one({'username': username})
     if not user:
@@ -2555,14 +2541,44 @@ def profile_settings(username):
         return redirect(url_for('home'))
 
     if request.method == 'POST':
+        update_data = {}
+
+        # Update bio and website
+        update_data['bio'] = request.form.get('bio', '').strip()
+        update_data['website_url'] = request.form.get('website_url', '').strip()
+
+        # Handle profile image upload
+        profile_image_file = request.files.get('profile_image')
+        if profile_image_file and profile_image_file.filename:
+            if '.' in profile_image_file.filename and profile_image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
+                try:
+                    # Delete old profile image from Cloudinary if it exists
+                    if user.get('profile_image_public_id'):
+                        cloudinary.uploader.destroy(user['profile_image_public_id'])
+
+                    # Upload new image
+                    upload_result = cloudinary.uploader.upload(profile_image_file, folder="echowithin_avatars")
+                    update_data['profile_image_url'] = upload_result.get('secure_url')
+                    update_data['profile_image_public_id'] = upload_result.get('public_id')
+                except Exception as e:
+                    app.logger.error(f"Cloudinary avatar upload failed for user {username}: {e}")
+                    flash("There was an error uploading your profile picture.", "danger")
+            else:
+                flash("Invalid image format. Please use png, jpg, jpeg, or gif.", "danger")
+
+        # Handle notification preference
         notify_val = request.form.get('notify_new_posts')
-        notify_flag = True if notify_val in ('1', 'true', 'on') else False
-        try:
-            users_conf.update_one({'_id': user['_id']}, {'$set': {'notify_new_posts': notify_flag}})
-            flash('Settings updated.', 'success')
-        except Exception as e:
-            app.logger.error(f"Failed to update settings for {username}: {e}")
-            flash('Failed to update settings. Please try again later.', 'danger')
+        update_data['notify_new_posts'] = True if notify_val in ('1', 'true', 'on') else False
+
+        if update_data:
+            try:
+                users_conf.update_one({'_id': user['_id']}, {'$set': update_data})
+                flash('Settings updated successfully!', 'success')
+            except Exception as e:
+                app.logger.error(f"Failed to update settings for {username}: {e}")
+                flash('Failed to update settings. Please try again later.', 'danger')
+
+        # Redirect back to the settings page to see the changes
         return redirect(url_for('profile_settings', username=username))
 
     # For GET, render settings page

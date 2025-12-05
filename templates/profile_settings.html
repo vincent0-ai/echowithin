@@ -7,20 +7,42 @@
 {% block content %}
 <div class="content-wrapper">
   <h1>Account Settings</h1>
-  <div class="settings-panel">
-    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}">
-      <div class="form-row">
+  <div class="settings-panel" style="max-width: 600px; margin: auto;">
+    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}" enctype="multipart/form-data" class="post-form">
+      
+      <div class="form-group">
+        <label for="bio">Bio</label>
+        <textarea id="bio" name="bio" class="form-input" rows="4" placeholder="Tell us a little about yourself...">{{ user.get('bio', '') }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="website">Website</label>
+        <input type="url" id="website" name="website" class="form-input" placeholder="https://yourwebsite.com" value="{{ user.get('website', '') }}">
+      </div>
+
+      <div class="form-group">
+        <label>Profile Picture</label>
+        {% if user.profile_picture_url %}
+          <img src="{{ user.profile_picture_url }}" alt="Current profile picture" class="edit-post-image-preview">
+        {% endif %}
+        <label for="profile_picture">Update Profile Picture</label>
+        <input type="file" id="profile_picture" name="profile_picture" class="form-input" accept="image/*">
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Upload a new image to change your profile picture.</p>
+      </div>
+
+      <div class="form-group">
         <label for="notify_new_posts">
           <input type="checkbox" id="notify_new_posts" name="notify_new_posts" value="1" {% if user.get('notify_new_posts', True) %}checked{% endif %}>
           Receive email notifications for new posts
         </label>
-        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">By default, you receive email notifications for new posts. Uncheck to disable.</p>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Uncheck to disable email notifications for new posts on the platform.</p>
       </div>
 
-      <div class="form-row">
-        <button type="submit" class="btn small-btn">Save Settings</button>
-        <a class="btn" href="{{ url_for('profile', username=user.username) }}">Back to Profile</a>
+      <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
+        <button type="submit" class="btn form-button" style="width: auto; padding: 0.5rem 1.5rem;">Save Settings</button>
+        <a class="btn" href="{{ url_for('profile', username=user.username) }}" style="background-color: #6c757d; color: white;">Back to Profile</a>
       </div>
+
     </form>
   </div>
 </div>

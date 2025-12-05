@@ -1011,9 +1011,9 @@ body {
         padding-right: 15px;
     }
     .blog-container {
-        max-width: 100vw;
-        padding: 0.5rem 0.5rem 0.5rem 0; /* remove left padding so content can reach edge */
-        margin: 0.5rem 0 0.5rem 0;
+        width: 100%;
+        padding: 0.5rem;
+        margin: 0.5rem 0;
     }
 
     .blog-header h1 {
@@ -1159,14 +1159,14 @@ body {
     }
 
     .container {
-        padding: 0.5rem 0.5rem 0.5rem 0; /* Allow content to reach left edge */
+        padding: 0.5rem; /* Consistent padding */
         min-height: 80vh; /* Ensure container stretches to cover better part of the screen on mobile */
     }
 
     .blog-container {
-        max-width: 100vw;
-        padding: 0.25rem 0.5rem 0.25rem 0; /* allow edge-to-edge feel on the left */
-        margin: 0.25rem 0 0.5rem 0;
+        width: 100%;
+        padding: 0.5rem;
+        margin: 0.25rem 0;
     }
 
     .blog-header h1 {
@@ -1301,4 +1301,37 @@ body {
 /* Ensure comment action buttons are small on very small screens */
 @media (max-width: 480px) {
     .comment-actions button { padding: 3px 6px; font-size: 0.72rem; }
+}
+
+/* --- Related Posts Section --- */
+.related-posts-section {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.related-posts-section h3 {
+    margin-bottom: 1.5rem;
+    color: var(--primary-dark-color);
+    text-align: center;
+}
+
+.related-posts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+.related-post-card {
+    background-color: #f9f9f9;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    border-left: 3px solid var(--primary-color);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.related-post-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
 }

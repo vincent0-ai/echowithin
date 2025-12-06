@@ -77,7 +77,11 @@ async function loadMetrics(){
   topList.innerHTML = '';
   (data.top_posts_by_comments || []).forEach(p=>{
     const li = document.createElement('li');
-    li.textContent = `${p._id} — ${p.count} comments`;
+    const link = document.createElement('a');
+    link.href = `/post/${p.slug}`;
+    link.textContent = `${p.title} — ${p.count} comments`;
+    link.target = '_blank'; // Open in new tab
+    li.appendChild(link);
     topList.appendChild(li);
   });
 

@@ -710,12 +710,20 @@ def admin_metrics():
         active_users = users_conf.count_documents({'last_active': {'$gte': start}})
 
         top_posts = list(comments_conf.aggregate([
-            {'$match': {'is_deleted': False}},
-            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 10}
+            {'$match': {'is_deleted': False, 'post_slug': {'$ne': None}}},
+            {'$group': {'_id': '$post_slug', 'comment_count': {'$sum': 1}}},
+            {'$sort': {'comment_count': -1}},
+            {'$limit': 10},
+            {'$lookup': {
+                'from': 'posts',
+                'localField': '_id',
+                'foreignField': 'slug',
+                'as': 'post_details'
+            }},
+            {'$unwind': '$post_details'},
+            {'$project': {'slug': '$_id', 'count': '$comment_count', 'title': '$post_details.title', '_id': 0}}
         ]))
-
+        
         return jsonify({
             'posts_per_day': posts_per_day,
             'comments_per_day': comments_per_day,
@@ -2661,7 +2669,21 @@ def profile_settings(username):
 
         # Update bio and website
         update_data['bio'] = request.form.get('bio', '').strip()
-        update_data['website_url'] = request.form.get('website_url', '').strip()
+        update_data['website_url'] = request.form.get('website', '').strip()
+
+        # Handle profile picture removal
+        if request.form.get('remove_profile_picture'):
+            if user.get('profile_image_public_id'):
+                try:
+                    # Delete old profile image from Cloudinary
+                    cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
+                except Exception as e:
+                    app.logger.error(f"Cloudinary avatar deletion failed for user {username}: {e}")
+            
+            # Unset the fields in the database
+            update_data['profile_image_url'] = None
+            update_data['profile_image_public_id'] = None
+
 
         # Handle profile image upload
         profile_image_file = request.files.get('profile_image')
@@ -2669,7 +2691,7 @@ def profile_settings(username):
             if '.' in profile_image_file.filename and profile_image_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
                 try:
                     # Delete old profile image from Cloudinary if it exists
-                    if user.get('profile_image_public_id'):
+                    if user.get('profile_image_public_id') and not request.form.get('remove_profile_picture'):
                         cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
 
                     # Upload new image

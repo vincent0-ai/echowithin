@@ -2665,7 +2665,7 @@ def profile_settings(username):
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
 
 @app.route('/contact', methods=['POST'])
-@limits(calls=5, period=TIME) 
+@limits(calls=5, period=60) 
 def contact_developer():
     if request.method == 'POST':
         name = request.form.get('name')
@@ -2793,20 +2793,6 @@ def handle_ratelimit_exception(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     """Handler for 500 errors, sends an ntfy notification."""
-    try:
-        # Log the original error first
-        app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)
-        try:
-            send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
-        except redis.exceptions.ConnectionError as ntfy_e:
-            app.logger.warning(f"Redis connection failed. Falling back to thread for 500 error ntfy notification. Error: {ntfy_e}")
-            with app.app_context():
-                ThreadPoolExecutor().submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
-        except Exception as ntfy_e:
-            app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
-    except Exception as log_e:
-        print(f"CRITICAL: Failed to log 500 error: {log_e}", file=sys.stderr)
-    return render_template("500.html"), 500
     try:
         # Log the original error first
         app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)

@@ -1004,12 +1004,6 @@ def register():
         email = request.form.get("email")
         password = request.form.get("password")
 
-        client_ip = request.remote_addr
-        logs_conf.insert_one({
-        'ip' : client_ip,
-        'username': username,
-        'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
-        })
         if username and password and email:
             # 1. Check if username is already taken
             if users_conf.find_one({'username': username}):
@@ -1107,13 +1101,6 @@ def login():
         password = request.form.get("password")
         remember = request.form.get("remember") == "on" # Check if the "Remember Me" box was checked
         
-        client_ip = request.remote_addr
-        logs_conf.insert_one({
-        'ip' : client_ip,
-        'username': username,
-        'timestamp' : datetime.datetime.now().strftime("%B %d, %Y %I:%M %p") 
-        })
-
         user = users_conf.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):

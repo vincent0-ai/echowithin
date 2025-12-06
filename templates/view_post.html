@@ -288,7 +288,7 @@ document.addEventListener('DOMContentLoaded', function() {
             upvoteBtn.textContent = 'Upvote';
             const countSpan = document.createElement('span');
             countSpan.className = 'upvote-count';
-            countSpan.textContent = '0';
+            countSpan.textContent = comment.upvote_count || 0;
             voting.appendChild(upvoteBtn);
             voting.appendChild(countSpan);
             actions.appendChild(voting);

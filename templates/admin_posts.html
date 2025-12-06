@@ -24,7 +24,7 @@
                 <p>{{ post.content[:150] ~ '...' if post.content|length > 150 else post.content }}</p>
                 <div class="post-meta">
                   {% if post.edited_at %}
-                    Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }}<br>
+                    Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
                   {% else %}
                     Posted by <strong>{{ post.author }}</strong>
                   {% endif %}

@@ -314,10 +314,19 @@ class User(UserMixin):
 def update_last_active():
     """Update a user's last active timestamp on each request."""
     if current_user.is_authenticated:
-        users_conf.update_one(
-            {'_id': ObjectId(current_user.id)},
-            {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
-        )
+        # Fetch the full user document to check for ban status
+        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+
+        # If user is banned, log them out immediately.
+        if user_doc and user_doc.get('is_banned'):
+            logout_user()
+            flash('Your account has been suspended. Please contact support.', 'danger')
+            # Redirect to login to prevent further access to authenticated routes
+            return redirect(url_for('login'))
+        
+        # If user is not banned, update their last active time
+        if user_doc:
+            users_conf.update_one({'_id': user_doc['_id']}, {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}})
 
 
 @app.before_request

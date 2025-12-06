@@ -244,11 +244,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 ${media}
             </div>
             <p>${plainTextContent.substring(0,150)}...</p>
-            {% if post.edited_at %}
-                <div class="post-meta">Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }}</div>
-            {% else %}
-                <div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>
-            {% endif %}
+            ${post.edited_at
+                ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
+                : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>`
+            }
             <div class="post-actions">
                 <a href="${post.url}" class="btn comment-btn record-view-link" data-post-id="${post._id}">
                     Comments <span class="comment-count-display">${post.comment_count || 0}</span>

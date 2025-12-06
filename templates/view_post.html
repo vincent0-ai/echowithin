@@ -211,7 +211,7 @@
                                     {# Voting Controls - now available on all comments #}
                                     <div class="comment-voting" style="display: inline-flex;">
                                         <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
-                                            <i class="fa-solid fa-arrow-up"></i>
+                                            upvote
                                         </button>
                                         <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
                                     </div>

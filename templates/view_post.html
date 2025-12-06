@@ -134,6 +134,25 @@
 
         <div class="post-content" style="white-space: pre-wrap; margin-top: 1rem;">{{ post.content|linkify|safe }}</div>
 
+        {% if related_posts %}
+        <div class="related-posts-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h3>Related Posts</h3>
+            <div class="related-posts-list">
+                {% for r_post in related_posts %}
+                    <div class="related-post-item" style="margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
+                            {# The title from Meilisearch might contain highlight tags, so it needs to be marked safe #}
+                            <a href="{{ url_for('view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
+                        </h4>
+                        <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
+                            by {{ r_post.author_username }} on {{ r_post.created_at.strftime('%b %d, %Y') if r_post.created_at and r_post.created_at.strftime else '' }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="comments-section" style="margin-top: 30px;">
             <h3>Comments ({{ comment_count or 0 }})</h3>
 

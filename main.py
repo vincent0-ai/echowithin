@@ -2164,6 +2164,45 @@ def api_edit_comment(comment_id):
         return jsonify({'error': 'Failed to edit comment'}), 500
 
 @app.route('/edit_post/<post_id>', methods=['GET'])
+@app.route('/api/comments/<comment_id>/vote', methods=['POST'])
+@login_required
+def api_vote_comment(comment_id):
+    """Upvote or remove an upvote from a comment."""
+    try:
+        user_id = ObjectId(current_user.id)
+        comment_oid = ObjectId(comment_id)
+
+        # Find the comment to ensure it exists
+        comment = comments_conf.find_one({'_id': comment_oid}, {'author_id': 1, 'upvoted_by': 1})
+        if not comment:
+            return jsonify({'error': 'Comment not found'}), 404
+
+        # Users cannot vote on their own comments
+        if comment.get('author_id') == user_id:
+            return jsonify({'error': 'You cannot vote on your own comment'}), 403
+
+        # Check if the user has already upvoted this comment
+        is_already_voted = user_id in (comment.get('upvoted_by') or [])
+
+        if is_already_voted:
+            # Remove the upvote (un-vote)
+            update_result = comments_conf.update_one(
+                {'_id': comment_oid},
+                {'$pull': {'upvoted_by': user_id}, '$inc': {'upvote_count': -1}}
+            )
+        else:
+            # Add the upvote
+            update_result = comments_conf.update_one(
+                {'_id': comment_oid},
+                {'$addToSet': {'upvoted_by': user_id}, '$inc': {'upvote_count': 1}}
+            )
+
+        new_count = comments_conf.find_one({'_id': comment_oid}, {'upvote_count': 1}).get('upvote_count', 0)
+        return jsonify({'status': 'success', 'upvote_count': new_count, 'voted': not is_already_voted})
+    except Exception as e:
+        app.logger.error(f"Failed to vote on comment {comment_id}: {e}")
+        return jsonify({'error': 'Failed to process vote'}), 500
+
 @login_required
 @owner_required
 def edit_post(post_id):

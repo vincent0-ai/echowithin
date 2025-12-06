@@ -68,6 +68,26 @@
     .comment-body {
         font-size: 0.95rem; /* Slightly smaller font for the comment content */
     }
+
+    /* Styles for comment voting */
+    .comment-voting {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.85rem;
+        color: #555;
+    }
+    .upvote-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #888;
+        padding: 2px 4px;
+    }
+    .upvote-btn.voted, .upvote-btn:hover {
+        color: var(--primary-color); /* Use your site's primary color */
+    }
+
 </style>
 {% endblock %}
 
@@ -136,8 +156,10 @@
 
         {% if related_posts %}
         <div class="related-posts-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
-            <h3>Related Posts</h3>
-            <div class="related-posts-list">
+            <h3 id="toggle-related-posts" style="cursor: pointer; display: inline-block;">
+                Related Posts <i class="fa-solid fa-chevron-down" style="font-size: 0.8em;"></i>
+            </h3>
+            <div id="related-posts-list" class="related-posts-list" style="display: none; margin-top: 10px;">
                 {% for r_post in related_posts %}
                     <div class="related-post-item" style="margin-bottom: 15px;">
                         <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
@@ -179,6 +201,15 @@
                             {% endif %}
                         </div>
                         <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>
+                        
+                        {% if not c.is_deleted and current_user.is_authenticated %}
+                        <div class="comment-voting" style="margin-top: 8px;">
+                            <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
+                                <i class="fa-solid fa-arrow-up"></i>
+                            </button>
+                            <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
+                        </div>
+                        {% endif %}
                         <div class="comment-actions" style="margin-top:6px;">
                             {% if c.parent_id %}
                                 {% if current_user.is_authenticated and not c.is_deleted %}
@@ -239,6 +270,20 @@ document.addEventListener('DOMContentLoaded', function() {
         body.style.marginTop = '4px';
         body.innerHTML = comment.content;
 
+        const voting = document.createElement('div');
+        if (CURRENT_USER_ID) {
+            voting.className = 'comment-voting';
+            voting.style.marginTop = '8px';
+            const upvoteBtn = document.createElement('button');
+            upvoteBtn.className = 'upvote-btn';
+            upvoteBtn.setAttribute('data-id', comment.id);
+            upvoteBtn.setAttribute('aria-label', 'Upvote');
+            upvoteBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+            const upvoteCount = document.createElement('span');
+            upvoteCount.className = 'upvote-count';
+            upvoteCount.textContent = '0';
+            voting.append(upvoteBtn, upvoteCount);
+        }
         el.appendChild(meta);
         el.appendChild(body);
 
@@ -246,6 +291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const actions = document.createElement('div');
         actions.className = 'comment-actions';
         actions.style.marginTop = '6px';
+        if (voting) el.appendChild(voting);
 
         if (CURRENT_USER_ID) {
             if (comment.parent_id) {
@@ -426,6 +472,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 if (!confirm('Delete this comment?')) return;
+            }
+            return;
+        }
+
+        // Upvote
+        if (e.target && e.target.closest('.upvote-btn')) {
+            e.preventDefault();
+            const button = e.target.closest('.upvote-btn');
+            const id = button.getAttribute('data-id');
+            const resp = await fetch('/api/comments/' + id + '/vote', { method: 'POST' });
+            if (resp.ok) {
+                const data = await resp.json();
+                const commentEl = button.closest('.comment-item');
+                if (commentEl) {
+                    const countEl = commentEl.querySelector('.upvote-count');
+                    if (countEl) countEl.textContent = data.upvote_count;
+                }
+                if (data.voted) {
+                    button.classList.add('voted');
+                } else {
+                    button.classList.remove('voted');
+                }
             }
             return;
         }
@@ -649,6 +717,24 @@ document.addEventListener('DOMContentLoaded', function() {
         nextBtn.addEventListener('click', function(ev){ ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
         document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') closeLightbox(); if (ev.key === 'ArrowLeft' && currentGallery.length>1) { currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } if (ev.key === 'ArrowRight' && currentGallery.length>1) { currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } });
     })();
+
+    // Toggle for related posts
+    const toggleRelatedBtn = document.getElementById('toggle-related-posts');
+    if (toggleRelatedBtn) {
+        toggleRelatedBtn.addEventListener('click', function() {
+            const relatedList = document.getElementById('related-posts-list');
+            const icon = this.querySelector('i');
+            if (relatedList.style.display === 'none') {
+                relatedList.style.display = 'block';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                relatedList.style.display = 'none';
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

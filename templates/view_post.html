@@ -270,20 +270,6 @@ document.addEventListener('DOMContentLoaded', function() {
         body.style.marginTop = '4px';
         body.innerHTML = comment.content;
 
-        const voting = document.createElement('div');
-        if (CURRENT_USER_ID) {
-            voting.className = 'comment-voting';
-            voting.style.marginTop = '8px';
-            const upvoteBtn = document.createElement('button');
-            upvoteBtn.className = 'upvote-btn';
-            upvoteBtn.setAttribute('data-id', comment.id);
-            upvoteBtn.setAttribute('aria-label', 'Upvote');
-            upvoteBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
-            const upvoteCount = document.createElement('span');
-            upvoteCount.className = 'upvote-count';
-            upvoteCount.textContent = '0';
-            voting.append(upvoteBtn, upvoteCount);
-        }
         el.appendChild(meta);
         el.appendChild(body);
 
@@ -291,7 +277,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const actions = document.createElement('div');
         actions.className = 'comment-actions';
         actions.style.marginTop = '6px';
-        if (voting) el.appendChild(voting);
+
+        if (CURRENT_USER_ID) {
+            const voting = document.createElement('div');
+            voting.className = 'comment-voting';
+            const upvoteBtn = document.createElement('button');
+            upvoteBtn.className = 'upvote-btn';
+            upvoteBtn.setAttribute('data-id', comment.id);
+            upvoteBtn.setAttribute('aria-label', 'Upvote');
+            upvoteBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i> <span class="upvote-count">0</span>';
+            voting.appendChild(upvoteBtn);
+            actions.appendChild(voting);
+        }
 
         if (CURRENT_USER_ID) {
             if (comment.parent_id) {

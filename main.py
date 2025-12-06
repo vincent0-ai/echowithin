@@ -2332,7 +2332,7 @@ def update_post(post_id):
                 'video_public_id': video_public_id,
                 'video_status': video_status,
                 'slug': slug,
-                'timestamp': datetime.datetime.now(),
+                'edited_at': datetime.datetime.now(),
             }}
         )
         # Re-index the post in Meilisearch to reflect the changes

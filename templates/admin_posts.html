@@ -23,7 +23,11 @@
                 <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
                 <p>{{ post.content[:150] ~ '...' if post.content|length > 150 else post.content }}</p>
                 <div class="post-meta">
+                  {% if post.edited_at %}
+                    Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }}<br>
+                  {% else %}
                     Posted by <strong>{{ post.author }}</strong>
+                  {% endif}
                 </div>
                 <div class="post-actions">
                     <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST" data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">

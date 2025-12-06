@@ -97,11 +97,15 @@
 
     {# --- Timestamp --- #}
     <div class="post-meta">
-        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
-        {% if post.timestamp.strftime %}
-            {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+        {% if post.edited_at %}
+            Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }}<br>
         {% else %}
-            {{ post.timestamp }}
+            Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
+            {% if post.timestamp.strftime %}
+                {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+            {% else %}
+                {{ post.timestamp }}
+            {% endif %}
         {% endif %}
     </div>
 

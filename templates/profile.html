@@ -8,7 +8,7 @@
 <div class="content-wrapper">
     <div class="profile-container">
         <div class="profile-sidebar"> 
-            <img src="{{ user.profile_picture_url + '?v=' + now_timestamp if user.profile_picture_url else url_for('static', filename='default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
+            <img src="{{ user.profile_image_url + '?v=' + now_timestamp if user.profile_image_url else url_for('static', filename='default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
             <h1 class="profile-username">{{ user.username }}</h1>
             {% if user.bio %}
                 <p class="profile-bio">{{ user.bio }}</p>
@@ -18,9 +18,9 @@
                 <div class="stat-item"><strong>{{ total_comments }}</strong> Comments</div>
             </div>
             <div class="profile-meta">
-                {% if user.website %}
+                {% if user.website_url %}
                     <div class="profile-meta-item">
-                        <i class="fas fa-link"></i> <a href="{{ user.website }}" target="_blank" rel="noopener noreferrer">{{ user.website | replace('https://', '') | replace('http://', '') }}</a>
+                        <i class="fas fa-link"></i> <a href="{{ user.website_url }}" target="_blank" rel="noopener noreferrer">{{ user.website_url | replace('https://', '') | replace('http://', '') }}</a>
                     </div>
                 {% endif %}
                 {% if user.join_date %}

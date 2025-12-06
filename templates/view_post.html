@@ -100,9 +100,11 @@
             </div>
         <div class="post-meta">
             {% if post.edited_at %}
-                Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+                {# Use 'is instance' for a more robust type check #}
+                Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at is instance('datetime.datetime') else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
             {% else %}
-                Posted by <strong>{{ post.author }}</strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
+                {# Assuming post.timestamp is always a datetime object from the DB #}
+                Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
             {% endif %}
         </div>
 
@@ -200,34 +202,31 @@
                         </div>
                         <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>
                         
-                        {% if not c.is_deleted and current_user.is_authenticated %}
-                        <div class="comment-voting" style="margin-top: 8px;">
-                            <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
-                                Upvote
-                            </button>
-                            <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
-                        </div>
-                        {% endif %}
                         <div class="comment-actions" style="margin-top:6px;">
-                            {% if c.parent_id %}
-                                {% if current_user.is_authenticated and not c.is_deleted %}
+                            {% if not c.is_deleted %}
+                                {% if current_user.is_authenticated %}
+                                    {# Reply Button #}
                                     <a href="#" class="reply-btn action-link" data-id="{{ c._id|string }}">Reply</a>
+
+                                    {# Voting Controls - now available on all comments #}
+                                    <div class="comment-voting" style="display: inline-flex;">
+                                        <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
+                                            <i class="fa-solid fa-arrow-up"></i>
+                                        </button>
+                                        <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
+                                    </div>
                                 {% endif %}
-                            {% else %}
-                                {% if current_user.is_authenticated and not c.is_deleted %}
-                                    <button class="reply-btn" data-id="{{ c._id|string }}">Reply</button>
-                                {% endif %}
-                                {% if reply_count and reply_count > 0 %}
+
+                                {# Show Replies Toggle (only for top-level comments with replies) #}
+                                {% if not c.parent_id and reply_count and reply_count > 0 %}
                                     <a href="#" class="toggle-replies action-link" data-id="{{ c._id|string }}">Show replies ({{ reply_count }})</a>
                                 {% endif %}
-                            {% endif %}
-                        {% if not c.is_deleted and current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
-                            {% if c.parent_id %}
-                                <a href="#" class="edit-btn action-link" data-id="{{ c._id|string }}">Edit</a>
-                                <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
-                            {% else %}
-                                <button class="edit-btn" data-id="{{ c._id|string }}">Edit</button>
-                                <button class="delete-comment" data-id="{{ c._id|string }}">Delete</button>
+
+                                {# Edit/Delete Controls (for owner or admin) #}
+                                {% if current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
+                                    <a href="#" class="edit-btn action-link" data-id="{{ c._id|string }}">Edit</a>
+                                    <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
+                                {% endif %}
                             {% endif %}
                         {% endif %}
                         </div>
@@ -430,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (body) body.innerHTML = '<em>Comment deleted</em>';
                                 // remove action buttons
                                 const actions = item.querySelector('.comment-actions');
-                                if (actions) actions.remove();
+                                if (actions) actions.innerHTML = ''; // Clear actions instead of removing the container
                                 item.setAttribute('data-deleted', '1');
                             }
                         }

@@ -30,7 +30,7 @@
     
     /* Unify all comment action buttons and links */
     .comment-actions .reply-btn,
-    .comment-actions .edit-btn, .comment-actions .delete-comment, .comment-actions .toggle-replies {
+    .comment-actions .edit-btn, .comment-actions .delete-comment, .comment-actions .toggle-replies .upvote-btn {
         background: none;
         border: none;
         color: var(--info-color);
@@ -73,13 +73,6 @@
         gap: 4px;
         font-size: 0.85rem;
         color: #555;
-    }
-    .upvote-btn {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: #888;
-        padding: 2px 4px;
     }
     .upvote-btn.voted, .upvote-btn:hover {
         color: var(--primary-color); /* Use your site's primary color */
@@ -211,7 +204,7 @@
                                     {# Voting Controls - now available on all comments #}
                                     <div class="comment-voting" style="display: inline-flex;">
                                         <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
-                                            upvote
+                                            Upvotes
                                         </button>
                                         <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
                                     </div>

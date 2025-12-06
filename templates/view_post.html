@@ -228,11 +228,10 @@
                                     <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
                                 {% endif %}
                             {% endif %}
-                        {% endif %}
                         </div>
                         <div class="comment-replies" style="margin-top:8px; margin-left:18px;"></div>
                     </div>
-                {% endfor %}
+                {% endfor %} {# This was incorrectly {% endif %} #}
             </div>
             {% if has_more %}
                 <div style="text-align:center; margin-top:8px;"><button id="load-more-comments">Load more comments</button></div>

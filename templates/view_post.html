@@ -101,7 +101,7 @@
         <div class="post-meta">
             {% if post.edited_at %}
                 {# Use 'is instance' for a more robust type check #}
-                Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at is instance('datetime.datetime') else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+                Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime('%b %d, %Y at %I:%M %p') else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
             {% else %}
                 {# Assuming post.timestamp is always a datetime object from the DB #}
                 Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}

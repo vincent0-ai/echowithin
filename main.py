@@ -2203,6 +2203,7 @@ def api_vote_comment(comment_id):
         app.logger.error(f"Failed to vote on comment {comment_id}: {e}")
         return jsonify({'error': 'Failed to process vote'}), 500
 
+@app.route('/edit_post/<post_id>', methods=['GET'])
 @login_required
 @owner_required
 def edit_post(post_id):

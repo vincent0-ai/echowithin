@@ -30,18 +30,15 @@
     
     /* Unify all comment action buttons and links */
     .comment-actions .reply-btn,
-    .comment-actions .edit-btn,
-    .comment-actions .delete-comment,
-    .comment-actions .toggle-replies,
-    .comment-actions .action-link {
+    .comment-actions .edit-btn, .comment-actions .delete-comment, .comment-actions .toggle-replies {
         background: none;
         border: none;
-        color: var(--info-color); /* Light blue from your root variables */
+        color: var(--info-color);
         padding: 0;
         margin-right: 12px;
         cursor: pointer;
         font-size: 0.85rem;
-        text-decoration: none;
+        text-decoration: none; /* Keep for link-like appearance */
     }
     .comment-actions .reply-btn:hover,
     .comment-actions .edit-btn:hover,
@@ -175,13 +172,14 @@
         </div>
         {% endif %}
 
-        <div class="comments-section" style="margin-top: 30px;">
-            <h3>Comments ({{ comment_count or 0 }})</h3>
+        <section class="comments-section" style="margin-top: 30px;" aria-labelledby="comments-heading">
+            <h3 id="comments-heading">Comments ({{ comment_count or 0 }})</h3>
 
             {# reply_counts mapping provided by server (reply_counts[comment_id] -> int) #}
 
             {% if current_user.is_authenticated %}
                 <form id="comment-form">
+                    <label for="comment-content" class="visually-hidden">Write a comment</label>
                     <textarea id="comment-content" name="content" rows="3" style="width:100%;" placeholder="Write a comment..."></textarea>
                     <button id="comment-submit" type="submit">Post Comment</button>
                 </form>
@@ -240,7 +238,7 @@
             {% if has_more %}
                 <div style="text-align:center; margin-top:8px;"><button id="load-more-comments">Load more comments</button></div>
             {% endif %}
-        </div>
+        </section>
     </div>
 </div>
 
@@ -280,6 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (CURRENT_USER_ID) {
             const voting = document.createElement('div');
+            voting.style.marginTop = '8px';
             voting.className = 'comment-voting';
             const upvoteBtn = document.createElement('button');
             upvoteBtn.className = 'upvote-btn';
@@ -292,56 +291,33 @@ document.addEventListener('DOMContentLoaded', function() {
             voting.appendChild(upvoteBtn);
             voting.appendChild(countSpan);
             actions.appendChild(voting);
+            el.insertBefore(voting, actions); // Place voting before actions
         }
 
         if (CURRENT_USER_ID) {
-            if (comment.parent_id) {
-                const replyLink = document.createElement('a');
-                replyLink.href = '#';
-                replyLink.className = 'reply-btn action-link';
-                replyLink.setAttribute('data-id', comment.id);
-                replyLink.textContent = 'Reply';
-                actions.appendChild(replyLink);
-            } else {
-                const replyBtn = document.createElement('button');
-                replyBtn.className = 'reply-btn';
-                replyBtn.setAttribute('data-id', comment.id);
-                replyBtn.textContent = 'Reply';
-                actions.appendChild(replyBtn);
-                // placeholder for toggle link; client appended replies might update counts
-            }
+            const replyBtn = document.createElement('button');
+            replyBtn.className = 'reply-btn';
+            replyBtn.setAttribute('data-id', comment.id);
+            replyBtn.setAttribute('aria-label', `Reply to comment by ${comment.author_username}`);
+            replyBtn.textContent = 'Reply';
+            actions.appendChild(replyBtn);
         }
 
         const canModify = IS_ADMIN || (CURRENT_USER_ID && comment.author_id && comment.author_id === CURRENT_USER_ID);
         if (canModify) {
-            if (comment.parent_id) {
-                const editLink = document.createElement('a');
-                editLink.href = '#';
-                editLink.className = 'edit-btn action-link';
-                editLink.setAttribute('data-id', comment.id);
-                editLink.textContent = 'Edit';
-                actions.appendChild(editLink);
+            const editBtn = document.createElement('button');
+            editBtn.className = 'edit-btn';
+            editBtn.setAttribute('data-id', comment.id);
+            editBtn.setAttribute('aria-label', 'Edit your comment');
+            editBtn.textContent = 'Edit';
+            actions.appendChild(editBtn);
 
-                const delLink = document.createElement('a');
-                delLink.href = '#';
-                delLink.className = 'delete-comment action-link';
-                delLink.setAttribute('data-id', comment.id);
-                delLink.textContent = 'Delete';
-                actions.appendChild(delLink);
-            } else {
-                const editBtn = document.createElement('button');
-                editBtn.className = 'edit-btn';
-                editBtn.setAttribute('data-id', comment.id);
-                editBtn.textContent = 'Edit';
-                actions.appendChild(editBtn);
-
-                const del = document.createElement('button');
-                del.className = 'delete-comment';
-                del.setAttribute('data-id', comment.id);
-                del.style.marginLeft = '8px';
-                del.textContent = 'Delete';
-                actions.appendChild(del);
-            }
+            const delBtn = document.createElement('button');
+            delBtn.className = 'delete-comment';
+            delBtn.setAttribute('data-id', comment.id);
+            delBtn.setAttribute('aria-label', 'Delete your comment');
+            delBtn.textContent = 'Delete';
+            actions.appendChild(delBtn);
         }
 
         el.appendChild(actions);
@@ -395,7 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Increment local count display
                 const header = document.querySelector('.comments-section h3');
                 if (header) {
-                    const m = header.textContent.match(/Comments \((\d+)\)/);
+                    const m = header.textContent.match(/\((\d+)\)/);
                     if (m) {
                         const n = parseInt(m[1], 10) + 1;
                         header.textContent = `Comments (${n})`;
@@ -419,10 +395,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const hidden = getComputedStyle(first).display === 'none';
             if (hidden) {
                 replies.forEach(el => el.style.display = 'block');
+                e.target.setAttribute('aria-expanded', 'true');
                 e.target.textContent = e.target.textContent.replace(/^Show replies/, 'Hide replies');
             } else {
                 replies.forEach(el => el.style.display = 'none');
                 e.target.textContent = e.target.textContent.replace(/^Hide replies/, 'Show replies');
+                e.target.setAttribute('aria-expanded', 'false');
             }
             return;
         }
@@ -459,7 +437,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Decrement header count
                         const header = document.querySelector('.comments-section h3');
                         if (header) {
-                            const m = header.textContent.match(/Comments \((\d+)\)/);
+                            const m = header.textContent.match(/\((\d+)\)/);
                             if (m) {
                                 const n = Math.max(0, parseInt(m[1], 10) - 1);
                                 header.textContent = `Comments (${n})`;
@@ -485,9 +463,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const resp = await fetch('/api/comments/' + id + '/vote', { method: 'POST' });
             if (resp.ok) {
                 const data = await resp.json();
-                const commentEl = button.closest('.comment-item');
-                if (commentEl) {
-                    const countEl = commentEl.querySelector('.upvote-count');
+                const votingEl = button.closest('.comment-voting');
+                if (votingEl) {
+                    const countEl = votingEl.querySelector('.upvote-count');
                     if (countEl) countEl.textContent = data.upvote_count;
                 }
                 if (data.voted) {
@@ -538,12 +516,12 @@ document.addEventListener('DOMContentLoaded', function() {
                             // update toggle link text if present
                             const toggle = parentEl.querySelector('.toggle-replies');
                             if (toggle) {
-                                const m = toggle.textContent.match(/Show replies \((\d+)\)/);
+                                const m = toggle.textContent.match(/\((\d+)\)/);
                                 if (m) {
                                     const n = parseInt(m[1], 10) + 1;
-                                    toggle.textContent = `Hide replies (${n})`;
+                                    toggle.textContent = toggle.textContent.startsWith('Show') ? `Show replies (${n})` : `Hide replies (${n})`;
                                 } else {
-                                    // if it was already 'Hide replies (n)', try to increment
+                                    // if it was already 'Hide replies (n)', or no count, just create it
                                     const mm = toggle.textContent.match(/Hide replies \((\d+)\)/);
                                     if (mm) {
                                         const nn = parseInt(mm[1], 10) + 1;
@@ -559,7 +537,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Increment header count
                     const header = document.querySelector('.comments-section h3');
                     if (header) {
-                        const m = header.textContent.match(/Comments \((\d+)\)/);
+                        const m = header.textContent.match(/\((\d+)\)/);
                         if (m) {
                             const n = parseInt(m[1], 10) + 1;
                             header.textContent = `Comments (${n})`;

@@ -251,64 +251,73 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const meta = document.createElement('div');
         meta.className = 'comment-meta';
-        const date = comment.created_at ? new Date(comment.created_at).toLocaleString() : '';
-        meta.innerHTML = `<strong>${comment.author_username}</strong> — ${date}`;
+        const authorUsername = comment.is_deleted ? 'Deleted' : (comment.author_username || 'User');
+        const date = comment.created_at ? ` — ${new Date(comment.created_at).toLocaleString()}` : '';
+        meta.innerHTML = `<strong>${authorUsername}</strong>${date}`;
 
         const body = document.createElement('div');
         body.className = 'comment-body';
         body.style.marginTop = '4px';
-        body.innerHTML = comment.content;
+        body.innerHTML = comment.is_deleted ? '<em>Comment deleted</em>' : (comment.content || '');
 
         el.appendChild(meta);
         el.appendChild(body);
 
-        // Actions: Reply (if logged in), Edit/Delete (if owner or admin)
         const actions = document.createElement('div');
         actions.className = 'comment-actions';
         actions.style.marginTop = '6px';
 
-        if (CURRENT_USER_ID) {
-            const voting = document.createElement('div');
-            voting.style.marginTop = '8px';
-            voting.className = 'comment-voting';
-            const upvoteBtn = document.createElement('button');
-            upvoteBtn.className = 'upvote-btn';
-            upvoteBtn.setAttribute('data-id', comment.id);
-            upvoteBtn.setAttribute('aria-label', 'Upvote');
-            upvoteBtn.textContent = 'Upvote';
-            const countSpan = document.createElement('span');
-            countSpan.className = 'upvote-count';
-            countSpan.textContent = comment.upvote_count || 0;
-            voting.appendChild(upvoteBtn);
-            voting.appendChild(countSpan);
-            actions.appendChild(voting);
-            el.insertBefore(voting, actions); // Place voting before actions
-        }
+        if (!comment.is_deleted) {
+            if (CURRENT_USER_ID) {
+                // Reply Button
+                const replyBtn = document.createElement('a');
+                replyBtn.href = '#';
+                replyBtn.className = 'reply-btn action-link';
+                replyBtn.setAttribute('data-id', comment.id);
+                replyBtn.textContent = 'Reply';
+                actions.appendChild(replyBtn);
 
-        if (CURRENT_USER_ID) {
-            const replyBtn = document.createElement('button');
-            replyBtn.className = 'reply-btn';
-            replyBtn.setAttribute('data-id', comment.id);
-            replyBtn.setAttribute('aria-label', `Reply to comment by ${comment.author_username}`);
-            replyBtn.textContent = 'Reply';
-            actions.appendChild(replyBtn);
-        }
+                // Voting Controls
+                const voting = document.createElement('div');
+                voting.className = 'comment-voting';
+                voting.style.display = 'inline-flex';
+                const upvoteBtn = document.createElement('button');
+                const isVoted = comment.upvoted_by && comment.upvoted_by.includes(CURRENT_USER_ID);
+                upvoteBtn.className = `upvote-btn ${isVoted ? 'voted' : ''}`;
+                upvoteBtn.setAttribute('data-id', comment.id);
+                upvoteBtn.setAttribute('aria-label', 'Upvote');
+                upvoteBtn.innerHTML = `Upvotes <span class="upvote-count">${comment.upvote_count || 0}</span>`;
+                voting.appendChild(upvoteBtn);
+                actions.appendChild(voting);
+            }
 
-        const canModify = IS_ADMIN || (CURRENT_USER_ID && comment.author_id && comment.author_id === CURRENT_USER_ID);
-        if (canModify) {
-            const editBtn = document.createElement('button');
-            editBtn.className = 'edit-btn';
-            editBtn.setAttribute('data-id', comment.id);
-            editBtn.setAttribute('aria-label', 'Edit your comment');
-            editBtn.textContent = 'Edit';
-            actions.appendChild(editBtn);
+            // Show Replies Toggle (only for top-level comments with replies)
+            if (!comment.parent_id && comment.reply_count > 0) {
+                const toggleReplies = document.createElement('a');
+                toggleReplies.href = '#';
+                toggleReplies.className = 'toggle-replies action-link';
+                toggleReplies.setAttribute('data-id', comment.id);
+                toggleReplies.textContent = `Show replies (${comment.reply_count})`;
+                actions.appendChild(toggleReplies);
+            }
 
-            const delBtn = document.createElement('button');
-            delBtn.className = 'delete-comment';
-            delBtn.setAttribute('data-id', comment.id);
-            delBtn.setAttribute('aria-label', 'Delete your comment');
-            delBtn.textContent = 'Delete';
-            actions.appendChild(delBtn);
+            // Edit/Delete Controls
+            const canModify = IS_ADMIN || (CURRENT_USER_ID && comment.author_id && comment.author_id === CURRENT_USER_ID);
+            if (canModify) {
+                const editBtn = document.createElement('a');
+                editBtn.href = '#';
+                editBtn.className = 'edit-btn action-link';
+                editBtn.setAttribute('data-id', comment.id);
+                editBtn.textContent = 'Edit';
+                actions.appendChild(editBtn);
+
+                const delBtn = document.createElement('a');
+                delBtn.href = '#';
+                delBtn.className = 'delete-comment action-link';
+                delBtn.setAttribute('data-id', comment.id);
+                delBtn.textContent = 'Delete';
+                actions.appendChild(delBtn);
+            }
         }
 
         el.appendChild(actions);

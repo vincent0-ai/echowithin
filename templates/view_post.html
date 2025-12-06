@@ -205,7 +205,7 @@
                         {% if not c.is_deleted and current_user.is_authenticated %}
                         <div class="comment-voting" style="margin-top: 8px;">
                             <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
-                                <i class="fa-solid fa-arrow-up"></i>
+                                Upvote
                             </button>
                             <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
                         </div>
@@ -285,8 +285,12 @@ document.addEventListener('DOMContentLoaded', function() {
             upvoteBtn.className = 'upvote-btn';
             upvoteBtn.setAttribute('data-id', comment.id);
             upvoteBtn.setAttribute('aria-label', 'Upvote');
-            upvoteBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i> <span class="upvote-count">0</span>';
+            upvoteBtn.textContent = 'Upvote';
+            const countSpan = document.createElement('span');
+            countSpan.className = 'upvote-count';
+            countSpan.textContent = '0';
             voting.appendChild(upvoteBtn);
+            voting.appendChild(countSpan);
             actions.appendChild(voting);
         }
 

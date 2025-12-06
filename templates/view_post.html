@@ -355,8 +355,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             if (resp.ok) {
                 const newComment = await resp.json();
-                // Append new comment to the list (bottom) or under parent
-                appendComments([newComment], true);
+                // Prepend new top-level comment to the list
+                appendComments([newComment], false);
                 // Clear textarea
                 contentField.value = '';
                 // Increment local count display

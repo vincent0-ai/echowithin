@@ -752,7 +752,7 @@ def admin_active_users():
         active_users_list = list(active_users_cursor)
         
         for user in active_users_list:
-            user['last_active'] = user['last_active'].strftime('%Y-%m-%d %H:%M:%S UTC')
+            user['last_active'] = user['last_active'].strftime('%H:%M %d-%m-%Y')
 
         return jsonify({'active_users': active_users_list})
     except Exception as e:

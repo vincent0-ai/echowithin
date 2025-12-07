@@ -28,6 +28,7 @@ import cloudinary
 import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
+import markdown
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -1854,6 +1855,11 @@ def view_post(slug):
     if not post:
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
+
+    # Convert post content from Markdown to HTML
+    # The 'fenced_code' extension is crucial for handling code blocks (```)
+    # The 'nl2br' extension converts newlines to <br> tags, preserving line breaks.
+    post['content'] = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
 
     # --- Fetch Related Posts using Meilisearch ---
     related_posts = []

@@ -5,6 +5,11 @@
     <meta name="description" content="{{ description }}">
 {% endblock %}
 
+{% block head_meta %}
+    <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+    <script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="content-wrapper">
     <div class="form-container" style="max-width: 800px; margin: auto;">
@@ -103,6 +108,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 removeItemButton: true, // Add a small 'x' to remove selected items
                 placeholder: true,
                 placeholderValue: 'Select tags...',
+            });
+        }
+
+        // Initialize EasyMDE for the content textarea
+        const contentElement = document.getElementById('content');
+        if (contentElement) {
+            const easyMDE = new EasyMDE({
+                element: contentElement,
+                spellChecker: false,
+                placeholder: "Write your post content here. You can use Markdown for formatting...",
+                status: ["lines", "words"],
             });
         }
     }

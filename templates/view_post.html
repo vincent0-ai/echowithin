@@ -24,6 +24,10 @@
 {% if meta_jsonld %}
     <script type="application/ld+json">{{ meta_jsonld|safe }}</script>
 {% endif %}
+{# Add Prism.js for syntax highlighting in code blocks #}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
 <style>
     .comment-replies { margin-left: 32px; border-left: 2px solid #f4f4f4; padding-left: 12px; }
     .comment-item { margin-bottom: 6px; }

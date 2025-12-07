@@ -1788,7 +1788,7 @@ def post():
                 'author': current_user.username,
                 'status': 'processing_media' if temp_image_paths or temp_video_path else 'published',
                 'view_count': 0, # Initialize view count
-                'timestamp': datetime.datetime.now(),
+                'timestamp': datetime.datetime.now(datetime.timezone.utc),
                 'image_alts': normalized_alts,
             }
             result = posts_conf.insert_one(new_post_data)

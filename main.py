@@ -2667,9 +2667,8 @@ def profile_settings(username):
     if request.method == 'POST':
         update_data = {}
 
-        # Update bio and website
+        # Update bio
         update_data['bio'] = request.form.get('bio', '').strip()
-        update_data['website_url'] = request.form.get('website', '').strip()
 
         # Handle profile picture removal
         if request.form.get('remove_profile_picture'):

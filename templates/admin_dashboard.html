@@ -15,8 +15,6 @@
   <h3>Comments per Day</h3>
   <div class="chart-container"><canvas id="commentsChart"></canvas></div>
 
-  <h3>Top Posts by Comments</h3>
-  <ul id="top-posts" class="mb-4"></ul>
 
   <h3>Users</h3>
   <p>Total confirmed users: <span id="total-users"></span></p>
@@ -72,19 +70,7 @@ async function loadMetrics(){
     }
   });
 
-  // Top posts
-  const topList = document.getElementById('top-posts');
-  topList.innerHTML = '';
-  (data.top_posts_by_comments || []).forEach(p=>{
-    const li = document.createElement('li');
-    const link = document.createElement('a');
-    link.href = `/post/${p.slug}`;
-    link.textContent = `${p.title} — ${p.count} comments`;
-    link.target = '_blank'; // Open in new tab
-    li.appendChild(link);
-    topList.appendChild(li);
-  });
-
+  // User stats
   document.getElementById('total-users').textContent = data.total_users;
   document.getElementById('active-users').textContent = data.active_users;
     // Load traffic data

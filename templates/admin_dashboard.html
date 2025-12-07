@@ -110,7 +110,7 @@ async function loadActiveNow() {
             const li = document.createElement('li');
             const link = document.createElement('a');
             link.href = `/profile/${u.username}`;
-            link.textContent = `${u.username} (Last seen: ${u.last_active})`;
+            link.textContent = `${u.username}`;
             li.appendChild(link);
             activeList.appendChild(li);
         });

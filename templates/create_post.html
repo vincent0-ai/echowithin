@@ -19,7 +19,7 @@
         <p>Share your ideas, experiences, and perspectives with the EchoWithin community.</p>
 
         {# CHECK THIS: Ensure 'create_post' matches the function name of your Flask route #}
-        <form id="create-post-form" action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
+        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
             
             <div class="form-group">
                 <label for="title">Title</label>
@@ -40,6 +40,19 @@
                         <option value="Education">Education</option>
                         <option value="Technology">Technology</option>
                         <option value="Career">Career</option>
+                        <option value="Health">Health</option>
+                        <option value="Law">Law</option>
+                        <option value="Campus">Campus</option>
+                        <option value="Announcement">Announcement</option>
+                        <option value="Other">Other</option>
+                    </optgroup>
+                    <optgroup label="Specific Topics">
+                        <option value="Art">Art</option>
+                        <option value="Music">Music</option>
+                        <option value="Science">Science</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Deep dive">Deep dive</option>
+                        <option value="Rants">Rants</option>
                         </optgroup>
                 </select>
             </div>

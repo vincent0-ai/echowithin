@@ -19,7 +19,7 @@
         <p>Share your ideas, experiences, and perspectives with the EchoWithin community.</p>
 
         {# The 'action' should point to your Flask endpoint, e.g., 'post.create_post' or just 'create_post' #}
-        <form id="create-post-form" action="{{ url_for('post.create_post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
+        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
             <div class="form-group">
                 <label for="title">Title</label>
                 <input type="text" id="title" name="title" class="form-input" required minlength="3">

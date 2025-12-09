@@ -1723,7 +1723,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
             os.remove(temp_video_path)
         app.logger.info(f"Cleaned up temporary files for post {post_id_str}")
 
-@app.route("/post", methods=['POST'])
+@app.route("/post", methods=['POST', 'GET'])
 @login_required
 def post():
     if request.method=="POST":

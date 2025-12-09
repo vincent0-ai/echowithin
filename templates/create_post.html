@@ -91,36 +91,41 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const postForm = document.getElementById('create-post-form');
+
     const submitButton = document.getElementById('submit-post-btn');
+    const tagsElement = document.getElementById('tags');
+    const contentElement = document.getElementById('content');
+    let easyMDE;
+
+    if (contentElement) {
+        easyMDE = new EasyMDE({
+            element: contentElement,
+            spellChecker: false,
+            placeholder: "Write your post content here. You can use Markdown for formatting...",
+            status: ["lines", "words"],
+        });
+    }
+
+    if (tagsElement) {
+        const choices = new Choices(tagsElement, {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'Select tags...',
+        });
+    }
 
     if (postForm && submitButton) {
         postForm.addEventListener('submit', function() {
+            // Sync EasyMDE content with the original textarea before submitting
+            if (easyMDE) {
+                easyMDE.codemirror.save();
+            }
+
             // Disable the button to prevent multiple clicks
             submitButton.disabled = true;
             // Change the button text to give user feedback
             submitButton.textContent = 'Submitting...';
         });
-
-        // Initialize Choices.js for the tags dropdown
-        const tagsElement = document.getElementById('tags');
-        if (tagsElement) {
-            const choices = new Choices(tagsElement, {
-                removeItemButton: true, // Add a small 'x' to remove selected items
-                placeholder: true,
-                placeholderValue: 'Select tags...',
-            });
-        }
-
-        // Initialize EasyMDE for the content textarea
-        const contentElement = document.getElementById('content');
-        if (contentElement) {
-            const easyMDE = new EasyMDE({
-                element: contentElement,
-                spellChecker: false,
-                placeholder: "Write your post content here. You can use Markdown for formatting...",
-                status: ["lines", "words"],
-            });
-        }
     }
 });
 </script>

@@ -18,8 +18,9 @@
         <h1>Create a New Post</h1>
         <p>Share your ideas, experiences, and perspectives with the EchoWithin community.</p>
 
-        {# The 'action' should point to your Flask endpoint, e.g., 'post.create_post' or just 'create_post' #}
-        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
+        {# CHECK THIS: Ensure 'create_post' matches the function name of your Flask route #}
+        <form id="create-post-form" action="{{ url_for('create_post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
+            
             <div class="form-group">
                 <label for="title">Title</label>
                 <input type="text" id="title" name="title" class="form-input" required minlength="3">
@@ -27,7 +28,9 @@
 
             <div class="form-group">
                 <label for="content">Content</label>
-                <textarea id="content" name="content" class="form-input" rows="10" required></textarea>
+                {# FIX: Removed 'required' attribute to prevent browser validation error on hidden element #}
+                <textarea id="content" name="content" class="form-input" rows="10"></textarea>
+                <div id="content-error" style="color: red; display: none; margin-top: 5px;">Content is required.</div>
             </div>
 
             <div class="form-group">
@@ -35,49 +38,14 @@
                 <select id="tags" name="tags" class="form-input" multiple size="8">
                     <optgroup label="General Topics">
                         <option value="Education">Education</option>
-                        <option value="Law">Law</option>
-                        <option value="Legal">Legal</option>
-                        <option value="Politics">Politics</option>
-                        <option value="Religion">Religion</option>
-                        <option value="Health">Health</option>
-                        <option value="Sports">Sports</option>
-                        <option value="Business">Business</option>
-                        <option value="Science">Science</option>
-                        <option value="Philosophy">Philosophy</option>
-                        <option value="History">History</option>
-                        <option value="Announcement">Announcement</option>
-                    </optgroup>
-                    <optgroup label="Tech & Innovation">
                         <option value="Technology">Technology</option>
-                        <option value="Programming">Programming</option>
-                        <option value="Cybersecurity">Cybersecurity</option>
-                        <option value="Web Development">Web Development</option>
-                    </optgroup>
-                    <optgroup label="Vibe & Tone">
-                        <option value="Motivation">Motivation</option>
-                        <option value="Meme">Meme</option>
-                        <option value="Rant">Rant</option>
-                        <option value="Opinion">Opinion</option>
-                        <option value="Storytime">Storytime</option>
-                        <option value="Deep Dive">Deep Dive</option>
-                        <option value="Quick Read">Quick Read</option>
-                    </optgroup>
-                    <optgroup label="Lifestyle & Student Life">
-                        <option value="University Life">University Life</option>
-                        <option value="Productivity">Productivity</option>
-                        <option value="Mental Health">Mental Health</option>
                         <option value="Career">Career</option>
-                        <option value="Gaming">Gaming</option>
-                        <option value="Music">Music</option>
-                        <option value="Art">Art</option>
-                        <option value="Travel">Travel</option>
-                        <option value="Food">Food</option>
-                    </optgroup>
+                        </optgroup>
                 </select>
             </div>
 
             <div class="form-group">
-                <label for="images">Images (Optional — you may select multiple)</label>
+                <label for="images">Images (Optional)</label>
                 <input type="file" id="images" name="images" class="form-input" accept="image/png, image/jpeg, image/gif" multiple>
             </div>
 
@@ -96,40 +64,58 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const postForm = document.getElementById('create-post-form');
-
     const submitButton = document.getElementById('submit-post-btn');
     const tagsElement = document.getElementById('tags');
     const contentElement = document.getElementById('content');
+    const contentError = document.getElementById('content-error');
+    
     let easyMDE;
 
+    // Initialize EasyMDE
     if (contentElement) {
         easyMDE = new EasyMDE({
             element: contentElement,
             spellChecker: false,
-            placeholder: "Write your post content here. You can use Markdown for formatting...",
+            placeholder: "Write your post content here...",
             status: ["lines", "words"],
+            forceSync: true, // Auto-syncs changes to original textarea
         });
     }
 
+    // Initialize Choices.js
     if (tagsElement) {
-        const choices = new Choices(tagsElement, {
+        new Choices(tagsElement, {
             removeItemButton: true,
             placeholder: true,
             placeholderValue: 'Select tags...',
         });
     }
 
-    if (postForm && submitButton) {
-        postForm.addEventListener('submit', function() {
-            // Sync EasyMDE content with the original textarea before submitting
+    if (postForm) {
+        postForm.addEventListener('submit', function(e) {
+            // 1. Force EasyMDE to update the hidden textarea value
             if (easyMDE) {
-                easyMDE.codemirror.save();
+                // This puts the text from the pretty editor into the standard form field
+                easyMDE.codemirror.save(); 
             }
 
-            // Disable the button to prevent multiple clicks
-            submitButton.disabled = true;
-            // Change the button text to give user feedback
-            submitButton.textContent = 'Submitting...';
+            // 2. Manual Validation for Content
+            // We removed 'required' from HTML, so we check it here
+            if (!contentElement.value.trim()) {
+                e.preventDefault(); // Stop submission
+                contentError.style.display = 'block'; // Show error message
+                return;
+            } else {
+                contentError.style.display = 'none';
+            }
+
+            // 3. UX: Disable button and show loading state
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = 'Submitting...';
+            }
+            
+            // The form will now proceed to submit normally
         });
     }
 });

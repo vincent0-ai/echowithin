@@ -89,10 +89,19 @@
 <div class="content-wrapper">
     <div class="post-item" style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
             <div class="post-header" style="align-items: flex-start; gap: 0.6rem;">
-                <h1 class="post-title single-post-title" style="margin:0;">{{ post.title }}</h1>
-                <div class="post-views">
-                    <i class="fa-regular fa-eye"></i>
-                    <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
+                <h1 class="post-title single-post-title" style="margin:0; flex-grow: 1;">{{ post.title }}</h1>
+                <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
+                    <div class="post-views" title="Views">
+                        <i class="fa-regular fa-eye"></i>
+                        <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
+                    </div>
+                    {% if current_user.is_authenticated %}
+                    <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="margin: 0;">
+                        <button type="submit" style="background: none; border: none; cursor: pointer; color: {% if is_saved %}#d63384{% else %}#6c757d{% endif %}; font-size: 1.2rem; padding: 0;" title="{% if is_saved %}Unsave Post{% else %}Save Post{% endif %}">
+                            <i class="{% if is_saved %}fas{% else %}far{% endif %} fa-bookmark"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
         <div class="post-meta">

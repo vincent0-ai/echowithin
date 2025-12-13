@@ -140,6 +140,7 @@ logs_conf = db['logs']
 auth_conf = db['auth']
 announcements_conf = db['announcements']
 comments_conf = db['comments']
+personal_posts_conf = db['personal_posts']
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
@@ -1946,6 +1947,12 @@ def view_post(slug):
     page_title = post.get('title', 'View Post')
     page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
 
+    is_saved = False
+    if current_user.is_authenticated:
+        u = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'saved_posts': 1})
+        if u and post['_id'] in u.get('saved_posts', []):
+            is_saved = True
+
     # Prepare SEO meta fields
     meta_url = url_for('view_post', slug=slug, _external=True)
     meta_image = None
@@ -1973,7 +1980,7 @@ def view_post(slug):
     except Exception:
         jsonld_str = ''
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved)
 
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
@@ -2726,6 +2733,98 @@ def profile_settings(username):
 
     # For GET, render settings page
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
+
+@app.route('/personal_space')
+@login_required
+def personal_space():
+    """Renders the user's personal space with saved posts and personal notes."""
+    user = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    
+    # Fetch saved posts
+    saved_post_ids = user.get('saved_posts', [])
+    saved_posts = []
+    if saved_post_ids:
+        # Filter out any IDs that might not exist anymore
+        saved_posts_cursor = posts_conf.find({'_id': {'$in': saved_post_ids}})
+        saved_posts = list(saved_posts_cursor)
+        with app.app_context():
+            saved_posts = prepare_posts(saved_posts)
+            
+    # Fetch personal posts (notes)
+    personal_posts = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))
+    
+    page_title = "My Personal Space"
+    page_description = "Your private collection of saved posts and personal notes."
+    
+    return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_page='personal_space', title=page_title, description=page_description)
+
+@app.route('/post/<post_id>/toggle_save', methods=['POST'])
+@login_required
+def toggle_save_post(post_id):
+    """Toggles the saved status of a post for the current user."""
+    try:
+        post_oid = ObjectId(post_id)
+        post = posts_conf.find_one({'_id': post_oid})
+        if not post:
+            if request.is_json:
+                return jsonify({'error': 'Post not found'}), 404
+            flash('Post not found.', 'danger')
+            return redirect(url_for('home'))
+            
+        user_id = ObjectId(current_user.id)
+        user = users_conf.find_one({'_id': user_id})
+        saved_posts = user.get('saved_posts', [])
+        
+        is_saved = False
+        if post_oid in saved_posts:
+            users_conf.update_one({'_id': user_id}, {'$pull': {'saved_posts': post_oid}})
+            is_saved = False
+        else:
+            users_conf.update_one({'_id': user_id}, {'$addToSet': {'saved_posts': post_oid}})
+            is_saved = True
+            
+        if request.is_json:
+            return jsonify({'saved': is_saved})
+            
+        flash('Post saved!' if is_saved else 'Post removed from saved.', 'success')
+        return redirect(request.referrer or url_for('view_post', slug=post['slug']))
+    except Exception as e:
+        app.logger.error(f"Error toggling save for post {post_id}: {e}")
+        if request.is_json:
+            return jsonify({'error': 'Internal error'}), 500
+        flash('An error occurred.', 'danger')
+        return redirect(url_for('home'))
+
+@app.route('/personal_post/create', methods=['POST'])
+@login_required
+def create_personal_post():
+    """Creates a new personal note/post."""
+    content = request.form.get('content')
+    if content and content.strip():
+        personal_posts_conf.insert_one({
+            'user_id': ObjectId(current_user.id),
+            'content': content.strip(),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        flash('Personal note added.', 'success')
+    else:
+        flash('Content cannot be empty.', 'danger')
+    return redirect(url_for('personal_space'))
+
+@app.route('/personal_post/delete/<post_id>', methods=['POST'])
+@login_required
+def delete_personal_post(post_id):
+    """Deletes a personal note/post."""
+    try:
+        personal_posts_conf.delete_one({
+            '_id': ObjectId(post_id),
+            'user_id': ObjectId(current_user.id)
+        })
+        flash('Personal note deleted.', 'success')
+    except Exception as e:
+        app.logger.error(f"Error deleting personal post {post_id}: {e}")
+        flash('Could not delete note.', 'danger')
+    return redirect(url_for('personal_space'))
 
 @app.route('/contact', methods=['POST'])
 @limits(calls=5, period=60) 

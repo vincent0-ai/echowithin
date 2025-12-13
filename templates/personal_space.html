@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>{{ title }}</title>
+    <meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="personal-space-container" style="display: flex; gap: 2rem; flex-wrap: wrap;">
+        
+        <!-- Saved Posts Section -->
+        <div class="saved-posts-section" style="flex: 1; min-width: 300px;">
+            <h2 class="section-title">Saved Posts</h2>
+            {% if saved_posts %}
+                <div class="saved-posts-list">
+                    {% for post in saved_posts %}
+                        <div class="post-item-simple" style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                            <h3 style="margin-top: 0; font-size: 1.2rem;"><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
+                            <div class="post-meta" style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">
+                                By {{ post.author }} on {{ post.timestamp.strftime('%b %d, %Y') }}
+                            </div>
+                            <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn btn-sm" style="background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Remove</button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>You haven't saved any posts yet.</p>
+            {% endif %}
+        </div>
+
+        <!-- Personal Notes Section -->
+        <div class="personal-notes-section" style="flex: 1; min-width: 300px;">
+            <h2 class="section-title">My Personal Notes</h2>
+            
+            <div class="create-note-form" style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <form action="{{ url_for('create_personal_post') }}" method="POST">
+                    <div class="form-group">
+                        <label for="note-content" style="display: block; margin-bottom: 5px; font-weight: bold;">New Note</label>
+                        <textarea id="note-content" name="content" rows="3" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Write something for yourself..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn" style="background-color: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; margin-top: 10px;">Add Note</button>
+                </form>
+            </div>
+
+            {% if personal_posts %}
+                <div class="personal-notes-list">
+                    {% for note in personal_posts %}
+                        <div class="note-item" style="background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); position: relative;">
+                            <div class="note-content" style="white-space: pre-wrap; margin-bottom: 10px;">{{ note.content }}</div>
+                            <div class="note-meta" style="font-size: 0.85rem; color: #888; display: flex; justify-content: space-between; align-items: center;">
+                                <span>{{ note.created_at.strftime('%b %d, %Y at %I:%M %p') }}</span>
+                                <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this note?');">
+                                    <button type="submit" style="background: none; border: none; color: #dc3545; cursor: pointer; font-size: 0.9rem;">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>No personal notes yet.</p>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}

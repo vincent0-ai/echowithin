@@ -336,7 +336,7 @@ def enforce_canonical_domain_and_https():
     host = request.headers.get('X-Forwarded-Host', request.host)
     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-    canonical_host = "echowithin.xyz"
+    canonical_host = "blog.echowithin.xyz"
     canonical_scheme = "https"
 
     needs_redirect = False
@@ -512,7 +512,7 @@ def send_new_post_notifications(post_id_str):
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
+                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
             subject = f"New post on EchoWithin: {post.get('title')}"

@@ -2184,7 +2184,6 @@ def api_edit_comment(comment_id):
         app.logger.error(f"Failed to edit comment {comment_id}: {e}")
         return jsonify({'error': 'Failed to edit comment'}), 500
 
-@app.route('/edit_post/<post_id>', methods=['GET'])
 @app.route('/api/comments/<comment_id>/vote', methods=['POST'])
 @login_required
 def api_vote_comment(comment_id):

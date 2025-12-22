@@ -21,7 +21,11 @@
             {% for post in posts %}
             <div class="post-item">
                 <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
-                <p>{{ post.content[:150] ~ '...' if post.content|length > 150 else post.content }}</p>
+                {% if post.content|length > 150 %}
+                    <p>{{ (post.content[:150] ~ '...') | linkify | safe }}</p>
+                {% else %}
+                    <p>{{ post.content | linkify | safe }}</p>
+                {% endif %}
                 <div class="post-meta">
                   {% if post.edited_at %}
                     Edited on {{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>

@@ -210,8 +210,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Fix 1: Use loose equality (==) for ID comparison in case of int/string mismatch
         const isOwner = currentUserId && post.author_id == currentUserId;
 
-        // Fix 2: Strip HTML tags to prevent XSS and broken UI in previews
-        const plainTextContent = post.content.replace(/<[^>]+>/g, '');
+        // Fix 2: Escape and linkify content for safe previews
+        function escapeHtml(str) {
+            return String(str).replace(/[&<>"']/g, function(s){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[s]; });
+        }
+        function linkifyText(text) {
+            const urlRegex = /(\b(?:https?:\/\/|www\.)[^\s<]+)/gi;
+            return text.replace(urlRegex, function(url) {
+                let href = url;
+                if (!/^https?:\/\//i.test(href)) href = 'http://' + href;
+                return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+            });
+        }
+        const escaped = escapeHtml(post.content || '');
+        const snippet = escaped.length > 150 ? escaped.substring(0,150) + '...' : escaped;
+        const previewContent = linkifyText(snippet);
 
         let media = '';
         if (post.video_url) {
@@ -243,7 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="post-content-wrapper">
                 ${media}
             </div>
-            <p>${plainTextContent.substring(0,150)}...</p>
+            <p>${previewContent}</p>
             ${post.edited_at
                 ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
                 : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>`

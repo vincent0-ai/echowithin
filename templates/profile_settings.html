@@ -92,6 +92,7 @@
       if (!vapidResponse.ok) {
         statusText.textContent = 'Push notifications are not configured on the server.';
         statusText.style.color = '#666';
+        enableBtn.style.display = 'inline-block';
         return;
       }
       
@@ -100,15 +101,29 @@
       
       if (subscription) {
         // Check if this subscription is registered on server
-        const serverStatus = await fetch('/api/push/status');
-        const serverData = await serverStatus.json();
-        
-        if (serverData.subscribed) {
-          statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications are enabled for this device.';
-          statusText.style.color = '#28a745';
-          disableBtn.style.display = 'inline-block';
-        } else {
-          statusText.textContent = 'Push notifications available but not enabled.';
+        try {
+          const serverStatus = await fetch('/api/push/status');
+          if (serverStatus.ok) {
+            const serverData = await serverStatus.json();
+            
+            if (serverData.subscribed) {
+              statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications are enabled for this device.';
+              statusText.style.color = '#28a745';
+              disableBtn.style.display = 'inline-block';
+            } else {
+              statusText.textContent = 'Push notifications available but not enabled.';
+              statusText.style.color = '#666';
+              enableBtn.style.display = 'inline-block';
+            }
+          } else {
+            // Server status check failed, show enable button by default
+            statusText.textContent = 'Push notifications are not enabled.';
+            statusText.style.color = '#666';
+            enableBtn.style.display = 'inline-block';
+          }
+        } catch (statusErr) {
+          console.error('Error checking server status:', statusErr);
+          statusText.textContent = 'Push notifications are not enabled.';
           statusText.style.color = '#666';
           enableBtn.style.display = 'inline-block';
         }
@@ -124,8 +139,10 @@
       }
     } catch (err) {
       console.error('Error checking push status:', err);
-      statusText.textContent = 'Unable to check notification status.';
-      statusText.style.color = '#dc3545';
+      // Default to showing enable button on error
+      statusText.textContent = 'Push notifications are not enabled.';
+      statusText.style.color = '#666';
+      enableBtn.style.display = 'inline-block';
     }
   }
   

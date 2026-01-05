@@ -522,7 +522,8 @@ body {
     border-top: 1px solid var(--border-color);
     display: flex;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .post-interaction {
@@ -1327,9 +1328,19 @@ body {
     }
     
     /* Adjust admin buttons on blog posts for smaller screens */
+    .admin-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
     .admin-actions .btn {
-        padding: 0.25rem 0.5rem; /* Make padding smaller */
-        font-size: 0.8rem;      /* Make font smaller */
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        text-align: center;
+        white-space: nowrap;
     }
 
     .social-links {

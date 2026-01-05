@@ -35,6 +35,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from meilisearch import Client as MeiliClient
 from PIL import Image
 from io import BytesIO
+from pywebpush import webpush, WebPushException
 
 app = Flask(__name__)
 
@@ -112,6 +113,13 @@ os.makedirs(TEMP_UPLOAD_FOLDER, exist_ok=True)
 # --- Cloudinary Configuration ---
 cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_key = get_env_variable('CLOUDINARY_API_KEY'), api_secret = get_env_variable('CLOUDINARY_API_SECRET'))
 
+# --- VAPID Configuration for Web Push Notifications ---
+# Generate these keys using: vapid --gen or use an online generator
+# Store the private key securely and share the public key with clients
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_CLAIMS = {"sub": "mailto:" + os.environ.get('MAIL_USERNAME', 'admin@echowithin.com')}
+
 app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
@@ -141,6 +149,10 @@ auth_conf = db['auth']
 announcements_conf = db['announcements']
 comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
+push_subscriptions_conf = db['push_subscriptions']
+
+# Create index for push subscriptions to ensure unique endpoints per user
+push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
@@ -287,6 +299,13 @@ def reindex_all_posts_to_meili(batch_size: int = 1000):
 def linkify_filter(text):
     """A Jinja2 filter to turn URLs in text into clickable links."""
     return bleach.linkify(text)
+
+@app.template_filter('markdown')
+def markdown_filter(text):
+    """A Jinja2 filter to convert markdown text to HTML."""
+    if not text:
+        return ''
+    return markdown.markdown(text, extensions=['fenced_code', 'nl2br'])
 
 @app.template_filter('from_timestamp')
 def from_timestamp_filter(timestamp):
@@ -540,6 +559,189 @@ def send_new_post_notifications(post_id_str):
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
 
+@rq.job
+def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None):
+    """Send a web push notification to all devices subscribed by a user."""
+    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        app.logger.debug("VAPID keys not configured, skipping push notification")
+        return
+    
+    try:
+        subscriptions = list(push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
+        if not subscriptions:
+            app.logger.debug(f"No push subscriptions found for user {user_id_str}")
+            return
+        
+        payload = json.dumps({
+            'title': title,
+            'body': body,
+            'url': url or '/',
+            'tag': tag or 'echowithin',
+            'icon': '/static/logo.png',
+            'badge': '/static/logo.png'
+        })
+        
+        for sub in subscriptions:
+            try:
+                subscription_info = {
+                    'endpoint': sub['endpoint'],
+                    'keys': sub['keys']
+                }
+                webpush(
+                    subscription_info=subscription_info,
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims=VAPID_CLAIMS
+                )
+                app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
+            except WebPushException as e:
+                # If subscription is expired or invalid, remove it
+                if e.response and e.response.status_code in [404, 410]:
+                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                    app.logger.info(f"Removed expired push subscription for user {user_id_str}")
+                else:
+                    app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
+            except Exception as e:
+                app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+    except Exception as e:
+        app.logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
+
+
+@rq.job
+def send_push_notifications_for_new_post(post_id_str):
+    """Send push notifications to all subscribed users about a new post."""
+    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        app.logger.debug("VAPID keys not configured, skipping push notifications for new post")
+        return
+    
+    try:
+        post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
+        if not post:
+            app.logger.error(f"Post {post_id_str} not found for push notification")
+            return
+        
+        title = "New Post on EchoWithin"
+        body = f'"{post.get("title")}" by {post.get("author")}'
+        
+        with app.app_context():
+            try:
+                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
+            except RuntimeError:
+                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+                post_url = f"{base_url}/post/{post.get('slug')}"
+        
+        # Get all unique user subscriptions (exclude the post author)
+        author_id = post.get('author_id')
+        query = {'user_id': {'$ne': author_id}} if author_id else {}
+        subscriptions = list(push_subscriptions_conf.find(query))
+        
+        payload = json.dumps({
+            'title': title,
+            'body': body,
+            'url': post_url,
+            'tag': f'new-post-{post_id_str}',
+            'icon': '/static/logo.png',
+            'badge': '/static/logo.png'
+        })
+        
+        for sub in subscriptions:
+            try:
+                subscription_info = {
+                    'endpoint': sub['endpoint'],
+                    'keys': sub['keys']
+                }
+                webpush(
+                    subscription_info=subscription_info,
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims=VAPID_CLAIMS
+                )
+            except WebPushException as e:
+                if e.response and e.response.status_code in [404, 410]:
+                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                else:
+                    app.logger.error(f"Push notification failed: {e}")
+            except Exception as e:
+                app.logger.error(f"Unexpected push error: {e}")
+        
+        app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} subscriptions")
+    except Exception as e:
+        app.logger.error(f"Error in send_push_notifications_for_new_post: {e}", exc_info=True)
+
+
+@rq.job
+def send_push_notification_for_comment(comment_id_str, post_slug):
+    """Send push notification to post author when someone comments on their post."""
+    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
+        app.logger.debug("VAPID keys not configured, skipping comment push notification")
+        return
+    
+    try:
+        comment = comments_conf.find_one({'_id': ObjectId(comment_id_str)})
+        if not comment:
+            app.logger.error(f"Comment {comment_id_str} not found for push notification")
+            return
+        
+        post = posts_conf.find_one({'slug': post_slug})
+        if not post:
+            app.logger.error(f"Post with slug {post_slug} not found for comment notification")
+            return
+        
+        # Don't notify if the commenter is the post author
+        post_author_id = post.get('author_id')
+        commenter_id = comment.get('author_id')
+        if post_author_id and commenter_id and str(post_author_id) == str(commenter_id):
+            app.logger.debug("Skipping notification - commenter is post author")
+            return
+        
+        commenter_username = comment.get('author_username', 'Someone')
+        title = "New Comment on Your Post"
+        body = f'{commenter_username} commented on "{post.get("title")}"'
+        
+        with app.app_context():
+            try:
+                post_url = url_for('view_post', slug=post_slug, _external=True)
+            except RuntimeError:
+                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+                post_url = f"{base_url}/post/{post_slug}"
+        
+        # Send to all devices of the post author
+        subscriptions = list(push_subscriptions_conf.find({'user_id': post_author_id}))
+        
+        payload = json.dumps({
+            'title': title,
+            'body': body,
+            'url': post_url,
+            'tag': f'comment-{comment_id_str}',
+            'icon': '/static/logo.png',
+            'badge': '/static/logo.png'
+        })
+        
+        for sub in subscriptions:
+            try:
+                subscription_info = {
+                    'endpoint': sub['endpoint'],
+                    'keys': sub['keys']
+                }
+                webpush(
+                    subscription_info=subscription_info,
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims=VAPID_CLAIMS
+                )
+            except WebPushException as e:
+                if e.response and e.response.status_code in [404, 410]:
+                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                else:
+                    app.logger.error(f"Push notification failed for comment: {e}")
+            except Exception as e:
+                app.logger.error(f"Unexpected push error for comment: {e}")
+        
+        app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
+    except Exception as e:
+        app.logger.error(f"Error in send_push_notification_for_comment: {e}", exc_info=True)
+
+
 # Cache counts for 5 minutes
 comment_count_cache = TTLCache(maxsize=512, ttl=300)
 @cached(comment_count_cache)
@@ -695,8 +897,8 @@ def admin_metrics():
         start = now - datetime.timedelta(days=days)
 
         pipeline_posts = [
-            {'$match': {'created_at': {'$gte': start}}},
-            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}, 'count': {'$sum': 1}}},
+            {'$match': {'timestamp': {'$gte': start}}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}}, 'count': {'$sum': 1}}},
             {'$sort': SON([('_id', 1)])}
         ]
         posts_per_day = list(posts_conf.aggregate(pipeline_posts))
@@ -1840,6 +2042,17 @@ def post():
             except Exception as e:
                 app.logger.error(f"Failed to enqueue ntfy notification for new post: {e}")
 
+            # --- Send web push notifications for new post ---
+            try:
+                send_push_notifications_for_new_post.queue(post_id_str)
+                app.logger.info(f"Enqueued push notification job for post {post_id_str}")
+            except redis.exceptions.ConnectionError as e:
+                app.logger.warning(f"Redis connection failed. Falling back to thread for push notifications. Error: {e}")
+                with app.app_context():
+                    ThreadPoolExecutor().submit(send_push_notifications_for_new_post, post_id_str)
+            except Exception as e:
+                app.logger.error(f"Failed to enqueue push notification for new post: {e}")
+
             flash("Post created successfully!", "success")
         else:
             flash("Title and content cannot be empty.", "danger")
@@ -2031,6 +2244,86 @@ def api_record_post_view(post_id):
         return jsonify({'success': False, 'error': 'Failed to record view'}), 500
 
 
+# --- Push Notification Subscription Endpoints ---
+
+@app.route('/api/push/vapid-public-key')
+def get_vapid_public_key():
+    """Return the VAPID public key for push subscription."""
+    if not VAPID_PUBLIC_KEY:
+        return jsonify({'error': 'Push notifications not configured'}), 503
+    return jsonify({'publicKey': VAPID_PUBLIC_KEY})
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def subscribe_push():
+    """Subscribe a user's device to push notifications."""
+    if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
+        return jsonify({'error': 'Push notifications not configured'}), 503
+    
+    data = request.get_json()
+    if not data or not data.get('endpoint') or not data.get('keys'):
+        return jsonify({'error': 'Invalid subscription data'}), 400
+    
+    try:
+        subscription_doc = {
+            'user_id': ObjectId(current_user.id),
+            'endpoint': data['endpoint'],
+            'keys': data['keys'],
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'user_agent': request.headers.get('User-Agent', '')[:200]
+        }
+        
+        # Upsert - update if exists, insert if not
+        push_subscriptions_conf.update_one(
+            {'user_id': ObjectId(current_user.id), 'endpoint': data['endpoint']},
+            {'$set': subscription_doc},
+            upsert=True
+        )
+        
+        app.logger.info(f"Push subscription saved for user {current_user.username}")
+        return jsonify({'success': True, 'message': 'Subscribed to push notifications'})
+    except Exception as e:
+        app.logger.error(f"Failed to save push subscription: {e}")
+        return jsonify({'error': 'Failed to save subscription'}), 500
+
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+def unsubscribe_push():
+    """Unsubscribe a user's device from push notifications."""
+    data = request.get_json()
+    if not data or not data.get('endpoint'):
+        return jsonify({'error': 'Invalid request'}), 400
+    
+    try:
+        result = push_subscriptions_conf.delete_one({
+            'user_id': ObjectId(current_user.id),
+            'endpoint': data['endpoint']
+        })
+        
+        if result.deleted_count > 0:
+            app.logger.info(f"Push subscription removed for user {current_user.username}")
+            return jsonify({'success': True, 'message': 'Unsubscribed from push notifications'})
+        else:
+            return jsonify({'success': True, 'message': 'Subscription not found'})
+    except Exception as e:
+        app.logger.error(f"Failed to remove push subscription: {e}")
+        return jsonify({'error': 'Failed to unsubscribe'}), 500
+
+
+@app.route('/api/push/status')
+@login_required
+def push_subscription_status():
+    """Check if the current user has any push subscriptions."""
+    try:
+        count = push_subscriptions_conf.count_documents({'user_id': ObjectId(current_user.id)})
+        return jsonify({'subscribed': count > 0, 'subscription_count': count})
+    except Exception as e:
+        app.logger.error(f"Failed to check push subscription status: {e}")
+        return jsonify({'error': 'Failed to check status'}), 500
+
+
 def _serialize_comment(doc):
     return {
         'id': str(doc.get('_id')),
@@ -2101,11 +2394,25 @@ def api_post_comments(slug):
     try:
         res = comments_conf.insert_one(comment)
         comment['_id'] = res.inserted_id
+        comment_id_str = str(res.inserted_id)
+        
         # Invalidate cached comment counts so lists update immediately
         try:
             comment_count_cache.clear()
         except Exception:
             pass
+        
+        # --- Send push notification to post author ---
+        try:
+            send_push_notification_for_comment.queue(comment_id_str, slug)
+            app.logger.debug(f"Enqueued push notification for comment {comment_id_str}")
+        except redis.exceptions.ConnectionError as e:
+            app.logger.warning(f"Redis connection failed. Falling back to thread for comment push notification. Error: {e}")
+            with app.app_context():
+                ThreadPoolExecutor().submit(send_push_notification_for_comment, comment_id_str, slug)
+        except Exception as e:
+            app.logger.error(f"Failed to enqueue push notification for comment: {e}")
+        
         return jsonify(_serialize_comment(comment)), 201
     except Exception as e:
         app.logger.error(f"Failed to insert comment for {slug}: {e}")
@@ -2756,6 +3063,45 @@ def personal_space():
     page_description = "Your private collection of saved posts and personal notes."
     
     return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_page='personal_space', title=page_title, description=page_description)
+
+@app.route('/post/<post_id>/toggle_like', methods=['POST'])
+@login_required
+def toggle_like_post(post_id):
+    """Toggles the like status of a post for the current user."""
+    try:
+        post_oid = ObjectId(post_id)
+        post = posts_conf.find_one({'_id': post_oid})
+        if not post:
+            if request.is_json:
+                return jsonify({'error': 'Post not found'}), 404
+            flash('Post not found.', 'danger')
+            return redirect(url_for('home'))
+
+        user_id = str(current_user.id)
+        liked_by = post.get('liked_by', [])
+        
+        is_liked = False
+        if user_id in liked_by:
+            posts_conf.update_one({'_id': post_oid}, {'$pull': {'liked_by': user_id}, '$inc': {'likes_count': -1}})
+            is_liked = False
+        else:
+            posts_conf.update_one({'_id': post_oid}, {'$addToSet': {'liked_by': user_id}, '$inc': {'likes_count': 1}})
+            is_liked = True
+
+        # Get updated count
+        updated_post = posts_conf.find_one({'_id': post_oid}, {'likes_count': 1})
+        likes_count = updated_post.get('likes_count', 0) if updated_post else 0
+
+        if request.is_json:
+            return jsonify({'liked': is_liked, 'likes_count': likes_count})
+
+        return redirect(request.referrer or url_for('view_post', slug=post['slug']))
+    except Exception as e:
+        app.logger.error(f"Error toggling like for post {post_id}: {e}")
+        if request.is_json:
+            return jsonify({'error': 'Internal error'}), 500
+        flash('An error occurred.', 'danger')
+        return redirect(url_for('home'))
 
 @app.route('/post/<post_id>/toggle_save', methods=['POST'])
 @login_required

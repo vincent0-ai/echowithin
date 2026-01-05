@@ -250,18 +250,33 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button type="submit" class="btn delete-btn">Delete</button>
             </form>` : '';
 
+        // Check if the current user has liked this post
+        const likedBy = post.liked_by || [];
+        const isLiked = currentUserId && likedBy.includes(currentUserId);
+        const likesCount = post.likes_count || 0;
+        const isAuthenticated = !!currentUserId;
+
+        const likeButton = `
+            <button class="like-btn ${isLiked ? 'liked' : ''}" 
+                    data-post-id="${post._id}"
+                    ${!isAuthenticated ? 'disabled title="Log in to like"' : ''}>
+                <i class="${isLiked ? 'fas' : 'far'} fa-heart"></i>
+                <span class="likes-count">${likesCount}</span>
+            </button>`;
+
         return `
         <div class="post-item" style="position: relative;">
             <h3><a href="${post.url}" class="record-view-link" data-post-id="${post._id}">${post.title}</a></h3>
             <div class="post-content-wrapper">
                 ${media}
             </div>
-            <p>${previewContent}</p>
+            <div class="post-content-rendered">${previewContent}</div>
             ${post.edited_at
                 ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
                 : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>`
             }
             <div class="post-actions">
+                ${likeButton}
                 <a href="${post.url}" class="btn comment-btn record-view-link" data-post-id="${post._id}">
                     Comments <span class="comment-count-display">${post.comment_count || 0}</span>
                 </a>

@@ -84,14 +84,14 @@
     {% endif %}
     {% endif %}
 
-    {# --- Content (unchanged) --- #}
+    {# --- Content with Markdown rendering --- #}
     <div class="post-content-wrapper">
         {% if post.content|length > 150 %}
-            <p class="post-content-truncated">{{ post.content|truncate(150, true)|linkify|safe }}</p>
-            <p class="post-content-full">{{ post.content|linkify|safe }}</p>
+            <div class="post-content-truncated">{{ post.content|truncate(150, true)|markdown|safe }}</div>
+            <div class="post-content-full">{{ post.content|markdown|safe }}</div>
             <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
         {% else %}
-            <p>{{ post.content|linkify|safe }}</p>
+            <div class="post-content-rendered">{{ post.content|markdown|safe }}</div>
         {% endif %}
     </div>
 
@@ -109,8 +109,17 @@
         {% endif %}
     </div>
 
-    {# --- Actions: Comment count + Edit/Delete --- #}
+    {# --- Actions: Like button + Comment count + Edit/Delete --- #}
     <div class="post-actions" style="margin-top: 10px;">
+        {# Like Button #}
+        {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
+        <button class="like-btn {% if is_liked %}liked{% endif %}" 
+                data-post-id="{{ post._id|string }}"
+                {% if not current_user.is_authenticated %}disabled title="Log in to like"{% endif %}>
+            <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
+            <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+        </button>
+
         <a href="{{ post.url }}" class="btn comment-btn record-view-link" data-post-id="{{ post._id|string }}">
             Comments
             <span class="comment-count-display">

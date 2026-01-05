@@ -200,14 +200,146 @@
 </body>
 
 <script>
-    // Register service worker for PWA offline support
+    // Register service worker for PWA offline support and push notifications
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
             navigator.serviceWorker.register('{{ url_for('static', filename='service-worker.js') }}')
-                .then(function(reg) { console.log('Service worker registered.', reg); })
+                .then(function(reg) { 
+                    console.log('Service worker registered.', reg);
+                    // Initialize push notifications after service worker is ready
+                    initPushNotifications(reg);
+                })
                 .catch(function(err) { console.warn('Service worker registration failed:', err); });
         });
     }
+
+    // Push Notification Subscription Functions
+    async function initPushNotifications(registration) {
+        // Only for logged in users (check if user is authenticated)
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+        if (!isLoggedIn) return;
+        
+        // Check if push is supported
+        if (!('PushManager' in window)) {
+            console.log('Push notifications not supported');
+            return;
+        }
+        
+        try {
+            // Check current subscription status
+            const subscription = await registration.pushManager.getSubscription();
+            if (subscription) {
+                console.log('Already subscribed to push notifications');
+                return;
+            }
+            
+            // Check if user has granted notification permission
+            if (Notification.permission === 'granted') {
+                await subscribeToPush(registration);
+            } else if (Notification.permission !== 'denied') {
+                // Will be prompted when they click the notification button
+                console.log('Notification permission not yet granted');
+            }
+        } catch (err) {
+            console.warn('Error initializing push notifications:', err);
+        }
+    }
+    
+    async function subscribeToPush(registration) {
+        try {
+            // Get the VAPID public key from the server
+            const response = await fetch('/api/push/vapid-public-key');
+            if (!response.ok) {
+                console.log('Push notifications not configured on server');
+                return;
+            }
+            
+            const { publicKey } = await response.json();
+            if (!publicKey) return;
+            
+            // Convert the public key to Uint8Array
+            const applicationServerKey = urlBase64ToUint8Array(publicKey);
+            
+            // Subscribe to push
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: applicationServerKey
+            });
+            
+            // Send subscription to server
+            const subResponse = await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subscription.toJSON())
+            });
+            
+            if (subResponse.ok) {
+                console.log('Successfully subscribed to push notifications');
+            } else {
+                console.warn('Failed to save subscription on server');
+            }
+        } catch (err) {
+            console.error('Failed to subscribe to push:', err);
+        }
+    }
+    
+    // Global function to unsubscribe from push notifications
+    window.unsubscribeFromPush = async function() {
+        try {
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            
+            if (subscription) {
+                // Unsubscribe locally
+                await subscription.unsubscribe();
+                
+                // Notify server
+                await fetch('/api/push/unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint: subscription.endpoint })
+                });
+                
+                console.log('Unsubscribed from push notifications');
+            }
+        } catch (err) {
+            console.error('Failed to unsubscribe:', err);
+        }
+    };
+    
+    // Utility function to convert base64 to Uint8Array for VAPID key
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+        
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
+    
+    // Global function to request push notification permission and subscribe
+    window.enablePushNotifications = async function() {
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                const registration = await navigator.serviceWorker.ready;
+                await subscribeToPush(registration);
+                return true;
+            } else {
+                console.log('Notification permission denied');
+                return false;
+            }
+        } catch (err) {
+            console.error('Error enabling push notifications:', err);
+            return false;
+        }
+    };
 
     // Wait for the entire page to load before running the script
     window.addEventListener('load', () => {
@@ -232,6 +364,44 @@
     document.addEventListener('DOMContentLoaded', () => {
         const commentToggleButtons = document.querySelectorAll('.toggle-comments-btn');
         const readMoreButtons = document.querySelectorAll('.read-more-btn');
+
+        // --- Like Button Handler (Global) ---
+        document.body.addEventListener('click', function(e) {
+            const likeBtn = e.target.closest('.like-btn');
+            if (likeBtn && !likeBtn.disabled) {
+                e.preventDefault();
+                const postId = likeBtn.dataset.postId;
+                
+                fetch(`/post/${postId}/toggle_like`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        return;
+                    }
+                    const icon = likeBtn.querySelector('i');
+                    const countSpan = likeBtn.querySelector('.likes-count');
+                    
+                    if (data.liked) {
+                        likeBtn.classList.add('liked');
+                        icon.classList.remove('far');
+                        icon.classList.add('fas');
+                    } else {
+                        likeBtn.classList.remove('liked');
+                        icon.classList.remove('fas');
+                        icon.classList.add('far');
+                    }
+                    countSpan.textContent = data.likes_count;
+                })
+                .catch(err => console.error('Like error:', err));
+            }
+        });
 
         readMoreButtons.forEach(button => {
             button.addEventListener('click', () => {

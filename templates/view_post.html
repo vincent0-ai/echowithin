@@ -91,6 +91,14 @@
             <div class="post-header" style="align-items: flex-start; gap: 0.6rem;">
                 <h1 class="post-title single-post-title" style="margin:0; flex-grow: 1;">{{ post.title }}</h1>
                 <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
+                    {# Like Button #}
+                    {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
+                    <button class="like-btn {% if is_liked %}liked{% endif %}" 
+                            data-post-id="{{ post._id|string }}"
+                            {% if not current_user.is_authenticated %}disabled title="Log in to like"{% endif %}>
+                        <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
+                        <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+                    </button>
                     <div class="post-views" title="Views">
                         <i class="fa-regular fa-eye"></i>
                         <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
@@ -157,7 +165,7 @@
             {% endif %}
         {% endif %}
 
-        <div class="post-content" style="white-space: pre-wrap; margin-top: 1rem;">{{ post.content|linkify|safe }}</div>
+        <div class="post-content" style="margin-top: 1rem;">{{ post.content|safe }}</div>
 
         {% if related_posts %}
         <div class="related-posts-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px;">
@@ -253,6 +261,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('comment-form');
     let currentPage = {{ comment_page | default(1) }};
     const perPage = {{ per_page | default(10) }};
+
+    // Like button handler is in base.html
 
     function createCommentElement(comment) {
         const el = document.createElement('div');

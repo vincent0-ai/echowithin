@@ -38,6 +38,26 @@
         <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Uncheck to disable email notifications for new posts on the platform.</p>
       </div>
 
+      <!-- Push Notifications Section -->
+      <div class="form-group" id="push-notification-settings">
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Push Notifications</label>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Get instant notifications on your device when there's a new post or someone comments on your posts.</p>
+        
+        <div id="push-status" style="margin-bottom: 1rem;">
+          <span id="push-status-text" style="font-size: 0.9rem;">Checking notification status...</span>
+        </div>
+        
+        <button type="button" id="enable-push-btn" class="btn" style="background-color: #28a745; color: white; display: none;" onclick="togglePushNotifications(true)">
+          <i class="fas fa-bell"></i> Enable Push Notifications
+        </button>
+        <button type="button" id="disable-push-btn" class="btn" style="background-color: #dc3545; color: white; display: none;" onclick="togglePushNotifications(false)">
+          <i class="fas fa-bell-slash"></i> Disable Push Notifications
+        </button>
+        <p id="push-not-supported" style="font-size: 0.9rem; color: #dc3545; display: none;">
+          Push notifications are not supported in this browser.
+        </p>
+      </div>
+
       <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
         <button type="submit" class="btn form-button" style="width: auto; padding: 0.5rem 1.5rem;">Save Settings</button>
         <a class="btn" href="{{ url_for('profile', username=user.username) }}" style="background-color: #6c757d; color: white;">Back to Profile</a>
@@ -46,4 +66,115 @@
     </form>
   </div>
 </div>
+
+<script>
+  // Push notification settings management
+  document.addEventListener('DOMContentLoaded', function() {
+    checkPushStatus();
+  });
+  
+  async function checkPushStatus() {
+    const statusText = document.getElementById('push-status-text');
+    const enableBtn = document.getElementById('enable-push-btn');
+    const disableBtn = document.getElementById('disable-push-btn');
+    const notSupported = document.getElementById('push-not-supported');
+    
+    // Check if push is supported
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      statusText.style.display = 'none';
+      notSupported.style.display = 'block';
+      return;
+    }
+    
+    try {
+      // Check if VAPID key is configured
+      const vapidResponse = await fetch('/api/push/vapid-public-key');
+      if (!vapidResponse.ok) {
+        statusText.textContent = 'Push notifications are not configured on the server.';
+        statusText.style.color = '#666';
+        return;
+      }
+      
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      
+      if (subscription) {
+        // Check if this subscription is registered on server
+        const serverStatus = await fetch('/api/push/status');
+        const serverData = await serverStatus.json();
+        
+        if (serverData.subscribed) {
+          statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications are enabled for this device.';
+          statusText.style.color = '#28a745';
+          disableBtn.style.display = 'inline-block';
+        } else {
+          statusText.textContent = 'Push notifications available but not enabled.';
+          statusText.style.color = '#666';
+          enableBtn.style.display = 'inline-block';
+        }
+      } else {
+        if (Notification.permission === 'denied') {
+          statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Notifications blocked. Please enable in browser settings.';
+          statusText.style.color = '#dc3545';
+        } else {
+          statusText.textContent = 'Push notifications are not enabled.';
+          statusText.style.color = '#666';
+          enableBtn.style.display = 'inline-block';
+        }
+      }
+    } catch (err) {
+      console.error('Error checking push status:', err);
+      statusText.textContent = 'Unable to check notification status.';
+      statusText.style.color = '#dc3545';
+    }
+  }
+  
+  async function togglePushNotifications(enable) {
+    const enableBtn = document.getElementById('enable-push-btn');
+    const disableBtn = document.getElementById('disable-push-btn');
+    const statusText = document.getElementById('push-status-text');
+    
+    if (enable) {
+      enableBtn.disabled = true;
+      enableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enabling...';
+      
+      try {
+        const success = await window.enablePushNotifications();
+        if (success) {
+          statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
+          statusText.style.color = '#28a745';
+          enableBtn.style.display = 'none';
+          disableBtn.style.display = 'inline-block';
+        } else {
+          statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Permission denied. Enable in browser settings.';
+          statusText.style.color = '#dc3545';
+          enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+          enableBtn.disabled = false;
+        }
+      } catch (err) {
+        console.error('Error enabling push:', err);
+        statusText.textContent = 'Failed to enable notifications. Try again.';
+        statusText.style.color = '#dc3545';
+        enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+        enableBtn.disabled = false;
+      }
+    } else {
+      disableBtn.disabled = true;
+      disableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Disabling...';
+      
+      try {
+        await window.unsubscribeFromPush();
+        statusText.textContent = 'Push notifications disabled.';
+        statusText.style.color = '#666';
+        disableBtn.style.display = 'none';
+        enableBtn.style.display = 'inline-block';
+        enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+      } catch (err) {
+        console.error('Error disabling push:', err);
+        disableBtn.innerHTML = '<i class="fas fa-bell-slash"></i> Disable Push Notifications';
+        disableBtn.disabled = false;
+      }
+    }
+  }
+</script>
 {% endblock %}

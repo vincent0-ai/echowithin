@@ -116,8 +116,8 @@ cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_ke
 # --- VAPID Configuration for Web Push Notifications ---
 # Generate these keys using: vapid --gen or use an online generator
 # Store the private key securely and share the public key with clients
-VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
-VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
 VAPID_CLAIMS = {"sub": "mailto:" + os.environ.get('MAIL_USERNAME', 'admin@echowithin.com')}
 
 app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')

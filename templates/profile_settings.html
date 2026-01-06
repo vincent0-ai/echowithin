@@ -308,7 +308,25 @@
       
       console.log('Service worker is active:', registration.active);
       
+      // First, check if there's an existing subscription and unsubscribe
+      // This helps clear any corrupted subscriptions
+      try {
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          console.log('Found existing subscription, unsubscribing first...');
+          await existingSub.unsubscribe();
+          console.log('Unsubscribed from old subscription');
+        }
+      } catch (unsubErr) {
+        console.warn('Error checking/clearing old subscription:', unsubErr);
+      }
+      
+      // Validate and log the VAPID key
+      console.log('VAPID key length:', publicKey.length);
+      console.log('VAPID key preview:', publicKey.substring(0, 20) + '...');
+      
       const applicationServerKey = urlBase64ToUint8Array(publicKey);
+      console.log('Converted key length:', applicationServerKey.length, '(should be 65 for P-256)');
       
       // Subscribe to push with timeout
       console.log('Subscribing to push manager...');

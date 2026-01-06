@@ -88,9 +88,9 @@
 {% block content %}
 <div class="content-wrapper">
     <div class="post-item" style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
-            <div class="post-header" style="align-items: flex-start; gap: 0.6rem;">
-                <h1 class="post-title single-post-title" style="margin:0; flex-grow: 1;">{{ post.title }}</h1>
-                <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
+            <div class="post-header" style="align-items: flex-start; gap: 0.6rem; flex-wrap: wrap;">
+                <h1 class="post-title single-post-title" style="margin:0; flex: 1 1 auto; min-width: 0; font-size: 1.4rem; word-wrap: break-word; overflow-wrap: break-word;">{{ post.title }}</h1>
+                <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap; flex-shrink: 0;">
                     {# Like Button #}
                     {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
                     <button class="like-btn {% if is_liked %}liked{% endif %}" 

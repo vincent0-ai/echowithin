@@ -363,7 +363,23 @@
       }
     } catch (err) {
       console.error('Error auto-subscribing:', err);
-      statusText.textContent = `Error: ${err.message || 'Could not enable notifications'}. Click to retry.`;
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'Could not enable notifications.';
+      if (err.name === 'AbortError' || (err.message && err.message.includes('push service'))) {
+        errorMessage = 'Push service unavailable. Check browser settings or try a different browser.';
+        console.log('Hint: This error often occurs when:');
+        console.log('1. You are in Incognito/Private mode');
+        console.log('2. Push notifications are blocked at OS level');
+        console.log('3. Your browser cannot reach the push service (network/firewall)');
+        console.log('4. Try: chrome://settings/content/notifications (for Chrome)');
+      } else if (err.name === 'NotAllowedError') {
+        errorMessage = 'Notifications blocked. Enable in browser settings.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      statusText.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> ${errorMessage}`;
       statusText.style.color = '#dc3545';
       enableBtn.style.display = 'inline-block';
     }

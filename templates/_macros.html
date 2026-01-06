@@ -109,7 +109,7 @@
         {% endif %}
     </div>
 
-    {# --- Actions: Like button + Comment count + Edit/Delete --- #}
+    {# --- Actions: Like button + Share button + Comment count + Edit/Delete --- #}
     <div class="post-actions" style="margin-top: 10px;">
         {# Like Button #}
         {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
@@ -118,6 +118,12 @@
                 {% if not current_user.is_authenticated %}disabled title="Log in to like"{% endif %}>
             <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
             <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+        </button>
+
+        {# Share Button #}
+        <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
+            <i class="fas fa-share-alt"></i>
+            <span class="share-count">{{ post.share_count|default(0) }}</span>
         </button>
 
         <a href="{{ post.url }}" class="btn comment-btn record-view-link" data-post-id="{{ post._id|string }}">

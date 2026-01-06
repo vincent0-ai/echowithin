@@ -1679,7 +1679,7 @@ def get_top_posts_json():
         results = []
         for doc in agg:
             slug = doc['_id']
-            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'image_public_ids':1, 'image_status':1, 'video_url':1})
+            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'image_public_ids':1, 'image_status':1, 'video_url':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1})
             if not post:
                 continue
             post['_id'] = str(post['_id'])
@@ -1687,6 +1687,10 @@ def get_top_posts_json():
             post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
             post['comment_count'] = doc.get('count', 0)
+            post['likes_count'] = post.get('likes_count', 0)
+            post['share_count'] = post.get('share_count', 0)
+            # Convert liked_by ObjectIds to strings for JS comparison
+            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
             results.append(post)
         return jsonify(results)
     except Exception as e:
@@ -1702,7 +1706,7 @@ def get_hot_posts_json():
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
         recent_posts = list(posts_conf.find(
             {'created_at': {'$gte': seven_days_ago}},
-            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1}
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1}
         ))
 
         # Get comment counts for these posts
@@ -1722,6 +1726,10 @@ def get_hot_posts_json():
             post['author_id'] = str(post.get('author_id'))
             post['timestamp'] = (post.get('created_at') or post.get('timestamp')).strftime('%b %d, %Y at %I:%M %p')
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+            post['likes_count'] = post.get('likes_count', 0)
+            post['share_count'] = post.get('share_count', 0)
+            # Convert liked_by ObjectIds to strings for JS comparison
+            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
             scored_posts.append(post)
 
         # Sort by hot score and return top 20
@@ -1735,45 +1743,231 @@ def get_hot_posts_json():
 @login_required
 def get_related_posts_json():
     """
-    Returns posts related to a user's activity, finding posts that share
-    tags with posts the user has either authored or commented on.
+    Advanced personalization algorithm that returns posts tailored to a user's interests.
+    Uses multiple signals: likes, comments, views, tags, author preferences, and engagement patterns.
     """
     try:
-        interest_tags = set()
-
-        # 1. Find tags from posts the current user has authored.
-        user_posts = posts_conf.find({'author_id': ObjectId(current_user.id)}, {'tags': 1})
-        for post in user_posts:
-            interest_tags.update(post.get('tags', []))
-
-        # 2. Find tags from posts the current user has commented on.
-        commented_post_slugs = comments_conf.distinct('post_slug', {'author_id': ObjectId(current_user.id)})
+        user_id = ObjectId(current_user.id)
+        user_id_str = str(current_user.id)
+        
+        # =====================================================
+        # STEP 1: Build User Interest Profile
+        # =====================================================
+        
+        # Tags the user is interested in (weighted by interaction type)
+        tag_scores = {}  # tag -> weighted score
+        author_scores = {}  # author_id -> weighted score
+        
+        # Weight constants for different interaction types
+        WEIGHT_LIKED = 3.0
+        WEIGHT_COMMENTED = 2.5
+        WEIGHT_VIEWED = 0.5
+        WEIGHT_SAVED = 4.0
+        WEIGHT_AUTHORED = 1.0
+        
+        # 1a. Tags from posts the user has LIKED (strong signal)
+        liked_posts = posts_conf.find(
+            {'liked_by': user_id_str},
+            {'tags': 1, 'author_id': 1, 'author': 1}
+        )
+        for post in liked_posts:
+            for tag in post.get('tags', []):
+                tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_LIKED
+            author_id = str(post.get('author_id', ''))
+            if author_id and author_id != user_id_str:
+                author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_LIKED
+        
+        # 1b. Tags from posts the user has COMMENTED on (strong signal)
+        commented_post_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
         if commented_post_slugs:
-            commented_on_posts = posts_conf.find(
+            commented_posts = posts_conf.find(
                 {'slug': {'$in': commented_post_slugs}},
-                {'tags': 1}
+                {'tags': 1, 'author_id': 1, 'author': 1}
             )
-            for post in commented_on_posts:
-                interest_tags.update(post.get('tags', []))
-
-        if not interest_tags:
-            return jsonify([])
-
-        # 3. Find recent posts that have these tags but are not from the current user.
-        related_posts_cursor = posts_conf.find(
-            {'tags': {'$in': list(interest_tags)}, 'author_id': {'$ne': ObjectId(current_user.id)}},
-            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'video_url':1}
-        ).sort('timestamp', -1).limit(10)
-
-        related_posts = list(related_posts_cursor)
-        for post in related_posts:
+            for post in commented_posts:
+                for tag in post.get('tags', []):
+                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_COMMENTED
+                author_id = str(post.get('author_id', ''))
+                if author_id and author_id != user_id_str:
+                    author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_COMMENTED
+        
+        # 1c. Tags from posts the user has SAVED (very strong signal)
+        user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
+        saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
+        if saved_post_ids:
+            saved_posts = posts_conf.find(
+                {'_id': {'$in': saved_post_ids}},
+                {'tags': 1, 'author_id': 1}
+            )
+            for post in saved_posts:
+                for tag in post.get('tags', []):
+                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_SAVED
+                author_id = str(post.get('author_id', ''))
+                if author_id and author_id != user_id_str:
+                    author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_SAVED
+        
+        # 1d. Tags from posts the user has AUTHORED (for topic continuity)
+        user_posts = posts_conf.find({'author_id': user_id}, {'tags': 1})
+        for post in user_posts:
+            for tag in post.get('tags', []):
+                tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_AUTHORED
+        
+        # 1e. Get upvoted comments and extract their post tags
+        upvoted_comment_slugs = comments_conf.distinct(
+            'post_slug', 
+            {'upvoted_by': user_id_str, 'is_deleted': False}
+        )
+        if upvoted_comment_slugs:
+            upvoted_posts = posts_conf.find(
+                {'slug': {'$in': upvoted_comment_slugs}},
+                {'tags': 1, 'author_id': 1}
+            )
+            for post in upvoted_posts:
+                for tag in post.get('tags', []):
+                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_COMMENTED * 0.5
+        
+        # =====================================================
+        # STEP 2: Get Candidate Posts
+        # =====================================================
+        
+        # Get IDs of posts the user has already interacted with
+        interacted_slugs = set(commented_post_slugs if commented_post_slugs else [])
+        interacted_slugs.update(upvoted_comment_slugs if upvoted_comment_slugs else [])
+        
+        # Get posts liked by the user (by ObjectId)
+        liked_post_docs = list(posts_conf.find(
+            {'liked_by': user_id_str},
+            {'_id': 1, 'slug': 1}
+        ))
+        interacted_ids = [p['_id'] for p in liked_post_docs]
+        interacted_slugs.update([p['slug'] for p in liked_post_docs if p.get('slug')])
+        
+        # Add saved posts to interacted
+        interacted_ids.extend(saved_post_ids)
+        
+        # Get user's own posts
+        user_own_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1}))
+        interacted_ids.extend([p['_id'] for p in user_own_posts])
+        interacted_slugs.update([p['slug'] for p in user_own_posts if p.get('slug')])
+        
+        # Build query for candidate posts
+        # Posts that match user interests but aren't already interacted with
+        query_conditions = [
+            {'author_id': {'$ne': user_id}},  # Not by the user
+            {'_id': {'$nin': list(set(interacted_ids))}}  # Not already interacted
+        ]
+        
+        # Add tag or author filter if we have preferences
+        interest_filters = []
+        if tag_scores:
+            top_tags = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)[:15]
+            interest_filters.append({'tags': {'$in': top_tags}})
+        if author_scores:
+            top_authors = sorted(author_scores.keys(), key=lambda a: author_scores[a], reverse=True)[:10]
+            top_author_oids = [ObjectId(a) for a in top_authors if ObjectId.is_valid(a)]
+            if top_author_oids:
+                interest_filters.append({'author_id': {'$in': top_author_oids}})
+        
+        if interest_filters:
+            query_conditions.append({'$or': interest_filters})
+        
+        # Fallback: if no interests found, get recent popular posts
+        if not tag_scores and not author_scores:
+            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+            candidate_posts = list(posts_conf.find(
+                {'author_id': {'$ne': user_id}, 'timestamp': {'$gte': seven_days_ago}},
+                {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
+                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
+                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1}
+            ).sort([('likes_count', -1), ('timestamp', -1)]).limit(30))
+        else:
+            # Get candidates matching interests
+            query = {'$and': query_conditions}
+            candidate_posts = list(posts_conf.find(
+                query,
+                {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
+                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
+                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1}
+            ).sort('timestamp', -1).limit(50))
+        
+        # =====================================================
+        # STEP 3: Score and Rank Candidate Posts
+        # =====================================================
+        
+        # Get comment counts for candidate posts
+        candidate_slugs = [p['slug'] for p in candidate_posts if p.get('slug')]
+        comment_counts = {}
+        if candidate_slugs:
+            comment_agg = list(comments_conf.aggregate([
+                {'$match': {'post_slug': {'$in': candidate_slugs}, 'is_deleted': False}},
+                {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+            ]))
+            comment_counts = {doc['_id']: doc['count'] for doc in comment_agg}
+        
+        scored_posts = []
+        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        for post in candidate_posts:
+            score = 0.0
+            
+            # Tag relevance score
+            post_tags = post.get('tags', [])
+            for tag in post_tags:
+                if tag in tag_scores:
+                    score += tag_scores[tag] * 2
+            
+            # Author preference score
+            post_author_id = str(post.get('author_id', ''))
+            if post_author_id in author_scores:
+                score += author_scores[post_author_id] * 3
+            
+            # Engagement signals (popularity indicators)
+            likes = post.get('likes_count', 0)
+            views = post.get('view_count', 0)
+            comments = comment_counts.get(post.get('slug'), 0)
+            shares = post.get('share_count', 0)
+            
+            # Engagement score (normalized and weighted)
+            engagement_score = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
+            score += min(engagement_score, 50)  # Cap engagement contribution
+            
+            # Recency boost (newer posts get a boost)
+            post_time = post.get('timestamp')
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                hours_old = (now - post_time).total_seconds() / 3600
+                recency_factor = max(0, 1 - (hours_old / (24 * 7)))  # Decay over 7 days
+                score += recency_factor * 10
+            
+            # Diversity bonus: slightly boost posts with different tags to avoid filter bubble
+            unique_tags = set(post_tags) - set(tag_scores.keys())
+            if unique_tags:
+                score += len(unique_tags) * 0.5
+            
+            post['_score'] = score
+            post['comment_count'] = comments
+            scored_posts.append(post)
+        
+        # Sort by personalization score
+        scored_posts.sort(key=lambda p: p['_score'], reverse=True)
+        
+        # =====================================================
+        # STEP 4: Format and Return Top Results
+        # =====================================================
+        
+        result_posts = scored_posts[:15]
+        for post in result_posts:
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
             post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
-            post['comment_count'] = comments_conf.count_documents({'post_slug': post['slug'], 'is_deleted': False})
-
-        return jsonify(related_posts)
+            # Remove internal scoring field
+            post.pop('_score', None)
+            post.pop('liked_by', None)
+        
+        return jsonify(result_posts)
+        
     except Exception as e:
         app.logger.error(f"Error in get_related_posts_json for user {current_user.id}: {e}")
         return jsonify({'error': 'Could not retrieve related posts'}), 500
@@ -3139,6 +3333,88 @@ def toggle_save_post(post_id):
             return jsonify({'error': 'Internal error'}), 500
         flash('An error occurred.', 'danger')
         return redirect(url_for('home'))
+
+
+@app.route('/post/<post_id>/share', methods=['POST'])
+def share_post(post_id):
+    """
+    Tracks when a post is shared. Increments share_count for the post.
+    Can be called by authenticated or anonymous users.
+    Returns share URL and updated count.
+    """
+    try:
+        post_oid = ObjectId(post_id)
+        post = posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'share_count': 1})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+        
+        # Increment share count
+        posts_conf.update_one({'_id': post_oid}, {'$inc': {'share_count': 1}})
+        
+        # Get updated count
+        updated_post = posts_conf.find_one({'_id': post_oid}, {'share_count': 1})
+        share_count = updated_post.get('share_count', 1) if updated_post else 1
+        
+        # Generate shareable URL
+        share_url = url_for('view_post', slug=post['slug'], _external=True)
+        
+        return jsonify({
+            'success': True,
+            'share_count': share_count,
+            'share_url': share_url,
+            'title': post.get('title', 'Check out this post on EchoWithin')
+        })
+    except Exception as e:
+        app.logger.error(f"Error tracking share for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
+
+@app.route('/api/post/<post_id>/share-data')
+def get_share_data(post_id):
+    """
+    Returns share data for a post including URLs for different platforms.
+    """
+    try:
+        post_oid = ObjectId(post_id)
+        post = posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'content': 1, 'share_count': 1})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+        
+        share_url = url_for('view_post', slug=post['slug'], _external=True)
+        title = post.get('title', 'Check out this post')
+        
+        # Create a short description from content
+        content = post.get('content', '')
+        # Strip HTML and truncate
+        import re
+        clean_content = re.sub('<[^<]+?>', '', content)
+        description = clean_content[:150] + '...' if len(clean_content) > 150 else clean_content
+        
+        # URL-encode for share links
+        from urllib.parse import quote
+        encoded_url = quote(share_url, safe='')
+        encoded_title = quote(title, safe='')
+        encoded_text = quote(f"{title} - {description}", safe='')
+        
+        return jsonify({
+            'share_url': share_url,
+            'title': title,
+            'description': description,
+            'share_count': post.get('share_count', 0),
+            'platforms': {
+                'twitter': f"https://twitter.com/intent/tweet?url={encoded_url}&text={encoded_title}",
+                'facebook': f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}",
+                'linkedin': f"https://www.linkedin.com/sharing/share-offsite/?url={encoded_url}",
+                'whatsapp': f"https://wa.me/?text={encoded_text}%20{encoded_url}",
+                'telegram': f"https://t.me/share/url?url={encoded_url}&text={encoded_title}",
+                'reddit': f"https://reddit.com/submit?url={encoded_url}&title={encoded_title}",
+                'email': f"mailto:?subject={encoded_title}&body={encoded_text}%0A%0A{encoded_url}"
+            }
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting share data for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
 
 @app.route('/personal_post/create', methods=['POST'])
 @login_required

@@ -566,6 +566,170 @@
             const postId = anchor.dataset.postId;
             if (postId) recordPostView(postId);
         });
+
+        // --- Share Button Handler ---
+        document.body.addEventListener('click', async function(e) {
+            const shareBtn = e.target.closest('.share-btn');
+            if (!shareBtn) return;
+            
+            e.preventDefault();
+            const postId = shareBtn.dataset.postId;
+            if (!postId) return;
+            
+            try {
+                // Fetch share data from server
+                const response = await fetch(`/api/post/${postId}/share-data`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showCustomAlert('Unable to share this post', 'error');
+                    return;
+                }
+                
+                // Check if Web Share API is available (mobile-friendly)
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: data.title,
+                            text: data.description,
+                            url: data.share_url
+                        });
+                        // Track the share
+                        await fetch(`/post/${postId}/share`, { method: 'POST' });
+                        // Update share count in UI
+                        const countSpan = shareBtn.querySelector('.share-count');
+                        if (countSpan) {
+                            countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
+                        }
+                    } catch (err) {
+                        // User cancelled sharing, ignore
+                        if (err.name !== 'AbortError') {
+                            console.error('Share failed:', err);
+                        }
+                    }
+                } else {
+                    // Show custom share modal for desktop
+                    showShareModal(postId, data);
+                }
+            } catch (err) {
+                console.error('Share error:', err);
+                showCustomAlert('Unable to share this post', 'error');
+            }
+        });
+
+        // Share modal functionality
+        function showShareModal(postId, data) {
+            // Remove existing modal if present
+            const existingModal = document.getElementById('share-modal');
+            if (existingModal) existingModal.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'share-modal';
+            modal.className = 'share-modal-overlay';
+            modal.innerHTML = `
+                <div class="share-modal-content">
+                    <button class="share-modal-close" aria-label="Close">&times;</button>
+                    <h3>Share this post</h3>
+                    <p class="share-modal-title">${data.title}</p>
+                    
+                    <div class="share-platforms">
+                        <a href="${data.platforms.twitter}" target="_blank" rel="noopener noreferrer" class="share-platform-btn twitter" data-platform="twitter">
+                            <i class="fab fa-twitter"></i>
+                            <span>Twitter</span>
+                        </a>
+                        <a href="${data.platforms.facebook}" target="_blank" rel="noopener noreferrer" class="share-platform-btn facebook" data-platform="facebook">
+                            <i class="fab fa-facebook-f"></i>
+                            <span>Facebook</span>
+                        </a>
+                        <a href="${data.platforms.linkedin}" target="_blank" rel="noopener noreferrer" class="share-platform-btn linkedin" data-platform="linkedin">
+                            <i class="fab fa-linkedin-in"></i>
+                            <span>LinkedIn</span>
+                        </a>
+                        <a href="${data.platforms.whatsapp}" target="_blank" rel="noopener noreferrer" class="share-platform-btn whatsapp" data-platform="whatsapp">
+                            <i class="fab fa-whatsapp"></i>
+                            <span>WhatsApp</span>
+                        </a>
+                        <a href="${data.platforms.telegram}" target="_blank" rel="noopener noreferrer" class="share-platform-btn telegram" data-platform="telegram">
+                            <i class="fab fa-telegram-plane"></i>
+                            <span>Telegram</span>
+                        </a>
+                        <a href="${data.platforms.reddit}" target="_blank" rel="noopener noreferrer" class="share-platform-btn reddit" data-platform="reddit">
+                            <i class="fab fa-reddit-alien"></i>
+                            <span>Reddit</span>
+                        </a>
+                        <a href="${data.platforms.email}" class="share-platform-btn email" data-platform="email">
+                            <i class="fas fa-envelope"></i>
+                            <span>Email</span>
+                        </a>
+                    </div>
+                    
+                    <div class="share-copy-section">
+                        <label>Copy link:</label>
+                        <div class="share-copy-input-group">
+                            <input type="text" id="share-url-input" value="${data.share_url}" readonly>
+                            <button class="share-copy-btn" id="copy-share-url">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            document.body.style.overflow = 'hidden';
+            
+            // Close handlers
+            const closeBtn = modal.querySelector('.share-modal-close');
+            closeBtn.addEventListener('click', closeShareModal);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeShareModal();
+            });
+            document.addEventListener('keydown', handleShareModalEsc);
+            
+            // Copy URL handler
+            const copyBtn = modal.querySelector('#copy-share-url');
+            const urlInput = modal.querySelector('#share-url-input');
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(data.share_url);
+                    copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => {
+                        copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+                    }, 2000);
+                } catch (err) {
+                    urlInput.select();
+                    document.execCommand('copy');
+                }
+            });
+            
+            // Track shares when clicking platform buttons
+            modal.querySelectorAll('.share-platform-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    await fetch(`/post/${postId}/share`, { method: 'POST' });
+                    // Update share count in the page
+                    const shareBtn = document.querySelector(`.share-btn[data-post-id="${postId}"]`);
+                    if (shareBtn) {
+                        const countSpan = shareBtn.querySelector('.share-count');
+                        if (countSpan) {
+                            countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
+                        }
+                    }
+                });
+            });
+        }
+        
+        function closeShareModal() {
+            const modal = document.getElementById('share-modal');
+            if (modal) {
+                modal.remove();
+                document.body.style.overflow = '';
+            }
+            document.removeEventListener('keydown', handleShareModalEsc);
+        }
+        
+        function handleShareModalEsc(e) {
+            if (e.key === 'Escape') closeShareModal();
+        }
     });
 </script>
 

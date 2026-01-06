@@ -1478,3 +1478,239 @@ body {
     transform: translateY(-3px);
     box-shadow: 0 4px 10px rgba(0,0,0,0.12);
 }
+
+/* --- Share Button Styles --- */
+.share-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.share-btn:hover {
+    color: var(--primary-color);
+    background-color: rgba(62, 34, 23, 0.08);
+}
+
+.share-btn i {
+    font-size: 1.1rem;
+}
+
+.share-count {
+    font-size: 0.9rem;
+}
+
+/* --- Share Modal Styles --- */
+.share-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.share-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 450px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.share-modal-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: #888;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.share-modal-close:hover {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.share-modal-content h3 {
+    margin: 0 0 8px 0;
+    color: var(--primary-dark-color);
+    font-size: 1.4rem;
+}
+
+.share-modal-title {
+    margin: 0 0 20px 0;
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.share-platforms {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.share-platform-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    border-radius: 10px;
+    text-decoration: none;
+    color: white;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+    gap: 6px;
+}
+
+.share-platform-btn i {
+    font-size: 1.4rem;
+}
+
+.share-platform-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.share-platform-btn.twitter {
+    background: linear-gradient(135deg, #1da1f2, #0d8bd9);
+}
+
+.share-platform-btn.facebook {
+    background: linear-gradient(135deg, #4267b2, #365899);
+}
+
+.share-platform-btn.linkedin {
+    background: linear-gradient(135deg, #0077b5, #005885);
+}
+
+.share-platform-btn.whatsapp {
+    background: linear-gradient(135deg, #25d366, #128c7e);
+}
+
+.share-platform-btn.telegram {
+    background: linear-gradient(135deg, #0088cc, #006daa);
+}
+
+.share-platform-btn.reddit {
+    background: linear-gradient(135deg, #ff4500, #cc3700);
+}
+
+.share-platform-btn.email {
+    background: linear-gradient(135deg, #666, #444);
+}
+
+.share-copy-section {
+    border-top: 1px solid #eee;
+    padding-top: 16px;
+}
+
+.share-copy-section label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.share-copy-input-group {
+    display: flex;
+    gap: 8px;
+}
+
+.share-copy-input-group input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: #f9f9f9;
+    color: #333;
+}
+
+.share-copy-input-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.share-copy-btn {
+    padding: 10px 16px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.share-copy-btn:hover {
+    background: var(--primary-dark-color);
+}
+
+@media (max-width: 480px) {
+    .share-platforms {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .share-modal-content {
+        padding: 20px;
+    }
+    
+    .share-platform-btn {
+        padding: 10px 6px;
+    }
+    
+    .share-platform-btn span {
+        font-size: 0.65rem;
+    }
+}

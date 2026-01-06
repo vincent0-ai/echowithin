@@ -99,6 +99,11 @@
                         <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
                         <span class="likes-count">{{ post.likes_count|default(0) }}</span>
                     </button>
+                    {# Share Button #}
+                    <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
+                        <i class="fas fa-share-alt"></i>
+                        <span class="share-count">{{ post.share_count|default(0) }}</span>
+                    </button>
                     <div class="post-views" title="Views">
                         <i class="fa-regular fa-eye"></i>
                         <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>

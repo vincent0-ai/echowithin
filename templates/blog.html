@@ -267,6 +267,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const likedBy = post.liked_by || [];
         const isLiked = currentUserId && likedBy.includes(currentUserId);
         const likesCount = post.likes_count || 0;
+        const shareCount = post.share_count || 0;
         const isAuthenticated = !!currentUserId;
 
         const likeButton = `
@@ -275,6 +276,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${!isAuthenticated ? 'disabled title="Log in to like"' : ''}>
                 <i class="${isLiked ? 'fas' : 'far'} fa-heart"></i>
                 <span class="likes-count">${likesCount}</span>
+            </button>`;
+
+        const shareButton = `
+            <button class="share-btn" data-post-id="${post._id}" title="Share this post">
+                <i class="fas fa-share-alt"></i>
+                <span class="share-count">${shareCount}</span>
             </button>`;
 
         return `
@@ -290,6 +297,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             <div class="post-actions">
                 ${likeButton}
+                ${shareButton}
                 <a href="${post.url}" class="btn comment-btn record-view-link" data-post-id="${post._id}">
                     Comments <span class="comment-count-display">${post.comment_count || 0}</span>
                 </a>

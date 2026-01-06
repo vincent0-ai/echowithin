@@ -1468,6 +1468,16 @@ def google_signup():
     suggested_username = google_info['name'].replace(' ', '_').lower()
     return render_template('google_signup.html', email=email, suggested_username=suggested_username)
 
+
+@app.route('/service-worker.js')
+def service_worker():
+    """Serve the service worker from the root path for proper scope."""
+    response = send_from_directory('static', 'service-worker.js')
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
@@ -1503,8 +1513,8 @@ def home():
         
         # This pipeline performs the entire hot post calculation in the database.
         hot_posts_pipeline = [
-            # 1. Find recent posts
-            {'$match': {'created_at': {'$gte': seven_days_ago}}},
+            # 1. Find recent posts (use 'timestamp' field, which is what posts actually have)
+            {'$match': {'timestamp': {'$gte': seven_days_ago}}},
             # 2. Join with comments collection to get comment counts
             {'$lookup': {
                 'from': 'comments',
@@ -1515,9 +1525,10 @@ def home():
             # 3. Add fields for calculation
             {'$addFields': {
                 'comment_count': {'$size': '$comments'},
+                'like_count': {'$size': {'$ifNull': ['$liked_by', []]}},
                 'age_in_hours': {
                     '$divide': [
-                        {'$subtract': ["$$NOW", '$created_at']},
+                        {'$subtract': ["$$NOW", '$timestamp']},
                         3600000 # milliseconds in an hour
                     ]
                 }
@@ -1526,7 +1537,11 @@ def home():
             {'$addFields': {
                 'hot_score': {
                     '$divide': [
-                        {'$add': [{'$multiply': ['$comment_count', 5]}, {'$ifNull': ['$view_count', 0]}]},
+                        {'$add': [
+                            {'$multiply': ['$comment_count', 5]},
+                            {'$multiply': ['$like_count', 3]},
+                            {'$ifNull': ['$view_count', 0]}
+                        ]},
                         {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.8]}
                     ]
                 }
@@ -1539,10 +1554,10 @@ def home():
         with app.app_context():
             hot_posts = prepare_posts(hot_posts) # Adds 'url' to each post
 
-        # Fallback for new sites: if not enough hot posts, show latest posts.
-        if len(hot_posts) < 5:
-            app.logger.info("Not enough hot posts found, falling back to latest posts for homepage.")
-            latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(3)
+        # Fallback for new sites: if no hot posts at all, show latest posts.
+        if len(hot_posts) == 0:
+            app.logger.info("No hot posts found, falling back to latest posts for homepage.")
+            latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
             with app.app_context():
                 # Overwrite hot_posts with the latest posts
                 hot_posts = prepare_posts(list(latest_posts_cursor))

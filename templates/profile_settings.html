@@ -70,8 +70,27 @@
 <script>
   // Push notification settings management
   document.addEventListener('DOMContentLoaded', function() {
-    // Small delay to ensure service worker is ready
-    setTimeout(checkPushStatus, 500);
+    // Wait for service worker to be registered first
+    if ('serviceWorker' in navigator) {
+      // Check if already registered
+      navigator.serviceWorker.getRegistration('/').then(reg => {
+        if (reg) {
+          checkPushStatus();
+        } else {
+          // Wait for registration
+          navigator.serviceWorker.ready.then(() => {
+            checkPushStatus();
+          }).catch(() => {
+            // Fallback after timeout
+            setTimeout(checkPushStatus, 1000);
+          });
+        }
+      }).catch(() => {
+        setTimeout(checkPushStatus, 1000);
+      });
+    } else {
+      checkPushStatus();
+    }
   });
   
   // Utility function to convert base64 to Uint8Array for VAPID key
@@ -111,6 +130,37 @@
     }
     
     try {
+      // First ensure service worker is registered
+      let registration = await navigator.serviceWorker.getRegistration('/');
+      if (!registration) {
+        // Try to register it
+        try {
+          registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          // Wait for it to be active
+          await new Promise(resolve => {
+            if (registration.active) {
+              resolve();
+            } else {
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'activated') {
+                    resolve();
+                  }
+                });
+              });
+              // Timeout fallback
+              setTimeout(resolve, 3000);
+            }
+          });
+        } catch (regErr) {
+          console.error('Failed to register service worker:', regErr);
+          statusText.textContent = 'Push notifications unavailable.';
+          statusText.style.color = '#666';
+          return;
+        }
+      }
+      
       // If permission hasn't been asked yet, auto-prompt the user
       if (Notification.permission === 'default') {
         statusText.textContent = 'Requesting notification permission...';
@@ -139,23 +189,7 @@
       
       // Permission is granted, check subscription status
       if (Notification.permission === 'granted') {
-        // Wait for service worker to be ready with a timeout
-        const swReady = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('Service worker timeout')), 5000))
-        ]).catch(err => {
-          console.warn('Service worker not ready:', err);
-          return null;
-        });
-        
-        if (!swReady) {
-          statusText.textContent = 'Push notifications available. Click to enable.';
-          statusText.style.color = '#666';
-          enableBtn.style.display = 'inline-block';
-          return;
-        }
-        
-        const subscription = await swReady.pushManager.getSubscription();
+        const subscription = await registration.pushManager.getSubscription();
         
         if (subscription) {
           // Already subscribed, verify with server
@@ -203,31 +237,95 @@
     
     try {
       // Get VAPID key
+      console.log('Fetching VAPID key...');
       const vapidResponse = await fetch('/api/push/vapid-public-key');
       if (!vapidResponse.ok) {
         statusText.textContent = 'Push notifications not configured on server.';
         statusText.style.color = '#666';
+        enableBtn.style.display = 'inline-block';
         return;
       }
       
       const { publicKey } = await vapidResponse.json();
       if (!publicKey) {
-        statusText.textContent = 'Push notifications not configured.';
+        statusText.textContent = 'Push notifications not configured (no key).';
         statusText.style.color = '#666';
+        enableBtn.style.display = 'inline-block';
         return;
       }
+      console.log('Got VAPID key');
       
-      // Wait for service worker
-      const registration = await navigator.serviceWorker.ready;
+      // Get or register service worker
+      console.log('Getting service worker registration...');
+      let registration = await navigator.serviceWorker.getRegistration('/');
+      
+      if (!registration) {
+        console.log('No registration found, registering new service worker...');
+        try {
+          registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+          console.log('Service worker registered:', registration);
+        } catch (regErr) {
+          console.error('Service worker registration failed:', regErr);
+          statusText.textContent = 'Failed to register service worker.';
+          statusText.style.color = '#dc3545';
+          enableBtn.style.display = 'inline-block';
+          return;
+        }
+      }
+      
+      // Wait for the service worker to be active
+      if (!registration.active) {
+        console.log('Waiting for service worker to activate...');
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Service worker activation timeout'));
+          }, 10000);
+          
+          const checkActive = () => {
+            if (registration.active) {
+              clearTimeout(timeout);
+              resolve();
+              return;
+            }
+            
+            const worker = registration.installing || registration.waiting;
+            if (worker) {
+              worker.addEventListener('statechange', function() {
+                if (this.state === 'activated') {
+                  clearTimeout(timeout);
+                  resolve();
+                }
+              });
+            } else {
+              clearTimeout(timeout);
+              resolve(); // No worker to wait for
+            }
+          };
+          
+          checkActive();
+        });
+      }
+      
+      console.log('Service worker is active:', registration.active);
+      
       const applicationServerKey = urlBase64ToUint8Array(publicKey);
       
-      // Subscribe
-      const subscription = await registration.pushManager.subscribe({
+      // Subscribe to push with timeout
+      console.log('Subscribing to push manager...');
+      const subscribePromise = registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey
       });
       
+      const subscription = await Promise.race([
+        subscribePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Push subscription timeout')), 15000))
+      ]);
+      
+      console.log('Got subscription:', subscription);
+      
       // Send to server
+      console.log('Sending subscription to server...');
       const subResponse = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -235,16 +333,19 @@
       });
       
       if (subResponse.ok) {
+        console.log('Subscription saved to server');
         statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
         statusText.style.color = '#28a745';
         enableBtn.style.display = 'none';
         disableBtn.style.display = 'inline-block';
       } else {
+        const errText = await subResponse.text();
+        console.error('Server rejected subscription:', errText);
         throw new Error('Failed to save subscription on server');
       }
     } catch (err) {
       console.error('Error auto-subscribing:', err);
-      statusText.textContent = 'Could not enable notifications. Click to retry.';
+      statusText.textContent = `Error: ${err.message || 'Could not enable notifications'}. Click to retry.`;
       statusText.style.color = '#dc3545';
       enableBtn.style.display = 'inline-block';
     }

@@ -203,9 +203,10 @@
     // Register service worker for PWA offline support and push notifications
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-            navigator.serviceWorker.register('{{ url_for('static', filename='service-worker.js') }}')
+            // Register from root path for proper scope (needed for push notifications)
+            navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
                 .then(function(reg) { 
-                    console.log('Service worker registered.', reg);
+                    console.log('Service worker registered with scope:', reg.scope);
                     // Initialize push notifications after service worker is ready
                     initPushNotifications(reg);
                 })
@@ -693,6 +694,18 @@
                 try {
                     await navigator.clipboard.writeText(data.share_url);
                     copyBtn.innerHTML = '<i class="fas fa-check"></i>';
+                    
+                    // Track the share when copying link
+                    await fetch(`/post/${postId}/share`, { method: 'POST' });
+                    // Update share count in UI
+                    const shareBtn = document.querySelector(`.share-btn[data-post-id="${postId}"]`);
+                    if (shareBtn) {
+                        const countSpan = shareBtn.querySelector('.share-count');
+                        if (countSpan) {
+                            countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
+                        }
+                    }
+                    
                     setTimeout(() => {
                         copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
                     }, 2000);

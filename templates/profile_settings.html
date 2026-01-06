@@ -70,7 +70,8 @@
 <script>
   // Push notification settings management
   document.addEventListener('DOMContentLoaded', function() {
-    checkPushStatus();
+    // Small delay to ensure service worker is ready
+    setTimeout(checkPushStatus, 500);
   });
   
   // Utility function to convert base64 to Uint8Array for VAPID key
@@ -102,62 +103,149 @@
       return;
     }
     
+    // Check if Notification API is supported
+    if (!('Notification' in window)) {
+      statusText.style.display = 'none';
+      notSupported.style.display = 'block';
+      return;
+    }
+    
     try {
-      // Check if VAPID key is configured
-      const vapidResponse = await fetch('/api/push/vapid-public-key');
-      if (!vapidResponse.ok) {
-        statusText.textContent = 'Push notifications are not configured on the server.';
+      // If permission hasn't been asked yet, auto-prompt the user
+      if (Notification.permission === 'default') {
+        statusText.textContent = 'Requesting notification permission...';
         statusText.style.color = '#666';
-        enableBtn.style.display = 'inline-block';
+        
+        // Auto-prompt for permission
+        const permission = await Notification.requestPermission();
+        
+        if (permission === 'granted') {
+          // Permission granted, now subscribe
+          await autoSubscribeToPush();
+          return;
+        } else if (permission === 'denied') {
+          statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Notifications blocked. Please enable in browser settings.';
+          statusText.style.color = '#dc3545';
+          return;
+        }
+      }
+      
+      // If permission was already denied
+      if (Notification.permission === 'denied') {
+        statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Notifications blocked. Please enable in browser settings.';
+        statusText.style.color = '#dc3545';
         return;
       }
       
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      
-      if (subscription) {
-        // Check if this subscription is registered on server
-        try {
-          const serverStatus = await fetch('/api/push/status');
-          if (serverStatus.ok) {
-            const serverData = await serverStatus.json();
-            
-            if (serverData.subscribed) {
-              statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications are enabled for this device.';
-              statusText.style.color = '#28a745';
-              disableBtn.style.display = 'inline-block';
-            } else {
-              statusText.textContent = 'Push notifications available but not enabled.';
-              statusText.style.color = '#666';
-              enableBtn.style.display = 'inline-block';
-            }
-          } else {
-            // Server status check failed, show enable button by default
-            statusText.textContent = 'Push notifications are not enabled.';
-            statusText.style.color = '#666';
-            enableBtn.style.display = 'inline-block';
-          }
-        } catch (statusErr) {
-          console.error('Error checking server status:', statusErr);
-          statusText.textContent = 'Push notifications are not enabled.';
+      // Permission is granted, check subscription status
+      if (Notification.permission === 'granted') {
+        // Wait for service worker to be ready with a timeout
+        const swReady = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Service worker timeout')), 5000))
+        ]).catch(err => {
+          console.warn('Service worker not ready:', err);
+          return null;
+        });
+        
+        if (!swReady) {
+          statusText.textContent = 'Push notifications available. Click to enable.';
           statusText.style.color = '#666';
           enableBtn.style.display = 'inline-block';
+          return;
         }
-      } else {
-        if (Notification.permission === 'denied') {
-          statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Notifications blocked. Please enable in browser settings.';
-          statusText.style.color = '#dc3545';
+        
+        const subscription = await swReady.pushManager.getSubscription();
+        
+        if (subscription) {
+          // Already subscribed, verify with server
+          try {
+            const serverStatus = await fetch('/api/push/status', {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (serverStatus.ok) {
+              const serverData = await serverStatus.json();
+              if (serverData.subscribed) {
+                statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications are enabled for this device.';
+                statusText.style.color = '#28a745';
+                disableBtn.style.display = 'inline-block';
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Error checking server status:', e);
+          }
+          
+          // Subscription exists locally but not on server, re-subscribe
+          await autoSubscribeToPush();
         } else {
-          statusText.textContent = 'Push notifications are not enabled.';
-          statusText.style.color = '#666';
-          enableBtn.style.display = 'inline-block';
+          // No subscription, auto-subscribe since permission is already granted
+          await autoSubscribeToPush();
         }
       }
     } catch (err) {
       console.error('Error checking push status:', err);
-      // Default to showing enable button on error
-      statusText.textContent = 'Push notifications are not enabled.';
+      statusText.textContent = 'Push notifications available. Click to enable.';
       statusText.style.color = '#666';
+      enableBtn.style.display = 'inline-block';
+    }
+  }
+  
+  async function autoSubscribeToPush() {
+    const statusText = document.getElementById('push-status-text');
+    const enableBtn = document.getElementById('enable-push-btn');
+    const disableBtn = document.getElementById('disable-push-btn');
+    
+    statusText.textContent = 'Enabling push notifications...';
+    statusText.style.color = '#666';
+    
+    try {
+      // Get VAPID key
+      const vapidResponse = await fetch('/api/push/vapid-public-key');
+      if (!vapidResponse.ok) {
+        statusText.textContent = 'Push notifications not configured on server.';
+        statusText.style.color = '#666';
+        return;
+      }
+      
+      const { publicKey } = await vapidResponse.json();
+      if (!publicKey) {
+        statusText.textContent = 'Push notifications not configured.';
+        statusText.style.color = '#666';
+        return;
+      }
+      
+      // Wait for service worker
+      const registration = await navigator.serviceWorker.ready;
+      const applicationServerKey = urlBase64ToUint8Array(publicKey);
+      
+      // Subscribe
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+      
+      // Send to server
+      const subResponse = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription.toJSON())
+      });
+      
+      if (subResponse.ok) {
+        statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
+        statusText.style.color = '#28a745';
+        enableBtn.style.display = 'none';
+        disableBtn.style.display = 'inline-block';
+      } else {
+        throw new Error('Failed to save subscription on server');
+      }
+    } catch (err) {
+      console.error('Error auto-subscribing:', err);
+      statusText.textContent = 'Could not enable notifications. Click to retry.';
+      statusText.style.color = '#dc3545';
       enableBtn.style.display = 'inline-block';
     }
   }
@@ -172,50 +260,22 @@
       enableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enabling...';
       
       try {
-        // Check if the global function exists, otherwise request permission directly
-        let success = false;
-        if (typeof window.enablePushNotifications === 'function') {
-          success = await window.enablePushNotifications();
-        } else {
-          // Fallback: request permission directly
-          console.log('enablePushNotifications not found, requesting permission directly');
+        // Request permission if not granted
+        if (Notification.permission !== 'granted') {
           const permission = await Notification.requestPermission();
-          if (permission === 'granted') {
-            // Try to subscribe via service worker
-            if ('serviceWorker' in navigator) {
-              const registration = await navigator.serviceWorker.ready;
-              const response = await fetch('/api/push/vapid-public-key');
-              if (response.ok) {
-                const { publicKey } = await response.json();
-                if (publicKey) {
-                  const applicationServerKey = urlBase64ToUint8Array(publicKey);
-                  const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: applicationServerKey
-                  });
-                  const subResponse = await fetch('/api/push/subscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(subscription.toJSON())
-                  });
-                  success = subResponse.ok;
-                }
-              }
-            }
+          if (permission !== 'granted') {
+            statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Permission denied. Enable in browser settings.';
+            statusText.style.color = '#dc3545';
+            enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+            enableBtn.disabled = false;
+            return;
           }
         }
         
-        if (success) {
-          statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
-          statusText.style.color = '#28a745';
-          enableBtn.style.display = 'none';
-          disableBtn.style.display = 'inline-block';
-        } else {
-          statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Permission denied. Enable in browser settings.';
-          statusText.style.color = '#dc3545';
-          enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
-          enableBtn.disabled = false;
-        }
+        // Subscribe
+        await autoSubscribeToPush();
+        enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+        enableBtn.disabled = false;
       } catch (err) {
         console.error('Error enabling push:', err);
         statusText.textContent = 'Failed to enable notifications. Try again.';
@@ -228,12 +288,27 @@
       disableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Disabling...';
       
       try {
-        await window.unsubscribeFromPush();
+        // Unsubscribe from push
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+          await subscription.unsubscribe();
+          
+          // Notify server
+          await fetch('/api/push/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: subscription.endpoint })
+          });
+        }
+        
         statusText.textContent = 'Push notifications disabled.';
         statusText.style.color = '#666';
         disableBtn.style.display = 'none';
         enableBtn.style.display = 'inline-block';
-        enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
+        disableBtn.innerHTML = '<i class="fas fa-bell-slash"></i> Disable Push Notifications';
+        disableBtn.disabled = false;
       } catch (err) {
         console.error('Error disabling push:', err);
         disableBtn.innerHTML = '<i class="fas fa-bell-slash"></i> Disable Push Notifications';

@@ -809,6 +809,34 @@ body {
     white-space: pre-wrap; /* Respects newlines in the post content */
 }
 
+/* Proper indentation for numbered and bullet lists in post content */
+.post-content ol,
+.post-content ul,
+.post-content-rendered ol,
+.post-content-rendered ul,
+.post-content-truncated ol,
+.post-content-truncated ul,
+.post-content-full ol,
+.post-content-full ul {
+    padding-left: 2rem;
+    margin: 0.5rem 0;
+}
+
+.post-content li,
+.post-content-rendered li,
+.post-content-truncated li,
+.post-content-full li {
+    margin-bottom: 0.25rem;
+}
+
+/* Disabled state for comment/reply buttons */
+#comment-submit:disabled,
+.reply-form button[type="submit"]:disabled,
+.reply-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Read More Link Styling */
 .read-more-link {
     display: inline-block;

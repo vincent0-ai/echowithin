@@ -968,16 +968,34 @@ def admin_active_users():
 @admin_required
 def admin_export_csv():
     metric = request.args.get('metric', 'posts_per_day')
-    days = int(request.args.get('days', 30))
+    days = request.args.get('days')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
     now = datetime.datetime.now(datetime.timezone.utc)
-    start = now - datetime.timedelta(days=days)
+    
+    # Determine date range from parameters
+    if start_date and end_date:
+        try:
+            start = datetime.datetime.strptime(start_date, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
+            end = datetime.datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59, tzinfo=datetime.timezone.utc)
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    elif days:
+        days = int(days)
+        start = now - datetime.timedelta(days=days)
+        end = now
+    else:
+        # Default to last 30 days
+        start = now - datetime.timedelta(days=30)
+        end = now
 
     import csv
     output = []
     if metric == 'posts_per_day':
         pipeline = [
-            {'$match': {'created_at': {'$gte': start}}},
-            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at'}}, 'count': {'$sum': 1}}},
+            {'$match': {'timestamp': {'$gte': start, '$lte': end}}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}}, 'count': {'$sum': 1}}},
             {'$sort': SON([('_id', 1)])}
         ]
         rows = list(posts_conf.aggregate(pipeline))

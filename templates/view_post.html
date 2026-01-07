@@ -382,32 +382,43 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const contentField = document.getElementById('comment-content');
+            const submitBtn = document.getElementById('comment-submit');
             const content = contentField.value;
             if (!content || !content.trim()) return;
 
-            const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
-            });
-            if (resp.ok) {
-                const newComment = await resp.json();
-                // Prepend new top-level comment to the list
-                appendComments([newComment], false);
-                // Clear textarea
-                contentField.value = '';
-                // Increment local count display
-                const header = document.querySelector('.comments-section h3');
-                if (header) {
-                    const m = header.textContent.match(/\((\d+)\)/);
-                    if (m) {
-                        const n = parseInt(m[1], 10) + 1;
-                        header.textContent = `Comments (${n})`;
+            // Disable button to prevent duplicate submissions
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Posting...';
+
+            try {
+                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content })
+                });
+                if (resp.ok) {
+                    const newComment = await resp.json();
+                    // Prepend new top-level comment to the list
+                    appendComments([newComment], false);
+                    // Clear textarea
+                    contentField.value = '';
+                    // Increment local count display
+                    const header = document.querySelector('.comments-section h3');
+                    if (header) {
+                        const m = header.textContent.match(/\((\d+)\)/);
+                        if (m) {
+                            const n = parseInt(m[1], 10) + 1;
+                            header.textContent = `Comments (${n})`;
+                        }
                     }
+                } else {
+                    const data = await resp.json();
+                    alert(data.error || 'Failed to post comment');
                 }
-            } else {
-                const data = await resp.json();
-                alert(data.error || 'Failed to post comment');
+            } finally {
+                // Re-enable button after request completes
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Post Comment';
             }
         });
     }
@@ -520,60 +531,76 @@ document.addEventListener('DOMContentLoaded', function() {
             const form = document.createElement('form');
             form.className = 'reply-form';
             form.style.marginTop = '8px';
-            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><button type="submit">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
+            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><button type="submit" class="reply-submit-btn">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
             replies.insertBefore(form, replies.firstChild);
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
+                const replyBtn = form.querySelector('.reply-submit-btn');
                 const content = form.querySelector('.reply-content').value;
                 if (!content || !content.trim()) return;
-                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, parent_id: parentId })
-                });
-                if (resp.ok) {
-                    const newComment = await resp.json();
-                    appendComments([newComment], true);
-                    // Ensure replies are visible for this parent after posting
-                    try {
-                        const parentEl = document.querySelector(`[data-id="${parentId}"]`);
-                        if (parentEl) {
-                            // show any reply items
-                            document.querySelectorAll(`.comment-item[data-parent="${parentId}"]`).forEach(el => el.style.display = 'block');
-                            // update toggle link text if present
-                            const toggle = parentEl.querySelector('.toggle-replies');
-                            if (toggle) {
-                                const m = toggle.textContent.match(/\((\d+)\)/);
-                                if (m) {
-                                    const n = parseInt(m[1], 10) + 1;
-                                    toggle.textContent = toggle.textContent.startsWith('Show') ? `Show replies (${n})` : `Hide replies (${n})`;
-                                } else {
-                                    // if it was already 'Hide replies (n)', or no count, just create it
-                                    const mm = toggle.textContent.match(/Hide replies \((\d+)\)/);
-                                    if (mm) {
-                                        const nn = parseInt(mm[1], 10) + 1;
-                                        toggle.textContent = `Hide replies (${nn})`;
+
+                // Disable button to prevent duplicate submissions
+                replyBtn.disabled = true;
+                replyBtn.textContent = 'Posting...';
+
+                try {
+                    const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content, parent_id: parentId })
+                    });
+                    if (resp.ok) {
+                        const newComment = await resp.json();
+                        appendComments([newComment], true);
+                        // Ensure replies are visible for this parent after posting
+                        try {
+                            const parentEl = document.querySelector(`[data-id="${parentId}"]`);
+                            if (parentEl) {
+                                // show any reply items
+                                document.querySelectorAll(`.comment-item[data-parent="${parentId}"]`).forEach(el => el.style.display = 'block');
+                                // update toggle link text if present
+                                const toggle = parentEl.querySelector('.toggle-replies');
+                                if (toggle) {
+                                    const m = toggle.textContent.match(/\((\d+)\)/);
+                                    if (m) {
+                                        const n = parseInt(m[1], 10) + 1;
+                                        toggle.textContent = toggle.textContent.startsWith('Show') ? `Show replies (${n})` : `Hide replies (${n})`;
+                                    } else {
+                                        // if it was already 'Hide replies (n)', or no count, just create it
+                                        const mm = toggle.textContent.match(/Hide replies \((\d+)\)/);
+                                        if (mm) {
+                                            const nn = parseInt(mm[1], 10) + 1;
+                                            toggle.textContent = `Hide replies (${nn})`;
+                                        }
                                     }
                                 }
                             }
+                        } catch (err) {
+                            console.warn('Failed to update reply toggle', err);
                         }
-                    } catch (err) {
-                        console.warn('Failed to update reply toggle', err);
-                    }
-                    form.remove();
-                    // Increment header count
-                    const header = document.querySelector('.comments-section h3');
-                    if (header) {
-                        const m = header.textContent.match(/\((\d+)\)/);
-                        if (m) {
-                            const n = parseInt(m[1], 10) + 1;
-                            header.textContent = `Comments (${n})`;
+                        form.remove();
+                        // Increment header count
+                        const header = document.querySelector('.comments-section h3');
+                        if (header) {
+                            const m = header.textContent.match(/\((\d+)\)/);
+                            if (m) {
+                                const n = parseInt(m[1], 10) + 1;
+                                header.textContent = `Comments (${n})`;
+                            }
                         }
+                    } else {
+                        const data = await resp.json();
+                        alert(data.error || 'Failed to post reply');
+                        // Re-enable button on error
+                        replyBtn.disabled = false;
+                        replyBtn.textContent = 'Reply';
                     }
-                } else {
-                    const data = await resp.json();
-                    alert(data.error || 'Failed to post reply');
+                } catch (err) {
+                    // Re-enable button on network error
+                    replyBtn.disabled = false;
+                    replyBtn.textContent = 'Reply';
+                    alert('Failed to post reply');
                 }
             });
 

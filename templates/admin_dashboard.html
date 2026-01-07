@@ -6,7 +6,32 @@
   <h1>Admin Dashboard</h1>
   <div class="d-flex flex-column flex-sm-row gap-2 mb-4">
     <button id="reindex-btn" class="btn btn-primary ">Reindex Search</button>
-    <a id="export-csv" class="btn btn-secondary" href="/admin/export_csv?metric=posts_per_day">Export Posts CSV</a>
+  </div>
+
+  <!-- CSV Export Section -->
+  <div class="card mb-4" style="padding: 1rem; background: #f9f9f9; border-radius: 8px;">
+    <h4>Export Posts CSV</h4>
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+      <div>
+        <label for="export-start-date" style="display: block; font-size: 0.9rem;">Start Date</label>
+        <input type="date" id="export-start-date" class="form-input" style="padding: 0.5rem;">
+      </div>
+      <div>
+        <label for="export-end-date" style="display: block; font-size: 0.9rem;">End Date</label>
+        <input type="date" id="export-end-date" class="form-input" style="padding: 0.5rem;">
+      </div>
+      <div>
+        <label style="display: block; font-size: 0.9rem;">Or Quick Select</label>
+        <select id="export-days" class="form-input" style="padding: 0.5rem;">
+          <option value="">Custom dates</option>
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+        </select>
+      </div>
+      <button id="export-csv-btn" class="btn btn-secondary">Export CSV</button>
+    </div>
   </div>
 
   <h3>Posts per Day</h3>
@@ -122,6 +147,50 @@ async function loadActiveNow() {
 loadMetrics();
 loadActiveNow();
 setInterval(loadActiveNow, 30000); // Refresh every 30 seconds
+
+// Set default dates for export (last 30 days)
+const today = new Date();
+const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+document.getElementById('export-end-date').value = today.toISOString().split('T')[0];
+document.getElementById('export-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+
+// Handle quick select dropdown
+document.getElementById('export-days').addEventListener('change', function() {
+  const days = this.value;
+  if (days) {
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - parseInt(days) * 24 * 60 * 60 * 1000);
+    document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
+    document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
+  }
+});
+
+// Clear quick select when custom dates are picked
+document.getElementById('export-start-date').addEventListener('change', function() {
+  document.getElementById('export-days').value = '';
+});
+document.getElementById('export-end-date').addEventListener('change', function() {
+  document.getElementById('export-days').value = '';
+});
+
+// Export CSV button handler
+document.getElementById('export-csv-btn').addEventListener('click', function() {
+  const startDate = document.getElementById('export-start-date').value;
+  const endDate = document.getElementById('export-end-date').value;
+  
+  if (!startDate || !endDate) {
+    alert('Please select both start and end dates');
+    return;
+  }
+  
+  if (new Date(startDate) > new Date(endDate)) {
+    alert('Start date must be before end date');
+    return;
+  }
+  
+  const url = `/admin/export_csv?metric=posts_per_day&start_date=${startDate}&end_date=${endDate}`;
+  window.location.href = url;
+});
 
 document.getElementById('reindex-btn').addEventListener('click', async ()=>{
   const btn = document.getElementById('reindex-btn');

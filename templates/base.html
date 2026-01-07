@@ -273,9 +273,26 @@
             // Check if user has granted notification permission
             if (Notification.permission === 'granted') {
                 await subscribeToPush(registration);
-            } else if (Notification.permission !== 'denied') {
-                // Will be prompted when they click the notification button
-                console.log('Notification permission not yet granted');
+            } else if (Notification.permission === 'default') {
+                // Prompt for permission after a short delay (less intrusive)
+                // Check if we've already asked recently (use sessionStorage to avoid repeated prompts)
+                const lastPrompt = sessionStorage.getItem('notificationPromptTime');
+                const now = Date.now();
+                // Only prompt once per session
+                if (!lastPrompt) {
+                    sessionStorage.setItem('notificationPromptTime', now.toString());
+                    // Delay the prompt by 5 seconds so user has time to orient themselves
+                    setTimeout(async () => {
+                        try {
+                            const permission = await Notification.requestPermission();
+                            if (permission === 'granted') {
+                                await subscribeToPush(registration);
+                            }
+                        } catch (err) {
+                            console.warn('Error requesting notification permission:', err);
+                        }
+                    }, 5000);
+                }
             }
         } catch (err) {
             console.warn('Error initializing push notifications:', err);

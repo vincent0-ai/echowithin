@@ -1713,32 +1713,55 @@ def calculate_hot_score(post, comment_count):
 
 @app.route('/api/posts/top-by-comments')
 def get_top_posts_json():
-    """Return top posts sorted by internal comment counts."""
+    """Return top posts sorted by overall engagement (comments, likes, views, shares)."""
     try:
         # Aggregate comment counts per post_slug
-        pipeline = [
+        comment_pipeline = [
             {'$match': {'is_deleted': False}},
-            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 20}
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
         ]
-        agg = list(comments_conf.aggregate(pipeline))
+        comment_counts = {doc['_id']: doc['count'] for doc in comments_conf.aggregate(comment_pipeline)}
+        
+        # Fetch posts and calculate engagement score
+        posts = list(posts_conf.find(
+            {},
+            {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
+             'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 
+             'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 
+             'share_count': 1, 'view_count': 1}
+        ))
+        
         results = []
-        for doc in agg:
-            slug = doc['_id']
-            post = posts_conf.find_one({'slug': slug}, {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'image_url':1, 'image_urls':1, 'image_public_ids':1, 'image_status':1, 'video_url':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1})
-            if not post:
+        for post in posts:
+            slug = post.get('slug')
+            if not slug:
                 continue
+            
+            # Calculate engagement score: comments (weight 5) + likes (weight 3) + shares (weight 2) + views (weight 0.1)
+            comment_count = comment_counts.get(slug, 0)
+            likes = post.get('likes_count', 0) or 0
+            shares = post.get('share_count', 0) or 0
+            views = post.get('view_count', 0) or 0
+            
+            engagement_score = (comment_count * 5) + (likes * 3) + (shares * 2) + (views * 0.1)
+            
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
             post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
-            post['comment_count'] = doc.get('count', 0)
-            post['likes_count'] = post.get('likes_count', 0)
-            post['share_count'] = post.get('share_count', 0)
+            post['comment_count'] = comment_count
+            post['likes_count'] = likes
+            post['share_count'] = shares
+            post['view_count'] = views
+            post['engagement_score'] = engagement_score
             # Convert liked_by ObjectIds to strings for JS comparison
             post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
             results.append(post)
+        
+        # Sort by engagement score descending and limit to top 20
+        results.sort(key=lambda x: x['engagement_score'], reverse=True)
+        results = results[:20]
+        
         return jsonify(results)
     except Exception as e:
         app.logger.error(f"Error in get_top_posts_json: {e}")

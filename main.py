@@ -4,6 +4,7 @@ import logging
 import math
 import redis
 import bleach
+import base64
 from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from functools import wraps
@@ -36,6 +37,9 @@ from meilisearch import Client as MeiliClient
 from PIL import Image
 from io import BytesIO
 from pywebpush import webpush, WebPushException
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 app = Flask(__name__)
 
@@ -156,6 +160,56 @@ push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=T
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
+
+# --- Encryption utilities for personal notes ---
+# Derive a Fernet key from the app's SECRET_KEY for encrypting personal notes
+def _get_notes_encryption_key():
+    """Derives a Fernet-compatible key from the app's SECRET_KEY."""
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    # Use a fixed salt for consistent key derivation (notes would be unreadable if salt changes)
+    salt = b'echowithin_notes_salt_v1'
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(secret))
+    return key
+
+_notes_fernet = None
+
+def get_notes_fernet():
+    """Returns a Fernet instance for encrypting/decrypting notes."""
+    global _notes_fernet
+    if _notes_fernet is None:
+        _notes_fernet = Fernet(_get_notes_encryption_key())
+    return _notes_fernet
+
+def encrypt_note(content):
+    """Encrypts note content and returns base64-encoded ciphertext."""
+    if not content:
+        return content
+    try:
+        f = get_notes_fernet()
+        encrypted = f.encrypt(content.encode('utf-8'))
+        return encrypted.decode('utf-8')
+    except Exception as e:
+        app.logger.error(f"Error encrypting note: {e}")
+        return content  # Fallback to plaintext if encryption fails
+
+def decrypt_note(encrypted_content):
+    """Decrypts base64-encoded ciphertext and returns plaintext."""
+    if not encrypted_content:
+        return encrypted_content
+    try:
+        f = get_notes_fernet()
+        decrypted = f.decrypt(encrypted_content.encode('utf-8'))
+        return decrypted.decode('utf-8')
+    except Exception as e:
+        # If decryption fails, it might be an old unencrypted note
+        app.logger.debug(f"Note decryption failed (may be legacy unencrypted): {e}")
+        return encrypted_content  # Return as-is for backward compatibility
 
 # --- Meilisearch setup for fast full-text search ---
 MEILI_URL = get_env_variable('MEILI_URL')
@@ -3368,8 +3422,12 @@ def personal_space():
         with app.app_context():
             saved_posts = prepare_posts(saved_posts)
             
-    # Fetch personal posts (notes)
-    personal_posts = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))
+    # Fetch personal posts (notes) and decrypt them
+    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))
+    personal_posts = []
+    for note in personal_posts_raw:
+        note['content'] = decrypt_note(note.get('content', ''))
+        personal_posts.append(note)
     
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
@@ -3536,27 +3594,39 @@ def get_share_data(post_id):
 
 @app.route('/personal_post/create', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def create_personal_post():
-    """Creates a new personal note/post."""
+    """Creates a new personal note/post with encryption."""
     content = request.form.get('content')
     if content and content.strip():
+        # Limit note length to 2000 characters
+        content = content.strip()[:2000]
+        # Encrypt the note content before storing
+        encrypted_content = encrypt_note(content)
         personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
-            'content': content.strip(),
+            'content': encrypted_content,
+            'encrypted': True,  # Flag to indicate this note is encrypted
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
-        flash('Personal note added.', 'success')
+        flash('Personal note added securely.', 'success')
     else:
         flash('Content cannot be empty.', 'danger')
     return redirect(url_for('personal_space'))
 
 @app.route('/personal_post/delete/<post_id>', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def delete_personal_post(post_id):
     """Deletes a personal note/post."""
     try:
+        obj_id = safe_object_id(post_id)
+        if not obj_id:
+            flash('Invalid note ID.', 'danger')
+            return redirect(url_for('personal_space'))
+        
         personal_posts_conf.delete_one({
-            '_id': ObjectId(post_id),
+            '_id': obj_id,
             'user_id': ObjectId(current_user.id)
         })
         flash('Personal note deleted.', 'success')

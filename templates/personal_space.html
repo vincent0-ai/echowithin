@@ -407,7 +407,7 @@
             <i class="fas fa-pen"></i>
             Create Post
         </a>
-        <a href="{{ url_for('profile_settings') }}" class="quick-action-btn">
+        <a href="{{ url_for('profile_settings', username=current_user.username) }}" class="quick-action-btn">
             <i class="fas fa-cog"></i>
             Settings
         </a>

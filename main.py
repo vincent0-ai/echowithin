@@ -967,7 +967,7 @@ def admin_active_users():
 @login_required
 @admin_required
 def admin_export_csv():
-    metric = request.args.get('metric', 'posts_per_day')
+    metric = request.args.get('metric', 'posts')
     days = request.args.get('days')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
@@ -991,23 +991,37 @@ def admin_export_csv():
         end = now
 
     import csv
+    from io import StringIO
     output = []
-    if metric == 'posts_per_day':
-        pipeline = [
-            {'$match': {'timestamp': {'$gte': start, '$lte': end}}},
-            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp'}}, 'count': {'$sum': 1}}},
-            {'$sort': SON([('_id', 1)])}
-        ]
-        rows = list(posts_conf.aggregate(pipeline))
-        output.append(['date', 'posts'])
-        for r in rows:
-            output.append([r['_id'], r['count']])
+    
+    if metric == 'posts':
+        # Export actual post content
+        posts = list(posts_conf.find(
+            {'timestamp': {'$gte': start, '$lte': end}},
+            {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'timestamp': 1, 'view_count': 1, 'likes_count': 1, 'comment_count': 1}
+        ).sort('timestamp', -1))
+        
+        output.append(['id', 'title', 'slug', 'author', 'date', 'content', 'views', 'likes', 'comments'])
+        for p in posts:
+            timestamp = p.get('timestamp')
+            date_str = timestamp.strftime('%Y-%m-%d %H:%M:%S') if timestamp else ''
+            # Clean content - remove newlines for CSV compatibility
+            content = (p.get('content') or '').replace('\n', ' ').replace('\r', '')
+            output.append([
+                str(p.get('_id', '')),
+                p.get('title', ''),
+                p.get('slug', ''),
+                p.get('author', ''),
+                date_str,
+                content,
+                p.get('view_count', 0),
+                p.get('likes_count', 0),
+                p.get('comment_count', 0)
+            ])
     else:
         return jsonify({'error': 'unsupported metric'}), 400
 
     # Build CSV
-    si = []
-    from io import StringIO
     buf = StringIO()
     writer = csv.writer(buf)
     for row in output:
@@ -1015,7 +1029,7 @@ def admin_export_csv():
     csv_data = buf.getvalue()
     resp = make_response(csv_data)
     resp.headers['Content-Type'] = 'text/csv'
-    resp.headers['Content-Disposition'] = f'attachment; filename="{metric}.csv"'
+    resp.headers['Content-Disposition'] = f'attachment; filename="posts_export.csv"'
     return resp
 
 

@@ -302,10 +302,29 @@ def linkify_filter(text):
 
 @app.template_filter('markdown')
 def markdown_filter(text):
-    """A Jinja2 filter to convert markdown text to HTML."""
+    """A Jinja2 filter to convert markdown text to HTML, sanitized to prevent XSS."""
     if not text:
         return ''
-    return markdown.markdown(text, extensions=['fenced_code', 'nl2br'])
+    # Convert markdown to HTML
+    html = markdown.markdown(text, extensions=['fenced_code', 'nl2br'])
+    # Sanitize HTML to prevent XSS - allow safe tags only
+    allowed_tags = [
+        'p', 'br', 'strong', 'em', 'b', 'i', 'u', 's', 'strike',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'blockquote', 'code', 'pre',
+        'a', 'img', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'span', 'div', 'sub', 'sup'
+    ]
+    allowed_attrs = {
+        'a': ['href', 'title', 'target', 'rel'],
+        'img': ['src', 'alt', 'title', 'width', 'height'],
+        'code': ['class'],
+        'pre': ['class'],
+        'span': ['class'],
+        'div': ['class'],
+        '*': ['class']
+    }
+    return bleach.clean(html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
 
 @app.template_filter('from_timestamp')
 def from_timestamp_filter(timestamp):
@@ -373,6 +392,35 @@ def enforce_canonical_domain_and_https():
     if needs_redirect:
         new_url = f"{scheme}://{host}{request.full_path}"
         return redirect(new_url, code=301)
+
+
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses."""
+    # Prevent clickjacking
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    # XSS protection (legacy but still useful)
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    # Referrer policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    # Permissions policy (restrict features)
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # HSTS - enforce HTTPS (1 year)
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+
+def safe_object_id(id_string):
+    """Safely parse a string to ObjectId, returning None if invalid."""
+    if not id_string:
+        return None
+    try:
+        return ObjectId(id_string)
+    except Exception:
+        return None
 
 
 def admin_required(f):

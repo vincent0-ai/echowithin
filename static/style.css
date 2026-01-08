@@ -1478,23 +1478,24 @@ body {
     cursor: pointer; 
 }
 
-.comment-actions .reply-btn {
-    background-color: var(--primary-color);
-    color: var(--text-light-color);
+.comment-actions .reply-btn,
+.comment-actions .edit-btn,
+.comment-actions .delete-comment,
+.comment-actions .toggle-replies,
+.comment-actions .action-link {
+    background: none;
+    color: #007bff;
+    text-decoration: none;
 }
-.comment-actions .reply-btn:hover { background-color: var(--primary-dark-color); }
-
-.comment-actions .edit-btn {
-    background-color: var(--success-color);
-    color: var(--text-light-color);
+.comment-actions .reply-btn:hover,
+.comment-actions .edit-btn:hover,
+.comment-actions .delete-comment:hover,
+.comment-actions .toggle-replies:hover,
+.comment-actions .action-link:hover {
+    background: none;
+    color: #0056b3;
+    text-decoration: underline;
 }
-.comment-actions .edit-btn:hover { background-color: #45a049; }
-
-.comment-actions .delete-comment {
-    background-color: var(--danger-color);
-    color: var(--text-light-color);
-}
-.comment-actions .delete-comment:hover { background-color: #da190b; }
 
 /* Ensure comment action buttons are small on very small screens */
 @media (max-width: 480px) {

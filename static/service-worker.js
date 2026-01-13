@@ -1,5 +1,6 @@
 // Service worker for EchoWithin PWA
 // Provides offline support, faster loads via caching, and push notifications
+// Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
 const CACHE_NAME = 'echowithin-v1';
 const URLS_TO_CACHE = [

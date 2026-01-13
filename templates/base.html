@@ -117,8 +117,26 @@
     </style>
     {# Block for Content Security Policy or other meta tags #}
     {% block head_meta %}{% endblock %}
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <meta name="theme-color" content="#ffffff">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#ffffff">
+    
+    <!-- iOS-specific PWA meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="EchoWithin">
+    
+    <!-- iOS app icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='logo.png') }}">
+    <link rel="apple-touch-icon" sizes="167x167" href="{{ url_for('static', filename='logo.png') }}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='logo.png') }}">
+    <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='logo.png') }}">
+    
+    <!-- iOS splash screens (optional, for better user experience) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
     {% block title %}<title>Auth</title>{% endblock %}
 </head>
 
@@ -259,6 +277,18 @@
         // Check if push is supported
         if (!('PushManager' in window)) {
             console.log('Push notifications not supported');
+            return;
+        }
+        
+        // Check if we're on iOS (Safari on iOS has limited push notification support)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
+        if (isIOS) {
+            console.log('iOS detected - Push notifications have limited support');
+            // On iOS, we'll only attempt notifications if explicitly requested by user
+            // You may want to add a UI button for users to enable notifications
             return;
         }
         

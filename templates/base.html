@@ -155,6 +155,9 @@
                 <a href="https://web.facebook.com/profile.php?id=61581191858783" target="_blank" rel="noopener noreferrer" title="Facebook"><i class="fa-brands fa-facebook"></i></a>
                 <a href="https://www.tiktok.com/@echowithin2025?_t=ZM-8zyR66ekbou&_r=1" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
                 <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                <button class="theme-toggle" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
             </div>
         </div>
         <nav class="nav-links" id="nav-links">
@@ -827,6 +830,110 @@
             if (e.key === 'Escape') closeShareModal();
         }
     });
+</script>
+
+<!-- Dark Mode Toggle Script -->
+<script>
+    (function() {
+        // Initialize theme from localStorage or system preference
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+        
+        // Apply theme immediately to prevent flash
+        if (theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggle = document.getElementById('theme-toggle');
+            const icon = document.getElementById('theme-icon');
+            
+            // Update icon based on current theme
+            function updateIcon() {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                if (currentTheme === 'dark') {
+                    icon.classList.remove('fa-moon');
+                    icon.classList.add('fa-sun');
+                } else {
+                    icon.classList.remove('fa-sun');
+                    icon.classList.add('fa-moon');
+                }
+            }
+            
+            updateIcon();
+            
+            // Toggle theme on click
+            toggle.addEventListener('click', function() {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                document.documentElement.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+                updateIcon();
+            });
+            
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                if (!localStorage.getItem('theme')) {
+                    const newTheme = e.matches ? 'dark' : 'light';
+                    document.documentElement.setAttribute('data-theme', newTheme);
+                    updateIcon();
+                }
+            });
+        });
+    })();
+</script>
+
+<!-- App Badge (Unread Count) Script -->
+<script>
+    (function() {
+        // App Badge API for showing unread count on PWA icon
+        async function updateAppBadge(count) {
+            if ('setAppBadge' in navigator) {
+                try {
+                    if (count > 0) {
+                        await navigator.setAppBadge(count);
+                    } else {
+                        await navigator.clearAppBadge();
+                    }
+                } catch (err) {
+                    console.log('Badge API error:', err);
+                }
+            }
+        }
+        
+        // Clear badge when user focuses on the app
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
+                updateAppBadge(0);
+            }
+        });
+        
+        // Expose globally for use elsewhere
+        window.updateAppBadge = updateAppBadge;
+        
+        // Check for unread notifications periodically (only for logged in users)
+        {% if current_user.is_authenticated %}
+        async function checkUnreadCount() {
+            try {
+                const response = await fetch('/api/notifications/unread-count');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateAppBadge(data.count || 0);
+                }
+            } catch (err) {
+                // Silently fail - not critical
+            }
+        }
+        
+        // Check on load and every 60 seconds
+        document.addEventListener('DOMContentLoaded', function() {
+            checkUnreadCount();
+            setInterval(checkUnreadCount, 60000);
+        });
+        {% endif %}
+    })();
 </script>
 
 </html>

@@ -2,9 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v1';
+const CACHE_NAME = 'echowithin-v2';
 const URLS_TO_CACHE = [
   '/',
+  '/offline',
   '/static/style.css',
   '/static/custom_styles.css',
   '/static/script.js',
@@ -67,8 +68,11 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(err => {
-          console.log('Fetch failed; returning offline page or cached response', err);
-          // Could return a custom offline page here
+          console.log('Fetch failed; returning offline page', err);
+          // Return offline page for navigation requests
+          if (request.mode === 'navigate') {
+            return caches.match('/offline');
+          }
           return null;
         });
     })

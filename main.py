@@ -76,6 +76,17 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
 # Configure permanent session lifetime for "Remember Me"
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
+
+# Flask-Login "Remember Me" cookie settings - CRITICAL for PWA persistence
+app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=30)
+app.config['REMEMBER_COOKIE_SECURE'] = True  # Only send over HTTPS
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JS access
+app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True  # Extend cookie on each visit
+
+# Session cookie name - helps with PWA cookie isolation
+app.config['SESSION_COOKIE_NAME'] = 'echowithin_session'
+
 # Load environment variables from .env file
 
 # Ensure all external URLs are generated with https
@@ -1447,6 +1458,11 @@ def login():
         password = request.form.get("password")
         remember = request.form.get("remember") == "on" # Check if the "Remember Me" box was checked
         
+        # In PWA/Webview context, users expect to stay logged in
+        # If 'remember' is not explicitly unchecked, default to true for better UX
+        if request.headers.get('Display-Mode') == 'standalone': 
+            remember = True
+        
         user = users_conf.find_one({"username": username})
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
@@ -2690,6 +2706,36 @@ def push_subscription_status():
         return jsonify({'error': 'Failed to check status'}), 500
 
 
+@app.route('/api/notifications/unread-count')
+@login_required
+def get_unread_notification_count():
+    """Get the count of unread notifications for the current user (for PWA badge)."""
+    try:
+        # Count unread notifications for this user
+        # This counts: new comments on user's posts, replies to user's comments, etc.
+        user_id = ObjectId(current_user.id)
+        
+        # Get user's posts to check for new comments
+        user_posts = posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1})
+        user_post_slugs = [p.get('slug') for p in user_posts]
+        
+        # Count new comments on user's posts (not by the user themselves) from last 24 hours
+        yesterday = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+        
+        unread_count = 0
+        if user_post_slugs:
+            unread_count = comments_conf.count_documents({
+                'post_slug': {'$in': user_post_slugs},
+                'author_id': {'$ne': user_id},
+                'created_at': {'$gte': yesterday}
+            })
+        
+        return jsonify({'count': unread_count})
+    except Exception as e:
+        app.logger.error(f"Failed to get unread notification count: {e}")
+        return jsonify({'count': 0})
+
+
 def _serialize_comment(doc):
     return {
         'id': str(doc.get('_id')),
@@ -3284,6 +3330,11 @@ def delete_user(user_id):
     
     flash(f"User '{username}' and all their posts have been permanently deleted.", "success")
     return redirect(url_for('admin_users'))
+
+@app.route('/offline')
+def offline():
+    """Offline fallback page for PWA"""
+    return render_template("offline.html", title="Offline - EchoWithin")
 
 @app.route('/about')
 def about():

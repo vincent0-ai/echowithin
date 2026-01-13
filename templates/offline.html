@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}
+    <title>Offline - EchoWithin</title>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper" style="text-align: center; padding: 3rem 1rem;">
+    <div style="font-size: 4rem; margin-bottom: 1rem;">📡</div>
+    <h1>You're Offline</h1>
+    <p style="color: #666; margin: 1rem 0;">It looks like you've lost your internet connection.</p>
+    
+    <div class="card" style="max-width: 400px; margin: 2rem auto; padding: 1.5rem;">
+        <h3>While you're offline, you can:</h3>
+        <ul style="text-align: left; margin: 1rem 0;">
+            <li>Read previously viewed posts (if cached)</li>
+            <li>Draft new posts to publish later</li>
+            <li>Review your saved content</li>
+        </ul>
+    </div>
+    
+    <button onclick="location.reload()" class="btn edit-btn" style="margin-top: 1rem;">
+        <i class="fas fa-sync-alt"></i> Try Again
+    </button>
+    
+    <p style="margin-top: 2rem; font-size: 0.9rem; color: #888;">
+        Your content will sync automatically when you're back online.
+    </p>
+</div>
+
+<script>
+    // Auto-retry when connection is restored
+    window.addEventListener('online', () => {
+        location.reload();
+    });
+</script>
+{% endblock %}

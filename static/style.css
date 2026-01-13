@@ -47,10 +47,27 @@
 
 [data-theme="dark"] .card,
 [data-theme="dark"] .post-card,
+[data-theme="dark"] .post-item,
+[data-theme="dark"] .stat-card,
 [data-theme="dark"] .auth-container,
-[data-theme="dark"] .content-wrapper {
+[data-theme="dark"] .content-wrapper,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .admin-card {
     background: var(--card-background) !important;
     color: var(--text-dark-color);
+}
+
+[data-theme="dark"] .post-item,
+[data-theme="dark"] .stat-card {
+    border-color: var(--primary-color);
+}
+
+[data-theme="dark"] .stat-subtext {
+    color: #bbb;
+}
+
+[data-theme="dark"] .trending-list li {
+    border-bottom-color: var(--border-color);
 }
 
 [data-theme="dark"] .content-wrapper {

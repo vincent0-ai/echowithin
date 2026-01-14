@@ -139,7 +139,8 @@ app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
 app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')  
+app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = get_env_variable('MAIL_USERNAME')  
 
 # Configure Redis connection for RQ background jobs
 REDIS_HOST = get_env_variable('REDIS_HOST')
@@ -613,18 +614,30 @@ def send_code(email, gen_code=None, retries=3, delay=2):
 def send_reset_code(email, reset_token=None, retries=3, delay=2):
     for attempt in range(retries):
         try:
+            sender_email = app.config.get('MAIL_DEFAULT_SENDER') or get_env_variable('MAIL_USERNAME')
             msg = Message(
                 subject="EchoWithin Password Reset",
-                sender=get_env_variable('MAIL_USERNAME'),
+                sender=sender_email,
                 recipients=[email]
             )
             reset_url = url_for('reset_password', token=reset_token, _external=True)
             msg.html = render_template("reset_email.html", reset_url=reset_url)
+            # Also add plain text version for better deliverability
+            msg.body = f"""Password Reset Request
+
+You requested a password reset for your EchoWithin account.
+
+Click the link below to reset your password:
+{reset_url}
+
+If you didn't request this, please ignore this email.
+This link will expire in 1 hour.
+"""
             mail.send(msg)
             app.logger.info(f"Password reset email sent to {email}")
             return True
         except Exception as e:
-            app.logger.error(f"Attempt {attempt+1} failed to send reset email to {email}: {e}")
+            app.logger.error(f"Attempt {attempt+1} failed to send reset email to {email}: {e}", exc_info=True)
             time.sleep(delay)
     else:
         app.logger.error(f"Failed to send password reset email to {email} after {retries} attempts.")
@@ -3732,9 +3745,12 @@ def forgot_password():
                     upsert=True
                 )
                 send_reset_code(email, reset_token)
-                flash("If an account with that email exists, we've sent you a password reset link.", "info")
+                flash("We've sent a password reset link to your email. Please check your inbox (and spam folder).", "success")
+                return redirect(url_for('login'))
             else:
+                # Don't reveal whether email exists or not for security
                 flash("If an account with that email exists, we've sent you a password reset link.", "info")
+                return redirect(url_for('login'))
         else:
             flash("Please enter your email address.", "danger")
     return render_template('forgot_password.html', active_page='forgot_password')

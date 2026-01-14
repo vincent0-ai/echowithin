@@ -223,21 +223,57 @@
 <script>
     // PWA Install Prompt handling
     let deferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-        console.log('PWA install prompt available');
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        // Store the event so it can be triggered later
-        deferredPrompt = e;
-        // Optionally show your own install button/banner here
-        showInstallPromotion();
-    });
+    
+    // Check if app is already installed (running in standalone mode)
+    function isAppInstalled() {
+        // Check display-mode media query (works for most browsers)
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            return true;
+        }
+        // Check iOS standalone mode
+        if (window.navigator.standalone === true) {
+            return true;
+        }
+        // Check if launched from home screen on Android
+        if (document.referrer.includes('android-app://')) {
+            return true;
+        }
+        return false;
+    }
+    
+    // Hide install button if already installed
+    function hideInstallButton() {
+        const installButton = document.getElementById('install-button');
+        if (installButton) {
+            installButton.style.display = 'none';
+        }
+    }
+    
+    // Don't show install prompt if already installed as PWA
+    if (isAppInstalled()) {
+        console.log('App is running in standalone mode (installed)');
+        hideInstallButton();
+    } else {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            console.log('PWA install prompt available');
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            // Store the event so it can be triggered later
+            deferredPrompt = e;
+            // Show install button
+            showInstallPromotion();
+        });
+    }
 
     function showInstallPromotion() {
+        // Only show if not already installed
+        if (isAppInstalled()) {
+            return;
+        }
         // Show the install button
         const installButton = document.getElementById('install-button');
         if (installButton) {
-            installButton.style.display = 'inline-block';
+            installButton.style.display = 'inline-flex';
         }
         console.log('App can be installed - showing install promotion');
     }
@@ -259,6 +295,8 @@
     window.addEventListener('appinstalled', () => {
         console.log('PWA was installed');
         deferredPrompt = null;
+        // Hide the install button after installation
+        hideInstallButton();
     });
 
     // Register service worker for PWA offline support and push notifications

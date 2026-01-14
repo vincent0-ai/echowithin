@@ -123,10 +123,10 @@
         <div class="post-meta">
             {% if post.edited_at %}
                 {# Use 'is instance' for a more robust type check #}
-                Edited on <time class="local-time" datetime="{{ post.edited_at|to_iso }}">{{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime('%b %d, %Y at %I:%M %p') else post.edited_at }} UTC</time> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+                Edited on <time class="local-time" datetime="{{ post.edited_at|to_iso }}">{{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime('%b %d, %Y at %I:%M %p') else post.edited_at }}</time> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
             {% else %}
                 {# Assuming post.timestamp is always a datetime object from the DB #}
-                Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on <time class="local-time" datetime="{{ post.timestamp|to_iso }}">{{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }} UTC</time>
+                Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on <time class="local-time" datetime="{{ post.timestamp|to_iso }}">{{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}</time>
             {% endif %}
         </div>
 
@@ -219,7 +219,7 @@
                         <div class="comment-meta">
                             <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
                             {% if c.created_at %}
-                                — <time class="local-time" datetime="{{ c.created_at|to_iso }}">{% if c.created_at.strftime %}{{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }} UTC{% else %}{{ c.created_at }}{% endif %}</time>
+                                — <time class="local-time" datetime="{{ c.created_at|to_iso }}">{% if c.created_at.strftime %}{{ c.created_at.strftime('%b %d, %Y at %I:%M %p') }}{% else %}{{ c.created_at }}{% endif %}</time>
                             {% endif %}
                         </div>
                         <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>

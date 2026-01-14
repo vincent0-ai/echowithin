@@ -98,12 +98,12 @@
     {# --- Timestamp --- #}
     <div class="post-meta">
         {% if post.edited_at %}
-            Edited on <time class="local-time" datetime="{{ post.edited_at|to_iso }}">{{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }} UTC</time> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+            Edited on <time class="local-time" datetime="{{ post.edited_at|to_iso }}">{{ post.edited_at.strftime('%b %d, %Y at %I:%M %p') if post.edited_at.strftime else post.edited_at }}</time> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
         {% else %}
             Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
             <time class="local-time" datetime="{{ post.timestamp|to_iso }}">
                 {% if post.timestamp.strftime %}
-                    {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }} UTC
+                    {{ post.timestamp.strftime('%b %d, %Y at %I:%M %p') }}
                 {% else %}
                     {{ post.timestamp }}
                 {% endif %}

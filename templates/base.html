@@ -170,6 +170,7 @@
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
             {% endif %}
+            <button id="install-button" style="display: none;" onclick="promptInstall()">Install App</button>
         </nav>
     </div>
     <div class="overlay" id="overlay"></div>
@@ -231,7 +232,11 @@
     });
 
     function showInstallPromotion() {
-        // You can create a custom install button that calls promptInstall()
+        // Show the install button
+        const installButton = document.getElementById('install-button');
+        if (installButton) {
+            installButton.style.display = 'inline-block';
+        }
         console.log('App can be installed - showing install promotion');
     }
 

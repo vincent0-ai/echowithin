@@ -445,7 +445,7 @@
                             </h3>
                             <div class="saved-post-meta">
                                 <i class="fas fa-user"></i> {{ post.author }} &bull;
-                                <i class="fas fa-calendar"></i> {{ post.timestamp.strftime('%b %d, %Y') }}
+                                <i class="fas fa-calendar"></i> {{ post.timestamp|localtime('%b %d, %Y') }}
                                 {% if post.view_count %}
                                     &bull; <i class="fas fa-eye"></i> {{ post.view_count }}
                                 {% endif %}
@@ -499,7 +499,7 @@
                         <div class="note-footer">
                             <span class="note-date">
                                 <i class="far fa-clock"></i> 
-                                {{ note.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                                {{ note.created_at|localtime }}
                                 <span style="margin-left: 0.5rem; color: #4caf50; font-size: 0.75rem;" title="Encrypted">
                                     <i class="fas fa-lock"></i>
                                 </span>

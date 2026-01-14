@@ -420,6 +420,38 @@ def to_iso_filter(dt):
     except (ValueError, TypeError, AttributeError):
         return str(dt)
 
+# Define the display timezone
+DISPLAY_TIMEZONE = ZoneInfo('Africa/Nairobi')
+
+@app.template_filter('to_local')
+def to_local_filter(dt):
+    """Convert a datetime object from UTC to Africa/Nairobi timezone."""
+    try:
+        if isinstance(dt, datetime.datetime):
+            # If naive datetime, assume it's UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            # Convert to Nairobi timezone
+            return dt.astimezone(DISPLAY_TIMEZONE)
+        return dt
+    except (ValueError, TypeError, AttributeError):
+        return dt
+
+@app.template_filter('localtime')
+def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
+    """Convert datetime to local timezone and format it."""
+    try:
+        if isinstance(dt, datetime.datetime):
+            # If naive datetime, assume it's UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            # Convert to Nairobi timezone
+            local_dt = dt.astimezone(DISPLAY_TIMEZONE)
+            return local_dt.strftime(fmt)
+        return str(dt)
+    except (ValueError, TypeError, AttributeError):
+        return str(dt)
+
 
 class User(UserMixin):
     def __init__(self, user_data):

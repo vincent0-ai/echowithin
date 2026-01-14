@@ -25,7 +25,7 @@
             <div class="post-item {% if announcement.is_pinned %}pinned-announcement-admin{% endif %}">
                 <p>{{ announcement.content }}</p>
                 <div class="post-meta">
-                    By <strong>{{ announcement.author_username }}</strong> on {{ announcement.created_at.strftime("%B %d, %Y") }}
+                    By <strong>{{ announcement.author_username }}</strong> on {{ announcement.created_at|localtime('%B %d, %Y') }}
                     {% if announcement.is_pinned %}
                         <span class="pinned-tag">[PINNED]</span>
                     {% endif %}

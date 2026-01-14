@@ -2,37 +2,60 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v2';
-const URLS_TO_CACHE = [
-  '/',
-  '/offline',
+const CACHE_NAME = 'echowithin-v3';
+const STATIC_CACHE = 'echowithin-static-v3';
+const PAGES_CACHE = 'echowithin-pages-v3';
+const POSTS_CACHE = 'echowithin-posts-v3';
+
+// Static assets to cache immediately on install
+const STATIC_ASSETS = [
   '/static/style.css',
   '/static/custom_styles.css',
   '/static/script.js',
   '/static/logo.png',
-  '/static/coffee-bean.png'
+  '/static/coffee-bean.png',
+  '/static/manifest.json'
+];
+
+// Pages to cache for offline access
+const PAGES_TO_CACHE = [
+  '/',
+  '/offline',
+  '/home',
+  '/blog',
+  '/about'
 ];
 
 // Install event: cache critical assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(URLS_TO_CACHE).catch(err => {
-        console.warn('Cache addAll failed:', err);
-        // Continue even if some assets fail to cache
-      });
-    })
+    Promise.all([
+      // Cache static assets
+      caches.open(STATIC_CACHE).then(cache => {
+        return cache.addAll(STATIC_ASSETS).catch(err => {
+          console.warn('Static cache addAll failed:', err);
+        });
+      }),
+      // Cache main pages
+      caches.open(PAGES_CACHE).then(cache => {
+        return cache.addAll(PAGES_TO_CACHE).catch(err => {
+          console.warn('Pages cache addAll failed:', err);
+        });
+      })
+    ])
   );
   self.skipWaiting();
 });
 
 // Activate event: clean up old caches
 self.addEventListener('activate', event => {
+  const currentCaches = [STATIC_CACHE, PAGES_CACHE, POSTS_CACHE];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
+          if (!currentCaches.includes(cacheName) && cacheName.startsWith('echowithin')) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -42,40 +65,123 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch event: serve from cache, fallback to network
+// Fetch event: Network-first for pages, Cache-first for static assets
 self.addEventListener('fetch', event => {
   const { request } = event;
+  const url = new URL(request.url);
   
-  // Skip requests that are not GET
+  // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
   }
+  
+  // Skip external requests
+  if (url.origin !== location.origin) {
+    return;
+  }
+  
+  // Skip API requests - they should always go to network
+  if (url.pathname.startsWith('/api/')) {
+    return;
+  }
 
-  event.respondWith(
-    caches.match(request).then(response => {
-      if (response) {
-        return response;
-      }
-      return fetch(request)
-        .then(response => {
-          // Cache successful responses for static assets
-          if (response && response.status === 200 && request.url.includes('/static/')) {
+  // Static assets: Cache-first strategy
+  if (url.pathname.startsWith('/static/')) {
+    event.respondWith(
+      caches.match(request).then(cachedResponse => {
+        if (cachedResponse) {
+          // Return cached, but also update cache in background
+          event.waitUntil(
+            fetch(request).then(response => {
+              if (response && response.status === 200) {
+                caches.open(STATIC_CACHE).then(cache => {
+                  cache.put(request, response);
+                });
+              }
+            }).catch(() => {})
+          );
+          return cachedResponse;
+        }
+        return fetch(request).then(response => {
+          if (response && response.status === 200) {
             const respClone = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
+            caches.open(STATIC_CACHE).then(cache => {
+              cache.put(request, respClone);
+            });
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Post pages: Network-first with cache fallback, and cache successful responses
+  if (url.pathname.startsWith('/post/')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const respClone = response.clone();
+            caches.open(POSTS_CACHE).then(cache => {
               cache.put(request, respClone);
             });
           }
           return response;
         })
-        .catch(err => {
-          console.log('Fetch failed; returning offline page', err);
-          // Return offline page for navigation requests
-          if (request.mode === 'navigate') {
+        .catch(() => {
+          return caches.match(request).then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            // Return offline page if post not cached
             return caches.match('/offline');
+          });
+        })
+    );
+    return;
+  }
+
+  // Navigation requests: Network-first with cache fallback
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const respClone = response.clone();
+            caches.open(PAGES_CACHE).then(cache => {
+              cache.put(request, respClone);
+            });
           }
-          return null;
-        });
-    })
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then(cachedResponse => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            // Try to match the pathname without query params
+            return caches.match(url.pathname).then(pathMatch => {
+              if (pathMatch) {
+                return pathMatch;
+              }
+              return caches.match('/offline');
+            });
+          });
+        })
+    );
+    return;
+  }
+
+  // Default: Network with cache fallback
+  event.respondWith(
+    fetch(request)
+      .then(response => {
+        return response;
+      })
+      .catch(() => {
+        return caches.match(request);
+      })
   );
 });
 

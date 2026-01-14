@@ -3604,11 +3604,13 @@ def personal_space():
     saved_post_ids = user.get('saved_posts', [])
     saved_posts = []
     if saved_post_ids:
-        # Filter out any IDs that might not exist anymore
-        saved_posts_cursor = posts_conf.find({'_id': {'$in': saved_post_ids}})
-        saved_posts = list(saved_posts_cursor)
+        # Reverse to get most recently saved first
+        saved_post_ids = list(reversed(saved_post_ids))
+        # Fetch posts and preserve order
+        posts_map = {post['_id']: post for post in posts_conf.find({'_id': {'$in': saved_post_ids}})}
+        ordered_posts = [posts_map[pid] for pid in saved_post_ids if pid in posts_map]
         with app.app_context():
-            saved_posts = prepare_posts(saved_posts)
+            saved_posts = prepare_posts(ordered_posts)
             
     # Fetch personal posts (notes) and decrypt them
     personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))

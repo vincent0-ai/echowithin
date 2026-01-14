@@ -41,7 +41,7 @@
                 {% for post in user_posts %}
                     <div class="post-item-simple">
                         <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
-                        <p class="post-meta">Posted on {{ post.timestamp.strftime('%B %d, %Y') }}</p>
+                        <p class="post-meta">Posted on <time class="local-time" datetime="{{ post.timestamp|to_iso }}">{{ post.timestamp.strftime('%B %d, %Y') }}</time></p>
                     </div>
                 {% endfor %}
                 </div>

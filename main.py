@@ -406,6 +406,19 @@ def from_timestamp_filter(timestamp):
     except (ValueError, TypeError):
         return timestamp # Return original value if conversion fails
 
+@app.template_filter('to_iso')
+def to_iso_filter(dt):
+    """Convert a datetime object to ISO 8601 format string for JavaScript parsing."""
+    try:
+        if isinstance(dt, datetime.datetime):
+            # Ensure timezone awareness
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            return dt.isoformat()
+        return str(dt)
+    except (ValueError, TypeError, AttributeError):
+        return str(dt)
+
 
 class User(UserMixin):
     def __init__(self, user_data):

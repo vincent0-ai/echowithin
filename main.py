@@ -1780,7 +1780,7 @@ def all_posts():
     """Displays a paginated list of all blog posts."""
     selected_tag = request.args.get('tag', None)
     page = request.args.get('page', 1, type=int)
-    posts_per_page = 5
+    posts_per_page = 10
 
     # Build the filter query
     filter_query = {}
@@ -2350,6 +2350,9 @@ def post():
         if title and content:  
             # Create a unique slug for SEO-friendly URLs
             base_slug = slugify(title)
+            # Handle emoji-only or non-ASCII titles that result in empty slugs
+            if not base_slug:
+                base_slug = f"post-{secrets.token_hex(6)}"
             slug = base_slug
             counter = 1
             while posts_conf.find_one({'slug': slug}):
@@ -3107,6 +3110,9 @@ def update_post(post_id):
         # If the title has changed, generate a new slug
         if title != post.get('title'):
             base_slug = slugify(title)
+            # Handle emoji-only or non-ASCII titles that result in empty slugs
+            if not base_slug:
+                base_slug = f"post-{secrets.token_hex(6)}"
             new_slug = base_slug
             counter = 1
             # Ensure the new slug is unique

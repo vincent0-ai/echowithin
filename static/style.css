@@ -653,31 +653,64 @@ body {
 .pagination-nav {
     margin-top: 2rem;
     text-align: center;
+    padding: 1rem 0;
 }
 
 .pagination {
     display: inline-flex;
     list-style: none;
     padding: 0;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+}
+
+.page-item {
+    margin: 0.15rem;
 }
 
 .page-link {
-    padding: 0.5rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 40px;
+    padding: 0.5rem 0.85rem;
     background-color: var(--primary-color);
     color: var(--text-light-color);
     text-decoration: none;
-    border-radius: 4px;
-    transition: background-color 0.3s;
+    border-radius: 8px;
+    transition: all 0.25s ease;
+    font-weight: 500;
+    font-size: 0.95rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    border: 2px solid transparent;
 }
 
 .page-link:hover {
     background-color: var(--primary-dark-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.page-link:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.page-item.active .page-link {
+    background-color: var(--primary-dark-color);
+    border-color: var(--text-light-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    font-weight: 600;
 }
 
 .page-item.disabled .page-link {
-    background-color: #ccc;
-    cursor: not-allowed;
+    background-color: #f5f5f5;
+    cursor: default;
+    box-shadow: none;
+    border: 1px solid #ccc;
 }
 
 /* Ensure pagination link text is always readable (white on primary color),
@@ -688,13 +721,16 @@ body {
 }
 
 .page-item.disabled .page-link {
-    background-color: #ccc;
-    cursor: not-allowed;
-    color: #555; /* darker text for disabled state */
+    background-color: #f5f5f5;
+    cursor: default;
+    color: #333 !important; /* dark text for better visibility */
+    font-weight: 600;
 }
 
 .page-item.disabled .page-link:hover {
-    background-color: #ccc;
+    background-color: #f5f5f5;
+    transform: none;
+    box-shadow: none;
 }
 
 /* --- Image Styling for Blog Posts --- */
@@ -1177,10 +1213,16 @@ body {
         flex-wrap: nowrap;       /* Force all items to stay on one line */
         overflow-x: auto;        /* Allow horizontal scroll if links exceed screen width */
         scrollbar-width: none;   /* Hide scrollbar (Firefox) */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
     }
 
     .nav-links::-webkit-scrollbar {
         display: none;           /* Hide scrollbar (Chrome) */
+    }
+
+    .nav-links a {
+        white-space: nowrap;     /* Prevent individual link text from wrapping */
+        flex-shrink: 0;          /* Don't shrink nav items */
     }
 
     .container {
@@ -1242,11 +1284,19 @@ body {
     .pagination {
         flex-wrap: wrap;
         justify-content: center;
+        gap: 0.35rem;
+    }
+
+    .page-item {
+        margin: 0.1rem;
     }
 
     .page-link {
-        padding: 0.5rem;
-        font-size: 0.9rem;
+        min-width: 36px;
+        height: 36px;
+        padding: 0.4rem 0.7rem;
+        font-size: 0.85rem;
+        border-radius: 6px;
     }
 }
 
@@ -1314,14 +1364,32 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        flex-wrap: wrap;
-        gap: 0.5rem;
+        flex-wrap: nowrap;       /* Prevent wrapping on small screens */
+        gap: 0.4rem;             /* Reduced gap for small screens */
         width: 100%;
-        justify-content: center;
+        overflow-x: auto;        /* Allow horizontal scroll if needed */
+        scrollbar-width: none;   /* Hide scrollbar (Firefox) */
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        padding-bottom: 0.25rem; /* Small padding for scroll area */
+    }
+
+    .nav-links::-webkit-scrollbar {
+        display: none;           /* Hide scrollbar (Chrome/Safari) */
+    }
+
+    .nav-links a {
+        font-size: 0.85rem;      /* Smaller font for small screens */
+        padding: 0.35rem 0.4rem; /* Reduced padding */
+        white-space: nowrap;     /* Prevent text wrapping */
+        flex-shrink: 0;          /* Don't shrink nav items */
     }
 
     .nav-brand {
-        font-size: 1.2rem;
+        font-size: 1.1rem;       /* Slightly smaller brand on very small screens */
+    }
+
+    .nav-logo {
+        height: 32px;            /* Smaller logo on small screens */
     }
 
     /* Show social icons next to brand on small screens */

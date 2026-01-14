@@ -115,6 +115,16 @@
             font-size: 1.5rem;
         }
     </style>
+    
+    <!-- Hide install button when running as installed PWA -->
+    <style>
+        @media all and (display-mode: standalone) {
+            #install-button {
+                display: none !important;
+            }
+        }
+    </style>
+    
     {# Block for Content Security Policy or other meta tags #}
     {% block head_meta %}{% endblock %}
     
@@ -230,12 +240,24 @@
         if (window.matchMedia('(display-mode: standalone)').matches) {
             return true;
         }
+        // Check display-mode fullscreen (some PWAs use this)
+        if (window.matchMedia('(display-mode: fullscreen)').matches) {
+            return true;
+        }
+        // Check display-mode minimal-ui
+        if (window.matchMedia('(display-mode: minimal-ui)').matches) {
+            return true;
+        }
         // Check iOS standalone mode
         if (window.navigator.standalone === true) {
             return true;
         }
         // Check if launched from home screen on Android
         if (document.referrer.includes('android-app://')) {
+            return true;
+        }
+        // Check if running in TWA (Trusted Web Activity)
+        if (document.referrer.includes('app://')) {
             return true;
         }
         return false;
@@ -246,14 +268,20 @@
         const installButton = document.getElementById('install-button');
         if (installButton) {
             installButton.style.display = 'none';
+            installButton.remove(); // Also remove from DOM to be sure
         }
     }
     
-    // Don't show install prompt if already installed as PWA
+    // Run immediately to hide button as early as possible
     if (isAppInstalled()) {
         console.log('App is running in standalone mode (installed)');
         hideInstallButton();
-    } else {
+        // Also set a flag to prevent any future showing
+        window.__pwaInstalled = true;
+    }
+    
+    // Don't show install prompt if already installed as PWA
+    if (!isAppInstalled() && !window.__pwaInstalled) {
         window.addEventListener('beforeinstallprompt', (e) => {
             console.log('PWA install prompt available');
             // Prevent the mini-infobar from appearing on mobile
@@ -267,7 +295,8 @@
 
     function showInstallPromotion() {
         // Only show if not already installed
-        if (isAppInstalled()) {
+        if (isAppInstalled() || window.__pwaInstalled) {
+            hideInstallButton();
             return;
         }
         // Show the install button

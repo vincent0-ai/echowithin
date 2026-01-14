@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="content-wrapper" style="text-align: center; padding: 3rem 1rem;">
-    <h1><i class="fas fa-wifi" style="opacity: 0.5;"></i> You're Offline</h1>
+    <h1>You're Offline</h1>
     <p style="color: #666; margin: 1rem 0;">It looks like you've lost your internet connection.</p>
     
     <div id="cached-pages" style="margin: 2rem auto; max-width: 600px; display: none;">
@@ -15,14 +15,6 @@
         <div id="cached-list" style="text-align: left;"></div>
     </div>
     
-    <div class="card" style="max-width: 400px; margin: 2rem auto; padding: 1.5rem;">
-        <h3>Tips for offline browsing:</h3>
-        <ul style="text-align: left; margin: 1rem 0; line-height: 1.8;">
-            <li>Previously visited posts are available offline</li>
-            <li>Navigate using the links above</li>
-            <li>Content syncs when you're back online</li>
-        </ul>
-    </div>
     
     <button onclick="location.reload()" class="btn edit-btn" style="margin-top: 1rem;">
         <i class="fas fa-sync-alt"></i> Try Again

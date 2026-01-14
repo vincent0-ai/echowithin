@@ -309,24 +309,46 @@
             if (Notification.permission === 'granted') {
                 await subscribeToPush(registration);
             } else if (Notification.permission === 'default') {
-                // Prompt for permission after a short delay (less intrusive)
-                // Check if we've already asked recently (use sessionStorage to avoid repeated prompts)
-                const lastPrompt = sessionStorage.getItem('notificationPromptTime');
-                const now = Date.now();
-                // Only prompt once per session
-                if (!lastPrompt) {
-                    sessionStorage.setItem('notificationPromptTime', now.toString());
-                    // Delay the prompt by 5 seconds so user has time to orient themselves
-                    setTimeout(async () => {
+                // Check if we're on mobile - mobile browsers require permission request to be in user gesture context
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                if (isMobile) {
+                    // On mobile, request permission immediately (page load from navigation may be considered user gesture)
+                    // Check if we've already asked recently to avoid repeated prompts
+                    const lastPrompt = sessionStorage.getItem('notificationPromptTime');
+                    const now = Date.now();
+                    // Only prompt once per session on mobile too
+                    if (!lastPrompt) {
+                        sessionStorage.setItem('notificationPromptTime', now.toString());
                         try {
                             const permission = await Notification.requestPermission();
                             if (permission === 'granted') {
                                 await subscribeToPush(registration);
                             }
                         } catch (err) {
-                            console.warn('Error requesting notification permission:', err);
+                            console.warn('Error requesting notification permission on mobile:', err);
                         }
-                    }, 5000);
+                    }
+                } else {
+                    // On desktop, use delayed prompt to be less intrusive
+                    // Check if we've already asked recently (use sessionStorage to avoid repeated prompts)
+                    const lastPrompt = sessionStorage.getItem('notificationPromptTime');
+                    const now = Date.now();
+                    // Only prompt once per session
+                    if (!lastPrompt) {
+                        sessionStorage.setItem('notificationPromptTime', now.toString());
+                        // Delay the prompt by 5 seconds so user has time to orient themselves
+                        setTimeout(async () => {
+                            try {
+                                const permission = await Notification.requestPermission();
+                                if (permission === 'granted') {
+                                    await subscribeToPush(registration);
+                                }
+                            } catch (err) {
+                                console.warn('Error requesting notification permission:', err);
+                            }
+                        }, 5000);
+                    }
                 }
             }
         } catch (err) {

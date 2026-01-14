@@ -1751,7 +1751,7 @@ def blog():
         # If there's a search query, perform the search and return only search results.
         search_filter = { "$text": { "$search": query } }
         page = request.args.get('page', 1, type=int)
-        posts_per_page = 5
+        posts_per_page = 10
         total_posts = posts_conf.count_documents(search_filter)
         total_pages = math.ceil(total_posts / posts_per_page)
         skip = (page - 1) * posts_per_page
@@ -1763,12 +1763,74 @@ def blog():
         page_description = f"Displaying search results for '{query}' on EchoWithin."
         return render_template("blog.html", posts=search_results, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
 
-    # --- Default Blog Page Logic (No Search) ---
-
-    # 1. Fetch Latest Posts (sorted by creation/update time)
-    latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
-    with app.app_context():
-        latest_posts_prepared = prepare_posts(list(latest_posts_cursor))
+    # --- Default Blog Page Logic (Mixed Feed Algorithm) ---
+    # This algorithm creates a diverse feed that:
+    # 1. Always includes some recent posts (freshness)
+    # 2. Mixes in older posts for discovery
+    # 3. Changes on each reload for variety
+    
+    import random
+    
+    total_posts_count = posts_conf.count_documents({})
+    
+    if total_posts_count <= 10:
+        # If we have 10 or fewer posts, just show all of them randomly ordered
+        all_posts = list(posts_conf.find({}).sort('timestamp', -1))
+        random.shuffle(all_posts)
+        with app.app_context():
+            latest_posts_prepared = prepare_posts(all_posts)
+    else:
+        # Mixed feed algorithm:
+        # - 4 most recent posts (guaranteed freshness)
+        # - 3 posts from the past week (recent but not newest)
+        # - 3 random posts from older content (discovery)
+        
+        now = datetime.datetime.now(datetime.timezone.utc)
+        one_week_ago = now - datetime.timedelta(days=7)
+        one_month_ago = now - datetime.timedelta(days=30)
+        
+        # Get the 4 most recent posts
+        recent_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(4))
+        recent_ids = [p['_id'] for p in recent_posts]
+        
+        # Get posts from the past week (excluding the most recent 4)
+        week_posts = list(posts_conf.find({
+            '_id': {'$nin': recent_ids},
+            'timestamp': {'$gte': one_week_ago}
+        }).sort('timestamp', -1).limit(10))
+        
+        # Randomly select 3 from the week posts (or all if less than 3)
+        if len(week_posts) > 3:
+            week_selection = random.sample(week_posts, 3)
+        else:
+            week_selection = week_posts
+        
+        week_ids = [p['_id'] for p in week_selection]
+        excluded_ids = recent_ids + week_ids
+        
+        # Calculate how many more posts we need
+        posts_needed = 10 - len(recent_posts) - len(week_selection)
+        
+        # Get random older posts for discovery
+        # Use aggregation with $sample for true random selection
+        older_posts = list(posts_conf.aggregate([
+            {'$match': {'_id': {'$nin': excluded_ids}}},
+            {'$sample': {'size': max(posts_needed, 1)}}
+        ]))
+        
+        # Combine all posts
+        combined_posts = recent_posts + week_selection + older_posts
+        
+        # Shuffle the non-recent posts to create variety, but keep recent posts at top
+        if len(combined_posts) > 4:
+            # Keep first 2 recent posts at top, shuffle the rest
+            top_posts = combined_posts[:2]
+            rest_posts = combined_posts[2:]
+            random.shuffle(rest_posts)
+            combined_posts = top_posts + rest_posts
+        
+        with app.app_context():
+            latest_posts_prepared = prepare_posts(combined_posts[:10])
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."

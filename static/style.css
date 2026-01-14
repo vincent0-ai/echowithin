@@ -1199,15 +1199,23 @@ body {
     .navbar {
         flex-direction: column;
         padding: 1rem;
-        align-items: flex-start;
-        gap: 1rem;
+        align-items: stretch;    /* Allow children to control their own alignment */
+        gap: 0.75rem;
     }
 
-    /* Display nav links directly in the navbar on mobile */
+    /* Keep nav-left left-aligned on mobile */
+    .nav-left {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    /* Display nav links directly in the navbar on mobile - CENTERED */
     .nav-links {
         display: flex;
         flex-direction: row;
         gap: 1rem;
+        justify-content: center; /* Center the nav links */
+        width: 100%;
 
         white-space: nowrap;     /* Prevent wrapping */
         flex-wrap: nowrap;       /* Force all items to stay on one line */
@@ -1223,6 +1231,11 @@ body {
     .nav-links a {
         white-space: nowrap;     /* Prevent individual link text from wrapping */
         flex-shrink: 0;          /* Don't shrink nav items */
+    }
+
+    /* Keep social icons next to brand */
+    .nav-socials {
+        margin-left: 0.5rem;
     }
 
     .container {
@@ -1357,7 +1370,7 @@ body {
     .navbar {
         padding: 0.5rem;
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;    /* Allow children to control their own alignment */
         gap: 0.5rem;
     }
 
@@ -1367,6 +1380,7 @@ body {
         flex-wrap: nowrap;       /* Prevent wrapping on small screens */
         gap: 0.4rem;             /* Reduced gap for small screens */
         width: 100%;
+        justify-content: center; /* Center the nav links */
         overflow-x: auto;        /* Allow horizontal scroll if needed */
         scrollbar-width: none;   /* Hide scrollbar (Firefox) */
         -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
@@ -1392,21 +1406,21 @@ body {
         height: 32px;            /* Smaller logo on small screens */
     }
 
-    /* Show social icons next to brand on small screens */
+    /* Keep brand and socials left-aligned on small screens */
     .nav-left {
         width: 100%;
         display: flex;
         align-items: center;
+        justify-content: flex-start; /* Left-align the brand and socials */
         gap: 0.5rem;
     }
 
-    /* push socials to the right edge of the screen */
+    /* Keep socials next to brand */
     .nav-socials {
         display: flex;
         gap: 0.6rem;
         align-items: center;
-        margin-left: auto;
-        padding-right: 0.5rem; /* start slightly from the right edge */
+        margin-left: 0.5rem;
     }
 
     .nav-socials a {

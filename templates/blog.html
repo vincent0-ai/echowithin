@@ -97,7 +97,7 @@
         <!-- Default Blog Page View with Tabs -->
         <div class="tab-container">
             <div class="tab-buttons">
-                <button class="tab-button active" data-tab="latest-posts">Latest Posts</button>
+                <button class="tab-button active" data-tab="latest-posts">For You</button>
                 <button class="tab-button" data-tab="active-posts">Most Active</button>
                 {% if current_user.is_authenticated %}
                 <button class="tab-button" data-tab="related-posts">Related Posts</button>
@@ -105,6 +105,9 @@
             </div>
 
             <div id="latest-posts" class="tab-content active">
+                <p style="text-align: center; color: #666; font-size: 0.9rem; margin-bottom: 1rem;">
+                    <i class="fas fa-shuffle"></i> A mix of recent and past posts — refresh for more!
+                </p>
                 {% if latest_posts %}
                     {% for post in latest_posts %}
                         {{ render_post_item(post, current_user) }}

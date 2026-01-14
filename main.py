@@ -83,9 +83,15 @@ app.config['REMEMBER_COOKIE_SECURE'] = True  # Only send over HTTPS
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JS access
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True  # Extend cookie on each visit
+app.config['REMEMBER_COOKIE_NAME'] = 'echowithin_remember'  # Custom name for remember cookie
 
 # Session cookie name - helps with PWA cookie isolation
 app.config['SESSION_COOKIE_NAME'] = 'echowithin_session'
+
+# Make all sessions permanent by default for better PWA experience
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
 # Load environment variables from .env file
 
@@ -1472,8 +1478,12 @@ def login():
         remember = request.form.get("remember") == "on" # Check if the "Remember Me" box was checked
         
         # In PWA/Webview context, users expect to stay logged in
-        # If 'remember' is not explicitly unchecked, default to true for better UX
-        if request.headers.get('Display-Mode') == 'standalone': 
+        # Default to true for better UX - users can explicitly log out if needed
+        # Check if running as installed PWA or if remember checkbox is checked
+        is_pwa = request.headers.get('Display-Mode') == 'standalone' or \
+                 request.headers.get('Sec-Fetch-Mode') == 'navigate' and \
+                 request.headers.get('Sec-Fetch-Dest') == 'document'
+        if is_pwa or remember:
             remember = True
         
         user = users_conf.find_one({"username": username})
@@ -1620,10 +1630,10 @@ def google_signup():
         # Clean up session
         session.pop('google_signup_info', None)
 
-        # Log the new user in
+        # Log the new user in with remember=True for PWA persistence
         user = users_conf.find_one({'email': email})
         user_obj = User(user)
-        login_user(user_obj)
+        login_user(user_obj, remember=True)
         flash(f"Account created successfully! Welcome, {username}!", "success")
         return redirect(url_for('home'))
 

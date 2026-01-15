@@ -6,6 +6,9 @@ function convertToLocalTime() {
     const timeElements = document.querySelectorAll('time.local-time');
     
     timeElements.forEach(el => {
+        // Skip if already converted to prevent infinite loops from MutationObserver
+        if (el.hasAttribute('data-converted')) return;
+        
         const isoString = el.getAttribute('datetime');
         if (!isoString) return;
         
@@ -27,6 +30,7 @@ function convertToLocalTime() {
             const localTimeString = date.toLocaleDateString('en-US', options);
             el.textContent = localTimeString;
             el.title = date.toLocaleString(); // Full date on hover
+            el.setAttribute('data-converted', 'true'); // Mark as converted
         } catch (e) {
             console.error('Error converting time:', e);
         }

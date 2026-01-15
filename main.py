@@ -1980,7 +1980,7 @@ def all_posts():
             # Candidate pool: get a reasonable subset to score (limit for performance)
             # Prefer posts that match interests, but also include a sample of other posts
             candidate_query = {'author_id': {'$ne': user_id}, '_id': {'$nin': list(set(interacted_ids))}}
-            candidate_cursor = posts_conf.find(candidate_query, {'_id':1,'slug':1,'title':1,'author':1,'author_id':1,'timestamp':1,'tags':1,'likes_count':1,'view_count':1,'share_count':1,'image_urls':1}).sort('timestamp', -1).limit(500)
+            candidate_cursor = posts_conf.find(candidate_query, {'_id':1,'slug':1,'title':1,'content':1,'author':1,'author_id':1,'timestamp':1,'tags':1,'likes_count':1,'view_count':1,'share_count':1,'image_urls':1,'image_url':1,'image_filename':1,'image_filenames':1,'video_url':1,'video_filename':1,'image_status':1,'status':1,'liked_by':1}).sort('timestamp', -1).limit(500)
             candidate_posts = list(candidate_cursor)
 
             # Score candidates

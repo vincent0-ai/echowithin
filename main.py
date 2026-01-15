@@ -1898,12 +1898,205 @@ def all_posts():
     total_posts = posts_conf.count_documents(filter_query)
     total_pages = math.ceil(total_posts / posts_per_page)
 
-    skip = (page - 1) * posts_per_page
+    # When no tag is selected, construct an ordered list for all posts.
+    # For authenticated users, create a personalized ordering based on their
+    # interactions (likes, comments, saves, authored posts). For anonymous
+    # users, fall back to a deterministic daily mixed feed.
+    if not selected_tag:
+        if current_user.is_authenticated:
+            # --- Build user interest profile (similar logic to /api/posts/related) ---
+            user_id = ObjectId(current_user.id)
+            user_id_str = str(current_user.id)
 
-    # Fetch a slice of all posts for the current page, sorted by newest first
-    posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
-    with app.app_context():
-        posts = prepare_posts(posts)
+            tag_scores = {}
+            author_scores = {}
+
+            WEIGHT_LIKED = 3.0
+            WEIGHT_COMMENTED = 2.5
+            WEIGHT_VIEWED = 0.5
+            WEIGHT_SAVED = 4.0
+            WEIGHT_AUTHORED = 1.0
+
+            # Liked posts
+            liked_posts = posts_conf.find({'liked_by': user_id_str}, {'tags': 1, 'author_id': 1})
+            for p in liked_posts:
+                for t in p.get('tags', []):
+                    tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_LIKED
+                a = p.get('author_id')
+                if a and str(a) != user_id_str:
+                    author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_LIKED
+
+            # Commented posts
+            commented_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
+            if commented_slugs:
+                commented_posts = posts_conf.find({'slug': {'$in': commented_slugs}}, {'tags': 1, 'author_id': 1})
+                for p in commented_posts:
+                    for t in p.get('tags', []):
+                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_COMMENTED
+                    a = p.get('author_id')
+                    if a and str(a) != user_id_str:
+                        author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_COMMENTED
+
+            # Saved posts
+            udoc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
+            saved_ids = udoc.get('saved_posts', []) if udoc else []
+            if saved_ids:
+                saved_docs = posts_conf.find({'_id': {'$in': saved_ids}}, {'tags': 1, 'author_id': 1})
+                for p in saved_docs:
+                    for t in p.get('tags', []):
+                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_SAVED
+                    a = p.get('author_id')
+                    if a and str(a) != user_id_str:
+                        author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_SAVED
+
+            # Authored posts
+            authored = posts_conf.find({'author_id': user_id}, {'tags': 1})
+            for p in authored:
+                for t in p.get('tags', []):
+                    tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_AUTHORED
+
+            # Upvoted comments' posts
+            upvoted_slugs = comments_conf.distinct('post_slug', {'upvoted_by': user_id_str, 'is_deleted': False})
+            if upvoted_slugs:
+                upvoted_posts = posts_conf.find({'slug': {'$in': upvoted_slugs}}, {'tags': 1, 'author_id': 1})
+                for p in upvoted_posts:
+                    for t in p.get('tags', []):
+                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_COMMENTED * 0.5
+
+            # Build set of interacted post ids/slugs to avoid repeating
+            interacted_slugs = set(commented_slugs if commented_slugs else [])
+            interacted_slugs.update(upvoted_slugs if upvoted_slugs else [])
+
+            liked_docs = list(posts_conf.find({'liked_by': user_id_str}, {'_id': 1, 'slug': 1}))
+            interacted_ids = [p['_id'] for p in liked_docs]
+            interacted_slugs.update([p['slug'] for p in liked_docs if p.get('slug')])
+
+            interacted_ids.extend(saved_ids)
+
+            own_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1}))
+            interacted_ids.extend([p['_id'] for p in own_posts])
+            interacted_slugs.update([p['slug'] for p in own_posts if p.get('slug')])
+
+            # Candidate pool: get a reasonable subset to score (limit for performance)
+            # Prefer posts that match interests, but also include a sample of other posts
+            candidate_query = {'author_id': {'$ne': user_id}, '_id': {'$nin': list(set(interacted_ids))}}
+            candidate_cursor = posts_conf.find(candidate_query, {'_id':1,'slug':1,'title':1,'author':1,'author_id':1,'timestamp':1,'tags':1,'likes_count':1,'view_count':1,'share_count':1,'image_urls':1}).sort('timestamp', -1).limit(500)
+            candidate_posts = list(candidate_cursor)
+
+            # Score candidates
+            candidate_slugs = [p['slug'] for p in candidate_posts if p.get('slug')]
+            comment_counts = {}
+            if candidate_slugs:
+                comment_agg = list(comments_conf.aggregate([
+                    {'$match': {'post_slug': {'$in': candidate_slugs}, 'is_deleted': False}},
+                    {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+                ]))
+                comment_counts = {doc['_id']: doc['count'] for doc in comment_agg}
+
+            scored = []
+            now = datetime.datetime.now(datetime.timezone.utc)
+            for p in candidate_posts:
+                score = 0.0
+                for t in p.get('tags', []):
+                    if t in tag_scores:
+                        score += tag_scores[t] * 2
+                aid = str(p.get('author_id',''))
+                if aid in author_scores:
+                    score += author_scores[aid] * 3
+                likes = p.get('likes_count', 0) or 0
+                views = p.get('view_count', 0) or 0
+                comments = comment_counts.get(p.get('slug'), 0)
+                shares = p.get('share_count', 0) or 0
+                engagement = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
+                score += min(engagement, 50)
+                post_time = p.get('timestamp')
+                if post_time:
+                    if post_time.tzinfo is None:
+                        post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                    hours_old = (now - post_time).total_seconds() / 3600
+                    recency = max(0, 1 - (hours_old / (24 * 7)))
+                    score += recency * 10
+                unique_tags = set(p.get('tags', [])) - set(tag_scores.keys())
+                if unique_tags:
+                    score += len(unique_tags) * 0.5
+                p['_score'] = score
+                p['comment_count'] = comments
+                scored.append(p)
+
+            scored.sort(key=lambda x: x['_score'], reverse=True)
+
+            # Build final ordered list: 4 most recent (fixed), then personalized scored list, then remaining posts
+            recent_all = list(posts_conf.find(filter_query).sort('timestamp', -1))
+            recent_top = recent_all[:4]
+            recent_ids = set([p['_id'] for p in recent_top])
+
+            scored_ids = set([p['_id'] for p in scored])
+            remaining_cursor = posts_conf.find({**filter_query, '_id': {'$nin': list(recent_ids.union(scored_ids))}})
+            remaining = list(remaining_cursor)
+
+            ordered = recent_top + scored + remaining
+
+            # Shuffle rest of the list on every load for variety while keeping top 2 fixed
+            import random
+            if len(ordered) > 4:
+                top_fixed = ordered[:2]
+                rest = ordered[2:]
+                random.shuffle(rest)
+                ordered = top_fixed + rest
+            else:
+                random.shuffle(ordered)
+
+            # Paginate slices from ordered list
+            start = (page - 1) * posts_per_page
+            end = page * posts_per_page
+            page_slice = ordered[start:end]
+
+            with app.app_context():
+                posts = prepare_posts(page_slice)
+        else:
+            # Anonymous users: mixed feed shuffled on every load for variety
+            import random
+
+            # Fetch the 4 most recent posts (preserve freshness at top)
+            recent_posts_full = list(posts_conf.find(filter_query).sort('timestamp', -1))
+            recent_top = recent_posts_full[:4]
+            recent_ids = [p['_id'] for p in recent_top]
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+            one_week_ago = now - datetime.timedelta(days=7)
+
+            # Select up to 3 posts from the past week excluding the recent_top
+            week_posts = list(posts_conf.find({**filter_query, '_id': {'$nin': recent_ids}, 'timestamp': {'$gte': one_week_ago}}).sort('timestamp', -1))
+            if len(week_posts) > 3:
+                week_selection = random.sample(week_posts, 3)
+            else:
+                week_selection = week_posts
+            week_ids = [p['_id'] for p in week_selection]
+
+            excluded_ids = set(recent_ids + week_ids)
+
+            # Remaining posts (everything else) — shuffle on every load
+            remaining_cursor = posts_conf.find({**filter_query, '_id': {'$nin': list(excluded_ids)}})
+            remaining_posts = list(remaining_cursor)
+            random.shuffle(remaining_posts)
+
+            # Combined ordered list for pagination (no duplicates)
+            combined = recent_top + week_selection + remaining_posts
+
+            # Keep recent top 2 fixed and shuffle the rest for variety
+            if len(combined) > 4:
+                top_fixed = combined[:2]
+                rest = combined[2:]
+                random.shuffle(rest)
+                combined = top_fixed + rest
+
+            # Compute slice for requested page
+            start = (page - 1) * posts_per_page
+            end = page * posts_per_page
+            page_slice = combined[start:end]
+
+            with app.app_context():
+                posts = prepare_posts(page_slice)
 
     # Get all unique tags for the dropdown
     all_tags = posts_conf.distinct('tags')

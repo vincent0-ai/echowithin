@@ -332,8 +332,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
-        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }
-    };
+        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
     const form = document.getElementById('comment-form');
     let currentPage = {{ comment_page | default (1) }};
     const perPage = {{ per_page | default (10) }};

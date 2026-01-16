@@ -2111,6 +2111,12 @@ def all_posts():
 
             with app.app_context():
                 posts = prepare_posts(page_slice)
+    else:
+        # When a tag is selected, simply query posts with that tag
+        skip = (page - 1) * posts_per_page
+        filtered_posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
+        with app.app_context():
+            posts = prepare_posts(filtered_posts)
 
     # Get all unique tags for the dropdown
     all_tags = posts_conf.distinct('tags')

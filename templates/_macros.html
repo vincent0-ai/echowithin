@@ -119,23 +119,25 @@
     <div class="post-actions" style="margin-top: 10px;">
         {# Reaction Button and Menu #}
         {% set reactions = post.reactions|default({}) %}
-        {% set user_reaction = None %}
+        {% set ns = namespace(user_reaction=None) %}
+        {% if current_user.is_authenticated %}
         {% for r_type, users in reactions.items() %}
         {% if current_user.id|string in users|map('string')|list %}
-        {% set user_reaction = r_type %}
+        {% set ns.user_reaction = r_type %}
         {% endif %}
         {% endfor %}
+        {% endif %}
 
         <div class="reaction-container" data-post-id="{{ post._id|string }}">
-            <button class="reaction-btn {% if user_reaction %}reacted{% endif %}"
-                data-current-reaction="{{ user_reaction|default('') }}" {% if not current_user.is_authenticated
+            <button class="reaction-btn {% if ns.user_reaction %}reacted{% endif %}"
+                data-current-reaction="{{ ns.user_reaction|default('') }}" {% if not current_user.is_authenticated
                 %}disabled title="Log in to react" {% endif %}>
                 <span class="reaction-icon">
-                    {% if user_reaction == 'heart' %}❤️
-                    {% elif user_reaction == 'wow' %}😮
-                    {% elif user_reaction == 'insightful' %}💡
-                    {% elif user_reaction == 'laugh' %}😂
-                    {% elif user_reaction == 'sad' %}😢
+                    {% if ns.user_reaction == 'heart' %}❤️
+                    {% elif ns.user_reaction == 'wow' %}😮
+                    {% elif ns.user_reaction == 'insightful' %}💡
+                    {% elif ns.user_reaction == 'laugh' %}😂
+                    {% elif ns.user_reaction == 'sad' %}😢
                     {% else %}<i class="far fa-heart"></i>{% endif %}
                 </span>
                 <span class="likes-count">{{ post.likes_count|default(0) }}</span>

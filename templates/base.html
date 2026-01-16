@@ -140,6 +140,12 @@
             transform: translateY(0);
         }
 
+        /* Force hide menu when closing (used by JS after selection) */
+        .reaction-container.menu-closing .reaction-menu {
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
+
         .reaction-option {
             background: none;
             border: none;
@@ -488,8 +494,9 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
+    if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {
@@ -725,6 +732,16 @@
                 const postId = reactionContainer.dataset.postId;
                 const reactionBtn = reactionContainer.querySelector('.reaction-btn');
                 const targetReaction = reactionOption.dataset.reaction;
+
+                // Close the menu immediately by adding a class
+                reactionContainer.classList.add('menu-closing');
+
+                // Remove the class when mouse leaves (so hover works again next time)
+                const removeClosingClass = () => {
+                    reactionContainer.classList.remove('menu-closing');
+                    reactionContainer.removeEventListener('mouseleave', removeClosingClass);
+                };
+                reactionContainer.addEventListener('mouseleave', removeClosingClass);
 
                 handleReaction(postId, targetReaction, reactionBtn);
             }

@@ -184,10 +184,21 @@
         .footer-content {
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 1rem;
+            box-sizing: border-box;
+        }
+
+        .footer-newsletter {
+            box-sizing: border-box;
+            max-width: 100%;
         }
 
         .footer-links {
             margin: 0.5rem 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
         }
 
         .footer-links a {
@@ -203,6 +214,41 @@
 
         .footer-socials a {
             font-size: 1.5rem;
+        }
+
+        /* Prevent horizontal overflow */
+        html,
+        body {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+
+        /* Mobile responsive styles */
+        @media (max-width: 600px) {
+            .footer-newsletter {
+                padding: 1rem !important;
+                margin: 1rem 0 !important;
+            }
+
+            #newsletter-form {
+                flex-direction: column !important;
+                max-width: 100% !important;
+            }
+
+            #newsletter-form input,
+            #newsletter-form button {
+                width: 100% !important;
+                box-sizing: border-box;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+
+            .footer-links a {
+                margin: 0;
+            }
         }
     </style>
 
@@ -458,8 +504,9 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
+    if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {

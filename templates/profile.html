@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>Profile: {{ user.username }}</title>
+<title>Profile: {{ user.username }}</title>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
     <div class="profile-container">
-        <div class="profile-sidebar"> 
-            <img src="{{ user.profile_image_url if user.profile_image_url else url_for('static', filename='default_avatar.png') }}" alt="Profile picture for {{ user.username }}" class="profile-picture">
+        <div class="profile-sidebar">
+            <img src="{{ user.profile_image_url if user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
+                alt="Profile picture for {{ user.username }}" class="profile-picture">
             <h1 class="profile-username">{{ user.username }}</h1>
             {% if user.bio %}
-                <p class="profile-bio">{{ user.bio }}</p>
+            <p class="profile-bio">{{ user.bio }}</p>
             {% endif %}
             <div class="profile-stats">
                 <div class="stat-item"><strong>{{ total_posts }}</strong> Posts</div>
@@ -19,64 +20,84 @@
             </div>
             <div class="profile-meta">
                 {% if user.join_date %}
-                    <div class="profile-meta-item">
-                        <i class="fas fa-calendar-alt"></i> Member since {{ user.join_date.strftime('%B %Y') }}
-                    </div>
+                <div class="profile-meta-item">
+                    <i class="fas fa-calendar-alt"></i> Member since {{ user.join_date.strftime('%B %Y') }}
+                </div>
                 {% endif %}
             </div>
             {% if current_user and current_user.username == user.username %}
-                <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn" style="width: 100%; margin-top: 1rem;">
-                    <i class="fas fa-cog"></i> Edit Profile
-                </a>
-                <a href="{{ url_for('personal_space') }}" class="btn" style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">
-                     Personal Space
-                </a>
+            <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn"
+                style="width: 100%; margin-top: 1rem;">
+                <i class="fas fa-cog"></i> Edit Profile
+            </a>
+            <a href="{{ url_for('personal_space') }}" class="btn"
+                style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">
+                Personal Space
+            </a>
             {% endif %}
+
+            <!-- Newsletter Subscription -->
+            <div class="footer-newsletter"
+                style="margin-top: 1.5rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <h4 style="margin-bottom: 0.5rem; color: #333; font-size: 0.95rem;">Subscribe to Newsletter</h4>
+                <p style="font-size: 0.8rem; margin-bottom: 0.75rem; color: #666;">Get the latest posts delivered to
+                    your inbox.</p>
+                <form id="newsletter-form" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <input type="email" id="newsletter-email" placeholder="your@email.com" required
+                        style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 5px; font-size: 0.85rem;">
+                    <button type="submit" class="btn comment-btn"
+                        style="width: 100%; padding: 0.5rem;">Subscribe</button>
+                </form>
+                <div id="newsletter-message" style="margin-top: 0.5rem; font-size: 0.8rem; min-height: 1rem;"></div>
+            </div>
         </div>
 
         <div class="profile-main-content">
             <h2 class="section-title">Posts by {{ user.username }}</h2>
             {% if user_posts %}
-                <div class="profile-posts-list">
+            <div class="profile-posts-list">
                 {% for post in user_posts %}
-                    <div class="post-item-simple">
-                        <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
-                        <p class="post-meta">Posted on {{ post.timestamp|localtime('%B %d, %Y') }}</p>
-                    </div>
-                {% endfor %}
+                <div class="post-item-simple">
+                    <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
+                    <p class="post-meta">Posted on {{ post.timestamp|localtime('%B %d, %Y') }}</p>
                 </div>
+                {% endfor %}
+            </div>
             {% else %}
-                <p>{{ user.username }} has not created any posts yet.</p>
+            <p>{{ user.username }} has not created any posts yet.</p>
             {% endif %}
             {% if user_posts and total_pages > 1 %}
             <nav class="pagination-nav" style="margin-top: 2rem;">
                 <ul class="pagination">
                     {% if page > 1 %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('profile', username=user.username, page=page-1) }}">Previous</a>
+                        <a class="page-link"
+                            href="{{ url_for('profile', username=user.username, page=page-1) }}">Previous</a>
                     </li>
                     {% endif %}
-                    
+
                     {% set max_visible = [8, page + 1] | max %}
                     {% for p in range(1, [max_visible + 1, total_pages + 1] | min) %}
                     <li class="page-item {% if p == page %}active{% endif %}">
                         <a class="page-link" href="{{ url_for('profile', username=user.username, page=p) }}">{{ p }}</a>
                     </li>
                     {% endfor %}
-                    
-                    {% if max_visible < total_pages - 1 %}
-                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                    {% endif %}
-                    
-                    {% if max_visible < total_pages %}
-                    <li class="page-item {% if total_pages == page %}active{% endif %}">
-                        <a class="page-link" href="{{ url_for('profile', username=user.username, page=total_pages) }}">{{ total_pages }}</a>
-                    </li>
-                    {% endif %}
-                    
-                    {% if page < total_pages %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('profile', username=user.username, page=page+1) }}">Next</a></li>
-                    {% endif %}
+
+                    {% if max_visible < total_pages - 1 %} <li class="page-item disabled"><span
+                            class="page-link">...</span></li>
+                        {% endif %}
+
+                        {% if max_visible < total_pages %} <li
+                            class="page-item {% if total_pages == page %}active{% endif %}">
+                            <a class="page-link"
+                                href="{{ url_for('profile', username=user.username, page=total_pages) }}">{{ total_pages
+                                }}</a>
+                            </li>
+                            {% endif %}
+
+                            {% if page < total_pages %} <li class="page-item"><a class="page-link"
+                                    href="{{ url_for('profile', username=user.username, page=page+1) }}">Next</a></li>
+                                {% endif %}
                 </ul>
             </nav>
             {% endif %}

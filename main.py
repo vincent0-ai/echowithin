@@ -70,7 +70,6 @@ if not app.debug:
     app.logger.info('EchoWithin application startup')
 
 login_manager = LoginManager(app)
-rq = RQ(app)
 login_manager.login_view = 'login'  # snyk:disable=security-issue
 
 # Secure session cookie settings
@@ -167,6 +166,10 @@ REDIS_PASSWORD = get_env_variable('REDIS_PASSWORD') # Password can be optional
 redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 app.config['RQ_REDIS_URL'] = redis_url
+
+# Initialize Flask-RQ2 AFTER redis URL is configured
+# This must happen after RQ_REDIS_URL is set, otherwise it defaults to localhost:6379
+rq = RQ(app)
 
 # Create Redis client for caching (separate from RQ)
 try:

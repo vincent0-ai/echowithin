@@ -749,6 +749,73 @@ def send_new_post_notifications(post_id_str):
 
 
 @rq.job
+def send_weekly_newsletter():
+    """Sends a weekly digest of all posts from the past week to newsletter subscribers."""
+    try:
+        with app.app_context():
+            # Calculate the date range for the past week
+            now = datetime.datetime.now(datetime.timezone.utc)
+            week_ago = now - datetime.timedelta(days=7)
+            
+            # Query posts from the last 7 days
+            posts_cursor = posts_conf.find({
+                'timestamp': {'$gte': week_ago}
+            }).sort('timestamp', -1)
+            
+            posts_list = list(posts_cursor)
+            
+            # Build URLs for each post
+            base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+            for post in posts_list:
+                try:
+                    post['url'] = url_for('view_post', slug=post.get('slug'), _external=True)
+                except RuntimeError:
+                    post['url'] = f"{base_url}/post/{post.get('slug')}"
+            
+            # Format dates for the email
+            week_start = week_ago.strftime('%B %d')
+            week_end = now.strftime('%B %d, %Y')
+            
+            # Get all newsletter subscribers
+            subscribers = list(newsletter_conf.find({}, {'email': 1}))
+            
+            if not subscribers:
+                app.logger.info("No newsletter subscribers found, skipping weekly newsletter")
+                return
+            
+            subject = f"EchoWithin Weekly Digest - {week_end}"
+            sender_email = get_env_variable('MAIL_USERNAME')
+            
+            sent_count = 0
+            for subscriber in subscribers:
+                try:
+                    recipient_email = subscriber.get('email')
+                    if not recipient_email:
+                        continue
+                    
+                    msg = Message(
+                        subject=subject,
+                        sender=sender_email,
+                        recipients=[recipient_email]
+                    )
+                    msg.html = render_template(
+                        'weekly_newsletter.html',
+                        posts=posts_list,
+                        week_start=week_start,
+                        week_end=week_end
+                    )
+                    mail.send(msg)
+                    sent_count += 1
+                    app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
+                except Exception as e:
+                    app.logger.error(f"Failed to send weekly newsletter to {subscriber.get('email')}: {e}")
+            
+            app.logger.info(f"Weekly newsletter sent to {sent_count} subscribers with {len(posts_list)} posts")
+    except Exception as e:
+        app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
+
+
+@rq.job
 def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None):
     """Send a web push notification to all devices subscribed by a user."""
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:

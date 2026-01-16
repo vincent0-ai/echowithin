@@ -2001,7 +2001,7 @@ body {
     }
 
     .content-wrapper {
-        padding: 0 !important;
+        padding: 1rem 1rem !important;
     }
 
     /* Reduce bottom margin before footer */

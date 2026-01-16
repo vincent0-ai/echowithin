@@ -167,12 +167,42 @@ REDIS_PASSWORD = get_env_variable('REDIS_PASSWORD') # Password can be optional
 redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 app.config['RQ_REDIS_URL'] = redis_url
+
+# Create Redis client for caching (separate from RQ)
+try:
+    redis_cache = redis.Redis(
+        host=REDIS_HOST,
+        port=int(REDIS_PORT),
+        password=REDIS_PASSWORD,
+        decode_responses=True,
+        socket_connect_timeout=5
+    )
+    redis_cache.ping()  # Test connection
+    app.logger.info('Redis cache connection established')
+except Exception as e:
+    app.logger.warning(f'Redis cache not available, using in-memory cache: {e}')
+    redis_cache = None
+
+# In-memory cache fallback for pinned announcements (60 second TTL)
+_pinned_announcement_cache = TTLCache(maxsize=1, ttl=60)
+
 mail = Mail(app)
 
 TIME = int(get_env_variable('TIME'))
 
 
-client = MongoClient(get_env_variable('MONGODB_CONNECTION'))
+# MongoDB connection with connection pooling for better performance
+# maxPoolSize: Maximum number of connections in the pool
+# minPoolSize: Minimum number of connections to maintain
+# serverSelectionTimeoutMS: How long to wait for server selection
+client = MongoClient(
+    get_env_variable('MONGODB_CONNECTION'),
+    maxPoolSize=10,  # Limit pool size for 2GB RAM VPS
+    minPoolSize=2,   # Keep minimum connections ready
+    serverSelectionTimeoutMS=5000,  # 5 second timeout
+    connectTimeoutMS=10000,  # 10 second connection timeout
+    socketTimeoutMS=30000,   # 30 second socket timeout
+)
 db = client['echowithin_db']
 users_conf = db['users']
 posts_conf = db['posts']
@@ -481,21 +511,45 @@ class User(UserMixin):
 
 @app.before_request
 def update_last_active():
-    """Update a user's last active timestamp on each request."""
+    """Update a user's last active timestamp with debouncing (every 5 minutes) to reduce DB load."""
     if current_user.is_authenticated:
+        user_id = current_user.id
+        cache_key = f"last_active:{user_id}"
+        
+        # Check if we recently updated (within 5 minutes)
+        should_update = True
+        if redis_cache:
+            try:
+                if redis_cache.exists(cache_key):
+                    should_update = False
+            except Exception:
+                pass  # Redis error, fall through to DB check
+        
+        if not should_update:
+            # Skip DB queries entirely if recently updated
+            return
+        
         # Fetch the full user document to check for ban status
-        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+        user_doc = users_conf.find_one({'_id': ObjectId(user_id)}, {'is_banned': 1})
 
         # If user is banned, log them out immediately.
         if user_doc and user_doc.get('is_banned'):
             logout_user()
             flash('Your account has been suspended. Please contact support.', 'danger')
-            # Redirect to login to prevent further access to authenticated routes
             return redirect(url_for('login'))
         
-        # If user is not banned, update their last active time
+        # Update last active time and set cache to prevent frequent updates
         if user_doc:
-            users_conf.update_one({'_id': user_doc['_id']}, {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}})
+            users_conf.update_one(
+                {'_id': ObjectId(user_id)},
+                {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
+            )
+            # Set cache key with 5 minute expiry to debounce updates
+            if redis_cache:
+                try:
+                    redis_cache.setex(cache_key, 300, '1')  # 300 seconds = 5 minutes
+                except Exception:
+                    pass
 
 
 @app.before_request
@@ -582,8 +636,40 @@ def owner_required(f):
 
 @app.context_processor
 def inject_pinned_announcement():
-    """Makes the pinned announcement available to all templates."""
+    """Makes the pinned announcement available to all templates (cached for 60s)."""
+    cache_key = 'pinned_announcement'
+    
+    # Try Redis cache first
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                if cached == '__none__':
+                    return dict(pinned_announcement=None)
+                return dict(pinned_announcement=json.loads(cached))
+        except Exception:
+            pass
+    
+    # Try in-memory cache
+    if cache_key in _pinned_announcement_cache:
+        return dict(pinned_announcement=_pinned_announcement_cache[cache_key])
+    
+    # Fetch from DB
     pinned_announcement = announcements_conf.find_one({'is_pinned': True})
+    
+    # Cache the result
+    if redis_cache:
+        try:
+            if pinned_announcement:
+                # Convert ObjectId to string for JSON serialization
+                cache_doc = {k: str(v) if isinstance(v, ObjectId) else v for k, v in pinned_announcement.items()}
+                redis_cache.setex(cache_key, 60, json.dumps(cache_doc, default=str))
+            else:
+                redis_cache.setex(cache_key, 60, '__none__')
+        except Exception:
+            pass
+    
+    _pinned_announcement_cache[cache_key] = pinned_announcement
     return dict(pinned_announcement=pinned_announcement)
 
 ## Remark42 removed: internal comments will be used instead.

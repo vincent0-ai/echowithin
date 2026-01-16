@@ -96,7 +96,7 @@ Optional / integrations (recommended for full feature set):
 - `JIGSAW_API_KEY` : JigsawStack API key used for NSFW detection
 - `MY_EMAIL` : Developer/system email used for admin log deliveries
 - `NTFY_TOPIC`, `NTFY_USERNAME`, `NTFY_PASSWORD` : `ntfy` push notifications
-- `REMARK42_HOST`, `REMARK42_SITE_ID`, `REMARK42_INTERNAL` : (legacy) remark42 settings if used
+
 
 Sample `.env` contents (fill values appropriately):
 

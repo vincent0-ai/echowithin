@@ -4,66 +4,71 @@
 
 {% block content %}
 <div class="blog-container">
-    <header class="blog-header">
-        <h1>Admin Post Management</h1>
-        <a href="{{ url_for('blog') }}" class="btn edit-btn" style="margin-top: 1rem;">&larr; Back to Blog</a>
-    </header>
+  <header class="blog-header">
+    <h1>Admin Post Management</h1>
+    <a href="{{ url_for('blog') }}" class="btn edit-btn" style="margin-top: 1rem;">&larr; Back to Blog</a>
+  </header>
 
-    <!-- Search Form -->
-    <form action="{{ url_for('admin_posts') }}" method="GET" class="search-form" style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
-        <input type="text" name="query" class="form-input" placeholder="Search by title or content..." value="{{ query or '' }}" style="width: 70%;">
-        <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
-    </form>
+  <!-- Search Form -->
+  <form action="{{ url_for('admin_posts') }}" method="GET" class="search-form"
+    style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
+    <input type="text" name="query" class="form-input" placeholder="Search by title or content..."
+      value="{{ query or '' }}" style="width: 70%;">
+    <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
+  </form>
 
-    <div class="posts-section">
-        <h2>{{ 'Search Results' if query else 'All Posts' }}</h2>
-        <div class="posts-list">
-            {% for post in posts %}
-            <div class="post-item">
-                <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
-                {% if post.content|length > 150 %}
-                    <p>{{ (post.content[:150] ~ '...') | linkify | safe }}</p>
-                {% else %}
-                    <p>{{ post.content | linkify | safe }}</p>
-                {% endif %}
-                <div class="post-meta">
-                  {% if post.edited_at %}
-                    Edited on {{ post.edited_at|localtime }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
-                  {% else %}
-                    Posted by <strong>{{ post.author }}</strong>
-                  {% endif %}
-                </div>
-                <div class="post-actions">
-                    <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST" data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">
-                        <button type="submit" class="delete-btn">Delete Post</button>
-                    </form>
-                </div>
-            </div>
-            {% else %}
-            <p>No posts found.</p>
-            {% endfor %}
-        </div>
-
-        {# Pagination Links #}
-        {% if total_pages > 1 %}
-        <nav aria-label="Page navigation" class="pagination-nav">
-          <ul class="pagination">
-            {# Link to the Previous Page #}
-            <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin_posts', page=page-1, query=query) }}">Previous</a>
-            </li>
-        
-            {# Link to the Next Page #}
-            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin_posts', page=page+1, query=query) }}">Next</a>
-            </li>
-
-            <li class="page-item" style="margin-left: auto;">
-              <a class="page-link" href="{{ url_for('blog') }}">Home</a>
-            </li>
-          </ul>
-        </nav>
+  <div class="posts-section">
+    <h2>{{ 'Search Results' if query else 'All Posts' }}</h2>
+    <div class="posts-list">
+      {% for post in posts %}
+      <div class="post-item">
+        <h3><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
+        {% if post.content|length > 150 %}
+        <p>{{ (post.content[:150] ~ '...') | linkify | safe }}</p>
+        {% else %}
+        <p>{{ post.content | linkify | safe }}</p>
         {% endif %}
+        <div class="post-meta">
+          {% if post.edited_at %}
+          Edited on {{ post.edited_at|localtime }} by <strong><a
+              href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+          {% else %}
+          Posted by <strong>{{ post.author }}</strong>
+          {% endif %}
+        </div>
+        <div class="post-actions">
+          <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST"
+            data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="delete-btn">Delete Post</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p>No posts found.</p>
+      {% endfor %}
     </div>
+
+    {# Pagination Links #}
+    {% if total_pages > 1 %}
+    <nav aria-label="Page navigation" class="pagination-nav">
+      <ul class="pagination">
+        {# Link to the Previous Page #}
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('admin_posts', page=page-1, query=query) }}">Previous</a>
+        </li>
+
+        {# Link to the Next Page #}
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+          <a class="page-link" href="{{ url_for('admin_posts', page=page+1, query=query) }}">Next</a>
+        </li>
+
+        <li class="page-item" style="margin-left: auto;">
+          <a class="page-link" href="{{ url_for('blog') }}">Home</a>
+        </li>
+      </ul>
+    </nav>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}

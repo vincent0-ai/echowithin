@@ -1,37 +1,45 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block head_meta %}
 {% if meta_url %}
-    <link rel="canonical" href="{{ meta_url }}">
-    <meta property="og:url" content="{{ meta_url }}" />
+<link rel="canonical" href="{{ meta_url }}">
+<meta property="og:url" content="{{ meta_url }}" />
 {% endif %}
 {% if title %}
-    <meta property="og:title" content="{{ title }}" />
+<meta property="og:title" content="{{ title }}" />
 {% endif %}
 {% if description %}
-    <meta property="og:description" content="{{ description }}" />
+<meta property="og:description" content="{{ description }}" />
 {% endif %}
 {% if meta_image %}
-    <meta property="og:image" content="{{ meta_image }}" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="{{ meta_image }}" />
+<meta property="og:image" content="{{ meta_image }}" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="{{ meta_image }}" />
 {% endif %}
 {% if meta_jsonld %}
-    <script type="application/ld+json">{{ meta_jsonld|safe }}</script>
+<script type="application/ld+json">{{ meta_jsonld|safe }}</script>
 {% endif %}
 {# Add Prism.js for syntax highlighting in code blocks #}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js" defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"
+    defer></script>
 <style>
-    .comment-replies { margin-left: 32px; border-left: 2px solid #f4f4f4; padding-left: 12px; }
-    .comment-item { margin-bottom: 6px; }
-    
+    .comment-replies {
+        margin-left: 32px;
+        border-left: 2px solid #f4f4f4;
+        padding-left: 12px;
+    }
+
+    .comment-item {
+        margin-bottom: 6px;
+    }
+
     /* Unify all comment action buttons and links */
     .comment-actions .reply-btn,
     .comment-actions .edit-btn,
@@ -41,37 +49,70 @@
     .comment-actions .action-link {
         background: none !important;
         border: none !important;
-        color: #007bff !important; /* A standard blue color */
+        color: #007bff !important;
+        /* A standard blue color */
         padding: 0 !important;
         margin-right: 12px !important;
         cursor: pointer !important;
         font-size: 0.85rem !important;
-        text-decoration: none !important; /* Keep for link-like appearance */
+        text-decoration: none !important;
+        /* Keep for link-like appearance */
     }
+
     .comment-actions .reply-btn:hover,
     .comment-actions .edit-btn:hover,
     .comment-actions .delete-comment:hover,
     .comment-actions .toggle-replies:hover,
     .comment-actions .action-link:hover {
         text-decoration: underline !important;
-        color: #1e88e5 !important; /* A slightly darker blue on hover */
+        color: #1e88e5 !important;
+        /* A slightly darker blue on hover */
     }
 
     /* Hide reply comment items by default (they will have data-parent attr) */
-    .comment-item[data-parent] { display: none; margin-left: 28px; }
+    .comment-item[data-parent] {
+        display: none;
+        margin-left: 28px;
+    }
+
     /* Post comment button (maroon) */
-    #comment-submit { background: #800000; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-    #comment-submit:hover { opacity: 0.95; }
-    #comment-form textarea, .reply-form textarea, .edit-form textarea { border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
-    #comment-form button, .reply-form button, .edit-form button { margin-top: 6px; }
+    #comment-submit {
+        background: #800000;
+        color: #fff;
+        border: none;
+        padding: 8px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    #comment-submit:hover {
+        opacity: 0.95;
+    }
+
+    #comment-form textarea,
+    .reply-form textarea,
+    .edit-form textarea {
+        border: 1px solid #ccc;
+        padding: 8px;
+        border-radius: 4px;
+    }
+
+    #comment-form button,
+    .reply-form button,
+    .edit-form button {
+        margin-top: 6px;
+    }
 
     /* Styles for comment text size */
     .comment-meta {
-        font-size: 0.8rem; /* Smaller font for username and date */
+        font-size: 0.8rem;
+        /* Smaller font for username and date */
         color: #666;
     }
+
     .comment-body {
-        font-size: 0.95rem; /* Slightly smaller font for the comment content */
+        font-size: 0.95rem;
+        /* Slightly smaller font for the comment content */
     }
 
     /* Styles for comment voting */
@@ -81,94 +122,111 @@
         gap: 4px;
         font-size: 0.85rem;
     }
-    .upvote-btn.voted, .upvote-btn:hover {
-        color: lightblue; /* Use your site's primary color */
-    }
 
+    .upvote-btn.voted,
+    .upvote-btn:hover {
+        color: lightblue;
+        /* Use your site's primary color */
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
-    <div class="post-item" style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
-            <div class="post-header" style="align-items: flex-start; gap: 0.6rem; flex-wrap: wrap;">
-                <h1 class="post-title single-post-title" style="margin:0; flex: 1 1 auto; min-width: 0; font-size: 1.4rem; word-wrap: break-word; overflow-wrap: break-word;">{{ post.title }}</h1>
-                <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap; flex-shrink: 0;">
-                    {# Like Button #}
-                    {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
-                    <button class="like-btn {% if is_liked %}liked{% endif %}" 
-                            data-post-id="{{ post._id|string }}"
-                            {% if not current_user.is_authenticated %}disabled title="Log in to like"{% endif %}>
-                        <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
-                        <span class="likes-count">{{ post.likes_count|default(0) }}</span>
-                    </button>
-                    {# Share Button #}
-                    <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
-                        <i class="fas fa-share-alt"></i>
-                        <span class="share-count">{{ post.share_count|default(0) }}</span>
-                    </button>
-                    <div class="post-views" title="Views">
-                        <i class="fa-regular fa-eye"></i>
-                        <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
-                    </div>
-                    {% if current_user.is_authenticated %}
-                    <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="margin: 0;">
-                        <button type="submit" style="background: none; border: none; cursor: pointer; color: {% if is_saved %}#d63384{% else %}#6c757d{% endif %}; font-size: 1.2rem; padding: 0;" title="{% if is_saved %}Unsave Post{% else %}Save Post{% endif %}">
-                            <i class="{% if is_saved %}fas{% else %}far{% endif %} fa-bookmark"></i>
-                        </button>
-                    </form>
-                    {% endif %}
+    <div class="post-item"
+        style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
+        <div class="post-header" style="align-items: flex-start; gap: 0.6rem; flex-wrap: wrap;">
+            <h1 class="post-title single-post-title"
+                style="margin:0; flex: 1 1 auto; min-width: 0; font-size: 1.4rem; word-wrap: break-word; overflow-wrap: break-word;">
+                {{ post.title }}</h1>
+            <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap; flex-shrink: 0;">
+                {# Like Button #}
+                {% set is_liked = current_user.is_authenticated and current_user.id in
+                (post.liked_by|default([])|map('string')|list) %}
+                <button class="like-btn {% if is_liked %}liked{% endif %}" data-post-id="{{ post._id|string }}" {% if
+                    not current_user.is_authenticated %}disabled title="Log in to like" {% endif %}>
+                    <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
+                    <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+                </button>
+                {# Share Button #}
+                <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
+                    <i class="fas fa-share-alt"></i>
+                    <span class="share-count">{{ post.share_count|default(0) }}</span>
+                </button>
+                <div class="post-views" title="Views">
+                    <i class="fa-regular fa-eye"></i>
+                    <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0
+                        }}</span>
                 </div>
+                {% if current_user.is_authenticated %}
+                <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="margin: 0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit"
+                        style="background: none; border: none; cursor: pointer; color: {% if is_saved %}#d63384{% else %}#6c757d{% endif %}; font-size: 1.2rem; padding: 0;"
+                        title="{% if is_saved %}Unsave Post{% else %}Save Post{% endif %}">
+                        <i class="{% if is_saved %}fas{% else %}far{% endif %} fa-bookmark"></i>
+                    </button>
+                </form>
+                {% endif %}
             </div>
+        </div>
         <div class="post-meta">
             {% if post.edited_at %}
-                Edited on {{ post.edited_at|localtime }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+            Edited on {{ post.edited_at|localtime }} by <strong><a
+                    href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
             {% else %}
-                Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on {{ post.timestamp|localtime }}
+            Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
+            {{ post.timestamp|localtime }}
             {% endif %}
         </div>
 
         {% if post.video_url %}
-            <div class="post-media-container">
-                <video class="post-video" controls preload="metadata">
-                    <source src="{{ post.video_url }}" type="video/{{ post.video_url.rsplit('.', 1)[1] if '.' in post.video_url else 'mp4' }}">
-                    Your browser does not support the video tag.
-                </video>
-            </div>
+        <div class="post-media-container">
+            <video class="post-video" controls preload="metadata">
+                <source src="{{ post.video_url }}"
+                    type="video/{{ post.video_url.rsplit('.', 1)[1] if '.' in post.video_url else 'mp4' }}">
+                Your browser does not support the video tag.
+            </video>
+        </div>
         {% elif post.image_urls %}
-            {% set images = post.image_urls %}
-            {% if images|length > 1 %}
-                <div class="post-gallery">
-                    {% for img in images %}
-                        <div class="post-gallery-item">
-                            <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
-                    {% if post.image_status == 'safe' %}
-                        <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ images[0] }}">
-                    {% elif post.image_status == 'removed_nsfw' %}
-                        <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
-                    {% endif %}
-                </div>
+        {% set images = post.image_urls %}
+        {% if images|length > 1 %}
+        <div class="post-gallery">
+            {% for img in images %}
+            <div class="post-gallery-item">
+                <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}"
+                    class="gallery-thumb" />
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+            {% if post.image_status == 'safe' %}
+            <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image"
+                data-full-url="{{ images[0] }}">
+            {% elif post.image_status == 'removed_nsfw' %}
+            <div class="nsfw-placeholder">Image removed for containing sensitive content.</div>
             {% endif %}
+        </div>
+        {% endif %}
         {% elif post.image_filenames %}
-            {% set files = post.image_filenames %}
-            {% if files|length > 1 %}
-                <div class="post-gallery">
-                    {% for fname in files %}
-                        <div class="post-gallery-item">
-                            <img src="{{ url_for('uploaded_file', filename=fname) }}" data-full-url="{{ url_for('uploaded_file', filename=fname) }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="post-image-container">
-                    <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
-                </div>
-            {% endif %}
+        {% set files = post.image_filenames %}
+        {% if files|length > 1 %}
+        <div class="post-gallery">
+            {% for fname in files %}
+            <div class="post-gallery-item">
+                <img src="{{ url_for('uploaded_file', filename=fname) }}"
+                    data-full-url="{{ url_for('uploaded_file', filename=fname) }}"
+                    alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="post-image-container">
+            <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
+                class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
+        </div>
+        {% endif %}
         {% endif %}
 
         <div class="post-content" style="margin-top: 1rem;">{{ post.content|safe }}</div>
@@ -180,15 +238,16 @@
             </h3>
             <div id="related-posts-list" class="related-posts-list" style="display: none; margin-top: 10px;">
                 {% for r_post in related_posts %}
-                    <div class="related-post-item" style="margin-bottom: 15px;">
-                        <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
-                            {# The title from Meilisearch might contain highlight tags, so it needs to be marked safe #}
-                            <a href="{{ url_for('view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
-                        </h4>
-                        <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
-                            by {{ r_post.author_username }} on {{ r_post.created_at.strftime('%b %d, %Y') if r_post.created_at and r_post.created_at.strftime else '' }}
-                        </div>
+                <div class="related-post-item" style="margin-bottom: 15px;">
+                    <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
+                        {# The title from Meilisearch might contain highlight tags, so it needs to be marked safe #}
+                        <a href="{{ url_for('view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
+                    </h4>
+                    <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
+                        by {{ r_post.author_username }} on {{ r_post.created_at.strftime('%b %d, %Y') if
+                        r_post.created_at and r_post.created_at.strftime else '' }}
                     </div>
+                </div>
                 {% endfor %}
             </div>
         </div>
@@ -200,73 +259,84 @@
             {# reply_counts mapping provided by server (reply_counts[comment_id] -> int) #}
 
             {% if current_user.is_authenticated %}
-                <form id="comment-form">
-                    <label for="comment-content" class="visually-hidden">Write a comment</label>
-                    <textarea id="comment-content" name="content" rows="3" style="width:100%;" placeholder="Write a comment..."></textarea>
-                    <button id="comment-submit" type="submit">Post Comment</button>
-                </form>
+            <form id="comment-form">
+                <label for="comment-content" class="visually-hidden">Write a comment</label>
+                <textarea id="comment-content" name="content" rows="3" style="width:100%;"
+                    placeholder="Write a comment..."></textarea>
+                <button id="comment-submit" type="submit">Post Comment</button>
+            </form>
             {% else %}
-                <p><a href="{{ url_for('login') }}">Log in</a> to post comments.</p>
+            <p><a href="{{ url_for('login') }}">Log in</a> to post comments.</p>
             {% endif %}
 
             <div id="comments-list" style="margin-top: 1rem;">
                 {% for c in comments %}
-                    {# compute reply count for this comment (number of items with parent_id == c._id) #}
-                    {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
-                    <div class="comment-item" data-id="{{ c._id|string }}" {% if c.parent_id %}data-parent="{{ c.parent_id|string }}"{% endif %} style="border-bottom:1px solid #eee; padding: 8px 0;">
-                        <div class="comment-meta">
-                            <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
-                            {% if c.created_at %}
-                                — {{ c.created_at|localtime }}
-                            {% endif %}
-                        </div>
-                        <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{% else %}{{ c.content|linkify|safe }}{% endif %}</div>
-                        
-                        <div class="comment-actions" style="margin-top:6px;">
-                            {% if not c.is_deleted %}
-                                {% if current_user.is_authenticated %}
-                                    {# Reply Button #}
-                                    <a href="#" class="reply-btn action-link" data-id="{{ c._id|string }}">Reply</a>
-
-                                    {# Voting Controls - now available on all comments #}
-                                    <div class="comment-voting" style="display: inline-flex;">
-                                        <button class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}" data-id="{{ c._id|string }}" aria-label="Upvote">
-                                            likes
-                                        <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
-                                        </button>
-                                    </div>
-                                {% endif %}
-
-                                {# Show Replies Toggle (only for top-level comments with replies) #}
-                                {% if not c.parent_id and reply_count and reply_count > 0 %}
-                                    <a href="#" class="toggle-replies action-link" data-id="{{ c._id|string }}">Show replies ({{ reply_count }})</a>
-                                {% endif %}
-
-                                {# Edit/Delete Controls (for owner or admin) #}
-                                {% if current_user.is_authenticated and (current_user.is_admin or (c.author_id and (c.author_id|string) == current_user.id)) %}
-                                    <a href="#" class="edit-btn action-link" data-id="{{ c._id|string }}">Edit</a>
-                                    <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
-                                {% endif %}
-                            {% endif %}
-                        </div>
-                        <div class="comment-replies" style="margin-top:8px; margin-left:18px;"></div>
+                {# compute reply count for this comment (number of items with parent_id == c._id) #}
+                {% set reply_count = (reply_counts.get(c._id|string) if reply_counts is defined else 0) | int %}
+                <div class="comment-item" data-id="{{ c._id|string }}" {% if c.parent_id
+                    %}data-parent="{{ c.parent_id|string }}" {% endif %}
+                    style="border-bottom:1px solid #eee; padding: 8px 0;">
+                    <div class="comment-meta">
+                        <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
+                        {% if c.created_at %}
+                        — {{ c.created_at|localtime }}
+                        {% endif %}
                     </div>
+                    <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{%
+                        else %}{{ c.content|linkify|safe }}{% endif %}</div>
+
+                    <div class="comment-actions" style="margin-top:6px;">
+                        {% if not c.is_deleted %}
+                        {% if current_user.is_authenticated %}
+                        {# Reply Button #}
+                        <a href="#" class="reply-btn action-link" data-id="{{ c._id|string }}">Reply</a>
+
+                        {# Voting Controls - now available on all comments #}
+                        <div class="comment-voting" style="display: inline-flex;">
+                            <button
+                                class="upvote-btn {% if current_user.id and (current_user.id|string) in c.upvoted_by|map('string')|list %}voted{% endif %}"
+                                data-id="{{ c._id|string }}" aria-label="Upvote">
+                                likes
+                                <span class="upvote-count">{{ c.upvote_count|default(0) }}</span>
+                            </button>
+                        </div>
+                        {% endif %}
+
+                        {# Show Replies Toggle (only for top-level comments with replies) #}
+                        {% if not c.parent_id and reply_count and reply_count > 0 %}
+                        <a href="#" class="toggle-replies action-link" data-id="{{ c._id|string }}">Show replies ({{
+                            reply_count }})</a>
+                        {% endif %}
+
+                        {# Edit/Delete Controls (for owner or admin) #}
+                        {% if current_user.is_authenticated and (current_user.is_admin or (c.author_id and
+                        (c.author_id|string) == current_user.id)) %}
+                        <a href="#" class="edit-btn action-link" data-id="{{ c._id|string }}">Edit</a>
+                        <a href="#" class="delete-comment action-link" data-id="{{ c._id|string }}">Delete</a>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="comment-replies" style="margin-top:8px; margin-left:18px;"></div>
+                </div>
                 {% endfor %} {# This was incorrectly {% endif %} #}
             </div>
             {% if has_more %}
-                <div style="text-align:center; margin-top:8px;"><button id="load-more-comments">Load more comments</button></div>
+            <div style="text-align:center; margin-top:8px;"><button id="load-more-comments">Load more comments</button>
+            </div>
             {% endif %}
         </section>
     </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
-    const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+    document.addEventListener('DOMContentLoaded', function () {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
+        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }
+    };
     const form = document.getElementById('comment-form');
-    let currentPage = {{ comment_page | default(1) }};
-    const perPage = {{ per_page | default(10) }};
+    let currentPage = {{ comment_page | default (1) }};
+    const perPage = {{ per_page | default (10) }};
 
     // Like button handler is in base.html
 
@@ -360,7 +430,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return el;
     }
 
-    async function appendComments(comments, toBottom=true) {
+    async function appendComments(comments, toBottom = true) {
         const list = document.getElementById('comments-list');
         for (const c of comments) {
             const el = createCommentElement(c);
@@ -394,7 +464,10 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
                     body: JSON.stringify({ content })
                 });
                 if (resp.ok) {
@@ -451,7 +524,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (typeof window.showCustomConfirm === 'function') {
                 window.showCustomConfirm('Delete this comment?', async (confirmed) => {
                     if (!confirmed) return;
-                    const resp = await fetch('/api/comments/' + id, { method: 'DELETE' });
+                    const resp = await fetch('/api/comments/' + id, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    });
                     if (resp.ok) {
                         // Decide whether to remove the comment node entirely or show a placeholder.
                         // If the comment has any non-deleted replies, keep a placeholder so replies remain nested.
@@ -500,7 +576,10 @@ document.addEventListener('DOMContentLoaded', function() {
             e.preventDefault();
             const button = e.target.closest('.upvote-btn');
             const id = button.getAttribute('data-id');
-            const resp = await fetch('/api/comments/' + id + '/vote', { method: 'POST' });
+            const resp = await fetch('/api/comments/' + id + '/vote', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            });
             if (resp.ok) {
                 const data = await resp.json();
                 const votingEl = button.closest('.comment-voting');
@@ -548,7 +627,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 try {
                     const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
                         body: JSON.stringify({ content, parent_id: parentId })
                     });
                     if (resp.ok) {
@@ -633,7 +715,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!newContent || !newContent.trim()) return;
                 const resp = await fetch('/api/comments/' + cid, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
                     body: JSON.stringify({ content: newContent })
                 });
                 if (resp.ok) {
@@ -687,7 +772,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Lightbox support for single-post view (gallery or single image)
-    (function setupLightboxView(){
+    (function setupLightboxView() {
         let modal = document.querySelector('.lightbox-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -718,7 +803,7 @@ document.addEventListener('DOMContentLoaded', function() {
             nextBtn.style.display = currentGallery.length > 1 ? 'block' : 'none';
         }
 
-        function closeLightbox(){
+        function closeLightbox() {
             modal.style.display = 'none';
             modalImg.src = '';
             currentGallery = [];
@@ -726,7 +811,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.body.style.overflow = '';
         }
 
-        document.body.addEventListener('click', function(e){
+        document.body.addEventListener('click', function (e) {
             const t = e.target;
             if (t.matches('.gallery-thumb')) {
                 e.preventDefault();
@@ -748,15 +833,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         closeBtn.addEventListener('click', closeLightbox);
-        prevBtn.addEventListener('click', function(ev){ ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
-        nextBtn.addEventListener('click', function(ev){ ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
-        document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') closeLightbox(); if (ev.key === 'ArrowLeft' && currentGallery.length>1) { currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } if (ev.key === 'ArrowRight' && currentGallery.length>1) { currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } });
+        prevBtn.addEventListener('click', function (ev) { ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
+        nextBtn.addEventListener('click', function (ev) { ev.stopPropagation(); if (!currentGallery.length) return; currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; });
+        document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeLightbox(); if (ev.key === 'ArrowLeft' && currentGallery.length > 1) { currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } if (ev.key === 'ArrowRight' && currentGallery.length > 1) { currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } });
     })();
 
     // Toggle for related posts
     const toggleRelatedBtn = document.getElementById('toggle-related-posts');
     if (toggleRelatedBtn) {
-        toggleRelatedBtn.addEventListener('click', function() {
+        toggleRelatedBtn.addEventListener('click', function () {
             const relatedList = document.getElementById('related-posts-list');
             const icon = this.querySelector('i');
             if (relatedList.style.display === 'none') {

@@ -1,56 +1,67 @@
 {% extends "base.html" %}
 
 {% block title %}
-  <title>Account Settings - {{ user.username }}</title>
+<title>Account Settings - {{ user.username }}</title>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
   <h1>Account Settings</h1>
   <div class="settings-panel" style="max-width: 600px; margin: auto;">
-    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}" enctype="multipart/form-data" class="post-form">
-      
+    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}" enctype="multipart/form-data"
+      class="post-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div class="form-group">
         <label for="bio">Bio</label>
-        <textarea id="bio" name="bio" class="form-input" rows="4" placeholder="Tell us a little about yourself...">{{ user.get('bio', '') }}</textarea>
+        <textarea id="bio" name="bio" class="form-input" rows="4"
+          placeholder="Tell us a little about yourself...">{{ user.get('bio', '') }}</textarea>
       </div>
 
       <div class="form-group">
         <label>Profile Picture</label>
         {% if user.profile_image_url %}
-          <img src="{{ user.profile_image_url }}" alt="Current profile picture" class="edit-post-image-preview" style="max-width: 100px; border-radius: 50%; margin-bottom: 1rem;">
+        <img src="{{ user.profile_image_url }}" alt="Current profile picture" class="edit-post-image-preview"
+          style="max-width: 100px; border-radius: 50%; margin-bottom: 1rem;">
         {% endif %}
         <label for="profile_image">Update Profile Picture</label>
         <input type="file" id="profile_image" name="profile_image" class="form-input" accept="image/*">
         {% if user.profile_image_url %}
         <label for="remove_profile_picture" style="display: block; margin-top: 1rem;">
-          <input type="checkbox" id="remove_profile_picture" name="remove_profile_picture" value="1"> Remove current profile picture
+          <input type="checkbox" id="remove_profile_picture" name="remove_profile_picture" value="1"> Remove current
+          profile picture
         </label>
         {% endif %}
-        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Upload a new image to change your profile picture.</p>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Upload a new image to change your profile
+          picture.</p>
       </div>
 
       <div class="form-group">
         <label for="notify_new_posts">
-          <input type="checkbox" id="notify_new_posts" name="notify_new_posts" value="1" {% if user.get('notify_new_posts', True) %}checked{% endif %}>
+          <input type="checkbox" id="notify_new_posts" name="notify_new_posts" value="1" {% if
+            user.get('notify_new_posts', True) %}checked{% endif %}>
           Receive email notifications for new posts
         </label>
-        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Uncheck to disable email notifications for new posts on the platform.</p>
+        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Uncheck to disable email notifications for new
+          posts on the platform.</p>
       </div>
 
       <!-- Push Notifications Section -->
       <div class="form-group" id="push-notification-settings">
         <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Push Notifications</label>
-        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Get instant notifications on your device when there's a new post or someone comments on your posts.</p>
-        
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Get instant notifications on your device when
+          there's a new post or someone comments on your posts.</p>
+
         <div id="push-status" style="margin-bottom: 1rem;">
           <span id="push-status-text" style="font-size: 0.9rem;">Checking notification status...</span>
         </div>
-        
-        <button type="button" id="enable-push-btn" class="btn" style="background-color: #28a745; color: white; display: none;" onclick="togglePushNotifications(true)">
+
+        <button type="button" id="enable-push-btn" class="btn"
+          style="background-color: #28a745; color: white; display: none;" onclick="togglePushNotifications(true)">
           <i class="fas fa-bell"></i> Enable Push Notifications
         </button>
-        <button type="button" id="disable-push-btn" class="btn" style="background-color: #dc3545; color: white; display: none;" onclick="togglePushNotifications(false)">
+        <button type="button" id="disable-push-btn" class="btn"
+          style="background-color: #dc3545; color: white; display: none;" onclick="togglePushNotifications(false)">
           <i class="fas fa-bell-slash"></i> Disable Push Notifications
         </button>
         <p id="push-not-supported" style="font-size: 0.9rem; color: #dc3545; display: none;">
@@ -59,8 +70,10 @@
       </div>
 
       <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
-        <button type="submit" class="btn form-button" style="width: auto; padding: 0.5rem 1.5rem;">Save Settings</button>
-        <a class="btn" href="{{ url_for('profile', username=user.username) }}" style="background-color: #6c757d; color: white;">Back to Profile</a>
+        <button type="submit" class="btn form-button" style="width: auto; padding: 0.5rem 1.5rem;">Save
+          Settings</button>
+        <a class="btn" href="{{ url_for('profile', username=user.username) }}"
+          style="background-color: #6c757d; color: white;">Back to Profile</a>
       </div>
 
     </form>
@@ -69,7 +82,7 @@
 
 <script>
   // Push notification settings management
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     // Wait for service worker to be registered first
     if ('serviceWorker' in navigator) {
       // Check if already registered
@@ -92,43 +105,43 @@
       checkPushStatus();
     }
   });
-  
+
   // Utility function to convert base64 to Uint8Array for VAPID key
   function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding)
       .replace(/-/g, '+')
       .replace(/_/g, '/');
-    
+
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
-    
+
     for (let i = 0; i < rawData.length; ++i) {
       outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
   }
-  
+
   async function checkPushStatus() {
     const statusText = document.getElementById('push-status-text');
     const enableBtn = document.getElementById('enable-push-btn');
     const disableBtn = document.getElementById('disable-push-btn');
     const notSupported = document.getElementById('push-not-supported');
-    
+
     // Check if push is supported
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       statusText.style.display = 'none';
       notSupported.style.display = 'block';
       return;
     }
-    
+
     // Check if Notification API is supported
     if (!('Notification' in window)) {
       statusText.style.display = 'none';
       notSupported.style.display = 'block';
       return;
     }
-    
+
     try {
       // First ensure service worker is registered
       let registration = await navigator.serviceWorker.getRegistration('/');
@@ -160,15 +173,15 @@
           return;
         }
       }
-      
+
       // If permission hasn't been asked yet, auto-prompt the user
       if (Notification.permission === 'default') {
         statusText.textContent = 'Requesting notification permission...';
         statusText.style.color = '#666';
-        
+
         // Auto-prompt for permission
         const permission = await Notification.requestPermission();
-        
+
         if (permission === 'granted') {
           // Permission granted, now subscribe
           await autoSubscribeToPush();
@@ -179,18 +192,18 @@
           return;
         }
       }
-      
+
       // If permission was already denied
       if (Notification.permission === 'denied') {
         statusText.innerHTML = '<i class="fas fa-times-circle" style="color: #dc3545;"></i> Notifications blocked. Please enable in browser settings.';
         statusText.style.color = '#dc3545';
         return;
       }
-      
+
       // Permission is granted, check subscription status
       if (Notification.permission === 'granted') {
         const subscription = await registration.pushManager.getSubscription();
-        
+
         if (subscription) {
           // Already subscribed, verify with server
           try {
@@ -198,7 +211,7 @@
               method: 'GET',
               headers: { 'Content-Type': 'application/json' }
             });
-            
+
             if (serverStatus.ok) {
               const serverData = await serverStatus.json();
               if (serverData.subscribed) {
@@ -211,7 +224,7 @@
           } catch (e) {
             console.warn('Error checking server status:', e);
           }
-          
+
           // Subscription exists locally but not on server, re-subscribe
           await autoSubscribeToPush();
         } else {
@@ -226,15 +239,15 @@
       enableBtn.style.display = 'inline-block';
     }
   }
-  
+
   async function autoSubscribeToPush() {
     const statusText = document.getElementById('push-status-text');
     const enableBtn = document.getElementById('enable-push-btn');
     const disableBtn = document.getElementById('disable-push-btn');
-    
+
     statusText.textContent = 'Enabling push notifications...';
     statusText.style.color = '#666';
-    
+
     try {
       // Get VAPID key
       console.log('Fetching VAPID key...');
@@ -245,7 +258,7 @@
         enableBtn.style.display = 'inline-block';
         return;
       }
-      
+
       const { publicKey } = await vapidResponse.json();
       if (!publicKey) {
         statusText.textContent = 'Push notifications not configured (no key).';
@@ -254,11 +267,11 @@
         return;
       }
       console.log('Got VAPID key');
-      
+
       // Get or register service worker
       console.log('Getting service worker registration...');
       let registration = await navigator.serviceWorker.getRegistration('/');
-      
+
       if (!registration) {
         console.log('No registration found, registering new service worker...');
         try {
@@ -272,7 +285,7 @@
           return;
         }
       }
-      
+
       // Wait for the service worker to be active
       if (!registration.active) {
         console.log('Waiting for service worker to activate...');
@@ -280,17 +293,17 @@
           const timeout = setTimeout(() => {
             reject(new Error('Service worker activation timeout'));
           }, 10000);
-          
+
           const checkActive = () => {
             if (registration.active) {
               clearTimeout(timeout);
               resolve();
               return;
             }
-            
+
             const worker = registration.installing || registration.waiting;
             if (worker) {
-              worker.addEventListener('statechange', function() {
+              worker.addEventListener('statechange', function () {
                 if (this.state === 'activated') {
                   clearTimeout(timeout);
                   resolve();
@@ -301,13 +314,13 @@
               resolve(); // No worker to wait for
             }
           };
-          
+
           checkActive();
         });
       }
-      
+
       console.log('Service worker is active:', registration.active);
-      
+
       // First, check if there's an existing subscription and unsubscribe
       // This helps clear any corrupted subscriptions
       try {
@@ -320,36 +333,40 @@
       } catch (unsubErr) {
         console.warn('Error checking/clearing old subscription:', unsubErr);
       }
-      
+
       // Validate and log the VAPID key
       console.log('VAPID key length:', publicKey.length);
       console.log('VAPID key preview:', publicKey.substring(0, 20) + '...');
-      
+
       const applicationServerKey = urlBase64ToUint8Array(publicKey);
       console.log('Converted key length:', applicationServerKey.length, '(should be 65 for P-256)');
-      
+
       // Subscribe to push with timeout
       console.log('Subscribing to push manager...');
       const subscribePromise = registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey
       });
-      
+
       const subscription = await Promise.race([
         subscribePromise,
         new Promise((_, reject) => setTimeout(() => reject(new Error('Push subscription timeout')), 15000))
       ]);
-      
+
       console.log('Got subscription:', subscription);
-      
+
       // Send to server
       console.log('Sending subscription to server...');
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
       const subResponse = await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
         body: JSON.stringify(subscription.toJSON())
       });
-      
+
       if (subResponse.ok) {
         console.log('Subscription saved to server');
         statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
@@ -363,7 +380,7 @@
       }
     } catch (err) {
       console.error('Error auto-subscribing:', err);
-      
+
       // Provide specific error messages based on error type
       let errorMessage = 'Could not enable notifications.';
       if (err.name === 'AbortError' || (err.message && err.message.includes('push service'))) {
@@ -378,22 +395,22 @@
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
+
       statusText.innerHTML = `<i class="fas fa-exclamation-triangle" style="color: #dc3545;"></i> ${errorMessage}`;
       statusText.style.color = '#dc3545';
       enableBtn.style.display = 'inline-block';
     }
   }
-  
+
   async function togglePushNotifications(enable) {
     const enableBtn = document.getElementById('enable-push-btn');
     const disableBtn = document.getElementById('disable-push-btn');
     const statusText = document.getElementById('push-status-text');
-    
+
     if (enable) {
       enableBtn.disabled = true;
       enableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enabling...';
-      
+
       try {
         // Request permission if not granted
         if (Notification.permission !== 'granted') {
@@ -406,7 +423,7 @@
             return;
           }
         }
-        
+
         // Subscribe
         await autoSubscribeToPush();
         enableBtn.innerHTML = '<i class="fas fa-bell"></i> Enable Push Notifications';
@@ -421,23 +438,27 @@
     } else {
       disableBtn.disabled = true;
       disableBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Disabling...';
-      
+
       try {
         // Unsubscribe from push
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
-        
+
         if (subscription) {
           await subscription.unsubscribe();
-          
+
+          const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
           // Notify server
           await fetch('/api/push/unsubscribe', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify({ endpoint: subscription.endpoint })
           });
         }
-        
+
         statusText.textContent = 'Push notifications disabled.';
         statusText.style.color = '#666';
         disableBtn.style.display = 'none';

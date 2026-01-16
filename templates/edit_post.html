@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block content %}
@@ -10,43 +10,61 @@
     <!-- Edit Post Form -->
     <div class="create-post-section" style="padding: 20px;">
         <h3>Edit Post</h3>
-        <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form" id="edit-post-form" enctype="multipart/form-data">
-            <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}" required>
-            <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10" required>{{ post.content }}</textarea>
-            
+        <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form"
+            id="edit-post-form" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}"
+                required>
+            <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10"
+                required>{{ post.content }}</textarea>
+
             <div class="form-group">
                 <label for="tags">Tags</label>
                 <select id="tags" name="tags" class="form-input" multiple size="8">
                     <optgroup label="General Topics">
-                        <option value="Education" {% if 'Education' in post.tags %}selected{% endif %}>Education</option>
+                        <option value="Education" {% if 'Education' in post.tags %}selected{% endif %}>Education
+                        </option>
                         <option value="Law" {% if 'Law' in post.tags %}selected{% endif %}>Law</option>
                         <option value="Legal" {% if 'Legal' in post.tags %}selected{% endif %}>Legal</option>
                         <option value="Politics" {% if 'Politics' in post.tags %}selected{% endif %}>Politics</option>
                         <option value="Business" {% if 'Business' in post.tags %}selected{% endif %}>Business</option>
                         <option value="Science" {% if 'Science' in post.tags %}selected{% endif %}>Science</option>
-                        <option value="Philosophy" {% if 'Philosophy' in post.tags %}selected{% endif %}>Philosophy</option>
+                        <option value="Philosophy" {% if 'Philosophy' in post.tags %}selected{% endif %}>Philosophy
+                        </option>
                         <option value="History" {% if 'History' in post.tags %}selected{% endif %}>History</option>
-                        <option value="Environment" {% if 'Environment' in post.tags %}selected{% endif %}>Environment</option>
-                        <option value="Announcement" {% if 'Announcement' in post.tags %}selected{% endif %}>Announcement</option>
+                        <option value="Environment" {% if 'Environment' in post.tags %}selected{% endif %}>Environment
+                        </option>
+                        <option value="Announcement" {% if 'Announcement' in post.tags %}selected{% endif %}>
+                            Announcement</option>
                     </optgroup>
                     <optgroup label="Tech & Innovation">
-                        <option value="Technology" {% if 'Technology' in post.tags %}selected{% endif %}>Technology</option>
-                        <option value="Programming" {% if 'Programming' in post.tags %}selected{% endif %}>Programming</option>
-                        <option value="Cybersecurity" {% if 'Cybersecurity' in post.tags %}selected{% endif %}>Cybersecurity</option>
+                        <option value="Technology" {% if 'Technology' in post.tags %}selected{% endif %}>Technology
+                        </option>
+                        <option value="Programming" {% if 'Programming' in post.tags %}selected{% endif %}>Programming
+                        </option>
+                        <option value="Cybersecurity" {% if 'Cybersecurity' in post.tags %}selected{% endif %}>
+                            Cybersecurity</option>
                     </optgroup>
                     <optgroup label="Vibe & Tone">
-                        <option value="Motivation" {% if 'Motivation' in post.tags %}selected{% endif %}>Motivation</option>
+                        <option value="Motivation" {% if 'Motivation' in post.tags %}selected{% endif %}>Motivation
+                        </option>
                         <option value="Meme" {% if 'Meme' in post.tags %}selected{% endif %}>Meme</option>
                         <option value="Rant" {% if 'Rant' in post.tags %}selected{% endif %}>Rant</option>
                         <option value="Opinion" {% if 'Opinion' in post.tags %}selected{% endif %}>Opinion</option>
-                        <option value="Storytime" {% if 'Storytime' in post.tags %}selected{% endif %}>Storytime</option>
-                        <option value="Deep Dive" {% if 'Deep Dive' in post.tags %}selected{% endif %}>Deep Dive</option>
-                        <option value="Quick Read" {% if 'Quick Read' in post.tags %}selected{% endif %}>Quick Read</option>
+                        <option value="Storytime" {% if 'Storytime' in post.tags %}selected{% endif %}>Storytime
+                        </option>
+                        <option value="Deep Dive" {% if 'Deep Dive' in post.tags %}selected{% endif %}>Deep Dive
+                        </option>
+                        <option value="Quick Read" {% if 'Quick Read' in post.tags %}selected{% endif %}>Quick Read
+                        </option>
                     </optgroup>
                     <optgroup label="Lifestyle & Student Life">
-                        <option value="University Life" {% if 'University Life' in post.tags %}selected{% endif %}>University Life</option>
-                        <option value="Productivity" {% if 'Productivity' in post.tags %}selected{% endif %}>Productivity</option>
-                        <option value="Mental Health" {% if 'Mental Health' in post.tags %}selected{% endif %}>Mental Health</option>
+                        <option value="University Life" {% if 'University Life' in post.tags %}selected{% endif %}>
+                            University Life</option>
+                        <option value="Productivity" {% if 'Productivity' in post.tags %}selected{% endif %}>
+                            Productivity</option>
+                        <option value="Mental Health" {% if 'Mental Health' in post.tags %}selected{% endif %}>Mental
+                            Health</option>
                         <option value="Career" {% if 'Career' in post.tags %}selected{% endif %}>Career</option>
                         <option value="Gaming" {% if 'Gaming' in post.tags %}selected{% endif %}>Gaming</option>
                         <option value="Music" {% if 'Music' in post.tags %}selected{% endif %}>Music</option>
@@ -56,26 +74,28 @@
                     </optgroup>
                 </select>
             </div>
-            
+
             <div>
                 <label for="images">Upload New Images (Optional — you may select multiple):</label>
                 {% if post.image_urls or post.image_url or post.image_filenames or post.image_filename %}
-                    <p>Current image(s):</p>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-                        {% if post.image_urls %}
-                            {% for img in post.image_urls %}
-                                <img src="{{ img }}" alt="Current image {{ loop.index }}" class="edit-post-image-preview">
-                            {% endfor %}
-                        {% elif post.image_url %}
-                            <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
-                        {% elif post.image_filenames %}
-                            {% for f in post.image_filenames %}
-                                <img src="{{ url_for('uploaded_file', filename=f) }}" alt="Current image {{ loop.index }}" class="edit-post-image-preview">
-                            {% endfor %}
-                        {% elif post.image_filename %}
-                            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image" class="edit-post-image-preview">
-                        {% endif %}
-                    </div>
+                <p>Current image(s):</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                    {% if post.image_urls %}
+                    {% for img in post.image_urls %}
+                    <img src="{{ img }}" alt="Current image {{ loop.index }}" class="edit-post-image-preview">
+                    {% endfor %}
+                    {% elif post.image_url %}
+                    <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
+                    {% elif post.image_filenames %}
+                    {% for f in post.image_filenames %}
+                    <img src="{{ url_for('uploaded_file', filename=f) }}" alt="Current image {{ loop.index }}"
+                        class="edit-post-image-preview">
+                    {% endfor %}
+                    {% elif post.image_filename %}
+                    <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image"
+                        class="edit-post-image-preview">
+                    {% endif %}
+                </div>
                 {% endif %}
                 <input type="file" name="images" class="form-input" accept="image/*" multiple>
             </div>
@@ -83,139 +103,144 @@
             <div>
                 <label for="video">Upload a New Video (Optional, max 10 MB):</label>
                 {% if post.video_url or post.video_filename %}
-                    <p>Current video:</p>
-                    {% if post.video_url %}
-                        <video controls class="edit-post-video-preview">
-                            <source src="{{ post.video_url }}" type="video/{{ post.video_url.rsplit('.', 1)[1] if post.video_url and '.' in post.video_url else 'mp4' }}">
-                            Your browser does not support the video tag.
-                        </video>
-                    {% else %}
-                        <video controls class="edit-post-video-preview">
-                            <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
-                    {% endif %}
+                <p>Current video:</p>
+                {% if post.video_url %}
+                <video controls class="edit-post-video-preview">
+                    <source src="{{ post.video_url }}"
+                        type="video/{{ post.video_url.rsplit('.', 1)[1] if post.video_url and '.' in post.video_url else 'mp4' }}">
+                    Your browser does not support the video tag.
+                </video>
+                {% else %}
+                <video controls class="edit-post-video-preview">
+                    <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                {% endif %}
                 {% endif %}
                 <input type="file" name="video" class="form-input" accept="video/*">
             </div>
 
             <button type="submit" class="form-button" id="update-post-submit-btn">Update Post</button>
-            <button type="button" class="form-button delete-btn" id="edit-cancel-upload-btn" style="display: none; margin-left: 10px;">Cancel</button>
+            <button type="button" class="form-button delete-btn" id="edit-cancel-upload-btn"
+                style="display: none; margin-left: 10px;">Cancel</button>
             <small id="edit-upload-status" style="display: none; margin-top: 10px;"></small>
-            <div id="edit-progress-container" style="display: none; width: 100%; background-color: #ddd; border-radius: 5px; margin-top: 10px;">
-                <div id="edit-progress-bar" style="width: 0%; height: 24px; background-color: #4CAF50; text-align: center; line-height: 24px; color: white; border-radius: 5px;">0%</div>
+            <div id="edit-progress-container"
+                style="display: none; width: 100%; background-color: #ddd; border-radius: 5px; margin-top: 10px;">
+                <div id="edit-progress-bar"
+                    style="width: 0%; height: 24px; background-color: #4CAF50; text-align: center; line-height: 24px; color: white; border-radius: 5px;">
+                    0%</div>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-    const editPostForm = document.getElementById('edit-post-form');
-    let xhr; // Define xhr in a scope accessible to the cancel handler
-    const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check
+    document.addEventListener('DOMContentLoaded', function () {
+        const editPostForm = document.getElementById('edit-post-form');
+        let xhr; // Define xhr in a scope accessible to the cancel handler
+        const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check
 
-    if (editPostForm) {
-        editPostForm.addEventListener('submit', function(event) {
-            event.preventDefault();
+        if (editPostForm) {
+            editPostForm.addEventListener('submit', function (event) {
+                event.preventDefault();
 
-            const videoInput = this.querySelector('input[name="video"]');
+                const videoInput = this.querySelector('input[name="video"]');
+                const submitButton = document.getElementById('update-post-submit-btn');
+                const cancelButton = document.getElementById('edit-cancel-upload-btn');
+                const statusElement = document.getElementById('edit-upload-status');
+                const progressContainer = document.getElementById('edit-progress-container');
+                const progressBar = document.getElementById('edit-progress-bar');
+
+                if (videoInput.files.length > 0) {
+                    const videoFile = videoInput.files[0];
+
+                    // Client-side basic checks
+                    if (videoFile.size > MAX_VIDEO_SIZE) {
+                        statusElement.textContent = 'Video exceeds maximum allowed size of 10 MB.';
+                        statusElement.style.display = 'block';
+                        return;
+                    }
+
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Uploading...';
+                    statusElement.textContent = 'Uploading video...';
+                    statusElement.style.display = 'block';
+                    cancelButton.style.display = 'inline-block';
+                    progressContainer.style.display = 'block';
+
+                    const formData = new FormData(this); // Grabs existing fields
+                    formData.set('video', videoFile, videoFile.name);
+
+                    xhr = new XMLHttpRequest();
+                    xhr.open('POST', this.action, true);
+
+                    xhr.upload.onprogress = function (e) {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            progressBar.style.width = percentComplete + '%';
+                            progressBar.textContent = percentComplete + '%';
+                        }
+                    };
+
+                    xhr.onload = function () {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            window.location.href = xhr.responseURL;
+                        } else {
+                            statusElement.textContent = 'Upload failed. Server responded with an error.';
+                            resetEditUploadUI();
+                        }
+                    };
+
+                    xhr.onabort = function () {
+                        statusElement.textContent = 'Upload cancelled.';
+                        resetEditUploadUI();
+                    };
+
+                    xhr.onerror = function () {
+                        statusElement.textContent = 'Upload failed due to a network error.';
+                        resetEditUploadUI();
+                    };
+
+                    cancelButton.onclick = function () {
+                        if (xhr) xhr.abort();
+                    };
+
+                    xhr.send(formData);
+                } else {
+                    this.submit();
+                }
+            });
+        }
+
+        function resetEditUploadUI(message) {
             const submitButton = document.getElementById('update-post-submit-btn');
             const cancelButton = document.getElementById('edit-cancel-upload-btn');
-            const statusElement = document.getElementById('edit-upload-status');
             const progressContainer = document.getElementById('edit-progress-container');
-            const progressBar = document.getElementById('edit-progress-bar');
+            const videoInput = document.querySelector('#edit-post-form input[name="video"]');
+            const statusElement = document.getElementById('edit-upload-status');
 
-            if (videoInput.files.length > 0) {
-                const videoFile = videoInput.files[0];
-
-                // Client-side basic checks
-                if (videoFile.size > MAX_VIDEO_SIZE) {
-                    statusElement.textContent = 'Video exceeds maximum allowed size of 10 MB.';
-                    statusElement.style.display = 'block';
-                    return;
-                }
-
-                submitButton.disabled = true;
-                submitButton.textContent = 'Uploading...';
-                statusElement.textContent = 'Uploading video...';
+            if (message) {
+                statusElement.textContent = message;
                 statusElement.style.display = 'block';
-                cancelButton.style.display = 'inline-block';
-                progressContainer.style.display = 'block';
-
-                const formData = new FormData(this); // Grabs existing fields
-                formData.set('video', videoFile, videoFile.name);
-
-                xhr = new XMLHttpRequest();
-                xhr.open('POST', this.action, true);
-
-                xhr.upload.onprogress = function(e) {
-                    if (e.lengthComputable) {
-                        const percentComplete = Math.round((e.loaded / e.total) * 100);
-                        progressBar.style.width = percentComplete + '%';
-                        progressBar.textContent = percentComplete + '%';
-                    }
-                };
-
-                xhr.onload = function() {
-                    if (xhr.status >= 200 && xhr.status < 300) {
-                        window.location.href = xhr.responseURL;
-                    } else {
-                        statusElement.textContent = 'Upload failed. Server responded with an error.';
-                        resetEditUploadUI();
-                    }
-                };
-
-                xhr.onabort = function() {
-                    statusElement.textContent = 'Upload cancelled.';
-                    resetEditUploadUI();
-                };
-
-                xhr.onerror = function() {
-                    statusElement.textContent = 'Upload failed due to a network error.';
-                    resetEditUploadUI();
-                };
-
-                cancelButton.onclick = function() {
-                    if (xhr) xhr.abort();
-                };
-
-                xhr.send(formData);
-            } else {
-                this.submit();
             }
-        });
-    }
-
-    function resetEditUploadUI(message) {
-        const submitButton = document.getElementById('update-post-submit-btn');
-        const cancelButton = document.getElementById('edit-cancel-upload-btn');
-        const progressContainer = document.getElementById('edit-progress-container');
-        const videoInput = document.querySelector('#edit-post-form input[name="video"]');
-        const statusElement = document.getElementById('edit-upload-status');
-
-        if (message) {
-            statusElement.textContent = message;
-            statusElement.style.display = 'block';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Update Post';
+            cancelButton.style.display = 'none';
+            progressContainer.style.display = 'none';
+            // Clear the file input
+            videoInput.value = '';
         }
-        submitButton.disabled = false;
-        submitButton.textContent = 'Update Post';
-        cancelButton.style.display = 'none';
-        progressContainer.style.display = 'none';
-        // Clear the file input
-        videoInput.value = '';
-    }
 
-    // Initialize Choices.js for the tags dropdown on the edit page
-    const tagsElement = document.getElementById('tags');
-    if (tagsElement) {
-        const choices = new Choices(tagsElement, {
-            removeItemButton: true,
-            placeholder: true,
-            placeholderValue: 'Select tags...',
-        });
-    }
-});
+        // Initialize Choices.js for the tags dropdown on the edit page
+        const tagsElement = document.getElementById('tags');
+        if (tagsElement) {
+            const choices = new Choices(tagsElement, {
+                removeItemButton: true,
+                placeholder: true,
+                placeholderValue: 'Select tags...',
+            });
+        }
+    });
 </script>
 
 {% endblock %}

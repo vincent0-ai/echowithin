@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block title %} <title>Admin Dashboard</title> {% endblock %}
-{% block content %} 
+{% block content %}
 <div class="container admin-dashboard-page-container py-4 px-3">
   <h1>Admin Dashboard</h1>
   <div class="d-flex flex-column flex-sm-row gap-2 mb-4">
@@ -44,11 +44,11 @@
   <h3>Users</h3>
   <p>Total confirmed users: <span id="total-users"></span></p>
   <p>Active users (window): <span id="active-users"></span></p>
-    <h3>Traffic (visits)</h3>
-    <h3>Currently Active Users (<span id="active-now-count">0</span>)</h3>
-    <ul id="active-now-list"></ul>
+  <h3>Traffic (visits)</h3>
+  <h3>Currently Active Users (<span id="active-now-count">0</span>)</h3>
+  <ul id="active-now-list"></ul>
 
-    <div class="chart-container"><canvas id="trafficChart"></canvas></div>
+  <div class="chart-container"><canvas id="trafficChart"></canvas></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -56,151 +56,157 @@
   .chart-container {
     position: relative;
     margin-bottom: 2rem;
-    height: 300px; /* Default height for charts */
+    height: 300px;
+    /* Default height for charts */
     width: 100%;
   }
 </style>
 
 <script>
-async function loadMetrics(){
-  const res = await fetch('/admin/metrics');
-  const data = await res.json();
+  async function loadMetrics() {
+    const res = await fetch('/admin/metrics');
+    const data = await res.json();
 
-  // Posts chart
-  const postsLabels = data.posts_per_day.map(x=>x._id);
-  const postsCounts = data.posts_per_day.map(x=>x.count);
-  const ctx1 = document.getElementById('postsChart').getContext('2d');
-  new Chart(ctx1, {
-    type:'line', 
-    data:{labels:postsLabels,datasets:[{label:'Posts',data:postsCounts,borderColor:'blue',fill:false}]},
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  });
+    // Posts chart
+    const postsLabels = data.posts_per_day.map(x => x._id);
+    const postsCounts = data.posts_per_day.map(x => x.count);
+    const ctx1 = document.getElementById('postsChart').getContext('2d');
+    new Chart(ctx1, {
+      type: 'line',
+      data: { labels: postsLabels, datasets: [{ label: 'Posts', data: postsCounts, borderColor: 'blue', fill: false }] },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
 
-  // Comments chart
-  const comLabels = data.comments_per_day.map(x=>x._id);
-  const comCounts = data.comments_per_day.map(x=>x.count);
-  const ctx2 = document.getElementById('commentsChart').getContext('2d');
-  new Chart(ctx2, {
-    type:'line', 
-    data:{
-      labels:comLabels,
-      datasets:[{label:'Comments',data:comCounts,borderColor:'green',fill:false}]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false
-    }
-  });
+    // Comments chart
+    const comLabels = data.comments_per_day.map(x => x._id);
+    const comCounts = data.comments_per_day.map(x => x.count);
+    const ctx2 = document.getElementById('commentsChart').getContext('2d');
+    new Chart(ctx2, {
+      type: 'line',
+      data: {
+        labels: comLabels,
+        datasets: [{ label: 'Comments', data: comCounts, borderColor: 'green', fill: false }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
 
-  // User stats
-  document.getElementById('total-users').textContent = data.total_users;
-  document.getElementById('active-users').textContent = data.active_users;
+    // User stats
+    document.getElementById('total-users').textContent = data.total_users;
+    document.getElementById('active-users').textContent = data.active_users;
     // Load traffic data
-    try{
+    try {
       const tRes = await fetch('/admin/traffic');
       const tData = await tRes.json();
-      const tLabels = tData.visits_per_day.map(x=>x._id);
-      const tCounts = tData.visits_per_day.map(x=>x.count);
+      const tLabels = tData.visits_per_day.map(x => x._id);
+      const tCounts = tData.visits_per_day.map(x => x.count);
       const ctx3 = document.getElementById('trafficChart').getContext('2d');
       new Chart(ctx3, {
-        type:'bar', 
-        data:{
-          labels:tLabels,
-          datasets:[{label:'Visits',data:tCounts,backgroundColor:'rgba(102,126,234,0.6)'}]},
+        type: 'bar',
+        data: {
+          labels: tLabels,
+          datasets: [{ label: 'Visits', data: tCounts, backgroundColor: 'rgba(102,126,234,0.6)' }]
+        },
         options: {
           responsive: true,
           maintainAspectRatio: false
         }
       });
 
-    }catch(e){
+    } catch (e) {
       console.debug('Failed to load traffic metrics', e);
     }
-}
+  }
 
-async function loadActiveNow() {
+  async function loadActiveNow() {
     try {
-        const res = await fetch('/admin/active_users');
-        const data = await res.json();
-        const activeList = document.getElementById('active-now-list');
-        const activeCount = document.getElementById('active-now-count');
-        
-        activeList.innerHTML = '';
-        activeCount.textContent = data.active_users.length;
+      const res = await fetch('/admin/active_users');
+      const data = await res.json();
+      const activeList = document.getElementById('active-now-list');
+      const activeCount = document.getElementById('active-now-count');
 
-        (data.active_users || []).forEach(u => {
-            const li = document.createElement('li');
-            const link = document.createElement('a');
-            link.href = `/profile/${u.username}`;
-            link.textContent = `${u.username}`;
-            li.appendChild(link);
-            activeList.appendChild(li);
-        });
+      activeList.innerHTML = '';
+      activeCount.textContent = data.active_users.length;
+
+      (data.active_users || []).forEach(u => {
+        const li = document.createElement('li');
+        const link = document.createElement('a');
+        link.href = `/profile/${u.username}`;
+        link.textContent = `${u.username}`;
+        li.appendChild(link);
+        activeList.appendChild(li);
+      });
     } catch (e) {
-        console.debug('Failed to load active users', e);
+      console.debug('Failed to load active users', e);
     }
-}
-
-loadMetrics();
-loadActiveNow();
-setInterval(loadActiveNow, 30000); // Refresh every 30 seconds
-
-// Set default dates for export (last 30 days)
-const today = new Date();
-const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-document.getElementById('export-end-date').value = today.toISOString().split('T')[0];
-document.getElementById('export-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
-
-// Handle quick select dropdown
-document.getElementById('export-days').addEventListener('change', function() {
-  const days = this.value;
-  if (days) {
-    const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - parseInt(days) * 24 * 60 * 60 * 1000);
-    document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
-    document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
   }
-});
 
-// Clear quick select when custom dates are picked
-document.getElementById('export-start-date').addEventListener('change', function() {
-  document.getElementById('export-days').value = '';
-});
-document.getElementById('export-end-date').addEventListener('change', function() {
-  document.getElementById('export-days').value = '';
-});
+  loadMetrics();
+  loadActiveNow();
+  setInterval(loadActiveNow, 30000); // Refresh every 30 seconds
 
-// Export CSV button handler
-document.getElementById('export-csv-btn').addEventListener('click', function() {
-  const startDate = document.getElementById('export-start-date').value;
-  const endDate = document.getElementById('export-end-date').value;
-  
-  if (!startDate || !endDate) {
-    alert('Please select both start and end dates');
-    return;
-  }
-  
-  if (new Date(startDate) > new Date(endDate)) {
-    alert('Start date must be before end date');
-    return;
-  }
-  
-  const url = `/admin/export_csv?metric=posts&start_date=${startDate}&end_date=${endDate}`;
-  window.location.href = url;
-});
+  // Set default dates for export (last 30 days)
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  document.getElementById('export-end-date').value = today.toISOString().split('T')[0];
+  document.getElementById('export-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
 
-document.getElementById('reindex-btn').addEventListener('click', async ()=>{
-  const btn = document.getElementById('reindex-btn');
-  btn.disabled = true;
-  btn.textContent = 'Reindexing...';
-  const res = await fetch('/admin/reindex_meili', {method:'POST'});
-  const json = await res.json();
-  alert(JSON.stringify(json));
-  btn.disabled = false;
-  btn.textContent = 'Reindex Search';
-});
+  // Handle quick select dropdown
+  document.getElementById('export-days').addEventListener('change', function () {
+    const days = this.value;
+    if (days) {
+      const endDate = new Date();
+      const startDate = new Date(endDate.getTime() - parseInt(days) * 24 * 60 * 60 * 1000);
+      document.getElementById('export-end-date').value = endDate.toISOString().split('T')[0];
+      document.getElementById('export-start-date').value = startDate.toISOString().split('T')[0];
+    }
+  });
+
+  // Clear quick select when custom dates are picked
+  document.getElementById('export-start-date').addEventListener('change', function () {
+    document.getElementById('export-days').value = '';
+  });
+  document.getElementById('export-end-date').addEventListener('change', function () {
+    document.getElementById('export-days').value = '';
+  });
+
+  // Export CSV button handler
+  document.getElementById('export-csv-btn').addEventListener('click', function () {
+    const startDate = document.getElementById('export-start-date').value;
+    const endDate = document.getElementById('export-end-date').value;
+
+    if (!startDate || !endDate) {
+      alert('Please select both start and end dates');
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      alert('Start date must be before end date');
+      return;
+    }
+
+    const url = `/admin/export_csv?metric=posts&start_date=${startDate}&end_date=${endDate}`;
+    window.location.href = url;
+  });
+
+  document.getElementById('reindex-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('reindex-btn');
+    btn.disabled = true;
+    btn.textContent = 'Reindexing...';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const res = await fetch('/admin/reindex_meili', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken }
+    });
+    const json = await res.json();
+    alert(JSON.stringify(json));
+    btn.disabled = false;
+    btn.textContent = 'Reindex Search';
+  });
 </script>
 {% endblock %}

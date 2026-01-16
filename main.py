@@ -41,8 +41,11 @@ from pywebpush import webpush, WebPushException
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from flask_wtf.csrf import CSRFProtect
+from urllib.parse import urlparse, urljoin
 
 app = Flask(__name__)
+csrf = CSRFProtect(app)
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.
@@ -110,6 +113,12 @@ def get_env_variable(name: str) -> str:
         message = f"Expected environment variable '{name}' not set."
         raise Exception(message)
 
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and \
+           ref_url.netloc == test_url.netloc
+
 # Google OAuth configuration
 GOOGLE_CLIENT_ID = get_env_variable('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = get_env_variable('GOOGLE_CLIENT_SECRET')
@@ -173,9 +182,11 @@ announcements_conf = db['announcements']
 comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
 push_subscriptions_conf = db['push_subscriptions']
+newsletter_conf = db['newsletter_subs']
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
+newsletter_conf.create_index('email', unique=True)
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
@@ -1551,7 +1562,10 @@ def login():
                 flash('You have logged in as admin', 'success')
                 return redirect(url_for('home'))
             flash(f"Welcome back, {user['username']}!", "success")
-            return redirect(request.args.get('next') or url_for('home'))
+            next_url = request.args.get('next')
+            if not next_url or not is_safe_url(next_url):
+                next_url = url_for('home')
+            return redirect(next_url)
         else:
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login', form='login')
@@ -3817,44 +3831,97 @@ def personal_space():
     
     return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_page='personal_space', title=page_title, description=page_description)
 
-@app.route('/post/<post_id>/toggle_like', methods=['POST'])
+@app.route('/post/<post_id>/react', methods=['POST'])
 @login_required
-def toggle_like_post(post_id):
-    """Toggles the like status of a post for the current user."""
+def toggle_reaction_post(post_id):
+    """Toggles a specific reaction for a post."""
     try:
+        reaction_type = request.json.get('reaction', 'heart') or 'heart'
+        # Allowed reactions
+        if reaction_type not in ['heart', 'wow', 'insightful', 'laugh', 'sad']:
+            reaction_type = 'heart'
+
         post_oid = ObjectId(post_id)
         post = posts_conf.find_one({'_id': post_oid})
         if not post:
-            if request.is_json:
-                return jsonify({'error': 'Post not found'}), 404
-            flash('Post not found.', 'danger')
-            return redirect(url_for('home'))
+            return jsonify({'error': 'Post not found'}), 404
 
         user_id = str(current_user.id)
-        liked_by = post.get('liked_by', [])
         
-        is_liked = False
-        if user_id in liked_by:
-            posts_conf.update_one({'_id': post_oid}, {'$pull': {'liked_by': user_id}, '$inc': {'likes_count': -1}})
-            is_liked = False
+        # Reactions are stored as a dict: { "heart": [user_id, ...], "wow": [...] }
+        reactions = post.get('reactions', {})
+        if not isinstance(reactions, dict):
+            reactions = {}
+            
+        # For legacy compatibility, handle the old liked_by field if it exists
+        liked_by = post.get('liked_by', [])
+        if liked_by and 'heart' not in reactions:
+            reactions['heart'] = liked_by
+
+        current_user_reactions = [] # Which types this user has on this post
+        for r_type, users in reactions.items():
+            if user_id in users:
+                current_user_reactions.append(r_type)
+
+        is_added = False
+        # If user already reacted with THIS type, remove it (toggle off)
+        if reaction_type in current_user_reactions:
+            posts_conf.update_one(
+                {'_id': post_oid},
+                {
+                    '$pull': {f'reactions.{reaction_type}': user_id},
+                    '$inc': {'likes_count': -1} # keep likes_count as total reactions for now
+                }
+            )
+            is_added = False
         else:
-            posts_conf.update_one({'_id': post_oid}, {'$addToSet': {'liked_by': user_id}, '$inc': {'likes_count': 1}})
-            is_liked = True
+            # If user has OTHER reactions, they can either have multiple or we can swap. 
+            # Usually people allow only one reaction type per user. Let's enforce one.
+            for other_type in current_user_reactions:
+                posts_conf.update_one(
+                    {'_id': post_oid},
+                    {
+                        '$pull': {f'reactions.{other_type}': user_id},
+                        '$inc': {'likes_count': -1}
+                    }
+                )
+            
+            # Add new reaction
+            posts_conf.update_one(
+                {'_id': post_oid},
+                {
+                    '$addToSet': {f'reactions.{reaction_type}': user_id},
+                    '$inc': {'likes_count': 1}
+                }
+            )
+            is_added = True
 
-        # Get updated count
-        updated_post = posts_conf.find_one({'_id': post_oid}, {'likes_count': 1})
-        likes_count = updated_post.get('likes_count', 0) if updated_post else 0
+        # Get updated counts
+        updated_post = posts_conf.find_one({'_id': post_oid})
+        new_reactions = updated_post.get('reactions', {})
+        reaction_counts = {r: len(u) for r, u in new_reactions.items()}
+        total_count = updated_post.get('likes_count', 0)
 
-        if request.is_json:
-            return jsonify({'liked': is_liked, 'likes_count': likes_count})
+        # Clear legacy fields if we moved them
+        if 'liked_by' in updated_post:
+            posts_conf.update_one({'_id': post_oid}, {'$unset': {'liked_by': ""}})
 
-        return redirect(request.referrer or url_for('view_post', slug=post['slug']))
+        return jsonify({
+            'success': True,
+            'reaction': reaction_type if is_added else None,
+            'reaction_counts': reaction_counts,
+            'total_count': total_count
+        })
+
     except Exception as e:
-        app.logger.error(f"Error toggling like for post {post_id}: {e}")
-        if request.is_json:
-            return jsonify({'error': 'Internal error'}), 500
-        flash('An error occurred.', 'danger')
-        return redirect(url_for('home'))
+        app.logger.error(f"Error toggling reaction for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
+@app.route('/post/<post_id>/toggle_like', methods=['POST'])
+@login_required
+def toggle_like_post(post_id):
+    """Legacy endpoint for the simple like button."""
+    return toggle_reaction_post(post_id)
 
 @app.route('/post/<post_id>/toggle_save', methods=['POST'])
 @login_required
@@ -4132,6 +4199,27 @@ def logout():
     logout_user() # Use Flask-Login to properly log the user out
     flash('You have been logged out.', 'info')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/api/newsletter/subscribe', methods=['POST'])
+@limits(calls=5, period=60) # Rate limit subscriptions
+def api_newsletter_subscribe():
+    email = request.json.get('email')
+    if not email or '@' not in email:
+        return jsonify({'error': 'Invalid email address'}), 400
+    
+    try:
+        newsletter_conf.insert_one({
+            'email': email,
+            'subscribed_at': datetime.datetime.now(),
+            'ip': request.remote_addr
+        })
+        return jsonify({'success': True, 'message': 'Successfully subscribed to the newsletter!'})
+    except DuplicateKeyError:
+        return jsonify({'success': True, 'message': 'You are already subscribed!'})
+    except Exception as e:
+        app.logger.error(f"Newsletter subscription error: {e}")
+        return jsonify({'error': 'An internal error occurred'}), 500
 
 
 # Handles any possible errors

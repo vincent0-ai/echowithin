@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block head_meta %}
-    <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
-    <script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -19,8 +19,10 @@
         <p>Share your ideas, experiences, and perspectives with the EchoWithin community.</p>
 
         {# CHECK THIS: Ensure 'create_post' matches the function name of your Flask route #}
-        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data" style="margin-top: 2rem;">
-            
+        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data"
+            style="margin-top: 2rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
             <div class="form-group">
                 <label for="title">Title</label>
                 <input type="text" id="title" name="title" class="form-input" required minlength="3">
@@ -57,18 +59,20 @@
                         <option value="Memes">Memes</option>
                         <option value="Philosophy">Philosophy</option>
                         <option value="History">History</option>
-                        </optgroup>
+                    </optgroup>
                 </select>
             </div>
 
             <div class="form-group">
                 <label for="images">Images (Optional)</label>
-                <input type="file" id="images" name="images" class="form-input" accept="image/png, image/jpeg, image/gif" multiple>
+                <input type="file" id="images" name="images" class="form-input"
+                    accept="image/png, image/jpeg, image/gif" multiple>
             </div>
 
             <div class="form-group">
                 <label for="video">Video (Optional, max 10MB)</label>
-                <input type="file" id="video" name="video" class="form-input" accept="video/mp4, video/webm, video/ogg, video/mov">
+                <input type="file" id="video" name="video" class="form-input"
+                    accept="video/mp4, video/webm, video/ogg, video/mov">
             </div>
 
             <div class="form-group" style="text-align: right;">
@@ -79,62 +83,62 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const postForm = document.getElementById('create-post-form');
-    const submitButton = document.getElementById('submit-post-btn');
-    const tagsElement = document.getElementById('tags');
-    const contentElement = document.getElementById('content');
-    const contentError = document.getElementById('content-error');
-    
-    let easyMDE;
+    document.addEventListener('DOMContentLoaded', function () {
+        const postForm = document.getElementById('create-post-form');
+        const submitButton = document.getElementById('submit-post-btn');
+        const tagsElement = document.getElementById('tags');
+        const contentElement = document.getElementById('content');
+        const contentError = document.getElementById('content-error');
 
-    // Initialize EasyMDE
-    if (contentElement) {
-        easyMDE = new EasyMDE({
-            element: contentElement,
-            spellChecker: false,
-            placeholder: "Write your post content here...",
-            status: ["lines", "words"],
-            forceSync: true, // Auto-syncs changes to original textarea
-        });
-    }
+        let easyMDE;
 
-    // Initialize Choices.js
-    if (tagsElement) {
-        new Choices(tagsElement, {
-            removeItemButton: true,
-            placeholder: true,
-            placeholderValue: 'Select tags...',
-        });
-    }
+        // Initialize EasyMDE
+        if (contentElement) {
+            easyMDE = new EasyMDE({
+                element: contentElement,
+                spellChecker: false,
+                placeholder: "Write your post content here...",
+                status: ["lines", "words"],
+                forceSync: true, // Auto-syncs changes to original textarea
+            });
+        }
 
-    if (postForm) {
-        postForm.addEventListener('submit', function(e) {
-            // 1. Force EasyMDE to update the hidden textarea value
-            if (easyMDE) {
-                // This puts the text from the pretty editor into the standard form field
-                easyMDE.codemirror.save(); 
-            }
+        // Initialize Choices.js
+        if (tagsElement) {
+            new Choices(tagsElement, {
+                removeItemButton: true,
+                placeholder: true,
+                placeholderValue: 'Select tags...',
+            });
+        }
 
-            // 2. Manual Validation for Content
-            // We removed 'required' from HTML, so we check it here
-            if (!contentElement.value.trim()) {
-                e.preventDefault(); // Stop submission
-                contentError.style.display = 'block'; // Show error message
-                return;
-            } else {
-                contentError.style.display = 'none';
-            }
+        if (postForm) {
+            postForm.addEventListener('submit', function (e) {
+                // 1. Force EasyMDE to update the hidden textarea value
+                if (easyMDE) {
+                    // This puts the text from the pretty editor into the standard form field
+                    easyMDE.codemirror.save();
+                }
 
-            // 3. UX: Disable button and show loading state
-            if (submitButton) {
-                submitButton.disabled = true;
-                submitButton.textContent = 'Submitting...';
-            }
-            
-            // The form will now proceed to submit normally
-        });
-    }
-});
+                // 2. Manual Validation for Content
+                // We removed 'required' from HTML, so we check it here
+                if (!contentElement.value.trim()) {
+                    e.preventDefault(); // Stop submission
+                    contentError.style.display = 'block'; // Show error message
+                    return;
+                } else {
+                    contentError.style.display = 'none';
+                }
+
+                // 3. UX: Disable button and show loading state
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    submitButton.textContent = 'Submitting...';
+                }
+
+                // The form will now proceed to submit normally
+            });
+        }
+    });
 </script>
 {% endblock %}

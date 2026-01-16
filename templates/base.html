@@ -1,17 +1,19 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="shortcut icon" href="{{ url_for('static', filename = "coffee-bean.png")}}" type="image/x-icon">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="shortcut icon" href="{{ url_for('static', filename = " coffee-bean.png")}}" type="image/x-icon">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename = "style.css")}}">
+    <link rel="stylesheet" href="{{ url_for('static', filename = " style.css")}}">
     <!-- Choices.js CSS for custom dropdowns -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
 
-    <script src="{{ url_for('static', filename = "script.js")}}" defer></script>
+    <script src="{{ url_for('static', filename = " script.js")}}" defer></script>
     <style>
         /* Comment counter styles (server-provided counts shown via .comment-count-display) */
         .comment-count-display {
@@ -32,30 +34,35 @@
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.6);
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
             justify-content: center;
             align-items: center;
             z-index: 1000;
         }
+
         .custom-modal {
             background: #fff;
             padding: 25px;
             border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
             width: 90%;
             max-width: 400px;
             text-align: center;
         }
+
         .custom-modal-content p {
             margin-bottom: 20px;
             font-size: 1.1rem;
             color: #333;
         }
+
         .custom-modal-actions {
             display: flex;
             justify-content: center;
             gap: 15px;
         }
+
         .custom-modal-actions .btn {
             padding: 10px 20px;
             border: none;
@@ -67,6 +74,7 @@
         .post-tags {
             margin-top: 10px;
         }
+
         .tag-badge {
             display: inline-block;
             background-color: #f0f0f0;
@@ -75,6 +83,90 @@
             margin-right: 5px;
             border-radius: 4px;
             font-size: 0.8rem;
+        }
+
+        /* Reaction System Styles */
+        .reaction-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .reaction-btn {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 5px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .reaction-btn:hover {
+            background: #e8e8e8;
+            transform: scale(1.05);
+        }
+
+        .reaction-btn.reacted {
+            background: #fff0f0;
+            border-color: #ffcccc;
+            color: #ff4757;
+        }
+
+        .reaction-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background: #fff;
+            border-radius: 30px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            padding: 5px;
+            gap: 5px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            z-index: 100;
+            margin-bottom: 10px;
+        }
+
+        .reaction-container:hover .reaction-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .reaction-option {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            padding: 5px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            border-radius: 50%;
+        }
+
+        .reaction-option:hover {
+            transform: scale(1.3);
+            background: #f0f0f0;
+        }
+
+        .reaction-icon i {
+            font-size: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .reaction-menu {
+                padding: 3px;
+            }
+
+            .reaction-option {
+                font-size: 1.2rem;
+            }
         }
     </style>
     <style>
@@ -85,29 +177,35 @@
             padding: 2rem 1rem;
             text-align: center;
             border-top: 1px solid #e7e7e7;
-            margin-top: auto; /* Pushes footer to the bottom */
+            margin-top: auto;
+            /* Pushes footer to the bottom */
         }
+
         .footer-content {
             max-width: 1200px;
             margin: 0 auto;
         }
+
         .footer-links {
             margin: 0.5rem 0;
         }
+
         .footer-links a {
             color: #495057;
             text-decoration: none;
             margin: 0 10px;
             transition: color 0.2s;
         }
+
         .footer-links a:hover {
             color: #000;
         }
+
         .footer-socials a {
             font-size: 1.5rem;
         }
     </style>
-    
+
     <!-- Hide install button when running as installed PWA -->
     <style>
         @media all and (display-mode: standalone) {
@@ -116,116 +214,139 @@
             }
         }
     </style>
-    
+
     {# Block for Content Security Policy or other meta tags #}
     {% block head_meta %}{% endblock %}
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#ffffff">
-    
+
     <!-- iOS-specific PWA meta tags -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EchoWithin">
-    
+
     <!-- iOS app icons -->
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='logo.png') }}">
     <link rel="apple-touch-icon" sizes="167x167" href="{{ url_for('static', filename='logo.png') }}">
     <link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='logo.png') }}">
     <link rel="apple-touch-icon" sizes="120x120" href="{{ url_for('static', filename='logo.png') }}">
-    
+
     <!-- iOS splash screens (optional, for better user experience) -->
     <meta name="mobile-web-app-capable" content="yes">
-    
+
     {% block title %}<title>Auth</title>{% endblock %}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 
 <body>
     <div class="page-container">
-    <!-- Choices.js SCRIPT for custom dropdowns -->
-    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+        <!-- Choices.js SCRIPT for custom dropdowns -->
+        <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 
-    <div class="navbar">
-        <div class="nav-left">
-            <a href="{{ url_for('dashboard') }}" class="nav-brand">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="EchoWithin Logo" class="nav-logo">
-                EchoWithin
-            </a>
-            <div class="nav-socials" aria-hidden="false">
-                <a href="https://web.facebook.com/profile.php?id=61581191858783" target="_blank" rel="noopener noreferrer" title="Facebook"><i class="fa-brands fa-facebook"></i></a>
-                <a href="https://www.tiktok.com/@echowithin2025?_t=ZM-8zyR66ekbou&_r=1" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
-                <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+        <div class="navbar">
+            <div class="nav-left">
+                <a href="{{ url_for('dashboard') }}" class="nav-brand">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="EchoWithin Logo" class="nav-logo">
+                    EchoWithin
+                </a>
+                <div class="nav-socials" aria-hidden="false">
+                    <a href="https://web.facebook.com/profile.php?id=61581191858783" target="_blank"
+                        rel="noopener noreferrer" title="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="https://www.tiktok.com/@echowithin2025?_t=ZM-8zyR66ekbou&_r=1" target="_blank"
+                        rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank"
+                        rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                </div>
             </div>
-        </div>
-        <nav class="nav-links" id="nav-links">
-            {% if current_user.is_authenticated %}
+            <nav class="nav-links" id="nav-links">
+                {% if current_user.is_authenticated %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
-                <a href="{{ url_for('profile', username=current_user.username) }}" class="{{ 'active' if active_page == 'profile' }}">Profile</a>
+                <a href="{{ url_for('profile', username=current_user.username) }}"
+                    class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('logout') }}">Logout</a>
-            {% else %}
+                {% else %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 <a href="{{ url_for('login') }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
-            {% endif %}
-            <button id="install-button" class="install-btn" style="display: none;" onclick="promptInstall()">
-                <i class="fas fa-download"></i> Install
-            </button>
-        </nav>
-    </div>
-    <div class="overlay" id="overlay"></div>
-    
-    <div class="container">
-        <div class="flash-messages">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                {% if category in ['error', 'danger', 'warning'] %}
-                    <div class="alert alert-danger">{{ message }}</div>
-                {% else %}
-                    <div class="alert alert-success">{{ message }}</div>
                 {% endif %}
-            {% endfor %}
-        {%endif%}
-    {% endwith%}
-    </div>
-        {%block content%} {%endblock%}
-    </div>
+                <button id="install-button" class="install-btn" style="display: none;" onclick="promptInstall()">
+                    <i class="fas fa-download"></i> Install
+                </button>
+            </nav>
+        </div>
+        <div class="overlay" id="overlay"></div>
 
-    <!-- Custom Confirmation Modal -->
-    <div id="custom-confirm-overlay" class="custom-modal-overlay">
-        <div class="custom-modal">
-            <div class="custom-modal-content">
-                <p id="custom-confirm-msg">Are you sure?</p>
+        <div class="container">
+            <div class="flash-messages">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                {% if category in ['error', 'danger', 'warning'] %}
+                <div class="alert alert-danger">{{ message }}</div>
+                {% else %}
+                <div class="alert alert-success">{{ message }}</div>
+                {% endif %}
+                {% endfor %}
+                {%endif%}
+                {% endwith%}
             </div>
-            <div class="custom-modal-actions">
-                <button id="custom-confirm-cancel" class="btn edit-btn">Cancel</button>
-                <button id="custom-confirm-ok" class="btn delete-btn">Confirm</button>
+            {%block content%} {%endblock%}
+        </div>
+
+        <!-- Custom Confirmation Modal -->
+        <div id="custom-confirm-overlay" class="custom-modal-overlay">
+            <div class="custom-modal">
+                <div class="custom-modal-content">
+                    <p id="custom-confirm-msg">Are you sure?</p>
+                </div>
+                <div class="custom-modal-actions">
+                    <button id="custom-confirm-cancel" class="btn edit-btn">Cancel</button>
+                    <button id="custom-confirm-ok" class="btn delete-btn">Confirm</button>
+                </div>
             </div>
         </div>
-    </div>
-    <!-- Toast container for custom alerts -->
-    <div id="custom-toast-container" style="position: fixed; top: 20px; right: 20px; z-index:1200; display:flex; flex-direction:column; gap:10px;"></div>
-
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="{{ url_for('home') }}">Home</a> | <a href="{{ url_for('blog') }}">Blog</a> | <a href="{{ url_for('about') }}">About</a> | <a href="{{ url_for('terms') }}">Terms</a>
-            </div>
-            <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
+        <!-- Toast container for custom alerts -->
+        <div id="custom-toast-container"
+            style="position: fixed; top: 20px; right: 20px; z-index:1200; display:flex; flex-direction:column; gap:10px;">
         </div>
-    </footer>
+
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-newsletter"
+                    style="margin: 1.5rem 0; padding: 1.5rem; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                    <h4 style="margin-bottom: 0.5rem; color: #333;">Subscribe to our Newsletter</h4>
+                    <p style="font-size: 0.85rem; margin-bottom: 1rem; color: #666;">Get the latest posts and updates
+                        delivered to your inbox.</p>
+                    <form id="newsletter-form"
+                        style="display: flex; gap: 0.5rem; justify-content: center; max-width: 400px; margin: 0 auto;">
+                        <input type="email" id="newsletter-email" placeholder="your@email.com" required
+                            style="flex-grow: 1; padding: 0.6rem 1rem; border: 1px solid #ddd; border-radius: 5px; font-size: 0.9rem;">
+                        <button type="submit" class="btn comment-btn"
+                            style="width: auto; padding: 0.6rem 1.2rem;">Subscribe</button>
+                    </form>
+                    <div id="newsletter-message" style="margin-top: 0.8rem; font-size: 0.85rem; min-height: 1.2rem;">
+                    </div>
+                </div>
+                <div class="footer-links">
+                    <a href="{{ url_for('home') }}">Home</a> | <a href="{{ url_for('blog') }}">Blog</a> | <a
+                        href="{{ url_for('about') }}">About</a> | <a href="{{ url_for('terms') }}">Terms</a>
+                </div>
+                <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
+            </div>
+        </footer>
     </div>
 </body>
 
 <script>
     // PWA Install Prompt handling
     let deferredPrompt;
-    
+
     // Check if app is already installed (running in standalone mode)
     function isAppInstalled() {
         // Check display-mode media query (works for most browsers)
@@ -254,7 +375,7 @@
         }
         return false;
     }
-    
+
     // Hide install button if already installed
     function hideInstallButton() {
         const installButton = document.getElementById('install-button');
@@ -263,7 +384,7 @@
             installButton.remove(); // Also remove from DOM to be sure
         }
     }
-    
+
     // Run immediately to hide button as early as possible
     if (isAppInstalled()) {
         console.log('App is running in standalone mode (installed)');
@@ -271,7 +392,7 @@
         // Also set a flag to prevent any future showing
         window.__pwaInstalled = true;
     }
-    
+
     // Don't show install prompt if already installed as PWA
     if (!isAppInstalled() && !window.__pwaInstalled) {
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -322,101 +443,102 @@
 
     // Register service worker for PWA offline support and push notifications
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             // Register from root path for proper scope (needed for push notifications)
             navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
-                .then(function(reg) { 
+                .then(function (reg) {
                     console.log('Service worker registered with scope:', reg.scope);
                     // Initialize push notifications after service worker is ready
                     initPushNotifications(reg);
                 })
-                .catch(function(err) { console.warn('Service worker registration failed:', err); });
+                .catch(function (err) { console.warn('Service worker registration failed:', err); });
         });
     }
 
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
-        
-        // Check if push is supported
-        if (!('PushManager' in window)) {
-            console.log('Push notifications not supported');
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
+    if (!isLoggedIn) return;
+
+    // Check if push is supported
+    if (!('PushManager' in window)) {
+        console.log('Push notifications not supported');
+        return;
+    }
+
+    // Check if we're on iOS (Safari on iOS has limited push notification support)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
+    if (isIOS) {
+        console.log('iOS detected - Push notifications have limited support');
+        // On iOS, we'll only attempt notifications if explicitly requested by user
+        // You may want to add a UI button for users to enable notifications
+        return;
+    }
+
+    try {
+        // Check current subscription status
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+            console.log('Already subscribed to push notifications');
             return;
         }
-        
-        // Check if we're on iOS (Safari on iOS has limited push notification support)
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        
-        // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
-        if (isIOS) {
-            console.log('iOS detected - Push notifications have limited support');
-            // On iOS, we'll only attempt notifications if explicitly requested by user
-            // You may want to add a UI button for users to enable notifications
-            return;
-        }
-        
-        try {
-            // Check current subscription status
-            const subscription = await registration.pushManager.getSubscription();
-            if (subscription) {
-                console.log('Already subscribed to push notifications');
-                return;
-            }
-            
-            // Check if user has granted notification permission
-            if (Notification.permission === 'granted') {
-                await subscribeToPush(registration);
-            } else if (Notification.permission === 'default') {
-                // Check if we're on mobile - mobile browsers require permission request to be in user gesture context
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                
-                if (isMobile) {
-                    // On mobile, request permission immediately (page load from navigation may be considered user gesture)
-                    // Check if we've already asked recently to avoid repeated prompts
-                    const lastPrompt = sessionStorage.getItem('notificationPromptTime');
-                    const now = Date.now();
-                    // Only prompt once per session on mobile too
-                    if (!lastPrompt) {
-                        sessionStorage.setItem('notificationPromptTime', now.toString());
+
+        // Check if user has granted notification permission
+        if (Notification.permission === 'granted') {
+            await subscribeToPush(registration);
+        } else if (Notification.permission === 'default') {
+            // Check if we're on mobile - mobile browsers require permission request to be in user gesture context
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                // On mobile, request permission immediately (page load from navigation may be considered user gesture)
+                // Check if we've already asked recently to avoid repeated prompts
+                const lastPrompt = sessionStorage.getItem('notificationPromptTime');
+                const now = Date.now();
+                // Only prompt once per session on mobile too
+                if (!lastPrompt) {
+                    sessionStorage.setItem('notificationPromptTime', now.toString());
+                    try {
+                        const permission = await Notification.requestPermission();
+                        if (permission === 'granted') {
+                            await subscribeToPush(registration);
+                        }
+                    } catch (err) {
+                        console.warn('Error requesting notification permission on mobile:', err);
+                    }
+                }
+            } else {
+                // On desktop, use delayed prompt to be less intrusive
+                // Check if we've already asked recently (use sessionStorage to avoid repeated prompts)
+                const lastPrompt = sessionStorage.getItem('notificationPromptTime');
+                const now = Date.now();
+                // Only prompt once per session
+                if (!lastPrompt) {
+                    sessionStorage.setItem('notificationPromptTime', now.toString());
+                    // Delay the prompt by 5 seconds so user has time to orient themselves
+                    setTimeout(async () => {
                         try {
                             const permission = await Notification.requestPermission();
                             if (permission === 'granted') {
                                 await subscribeToPush(registration);
                             }
                         } catch (err) {
-                            console.warn('Error requesting notification permission on mobile:', err);
+                            console.warn('Error requesting notification permission:', err);
                         }
-                    }
-                } else {
-                    // On desktop, use delayed prompt to be less intrusive
-                    // Check if we've already asked recently (use sessionStorage to avoid repeated prompts)
-                    const lastPrompt = sessionStorage.getItem('notificationPromptTime');
-                    const now = Date.now();
-                    // Only prompt once per session
-                    if (!lastPrompt) {
-                        sessionStorage.setItem('notificationPromptTime', now.toString());
-                        // Delay the prompt by 5 seconds so user has time to orient themselves
-                        setTimeout(async () => {
-                            try {
-                                const permission = await Notification.requestPermission();
-                                if (permission === 'granted') {
-                                    await subscribeToPush(registration);
-                                }
-                            } catch (err) {
-                                console.warn('Error requesting notification permission:', err);
-                            }
-                        }, 5000);
-                    }
+                    }, 5000);
                 }
             }
-        } catch (err) {
-            console.warn('Error initializing push notifications:', err);
         }
+    } catch (err) {
+        console.warn('Error initializing push notifications:', err);
     }
-    
+    }
+
     async function subscribeToPush(registration) {
         try {
             // Get the VAPID public key from the server
@@ -425,26 +547,30 @@
                 console.log('Push notifications not configured on server');
                 return;
             }
-            
+
             const { publicKey } = await response.json();
             if (!publicKey) return;
-            
+
             // Convert the public key to Uint8Array
             const applicationServerKey = urlBase64ToUint8Array(publicKey);
-            
+
             // Subscribe to push
             const subscription = await registration.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: applicationServerKey
             });
-            
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             // Send subscription to server
             const subResponse = await fetch('/api/push/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify(subscription.toJSON())
             });
-            
+
             if (subResponse.ok) {
                 console.log('Successfully subscribed to push notifications');
             } else {
@@ -454,49 +580,53 @@
             console.error('Failed to subscribe to push:', err);
         }
     }
-    
+
     // Global function to unsubscribe from push notifications
-    window.unsubscribeFromPush = async function() {
+    window.unsubscribeFromPush = async function () {
         try {
             const registration = await navigator.serviceWorker.ready;
             const subscription = await registration.pushManager.getSubscription();
-            
+
             if (subscription) {
                 // Unsubscribe locally
                 await subscription.unsubscribe();
-                
+
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 // Notify server
                 await fetch('/api/push/unsubscribe', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
                     body: JSON.stringify({ endpoint: subscription.endpoint })
                 });
-                
+
                 console.log('Unsubscribed from push notifications');
             }
         } catch (err) {
             console.error('Failed to unsubscribe:', err);
         }
     };
-    
+
     // Utility function to convert base64 to Uint8Array for VAPID key
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding)
             .replace(/-/g, '+')
             .replace(/_/g, '/');
-        
+
         const rawData = window.atob(base64);
         const outputArray = new Uint8Array(rawData.length);
-        
+
         for (let i = 0; i < rawData.length; ++i) {
             outputArray[i] = rawData.charCodeAt(i);
         }
         return outputArray;
     }
-    
+
     // Global function to request push notification permission and subscribe
-    window.enablePushNotifications = async function() {
+    window.enablePushNotifications = async function () {
         try {
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
@@ -537,43 +667,77 @@
         const commentToggleButtons = document.querySelectorAll('.toggle-comments-btn');
         const readMoreButtons = document.querySelectorAll('.read-more-btn');
 
-        // --- Like Button Handler (Global) ---
-        document.body.addEventListener('click', function(e) {
-            const likeBtn = e.target.closest('.like-btn');
-            if (likeBtn && !likeBtn.disabled) {
+        // --- Reaction System Handler (Global) ---
+        const reactionEmojis = {
+            'heart': '❤️',
+            'wow': '😮',
+            'insightful': '💡',
+            'laugh': '😂',
+            'sad': '😢'
+        };
+
+        document.body.addEventListener('click', async function (e) {
+            const reactionBtn = e.target.closest('.reaction-btn');
+            const reactionOption = e.target.closest('.reaction-option');
+
+            if (reactionBtn && !reactionBtn.disabled && !reactionOption) {
+                // Clicking the main button toggles the default 'heart' or current reaction
                 e.preventDefault();
-                const postId = likeBtn.dataset.postId;
-                
-                fetch(`/post/${postId}/toggle_like`, {
+                const postId = reactionBtn.closest('.reaction-container').dataset.postId;
+                const currentReaction = reactionBtn.dataset.currentReaction;
+                const targetReaction = currentReaction || 'heart';
+
+                handleReaction(postId, targetReaction, reactionBtn);
+            }
+
+            if (reactionOption) {
+                e.preventDefault();
+                const reactionContainer = reactionOption.closest('.reaction-container');
+                const postId = reactionContainer.dataset.postId;
+                const reactionBtn = reactionContainer.querySelector('.reaction-btn');
+                const targetReaction = reactionOption.dataset.reaction;
+
+                handleReaction(postId, targetReaction, reactionBtn);
+            }
+        });
+
+        async function handleReaction(postId, reactionType, btn) {
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                const response = await fetch(`/post/${postId}/react`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('Error:', data.error);
-                        return;
-                    }
-                    const icon = likeBtn.querySelector('i');
-                    const countSpan = likeBtn.querySelector('.likes-count');
-                    
-                    if (data.liked) {
-                        likeBtn.classList.add('liked');
-                        icon.classList.remove('far');
-                        icon.classList.add('fas');
-                    } else {
-                        likeBtn.classList.remove('liked');
-                        icon.classList.remove('fas');
-                        icon.classList.add('far');
-                    }
-                    countSpan.textContent = data.likes_count;
-                })
-                .catch(err => console.error('Like error:', err));
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ reaction: reactionType })
+                });
+
+                const data = await response.json();
+                if (data.error) {
+                    console.error('Reaction error:', data.error);
+                    return;
+                }
+
+                const iconSpan = btn.querySelector('.reaction-icon');
+                const countSpan = btn.querySelector('.likes-count');
+
+                if (data.reaction) {
+                    btn.classList.add('reacted');
+                    btn.dataset.currentReaction = data.reaction;
+                    iconSpan.textContent = reactionEmojis[data.reaction] || '❤️';
+                } else {
+                    btn.classList.remove('reacted');
+                    btn.dataset.currentReaction = '';
+                    iconSpan.innerHTML = '<i class="far fa-heart"></i>';
+                }
+                countSpan.textContent = data.total_count;
+
+            } catch (err) {
+                console.error('Reaction fetch error:', err);
             }
-        });
+        }
 
         readMoreButtons.forEach(button => {
             button.addEventListener('click', () => {
@@ -647,9 +811,13 @@
         function recordPostView(postId) {
             if (!postId) return;
 
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             // Track views per user per day in the database
             // Send a request to the server to increment the view count
-            fetch(`/api/posts/${postId}/view`, { method: 'POST' })
+            fetch(`/api/posts/${postId}/view`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -678,7 +846,7 @@
 
         // Custom toast alerts
         const toastContainer = document.getElementById('custom-toast-container');
-        function showCustomAlert(message, type='info', duration=3500) {
+        function showCustomAlert(message, type = 'info', duration = 3500) {
             const toast = document.createElement('div');
             toast.className = 'custom-toast';
             toast.style.background = (type === 'error' || type === 'danger') ? '#8b0000' : (type === 'success' ? '#2c7a2c' : '#333');
@@ -718,7 +886,7 @@
         });
 
         // --- Event delegation for custom confirms on any form ---
-        document.body.addEventListener('submit', function(e) {
+        document.body.addEventListener('submit', function (e) {
             // Target forms for deletion or other confirmation actions
             const form = e.target;
             const confirmMessage = form.getAttribute('data-confirm');
@@ -732,7 +900,7 @@
 
         // Record views only when navigating to a post via links marked with `.record-view-link`.
         // This avoids counting expansions like "Read More" as full post views.
-        document.body.addEventListener('click', function(e) {
+        document.body.addEventListener('click', function (e) {
             const anchor = e.target.closest('a.record-view-link');
             if (!anchor) return;
             const postId = anchor.dataset.postId;
@@ -740,24 +908,24 @@
         });
 
         // --- Share Button Handler ---
-        document.body.addEventListener('click', async function(e) {
+        document.body.addEventListener('click', async function (e) {
             const shareBtn = e.target.closest('.share-btn');
             if (!shareBtn) return;
-            
+
             e.preventDefault();
             const postId = shareBtn.dataset.postId;
             if (!postId) return;
-            
+
             try {
                 // Fetch share data from server
                 const response = await fetch(`/api/post/${postId}/share-data`);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     showCustomAlert('Unable to share this post', 'error');
                     return;
                 }
-                
+
                 // Check if Web Share API is available (mobile-friendly)
                 if (navigator.share) {
                     try {
@@ -766,8 +934,12 @@
                             text: data.description,
                             url: data.share_url
                         });
+                        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                         // Track the share
-                        await fetch(`/post/${postId}/share`, { method: 'POST' });
+                        await fetch(`/post/${postId}/share`, {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrfToken }
+                        });
                         // Update share count in UI
                         const countSpan = shareBtn.querySelector('.share-count');
                         if (countSpan) {
@@ -794,7 +966,7 @@
             // Remove existing modal if present
             const existingModal = document.getElementById('share-modal');
             if (existingModal) existingModal.remove();
-            
+
             const modal = document.createElement('div');
             modal.id = 'share-modal';
             modal.className = 'share-modal-overlay';
@@ -846,10 +1018,10 @@
                     </div>
                 </div>
             `;
-            
+
             document.body.appendChild(modal);
             document.body.style.overflow = 'hidden';
-            
+
             // Close handlers
             const closeBtn = modal.querySelector('.share-modal-close');
             closeBtn.addEventListener('click', closeShareModal);
@@ -857,7 +1029,7 @@
                 if (e.target === modal) closeShareModal();
             });
             document.addEventListener('keydown', handleShareModalEsc);
-            
+
             // Copy URL handler
             const copyBtn = modal.querySelector('#copy-share-url');
             const urlInput = modal.querySelector('#share-url-input');
@@ -865,9 +1037,13 @@
                 try {
                     await navigator.clipboard.writeText(data.share_url);
                     copyBtn.innerHTML = '<i class="fas fa-check"></i>';
-                    
+
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                     // Track the share when copying link
-                    await fetch(`/post/${postId}/share`, { method: 'POST' });
+                    await fetch(`/post/${postId}/share`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    });
                     // Update share count in UI
                     const shareBtn = document.querySelector(`.share-btn[data-post-id="${postId}"]`);
                     if (shareBtn) {
@@ -876,7 +1052,7 @@
                             countSpan.textContent = parseInt(countSpan.textContent || '0') + 1;
                         }
                     }
-                    
+
                     setTimeout(() => {
                         copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
                     }, 2000);
@@ -885,11 +1061,15 @@
                     document.execCommand('copy');
                 }
             });
-            
+
             // Track shares when clicking platform buttons
             modal.querySelectorAll('.share-platform-btn').forEach(btn => {
                 btn.addEventListener('click', async () => {
-                    await fetch(`/post/${postId}/share`, { method: 'POST' });
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    await fetch(`/post/${postId}/share`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    });
                     // Update share count in the page
                     const shareBtn = document.querySelector(`.share-btn[data-post-id="${postId}"]`);
                     if (shareBtn) {
@@ -901,7 +1081,7 @@
                 });
             });
         }
-        
+
         function closeShareModal() {
             const modal = document.getElementById('share-modal');
             if (modal) {
@@ -910,7 +1090,7 @@
             }
             document.removeEventListener('keydown', handleShareModalEsc);
         }
-        
+
         function handleShareModalEsc(e) {
             if (e.key === 'Escape') closeShareModal();
         }
@@ -919,7 +1099,7 @@
 
 <!-- App Badge (Unread Count) Script -->
 <script>
-    (function() {
+    (function () {
         // App Badge API for showing unread count on PWA icon
         async function updateAppBadge(count) {
             if ('setAppBadge' in navigator) {
@@ -934,17 +1114,17 @@
                 }
             }
         }
-        
+
         // Clear badge when user focuses on the app
-        document.addEventListener('visibilitychange', function() {
+        document.addEventListener('visibilitychange', function () {
             if (document.visibilityState === 'visible') {
                 updateAppBadge(0);
             }
         });
-        
+
         // Expose globally for use elsewhere
         window.updateAppBadge = updateAppBadge;
-        
+
         // Check for unread notifications periodically (only for logged in users)
         {% if current_user.is_authenticated %}
         async function checkUnreadCount() {
@@ -958,14 +1138,64 @@
                 // Silently fail - not critical
             }
         }
-        
+
         // Check on load and every 60 seconds
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             checkUnreadCount();
             setInterval(checkUnreadCount, 60000);
         });
         {% endif %}
     })();
+</script>
+
+<!-- Newsletter Script -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const newsletterForm = document.getElementById('newsletter-form');
+        const newsletterMessage = document.getElementById('newsletter-message');
+
+        if (newsletterForm) {
+            newsletterForm.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const email = document.getElementById('newsletter-email').value;
+                const btn = newsletterForm.querySelector('button');
+                const originalBtnText = btn.textContent;
+
+                btn.disabled = true;
+                btn.textContent = 'Subscribing...';
+                newsletterMessage.textContent = '';
+
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    const response = await fetch('/api/newsletter/subscribe', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ email: email })
+                    });
+
+                    const data = await response.json();
+                    if (response.ok) {
+                        newsletterMessage.style.color = '#2c7a2c';
+                        newsletterMessage.textContent = data.message;
+                        newsletterForm.reset();
+                    } else {
+                        newsletterMessage.style.color = '#8b0000';
+                        newsletterMessage.textContent = data.error || 'Something went wrong. Please try again.';
+                    }
+                } catch (err) {
+                    console.error('Newsletter error:', err);
+                    newsletterMessage.style.color = '#8b0000';
+                    newsletterMessage.textContent = 'Network error. Please try again later.';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalBtnText;
+                }
+            });
+        }
+    });
 </script>
 
 </html>

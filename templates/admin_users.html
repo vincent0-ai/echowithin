@@ -10,8 +10,10 @@
     </header>
 
     <!-- Search Form -->
-    <form action="{{ url_for('admin_users') }}" method="GET" class="search-form" style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
-        <input type="text" name="query" class="form-input" placeholder="Search by username or email..." value="{{ query or '' }}" style="width: 70%;">
+    <form action="{{ url_for('admin_users') }}" method="GET" class="search-form"
+        style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
+        <input type="text" name="query" class="form-input" placeholder="Search by username or email..."
+            value="{{ query or '' }}" style="width: 70%;">
         <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
     </form>
 
@@ -21,29 +23,36 @@
             {% for user in users %}
             <div class="post-item" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="user-info">
-                    <h3 style="margin-bottom: 0.25rem;">{{ user.username }} {% if user.is_admin %}<span style="font-size: 0.8rem; color: #d9534f;">(Admin)</span>{% endif %}</h3>
+                    <h3 style="margin-bottom: 0.25rem;">{{ user.username }} {% if user.is_admin %}<span
+                            style="font-size: 0.8rem; color: #d9534f;">(Admin)</span>{% endif %}</h3>
                     <p style="font-size: 0.9rem; color: #666;">{{ user.email }}</p>
                     {% if user.is_banned %}
-                        <p style="color: red; font-weight: bold;">Status: Banned</p>
+                    <p style="color: red; font-weight: bold;">Status: Banned</p>
                     {% endif %}
                 </div>
                 <div class="post-actions" style="display: flex; gap: 10px;">
                     {# Admins cannot ban or delete themselves #}
                     {% if user._id|string != current_user.id %}
-                        {% if user.is_banned %}
-                            <form action="{{ url_for('unban_user', user_id=user._id) }}" method="POST" data-confirm="Are you sure you want to unban this user?">
-                                <button type="submit" class="btn edit-btn">Unban</button>
-                            </form>
-                        {% else %}
-                            <form action="{{ url_for('ban_user', user_id=user._id) }}" method="POST" data-confirm="Are you sure you want to ban this user? This will prevent them from logging in.">
-                                <button type="submit" class="btn delete-btn">Ban</button>
-                            </form>
-                        {% endif %}
-                        <form action="{{ url_for('delete_user', user_id=user._id) }}" method="POST" data-confirm="Are you sure you want to PERMANENTLY DELETE this user and all their posts? This action cannot be undone.">
-                            <button type="submit" class="btn delete-btn">Delete</button>
-                        </form>
+                    {% if user.is_banned %}
+                    <form action="{{ url_for('unban_user', user_id=user._id) }}" method="POST"
+                        data-confirm="Are you sure you want to unban this user?">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn edit-btn">Unban</button>
+                    </form>
                     {% else %}
-                        <span style="align-self: center; color: #777;">(You)</span>
+                    <form action="{{ url_for('ban_user', user_id=user._id) }}" method="POST"
+                        data-confirm="Are you sure you want to ban this user? This will prevent them from logging in.">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn delete-btn">Ban</button>
+                    </form>
+                    {% endif %}
+                    <form action="{{ url_for('delete_user', user_id=user._id) }}" method="POST"
+                        data-confirm="Are you sure you want to PERMANENTLY DELETE this user and all their posts? This action cannot be undone.">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn delete-btn">Delete</button>
+                    </form>
+                    {% else %}
+                    <span style="align-self: center; color: #777;">(You)</span>
                     {% endif %}
                 </div>
             </div>

@@ -1,120 +1,153 @@
 {% macro render_post_item(post, current_user) %}
 <div class="post-item">
     <div class="post-header">
-        <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link" data-post-id="{{ post._id|string }}">{{ post.title }}</a></h3>
+        <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link" data-post-id="{{ post._id|string }}">{{
+                post.title }}</a></h3>
         <div class="post-views">
             <i class="fa-regular fa-eye"></i>
-            <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0 }}</span>
+            <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0
+                }}</span>
         </div>
     </div>
 
-        {% if post.status == 'processing_media' %}
-            <div class="media-processing-placeholder">
-                <div class="spinner"></div>
-                <p>Your media is being processed...</p>
-            </div>
-        {% else %}
+    {% if post.status == 'processing_media' %}
+    <div class="media-processing-placeholder">
+        <div class="spinner"></div>
+        <p>Your media is being processed...</p>
+    </div>
+    {% else %}
     {# --- Existing Media Display Logic --- #}
     {% if post.video_url %}
-        <div class="post-media-container">
-            <video class="post-video" controls preload="metadata">
-                <source src="{{ post.video_url }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
+    <div class="post-media-container">
+        <video class="post-video" controls preload="metadata">
+            <source src="{{ post.video_url }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
 
     {% elif post.video_filename %}
-        <div class="post-media-container">
-            <video class="post-video" controls preload="metadata">
-                <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </div>
+    <div class="post-media-container">
+        <video class="post-video" controls preload="metadata">
+            <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
     {% elif post.image_urls %}
-        {# Support multiple image URLs (list). Render a gallery if more than one. #}
-        {% set images = post.image_urls %}
-        {% if images|length > 1 %}
-            <div class="post-gallery">
-                {% for img in images %}
-                    <div class="post-gallery-item">
-                        <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
-                    </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
-                {% if post.image_status in ['safe', 'processing'] %}
-                    <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ images[0] }}">
-                {% elif post.image_status == 'removed_nsfw' %}
-                    <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
-                {% endif %}
-            </div>
+    {# Support multiple image URLs (list). Render a gallery if more than one. #}
+    {% set images = post.image_urls %}
+    {% if images|length > 1 %}
+    <div class="post-gallery">
+        {% for img in images %}
+        <div class="post-gallery-item">
+            <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}"
+                class="gallery-thumb" />
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+        {% if post.image_status in ['safe', 'processing'] %}
+        <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image"
+            data-full-url="{{ images[0] }}">
+        {% elif post.image_status == 'removed_nsfw' %}
+        <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
         {% endif %}
+    </div>
+    {% endif %}
 
     {% elif post.image_filenames %}
-        {# Support list of uploaded filenames #}
-        {% set files = post.image_filenames %}
-        {% if files|length > 1 %}
-            <div class="post-gallery">
-                {% for fname in files %}
-                    <div class="post-gallery-item">
-                        <img src="{{ url_for('uploaded_file', filename=fname) }}" data-full-url="{{ url_for('uploaded_file', filename=fname) }}" alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
-                    </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="post-image-container">
-                <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
-            </div>
-        {% endif %}
+    {# Support list of uploaded filenames #}
+    {% set files = post.image_filenames %}
+    {% if files|length > 1 %}
+    <div class="post-gallery">
+        {% for fname in files %}
+        <div class="post-gallery-item">
+            <img src="{{ url_for('uploaded_file', filename=fname) }}"
+                data-full-url="{{ url_for('uploaded_file', filename=fname) }}"
+                alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="post-image-container">
+        <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
+            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
+    </div>
+    {% endif %}
 
     {% elif post.image_url %}
-        <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
-            {% if post.image_status in ['safe', 'processing'] %}
-                <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ post.image_url }}">
-            {% elif post.image_status == 'removed_nsfw' %}
-                <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
-            {% endif %}
-        </div>
+    <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
+        {% if post.image_status in ['safe', 'processing'] %}
+        <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image"
+            data-full-url="{{ post.image_url }}">
+        {% elif post.image_status == 'removed_nsfw' %}
+        <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
+        {% endif %}
+    </div>
 
     {% elif post.image_filename %}
-        <div class="post-image-container">
-            <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}" class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
-        </div>
+    <div class="post-image-container">
+        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}"
+            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
+    </div>
     {% endif %}
     {% endif %}
 
     {# --- Content with Markdown rendering --- #}
     <div class="post-content-wrapper">
         {% if post.content|length > 150 %}
-            <div class="post-content-truncated">{{ post.content|truncate(150, true)|markdown|safe }}</div>
-            <div class="post-content-full">{{ post.content|markdown|safe }}</div>
-            <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
+        <div class="post-content-truncated">{{ post.content|truncate(150, true)|markdown|safe }}</div>
+        <div class="post-content-full">{{ post.content|markdown|safe }}</div>
+        <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
         {% else %}
-            <div class="post-content-rendered">{{ post.content|markdown|safe }}</div>
+        <div class="post-content-rendered">{{ post.content|markdown|safe }}</div>
         {% endif %}
     </div>
 
     {# --- Timestamp --- #}
     <div class="post-meta">
         {% if post.edited_at %}
-            Edited on {{ post.edited_at|localtime }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+        Edited on {{ post.edited_at|localtime }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{
+                post.author }}</a></strong><br>
         {% else %}
-            Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
-            {{ post.timestamp|localtime }}
+        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
+        {{ post.timestamp|localtime }}
         {% endif %}
     </div>
 
     {# --- Actions: Like button + Share button + Comment count + Edit/Delete --- #}
     <div class="post-actions" style="margin-top: 10px;">
-        {# Like Button #}
-        {% set is_liked = current_user.is_authenticated and current_user.id in (post.liked_by|default([])|map('string')|list) %}
-        <button class="like-btn {% if is_liked %}liked{% endif %}" 
-                data-post-id="{{ post._id|string }}"
-                {% if not current_user.is_authenticated %}disabled title="Log in to like"{% endif %}>
-            <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
-            <span class="likes-count">{{ post.likes_count|default(0) }}</span>
-        </button>
+        {# Reaction Button and Menu #}
+        {% set reactions = post.reactions|default({}) %}
+        {% set user_reaction = None %}
+        {% for r_type, users in reactions.items() %}
+        {% if current_user.id|string in users|map('string')|list %}
+        {% set user_reaction = r_type %}
+        {% endif %}
+        {% endfor %}
+
+        <div class="reaction-container" data-post-id="{{ post._id|string }}">
+            <button class="reaction-btn {% if user_reaction %}reacted{% endif %}"
+                data-current-reaction="{{ user_reaction|default('') }}" {% if not current_user.is_authenticated
+                %}disabled title="Log in to react" {% endif %}>
+                <span class="reaction-icon">
+                    {% if user_reaction == 'heart' %}❤️
+                    {% elif user_reaction == 'wow' %}😮
+                    {% elif user_reaction == 'insightful' %}💡
+                    {% elif user_reaction == 'laugh' %}😂
+                    {% elif user_reaction == 'sad' %}😢
+                    {% else %}<i class="far fa-heart"></i>{% endif %}
+                </span>
+                <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+            </button>
+            <div class="reaction-menu">
+                <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
+                <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
+                <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>
+                <button class="reaction-option" data-reaction="sad" title="Sad">😢</button>
+            </div>
+        </div>
 
         {# Share Button #}
         <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
@@ -130,15 +163,12 @@
         </a>
 
         {% if current_user.is_authenticated and (post.author_id|string == current_user.id) %}
-            <a href="{{ url_for('edit_post', post_id=post._id, action='edit') }}"
-               class="btn edit-btn">Edit</a>
+        <a href="{{ url_for('edit_post', post_id=post._id, action='edit') }}" class="btn edit-btn">Edit</a>
 
-            <form action="{{ url_for('delete_post', post_id=post._id) }}"
-                  method="POST"
-                  class="delete-post-form"
-                  style="display: inline;">
-                <button type="submit" class="btn delete-btn">Delete</button>
-            </form>
+        <form action="{{ url_for('delete_post', post_id=post._id) }}" method="POST" class="delete-post-form"
+            style="display: inline;">
+            <button type="submit" class="btn delete-btn">Delete</button>
+        </form>
         {% endif %}
     </div>
 </div>
@@ -146,72 +176,72 @@
 
 {% macro post_polling_script() %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const postsToPoll = document.querySelectorAll('.post-media-container[data-status="processing_media"]');
+    document.addEventListener('DOMContentLoaded', function () {
+        const postsToPoll = document.querySelectorAll('.post-media-container[data-status="processing_media"]');
 
-    postsToPoll.forEach(container => {
-        const postId = container.getAttribute('data-post-id');
-        if (postId) {
-            pollPostStatus(postId, container);
-        }
-    });
-
-    function pollPostStatus(postId, container) {
-        let attempts = 0;
-        const maxAttempts = 30; // Poll for 5 minutes (30 * 10s)
-        const interval = 10000; // 10 seconds
-
-        const poller = setInterval(() => {
-            if (attempts >= maxAttempts) {
-                clearInterval(poller);
-                container.innerHTML = '<div class="media-processing-placeholder"><p>Media processing timed out. Please refresh the page.</p></div>';
-                return;
+        postsToPoll.forEach(container => {
+            const postId = container.getAttribute('data-post-id');
+            if (postId) {
+                pollPostStatus(postId, container);
             }
+        });
 
-            fetch(`/api/posts/${postId}/status`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(post => {
-                    if (post.status === 'published') {
-                        clearInterval(poller);
-                        updatePostMedia(post, container);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error polling post status:', error);
-                    // Optional: stop polling on error or just continue
-                });
+        function pollPostStatus(postId, container) {
+            let attempts = 0;
+            const maxAttempts = 30; // Poll for 5 minutes (30 * 10s)
+            const interval = 10000; // 10 seconds
 
-            attempts++;
-        }, interval);
-    }
+            const poller = setInterval(() => {
+                if (attempts >= maxAttempts) {
+                    clearInterval(poller);
+                    container.innerHTML = '<div class="media-processing-placeholder"><p>Media processing timed out. Please refresh the page.</p></div>';
+                    return;
+                }
 
-    function updatePostMedia(post, container) {
-        let mediaHtml = '';
-        const altText = `Post image for ${post.title}`;
+                fetch(`/api/posts/${postId}/status`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(post => {
+                        if (post.status === 'published') {
+                            clearInterval(poller);
+                            updatePostMedia(post, container);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error polling post status:', error);
+                        // Optional: stop polling on error or just continue
+                    });
 
-        if (post.video_url) {
-            mediaHtml = `
+                attempts++;
+            }, interval);
+        }
+
+        function updatePostMedia(post, container) {
+            let mediaHtml = '';
+            const altText = `Post image for ${post.title}`;
+
+            if (post.video_url) {
+                mediaHtml = `
                 <video class="post-video" controls preload="metadata">
                     <source src="${post.video_url}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
             `;
-        } else if (post.image_urls && post.image_urls.length > 0) {
-            if (post.image_urls.length > 1) {
-                // Simplified gallery for now, can be expanded
-                mediaHtml = post.image_urls.map(url => `<img src="${url}" alt="${altText}" class="post-image" style="max-width: 48%; margin: 1%;">`).join('');
-            } else {
-                mediaHtml = `<img src="${post.image_urls[0]}" alt="${altText}" class="post-image">`;
+            } else if (post.image_urls && post.image_urls.length > 0) {
+                if (post.image_urls.length > 1) {
+                    // Simplified gallery for now, can be expanded
+                    mediaHtml = post.image_urls.map(url => `<img src="${url}" alt="${altText}" class="post-image" style="max-width: 48%; margin: 1%;">`).join('');
+                } else {
+                    mediaHtml = `<img src="${post.image_urls[0]}" alt="${altText}" class="post-image">`;
+                }
             }
-        }
 
-        container.innerHTML = mediaHtml;
-    }
-});
+            container.innerHTML = mediaHtml;
+        }
+    });
 </script>
 {% endmacro %}

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block content %}
@@ -16,15 +16,17 @@
             border-radius: 12px;
             color: white;
         }
+
         .personal-space-header h1 {
             color: white;
             margin: 0 0 0.5rem 0;
         }
+
         .personal-space-header p {
-            color: rgba(255,255,255,0.9);
+            color: rgba(255, 255, 255, 0.9);
             margin: 0;
         }
-        
+
         .personal-space-stats {
             display: flex;
             justify-content: center;
@@ -32,25 +34,29 @@
             margin-top: 1rem;
             flex-wrap: wrap;
         }
+
         .stat-item {
             text-align: center;
         }
+
         /* Strong, high-contrast styles for header stats */
         .personal-space-header .stat-number,
         .personal-space-header .stat-label {
             color: #fff !important;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
         }
+
         .personal-space-header .stat-number {
             font-size: 1.5rem;
             font-weight: 700;
         }
+
         .personal-space-header .stat-label {
             font-size: 0.85rem;
             font-weight: 600;
             opacity: 0.95;
         }
-        
+
         .tab-nav {
             display: flex;
             gap: 0.5rem;
@@ -58,6 +64,7 @@
             border-bottom: 2px solid #eee;
             flex-wrap: wrap;
         }
+
         .tab-nav button {
             padding: 0.75rem 1.25rem;
             border: none;
@@ -72,49 +79,56 @@
             align-items: center;
             gap: 0.5rem;
         }
+
         .tab-nav button:hover {
             color: #333;
             background: #f5f5f5;
         }
+
         .tab-nav button.active {
             color: var(--primary-color);
             border-bottom-color: var(--primary-color);
             font-weight: 600;
         }
+
         .tab-nav button .badge {
             background: #eee;
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 0.8rem;
         }
+
         .tab-nav button.active .badge {
             background: var(--primary-color);
             color: white;
         }
-        
+
         .tab-panel {
             display: none;
         }
+
         .tab-panel.active {
             display: block;
         }
-        
+
         /* Card styles for saved posts */
         .saved-post-card {
             background: white;
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
             display: flex;
             gap: 1rem;
             align-items: flex-start;
             transition: transform 0.2s, box-shadow 0.2s;
         }
+
         .saved-post-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
+
         .saved-post-thumb {
             width: 80px;
             height: 80px;
@@ -123,6 +137,7 @@
             background: #f0f0f0;
             flex-shrink: 0;
         }
+
         .saved-post-thumb-placeholder {
             width: 80px;
             height: 80px;
@@ -134,32 +149,39 @@
             color: #999;
             flex-shrink: 0;
         }
+
         .saved-post-info {
             flex: 1;
             min-width: 0;
         }
+
         .saved-post-title {
             margin: 0 0 0.5rem 0;
             font-size: 1.1rem;
             line-height: 1.3;
         }
+
         .saved-post-title a {
             color: #333;
             text-decoration: none;
         }
+
         .saved-post-title a:hover {
             color: var(--primary-color);
         }
+
         .saved-post-meta {
             font-size: 0.85rem;
             color: #888;
             margin-bottom: 0.5rem;
         }
+
         .saved-post-actions {
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
         }
+
         .btn-icon {
             padding: 0.4rem 0.75rem;
             border-radius: 6px;
@@ -171,41 +193,48 @@
             gap: 0.3rem;
             transition: background 0.2s;
         }
+
         .btn-view {
             background: #e8f4fd;
             color: #1976d2;
         }
+
         .btn-view:hover {
             background: #d0e8f9;
         }
+
         .btn-remove {
             background: #ffebee;
             color: #d32f2f;
         }
+
         .btn-remove:hover {
             background: #ffcdd2;
         }
-        
+
         /* Note card styles */
         .note-card {
             background: white;
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 1rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
             border-left: 4px solid var(--primary-color);
             position: relative;
         }
+
         .note-card.pinned {
             border-left-color: #ffc107;
             background: #fffdf5;
         }
+
         .note-content {
             white-space: pre-wrap;
             word-break: break-word;
             line-height: 1.6;
             margin-bottom: 0.75rem;
         }
+
         .note-footer {
             display: flex;
             justify-content: space-between;
@@ -215,14 +244,17 @@
             padding-top: 0.75rem;
             border-top: 1px solid #f0f0f0;
         }
+
         .note-date {
             font-size: 0.8rem;
             color: #999;
         }
+
         .note-actions {
             display: flex;
             gap: 0.5rem;
         }
+
         .note-actions button {
             background: none;
             border: none;
@@ -232,14 +264,16 @@
             color: #666;
             font-size: 0.85rem;
         }
+
         .note-actions button:hover {
             background: #f5f5f5;
         }
+
         .note-actions .delete-btn:hover {
             background: #ffebee;
             color: #d32f2f;
         }
-        
+
         /* Create note form */
         .create-note-card {
             background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
@@ -247,6 +281,7 @@
             padding: 1.25rem;
             margin-bottom: 1.5rem;
         }
+
         .create-note-card textarea {
             width: 100%;
             border: 1px solid #ddd;
@@ -257,11 +292,13 @@
             font-family: inherit;
             font-size: 1rem;
         }
+
         .create-note-card textarea:focus {
             outline: none;
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(62, 34, 23, 0.1);
         }
+
         .create-note-footer {
             display: flex;
             justify-content: space-between;
@@ -270,17 +307,20 @@
             flex-wrap: wrap;
             gap: 0.5rem;
         }
+
         .char-count {
             font-size: 0.8rem;
             color: #999;
         }
+
         .char-count.warning {
             color: #f57c00;
         }
+
         .char-count.danger {
             color: #d32f2f;
         }
-        
+
         /* Quick actions */
         .quick-actions {
             display: flex;
@@ -288,6 +328,7 @@
             margin-bottom: 1.5rem;
             flex-wrap: wrap;
         }
+
         .quick-action-btn {
             flex: 1;
             min-width: 140px;
@@ -301,39 +342,44 @@
             text-decoration: none;
             color: #666;
         }
+
         .quick-action-btn:hover {
             border-color: var(--primary-color);
             color: var(--primary-color);
             background: #faf8f7;
         }
+
         .quick-action-btn i {
             font-size: 1.5rem;
             display: block;
             margin-bottom: 0.5rem;
         }
-        
+
         /* Empty state */
         .empty-state {
             text-align: center;
             padding: 3rem 1rem;
             color: #888;
         }
+
         .empty-state i {
             font-size: 3rem;
             margin-bottom: 1rem;
             opacity: 0.5;
         }
+
         .empty-state h3 {
             color: #666;
             margin-bottom: 0.5rem;
         }
-        
+
         /* Search/filter */
         .search-filter {
             display: flex;
             gap: 0.5rem;
             margin-bottom: 1rem;
         }
+
         .search-filter input {
             flex: 1;
             padding: 0.6rem 1rem;
@@ -341,44 +387,53 @@
             border-radius: 8px;
             font-size: 0.95rem;
         }
+
         .search-filter input:focus {
             outline: none;
             border-color: var(--primary-color);
         }
-        
+
         /* Mobile optimizations */
         @media (max-width: 600px) {
             .personal-space-header {
                 padding: 1rem;
             }
+
             .personal-space-stats {
                 gap: 1rem;
             }
+
             .tab-nav {
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
             }
+
             .tab-nav::-webkit-scrollbar {
                 display: none;
             }
+
             .tab-nav button {
                 padding: 0.6rem 1rem;
                 font-size: 0.9rem;
                 white-space: nowrap;
             }
+
             .saved-post-card {
                 flex-direction: column;
             }
+
             .saved-post-thumb,
             .saved-post-thumb-placeholder {
                 width: 100%;
                 height: 120px;
             }
+
             .quick-action-btn {
                 min-width: 100px;
                 padding: 0.75rem;
             }
+
             .quick-action-btn i {
                 font-size: 1.25rem;
             }
@@ -403,18 +458,21 @@
             <i class="fas fa-lock"></i> Notes are end-to-end encrypted
         </div>
         <style>
-        .encrypt-note {
-            margin-top: 1rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: rgba(255,255,255,0.12);
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            color: #fff;
-        }
-        .encrypt-note i { color: #fff; }
+            .encrypt-note {
+                margin-top: 1rem;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                background: rgba(255, 255, 255, 0.12);
+                padding: 0.4rem 0.8rem;
+                border-radius: 20px;
+                font-size: 0.85rem;
+                color: #fff;
+            }
+
+            .encrypt-note i {
+                color: #fff;
+            }
         </style>
     </div>
 
@@ -433,11 +491,11 @@
     <!-- Tab Navigation -->
     <div class="tab-nav" role="tablist">
         <button class="active" data-tab="saved" role="tab" aria-selected="true">
-             Saved
+            Saved
             <span class="badge">{{ saved_posts|length }}</span>
         </button>
         <button data-tab="notes" role="tab" aria-selected="false">
-             Notes <i class="fas fa-lock" style="font-size: 0.7rem; opacity: 0.7;"></i>
+            Notes <i class="fas fa-lock" style="font-size: 0.7rem; opacity: 0.7;"></i>
             <span class="badge">{{ personal_posts|length }}</span>
         </button>
     </div>
@@ -445,64 +503,69 @@
     <!-- Saved Posts Tab -->
     <div id="tab-saved" class="tab-panel active" role="tabpanel">
         {% if saved_posts %}
-            <div class="search-filter">
-                <input type="text" id="saved-search" placeholder="Search saved posts..." aria-label="Search saved posts">
-            </div>
-            <div class="saved-posts-list" id="saved-posts-container">
-                {% for post in saved_posts %}
-                    <div class="saved-post-card" data-title="{{ post.title|lower }}" data-author="{{ post.author|lower }}">
-                        {% if post.image_urls and post.image_urls|length > 0 %}
-                            <img src="{{ post.image_urls[0] }}" alt="" class="saved-post-thumb" loading="lazy">
-                        {% elif post.image_url %}
-                            <img src="{{ post.image_url }}" alt="" class="saved-post-thumb" loading="lazy">
-                        {% else %}
-                            <div class="saved-post-thumb-placeholder">
-                                <i class="fas fa-file-alt"></i>
-                            </div>
+        <div class="search-filter">
+            <input type="text" id="saved-search" placeholder="Search saved posts..." aria-label="Search saved posts">
+        </div>
+        <div class="saved-posts-list" id="saved-posts-container">
+            {% for post in saved_posts %}
+            <div class="saved-post-card" data-title="{{ post.title|lower }}" data-author="{{ post.author|lower }}">
+                {% if post.image_urls and post.image_urls|length > 0 %}
+                <img src="{{ post.image_urls[0] }}" alt="" class="saved-post-thumb" loading="lazy">
+                {% elif post.image_url %}
+                <img src="{{ post.image_url }}" alt="" class="saved-post-thumb" loading="lazy">
+                {% else %}
+                <div class="saved-post-thumb-placeholder">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                {% endif %}
+                <div class="saved-post-info">
+                    <h3 class="saved-post-title">
+                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                    </h3>
+                    <div class="saved-post-meta">
+                        <i class="fas fa-user"></i> {{ post.author }} &bull;
+                        <i class="fas fa-calendar"></i> {{ post.timestamp|localtime('%b %d, %Y') }}
+                        {% if post.view_count %}
+                        &bull; <i class="fas fa-eye"></i> {{ post.view_count }}
                         {% endif %}
-                        <div class="saved-post-info">
-                            <h3 class="saved-post-title">
-                                <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                            </h3>
-                            <div class="saved-post-meta">
-                                <i class="fas fa-user"></i> {{ post.author }} &bull;
-                                <i class="fas fa-calendar"></i> {{ post.timestamp|localtime('%b %d, %Y') }}
-                                {% if post.view_count %}
-                                    &bull; <i class="fas fa-eye"></i> {{ post.view_count }}
-                                {% endif %}
-                            </div>
-                            <div class="saved-post-actions">
-                                <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn-icon btn-view">
-                                    <i class="fas fa-arrow-right"></i> Read
-                                </a>
-                                <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="display:inline;" class="unsave-form">
-                                    <button type="submit" class="btn-icon btn-remove">
-                                        <i class="fas fa-bookmark"></i> Unsave
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
                     </div>
-                {% endfor %}
+                    <div class="saved-post-actions">
+                        <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn-icon btn-view">
+                            <i class="fas fa-arrow-right"></i> Read
+                        </a>
+                        <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST"
+                            style="display:inline;" class="unsave-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn-icon btn-remove">
+                                <i class="fas fa-bookmark"></i> Unsave
+                            </button>
+                        </form>
+                    </div>
+                </div>
             </div>
+            {% endfor %}
+        </div>
         {% else %}
-            <div class="empty-state">
-                <i class="far fa-bookmark"></i>
-                <h3>No saved posts yet</h3>
-                <p>Save posts you want to read later by clicking the bookmark icon on any post.</p>
-                <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">Explore Posts</a>
-            </div>
+        <div class="empty-state">
+            <i class="far fa-bookmark"></i>
+            <h3>No saved posts yet</h3>
+            <p>Save posts you want to read later by clicking the bookmark icon on any post.</p>
+            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">Explore Posts</a>
+        </div>
         {% endif %}
     </div>
 
     <!-- Notes Tab -->
     <div id="tab-notes" class="tab-panel" role="tabpanel">
         <div class="create-note-card">
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; color: #666; font-size: 0.85rem;">
+            <div
+                style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; color: #666; font-size: 0.85rem;">
                 <i class="fas fa-shield-alt"></i> Your notes are encrypted and only visible to you
             </div>
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
-                <textarea name="content" id="note-input" placeholder="Write a private note to yourself..." maxlength="2000" required></textarea>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <textarea name="content" id="note-input" placeholder="Write a private note to yourself..."
+                    maxlength="2000" required></textarea>
                 <div class="create-note-footer">
                     <span class="char-count"><span id="char-count">0</span>/2000</span>
                     <button type="submit" class="btn comment-btn" id="add-note-btn">
@@ -513,156 +576,158 @@
         </div>
 
         {% if personal_posts %}
-            <div class="personal-notes-list">
-                {% for note in personal_posts %}
-                    <div class="note-card">
-                        <div class="note-content">{{ note.content }}</div>
-                        <div class="note-footer">
-                            <span class="note-date">
-                                <i class="far fa-clock"></i> 
-                                {{ note.created_at|localtime }}
-                                <span style="margin-left: 0.5rem; color: #4caf50; font-size: 0.75rem;" title="Encrypted">
-                                    <i class="fas fa-lock"></i>
-                                </span>
-                            </span>
-                            <div class="note-actions">
-                                <button type="button" class="copy-note-btn" title="Copy note" data-content="{{ note.content }}">
-                                    <i class="far fa-copy"></i>
-                                </button>
-                                <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST" style="display:inline;" class="delete-note-form">
-                                    <button type="submit" class="delete-btn" title="Delete note">
-                                        <i class="far fa-trash-alt"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
+        <div class="personal-notes-list">
+            {% for note in personal_posts %}
+            <div class="note-card">
+                <div class="note-content">{{ note.content }}</div>
+                <div class="note-footer">
+                    <span class="note-date">
+                        <i class="far fa-clock"></i>
+                        {{ note.created_at|localtime }}
+                        <span style="margin-left: 0.5rem; color: #4caf50; font-size: 0.75rem;" title="Encrypted">
+                            <i class="fas fa-lock"></i>
+                        </span>
+                    </span>
+                    <div class="note-actions">
+                        <button type="button" class="copy-note-btn" title="Copy note" data-content="{{ note.content }}">
+                            <i class="far fa-copy"></i>
+                        </button>
+                        <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
+                            style="display:inline;" class="delete-note-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="delete-btn" title="Delete note">
+                                <i class="far fa-trash-alt"></i>
+                            </button>
+                        </form>
                     </div>
-                {% endfor %}
+                </div>
             </div>
+            {% endfor %}
+        </div>
         {% else %}
-            <div class="empty-state">
-                <i class="far fa-sticky-note"></i>
-                <h3>No notes yet</h3>
-                <p>Write private notes that only you can see.</p>
-            </div>
+        <div class="empty-state">
+            <i class="far fa-sticky-note"></i>
+            <h3>No notes yet</h3>
+            <p>Write private notes that only you can see.</p>
+        </div>
         {% endif %}
     </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Tab switching
-    const tabButtons = document.querySelectorAll('.tab-nav button');
-    const tabPanels = document.querySelectorAll('.tab-panel');
-    
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const tabId = button.dataset.tab;
-            
-            tabButtons.forEach(b => {
-                b.classList.remove('active');
-                b.setAttribute('aria-selected', 'false');
+    document.addEventListener('DOMContentLoaded', function () {
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-nav button');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.dataset.tab;
+
+                tabButtons.forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                tabPanels.forEach(p => p.classList.remove('active'));
+
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+                document.getElementById('tab-' + tabId).classList.add('active');
             });
-            tabPanels.forEach(p => p.classList.remove('active'));
-            
-            button.classList.add('active');
-            button.setAttribute('aria-selected', 'true');
-            document.getElementById('tab-' + tabId).classList.add('active');
         });
-    });
-    
-    // Character counter for notes
-    const noteInput = document.getElementById('note-input');
-    const charCount = document.getElementById('char-count');
-    const charCountContainer = charCount?.parentElement;
-    
-    if (noteInput && charCount) {
-        noteInput.addEventListener('input', () => {
-            const len = noteInput.value.length;
-            charCount.textContent = len;
-            
-            charCountContainer.classList.remove('warning', 'danger');
-            if (len > 1800) {
-                charCountContainer.classList.add('danger');
-            } else if (len > 1500) {
-                charCountContainer.classList.add('warning');
-            }
+
+        // Character counter for notes
+        const noteInput = document.getElementById('note-input');
+        const charCount = document.getElementById('char-count');
+        const charCountContainer = charCount?.parentElement;
+
+        if (noteInput && charCount) {
+            noteInput.addEventListener('input', () => {
+                const len = noteInput.value.length;
+                charCount.textContent = len;
+
+                charCountContainer.classList.remove('warning', 'danger');
+                if (len > 1800) {
+                    charCountContainer.classList.add('danger');
+                } else if (len > 1500) {
+                    charCountContainer.classList.add('warning');
+                }
+            });
+        }
+
+        // Search saved posts
+        const searchInput = document.getElementById('saved-search');
+        const savedPosts = document.querySelectorAll('.saved-post-card');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase().trim();
+
+                savedPosts.forEach(card => {
+                    const title = card.dataset.title || '';
+                    const author = card.dataset.author || '';
+
+                    if (title.includes(query) || author.includes(query)) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // Copy note content
+        document.querySelectorAll('.copy-note-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const content = btn.dataset.content;
+                navigator.clipboard.writeText(content).then(() => {
+                    const icon = btn.querySelector('i');
+                    icon.className = 'fas fa-check';
+                    setTimeout(() => {
+                        icon.className = 'far fa-copy';
+                    }, 1500);
+                });
+            });
         });
-    }
-    
-    // Search saved posts
-    const searchInput = document.getElementById('saved-search');
-    const savedPosts = document.querySelectorAll('.saved-post-card');
-    
-    if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.toLowerCase().trim();
-            
-            savedPosts.forEach(card => {
-                const title = card.dataset.title || '';
-                const author = card.dataset.author || '';
-                
-                if (title.includes(query) || author.includes(query)) {
-                    card.style.display = '';
-                } else {
-                    card.style.display = 'none';
+
+        // Confirm delete for notes
+        document.querySelectorAll('.delete-note-form').forEach(form => {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (typeof window.showCustomConfirm === 'function') {
+                    window.showCustomConfirm('Delete this note?', confirmed => {
+                        if (confirmed) form.submit();
+                    });
+                } else if (confirm('Delete this note?')) {
+                    form.submit();
                 }
             });
         });
-    }
-    
-    // Copy note content
-    document.querySelectorAll('.copy-note-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const content = btn.dataset.content;
-            navigator.clipboard.writeText(content).then(() => {
-                const icon = btn.querySelector('i');
-                icon.className = 'fas fa-check';
-                setTimeout(() => {
-                    icon.className = 'far fa-copy';
-                }, 1500);
+
+        // Confirm unsave for posts
+        document.querySelectorAll('.unsave-form').forEach(form => {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (typeof window.showCustomConfirm === 'function') {
+                    window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
+                        if (confirmed) form.submit();
+                    });
+                } else if (confirm('Remove this post from your saved list?')) {
+                    form.submit();
+                }
             });
         });
+
+        // Prevent double submission
+        const noteForm = document.getElementById('create-note-form');
+        const addNoteBtn = document.getElementById('add-note-btn');
+
+        if (noteForm && addNoteBtn) {
+            noteForm.addEventListener('submit', () => {
+                addNoteBtn.disabled = true;
+                addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            });
+        }
     });
-    
-    // Confirm delete for notes
-    document.querySelectorAll('.delete-note-form').forEach(form => {
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (typeof window.showCustomConfirm === 'function') {
-                window.showCustomConfirm('Delete this note?', confirmed => {
-                    if (confirmed) form.submit();
-                });
-            } else if (confirm('Delete this note?')) {
-                form.submit();
-            }
-        });
-    });
-    
-    // Confirm unsave for posts
-    document.querySelectorAll('.unsave-form').forEach(form => {
-        form.addEventListener('submit', (e) => {
-            e.preventDefault();
-            if (typeof window.showCustomConfirm === 'function') {
-                window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
-                    if (confirmed) form.submit();
-                });
-            } else if (confirm('Remove this post from your saved list?')) {
-                form.submit();
-            }
-        });
-    });
-    
-    // Prevent double submission
-    const noteForm = document.getElementById('create-note-form');
-    const addNoteBtn = document.getElementById('add-note-btn');
-    
-    if (noteForm && addNoteBtn) {
-        noteForm.addEventListener('submit', () => {
-            addNoteBtn.disabled = true;
-            addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-        });
-    }
-});
 </script>
 {% endblock %}

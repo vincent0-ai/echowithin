@@ -2203,7 +2203,7 @@ def get_all_posts_json():
     """Returns all posts as a JSON object for client-side rendering."""
     try:
         # Fetch all posts with necessary fields
-        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1}))
+        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}))
         
         # Convert ObjectId and datetime to strings and add the post URL
         for post in all_posts:
@@ -2212,6 +2212,8 @@ def get_all_posts_json():
             # Format timestamp to be consistent with server-rendered posts
             post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p')
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
+            # Convert liked_by ObjectIds to strings for JS comparison
+            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
 
         return jsonify(all_posts)
     except Exception as e:
@@ -2257,7 +2259,7 @@ def get_top_posts_json():
             {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
              'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 
              'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 
-             'share_count': 1, 'view_count': 1}
+             'share_count': 1, 'view_count': 1, 'reactions': 1}
         ))
         
         results = []
@@ -2305,7 +2307,7 @@ def get_hot_posts_json():
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
         recent_posts = list(posts_conf.find(
             {'created_at': {'$gte': seven_days_ago}},
-            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1}
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
         ))
 
         # Get comment counts for these posts
@@ -2477,7 +2479,7 @@ def get_related_posts_json():
                 {'author_id': {'$ne': user_id}, 'timestamp': {'$gte': seven_days_ago}},
                 {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
                  'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
-                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1}
+                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
             ).sort([('likes_count', -1), ('timestamp', -1)]).limit(30))
         else:
             # Get candidates matching interests
@@ -2486,7 +2488,7 @@ def get_related_posts_json():
                 query,
                 {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
                  'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
-                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1}
+                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
             ).sort('timestamp', -1).limit(50))
         
         # =====================================================

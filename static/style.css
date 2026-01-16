@@ -1970,31 +1970,38 @@ body {
 /* Mobile spacing fixes */
 @media (max-width: 768px) {
     .container {
-        padding: 1rem;
+        padding: 0.5rem 0;
     }
 
     .blog-container {
-        margin: 0.5rem auto;
-        padding: 1rem;
+        margin: 0;
+        padding: 0.5rem 0;
+        border-radius: 0;
     }
 
     .blog-header {
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+        padding: 0 0.5rem 0.5rem;
     }
 
     .pagination-nav {
-        margin-top: 1rem;
+        margin-top: 0.75rem;
         padding: 0.5rem 0;
     }
 
     .post-item {
-        margin-bottom: 1rem;
-        padding: 1rem;
+        margin-bottom: 0.25rem;
+        padding: 0.5rem 0.65rem;
+        border-radius: 0;
+    }
+
+    .posts-section {
+        padding: 0;
+        margin: 0;
     }
 
     .content-wrapper {
-        padding-bottom: 0.5rem !important;
+        padding: 0 !important;
     }
 
     /* Reduce bottom margin before footer */

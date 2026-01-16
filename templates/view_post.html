@@ -140,14 +140,39 @@
                 style="margin:0; flex: 1 1 auto; min-width: 0; font-size: 1.4rem; word-wrap: break-word; overflow-wrap: break-word;">
                 {{ post.title }}</h1>
             <div style="display: flex; align-items: center; gap: 15px; white-space: nowrap; flex-shrink: 0;">
-                {# Like Button #}
-                {% set is_liked = current_user.is_authenticated and current_user.id in
-                (post.liked_by|default([])|map('string')|list) %}
-                <button class="like-btn {% if is_liked %}liked{% endif %}" data-post-id="{{ post._id|string }}" {% if
-                    not current_user.is_authenticated %}disabled title="Log in to like" {% endif %}>
-                    <i class="{% if is_liked %}fas{% else %}far{% endif %} fa-heart"></i>
-                    <span class="likes-count">{{ post.likes_count|default(0) }}</span>
-                </button>
+                {# Reaction Button and Menu #}
+                {% set reactions = post.reactions|default({}) %}
+                {% set ns = namespace(user_reaction=None) %}
+                {% if current_user.is_authenticated %}
+                {% for r_type, users in reactions.items() %}
+                {% if current_user.id|string in users|map('string')|list %}
+                {% set ns.user_reaction = r_type %}
+                {% endif %}
+                {% endfor %}
+                {% endif %}
+
+                <div class="reaction-container" data-post-id="{{ post._id|string }}">
+                    <button class="reaction-btn {% if ns.user_reaction %}reacted{% endif %}"
+                        data-current-reaction="{{ ns.user_reaction|default('') }}" {% if not
+                        current_user.is_authenticated %}disabled title="Log in to react" {% endif %}>
+                        <span class="reaction-icon">
+                            {% if ns.user_reaction == 'heart' %}❤️
+                            {% elif ns.user_reaction == 'wow' %}😮
+                            {% elif ns.user_reaction == 'insightful' %}💡
+                            {% elif ns.user_reaction == 'laugh' %}😂
+                            {% elif ns.user_reaction == 'sad' %}😢
+                            {% else %}<i class="far fa-heart"></i>{% endif %}
+                        </span>
+                        <span class="likes-count">{{ post.likes_count|default(0) }}</span>
+                    </button>
+                    <div class="reaction-menu">
+                        <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                        <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
+                        <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
+                        <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>
+                        <button class="reaction-option" data-reaction="sad" title="Sad">😢</button>
+                    </div>
+                </div>
                 {# Share Button #}
                 <button class="share-btn" data-post-id="{{ post._id|string }}" title="Share this post">
                     <i class="fas fa-share-alt"></i>
@@ -332,7 +357,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
-        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }
+    };
     const form = document.getElementById('comment-form');
     let currentPage = {{ comment_page | default (1) }};
     const perPage = {{ per_page | default (10) }};

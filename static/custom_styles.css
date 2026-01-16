@@ -28,8 +28,8 @@
 @media (max-width: 768px) {
     .content-wrapper {
         /* Add horizontal padding to keep content away from screen edges */
-        padding-left: 1rem;
-        padding-right: 1rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
         border-radius: 0;
         /* Remove rounded corners for edge-to-edge look */
         box-shadow: none;

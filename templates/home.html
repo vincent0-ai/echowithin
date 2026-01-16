@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
 {% endblock %}
 
 {% block content %}
@@ -10,6 +10,9 @@
     <div class="blog-header">
         <h1>Welcome, {{ username }}!</h1>
         <p>See what's happening in the community.</p>
+        <a href="{{ url_for('blog') }}" class="btn comment-btn"
+            style="display: inline-block; margin-top: 1rem; font-size: 1rem; padding: 0.6rem 1.2rem;">Explore The
+            Blog</a>
     </div>
 
     <!-- Community Stats Section -->
@@ -25,34 +28,31 @@
         <div class="stat-card">
             <h3>Most Active Member</h3>
             {% if most_active_member %}
-                <p class="stat-text">{{ most_active_member._id }}</p>
-                <p class="stat-subtext">with {{ most_active_member.post_count }} posts</p>
+            <p class="stat-text">{{ most_active_member._id }}</p>
+            <p class="stat-subtext">with {{ most_active_member.post_count }} posts</p>
             {% else %}
-                <p class="stat-subtext">No activity yet.</p>
+            <p class="stat-subtext">No activity yet.</p>
             {% endif %}
         </div>
-        
+
         <!-- Trending Posts Card -->
         <div class="stat-card trending-card">
             <h3>Top Posts</h3>
             {% if hot_posts %}
-                <ul class="trending-list">
-                    {% for post in hot_posts %}
-                        <li>
-                            <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                            <span class="stat-subtext">({{ post.comment_count if post.comment_count is defined else 0 }} comments)</span>
-                        </li>
-                    {% endfor %}
-                </ul>
+            <ul class="trending-list">
+                {% for post in hot_posts %}
+                <li>
+                    <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                    <span class="stat-subtext">({{ post.comment_count if post.comment_count is defined else 0 }}
+                        comments)</span>
+                </li>
+                {% endfor %}
+            </ul>
             {% else %}
-                <p class="stat-subtext">No trending posts right now.</p>
+            <p class="stat-subtext">No trending posts right now.</p>
             {% endif %}
         </div>
     </section>
-
-    <div class="explore-section" style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color);">
-        <a href="{{ url_for('blog') }}" class="btn comment-btn" style="font-size: 1.1rem; padding: 0.75rem 1.5rem;">Explore The Blog</a>
-    </div>
 </div>
 
 {# Load Remark42 script to enable comment counters on this page #}

@@ -1914,63 +1914,101 @@ def home():
 
     # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
     hot_posts = []
-    try:
-        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-        
-        # This pipeline performs the entire hot post calculation in the database.
-        hot_posts_pipeline = [
-            # 1. Find recent posts (use 'timestamp' field, which is what posts actually have)
-            {'$match': {'timestamp': {'$gte': seven_days_ago}}},
-            # 2. Join with comments collection to get comment counts
-            {'$lookup': {
-                'from': 'comments',
-                'localField': 'slug',
-                'foreignField': 'post_slug',
-                'as': 'comments'
-            }},
-            # 3. Add fields for calculation
-            {'$addFields': {
-                'comment_count': {'$size': '$comments'},
-                'like_count': {'$size': {'$ifNull': ['$liked_by', []]}},
-                'age_in_hours': {
-                    '$divide': [
-                        {'$subtract': ["$$NOW", '$timestamp']},
-                        3600000 # milliseconds in an hour
-                    ]
-                }
-            }},
-            # 4. Calculate the hot score
-            {'$addFields': {
-                'hot_score': {
-                    '$divide': [
-                        {'$add': [
+    
+    # Check cache first (1 minute TTL for freshness)
+    cache_key = 'home_hot_posts'
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                hot_posts = json.loads(cached)
+        except Exception:
+            pass
+    
+    if not hot_posts:
+        try:
+            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+            
+            # This pipeline calculates hot score with recency boost for new posts
+            hot_posts_pipeline = [
+                # 1. Find recent posts
+                {'$match': {'timestamp': {'$gte': seven_days_ago}}},
+                # 2. Join with comments collection to get comment counts
+                {'$lookup': {
+                    'from': 'comments',
+                    'localField': 'slug',
+                    'foreignField': 'post_slug',
+                    'as': 'comments'
+                }},
+                # 3. Add fields for calculation
+                {'$addFields': {
+                    'comment_count': {'$size': '$comments'},
+                    'like_count': {'$size': {'$ifNull': ['$liked_by', []]}},
+                    'age_in_hours': {
+                        '$divide': [
+                            {'$subtract': ["$$NOW", '$timestamp']},
+                            3600000  # milliseconds in an hour
+                        ]
+                    }
+                }},
+                # 4. Calculate the hot score WITH recency boost
+                {'$addFields': {
+                    # Base engagement score
+                    'engagement_score': {
+                        '$add': [
                             {'$multiply': ['$comment_count', 5]},
                             {'$multiply': ['$like_count', 3]},
-                            {'$ifNull': ['$view_count', 0]}
-                        ]},
-                        {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.8]}
-                    ]
-                }
-            }},
-            # 5. Sort by score and limit to the top 5
-            {'$sort': {'hot_score': -1}},
-            {'$limit': 5}
-        ]
-        hot_posts = list(posts_conf.aggregate(hot_posts_pipeline))
-        with app.app_context():
-            hot_posts = prepare_posts(hot_posts) # Adds 'url' to each post
-
-        # Fallback for new sites: if no hot posts at all, show latest posts.
-        if len(hot_posts) == 0:
-            app.logger.info("No hot posts found, falling back to latest posts for homepage.")
-            latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
+                            {'$multiply': [{'$ifNull': ['$share_count', 0]}, 4]},
+                            {'$multiply': [{'$ifNull': ['$view_count', 0]}, 0.1]}
+                        ]
+                    },
+                    # Recency boost: posts < 2 hours get 1.5x, < 6 hours get 1.2x
+                    'recency_boost': {
+                        '$switch': {
+                            'branches': [
+                                {'case': {'$lt': ['$age_in_hours', 2]}, 'then': 1.5},
+                                {'case': {'$lt': ['$age_in_hours', 6]}, 'then': 1.2}
+                            ],
+                            'default': 1.0
+                        }
+                    }
+                }},
+                # 5. Calculate final hot score
+                {'$addFields': {
+                    'hot_score': {
+                        '$multiply': [
+                            '$recency_boost',
+                            {'$divide': [
+                                {'$add': ['$engagement_score', 1]},  # +1 to avoid division issues
+                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Slightly less aggressive decay
+                            ]}
+                        ]
+                    }
+                }},
+                # 6. Sort by score and limit to the top 5
+                {'$sort': {'hot_score': -1}},
+                {'$limit': 5}
+            ]
+            hot_posts = list(posts_conf.aggregate(hot_posts_pipeline))
             with app.app_context():
-                # Overwrite hot_posts with the latest posts
-                hot_posts = prepare_posts(list(latest_posts_cursor))
+                hot_posts = prepare_posts(hot_posts)
 
-    except Exception as e:
-        app.logger.error(f"Failed to calculate hot posts: {e}")
-        hot_posts = []
+            # Fallback for new sites: if no hot posts at all, show latest posts.
+            if len(hot_posts) == 0:
+                app.logger.info("No hot posts found, falling back to latest posts for homepage.")
+                latest_posts_cursor = posts_conf.find({}).sort('timestamp', -1).limit(5)
+                with app.app_context():
+                    hot_posts = prepare_posts(list(latest_posts_cursor))
+
+            # Cache for 1 minute
+            if redis_cache and hot_posts:
+                try:
+                    redis_cache.setex(cache_key, 60, json.dumps(hot_posts, default=str))
+                except Exception:
+                    pass
+
+        except Exception as e:
+            app.logger.error(f"Failed to calculate hot posts: {e}")
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
@@ -4558,6 +4596,137 @@ def api_newsletter_subscribe():
     except Exception as e:
         app.logger.error(f"Newsletter subscription error: {e}")
         return jsonify({'error': 'An internal error occurred'}), 500
+
+
+# =====================================================
+# SEO: Sitemap and Robots.txt
+# =====================================================
+
+@app.route('/sitemap.xml')
+def sitemap():
+    """
+    Auto-generates a sitemap.xml with all posts and static pages.
+    Cached for 1 hour to reduce database load.
+    """
+    # Check cache first
+    cache_key = 'sitemap_xml'
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                response = make_response(cached)
+                response.headers['Content-Type'] = 'application/xml'
+                return response
+        except Exception:
+            pass
+    
+    # Build sitemap XML
+    base_url = request.url_root.rstrip('/')
+    
+    # Start XML
+    xml_parts = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    ]
+    
+    # Static pages with priority
+    static_pages = [
+        ('/', 1.0, 'daily'),
+        ('/blog', 0.9, 'hourly'),
+        ('/about', 0.5, 'monthly'),
+        ('/search', 0.6, 'weekly'),
+    ]
+    
+    for path, priority, changefreq in static_pages:
+        xml_parts.append(f'''  <url>
+    <loc>{base_url}{path}</loc>
+    <changefreq>{changefreq}</changefreq>
+    <priority>{priority}</priority>
+  </url>''')
+    
+    # All blog posts
+    try:
+        posts = posts_conf.find(
+            {},
+            {'slug': 1, 'timestamp': 1, 'edited_at': 1}
+        ).sort('timestamp', -1).limit(5000)  # Limit to 5000 posts
+        
+        for post in posts:
+            slug = post.get('slug')
+            if not slug:
+                continue
+            
+            # Use edited_at if available, otherwise timestamp
+            lastmod = post.get('edited_at') or post.get('timestamp')
+            lastmod_str = ''
+            if lastmod:
+                if hasattr(lastmod, 'strftime'):
+                    lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
+            
+            xml_parts.append(f'''  <url>
+    <loc>{base_url}/post/{slug}</loc>{lastmod_str}
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>''')
+    except Exception as e:
+        app.logger.error(f"Error generating sitemap posts: {e}")
+    
+    # User profiles (top 100 active authors)
+    try:
+        active_authors = posts_conf.aggregate([
+            {'$group': {'_id': '$author', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}},
+            {'$limit': 100}
+        ])
+        for author in active_authors:
+            username = author.get('_id')
+            if username:
+                xml_parts.append(f'''  <url>
+    <loc>{base_url}/profile/{username}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>''')
+    except Exception as e:
+        app.logger.error(f"Error generating sitemap authors: {e}")
+    
+    xml_parts.append('</urlset>')
+    sitemap_xml = '\n'.join(xml_parts)
+    
+    # Cache for 1 hour
+    if redis_cache:
+        try:
+            redis_cache.setex(cache_key, 3600, sitemap_xml)
+        except Exception:
+            pass
+    
+    response = make_response(sitemap_xml)
+    response.headers['Content-Type'] = 'application/xml'
+    return response
+
+
+@app.route('/robots.txt')
+def robots():
+    """Serves robots.txt with sitemap reference."""
+    base_url = request.url_root.rstrip('/')
+    robots_txt = f"""User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: {base_url}/sitemap.xml
+
+# Crawl-delay for politeness
+Crawl-delay: 1
+
+# Disallow admin/private areas
+Disallow: /admin/
+Disallow: /api/
+Disallow: /logout
+Disallow: /login
+Disallow: /register
+"""
+    response = make_response(robots_txt)
+    response.headers['Content-Type'] = 'text/plain'
+    return response
 
 
 # Handles any possible errors

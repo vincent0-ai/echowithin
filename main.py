@@ -2054,13 +2054,8 @@ def blog():
         # Combine all posts
         combined_posts = recent_posts + week_selection + older_posts
         
-        # Shuffle the non-recent posts to create variety, but keep recent posts at top
-        if len(combined_posts) > 4:
-            # Keep first 2 recent posts at top, shuffle the rest
-            top_posts = combined_posts[:2]
-            rest_posts = combined_posts[2:]
-            random.shuffle(rest_posts)
-            combined_posts = top_posts + rest_posts
+        # Fully shuffle all posts for a dynamic feed on every refresh
+        random.shuffle(combined_posts)
         
         with app.app_context():
             latest_posts_prepared = prepare_posts(combined_posts[:10])

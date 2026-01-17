@@ -2689,10 +2689,76 @@ def get_related_posts_json():
         scored_posts.sort(key=lambda p: p['_score'], reverse=True)
         
         # =====================================================
-        # STEP 4: Format and Return Top 15
+        # STEP 4: Build Mixed Feed (Prevents new posts from dominating)
         # =====================================================
+        # Strategy: Reserve slots for different content tiers
+        # - ~4 slots: Fresh posts (< 48 hours old) - keeps feed feeling current
+        # - ~4 slots: Proven quality (high engagement, any age) - best content surfaces
+        # - ~7 slots: Personalized by interest score - tailored recommendations
         
-        result_posts = scored_posts[:15]
+        fresh_posts = []      # < 48 hours old
+        quality_posts = []    # High engagement (any age)
+        interest_posts = []   # Best by personalization score
+        
+        forty_eight_hours_ago = now - datetime.timedelta(hours=48)
+        
+        for post in scored_posts:
+            post_time = post.get('timestamp')
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                
+                # Categorize posts
+                engagement = (post.get('likes_count', 0) or 0) + (post.get('comment_count', 0) * 2)
+                
+                if post_time > forty_eight_hours_ago and len(fresh_posts) < 6:
+                    fresh_posts.append(post)
+                elif engagement >= 5 and len(quality_posts) < 8:  # At least 5 engagement points
+                    quality_posts.append(post)
+                else:
+                    interest_posts.append(post)
+            else:
+                interest_posts.append(post)
+        
+        # Build final mixed feed
+        result_posts = []
+        used_ids = set()
+        
+        # Add fresh posts first (up to 4)
+        for post in fresh_posts[:4]:
+            if post['_id'] not in used_ids:
+                result_posts.append(post)
+                used_ids.add(post['_id'])
+        
+        # Add quality posts (up to 4)
+        for post in quality_posts[:4]:
+            if post['_id'] not in used_ids:
+                result_posts.append(post)
+                used_ids.add(post['_id'])
+        
+        # Fill remaining slots with interest-based posts (up to 15 total)
+        for post in interest_posts:
+            if len(result_posts) >= 15:
+                break
+            if post['_id'] not in used_ids:
+                result_posts.append(post)
+                used_ids.add(post['_id'])
+        
+        # If still not at 15, add from any remaining categories
+        all_remaining = fresh_posts[4:] + quality_posts[4:] + interest_posts
+        for post in all_remaining:
+            if len(result_posts) >= 15:
+                break
+            if post['_id'] not in used_ids:
+                result_posts.append(post)
+                used_ids.add(post['_id'])
+        
+        result_posts = result_posts[:15]
+        
+        # Shuffle to mix tiers together (prevents predictable ordering)
+        import random
+        random.shuffle(result_posts)
+        
         for post in result_posts:
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))

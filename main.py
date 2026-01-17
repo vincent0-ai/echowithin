@@ -2260,7 +2260,7 @@ def all_posts():
         page_title = "All Posts - EchoWithin"
         page_description = "Browse through all posts from the EchoWithin community."
 
-    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description, all_tags=sorted(all_tags), selected_tag=selected_tag)
+    return render_template("all_posts.html", posts=posts, active_page='blog', page=page, total_pages=total_pages, title=page_title, description=page_description, all_tags=sorted([t for t in all_tags if t is not None]), selected_tag=selected_tag)
 
 
 @app.route('/api/posts')

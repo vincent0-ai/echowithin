@@ -1484,7 +1484,7 @@ def feed():
 def prepare_posts(posts):
     """
     Add `url` and `comment_count` fields to each post.
-    Designed to work with Remark42 batch comment count retrieval.
+    Also ensures timestamps are timezone-aware for template calculations.
     """
     if not posts:
         return []
@@ -1495,6 +1495,12 @@ def prepare_posts(posts):
         post_url = url_for("view_post", slug=post.get("slug"), _external=True)
         post["url"] = post_url
         urls.add(post_url)
+        
+        # Ensure timestamp is timezone-aware (MongoDB stores naive UTC datetimes)
+        if post.get('timestamp') and post['timestamp'].tzinfo is None:
+            post['timestamp'] = post['timestamp'].replace(tzinfo=datetime.timezone.utc)
+        if post.get('edited_at') and post['edited_at'].tzinfo is None:
+            post['edited_at'] = post['edited_at'].replace(tzinfo=datetime.timezone.utc)
 
     # ---- Step 2: Batch-retrieve comment counts from internal comments collection ----
     counts_map = get_batch_comment_counts(tuple(sorted(urls)))

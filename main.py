@@ -1480,30 +1480,6 @@ def feed():
         abort(500)
 
 
-@app.route('/sitemap.xml')
-def sitemap():
-    """Dynamically generate sitemap using `sitemap_template.xml`."""
-    try:
-        pages = []
-        # Static routes
-        static_paths = ['home', 'blog', 'about', 'terms']
-        for p in static_paths:
-            try:
-                pages.append({'loc': url_for(p, _external=True), 'lastmod': datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'weekly', 'priority': '0.7'})
-            except Exception:
-                pass
-
-        # Posts
-        for post in posts_conf.find({'status': 'published'}, {'slug': 1, 'created_at': 1}).sort('created_at', -1).limit(5000):
-            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': post.get('created_at').date().isoformat() if post.get('created_at') else datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
-            last_mod = post.get('created_at') or post.get('timestamp')
-            pages.append({'loc': url_for('view_post', slug=post.get('slug'), _external=True), 'lastmod': last_mod.date().isoformat() if last_mod else datetime.datetime.now(datetime.timezone.utc).date().isoformat(), 'changefreq': 'monthly', 'priority': '0.6'})
-
-        return render_template('sitemap_template.xml', pages=pages), 200, {'Content-Type': 'application/xml; charset=utf-8'}
-    except Exception as e:
-        app.logger.error(f'Failed to build sitemap: {e}')
-        abort(500)
-
 def prepare_posts(posts):
     """
     Add `url` and `comment_count` fields to each post.

@@ -2140,3 +2140,84 @@ body {
         margin-bottom: 0.5rem;
     }
 }
+
+/* =====================================================
+   Post Badges (NEW, HOT, TRENDING)
+   ===================================================== */
+
+.post-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.post-badges {
+    display: flex;
+    gap: 0.35rem;
+    flex-shrink: 0;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.badge-new {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.badge-hot {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.badge-trending {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.5);
+    }
+
+    50% {
+        box-shadow: 0 0 15px rgba(102, 126, 234, 0.8);
+    }
+}
+
+/* Mobile responsive badges */
+@media (max-width: 480px) {
+    .post-title-row {
+        flex-wrap: wrap;
+    }
+
+    .post-badges {
+        order: -1;
+        width: 100%;
+        margin-bottom: 0.25rem;
+    }
+
+    .badge {
+        font-size: 0.65rem;
+        padding: 0.1rem 0.4rem;
+    }
+}
+
+/* Relative time styling */
+.relative-time {
+    color: #888;
+}

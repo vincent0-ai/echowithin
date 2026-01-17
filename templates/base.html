@@ -494,8 +494,9 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
+    if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {
@@ -702,9 +703,52 @@
         const commentToggleButtons = document.querySelectorAll('.toggle-comments-btn');
         const readMoreButtons = document.querySelectorAll('.read-more-btn');
 
+        // --- Relative Time Conversion ---
+        function getRelativeTime(dateString) {
+            if (!dateString) return '';
+
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffSecs < 60) return 'just now';
+            if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
+            if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            if (diffDays < 30) {
+                const weeks = Math.floor(diffDays / 7);
+                return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+            }
+            if (diffDays < 365) {
+                const months = Math.floor(diffDays / 30);
+                return `${months} month${months !== 1 ? 's' : ''} ago`;
+            }
+            const years = Math.floor(diffDays / 365);
+            return `${years} year${years !== 1 ? 's' : ''} ago`;
+        }
+
+        function updateRelativeTimes() {
+            document.querySelectorAll('.relative-time[data-timestamp]').forEach(el => {
+                const timestamp = el.getAttribute('data-timestamp');
+                if (timestamp) {
+                    el.textContent = getRelativeTime(timestamp);
+                }
+            });
+        }
+
+        // Update on page load
+        updateRelativeTimes();
+        // Update every minute
+        setInterval(updateRelativeTimes, 60000);
+
         // --- Reaction System Handler (Global) ---
         const reactionEmojis = {
-            'heart': '❤️',
+            'heart': '💗',
             'wow': '😮',
             'insightful': '💡',
             'laugh': '😂',
@@ -771,7 +815,7 @@
                 if (data.reaction) {
                     btn.classList.add('reacted');
                     btn.dataset.currentReaction = data.reaction;
-                    iconSpan.textContent = reactionEmojis[data.reaction] || '❤️';
+                    iconSpan.textContent = reactionEmojis[data.reaction] || '💗';
                 } else {
                     btn.classList.remove('reacted');
                     btn.dataset.currentReaction = '';

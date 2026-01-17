@@ -1,8 +1,22 @@
 {% macro render_post_item(post, current_user) %}
+{% set post_age_hours = ((now() - post.timestamp).total_seconds() / 3600) if post.timestamp else 999 %}
+{% set engagement = (post.likes_count|default(0)) + (post.comment_count|default(0) * 2) %}
 <div class="post-item">
     <div class="post-header">
-        <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link" data-post-id="{{ post._id|string }}">{{
-                post.title }}</a></h3>
+        <div class="post-title-row">
+            <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link"
+                    data-post-id="{{ post._id|string }}">{{ post.title }}</a></h3>
+            <div class="post-badges">
+                {% if post_age_hours < 24 %} <span class="badge badge-new" title="Posted less than 24 hours ago">🆕
+                    NEW</span>
+                    {% endif %}
+                    {% if engagement >= 10 and post_age_hours < 168 %} <span class="badge badge-hot"
+                        title="Trending this week">🔥 HOT</span>
+                        {% elif engagement >= 5 %}
+                        <span class="badge badge-trending" title="Getting attention">📈 TRENDING</span>
+                        {% endif %}
+            </div>
+        </div>
         <div class="post-views">
             <i class="fa-regular fa-eye"></i>
             <span id="view-count-{{ post._id|string }}">{{ post.view_count if post.view_count is defined else 0
@@ -104,14 +118,16 @@
         {% endif %}
     </div>
 
-    {# --- Timestamp --- #}
+    {# --- Timestamp with relative time --- #}
     <div class="post-meta">
         {% if post.edited_at %}
-        Edited on {{ post.edited_at|localtime }} by <strong><a href="{{ url_for('profile', username=post.author) }}">{{
-                post.author }}</a></strong><br>
+        Edited <span class="relative-time"
+            data-timestamp="{{ post.edited_at.isoformat() if post.edited_at else '' }}">{{ post.edited_at|localtime
+            }}</span> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>
         {% else %}
-        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
-        {{ post.timestamp|localtime }}
+        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> ·
+        <span class="relative-time" data-timestamp="{{ post.timestamp.isoformat() if post.timestamp else '' }}">{{
+            post.timestamp|localtime }}</span>
         {% endif %}
     </div>
 
@@ -133,7 +149,7 @@
                 data-current-reaction="{{ ns.user_reaction|default('') }}" {% if not current_user.is_authenticated
                 %}disabled title="Log in to react" {% endif %}>
                 <span class="reaction-icon">
-                    {% if ns.user_reaction == 'heart' %}❤️
+                    {% if ns.user_reaction == 'heart' %}💗
                     {% elif ns.user_reaction == 'wow' %}😮
                     {% elif ns.user_reaction == 'insightful' %}💡
                     {% elif ns.user_reaction == 'laugh' %}😂
@@ -143,7 +159,7 @@
                 <span class="likes-count">{{ post.likes_count|default(0) }}</span>
             </button>
             <div class="reaction-menu">
-                <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                <button class="reaction-option" data-reaction="heart" title="Love">💗</button>
                 <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
                 <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
                 <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>

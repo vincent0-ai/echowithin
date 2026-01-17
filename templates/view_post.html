@@ -156,7 +156,7 @@
                         data-current-reaction="{{ ns.user_reaction|default('') }}" {% if not
                         current_user.is_authenticated %}disabled title="Log in to react" {% endif %}>
                         <span class="reaction-icon">
-                            {% if ns.user_reaction == 'heart' %}❤️
+                            {% if ns.user_reaction == 'heart' %}💗
                             {% elif ns.user_reaction == 'wow' %}😮
                             {% elif ns.user_reaction == 'insightful' %}💡
                             {% elif ns.user_reaction == 'laugh' %}😂
@@ -166,7 +166,7 @@
                         <span class="likes-count">{{ post.likes_count|default(0) }}</span>
                     </button>
                     <div class="reaction-menu">
-                        <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                        <button class="reaction-option" data-reaction="heart" title="Love">💗</button>
                         <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
                         <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
                         <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>
@@ -357,8 +357,9 @@
     document.addEventListener('DOMContentLoaded', function () {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
-        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
-        const form = document.getElementById('comment-form');
+        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }
+    };
+    const form = document.getElementById('comment-form');
     let currentPage = {{ comment_page | default (1) }};
     const perPage = {{ per_page | default (10) }};
 

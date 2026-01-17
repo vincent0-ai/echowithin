@@ -96,12 +96,6 @@ app.config['SESSION_COOKIE_NAME'] = 'echowithin_session'
 def make_session_permanent():
     session.permanent = True
 
-# Inject 'now' into all templates for time calculations
-@app.context_processor
-def inject_now():
-    """Provide a timezone-aware 'now' datetime to all templates."""
-    return {'now': datetime.datetime.now(datetime.timezone.utc)}
-
 # Ensure all external URLs are generated with https
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 load_dotenv()
@@ -699,11 +693,11 @@ def inject_pinned_announcement():
 ## Remark42 removed: internal comments will be used instead.
 
 @app.context_processor
-def inject_current_year():
-    """Makes the current year and now() function available to all templates."""
+def inject_template_globals():
+    """Makes common variables available to all templates."""
     return {
         'current_year': datetime.date.today().year,
-        'now': lambda: datetime.datetime.now(datetime.timezone.utc)
+        'now': datetime.datetime.now(datetime.timezone.utc)
     }
 
 

@@ -2499,15 +2499,9 @@ def get_related_posts_json():
         user_id = ObjectId(current_user.id)
         user_id_str = str(current_user.id)
         
-        # Check if we have cached results for this user (3 minute cache)
-        results_cache_key = f"related_posts:{user_id_str}"
-        if redis_cache:
-            try:
-                cached_results = redis_cache.get(results_cache_key)
-                if cached_results:
-                    return jsonify(json.loads(cached_results))
-            except Exception:
-                pass
+        # NOTE: We don't cache results here because we want the feed to be
+        # dynamic on every refresh (shuffle, different mix). We only cache
+        # the user interest profile for performance.
         
         # =====================================================
         # STEP 1: Get or Build User Interest Profile (Cached)
@@ -2840,13 +2834,6 @@ def get_related_posts_json():
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
             post.pop('_score', None)
             post.pop('liked_by', None)
-        
-        # Cache the results
-        if redis_cache:
-            try:
-                redis_cache.setex(results_cache_key, 180, json.dumps(result_posts, default=str))
-            except Exception:
-                pass
         
         return jsonify(result_posts)
         

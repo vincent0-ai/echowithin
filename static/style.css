@@ -910,6 +910,133 @@ body {
     font-style: italic;
 }
 
+/* Post Content Styling - consistent across blog and view post pages */
+.post-content,
+.post-content-wrapper,
+.post-content-rendered,
+.post-content-truncated {
+    margin-top: 1rem;
+    line-height: 1.7;
+    color: var(--text-dark-color);
+    font-size: 0.95rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.post-content p,
+.post-content-wrapper p,
+.post-content-rendered p,
+.post-content-truncated p,
+.post-content-full p {
+    margin-bottom: 1rem;
+}
+
+.post-content h1,
+.post-content h2,
+.post-content h3,
+.post-content h4,
+.post-content h5,
+.post-content h6,
+.post-content-wrapper h1,
+.post-content-wrapper h2,
+.post-content-wrapper h3,
+.post-content-wrapper h4,
+.post-content-wrapper h5,
+.post-content-wrapper h6,
+.post-content-rendered h1,
+.post-content-rendered h2,
+.post-content-rendered h3,
+.post-content-rendered h4,
+.post-content-rendered h5,
+.post-content-rendered h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+    color: var(--primary-dark-color);
+}
+
+.post-content blockquote,
+.post-content-wrapper blockquote,
+.post-content-rendered blockquote,
+.post-content-truncated blockquote,
+.post-content-full blockquote {
+    margin: 1rem 0;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid var(--primary-color);
+    background-color: var(--background-light-color);
+    font-style: italic;
+    color: #555;
+}
+
+.post-content pre,
+.post-content-wrapper pre,
+.post-content-rendered pre,
+.post-content-truncated pre,
+.post-content-full pre {
+    margin: 1rem 0;
+    padding: 1rem;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9rem;
+}
+
+.post-content code,
+.post-content-wrapper code,
+.post-content-rendered code,
+.post-content-truncated code,
+.post-content-full code {
+    background-color: #f0f0f0;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
+
+.post-content pre code,
+.post-content-wrapper pre code,
+.post-content-rendered pre code,
+.post-content-truncated pre code,
+.post-content-full pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+.post-content a,
+.post-content-wrapper a,
+.post-content-rendered a,
+.post-content-truncated a,
+.post-content-full a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+
+.post-content a:hover,
+.post-content-wrapper a:hover,
+.post-content-rendered a:hover,
+.post-content-truncated a:hover,
+.post-content-full a:hover {
+    color: var(--primary-dark-color);
+}
+
+.post-content img,
+.post-content-wrapper img,
+.post-content-rendered img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 0.75rem 0;
+}
+
+.post-content hr,
+.post-content-wrapper hr,
+.post-content-rendered hr {
+    margin: 1.5rem 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
 .post-content-full {
     display: none;
     /* Hidden by default */

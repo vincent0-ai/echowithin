@@ -96,7 +96,11 @@ app.config['SESSION_COOKIE_NAME'] = 'echowithin_session'
 def make_session_permanent():
     session.permanent = True
 
-# Load environment variables from .env file
+# Inject 'now' into all templates for time calculations
+@app.context_processor
+def inject_now():
+    """Provide a timezone-aware 'now' datetime to all templates."""
+    return {'now': datetime.datetime.now(datetime.timezone.utc)}
 
 # Ensure all external URLs are generated with https
 app.config['PREFERRED_URL_SCHEME'] = 'https'

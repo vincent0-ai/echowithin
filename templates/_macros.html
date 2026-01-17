@@ -1,5 +1,5 @@
 {% macro render_post_item(post, current_user, now=none) %}
-{% set post_age_hours = ((now() - post.timestamp).total_seconds() / 3600) if (now and post.timestamp) else 999 %}
+{% set post_age_hours = ((now - post.timestamp).total_seconds() / 3600) if (now and post.timestamp) else 999 %}
 {% set engagement = (post.likes_count|default(0)) + (post.comment_count|default(0) * 2) %}
 <div class="post-item">
     <div class="post-header">

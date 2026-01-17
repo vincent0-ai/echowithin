@@ -64,7 +64,7 @@
         <h2>Search Results for "{{ query }}"</h2>
         {% if posts %}
         {% for post in posts %}
-        {{ render_post_item(post, current_user) }}
+        {{ render_post_item(post, current_user, now) }}
         {% endfor %}
         {% else %}
         <p>No posts found for your search. Try a different query.</p>
@@ -116,7 +116,7 @@
         <div id="latest-posts" class="tab-content active">
             {% if latest_posts %}
             {% for post in latest_posts %}
-            {{ render_post_item(post, current_user) }}
+            {{ render_post_item(post, current_user, now) }}
             {% endfor %}
             {% else %}
             <p>No posts found. {% if current_user.is_authenticated %}Why not create the first one?{% endif %}</p>

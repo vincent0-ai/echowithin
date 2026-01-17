@@ -926,9 +926,12 @@ body {
 .post-content p,
 .post-content-wrapper p,
 .post-content-rendered p,
-.post-content-truncated p,
+.post-content-truncated p {
+    margin-bottom: 0.75rem;
+}
+
 .post-content-full p {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
 }
 
 .post-content h1,
@@ -1040,8 +1043,7 @@ body {
 .post-content-full {
     display: none;
     /* Hidden by default */
-    white-space: pre-wrap;
-    /* Respects newlines in the post content */
+    line-height: 1.6;
 }
 
 /* Proper indentation for numbered and bullet lists in post content */

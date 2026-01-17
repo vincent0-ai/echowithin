@@ -200,8 +200,8 @@ TIME = int(get_env_variable('TIME'))
 # serverSelectionTimeoutMS: How long to wait for server selection
 client = MongoClient(
     get_env_variable('MONGODB_CONNECTION'),
-    maxPoolSize=10,  # Limit pool size for 2GB RAM VPS
-    minPoolSize=2,   # Keep minimum connections ready
+    maxPoolSize=20,  # Increased pool size for 4GB RAM VPS with 16 workers
+    minPoolSize=4,   # Keep minimum connections ready
     serverSelectionTimeoutMS=5000,  # 5 second timeout
     connectTimeoutMS=10000,  # 10 second connection timeout
     socketTimeoutMS=30000,   # 30 second socket timeout
@@ -223,6 +223,23 @@ newsletter_conf.create_index('email', unique=True)
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
+
+# --- Performance indexes for faster queries ---
+# Index for liked_by lookups (personalized feed)
+posts_conf.create_index('liked_by')
+# Index for author lookups
+posts_conf.create_index('author_id')
+# Index for timestamp sorting (most common sort)
+posts_conf.create_index([('timestamp', -1)])
+# Compound index for tag filtering with timestamp sort
+posts_conf.create_index([('tags', 1), ('timestamp', -1)])
+# Index for comments lookups by post slug
+comments_conf.create_index('post_slug')
+# Index for comments by author
+comments_conf.create_index('author_id')
+# Compound index for engagement-based sorting (hot/top posts)
+posts_conf.create_index([('likes_count', -1), ('timestamp', -1)])
+posts_conf.create_index([('view_count', -1)])
 
 # --- Encryption utilities for personal notes ---
 # Derive a Fernet key from the app's SECRET_KEY for encrypting personal notes
@@ -2055,7 +2072,7 @@ def blog():
 @app.route("/blog/all")
 @login_required
 def all_posts():
-    """Displays a paginated list of all blog posts."""
+    """Displays a paginated list of all blog posts with optimized performance."""
     selected_tag = request.args.get('tag', None)
     page = request.args.get('page', 1, type=int)
     posts_per_page = 10
@@ -2067,215 +2084,165 @@ def all_posts():
 
     total_posts = posts_conf.count_documents(filter_query)
     total_pages = math.ceil(total_posts / posts_per_page)
+    skip = (page - 1) * posts_per_page
 
-    # When no tag is selected, construct an ordered list for all posts.
-    # For authenticated users, create a personalized ordering based on their
-    # interactions (likes, comments, saves, authored posts). For anonymous
-    # users, fall back to a deterministic daily mixed feed.
-    if not selected_tag:
-        if current_user.is_authenticated:
-            # --- Build user interest profile (similar logic to /api/posts/related) ---
-            user_id = ObjectId(current_user.id)
-            user_id_str = str(current_user.id)
+    posts = []
 
-            tag_scores = {}
-            author_scores = {}
-
-            WEIGHT_LIKED = 3.0
-            WEIGHT_COMMENTED = 2.5
-            WEIGHT_VIEWED = 0.5
-            WEIGHT_SAVED = 4.0
-            WEIGHT_AUTHORED = 1.0
-
-            # Liked posts
-            liked_posts = posts_conf.find({'liked_by': user_id_str}, {'tags': 1, 'author_id': 1})
-            for p in liked_posts:
-                for t in p.get('tags', []):
-                    tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_LIKED
-                a = p.get('author_id')
-                if a and str(a) != user_id_str:
-                    author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_LIKED
-
-            # Commented posts
-            commented_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
-            if commented_slugs:
-                commented_posts = posts_conf.find({'slug': {'$in': commented_slugs}}, {'tags': 1, 'author_id': 1})
-                for p in commented_posts:
-                    for t in p.get('tags', []):
-                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_COMMENTED
-                    a = p.get('author_id')
-                    if a and str(a) != user_id_str:
-                        author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_COMMENTED
-
-            # Saved posts
-            udoc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
-            saved_ids = udoc.get('saved_posts', []) if udoc else []
-            if saved_ids:
-                saved_docs = posts_conf.find({'_id': {'$in': saved_ids}}, {'tags': 1, 'author_id': 1})
-                for p in saved_docs:
-                    for t in p.get('tags', []):
-                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_SAVED
-                    a = p.get('author_id')
-                    if a and str(a) != user_id_str:
-                        author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_SAVED
-
-            # Authored posts
-            authored = posts_conf.find({'author_id': user_id}, {'tags': 1})
-            for p in authored:
-                for t in p.get('tags', []):
-                    tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_AUTHORED
-
-            # Upvoted comments' posts
-            upvoted_slugs = comments_conf.distinct('post_slug', {'upvoted_by': user_id_str, 'is_deleted': False})
-            if upvoted_slugs:
-                upvoted_posts = posts_conf.find({'slug': {'$in': upvoted_slugs}}, {'tags': 1, 'author_id': 1})
-                for p in upvoted_posts:
-                    for t in p.get('tags', []):
-                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_COMMENTED * 0.5
-
-            # Build set of interacted post ids/slugs to avoid repeating
-            interacted_slugs = set(commented_slugs if commented_slugs else [])
-            interacted_slugs.update(upvoted_slugs if upvoted_slugs else [])
-
-            liked_docs = list(posts_conf.find({'liked_by': user_id_str}, {'_id': 1, 'slug': 1}))
-            interacted_ids = [p['_id'] for p in liked_docs]
-            interacted_slugs.update([p['slug'] for p in liked_docs if p.get('slug')])
-
-            interacted_ids.extend(saved_ids)
-
-            own_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1}))
-            interacted_ids.extend([p['_id'] for p in own_posts])
-            interacted_slugs.update([p['slug'] for p in own_posts if p.get('slug')])
-
-            # Candidate pool: get a reasonable subset to score (limit for performance)
-            # Prefer posts that match interests, but also include a sample of other posts
-            candidate_query = {'author_id': {'$ne': user_id}, '_id': {'$nin': list(set(interacted_ids))}}
-            candidate_cursor = posts_conf.find(candidate_query, {'_id':1,'slug':1,'title':1,'content':1,'author':1,'author_id':1,'timestamp':1,'tags':1,'likes_count':1,'view_count':1,'share_count':1,'image_urls':1,'image_url':1,'image_filename':1,'image_filenames':1,'video_url':1,'video_filename':1,'image_status':1,'status':1,'liked_by':1}).sort('timestamp', -1).limit(500)
-            candidate_posts = list(candidate_cursor)
-
-            # Score candidates
-            candidate_slugs = [p['slug'] for p in candidate_posts if p.get('slug')]
-            comment_counts = {}
-            if candidate_slugs:
-                comment_agg = list(comments_conf.aggregate([
-                    {'$match': {'post_slug': {'$in': candidate_slugs}, 'is_deleted': False}},
-                    {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
-                ]))
-                comment_counts = {doc['_id']: doc['count'] for doc in comment_agg}
-
-            scored = []
-            now = datetime.datetime.now(datetime.timezone.utc)
-            for p in candidate_posts:
-                score = 0.0
-                for t in p.get('tags', []):
-                    if t in tag_scores:
-                        score += tag_scores[t] * 2
-                aid = str(p.get('author_id',''))
-                if aid in author_scores:
-                    score += author_scores[aid] * 3
-                likes = p.get('likes_count', 0) or 0
-                views = p.get('view_count', 0) or 0
-                comments = comment_counts.get(p.get('slug'), 0)
-                shares = p.get('share_count', 0) or 0
-                engagement = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
-                score += min(engagement, 50)
-                post_time = p.get('timestamp')
-                if post_time:
-                    if post_time.tzinfo is None:
-                        post_time = post_time.replace(tzinfo=datetime.timezone.utc)
-                    hours_old = (now - post_time).total_seconds() / 3600
-                    recency = max(0, 1 - (hours_old / (24 * 7)))
-                    score += recency * 10
-                unique_tags = set(p.get('tags', [])) - set(tag_scores.keys())
-                if unique_tags:
-                    score += len(unique_tags) * 0.5
-                p['_score'] = score
-                p['comment_count'] = comments
-                scored.append(p)
-
-            scored.sort(key=lambda x: x['_score'], reverse=True)
-
-            # Build final ordered list: 4 most recent (fixed), then personalized scored list, then remaining posts
-            recent_all = list(posts_conf.find(filter_query).sort('timestamp', -1))
-            recent_top = recent_all[:4]
-            recent_ids = set([p['_id'] for p in recent_top])
-
-            scored_ids = set([p['_id'] for p in scored])
-            remaining_cursor = posts_conf.find({**filter_query, '_id': {'$nin': list(recent_ids.union(scored_ids))}})
-            remaining = list(remaining_cursor)
-
-            ordered = recent_top + scored + remaining
-
-            # Shuffle rest of the list on every load for variety while keeping top 2 fixed
-            import random
-            if len(ordered) > 4:
-                top_fixed = ordered[:2]
-                rest = ordered[2:]
-                random.shuffle(rest)
-                ordered = top_fixed + rest
-            else:
-                random.shuffle(ordered)
-
-            # Paginate slices from ordered list
-            start = (page - 1) * posts_per_page
-            end = page * posts_per_page
-            page_slice = ordered[start:end]
-
-            with app.app_context():
-                posts = prepare_posts(page_slice)
-        else:
-            # Anonymous users: mixed feed shuffled on every load for variety
-            import random
-
-            # Fetch the 4 most recent posts (preserve freshness at top)
-            recent_posts_full = list(posts_conf.find(filter_query).sort('timestamp', -1))
-            recent_top = recent_posts_full[:4]
-            recent_ids = [p['_id'] for p in recent_top]
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-            one_week_ago = now - datetime.timedelta(days=7)
-
-            # Select up to 3 posts from the past week excluding the recent_top
-            week_posts = list(posts_conf.find({**filter_query, '_id': {'$nin': recent_ids}, 'timestamp': {'$gte': one_week_ago}}).sort('timestamp', -1))
-            if len(week_posts) > 3:
-                week_selection = random.sample(week_posts, 3)
-            else:
-                week_selection = week_posts
-            week_ids = [p['_id'] for p in week_selection]
-
-            excluded_ids = set(recent_ids + week_ids)
-
-            # Remaining posts (everything else) — shuffle on every load
-            remaining_cursor = posts_conf.find({**filter_query, '_id': {'$nin': list(excluded_ids)}})
-            remaining_posts = list(remaining_cursor)
-            random.shuffle(remaining_posts)
-
-            # Combined ordered list for pagination (no duplicates)
-            combined = recent_top + week_selection + remaining_posts
-
-            # Keep recent top 2 fixed and shuffle the rest for variety
-            if len(combined) > 4:
-                top_fixed = combined[:2]
-                rest = combined[2:]
-                random.shuffle(rest)
-                combined = top_fixed + rest
-
-            # Compute slice for requested page
-            start = (page - 1) * posts_per_page
-            end = page * posts_per_page
-            page_slice = combined[start:end]
-
-            with app.app_context():
-                posts = prepare_posts(page_slice)
-    else:
-        # When a tag is selected, simply query posts with that tag
-        skip = (page - 1) * posts_per_page
+    # When tag is selected, use simple efficient query
+    if selected_tag:
         filtered_posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
         with app.app_context():
             posts = prepare_posts(filtered_posts)
+    elif current_user.is_authenticated:
+        # --- OPTIMIZED personalized feed ---
+        user_id = ObjectId(current_user.id)
+        user_id_str = str(current_user.id)
+        
+        # Try to get cached interest profile from Redis (cache for 5 minutes)
+        cache_key = f"user_interests:{user_id_str}"
+        cached_interests = None
+        if redis_cache:
+            try:
+                cached_data = redis_cache.get(cache_key)
+                if cached_data:
+                    cached_interests = json.loads(cached_data)
+            except Exception:
+                pass
+        
+        tag_scores = {}
+        author_scores = {}
+        
+        if cached_interests:
+            tag_scores = cached_interests.get('tags', {})
+            author_scores = cached_interests.get('authors', {})
+        else:
+            # Build interest profile with limited queries
+            WEIGHT_LIKED = 3.0
+            WEIGHT_SAVED = 4.0
+            
+            # Get user's liked and saved posts in ONE query via user document
+            user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
+            saved_ids = user_doc.get('saved_posts', []) if user_doc else []
+            
+            # Combine liked + saved lookup in one query (limit to 100 most recent for performance)
+            interest_query = {'$or': [
+                {'liked_by': user_id_str},
+                {'_id': {'$in': saved_ids[:50]}}  # Limit saved posts lookup
+            ]}
+            interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1, 'liked_by': 1}).limit(100))
+            
+            for p in interest_posts:
+                is_liked = user_id_str in (p.get('liked_by') or [])
+                is_saved = p.get('_id') in saved_ids
+                weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
+                
+                for t in p.get('tags', []):
+                    tag_scores[t] = tag_scores.get(t, 0) + weight
+                a = p.get('author_id')
+                if a and str(a) != user_id_str:
+                    author_scores[str(a)] = author_scores.get(str(a), 0) + weight
+            
+            # Cache the interest profile
+            if redis_cache and (tag_scores or author_scores):
+                try:
+                    redis_cache.setex(cache_key, 300, json.dumps({'tags': tag_scores, 'authors': author_scores}))
+                except Exception:
+                    pass
+        
+        # Fetch paginated posts with engagement data in a single aggregation
+        pipeline = [
+            {'$match': filter_query},
+            {'$sort': {'timestamp': -1}},
+            {'$skip': skip},
+            {'$limit': posts_per_page},
+            # Lookup comment counts
+            {'$lookup': {
+                'from': 'comments',
+                'let': {'slug': '$slug'},
+                'pipeline': [
+                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
+                    {'$count': 'count'}
+                ],
+                'as': 'comment_data'
+            }},
+            {'$addFields': {
+                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}
+            }},
+            {'$project': {'comment_data': 0}}
+        ]
+        
+        page_posts = list(posts_conf.aggregate(pipeline))
+        
+        # Score and sort the page posts (lightweight in-memory scoring)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        for p in page_posts:
+            score = 0.0
+            # Tag matching
+            for t in p.get('tags', []):
+                if t in tag_scores:
+                    score += tag_scores[t] * 2
+            # Author matching
+            aid = str(p.get('author_id', ''))
+            if aid in author_scores:
+                score += author_scores[aid] * 3
+            # Engagement score (capped)
+            likes = p.get('likes_count', 0) or 0
+            comments = p.get('comment_count', 0)
+            engagement = (likes * 2) + (comments * 3)
+            score += min(engagement, 30)
+            # Recency boost
+            post_time = p.get('timestamp')
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                hours_old = (now - post_time).total_seconds() / 3600
+                recency = max(0, 1 - (hours_old / (24 * 7)))
+                score += recency * 5
+            p['_score'] = score
+        
+        # Sort by score (keep first 2 fixed by timestamp, rest by score)
+        if len(page_posts) > 2:
+            top_two = page_posts[:2]
+            rest = sorted(page_posts[2:], key=lambda x: x.get('_score', 0), reverse=True)
+            page_posts = top_two + rest
+        
+        with app.app_context():
+            posts = prepare_posts(page_posts)
+    else:
+        # Anonymous users: simple timestamp-sorted feed with slight randomization
+        import random
+        
+        # Efficient paginated query
+        page_posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
+        
+        # Light shuffle for variety (keep first 2 fixed)
+        if len(page_posts) > 2:
+            top_two = page_posts[:2]
+            rest = page_posts[2:]
+            random.shuffle(rest)
+            page_posts = top_two + rest
+        
+        with app.app_context():
+            posts = prepare_posts(page_posts)
 
-    # Get all unique tags for the dropdown
-    all_tags = posts_conf.distinct('tags')
+    # Get all unique tags for the dropdown (cached)
+    tags_cache_key = 'all_post_tags'
+    all_tags = None
+    if redis_cache:
+        try:
+            cached_tags = redis_cache.get(tags_cache_key)
+            if cached_tags:
+                all_tags = json.loads(cached_tags)
+        except Exception:
+            pass
+    
+    if all_tags is None:
+        all_tags = posts_conf.distinct('tags')
+        if redis_cache:
+            try:
+                redis_cache.setex(tags_cache_key, 300, json.dumps(all_tags))
+            except Exception:
+                pass
 
     if selected_tag:
         page_title = f"Posts tagged '{selected_tag}' - EchoWithin"
@@ -2312,9 +2279,12 @@ def get_all_posts_json():
 
 def calculate_hot_score(post, comment_count):
     """
-    Calculates a 'hot' score for a post based on comments, views, and age.
-    A higher score means the post is 'hotter'.
+    Calculates a 'hot' score for a post using an improved algorithm.
+    Uses logarithmic scaling to prevent viral posts from dominating,
+    and includes all engagement signals (comments, likes, shares, views).
     """
+    import math as math_module
+    
     post_time = post.get('created_at') or post.get('timestamp')
     if not post_time:
         return 0
@@ -2324,63 +2294,149 @@ def calculate_hot_score(post, comment_count):
         post_time = post_time.replace(tzinfo=datetime.timezone.utc)
 
     age_in_hours = (datetime.datetime.now(datetime.timezone.utc) - post_time).total_seconds() / 3600
-    views = post.get('view_count', 0)
     
-    # Simple scoring: comments are weighted more heavily than views.
-    # The score decays over time using a gravity factor in the denominator.
-    score = (comment_count * 5) + views
-    return score / ((age_in_hours + 2) ** 1.8) # Gravity factor
+    # Get all engagement signals
+    views = post.get('view_count', 0) or 0
+    likes = post.get('likes_count', 0) or 0
+    shares = post.get('share_count', 0) or 0
+    
+    # Weighted engagement score: comments(5) + likes(3) + shares(4) + views(0.1)
+    raw_score = (comment_count * 5) + (likes * 3) + (shares * 4) + (views * 0.1)
+    
+    # Use logarithmic scaling to prevent viral posts from completely dominating
+    # log1p(x) = log(1 + x), handles zero values safely
+    log_score = math_module.log1p(raw_score) * 10
+    
+    # Exponential time decay - posts lose 50% of their score every 12 hours
+    # This creates a more aggressive decay than the gravity model
+    half_life_hours = 12
+    decay_factor = 0.5 ** (age_in_hours / half_life_hours)
+    
+    # Boost for very recent posts (first 2 hours get extra visibility)
+    if age_in_hours < 2:
+        recency_boost = 1.5 - (age_in_hours * 0.25)  # 1.5x to 1.0x
+    else:
+        recency_boost = 1.0
+    
+    return log_score * decay_factor * recency_boost
 
 @app.route('/api/posts/top-by-comments')
 def get_top_posts_json():
-    """Return top posts sorted by overall engagement (comments, likes, views, shares)."""
+    """
+    Return top posts sorted by overall engagement with recency factor.
+    Uses MongoDB aggregation for better performance and Redis caching.
+    """
+    import math as math_module
+    
+    # Check Redis cache first (cache for 2 minutes)
+    cache_key = 'top_posts_by_engagement'
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                return jsonify(json.loads(cached))
+        except Exception:
+            pass
+    
     try:
-        # Aggregate comment counts per post_slug
-        comment_pipeline = [
-            {'$match': {'is_deleted': False}},
-            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+        # Use aggregation pipeline for efficient server-side processing
+        # This avoids loading all posts into Python memory
+        pipeline = [
+            # Stage 1: Project only needed fields
+            {'$project': {
+                '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1,
+                'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1,
+                'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1,
+                'share_count': 1, 'view_count': 1, 'reactions': 1
+            }},
+            # Stage 2: Lookup comment counts
+            {'$lookup': {
+                'from': 'comments',
+                'let': {'slug': '$slug'},
+                'pipeline': [
+                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
+                    {'$count': 'count'}
+                ],
+                'as': 'comment_data'
+            }},
+            # Stage 3: Add computed fields
+            {'$addFields': {
+                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]},
+                'likes_safe': {'$ifNull': ['$likes_count', 0]},
+                'shares_safe': {'$ifNull': ['$share_count', 0]},
+                'views_safe': {'$ifNull': ['$view_count', 0]}
+            }},
+            # Stage 4: Calculate raw engagement score
+            {'$addFields': {
+                'raw_engagement': {
+                    '$add': [
+                        {'$multiply': ['$comment_count', 5]},
+                        {'$multiply': ['$likes_safe', 3]},
+                        {'$multiply': ['$shares_safe', 2]},
+                        {'$multiply': ['$views_safe', 0.1]}
+                    ]
+                }
+            }},
+            # Stage 5: Sort by raw engagement and limit for top candidates
+            {'$sort': {'raw_engagement': -1}},
+            {'$limit': 50},
+            # Stage 6: Remove lookup helper field
+            {'$project': {'comment_data': 0, 'likes_safe': 0, 'shares_safe': 0, 'views_safe': 0}}
         ]
-        comment_counts = {doc['_id']: doc['count'] for doc in comments_conf.aggregate(comment_pipeline)}
         
-        # Fetch posts and calculate engagement score
-        posts = list(posts_conf.find(
-            {},
-            {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
-             'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 
-             'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 
-             'share_count': 1, 'view_count': 1, 'reactions': 1}
-        ))
+        posts = list(posts_conf.aggregate(pipeline))
         
+        # Apply recency factor in Python (complex time math is cleaner here)
+        now = datetime.datetime.now(datetime.timezone.utc)
         results = []
+        
         for post in posts:
-            slug = post.get('slug')
-            if not slug:
+            if not post.get('slug'):
                 continue
             
-            # Calculate engagement score: comments (weight 5) + likes (weight 3) + shares (weight 2) + views (weight 0.1)
-            comment_count = comment_counts.get(slug, 0)
+            # Get engagement values
+            comment_count = post.get('comment_count', 0)
             likes = post.get('likes_count', 0) or 0
             shares = post.get('share_count', 0) or 0
             views = post.get('view_count', 0) or 0
+            raw_engagement = post.get('raw_engagement', 0)
             
-            engagement_score = (comment_count * 5) + (likes * 3) + (shares * 2) + (views * 0.1)
+            # Apply recency factor - posts decay over 30 days
+            post_time = post.get('timestamp')
+            recency_multiplier = 1.0
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                days_old = (now - post_time).total_seconds() / 86400
+                # Logarithmic decay: loses 50% over 30 days, but never goes below 0.2
+                recency_multiplier = max(0.2, 1.0 - (math_module.log1p(days_old) / 10))
             
+            final_score = raw_engagement * recency_multiplier
+            
+            # Format for JSON response
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
-            post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
+            post['timestamp'] = post_time.strftime('%b %d, %Y at %I:%M %p') if post_time else None
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
             post['comment_count'] = comment_count
             post['likes_count'] = likes
             post['share_count'] = shares
             post['view_count'] = views
-            post['engagement_score'] = engagement_score
-            # Convert liked_by ObjectIds to strings for JS comparison
+            post['engagement_score'] = round(final_score, 2)
             post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
+            post.pop('raw_engagement', None)
             results.append(post)
         
-        # Sort by engagement score descending and limit to top 20
+        # Sort by final score and limit to top 20
         results.sort(key=lambda x: x['engagement_score'], reverse=True)
         results = results[:20]
+        
+        # Cache the results
+        if redis_cache:
+            try:
+                redis_cache.setex(cache_key, 120, json.dumps(results, default=str))
+            except Exception:
+                pass
         
         return jsonify(results)
     except Exception as e:
@@ -2433,228 +2489,225 @@ def get_hot_posts_json():
 @login_required
 def get_related_posts_json():
     """
-    Advanced personalization algorithm that returns posts tailored to a user's interests.
-    Uses multiple signals: likes, comments, views, tags, author preferences, and engagement patterns.
+    OPTIMIZED personalization algorithm that returns posts tailored to user interests.
+    Uses Redis caching for user interest profiles and efficient MongoDB queries.
+    Reduced from 8+ DB queries to 2-3 per request.
     """
+    import math as math_module
+    
     try:
         user_id = ObjectId(current_user.id)
         user_id_str = str(current_user.id)
         
-        # =====================================================
-        # STEP 1: Build User Interest Profile
-        # =====================================================
-        
-        # Tags the user is interested in (weighted by interaction type)
-        tag_scores = {}  # tag -> weighted score
-        author_scores = {}  # author_id -> weighted score
-        
-        # Weight constants for different interaction types
-        WEIGHT_LIKED = 3.0
-        WEIGHT_COMMENTED = 2.5
-        WEIGHT_VIEWED = 0.5
-        WEIGHT_SAVED = 4.0
-        WEIGHT_AUTHORED = 1.0
-        
-        # 1a. Tags from posts the user has LIKED (strong signal)
-        liked_posts = posts_conf.find(
-            {'liked_by': user_id_str},
-            {'tags': 1, 'author_id': 1, 'author': 1}
-        )
-        for post in liked_posts:
-            for tag in post.get('tags', []):
-                tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_LIKED
-            author_id = str(post.get('author_id', ''))
-            if author_id and author_id != user_id_str:
-                author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_LIKED
-        
-        # 1b. Tags from posts the user has COMMENTED on (strong signal)
-        commented_post_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
-        if commented_post_slugs:
-            commented_posts = posts_conf.find(
-                {'slug': {'$in': commented_post_slugs}},
-                {'tags': 1, 'author_id': 1, 'author': 1}
-            )
-            for post in commented_posts:
-                for tag in post.get('tags', []):
-                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_COMMENTED
-                author_id = str(post.get('author_id', ''))
-                if author_id and author_id != user_id_str:
-                    author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_COMMENTED
-        
-        # 1c. Tags from posts the user has SAVED (very strong signal)
-        user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
-        saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
-        if saved_post_ids:
-            saved_posts = posts_conf.find(
-                {'_id': {'$in': saved_post_ids}},
-                {'tags': 1, 'author_id': 1}
-            )
-            for post in saved_posts:
-                for tag in post.get('tags', []):
-                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_SAVED
-                author_id = str(post.get('author_id', ''))
-                if author_id and author_id != user_id_str:
-                    author_scores[author_id] = author_scores.get(author_id, 0) + WEIGHT_SAVED
-        
-        # 1d. Tags from posts the user has AUTHORED (for topic continuity)
-        user_posts = posts_conf.find({'author_id': user_id}, {'tags': 1})
-        for post in user_posts:
-            for tag in post.get('tags', []):
-                tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_AUTHORED
-        
-        # 1e. Get upvoted comments and extract their post tags
-        upvoted_comment_slugs = comments_conf.distinct(
-            'post_slug', 
-            {'upvoted_by': user_id_str, 'is_deleted': False}
-        )
-        if upvoted_comment_slugs:
-            upvoted_posts = posts_conf.find(
-                {'slug': {'$in': upvoted_comment_slugs}},
-                {'tags': 1, 'author_id': 1}
-            )
-            for post in upvoted_posts:
-                for tag in post.get('tags', []):
-                    tag_scores[tag] = tag_scores.get(tag, 0) + WEIGHT_COMMENTED * 0.5
+        # Check if we have cached results for this user (3 minute cache)
+        results_cache_key = f"related_posts:{user_id_str}"
+        if redis_cache:
+            try:
+                cached_results = redis_cache.get(results_cache_key)
+                if cached_results:
+                    return jsonify(json.loads(cached_results))
+            except Exception:
+                pass
         
         # =====================================================
-        # STEP 2: Get Candidate Posts
+        # STEP 1: Get or Build User Interest Profile (Cached)
         # =====================================================
         
-        # Get IDs of posts the user has already interacted with
-        interacted_slugs = set(commented_post_slugs if commented_post_slugs else [])
-        interacted_slugs.update(upvoted_comment_slugs if upvoted_comment_slugs else [])
+        tag_scores = {}
+        author_scores = {}
         
-        # Get posts liked by the user (by ObjectId)
-        liked_post_docs = list(posts_conf.find(
-            {'liked_by': user_id_str},
-            {'_id': 1, 'slug': 1}
-        ))
-        interacted_ids = [p['_id'] for p in liked_post_docs]
-        interacted_slugs.update([p['slug'] for p in liked_post_docs if p.get('slug')])
+        # Try to get cached interest profile (5 minute cache)
+        interests_cache_key = f"user_interests_full:{user_id_str}"
+        cached_interests = None
+        if redis_cache:
+            try:
+                cached_data = redis_cache.get(interests_cache_key)
+                if cached_data:
+                    cached_interests = json.loads(cached_data)
+                    tag_scores = cached_interests.get('tags', {})
+                    author_scores = cached_interests.get('authors', {})
+            except Exception:
+                pass
         
-        # Add saved posts to interacted
-        interacted_ids.extend(saved_post_ids)
+        saved_post_ids = []
         
-        # Get user's own posts
-        user_own_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1}))
-        interacted_ids.extend([p['_id'] for p in user_own_posts])
-        interacted_slugs.update([p['slug'] for p in user_own_posts if p.get('slug')])
+        if not cached_interests:
+            # Build interest profile with optimized queries
+            WEIGHT_LIKED = 3.0
+            WEIGHT_SAVED = 4.0
+            WEIGHT_COMMENTED = 2.5
+            
+            # Get user's saved posts from user document
+            user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
+            saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
+            
+            # OPTIMIZED: Single query for liked + saved posts (limit 150 for performance)
+            interest_query = {'$or': [
+                {'liked_by': user_id_str},
+                {'_id': {'$in': saved_post_ids[:75]}}  # Limit saved posts
+            ]}
+            interest_posts = list(posts_conf.find(
+                interest_query, 
+                {'tags': 1, 'author_id': 1, 'liked_by': 1, '_id': 1}
+            ).limit(150))
+            
+            for p in interest_posts:
+                is_liked = user_id_str in (p.get('liked_by') or [])
+                is_saved = p.get('_id') in saved_post_ids
+                weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
+                
+                for t in p.get('tags', []):
+                    tag_scores[t] = tag_scores.get(t, 0) + weight
+                a = p.get('author_id')
+                if a and str(a) != user_id_str:
+                    author_scores[str(a)] = author_scores.get(str(a), 0) + weight
+            
+            # OPTIMIZED: Get commented posts in single query
+            commented_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
+            if commented_slugs:
+                commented_posts = list(posts_conf.find(
+                    {'slug': {'$in': commented_slugs[:50]}},  # Limit
+                    {'tags': 1, 'author_id': 1}
+                ))
+                for p in commented_posts:
+                    for t in p.get('tags', []):
+                        tag_scores[t] = tag_scores.get(t, 0) + WEIGHT_COMMENTED
+                    a = p.get('author_id')
+                    if a and str(a) != user_id_str:
+                        author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_COMMENTED
+            
+            # Cache the interest profile
+            if redis_cache and (tag_scores or author_scores):
+                try:
+                    redis_cache.setex(interests_cache_key, 300, json.dumps({
+                        'tags': tag_scores, 
+                        'authors': author_scores
+                    }))
+                except Exception:
+                    pass
         
-        # Build query for candidate posts
-        # Posts that match user interests but aren't already interacted with
-        query_conditions = [
-            {'author_id': {'$ne': user_id}},  # Not by the user
-            {'_id': {'$nin': list(set(interacted_ids))}}  # Not already interacted
-        ]
+        # =====================================================
+        # STEP 2: Get Candidate Posts (Optimized Aggregation)
+        # =====================================================
         
-        # Add tag or author filter if we have preferences
+        # Build interest filter for candidates
         interest_filters = []
         if tag_scores:
-            top_tags = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)[:15]
+            top_tags = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)[:12]
             interest_filters.append({'tags': {'$in': top_tags}})
         if author_scores:
-            top_authors = sorted(author_scores.keys(), key=lambda a: author_scores[a], reverse=True)[:10]
+            top_authors = sorted(author_scores.keys(), key=lambda a: author_scores[a], reverse=True)[:8]
             top_author_oids = [ObjectId(a) for a in top_authors if ObjectId.is_valid(a)]
             if top_author_oids:
                 interest_filters.append({'author_id': {'$in': top_author_oids}})
         
+        # Build match query
         if interest_filters:
-            query_conditions.append({'$or': interest_filters})
-        
-        # Fallback: if no interests found, get recent popular posts
-        if not tag_scores and not author_scores:
-            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-            candidate_posts = list(posts_conf.find(
-                {'author_id': {'$ne': user_id}, 'timestamp': {'$gte': seven_days_ago}},
-                {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
-                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
-                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
-            ).sort([('likes_count', -1), ('timestamp', -1)]).limit(30))
+            match_query = {
+                'author_id': {'$ne': user_id},
+                '$or': interest_filters
+            }
         else:
-            # Get candidates matching interests
-            query = {'$and': query_conditions}
-            candidate_posts = list(posts_conf.find(
-                query,
-                {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 
-                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'video_url': 1, 'tags': 1,
-                 'likes_count': 1, 'view_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
-            ).sort('timestamp', -1).limit(50))
+            # Fallback: recent popular posts for new users
+            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+            match_query = {
+                'author_id': {'$ne': user_id},
+                'timestamp': {'$gte': seven_days_ago}
+            }
+        
+        # Use aggregation for efficient candidate fetching with comment counts
+        pipeline = [
+            {'$match': match_query},
+            {'$sort': {'timestamp': -1}},
+            {'$limit': 40},  # Get 40 candidates, return top 15
+            # Lookup comment counts
+            {'$lookup': {
+                'from': 'comments',
+                'let': {'slug': '$slug'},
+                'pipeline': [
+                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
+                    {'$count': 'count'}
+                ],
+                'as': 'comment_data'
+            }},
+            {'$addFields': {
+                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}
+            }},
+            {'$project': {
+                'comment_data': 0  # Remove lookup helper
+            }}
+        ]
+        
+        candidate_posts = list(posts_conf.aggregate(pipeline))
         
         # =====================================================
-        # STEP 3: Score and Rank Candidate Posts
+        # STEP 3: Score Candidates (In Memory - Fast)
         # =====================================================
         
-        # Get comment counts for candidate posts
-        candidate_slugs = [p['slug'] for p in candidate_posts if p.get('slug')]
-        comment_counts = {}
-        if candidate_slugs:
-            comment_agg = list(comments_conf.aggregate([
-                {'$match': {'post_slug': {'$in': candidate_slugs}, 'is_deleted': False}},
-                {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
-            ]))
-            comment_counts = {doc['_id']: doc['count'] for doc in comment_agg}
-        
-        scored_posts = []
         now = datetime.datetime.now(datetime.timezone.utc)
+        scored_posts = []
         
         for post in candidate_posts:
             score = 0.0
             
-            # Tag relevance score
-            post_tags = post.get('tags', [])
-            for tag in post_tags:
+            # Tag relevance
+            for tag in post.get('tags', []):
                 if tag in tag_scores:
                     score += tag_scores[tag] * 2
             
-            # Author preference score
+            # Author preference
             post_author_id = str(post.get('author_id', ''))
             if post_author_id in author_scores:
                 score += author_scores[post_author_id] * 3
             
-            # Engagement signals (popularity indicators)
-            likes = post.get('likes_count', 0)
-            views = post.get('view_count', 0)
-            comments = comment_counts.get(post.get('slug'), 0)
-            shares = post.get('share_count', 0)
+            # Engagement (logarithmic to prevent viral domination)
+            likes = post.get('likes_count', 0) or 0
+            comments = post.get('comment_count', 0)
+            shares = post.get('share_count', 0) or 0
+            views = post.get('view_count', 0) or 0
+            raw_engagement = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
+            score += math_module.log1p(raw_engagement) * 5  # Log scale
             
-            # Engagement score (normalized and weighted)
-            engagement_score = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
-            score += min(engagement_score, 50)  # Cap engagement contribution
-            
-            # Recency boost (newer posts get a boost)
+            # Recency boost
             post_time = post.get('timestamp')
             if post_time:
                 if post_time.tzinfo is None:
                     post_time = post_time.replace(tzinfo=datetime.timezone.utc)
                 hours_old = (now - post_time).total_seconds() / 3600
-                recency_factor = max(0, 1 - (hours_old / (24 * 7)))  # Decay over 7 days
+                recency_factor = max(0, 1 - (hours_old / (24 * 7)))
                 score += recency_factor * 10
             
-            # Diversity bonus: slightly boost posts with different tags to avoid filter bubble
-            unique_tags = set(post_tags) - set(tag_scores.keys())
+            # Diversity bonus for new topics
+            unique_tags = set(post.get('tags', [])) - set(tag_scores.keys())
             if unique_tags:
                 score += len(unique_tags) * 0.5
             
             post['_score'] = score
-            post['comment_count'] = comments
             scored_posts.append(post)
         
-        # Sort by personalization score
+        # Sort by score
         scored_posts.sort(key=lambda p: p['_score'], reverse=True)
         
         # =====================================================
-        # STEP 4: Format and Return Top Results
+        # STEP 4: Format and Return Top 15
         # =====================================================
         
         result_posts = scored_posts[:15]
         for post in result_posts:
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
-            post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p') if post.get('timestamp') else None
+            ts = post.get('timestamp')
+            post['timestamp'] = ts.strftime('%b %d, %Y at %I:%M %p') if ts else None
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
-            # Remove internal scoring field
             post.pop('_score', None)
             post.pop('liked_by', None)
+        
+        # Cache the results
+        if redis_cache:
+            try:
+                redis_cache.setex(results_cache_key, 180, json.dumps(result_posts, default=str))
+            except Exception:
+                pass
         
         return jsonify(result_posts)
         

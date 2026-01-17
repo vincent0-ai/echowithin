@@ -3341,9 +3341,22 @@ def subscribe_push():
         return jsonify({'error': 'Invalid subscription data'}), 400
     
     try:
+        user_id = ObjectId(current_user.id)
+        new_endpoint = data['endpoint']
+        
+        # Proactively clean up old/stale subscriptions for this user
+        # This handles the case where a user reinstalls the app and gets a new endpoint
+        # We delete all OTHER subscriptions for this user (keeping only the new one)
+        delete_result = push_subscriptions_conf.delete_many({
+            'user_id': user_id,
+            'endpoint': {'$ne': new_endpoint}
+        })
+        if delete_result.deleted_count > 0:
+            app.logger.info(f"Cleaned up {delete_result.deleted_count} old push subscription(s) for user {current_user.username}")
+        
         subscription_doc = {
-            'user_id': ObjectId(current_user.id),
-            'endpoint': data['endpoint'],
+            'user_id': user_id,
+            'endpoint': new_endpoint,
             'keys': data['keys'],
             'created_at': datetime.datetime.now(datetime.timezone.utc),
             'user_agent': request.headers.get('User-Agent', '')[:200]
@@ -3351,7 +3364,7 @@ def subscribe_push():
         
         # Upsert - update if exists, insert if not
         push_subscriptions_conf.update_one(
-            {'user_id': ObjectId(current_user.id), 'endpoint': data['endpoint']},
+            {'user_id': user_id, 'endpoint': new_endpoint},
             {'$set': subscription_doc},
             upsert=True
         )

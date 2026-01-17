@@ -7,8 +7,8 @@
             <h3 class="post-title"><a href="{{ post.url }}" class="record-view-link"
                     data-post-id="{{ post._id|string }}">{{ post.title }}</a></h3>
             <div class="post-badges">
-                {% if post_age_hours < 24 %} <span class="badge badge-new" title="Posted less than 24 hours ago">🆕
-                    NEW</span>
+                {% if post_age_hours < 24 %} <span class="badge badge-new" title="Posted less than 24 hours ago">
+                    New</span>
                     {% endif %}
                     {% if engagement >= 10 and post_age_hours < 168 %} <span class="badge badge-hot"
                         title="Trending this week">Hot</span>

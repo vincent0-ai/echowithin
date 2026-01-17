@@ -696,8 +696,11 @@ def inject_pinned_announcement():
 
 @app.context_processor
 def inject_current_year():
-    """Makes the current year available to all templates."""
-    return {'current_year': datetime.date.today().year}
+    """Makes the current year and now() function available to all templates."""
+    return {
+        'current_year': datetime.date.today().year,
+        'now': lambda: datetime.datetime.now(datetime.timezone.utc)
+    }
 
 
 @login_manager.user_loader

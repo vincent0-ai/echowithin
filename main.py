@@ -2586,9 +2586,79 @@ def get_related_posts_json():
                 except Exception:
                     pass
         
-        # =====================================================
         # STEP 2: Get Candidate Posts (Optimized Aggregation)
         # =====================================================
+        
+        # Smart Exclusion Logic:
+        # 1. Time-based: Only exclude posts interacted with in last 7 days
+        # 2. Re-engagement: Show again if post has new comments since user's last interaction
+        
+        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+        interacted_post_ids = set()
+        posts_with_new_activity = set()  # Posts to RE-INCLUDE due to new comments
+        
+        # Get user's recent comments with timestamps
+        user_recent_comments = list(comments_conf.find(
+            {'author_id': user_id, 'created_at': {'$gte': seven_days_ago}},
+            {'post_slug': 1, 'created_at': 1}
+        ).sort('created_at', -1).limit(100))
+        
+        # Map of slug -> user's last comment time on that post
+        user_last_comment_time = {}
+        for c in user_recent_comments:
+            slug = c.get('post_slug')
+            if slug and slug not in user_last_comment_time:
+                user_last_comment_time[slug] = c.get('created_at')
+        
+        # Check if posts have new comments since user's last interaction
+        if user_last_comment_time:
+            for slug, last_time in user_last_comment_time.items():
+                # Find if there are newer comments from OTHER users
+                newer_comment = comments_conf.find_one({
+                    'post_slug': slug,
+                    'author_id': {'$ne': user_id},
+                    'created_at': {'$gt': last_time},
+                    'is_deleted': False
+                })
+                if newer_comment:
+                    # This post has new activity - should be re-shown
+                    post = posts_conf.find_one({'slug': slug}, {'_id': 1})
+                    if post:
+                        posts_with_new_activity.add(post['_id'])
+        
+        # Get posts user RECENTLY commented on (last 7 days) - exclude unless new activity
+        recently_commented_slugs = [c.get('post_slug') for c in user_recent_comments]
+        if recently_commented_slugs:
+            commented_posts_cursor = posts_conf.find(
+                {'slug': {'$in': list(set(recently_commented_slugs))}},
+                {'_id': 1}
+            )
+            for p in commented_posts_cursor:
+                if p['_id'] not in posts_with_new_activity:
+                    interacted_post_ids.add(p['_id'])
+        
+        # Get posts user RECENTLY liked - we can't track exact like time, 
+        # so we use a heuristic: recent posts that user liked are likely recent interactions
+        liked_posts_cursor = posts_conf.find(
+            {'liked_by': user_id_str, 'timestamp': {'$gte': seven_days_ago}},
+            {'_id': 1}
+        ).limit(100)
+        for p in liked_posts_cursor:
+            if p['_id'] not in posts_with_new_activity:
+                interacted_post_ids.add(p['_id'])
+        
+        # Saved posts - only recent saves (use post timestamp as proxy)
+        if not saved_post_ids:
+            user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
+            saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
+        if saved_post_ids:
+            saved_posts_recent = posts_conf.find(
+                {'_id': {'$in': saved_post_ids}, 'timestamp': {'$gte': seven_days_ago}},
+                {'_id': 1}
+            )
+            for p in saved_posts_recent:
+                if p['_id'] not in posts_with_new_activity:
+                    interacted_post_ids.add(p['_id'])
         
         # Build interest filter for candidates
         interest_filters = []
@@ -2601,17 +2671,20 @@ def get_related_posts_json():
             if top_author_oids:
                 interest_filters.append({'author_id': {'$in': top_author_oids}})
         
-        # Build match query
+        # Build match query - SMART EXCLUSION
+        interacted_list = list(interacted_post_ids) if interacted_post_ids else []
+        
         if interest_filters:
             match_query = {
                 'author_id': {'$ne': user_id},
+                '_id': {'$nin': interacted_list},  # Exclude only recently interacted (no re-engagement)
                 '$or': interest_filters
             }
         else:
             # Fallback: recent popular posts for new users
-            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
             match_query = {
                 'author_id': {'$ne': user_id},
+                '_id': {'$nin': interacted_list},
                 'timestamp': {'$gte': seven_days_ago}
             }
         

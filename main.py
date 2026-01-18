@@ -2517,11 +2517,16 @@ def get_my_commented_posts_json():
         pipeline = [
             # 1. Match user's posts
             {'$match': {'author_id': user_id}},
-            # 2. Lookup comments for each post
+            # 2. Lookup only non-deleted comments for each post
             {'$lookup': {
                 'from': 'comments',
-                'localField': 'slug',
-                'foreignField': 'post_slug',
+                'let': {'post_slug': '$slug'},
+                'pipeline': [
+                    {'$match': {
+                        '$expr': {'$eq': ['$post_slug', '$$post_slug']},
+                        'is_deleted': {'$ne': True}
+                    }}
+                ],
                 'as': 'post_comments'
             }},
             # 3. Filter to only posts with comments
@@ -2536,8 +2541,8 @@ def get_my_commented_posts_json():
             {'$addFields': {
                 'has_unread': {'$gt': ['$latest_comment_at', '$author_last_viewed']}
             }},
-            # 6. Sort by latest comment activity
-            {'$sort': {'latest_comment_at': -1}},
+            # 6. Sort: unread posts first, then by latest comment activity
+            {'$sort': {'has_unread': -1, 'latest_comment_at': -1}},
             # 7. Limit results
             {'$limit': 15},
             # 8. Project only needed fields

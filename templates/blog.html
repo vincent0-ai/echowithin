@@ -170,9 +170,9 @@
                     fetchRelatedPosts();
                     button.dataset.loaded = 'true';
                 }
-                if (tab === 'my-commented-posts' && !button.dataset.loaded) {
+                // Activity tab always fetches fresh data (no caching)
+                if (tab === 'my-commented-posts') {
                     fetchMyCommentedPosts();
-                    button.dataset.loaded = 'true';
                 }
             });
         });

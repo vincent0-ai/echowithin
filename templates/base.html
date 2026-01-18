@@ -146,6 +146,13 @@
             visibility: hidden !important;
         }
 
+        /* Show menu when toggled open via JS click */
+        .reaction-container.menu-open .reaction-menu {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
         .reaction-option {
             background: none;
             border: none;
@@ -494,8 +501,9 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
+    if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {
@@ -759,13 +767,18 @@
             const reactionOption = e.target.closest('.reaction-option');
 
             if (reactionBtn && !reactionBtn.disabled && !reactionOption) {
-                // Clicking the main button toggles the default 'heart' or current reaction
                 e.preventDefault();
-                const postId = reactionBtn.closest('.reaction-container').dataset.postId;
+                const reactionContainer = reactionBtn.closest('.reaction-container');
+                const postId = reactionContainer.dataset.postId;
                 const currentReaction = reactionBtn.dataset.currentReaction;
-                const targetReaction = currentReaction || 'heart';
 
-                handleReaction(postId, targetReaction, reactionBtn);
+                if (currentReaction) {
+                    // If already reacted, clicking removes the reaction
+                    handleReaction(postId, currentReaction, reactionBtn);
+                } else {
+                    // If no reaction, toggle the reaction menu open/closed
+                    reactionContainer.classList.toggle('menu-open');
+                }
             }
 
             if (reactionOption) {
@@ -775,8 +788,9 @@
                 const reactionBtn = reactionContainer.querySelector('.reaction-btn');
                 const targetReaction = reactionOption.dataset.reaction;
 
-                // Close the menu immediately by adding a class
+                // Close the menu immediately by adding/removing classes
                 reactionContainer.classList.add('menu-closing');
+                reactionContainer.classList.remove('menu-open');
 
                 // Remove the class when mouse leaves (so hover works again next time)
                 const removeClosingClass = () => {
@@ -786,6 +800,13 @@
                 reactionContainer.addEventListener('mouseleave', removeClosingClass);
 
                 handleReaction(postId, targetReaction, reactionBtn);
+            }
+
+            // Close any open reaction menus when clicking outside
+            if (!reactionBtn && !reactionOption) {
+                document.querySelectorAll('.reaction-container.menu-open').forEach(container => {
+                    container.classList.remove('menu-open');
+                });
             }
         });
 

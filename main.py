@@ -1611,7 +1611,8 @@ def register():
                     flash("This email is already registered but not confirmed. We've sent you a new confirmation code.", "info")
                     gen_code = str(secrets.randbelow(10**6)).zfill(6)
                     hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-                    auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
+                    code_expiry = datetime.datetime.now() + datetime.timedelta(hours=24)
+                    auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
                     send_code(email, gen_code)
                     return redirect(url_for("confirm", email=email))
 
@@ -1630,7 +1631,8 @@ def register():
             # --- Send email confirmation ---
             gen_code = str(secrets.randbelow(10**6)).zfill(6)
             hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-            auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed}}, upsert=True)
+            code_expiry = datetime.datetime.now() + datetime.timedelta(hours=24)
+            auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
             send_code(email, gen_code)
             
             flash("Account created successfully! Please check your email for a confirmation code.", "success")
@@ -1664,7 +1666,19 @@ def confirm(email):
         confirm_code = request.form.get("code")
         if confirm_code:
             hashed_obj = auth_conf.find_one({'email': email})
-            if hashed_obj and hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():
+            
+            # Check if code exists and is not expired
+            if not hashed_obj:
+                flash("No confirmation code found for this email.", "danger")
+                return redirect(url_for("register"))
+                
+            if hashed_obj.get('code_expiry') and hashed_obj['code_expiry'] < datetime.datetime.now():
+                # Clean up expired code
+                auth_conf.delete_one({'email': email})
+                flash("Your confirmation code has expired. Please register again to receive a new code.", "danger")
+                return redirect(url_for("register"))
+
+            if hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():
                 users_conf.update_one(
                     {'email': email},
                     {'$set': {'is_confirmed': True}}
@@ -1700,6 +1714,12 @@ def login():
             remember = True
         
         user = users_conf.find_one({"username": username})
+        
+        # Check if user exists but signed up via Google (no password set)
+        if user and user.get('password') is None:
+            flash("This account was created with Google. Please sign in with Google, or use 'Forgot Password' to set a password.", "info")
+            return redirect(url_for('login'))
+        
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
                 flash('Please confirm your account first', "danger")
@@ -1792,47 +1812,29 @@ def google_callback():
         flash(f"Welcome back, {user['username']}!", "success")
         return redirect(url_for('home'))
     else:
-        # New user, create account
-        # Store Google info in session and redirect to a completion page
-        session['google_signup_info'] = {
-            'email': email,
-            'name': name
-        }
-        return redirect(url_for('google_signup'))
-
-@app.route('/google_signup', methods=['GET', 'POST'])
-def google_signup():
-    if 'google_signup_info' not in session:
-        flash("No Google sign-up data found. Please try signing in with Google again.", "warning")
-        return redirect(url_for('login'))
-
-    google_info = session['google_signup_info']
-    email = google_info['email']
-
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        if not username or not password:
-            flash("Username and password are required.", "danger")
-            return render_template('google_signup.html', email=email, suggested_username=username)
-
-        if users_conf.find_one({'username': username}):
-            flash("This username is already taken. Please choose another.", "danger")
-            return render_template('google_signup.html', email=email, suggested_username=username)
-
-        hashed_password = generate_password_hash(password)
+        # New user - create account directly without requiring password
+        # Generate username from Google name
+        base_username = name.replace(' ', '_').lower()
+        username = base_username
+        counter = 1
+        # Ensure username is unique
+        while users_conf.find_one({'username': username}):
+            username = f"{base_username}{counter}"
+            counter += 1
+        
+        # Create user with no password (they can set one via forgot password if needed)
         users_conf.insert_one({
             'username': username,
             'email': email,
-            'password': hashed_password,
+            'password': None,  # No password - user signed up via Google
             'is_confirmed': True,
             'is_admin': False,
             'join_date': datetime.datetime.now(),
-            'notify_new_posts': True
+            'notify_new_posts': True,
+            'google_signup': True  # Flag to indicate Google signup
         })
-
-        # --- Send ntfy notification for new user from Google signup ---
+        
+        # Send ntfy notification for new user from Google signup
         try:
             ntfy_message = f"User '{username}' has registered via Google."
             send_ntfy_notification.queue(ntfy_message, "New User on EchoWithin", "partying_face")
@@ -1842,20 +1844,14 @@ def google_signup():
                 ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New User on EchoWithin", "partying_face")
         except Exception as e:
             app.logger.error(f"Failed to enqueue ntfy notification for new Google user '{username}': {e}")
-
-        # Clean up session
-        session.pop('google_signup_info', None)
-
-        # Log the new user in with remember=True for PWA persistence
+        
+        # Log the new user in
         user = users_conf.find_one({'email': email})
         user_obj = User(user)
         login_user(user_obj, remember=True)
         flash(f"Account created successfully! Welcome, {username}!", "success")
         return redirect(url_for('home'))
 
-    # For GET request, suggest a username
-    suggested_username = google_info['name'].replace(' ', '_').lower()
-    return render_template('google_signup.html', email=email, suggested_username=suggested_username)
 
 
 @app.route('/service-worker.js')

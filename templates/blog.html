@@ -110,6 +110,10 @@
             <button class="tab-button" data-tab="active-posts">Most Active</button>
             {% if current_user.is_authenticated %}
             <button class="tab-button" data-tab="related-posts">Related Posts</button>
+            <button class="tab-button" data-tab="my-commented-posts">
+                Activity
+                <span class="tab-badge" id="my-commented-badge" style="display:none;"></span>
+            </button>
             {% endif %}
         </div>
 
@@ -130,6 +134,9 @@
         {% if current_user.is_authenticated %}
         <div id="related-posts" class="tab-content">
             <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading related posts...</div>
+        </div>
+        <div id="my-commented-posts" class="tab-content">
+            <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading your commented posts...</div>
         </div>
         {% endif %}
     </div>
@@ -161,6 +168,10 @@
                 }
                 if (tab === 'related-posts' && !button.dataset.loaded) {
                     fetchRelatedPosts();
+                    button.dataset.loaded = 'true';
+                }
+                if (tab === 'my-commented-posts' && !button.dataset.loaded) {
+                    fetchMyCommentedPosts();
                     button.dataset.loaded = 'true';
                 }
             });
@@ -219,6 +230,47 @@
                 })
                 .catch(() => container.innerHTML = '<p>Unable to load related posts.</p>');
         }
+
+        function fetchMyCommentedPosts() {
+            const container = document.getElementById('my-commented-posts');
+
+            fetch('{{ url_for("get_my_commented_posts_json") }}')
+                .then(r => r.json())
+                .then(data => {
+                    const posts = data.posts || [];
+                    if (!posts.length) {
+                        container.innerHTML = '<p>None of your posts have comments yet.</p>';
+                        return;
+                    }
+
+                    let html = '';
+                    posts.forEach(p => {
+                        // Add unread indicator to posts with new comments
+                        const unreadClass = p.has_unread ? 'has-unread-comments' : '';
+                        const unreadBadge = p.has_unread ? '<span class="unread-indicator">New comments!</span>' : '';
+                        html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}${renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}')}</div>`;
+                    });
+
+                    container.innerHTML = html;
+                })
+                .catch(() => container.innerHTML = '<p>Unable to load your commented posts.</p>');
+        }
+
+        // Load unread badge count on page load (for authenticated users)
+        {% if current_user.is_authenticated %}
+        (function loadUnreadBadge() {
+            fetch('{{ url_for("get_my_commented_posts_json") }}')
+                .then(r => r.json())
+                .then(data => {
+                    const badge = document.getElementById('my-commented-badge');
+                    if (data.unread_count && data.unread_count > 0) {
+                        badge.textContent = data.unread_count;
+                        badge.style.display = 'inline-block';
+                    }
+                })
+                .catch(() => { });
+        })();
+        {% endif %}
 
         function renderPostItemJS(post, currentUserId) {
             // Fix 1: Use loose equality (==) for ID comparison in case of int/string mismatch

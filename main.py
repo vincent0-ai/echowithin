@@ -2501,6 +2501,89 @@ def get_hot_posts_json():
         app.logger.error(f"Error in get_hot_posts_json: {e}")
         return jsonify({'error': 'Could not retrieve hot posts'}), 500
 
+@app.route('/api/posts/my-commented')
+@login_required
+def get_my_commented_posts_json():
+    """
+    Returns the current user's posts that have received comments.
+    Sorted by most recent comment activity.
+    Includes unread indicator for posts with new comments since author last viewed.
+    """
+    try:
+        user_id = ObjectId(current_user.id)
+        
+        # Get user's posts that have at least 1 comment
+        # Use aggregation to join with comments and get latest comment time
+        pipeline = [
+            # 1. Match user's posts
+            {'$match': {'author_id': user_id}},
+            # 2. Lookup comments for each post
+            {'$lookup': {
+                'from': 'comments',
+                'localField': 'slug',
+                'foreignField': 'post_slug',
+                'as': 'post_comments'
+            }},
+            # 3. Filter to only posts with comments
+            {'$match': {'post_comments.0': {'$exists': True}}},
+            # 4. Add fields for comment count and latest comment time
+            {'$addFields': {
+                'comment_count': {'$size': '$post_comments'},
+                'latest_comment_at': {'$max': '$post_comments.created_at'},
+                'author_last_viewed': {'$ifNull': ['$author_last_viewed', datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)]}
+            }},
+            # 5. Add has_unread flag (comments newer than author's last view)
+            {'$addFields': {
+                'has_unread': {'$gt': ['$latest_comment_at', '$author_last_viewed']}
+            }},
+            # 6. Sort by latest comment activity
+            {'$sort': {'latest_comment_at': -1}},
+            # 7. Limit results
+            {'$limit': 15},
+            # 8. Project only needed fields
+            {'$project': {
+                'post_comments': 0  # Exclude the full comments array
+            }}
+        ]
+        
+        posts = list(posts_conf.aggregate(pipeline))
+        
+        # Calculate total unread count for badge
+        unread_count = sum(1 for p in posts if p.get('has_unread', False))
+        
+        # Format posts for JSON response
+        result_posts = []
+        for post in posts:
+            post_data = {
+                '_id': str(post['_id']),
+                'title': post.get('title', ''),
+                'slug': post.get('slug', ''),
+                'url': url_for('view_post', slug=post.get('slug', '')),
+                'content': (post.get('content', '')[:150] + '...') if len(post.get('content', '')) > 150 else post.get('content', ''),
+                'author': post.get('author', ''),
+                'author_id': str(post.get('author_id', '')),
+                'timestamp': post.get('timestamp').strftime('%b %d, %Y') if post.get('timestamp') else '',
+                'image_url': post.get('image_url'),
+                'image_urls': post.get('image_urls', []),
+                'video_url': post.get('video_url'),
+                'comment_count': post.get('comment_count', 0),
+                'likes_count': post.get('likes_count', 0),
+                'share_count': post.get('share_count', 0),
+                'has_unread': post.get('has_unread', False),
+                'latest_comment_at': post.get('latest_comment_at').isoformat() if post.get('latest_comment_at') else None,
+                'reactions': post.get('reactions', {})
+            }
+            result_posts.append(post_data)
+        
+        return jsonify({
+            'posts': result_posts,
+            'unread_count': unread_count
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in get_my_commented_posts_json: {e}")
+        return jsonify({'error': 'Could not retrieve posts'}), 500
+
 @app.route('/api/posts/related')
 @login_required
 def get_related_posts_json():
@@ -3247,6 +3330,16 @@ def view_post(slug):
         u = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'saved_posts': 1})
         if u and post['_id'] in u.get('saved_posts', []):
             is_saved = True
+        
+        # Track when user views their own post (for unread comment detection)
+        if str(post.get('author_id')) == current_user.id:
+            try:
+                posts_conf.update_one(
+                    {'_id': post['_id']},
+                    {'$set': {'author_last_viewed': datetime.datetime.now(datetime.timezone.utc)}}
+                )
+            except Exception as e:
+                app.logger.debug(f"Failed to update author_last_viewed for post {slug}: {e}")
 
     # Prepare SEO meta fields
     meta_url = url_for('view_post', slug=slug, _external=True)

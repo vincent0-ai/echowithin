@@ -1562,6 +1562,42 @@ body {
     /* Show only the active tab's content */
 }
 
+/* --- Tab Badge for Unread Notifications --- */
+.tab-badge {
+    background-color: #e53e3e;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* --- Unread Comments Indicator --- */
+.post-wrapper {
+    position: relative;
+}
+
+.post-wrapper.has-unread-comments {
+    border-left: 3px solid #e53e3e;
+}
+
+.unread-indicator {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: #e53e3e;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    z-index: 10;
+}
+
 /* Mobile Styles (max-width: 480px) */
 @media (max-width: 480px) {
     body {

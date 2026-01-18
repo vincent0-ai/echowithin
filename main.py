@@ -1670,12 +1670,11 @@ def confirm(email):
             # Check if code exists and is not expired
             if not hashed_obj:
                 flash("No confirmation code found for this email.", "danger")
-                return redirect(url_for("register"))
-                
-            if hashed_obj.get('code_expiry') and hashed_obj['code_expiry'] < datetime.datetime.now():
-                # Clean up expired code
-                auth_conf.delete_one({'email': email})
-                flash("Your confirmation code has expired. Please register again to receive a new code.", "danger")
+                return redirect(url_for("confirm", email=email))
+            
+            # Check for expiry
+            if 'code_expiry' in hashed_obj and hashed_obj['code_expiry'] < datetime.datetime.now():
+                flash("This confirmation code has expired. Please register again to get a new code.", "danger")
                 return redirect(url_for("register"))
 
             if hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():

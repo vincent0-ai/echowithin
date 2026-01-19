@@ -1529,6 +1529,13 @@ def get_zen_quote():
     }
 
 
+@app.route('/api/quote')
+def get_quote_api():
+    """API endpoint for fetching the cached ZenQuote asynchronously."""
+    return jsonify(get_zen_quote())
+
+
+
 
 def prepare_posts(posts):
     """
@@ -2039,8 +2046,7 @@ def home():
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           most_active_member=most_active_member, hot_posts=hot_posts,
-                           zen_quote=get_zen_quote())
+                           most_active_member=most_active_member, hot_posts=hot_posts)
 
 @app.route("/blog")
 def blog():

@@ -16,19 +16,49 @@
     </div>
 
     <!-- Daily Quote Section -->
-    {% if zen_quote %}
-    <div class="quote-section" style="margin: 2rem 0; padding: 1.5rem; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid var(--primary-color);">
-        <div class="quote-content" style="font-style: italic; font-size: 1.1rem; color: var(--primary-dark-color); margin-bottom: 0.5rem;">
-            "{{ zen_quote.text }}"
+    <div id="zen-quote-container"
+        style="display: none; margin: 1.5rem auto; max-width: 600px; padding: 1rem 1.25rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 5px solid var(--primary-color); transition: opacity 0.3s ease;">
+        <div id="zen-quote-content"
+            style="font-style: italic; font-size: 1rem; color: var(--primary-dark-color); margin-bottom: 0.5rem; line-height: 1.5;">
+            <!-- Quote text will be injected here -->
         </div>
-        <div class="quote-author" style="text-align: right; font-weight: 600; font-size: 0.9rem; color: #555;">
-            — {{ zen_quote.author }}
+        <div id="zen-quote-author" style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #555;">
+            <!-- Author name will be injected here -->
         </div>
-        <div class="quote-attribution" style="margin-top: 1rem; font-size: 0.8rem; color: #888; text-align: center;">
-            <a href="https://zenquotes.io/" target="_blank" rel="noopener noreferrer" style="color: #888; text-decoration: underline;">Inspirational quotes provided by ZenQuotes API</a>
+        <div class="quote-attribution" style="margin-top: 0.75rem; font-size: 0.75rem; color: #bbb; text-align: right;">
+            <a href="https://zenquotes.io/" target="_blank" rel="noopener noreferrer"
+                style="color: #bbb; text-decoration: none; border-bottom: 1px dotted #ccc;">By ZenQuotes API</a>
         </div>
     </div>
-    {% endif %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const container = document.getElementById('zen-quote-container');
+            const content = document.getElementById('zen-quote-content');
+            const author = document.getElementById('zen-quote-author');
+
+            fetch('/api/quote')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.text) {
+                        content.textContent = '"' + data.text + '"';
+                        author.textContent = '— ' + data.author;
+                        container.style.display = 'block';
+                        // Subtle fade in
+                        container.style.opacity = '0';
+                        setTimeout(() => {
+                            container.style.opacity = '1';
+                        }, 50);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching ZenQuote:', error);
+                });
+        });
+    </script>
 
     <!-- Community Stats Section -->
     <section class="community-stats">

@@ -1526,6 +1526,15 @@ body {
     display: flex;
     border-bottom: 2px solid var(--border-color);
     margin-bottom: 1.5rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+}
+
+.tab-buttons::-webkit-scrollbar {
+    display: none;
 }
 
 .tab-buttons .tab-button {
@@ -1651,6 +1660,13 @@ body {
         /* Prevent text wrapping */
         flex-shrink: 0;
         /* Don't shrink nav items */
+    }
+
+    /* Tab responsiveness on very small screens */
+    .tab-buttons .tab-button {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.95rem;
+        flex-shrink: 0;
     }
 
     .nav-brand {

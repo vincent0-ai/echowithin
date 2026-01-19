@@ -1481,6 +1481,55 @@ def feed():
         abort(500)
 
 
+def get_zen_quote():
+    """Fetches a random quote from ZenQuotes API with 2-minute caching."""
+    cache_key = 'zen_quote'
+    
+    # Try to get from Redis cache
+    if redis_cache:
+        try:
+            cached_quote = redis_cache.get(cache_key)
+            if cached_quote:
+                return json.loads(cached_quote)
+        except Exception as e:
+            app.logger.warning(f"Error reading quote from Redis: {e}")
+
+    # Fallback to in-memory cache if Redis is down or missing
+    # (Though redis_cache is preferred based on its setup in main.py)
+
+    try:
+        # Fetch from ZenQuotes API
+        # Free version restricted to 5 requests per 30 seconds
+        response = requests.get("https://zenquotes.io/api/random", timeout=5)
+        if response.status_code == 200:
+            quote_data = response.json()
+            if quote_data and isinstance(quote_data, list) and len(quote_data) > 0:
+                quote = {
+                    'text': quote_data[0].get('q'),
+                    'author': quote_data[0].get('a'),
+                    'html': quote_data[0].get('h')
+                }
+                
+                # Cache the quote for 2 minutes (120 seconds)
+                if redis_cache:
+                    try:
+                        redis_cache.setex(cache_key, 120, json.dumps(quote))
+                    except Exception as e:
+                        app.logger.warning(f"Error caching quote to Redis: {e}")
+                
+                return quote
+    except Exception as e:
+        app.logger.error(f"Error fetching ZenQuote: {e}")
+
+    # Fallback quote if API fails
+    return {
+        'text': "The only way to do great work is to love what you do.",
+        'author': "Steve Jobs",
+        'html': "<blockquote>&ldquo;The only way to do great work is to love what you do.&rdquo; &mdash; <footer>Steve Jobs</footer></blockquote>"
+    }
+
+
+
 def prepare_posts(posts):
     """
     Add `url` and `comment_count` fields to each post.
@@ -1990,7 +2039,8 @@ def home():
     return render_template("home.html", username=current_user.username, active_page='home', 
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
-                           most_active_member=most_active_member, hot_posts=hot_posts)
+                           most_active_member=most_active_member, hot_posts=hot_posts,
+                           zen_quote=get_zen_quote())
 
 @app.route("/blog")
 def blog():

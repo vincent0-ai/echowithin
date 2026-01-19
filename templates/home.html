@@ -15,6 +15,21 @@
             Blog</a>
     </div>
 
+    <!-- Daily Quote Section -->
+    {% if zen_quote %}
+    <div class="quote-section" style="margin: 2rem 0; padding: 1.5rem; background: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-left: 5px solid var(--primary-color);">
+        <div class="quote-content" style="font-style: italic; font-size: 1.1rem; color: var(--primary-dark-color); margin-bottom: 0.5rem;">
+            "{{ zen_quote.text }}"
+        </div>
+        <div class="quote-author" style="text-align: right; font-weight: 600; font-size: 0.9rem; color: #555;">
+            — {{ zen_quote.author }}
+        </div>
+        <div class="quote-attribution" style="margin-top: 1rem; font-size: 0.8rem; color: #888; text-align: center;">
+            <a href="https://zenquotes.io/" target="_blank" rel="noopener noreferrer" style="color: #888; text-decoration: underline;">Inspirational quotes provided by ZenQuotes API</a>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Community Stats Section -->
     <section class="community-stats">
         <div class="stat-card">

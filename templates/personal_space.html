@@ -715,8 +715,7 @@
             </div>
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input"
-                    placeholder="Write a private note... Supports **Markdown** and $math$" maxlength="8000"
+                <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="8000"
                     required></textarea>
                 <div class="format-hint">
                     <i class="fas fa-info-circle"></i>
@@ -791,11 +790,58 @@
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <script>
-    // Wait for all scripts to load
     document.addEventListener('DOMContentLoaded', function () {
+        // Function to auto-detect and convert common math patterns to LaTeX
+        function autoDetectMath(text) {
+            if (!text) return text;
+
+            // Don't process inside code blocks
+            const codeBlockPlaceholders = [];
+            text = text.replace(/```[\s\S]*?```/g, (match) => {
+                codeBlockPlaceholders.push(match);
+                return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
+            });
+            text = text.replace(/`[^`]+`/g, (match) => {
+                codeBlockPlaceholders.push(match);
+                return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
+            });
+
+            // Auto-detect patterns and wrap them in $...$ for KaTeX
+            // Pattern: word^number (e.g., x^2, a^10)
+            text = text.replace(/\b([a-zA-Z])\^(\d+)/g, (match, base, exp) => {
+                return `$${base}^{${exp}}$`;
+            });
+
+            // Pattern: word_number (subscripts like x_1, a_n)
+            text = text.replace(/\b([a-zA-Z])_(\d+)/g, (match, base, sub) => {
+                return `$${base}_{${sub}}$`;
+            });
+
+            // Pattern: sqrt(expression)
+            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (match, content) => {
+                return `$\\sqrt{${content}}$`;
+            });
+
+            // Pattern: simple fractions like 1/2, 3/4 (standalone)
+            text = text.replace(/(?:^|\s)(\d+)\/(\d+)(?=\s|$|[.,;:!?)])/g, (match, num, den) => {
+                const prefix = match.startsWith(' ') ? ' ' : '';
+                return `${prefix}$\\frac{${num}}{${den}}$`;
+            });
+
+            // Restore code blocks
+            text = text.replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => {
+                return codeBlockPlaceholders[parseInt(index)];
+            });
+
+            return text;
+        }
+
         // Function to render markdown with math support
         function renderMarkdownWithMath(text) {
             if (!text) return '';
+
+            // First, auto-detect common math patterns
+            text = autoDetectMath(text);
 
             // Escape block math ($$...$$) before markdown processing
             const blockMathPlaceholders = [];
@@ -813,12 +859,7 @@
 
             // Configure marked for safe rendering
             if (typeof marked !== 'undefined') {
-                marked.setOptions({
-                    breaks: true,
-                    gfm: true
-                });
-
-                // Render markdown
+                marked.setOptions({ breaks: true, gfm: true });
                 text = marked.parse(text);
             }
 
@@ -829,9 +870,7 @@
                     if (typeof katex !== 'undefined') {
                         return katex.renderToString(math, { displayMode: true, throwOnError: false });
                     }
-                } catch (e) {
-                    console.error('KaTeX error:', e);
-                }
+                } catch (e) { console.error('KaTeX error:', e); }
                 return `$$${math}$$`;
             });
 
@@ -842,9 +881,7 @@
                     if (typeof katex !== 'undefined') {
                         return katex.renderToString(math, { displayMode: false, throwOnError: false });
                     }
-                } catch (e) {
-                    console.error('KaTeX error:', e);
-                }
+                } catch (e) { console.error('KaTeX error:', e); }
                 return `$${math}$`;
             });
 
@@ -863,7 +900,6 @@
         function renderAllNotes() {
             document.querySelectorAll('.rendered-note').forEach(el => {
                 const rawContent = el.dataset.raw || '';
-                // Decode HTML entities
                 const textarea = document.createElement('textarea');
                 textarea.innerHTML = rawContent;
                 const decoded = textarea.value;
@@ -880,7 +916,6 @@
                 } else if (Date.now() - start < maxWait) {
                     setTimeout(check, 100);
                 } else {
-                    // Fallback: render without full formatting
                     console.warn('Libraries not loaded, rendering plain text');
                     document.querySelectorAll('.rendered-note').forEach(el => {
                         const rawContent = el.dataset.raw || '';
@@ -902,13 +937,11 @@
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const tabId = button.dataset.tab;
-
                 tabButtons.forEach(b => {
                     b.classList.remove('active');
                     b.setAttribute('aria-selected', 'false');
                 });
                 tabPanels.forEach(p => p.classList.remove('active'));
-
                 button.classList.add('active');
                 button.setAttribute('aria-selected', 'true');
                 document.getElementById('tab-' + tabId).classList.add('active');
@@ -924,7 +957,6 @@
             noteInput.addEventListener('input', () => {
                 const len = noteInput.value.length;
                 charCount.textContent = len;
-
                 charCountContainer.classList.remove('warning', 'danger');
                 if (len > 1800) {
                     charCountContainer.classList.add('danger');
@@ -942,12 +974,9 @@
         if (previewToggle && previewContainer && noteInput) {
             previewToggle.addEventListener('change', () => {
                 previewContainer.classList.toggle('active', previewToggle.checked);
-                if (previewToggle.checked) {
-                    updatePreview();
-                }
+                if (previewToggle.checked) updatePreview();
             });
 
-            // Update preview on input
             let previewTimeout;
             noteInput.addEventListener('input', () => {
                 if (previewToggle.checked) {
@@ -973,11 +1002,9 @@
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 const query = searchInput.value.toLowerCase().trim();
-
                 savedPosts.forEach(card => {
                     const title = card.dataset.title || '';
                     const author = card.dataset.author || '';
-
                     if (title.includes(query) || author.includes(query)) {
                         card.style.display = '';
                     } else {
@@ -994,9 +1021,7 @@
                 navigator.clipboard.writeText(content).then(() => {
                     const icon = btn.querySelector('i');
                     icon.className = 'fas fa-check';
-                    setTimeout(() => {
-                        icon.className = 'far fa-copy';
-                    }, 1500);
+                    setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);
                 });
             });
         });

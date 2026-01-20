@@ -4583,8 +4583,8 @@ def create_personal_post():
     """Creates a new personal note/post with encryption."""
     content = request.form.get('content')
     if content and content.strip():
-        # Limit note length to 2000 characters
-        content = content.strip()[:2000]
+        # Limit note length to 8000 characters
+        content = content.strip()[:8000]
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content)
         personal_posts_conf.insert_one({

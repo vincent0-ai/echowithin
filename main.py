@@ -1791,8 +1791,8 @@ def login():
             login_user(user_obj, remember=remember) # Pass the remember flag to login_user
             if current_user.is_admin and current_user.is_authenticated:
                 flash('You have logged in as admin', 'success')
-                return redirect(url_for('home'))
-            flash(f"Welcome back, {user['username']}!", "success")
+            else:
+                flash(f"Welcome back, {user['username']}!", "success")
             next_url = request.args.get('next')
             if not next_url or not is_safe_url(next_url):
                 next_url = url_for('home')
@@ -1811,6 +1811,10 @@ def google_login():
         prompt='consent' # Force the consent screen to be shown on first login.
     )
     session['oauth_state'] = state
+    # Store the next URL in session for redirect after Google login
+    next_url = request.args.get('next')
+    if next_url and is_safe_url(next_url):
+        session['oauth_next'] = next_url
     return redirect(authorization_url)
 
 @app.route('/google_callback')
@@ -1865,7 +1869,11 @@ def google_callback():
         # Use 'remember=True' to persist the session across browser restarts
         login_user(user_obj, remember=True)
         flash(f"Welcome back, {user['username']}!", "success")
-        return redirect(url_for('home'))
+        # Redirect to stored next URL or home
+        next_url = session.pop('oauth_next', None)
+        if not next_url or not is_safe_url(next_url):
+            next_url = url_for('home')
+        return redirect(next_url)
     else:
         # New user - create account directly without requiring password
         # Generate username from Google name
@@ -1905,7 +1913,11 @@ def google_callback():
         user_obj = User(user)
         login_user(user_obj, remember=True)
         flash(f"Account created successfully! Welcome, {username}!", "success")
-        return redirect(url_for('home'))
+        # Redirect to stored next URL or home
+        next_url = session.pop('oauth_next', None)
+        if not next_url or not is_safe_url(next_url):
+            next_url = url_for('home')
+        return redirect(next_url)
 
 
 
@@ -4215,6 +4227,7 @@ def terms():
     return render_template('terms.html', title=page_title, description=page_description)
 
 @app.route('/profile/<username>')
+@login_required
 def profile(username):
     # Find the user by username
     user = users_conf.find_one({'username': username})

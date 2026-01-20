@@ -501,8 +501,7 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
-    };
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
     if (!isLoggedIn) return;
 
     // Check if push is supported

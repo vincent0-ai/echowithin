@@ -806,27 +806,97 @@
                 return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
             });
 
+            // IMPORTANT: Detect raw LaTeX commands WITHOUT $ delimiters (common in AI output)
+            // Match \int, \frac, \sum, \prod, \lim and wrap entire expression in $...$
+
+            // Pattern: \int with optional limits and expression (e.g., \int_{a}^{b} f(x) dx)
+            text = text.replace(/\\int(?:_\{[^}]*\})?(?:\^\{[^}]*\})?\s*[^$\n]*?\s*d[a-z]/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: \frac{...}{...}
+            text = text.replace(/\\frac\{[^}]*\}\{[^}]*\}/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: \sqrt{...} or \sqrt[n]{...}
+            text = text.replace(/\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: \sum, \prod, \lim with subscripts/superscripts
+            text = text.replace(/\\(sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: \sin, \cos, \tan, \ln, \log, \exp (trig and log functions)
+            text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: \mathbf{...}, \text{...}, \mathrm{...}
+            text = text.replace(/\\(mathbf|text|mathrm|textbf)\{[^}]*\}/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: Standalone [...] with subscript/superscript (evaluation notation like [t^2]_0^3)
+            text = text.replace(/\[[^\]]+\](?:_\{?[^}\s]+\}?)?(?:\^\{?[^}\s]+\}?)?/g, (match) => {
+                if (match.includes('_') || match.includes('^')) {
+                    return `$${match}$`;
+                }
+                return match;
+            });
+
             // Auto-detect patterns and wrap them in $...$ for KaTeX
-            // Pattern: word^number (e.g., x^2, a^10)
-            text = text.replace(/\b([a-zA-Z])\^(\d+)/g, (match, base, exp) => {
+
+            // Pattern: any base^exponent (e.g., x^2, 2^3, (x+1)^2, a^n)
+            // Matches: letter/number/closing-paren followed by ^ and number/letter/braces
+            text = text.replace(/(\w|\))(\^)(\d+|[a-zA-Z]|\{[^}]+\})/g, (match, base, caret, exp) => {
+                if (exp.startsWith('{')) {
+                    return `$${base}^${exp}$`;
+                }
                 return `$${base}^{${exp}}$`;
             });
 
-            // Pattern: word_number (subscripts like x_1, a_n)
-            text = text.replace(/\b([a-zA-Z])_(\d+)/g, (match, base, sub) => {
+            // Pattern: subscripts like x_1, a_n, x_i
+            text = text.replace(/([a-zA-Z])_(\d+|[a-zA-Z]|\{[^}]+\})/g, (match, base, sub) => {
+                if (sub.startsWith('{')) {
+                    return `$${base}_${sub}$`;
+                }
                 return `$${base}_{${sub}}$`;
             });
 
-            // Pattern: sqrt(expression)
+            // Pattern: sqrt(expression) or √expression
             text = text.replace(/\bsqrt\(([^)]+)\)/gi, (match, content) => {
                 return `$\\sqrt{${content}}$`;
             });
-
-            // Pattern: simple fractions like 1/2, 3/4 (standalone)
-            text = text.replace(/(?:^|\s)(\d+)\/(\d+)(?=\s|$|[.,;:!?)])/g, (match, num, den) => {
-                const prefix = match.startsWith(' ') ? ' ' : '';
-                return `${prefix}$\\frac{${num}}{${den}}$`;
+            text = text.replace(/√(\w+|\([^)]+\))/g, (match, content) => {
+                return `$\\sqrt{${content}}$`;
             });
+
+            // Pattern: fractions a/b (more flexible - any word chars around /)
+            text = text.replace(/\b(\d+)\/(\d+)\b/g, (match, num, den) => {
+                return `$\\frac{${num}}{${den}}$`;
+            });
+
+            // Pattern: common Greek letters when spelled out
+            const greekMap = {
+                'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma',
+                'delta': '\\delta', 'epsilon': '\\epsilon', 'theta': '\\theta',
+                'lambda': '\\lambda', 'mu': '\\mu', 'pi': '\\pi',
+                'sigma': '\\sigma', 'omega': '\\omega', 'phi': '\\phi',
+                'infinity': '\\infty'
+            };
+            Object.entries(greekMap).forEach(([word, latex]) => {
+                const regex = new RegExp(`\\b${word}\\b`, 'gi');
+                text = text.replace(regex, `$${latex}$`);
+            });
+
+            // Pattern: common operators
+            text = text.replace(/\+\-/g, '$\\pm$');
+            text = text.replace(/(?<!=)>=(?!=)/g, ' $\\geq$ ');
+            text = text.replace(/(?<!=)<=(?!=)/g, ' $\\leq$ ');
+            text = text.replace(/!=(?!=)/g, ' $\\neq$ ');
 
             // Restore code blocks
             text = text.replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => {

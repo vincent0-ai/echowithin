@@ -209,6 +209,9 @@ post_comment_stats_cache = TTLCache(maxsize=256, ttl=30)
 community_stats_cache = TTLCache(maxsize=1, ttl=60)
 # Blog feed cache (15 second TTL - short to maintain freshness/randomness)
 blog_feed_cache = TTLCache(maxsize=1, ttl=15)
+# User loader cache - CRITICAL for performance (30 second TTL)
+# This caches user objects to avoid DB query on every single request
+user_loader_cache = TTLCache(maxsize=512, ttl=30)
 
 
 def limits(calls, period):
@@ -732,8 +735,31 @@ def inject_template_globals():
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Load user with caching to avoid DB query on every request.
+    
+    Flask-Login calls this on EVERY request for authenticated users.
+    Without caching, this causes massive DB load and slow response times.
+    Cache TTL of 30 seconds balances performance with data freshness.
+    """
+    cache_key = f"user:{user_id}"
+    
+    # Try cache first
+    cached_user = user_loader_cache.get(cache_key)
+    if cached_user is not None:
+        # Return cached User object (or None if cached as missing)
+        return cached_user if cached_user != '__none__' else None
+    
+    # Cache miss - query database
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})
-    return User(user_data) if user_data else None
+    
+    if user_data:
+        user_obj = User(user_data)
+        user_loader_cache[cache_key] = user_obj
+        return user_obj
+    else:
+        # Cache the "not found" result too to avoid repeated queries
+        user_loader_cache[cache_key] = '__none__'
+        return None
 
 def check_image_for_nsfw(image_path):
     """

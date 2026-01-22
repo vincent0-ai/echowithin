@@ -205,6 +205,10 @@ profile_posts_cache = TTLCache(maxsize=256, ttl=30)
 related_posts_cache = TTLCache(maxsize=128, ttl=120)
 # View post comment stats cache (30 second TTL)
 post_comment_stats_cache = TTLCache(maxsize=256, ttl=30)
+# Community stats cache for home page (60 second TTL)
+community_stats_cache = TTLCache(maxsize=1, ttl=60)
+# Blog feed cache (15 second TTL - short to maintain freshness/randomness)
+blog_feed_cache = TTLCache(maxsize=1, ttl=15)
 
 
 def limits(calls, period):
@@ -1970,18 +1974,31 @@ def home():
     page_title = f"Home - {current_user.username}"
     page_description = "Your personal dashboard on EchoWithin. Create new posts and engage with the community."
 
-    # --- Community Stats ---
-    total_members = users_conf.count_documents({})
-    total_posts = posts_conf.count_documents({})
-
-    # --- Most Active Member Calculation ---
-    most_active_pipeline = [
-        {"$group": {"_id": "$author", "post_count": {"$sum": 1}}},
-        {"$sort": {"post_count": -1}},
-        {"$limit": 1}
-    ]
-    most_active_result = list(posts_conf.aggregate(most_active_pipeline))
-    most_active_member = most_active_result[0] if most_active_result else None
+    # --- Community Stats (with caching) ---
+    cached_community = community_stats_cache.get('community_stats')
+    if cached_community:
+        total_members = cached_community['total_members']
+        total_posts = cached_community['total_posts']
+        most_active_member = cached_community['most_active_member']
+    else:
+        total_members = users_conf.count_documents({})
+        total_posts = posts_conf.count_documents({})
+        
+        # Most Active Member Calculation
+        most_active_pipeline = [
+            {"$group": {"_id": "$author", "post_count": {"$sum": 1}}},
+            {"$sort": {"post_count": -1}},
+            {"$limit": 1}
+        ]
+        most_active_result = list(posts_conf.aggregate(most_active_pipeline))
+        most_active_member = most_active_result[0] if most_active_result else None
+        
+        # Cache the stats
+        community_stats_cache['community_stats'] = {
+            'total_members': total_members,
+            'total_posts': total_posts,
+            'most_active_member': most_active_member
+        }
 
     # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
     hot_posts = []

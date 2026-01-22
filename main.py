@@ -16,7 +16,7 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from bson.son import SON
-from ratelimit import limits, RateLimitException
+from ratelimit import limits as _limits_base, RateLimitException
 from dotenv import load_dotenv
 import secrets
 from jigsawstack import JigsawStack
@@ -190,6 +190,31 @@ _pinned_announcement_cache = TTLCache(maxsize=1, ttl=60)
 mail = Mail(app)
 
 TIME = int(get_env_variable('TIME'))
+
+# Rate limit bypass for load testing (set BYPASS_RATE_LIMIT=1 in env to disable rate limits)
+BYPASS_RATE_LIMIT = os.environ.get('BYPASS_RATE_LIMIT', '').lower() in ('1', 'true', 'yes')
+if BYPASS_RATE_LIMIT:
+    app.logger.warning('Rate limiting is BYPASSED - for testing only!')
+
+# --- Performance caching (in-memory with TTL) ---
+# Profile stats cache: stores post/comment counts per user (30 second TTL)
+profile_stats_cache = TTLCache(maxsize=256, ttl=30)
+# Profile posts cache: stores paginated posts per user (30 second TTL)  
+profile_posts_cache = TTLCache(maxsize=256, ttl=30)
+# View post related posts cache (2 minute TTL)
+related_posts_cache = TTLCache(maxsize=128, ttl=120)
+# View post comment stats cache (30 second TTL)
+post_comment_stats_cache = TTLCache(maxsize=256, ttl=30)
+
+
+def limits(calls, period):
+    """Conditional rate limiter that respects BYPASS_RATE_LIMIT for testing."""
+    if BYPASS_RATE_LIMIT:
+        # Return a no-op decorator when bypassing
+        def noop_decorator(func):
+            return func
+        return noop_decorator
+    return _limits_base(calls=calls, period=period)
 
 
 # MongoDB connection with connection pooling for better performance
@@ -3308,13 +3333,20 @@ def view_post(slug):
     # The 'nl2br' extension converts newlines to <br> tags, preserving line breaks.
     post['content'] = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
 
-    # --- Fetch Related Posts using Meilisearch ---
+    # --- Fetch Related Posts using Meilisearch (with caching) ---
     related_posts = []
-    if meili_index:
+    post_id_str = str(post['_id'])
+    
+    # Try cache first
+    related_cache_key = f"related_posts:{post_id_str}"
+    cached_related = related_posts_cache.get(related_cache_key)
+    
+    if cached_related is not None:
+        related_posts = cached_related
+    elif meili_index:
         try:
             # Enhanced Related Posts Logic:
             # Search for posts with similar tags and title, then filter out the current post.
-            post_id_str = str(post['_id'])
             search_query = post.get('title', '')
             search_params = {
                 'limit': 4, # Fetch 4 to have a buffer in case the original post is in the results
@@ -3335,6 +3367,9 @@ def view_post(slug):
             for p in related_posts:
                 if p.get('created_at'):
                     p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
+            
+            # Cache the results (2 minute TTL)
+            related_posts_cache[related_cache_key] = related_posts
         except Exception as e:
             app.logger.error(f"Failed to get similar posts for {post_id_str}: {e}")
 
@@ -4235,20 +4270,47 @@ def profile(username):
         flash("User not found.", "danger")
         return redirect(url_for('home'))
 
+    user_id = user['_id']
+    
     # --- Pagination for user posts ---
     page = request.args.get('page', 1, type=int)
-    posts_per_page = 5 # Or another number
-    filter_query = {'author_id': user['_id']}
+    posts_per_page = 5
 
-    total_posts = posts_conf.count_documents(filter_query)
-    total_comments = comments_conf.count_documents({'author_id': user['_id'], 'is_deleted': False})
+    # --- Try to get cached stats ---
+    stats_cache_key = f"profile_stats:{user_id}"
+    cached_stats = profile_stats_cache.get(stats_cache_key)
+    
+    if cached_stats:
+        total_posts = cached_stats['total_posts']
+        total_comments = cached_stats['total_comments']
+    else:
+        # Combine both count queries into a single pipeline for efficiency
+        filter_query = {'author_id': user_id}
+        total_posts = posts_conf.count_documents(filter_query)
+        total_comments = comments_conf.count_documents({'author_id': user_id, 'is_deleted': False})
+        # Cache the stats
+        profile_stats_cache[stats_cache_key] = {
+            'total_posts': total_posts,
+            'total_comments': total_comments
+        }
+    
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
 
-    # Find posts by this user's ID with pagination
-    user_posts_cursor = posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
-    with app.app_context():
-        user_posts = prepare_posts(list(user_posts_cursor))
+    # --- Try to get cached posts for this page ---
+    posts_cache_key = f"profile_posts:{user_id}:page{page}"
+    cached_posts = profile_posts_cache.get(posts_cache_key)
+    
+    if cached_posts:
+        user_posts = cached_posts
+    else:
+        # Find posts by this user's ID with pagination
+        filter_query = {'author_id': user_id}
+        user_posts_cursor = posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+        with app.app_context():
+            user_posts = prepare_posts(list(user_posts_cursor))
+        # Cache the posts
+        profile_posts_cache[posts_cache_key] = user_posts
 
     page_title = f"Profile: {user['username']}"
     page_description = f"View the profile and posts by {user['username']} on EchoWithin."

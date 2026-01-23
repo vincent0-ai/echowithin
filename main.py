@@ -2799,10 +2799,6 @@ def get_my_commented_posts_json():
                 is_unread = True
                 unread_count += 1
             
-            # Debug logging for troubleshooting
-            app.logger.debug(f"Activity check - Post: {post.get('title', 'N/A')[:30]}, "
-                           f"activity_time: {activity_time}, threshold: {threshold}, "
-                           f"is_unread: {is_unread}, effective_read_time: {post.get('effective_read_time')}")
             
             post_data = {
                 '_id': str(post['_id']),
@@ -2822,24 +2818,14 @@ def get_my_commented_posts_json():
                 'has_unread': is_unread,
                 'activity_type': post.get('activity_type', 'comment'),
                 'latest_comment_at': post.get('latest_activity').isoformat() if post.get('latest_activity') else None,
-                'reactions': post.get('reactions', {}),
-                # Debug fields - can be removed after troubleshooting
-                '_threshold': threshold.isoformat() if threshold else None,
-                '_activity_time': activity_time.isoformat() if activity_time else None
+                'reactions': post.get('reactions', {})
             }
             result_posts.append(post_data)
         
         response = jsonify({
             'posts': result_posts,
             'unread_count': unread_count,
-            'last_checked': last_check.isoformat(),
-            # Debug info - can be removed after troubleshooting
-            '_debug': {
-                'last_check_from_db': last_check.isoformat() if last_check else None,
-                'own_posts_count': len(own_posts),
-                'relevant_replies_count': len(relevant_replies),
-                'total_activities': len(all_activities)
-            }
+            'last_checked': last_check.isoformat()
         })
         # Add headers to prevent caching
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

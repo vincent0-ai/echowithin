@@ -2660,6 +2660,8 @@ def get_my_commented_posts_json():
 
         # --- 1. Fetch User's Own Posts with Comments ---
         # (Same logic as before, but unread logic changes)
+        # --- 1. Fetch User's Own Posts with Comments ---
+        # (Hybrid logic: unread if newer than global check AND newer than author_last_viewed)
         own_posts_pipeline = [
             {'$match': {'author_id': user_id}},
             {'$lookup': {
@@ -2684,6 +2686,18 @@ def get_my_commented_posts_json():
         
         for p in own_posts:
             p['activity_type'] = 'comment_on_my_post'
+            # Determine effective last read time for this specific post
+            # It is the LATER of: global mark-read time OR this post's specific last view
+            post_last_viewed = p.get('author_last_viewed')
+            if post_last_viewed and post_last_viewed.tzinfo is None:
+                post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+            
+            # Use a high default if never viewed, but actually we want to default to VERY OLD
+            # so that last_check takes precedence.
+            if not post_last_viewed:
+                p['effective_read_time'] = last_check
+            else:
+                p['effective_read_time'] = max(last_check, post_last_viewed)
 
         # --- 2. Fetch Posts where others replied to User's comments ---
         # A. Find all comment IDs authored by current user
@@ -2763,9 +2777,16 @@ def get_my_commented_posts_json():
             if activity_time and activity_time.tzinfo is None:
                 activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
             
-            # It's unread if the activity is newer than the last check AND older than "now" (sanity check)
+            # Determine the threshold time for this specific post
+            # For own posts, we calculated 'effective_read_time' above.
+            # For replies, we fallback to 'last_check' (global).
+            threshold = post.get('effective_read_time', last_check)
+            if threshold.tzinfo is None:
+                threshold = threshold.replace(tzinfo=datetime.timezone.utc)
+
+            # It's unread if the activity is newer than the threshold
             is_unread = False
-            if activity_time and activity_time > last_check:
+            if activity_time and activity_time > threshold:
                 is_unread = True
                 unread_count += 1
             
@@ -2791,11 +2812,16 @@ def get_my_commented_posts_json():
             }
             result_posts.append(post_data)
         
-        return jsonify({
+        response = jsonify({
             'posts': result_posts,
             'unread_count': unread_count,
             'last_checked': last_check.isoformat()
         })
+        # Add headers to prevent caching
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
         
     except Exception as e:
         app.logger.error(f"Error in get_my_commented_posts_json: {e}", exc_info=True)
@@ -3476,6 +3502,16 @@ def view_post(slug):
     if not post:
         flash("Post not found.", "danger")
         return redirect(url_for('blog'))
+
+    # If current user is the author, update author_last_viewed
+    if current_user.is_authenticated and str(post.get('author_id')) == current_user.id:
+        try:
+            posts_conf.update_one(
+                {'_id': post['_id']},
+                {'$set': {'author_last_viewed': datetime.datetime.now(datetime.timezone.utc)}}
+            )
+        except Exception as e:
+            app.logger.error(f"Failed to update author_last_viewed for post {slug}: {e}")
 
     # Convert post content from Markdown to HTML
     # The 'fenced_code' extension is crucial for handling code blocks (```)

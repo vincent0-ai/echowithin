@@ -136,7 +136,15 @@
             <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading related posts...</div>
         </div>
         <div id="my-commented-posts" class="tab-content">
-            <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading your commented posts...</div>
+            <div id="activity-controls" style="text-align: right; margin-bottom: 1rem; display: none;">
+                <button id="mark-all-read-btn" class="btn comment-btn"
+                    style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
+                    <i class="fa-solid fa-check-double"></i> Mark all as read
+                </button>
+            </div>
+            <div id="activity-list">
+                <div class="loading-spinner" style="text-align:center; padding:2rem;">Loading your activity...</div>
+            </div>
         </div>
         {% endif %}
     </div>
@@ -232,28 +240,100 @@
         }
 
         function fetchMyCommentedPosts() {
-            const container = document.getElementById('my-commented-posts');
+            const container = document.getElementById('activity-list');
+            const controls = document.getElementById('activity-controls');
 
             fetch('{{ url_for("get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
                     const posts = data.posts || [];
+
+                    // Toggle "Mark all as read" button visibility
+                    if (data.unread_count && data.unread_count > 0) {
+                        controls.style.display = 'block';
+                    } else {
+                        controls.style.display = 'none';
+                    }
+
                     if (!posts.length) {
-                        container.innerHTML = '<p>None of your posts have comments yet.</p>';
+                        container.innerHTML = '<p>No activity found. Create posts or comment on others to get started!</p>';
                         return;
                     }
 
                     let html = '';
                     posts.forEach(p => {
-                        // Add unread indicator to posts with new comments
+                        // Add unread indicator
                         const unreadClass = p.has_unread ? 'has-unread-comments' : '';
-                        const unreadBadge = p.has_unread ? '<span class="unread-indicator">New comments!</span>' : '';
+
+                        // Determine badge text based on activity type
+                        let badgeText = 'New comments!';
+                        let badgeColor = 'red'; // default
+
+                        if (p.activity_type === 'reply_to_my_comment') {
+                            badgeText = 'New reply to you!';
+                            badgeColor = '#007bff'; // blue for replies
+                        }
+
+                        const unreadBadge = p.has_unread ?
+                            `<span class="unread-indicator" style="background-color: ${badgeColor}">${badgeText}</span>` : '';
+
                         html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}${renderPostItemJS(p, '{{ current_user.id if current_user.is_authenticated else "" }}')}</div>`;
                     });
 
                     container.innerHTML = html;
+
+                    // update badge count globally
+                    const badge = document.getElementById('my-commented-badge');
+                    if (data.unread_count > 0) {
+                        badge.textContent = data.unread_count;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
                 })
-                .catch(() => container.innerHTML = '<p>Unable to load your commented posts.</p>');
+                .catch(err => {
+                    console.error(err);
+                    container.innerHTML = '<p>Unable to load your activity.</p>';
+                });
+        }
+
+        // Handle "Mark all as read" click
+        const markReadBtn = document.getElementById('mark-all-read-btn');
+        if (markReadBtn) {
+            markReadBtn.addEventListener('click', function () {
+                const btn = this;
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+                fetch('{{ url_for("mark_all_comments_read") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
+                })
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success) {
+                            // Refresh the list to remove unread indicators
+                            fetchMyCommentedPosts();
+                            btn.innerHTML = '<i class="fa-solid fa-check"></i> Done!';
+                            setTimeout(() => {
+                                btn.disabled = false;
+                                btn.innerHTML = originalText;
+                            }, 2000);
+                        } else {
+                            alert('Failed to mark as read. Please try again.');
+                            btn.disabled = false;
+                            btn.innerHTML = originalText;
+                        }
+                    })
+                    .catch(() => {
+                        alert('Network error. Please try again.');
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                    });
+            });
         }
 
         // Load unread badge count on page load (for authenticated users)

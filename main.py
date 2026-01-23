@@ -550,7 +550,10 @@ class User(UserMixin):
         self.id = str(user_data["_id"])
         self.username = user_data["username"]
         self.is_admin = user_data.get('is_admin', False)
+        self.is_admin = user_data.get('is_admin', False)
         self._is_active = user_data.get('is_confirmed', False)
+        # Track when user last checked their activity tab
+        self.last_activity_check = user_data.get('last_activity_check')
 
     @property
     def is_active(self):
@@ -2636,19 +2639,29 @@ def get_hot_posts_json():
 @login_required
 def get_my_commented_posts_json():
     """
-    Returns the current user's posts that have received comments.
-    Sorted by most recent comment activity.
-    Includes unread indicator for posts with new comments since author last viewed.
+    Returns text posts relevant to the user's activity:
+    1. Posts AUTHORED by the user that have comments.
+    2. Posts AUTHORED BY OTHERS where someone replied to the user's comment.
+    
+    Sorted by most recent relevant activity.
+    Unread status is determined by User.last_activity_check.
     """
     try:
         user_id = ObjectId(current_user.id)
         
-        # Get user's posts that have at least 1 comment
-        # Use aggregation to join with comments and get latest comment time
-        pipeline = [
-            # 1. Match user's posts
+        # Get the timestamp when user last clicked "Mark all as read" (or default to old date)
+        last_check = current_user.last_activity_check
+        if not last_check:
+            # Default to 30 days ago if never checked, to avoid marking everything since beginning of time as unread
+            last_check = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        
+        if last_check.tzinfo is None:
+            last_check = last_check.replace(tzinfo=datetime.timezone.utc)
+
+        # --- 1. Fetch User's Own Posts with Comments ---
+        # (Same logic as before, but unread logic changes)
+        own_posts_pipeline = [
             {'$match': {'author_id': user_id}},
-            # 2. Lookup only non-deleted comments for each post
             {'$lookup': {
                 'from': 'comments',
                 'let': {'post_slug': '$slug'},
@@ -2660,65 +2673,139 @@ def get_my_commented_posts_json():
                 ],
                 'as': 'post_comments'
             }},
-            # 3. Filter to only posts with comments
             {'$match': {'post_comments.0': {'$exists': True}}},
-            # 4. Add fields for comment count and latest comment time
             {'$addFields': {
                 'comment_count': {'$size': '$post_comments'},
-                'latest_comment_at': {'$max': '$post_comments.created_at'},
-                'author_last_viewed': {'$ifNull': ['$author_last_viewed', datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)]}
+                'latest_activity': {'$max': '$post_comments.created_at'},
             }},
-            # 5. Add has_unread flag (comments newer than author's last view)
-            {'$addFields': {
-                'has_unread': {'$gt': ['$latest_comment_at', '$author_last_viewed']}
-            }},
-            # 6. Sort: unread posts first, then by latest comment activity
-            {'$sort': {'has_unread': -1, 'latest_comment_at': -1}},
-            # 7. Limit results
-            {'$limit': 15},
-            # 8. Project only needed fields
-            {'$project': {
-                'post_comments': 0  # Exclude the full comments array
-            }}
+            {'$limit': 50} 
         ]
+        own_posts = list(posts_conf.aggregate(own_posts_pipeline))
         
-        posts = list(posts_conf.aggregate(pipeline))
+        for p in own_posts:
+            p['activity_type'] = 'comment_on_my_post'
+
+        # --- 2. Fetch Posts where others replied to User's comments ---
+        # A. Find all comment IDs authored by current user
+        my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
+        my_comment_ids = [c['_id'] for c in my_comments]
         
-        # Calculate total unread count for badge
-        unread_count = sum(1 for p in posts if p.get('has_unread', False))
+        relevant_replies = []
+        if my_comment_ids:
+            # B. Find replies to those comments (where author is NOT me)
+            pipeline_replies = [
+                {'$match': {
+                    'parent_id': {'$in': my_comment_ids},
+                    'author_id': {'$ne': user_id},
+                    'is_deleted': {'$ne': True}
+                }},
+                {'$sort': {'created_at': -1}},
+                {'$group': {
+                    '_id': '$post_slug',
+                    'latest_reply': {'$first': '$created_at'},
+                    'reply_count': {'$sum': 1}
+                }}
+            ]
+            replies_grouped = list(comments_conf.aggregate(pipeline_replies))
+            
+            # C. Fetch the actual posts for these replies
+            slugs = [g['_id'] for g in replies_grouped]
+            if slugs:
+                reply_posts_cursor = posts_conf.find({'slug': {'$in': slugs}})
+                reply_map = {g['_id']: g for g in replies_grouped}
+                
+                for p in reply_posts_cursor:
+                    # Only include if it's NOT my own post (already covered above)
+                    if str(p.get('author_id')) == current_user.id:
+                        continue
+                        
+                    reply_data = reply_map.get(p['slug'])
+                    p['latest_activity'] = reply_data['latest_reply']
+                    p['activity_type'] = 'reply_to_my_comment'
+                    # p['extra_info'] = f"{reply_data['reply_count']} new replies" 
+                    relevant_replies.append(p)
+
+        # --- 3. Merge and Sort ---
+        all_activities = own_posts + relevant_replies
         
-        # Format posts for JSON response
+        # Sort by latest activity descending
+        all_activities.sort(key=lambda x: x.get('latest_activity', datetime.datetime.min), reverse=True)
+        
+        # Limit to 20 items
+        all_activities = all_activities[:20]
+        
+        # --- 4. Process for JSON Response ---
+        unread_count = 0
         result_posts = []
-        for post in posts:
+        
+        for post in all_activities:
+            # Determine unread status
+            activity_time = post.get('latest_activity')
+            if activity_time and activity_time.tzinfo is None:
+                activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
+            
+            # It's unread if the activity is newer than the last check AND older than "now" (sanity check)
+            is_unread = False
+            if activity_time and activity_time > last_check:
+                is_unread = True
+                unread_count += 1
+            
             post_data = {
                 '_id': str(post['_id']),
                 'title': post.get('title', ''),
                 'slug': post.get('slug', ''),
                 'url': url_for('view_post', slug=post.get('slug', '')),
-                'content': (post.get('content', '')[:150] + '...') if len(post.get('content', '')) > 150 else post.get('content', ''),
-                'author': post.get('author', ''),
+                'content': (post.get('content', '')[:100] + '...') if len(post.get('content', '')) > 100 else post.get('content', ''),
+                'author': post.get('author', ''), # This is the POST author
                 'author_id': str(post.get('author_id', '')),
                 'timestamp': post.get('timestamp').strftime('%b %d, %Y') if post.get('timestamp') else '',
                 'image_url': post.get('image_url'),
-                'image_urls': post.get('image_urls', []),
+                'image_urls': post.get('image_urls', []), 
                 'video_url': post.get('video_url'),
-                'comment_count': post.get('comment_count', 0),
+                'comment_count': post.get('comment_count', 0), # Total comments on post
                 'likes_count': post.get('likes_count', 0),
                 'share_count': post.get('share_count', 0),
-                'has_unread': post.get('has_unread', False),
-                'latest_comment_at': post.get('latest_comment_at').isoformat() if post.get('latest_comment_at') else None,
+                'has_unread': is_unread,
+                'activity_type': post.get('activity_type', 'comment'),
+                'latest_comment_at': post.get('latest_activity').isoformat() if post.get('latest_activity') else None,
                 'reactions': post.get('reactions', {})
             }
             result_posts.append(post_data)
         
         return jsonify({
             'posts': result_posts,
-            'unread_count': unread_count
+            'unread_count': unread_count,
+            'last_checked': last_check.isoformat()
         })
         
     except Exception as e:
-        app.logger.error(f"Error in get_my_commented_posts_json: {e}")
+        app.logger.error(f"Error in get_my_commented_posts_json: {e}", exc_info=True)
         return jsonify({'error': 'Could not retrieve posts'}), 500
+
+
+@app.route('/api/posts/mark-all-read', methods=['POST'])
+@login_required
+def mark_all_comments_read():
+    """
+    Updates the current user's last_activity_check timestamp to now.
+    This effectively marks all current activity as read.
+    """
+    try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        users_conf.update_one(
+            {'_id': ObjectId(current_user.id)},
+            {'$set': {'last_activity_check': now}}
+        )
+        # Clear user loader cache so the new timestamp is picked up on next request
+        try:
+            user_loader_cache.pop(f"user:{current_user.id}", None)
+        except Exception:
+            pass
+            
+        return jsonify({'success': True, 'timestamp': now.isoformat()})
+    except Exception as e:
+        app.logger.error(f"Error marking all read: {e}")
+        return jsonify({'error': 'Failed to update'}), 500
 
 @app.route('/api/posts/related')
 @login_required

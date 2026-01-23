@@ -13,6 +13,11 @@
     <!-- Choices.js CSS for custom dropdowns -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
 
+    <!-- Canonical URL to prevent duplicate content issues -->
+    {% block canonical %}
+    <link rel="canonical" href="{{ canonical_url or request.base_url }}" />
+    {% endblock %}
+
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <style>
         /* Comment counter styles (server-provided counts shown via .comment-count-display) */

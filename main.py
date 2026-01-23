@@ -2860,18 +2860,57 @@ def mark_all_comments_read():
     This effectively marks all current activity as read.
     """
     try:
+        user_id = ObjectId(current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # Start with current time as the marker
+        leap_marker = now
+        
+        # 1. Check for latest relevant comments on user's own posts
+        user_posts = list(posts_conf.find({'author_id': user_id}, {'slug': 1}))
+        user_post_slugs = [p['slug'] for p in user_posts]
+        
+        if user_post_slugs:
+            latest_comment = comments_conf.find_one(
+                {'post_slug': {'$in': user_post_slugs}, 'author_id': {'$ne': user_id}, 'is_deleted': {'$ne': True}},
+                projection={'created_at': 1},
+                sort=[('created_at', -1)]
+            )
+            if latest_comment and latest_comment.get('created_at'):
+                lc_time = latest_comment['created_at']
+                if lc_time.tzinfo is None: lc_time = lc_time.replace(tzinfo=datetime.timezone.utc)
+                if lc_time > leap_marker:
+                    leap_marker = lc_time
+        
+        # 2. Check for latest replies to user's comments
+        my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
+        my_comment_ids = [c['_id'] for c in my_comments]
+        
+        if my_comment_ids:
+            latest_reply = comments_conf.find_one(
+                {'parent_id': {'$in': my_comment_ids}, 'author_id': {'$ne': user_id}, 'is_deleted': {'$ne': True}},
+                projection={'created_at': 1},
+                sort=[('created_at', -1)]
+            )
+            if latest_reply and latest_reply.get('created_at'):
+                lr_time = latest_reply['created_at']
+                if lr_time.tzinfo is None: lr_time = lr_time.replace(tzinfo=datetime.timezone.utc)
+                if lr_time > leap_marker:
+                    leap_marker = lr_time
+
+        # Update the user's marker
         users_conf.update_one(
-            {'_id': ObjectId(current_user.id)},
-            {'$set': {'last_activity_check': now}}
+            {'_id': user_id},
+            {'$set': {'last_activity_check': leap_marker}}
         )
+        
         # Clear user loader cache so the new timestamp is picked up on next request
         try:
             user_loader_cache.pop(f"user:{current_user.id}", None)
         except Exception:
             pass
             
-        return jsonify({'success': True, 'timestamp': now.isoformat()})
+        return jsonify({'success': True, 'timestamp': leap_marker.isoformat()})
     except Exception as e:
         app.logger.error(f"Error marking all read: {e}")
         return jsonify({'error': 'Failed to update'}), 500
@@ -3643,12 +3682,27 @@ def view_post(slug):
         if u and post['_id'] in u.get('saved_posts', []):
             is_saved = True
         
-        # Track when user views their own post (for unread comment detection)
+            # Track when user views their own post (for unread comment detection)
         if str(post.get('author_id')) == current_user.id:
             try:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                # Find latest comment on this specific post to ensure leap-safe read marker
+                latest_p_comment = comments_conf.find_one(
+                    {'post_slug': slug, 'author_id': {'$ne': current_user.id}, 'is_deleted': {'$ne': True}},
+                    projection={'created_at': 1},
+                    sort=[('created_at', -1)]
+                )
+                
+                view_marker = now
+                if latest_p_comment and latest_p_comment.get('created_at'):
+                    lp_time = latest_p_comment['created_at']
+                    if lp_time.tzinfo is None: lp_time = lp_time.replace(tzinfo=datetime.timezone.utc)
+                    if lp_time > view_marker:
+                        view_marker = lp_time
+
                 posts_conf.update_one(
                     {'_id': post['_id']},
-                    {'$set': {'author_last_viewed': datetime.datetime.now(datetime.timezone.utc)}}
+                    {'$set': {'author_last_viewed': view_marker}}
                 )
             except Exception as e:
                 app.logger.debug(f"Failed to update author_last_viewed for post {slug}: {e}")

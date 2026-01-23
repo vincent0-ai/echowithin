@@ -2822,14 +2822,24 @@ def get_my_commented_posts_json():
                 'has_unread': is_unread,
                 'activity_type': post.get('activity_type', 'comment'),
                 'latest_comment_at': post.get('latest_activity').isoformat() if post.get('latest_activity') else None,
-                'reactions': post.get('reactions', {})
+                'reactions': post.get('reactions', {}),
+                # Debug fields - can be removed after troubleshooting
+                '_threshold': threshold.isoformat() if threshold else None,
+                '_activity_time': activity_time.isoformat() if activity_time else None
             }
             result_posts.append(post_data)
         
         response = jsonify({
             'posts': result_posts,
             'unread_count': unread_count,
-            'last_checked': last_check.isoformat()
+            'last_checked': last_check.isoformat(),
+            # Debug info - can be removed after troubleshooting
+            '_debug': {
+                'last_check_from_db': last_check.isoformat() if last_check else None,
+                'own_posts_count': len(own_posts),
+                'relevant_replies_count': len(relevant_replies),
+                'total_activities': len(all_activities)
+            }
         })
         # Add headers to prevent caching
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

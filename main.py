@@ -2708,10 +2708,29 @@ def get_my_commented_posts_json():
             ]
             replies_grouped = list(comments_conf.aggregate(pipeline_replies))
             
-            # C. Fetch the actual posts for these replies
+            # C. Fetch the actual posts with comment counts
             slugs = [g['_id'] for g in replies_grouped]
             if slugs:
-                reply_posts_cursor = posts_conf.find({'slug': {'$in': slugs}})
+                # Use aggregation to fetch posts AND count their comments
+                replies_pipeline = [
+                    {'$match': {'slug': {'$in': slugs}}},
+                    {'$lookup': {
+                        'from': 'comments',
+                        'let': {'post_slug': '$slug'},
+                        'pipeline': [
+                            {'$match': {
+                                '$expr': {'$eq': ['$post_slug', '$$post_slug']},
+                                'is_deleted': {'$ne': True}
+                            }},
+                            {'$count': 'count'}
+                        ],
+                        'as': 'comment_count_data'
+                    }},
+                    {'$addFields': {
+                        'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_count_data.count', 0]}, 0]}
+                    }}
+                ]
+                reply_posts_cursor = posts_conf.aggregate(replies_pipeline)
                 reply_map = {g['_id']: g for g in replies_grouped}
                 
                 for p in reply_posts_cursor:

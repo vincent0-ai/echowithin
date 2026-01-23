@@ -2668,15 +2668,22 @@ def get_my_commented_posts_json():
             {'$match': {'author_id': user_id}},
             {'$lookup': {
                 'from': 'comments',
-                'let': {'post_slug': '$slug'},
+                'let': {'post_slug': '$slug', 'owner_id': '$author_id'},
                 'pipeline': [
                     {'$match': {
-                        '$expr': {'$eq': ['$post_slug', '$$post_slug']},
-                        'is_deleted': {'$ne': True}
+                        '$expr': {
+                            '$and': [
+                                {'$eq': ['$post_slug', '$$post_slug']},
+                                {'$ne': ['$is_deleted', True]},
+                                # CRITICAL: Exclude the post author's own comments from unread calculation
+                                {'$ne': ['$author_id', '$$owner_id']}
+                            ]
+                        }
                     }}
                 ],
                 'as': 'post_comments'
             }},
+            # Only include posts that have comments from OTHER users
             {'$match': {'post_comments.0': {'$exists': True}}},
             {'$addFields': {
                 'comment_count': {'$size': '$post_comments'},
@@ -2791,6 +2798,11 @@ def get_my_commented_posts_json():
             if activity_time and activity_time > threshold:
                 is_unread = True
                 unread_count += 1
+            
+            # Debug logging for troubleshooting
+            app.logger.debug(f"Activity check - Post: {post.get('title', 'N/A')[:30]}, "
+                           f"activity_time: {activity_time}, threshold: {threshold}, "
+                           f"is_unread: {is_unread}, effective_read_time: {post.get('effective_read_time')}")
             
             post_data = {
                 '_id': str(post['_id']),

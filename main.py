@@ -3697,7 +3697,7 @@ def api_record_post_view(post_id):
         user_identifier = str(current_user.id) if current_user.is_authenticated else request.remote_addr
         
         # Get today's date at midnight (start of day)
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         today_start = datetime.datetime(now.year, now.month, now.day)
         today_end = today_start + datetime.timedelta(days=1)
         
@@ -3716,7 +3716,7 @@ def api_record_post_view(post_id):
                 'type': 'post_view',
                 'post_id': ObjectId(post_id),
                 'user_identifier': user_identifier,
-                'timestamp': datetime.datetime.now()
+                'timestamp': datetime.datetime.now(datetime.timezone.utc)
             })
             
             # Atomically increment the view count on the post
@@ -3838,7 +3838,7 @@ def get_unread_notification_count():
         user_post_slugs = [p.get('slug') for p in user_posts]
         
         # Count new comments on user's posts (not by the user themselves) from last 24 hours
-        yesterday = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+        yesterday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
         
         unread_count = 0
         if user_post_slugs:
@@ -3903,7 +3903,7 @@ def api_post_comments(slug):
         'author_id': ObjectId(current_user.id),
         'author_username': current_user.username,
         'content': content.strip(),
-        'created_at': datetime.datetime.now(),
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
         'is_deleted': False,
         'parent_id': None,
     }
@@ -4010,7 +4010,7 @@ def api_edit_comment(comment_id):
         if str(comment.get('author_id')) != current_user.id and not current_user.is_admin:
             return jsonify({'error': 'Not authorized'}), 403
 
-        comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'content': content.strip(), 'edited_at': datetime.datetime.now()}})
+        comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'content': content.strip(), 'edited_at': datetime.datetime.now(datetime.timezone.utc)}})
         updated = comments_conf.find_one({'_id': ObjectId(comment_id)})
         try:
             comment_count_cache.clear()
@@ -4228,7 +4228,7 @@ def update_post(post_id):
                 'video_public_id': video_public_id,
                 'video_status': video_status,
                 'slug': slug,
-                'edited_at': datetime.datetime.now(),
+                'edited_at': datetime.datetime.now(datetime.timezone.utc),
             }}
         )
         # Re-index the post in Meilisearch to reflect the changes
@@ -4338,7 +4338,7 @@ def admin_announcements():
                 'content': content,
                 'author_id': ObjectId(current_user.id),
                 'author_username': current_user.username,
-                'created_at': datetime.datetime.now(),
+                'created_at': datetime.datetime.now(datetime.timezone.utc),
                 'is_pinned': False
             })
             flash('Announcement created successfully.', 'success')
@@ -4929,7 +4929,7 @@ def forgot_password():
             if user:
                 reset_token = secrets.token_urlsafe(32)
                 hashed_token = hashlib.sha256(reset_token.encode()).hexdigest()
-                expiry = datetime.datetime.now() + datetime.timedelta(hours=1)
+                expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
                 auth_conf.update_one(
                     {'email': email},
                     {'$set': {'reset_token': hashed_token, 'reset_expiry': expiry}},
@@ -5016,7 +5016,7 @@ def api_newsletter_subscribe():
     try:
         newsletter_conf.insert_one({
             'email': email,
-            'subscribed_at': datetime.datetime.now(),
+            'subscribed_at': datetime.datetime.now(datetime.timezone.utc),
             'ip': request.remote_addr
         })
         return jsonify({'success': True, 'message': 'Successfully subscribed to the newsletter!'})

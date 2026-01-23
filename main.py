@@ -4991,6 +4991,12 @@ def sitemap():
     
     # Build sitemap XML
     base_url = request.url_root.rstrip('/')
+    # Ensure base_url is HTTPS in production/if preferred
+    if app.config.get('PREFERRED_URL_SCHEME') == 'https':
+        base_url = base_url.replace('http://', 'https://')
+    
+    # Import locally to avoid top-level clutter (or could be at top)
+    from html import escape
     
     # Start XML
     xml_parts = [
@@ -5008,7 +5014,7 @@ def sitemap():
     
     for path, priority, changefreq in static_pages:
         xml_parts.append(f'''  <url>
-    <loc>{base_url}{path}</loc>
+    <loc>{escape(base_url + path)}</loc>
     <changefreq>{changefreq}</changefreq>
     <priority>{priority}</priority>
   </url>''')
@@ -5018,7 +5024,7 @@ def sitemap():
         posts = posts_conf.find(
             {},
             {'slug': 1, 'timestamp': 1, 'edited_at': 1}
-        ).sort('timestamp', -1).limit(5000)  # Limit to 5000 posts
+        ).sort('timestamp', -1).limit(5000)
         
         for post in posts:
             slug = post.get('slug')
@@ -5032,8 +5038,11 @@ def sitemap():
                 if hasattr(lastmod, 'strftime'):
                     lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
             
+            # Escape the full URL
+            full_url = f"{base_url}/post/{slug}"
+            
             xml_parts.append(f'''  <url>
-    <loc>{base_url}/post/{slug}</loc>{lastmod_str}
+    <loc>{escape(full_url)}</loc>{lastmod_str}
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>''')
@@ -5050,8 +5059,9 @@ def sitemap():
         for author in active_authors:
             username = author.get('_id')
             if username:
+                profile_url = f"{base_url}/profile/{username}"
                 xml_parts.append(f'''  <url>
-    <loc>{base_url}/profile/{username}</loc>
+    <loc>{escape(profile_url)}</loc>
     <changefreq>weekly</changefreq>
     <priority>0.5</priority>
   </url>''')

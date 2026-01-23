@@ -2650,7 +2650,9 @@ def get_my_commented_posts_json():
         user_id = ObjectId(current_user.id)
         
         # Get the timestamp when user last clicked "Mark all as read" (or default to old date)
-        last_check = current_user.last_activity_check
+        # IMPORTANT: Query directly from DB to avoid stale cached values in current_user
+        user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
+        last_check = user_doc.get('last_activity_check') if user_doc else None
         if not last_check:
             # Default to 30 days ago if never checked, to avoid marking everything since beginning of time as unread
             last_check = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)

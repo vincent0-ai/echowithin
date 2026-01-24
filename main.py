@@ -23,7 +23,6 @@ from jigsawstack import JigsawStack
 from cachetools import cached, TTLCache
 import time
 import requests
-import aiohttp
 from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
@@ -256,6 +255,8 @@ newsletter_conf.create_index('email', unique=True)
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
 # --- Performance indexes for faster queries ---
+# Index for slug lookups (fast post retrieval)
+posts_conf.create_index('slug', unique=True)
 # Index for liked_by lookups (personalized feed)
 posts_conf.create_index('liked_by')
 # Index for author lookups
@@ -981,6 +982,39 @@ def send_weekly_newsletter():
         app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
 
 
+def send_single_webpush(sub, payload, vapid_private_key, vapid_claims):
+    """
+    Helper function to send a single web push notification.
+    Handles exceptions and removes expired subscriptions.
+    """
+    try:
+        subscription_info = {
+            'endpoint': sub['endpoint'],
+            'keys': sub['keys']
+        }
+        webpush(
+            subscription_info=subscription_info,
+            data=payload,
+            vapid_private_key=vapid_private_key,
+            vapid_claims=vapid_claims
+        )
+        app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
+        return True
+    except WebPushException as e:
+        # If subscription is expired or invalid, remove it
+        if e.response and e.response.status_code in [404, 410]:
+            try:
+                push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                app.logger.info(f"Removed expired push subscription: {sub.get('_id')}")
+            except Exception as db_e:
+                app.logger.error(f"Failed to delete expired subscription {sub.get('_id')}: {db_e}")
+        else:
+            app.logger.error(f"Push notification failed: {e}")
+    except Exception as e:
+        app.logger.error(f"Unexpected push error: {e}")
+    return False
+
+
 @rq.job
 def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None):
     """Send a web push notification to all devices subscribed by a user."""
@@ -1003,28 +1037,9 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None)
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-                app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
-            except WebPushException as e:
-                # If subscription is expired or invalid, remove it
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                    app.logger.info(f"Removed expired push subscription for user {user_id_str}")
-                else:
-                    app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
 
@@ -1066,25 +1081,9 @@ def send_push_notifications_for_new_post(post_id_str):
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
         
         app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} subscriptions")
     except Exception as e:
@@ -1139,25 +1138,9 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed for comment: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error for comment: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
         
         app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
     except Exception as e:
@@ -1540,7 +1523,7 @@ def feed():
         abort(500)
 
 
-async def get_zen_quote():
+def get_zen_quote():
     """Fetches a random quote from ZenQuotes API with 2-minute caching."""
     cache_key = 'zen_quote'
     
@@ -1559,11 +1542,9 @@ async def get_zen_quote():
     try:
         # Fetch from ZenQuotes API
         # Free version restricted to 5 requests per 30 seconds
-        timeout = aiohttp.ClientTimeout(total=5)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get("https://zenquotes.io/api/random") as response:
-                if response.status == 200:
-                    quote_data = await response.json()
+        response = requests.get("https://zenquotes.io/api/random", timeout=5)
+        if response.status_code == 200:
+            quote_data = response.json()
             if quote_data and isinstance(quote_data, list) and len(quote_data) > 0:
                 quote = {
                     'text': quote_data[0].get('q'),
@@ -1591,9 +1572,9 @@ async def get_zen_quote():
 
 
 @app.route('/api/quote')
-async def get_quote_api():
+def get_quote_api():
     """API endpoint for fetching the cached ZenQuote asynchronously."""
-    return jsonify(await get_zen_quote())
+    return jsonify(get_zen_quote())
 
 
 

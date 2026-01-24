@@ -23,6 +23,7 @@ from jigsawstack import JigsawStack
 from cachetools import cached, TTLCache
 import time
 import requests
+import aiohttp
 from werkzeug.utils import secure_filename
 import hashlib
 from slugify import slugify
@@ -1539,7 +1540,7 @@ def feed():
         abort(500)
 
 
-def get_zen_quote():
+async def get_zen_quote():
     """Fetches a random quote from ZenQuotes API with 2-minute caching."""
     cache_key = 'zen_quote'
     
@@ -1558,9 +1559,11 @@ def get_zen_quote():
     try:
         # Fetch from ZenQuotes API
         # Free version restricted to 5 requests per 30 seconds
-        response = requests.get("https://zenquotes.io/api/random", timeout=5)
-        if response.status_code == 200:
-            quote_data = response.json()
+        timeout = aiohttp.ClientTimeout(total=5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get("https://zenquotes.io/api/random") as response:
+                if response.status == 200:
+                    quote_data = await response.json()
             if quote_data and isinstance(quote_data, list) and len(quote_data) > 0:
                 quote = {
                     'text': quote_data[0].get('q'),
@@ -1588,9 +1591,9 @@ def get_zen_quote():
 
 
 @app.route('/api/quote')
-def get_quote_api():
+async def get_quote_api():
     """API endpoint for fetching the cached ZenQuote asynchronously."""
-    return jsonify(get_zen_quote())
+    return jsonify(await get_zen_quote())
 
 
 

@@ -19,6 +19,7 @@
     {% endblock %}
 
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
     <style>
         /* Comment counter styles (server-provided counts shown via .comment-count-display) */
         .comment-count-display {
@@ -304,7 +305,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 
-<body>
+<body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">
     <div class="page-container">
         <!-- Choices.js SCRIPT for custom dropdowns -->
         <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
@@ -507,7 +508,7 @@
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-    if (!isLoggedIn) return;
+        if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {
@@ -1228,12 +1229,8 @@
             }
         }
 
-        // Clear badge when user focuses on the app
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible') {
-                updateAppBadge(0);
-            }
-        });
+        // Note: We don't clear badge on visibility change - badge should persist until user
+        // actually views the Activity tab. The badge is cleared by explicit user action.
 
         // Expose globally for use elsewhere
         window.updateAppBadge = updateAppBadge;

@@ -52,9 +52,13 @@ async function enableNotificationsIOS() {
             });
             
             // Send subscription to server
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
             const subResponse = await fetch('/api/push/subscribe', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify(subscription.toJSON())
             });
             

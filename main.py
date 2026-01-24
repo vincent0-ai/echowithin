@@ -54,16 +54,16 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 if not app.debug:
     log_file_path = 'echowithin.log'
     file_handler = RotatingFileHandler(log_file_path, maxBytes=1024 * 1024 * 10, backupCount=5)
-    
+
     # Set the logging level (e.g., INFO, WARNING, ERROR)
     file_handler.setLevel(logging.INFO)
-    
+
     # Define the format for the log messages
     formatter = jsonlogger.JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
     )
     file_handler.setFormatter(formatter)
-    
+
     # Add the handler to the app's logger
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
@@ -153,14 +153,14 @@ app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
 app.config['MAIL_USERNAME'] = get_env_variable('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = get_env_variable('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = get_env_variable('MAIL_USERNAME')  
+app.config['MAIL_DEFAULT_SENDER'] = get_env_variable('MAIL_USERNAME')
 
 # Configure Redis connection for RQ background jobs
 REDIS_HOST = get_env_variable('REDIS_HOST')
 REDIS_PORT = get_env_variable('REDIS_PORT')
 REDIS_PASSWORD = get_env_variable('REDIS_PASSWORD') # Password can be optional
 
-# Format with password 
+# Format with password
 redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 app.config['RQ_REDIS_URL'] = redis_url
@@ -199,7 +199,7 @@ if BYPASS_RATE_LIMIT:
 # --- Performance caching (in-memory with TTL) ---
 # Profile stats cache: stores post/comment counts per user (30 second TTL)
 profile_stats_cache = TTLCache(maxsize=256, ttl=30)
-# Profile posts cache: stores paginated posts per user (30 second TTL)  
+# Profile posts cache: stores paginated posts per user (30 second TTL)
 profile_posts_cache = TTLCache(maxsize=256, ttl=30)
 # View post related posts cache (2 minute TTL)
 related_posts_cache = TTLCache(maxsize=128, ttl=120)
@@ -363,7 +363,7 @@ if MEILI_URL and MEILI_MASTER_KEY:
                 app.logger.debug('meili_index missing update_filterable_attributes; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to update filterable attributes: {e}')
-        
+
         # Configure typo tolerance: allow up to 2 typos for queries
         try:
             if hasattr(meili_index, 'update_typo_tolerance'):
@@ -376,7 +376,7 @@ if MEILI_URL and MEILI_MASTER_KEY:
                 app.logger.debug('meili_index missing update_typo_tolerance; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure typo tolerance: {e}')
-        
+
         # Configure ranking rules: prioritize relevance, then recency
         try:
             if hasattr(meili_index, 'update_ranking_rules'):
@@ -394,7 +394,7 @@ if MEILI_URL and MEILI_MASTER_KEY:
                 app.logger.debug('meili_index missing update_ranking_rules; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure ranking rules: {e}')
-        
+
         # Configure sortable attributes for user-initiated sorting
         try:
             if hasattr(meili_index, 'update_sortable_attributes'):
@@ -568,7 +568,7 @@ def update_last_active():
     if current_user.is_authenticated:
         user_id = current_user.id
         cache_key = f"last_active:{user_id}"
-        
+
         # Check if we recently updated (within 5 minutes)
         should_update = True
         if redis_cache:
@@ -577,11 +577,11 @@ def update_last_active():
                     should_update = False
             except Exception:
                 pass  # Redis error, fall through to DB check
-        
+
         if not should_update:
             # Skip DB queries entirely if recently updated
             return
-        
+
         # Fetch the full user document to check for ban status
         user_doc = users_conf.find_one({'_id': ObjectId(user_id)}, {'is_banned': 1})
 
@@ -590,7 +590,7 @@ def update_last_active():
             logout_user()
             flash('Your account has been suspended. Please contact support.', 'danger')
             return redirect(url_for('login'))
-        
+
         # Update last active time and set cache to prevent frequent updates
         if user_doc:
             users_conf.update_one(
@@ -691,7 +691,7 @@ def owner_required(f):
 def inject_pinned_announcement():
     """Makes the pinned announcement available to all templates (cached for 60s)."""
     cache_key = 'pinned_announcement'
-    
+
     # Try Redis cache first
     if redis_cache:
         try:
@@ -702,14 +702,14 @@ def inject_pinned_announcement():
                 return dict(pinned_announcement=json.loads(cached))
         except Exception:
             pass
-    
+
     # Try in-memory cache
     if cache_key in _pinned_announcement_cache:
         return dict(pinned_announcement=_pinned_announcement_cache[cache_key])
-    
+
     # Fetch from DB
     pinned_announcement = announcements_conf.find_one({'is_pinned': True})
-    
+
     # Cache the result
     if redis_cache:
         try:
@@ -721,7 +721,7 @@ def inject_pinned_announcement():
                 redis_cache.setex(cache_key, 60, '__none__')
         except Exception:
             pass
-    
+
     _pinned_announcement_cache[cache_key] = pinned_announcement
     return dict(pinned_announcement=pinned_announcement)
 
@@ -739,22 +739,22 @@ def inject_template_globals():
 @login_manager.user_loader
 def load_user(user_id):
     """Load user with caching to avoid DB query on every request.
-    
+
     Flask-Login calls this on EVERY request for authenticated users.
     Without caching, this causes massive DB load and slow response times.
     Cache TTL of 30 seconds balances performance with data freshness.
     """
     cache_key = f"user:{user_id}"
-    
+
     # Try cache first
     cached_user = user_loader_cache.get(cache_key)
     if cached_user is not None:
         # Return cached User object (or None if cached as missing)
         return cached_user if cached_user != '__none__' else None
-    
+
     # Cache miss - query database
     user_data = users_conf.find_one({"_id": ObjectId(user_id)})
-    
+
     if user_data:
         user_obj = User(user_data)
         user_loader_cache[cache_key] = user_obj
@@ -772,11 +772,11 @@ def check_image_for_nsfw(image_path):
     try:
         # Initialize the JigsawStack client
         client = JigsawStack(api_key=get_env_variable('JIGSAW_API_KEY'))
-        
+
         # Perform the NSFW check using the SDK
         # The SDK handles opening and sending the file
         response = client.image.nsfw(image_path=image_path)
-        
+
         # The response is a Pydantic model, access the result like this:
         return response.nsfw.is_nsfw
 
@@ -921,14 +921,14 @@ def send_weekly_newsletter():
             # Calculate the date range for the past week
             now = datetime.datetime.now(datetime.timezone.utc)
             week_ago = now - datetime.timedelta(days=7)
-            
+
             # Query posts from the last 7 days
             posts_cursor = posts_conf.find({
                 'timestamp': {'$gte': week_ago}
             }).sort('timestamp', -1)
-            
+
             posts_list = list(posts_cursor)
-            
+
             # Build URLs for each post
             base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
             for post in posts_list:
@@ -936,45 +936,58 @@ def send_weekly_newsletter():
                     post['url'] = url_for('view_post', slug=post.get('slug'), _external=True)
                 except RuntimeError:
                     post['url'] = f"{base_url}/post/{post.get('slug')}"
-            
+
             # Format dates for the email
             week_start = week_ago.strftime('%B %d')
             week_end = now.strftime('%B %d, %Y')
-            
+
             # Get all newsletter subscribers
             subscribers = list(newsletter_conf.find({}, {'email': 1}))
-            
+
             if not subscribers:
                 app.logger.info("No newsletter subscribers found, skipping weekly newsletter")
                 return
-            
+
             subject = f"EchoWithin Weekly Digest - {week_end}"
             sender_email = get_env_variable('MAIL_USERNAME')
-            
+
+            # Render the template ONCE
+            html_content = render_template(
+                'weekly_newsletter.html',
+                posts=posts_list,
+                week_start=week_start,
+                week_end=week_end
+            )
+
             sent_count = 0
-            for subscriber in subscribers:
+            batch_size = 50
+
+            # Process in batches
+            for i in range(0, len(subscribers), batch_size):
+                batch = subscribers[i:i + batch_size]
                 try:
-                    recipient_email = subscriber.get('email')
-                    if not recipient_email:
-                        continue
-                    
-                    msg = Message(
-                        subject=subject,
-                        sender=sender_email,
-                        recipients=[recipient_email]
-                    )
-                    msg.html = render_template(
-                        'weekly_newsletter.html',
-                        posts=posts_list,
-                        week_start=week_start,
-                        week_end=week_end
-                    )
-                    mail.send(msg)
-                    sent_count += 1
-                    app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
+                    # Open connection for the batch
+                    with mail.connect() as conn:
+                        for subscriber in batch:
+                            try:
+                                recipient_email = subscriber.get('email')
+                                if not recipient_email:
+                                    continue
+
+                                msg = Message(
+                                    subject=subject,
+                                    sender=sender_email,
+                                    recipients=[recipient_email]
+                                )
+                                msg.html = html_content
+                                conn.send(msg)
+                                sent_count += 1
+                                app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
+                            except Exception as e:
+                                app.logger.error(f"Failed to send weekly newsletter to {subscriber.get('email')}: {e}")
                 except Exception as e:
-                    app.logger.error(f"Failed to send weekly newsletter to {subscriber.get('email')}: {e}")
-            
+                    app.logger.error(f"Failed to connect to mail server for batch starting at {i}: {e}")
+
             app.logger.info(f"Weekly newsletter sent to {sent_count} subscribers with {len(posts_list)} posts")
     except Exception as e:
         app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
@@ -986,13 +999,13 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None)
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         app.logger.debug("VAPID keys not configured, skipping push notification")
         return
-    
+
     try:
         subscriptions = list(push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
         if not subscriptions:
             app.logger.debug(f"No push subscriptions found for user {user_id_str}")
             return
-        
+
         payload = json.dumps({
             'title': title,
             'body': body,
@@ -1001,7 +1014,7 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None)
             'icon': '/static/logo.png',
             'badge': '/static/logo.png'
         })
-        
+
         for sub in subscriptions:
             try:
                 subscription_info = {
@@ -1034,28 +1047,28 @@ def send_push_notifications_for_new_post(post_id_str):
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         app.logger.debug("VAPID keys not configured, skipping push notifications for new post")
         return
-    
+
     try:
         post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
         if not post:
             app.logger.error(f"Post {post_id_str} not found for push notification")
             return
-        
+
         title = "New Post on EchoWithin"
         body = f'"{post.get("title")}" by {post.get("author")}'
-        
+
         with app.app_context():
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
                 base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
-        
+
         # Get all unique user subscriptions (exclude the post author)
         author_id = post.get('author_id')
         query = {'user_id': {'$ne': author_id}} if author_id else {}
         subscriptions = list(push_subscriptions_conf.find(query))
-        
+
         payload = json.dumps({
             'title': title,
             'body': body,
@@ -1064,7 +1077,7 @@ def send_push_notifications_for_new_post(post_id_str):
             'icon': '/static/logo.png',
             'badge': '/static/logo.png'
         })
-        
+
         for sub in subscriptions:
             try:
                 subscription_info = {
@@ -1084,7 +1097,7 @@ def send_push_notifications_for_new_post(post_id_str):
                     app.logger.error(f"Push notification failed: {e}")
             except Exception as e:
                 app.logger.error(f"Unexpected push error: {e}")
-        
+
         app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} subscriptions")
     except Exception as e:
         app.logger.error(f"Error in send_push_notifications_for_new_post: {e}", exc_info=True)
@@ -1096,39 +1109,39 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
     if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
         app.logger.debug("VAPID keys not configured, skipping comment push notification")
         return
-    
+
     try:
         comment = comments_conf.find_one({'_id': ObjectId(comment_id_str)})
         if not comment:
             app.logger.error(f"Comment {comment_id_str} not found for push notification")
             return
-        
+
         post = posts_conf.find_one({'slug': post_slug})
         if not post:
             app.logger.error(f"Post with slug {post_slug} not found for comment notification")
             return
-        
+
         # Don't notify if the commenter is the post author
         post_author_id = post.get('author_id')
         commenter_id = comment.get('author_id')
         if post_author_id and commenter_id and str(post_author_id) == str(commenter_id):
             app.logger.debug("Skipping notification - commenter is post author")
             return
-        
+
         commenter_username = comment.get('author_username', 'Someone')
         title = "New Comment on Your Post"
         body = f'{commenter_username} commented on "{post.get("title")}"'
-        
+
         with app.app_context():
             try:
                 post_url = url_for('view_post', slug=post_slug, _external=True)
             except RuntimeError:
                 base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
                 post_url = f"{base_url}/post/{post_slug}"
-        
+
         # Send to all devices of the post author
         subscriptions = list(push_subscriptions_conf.find({'user_id': post_author_id}))
-        
+
         payload = json.dumps({
             'title': title,
             'body': body,
@@ -1137,7 +1150,7 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
             'icon': '/static/logo.png',
             'badge': '/static/logo.png'
         })
-        
+
         for sub in subscriptions:
             try:
                 subscription_info = {
@@ -1157,7 +1170,7 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
                     app.logger.error(f"Push notification failed for comment: {e}")
             except Exception as e:
                 app.logger.error(f"Unexpected push error for comment: {e}")
-        
+
         app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_for_comment: {e}", exc_info=True)
@@ -1248,7 +1261,7 @@ def search():
             }
             if filter_expr:
                 search_params['filter'] = filter_expr
-            
+
             # Apply sorting
             if sort == 'newest':
                 search_params['sort'] = ['created_at:desc']
@@ -1348,7 +1361,7 @@ def admin_metrics():
             {'$unwind': '$post_details'},
             {'$project': {'slug': '$_id', 'count': '$comment_count', 'title': '$post_details.title', '_id': 0}}
         ]))
-        
+
         return jsonify({
             'posts_per_day': posts_per_day,
             'comments_per_day': comments_per_day,
@@ -1368,14 +1381,14 @@ def admin_active_users():
     try:
         # Define "active" as having made a request in the last 5 minutes
         five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
-        
+
         active_users_cursor = users_conf.find(
             {'last_active': {'$gte': five_minutes_ago}},
             {'username': 1, 'last_active': 1, '_id': 0} # Projection
         ).sort('last_active', -1)
-        
+
         active_users_list = list(active_users_cursor)
-        
+
         for user in active_users_list:
             user['last_active'] = user['last_active'].strftime('%H:%M %d-%m-%Y')
 
@@ -1392,9 +1405,9 @@ def admin_export_csv():
     days = request.args.get('days')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    
+
     now = datetime.datetime.now(datetime.timezone.utc)
-    
+
     # Determine date range from parameters
     if start_date and end_date:
         try:
@@ -1414,14 +1427,14 @@ def admin_export_csv():
     import csv
     from io import StringIO
     output = []
-    
+
     if metric == 'posts':
         # Export actual post content
         posts = list(posts_conf.find(
             {'timestamp': {'$gte': start, '$lte': end}},
             {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'timestamp': 1, 'view_count': 1, 'likes_count': 1, 'comment_count': 1}
         ).sort('timestamp', -1))
-        
+
         output.append(['id', 'title', 'slug', 'author', 'date', 'content', 'views', 'likes', 'comments'])
         for p in posts:
             timestamp = p.get('timestamp')
@@ -1542,7 +1555,7 @@ def feed():
 def get_zen_quote():
     """Fetches a random quote from ZenQuotes API with 2-minute caching."""
     cache_key = 'zen_quote'
-    
+
     # Try to get from Redis cache
     if redis_cache:
         try:
@@ -1567,14 +1580,14 @@ def get_zen_quote():
                     'author': quote_data[0].get('a'),
                     'html': quote_data[0].get('h')
                 }
-                
+
                 # Cache the quote for 2 minutes (120 seconds)
                 if redis_cache:
                     try:
                         redis_cache.setex(cache_key, 120, json.dumps(quote))
                     except Exception as e:
                         app.logger.warning(f"Error caching quote to Redis: {e}")
-                
+
                 return quote
     except Exception as e:
         app.logger.error(f"Error fetching ZenQuote: {e}")
@@ -1609,7 +1622,7 @@ def prepare_posts(posts):
         post_url = url_for("view_post", slug=post.get("slug"), _external=True)
         post["url"] = post_url
         urls.add(post_url)
-        
+
         # Ensure timestamp is timezone-aware (MongoDB stores naive UTC datetimes)
         if post.get('timestamp') and post['timestamp'].tzinfo is None:
             post['timestamp'] = post['timestamp'].replace(tzinfo=datetime.timezone.utc)
@@ -1656,7 +1669,7 @@ def send_log_email_job():
                     "text/plain",
                     f.read()
                 )
-            
+
             mail.send(msg)
             app.logger.info(f"Log file email sent to {developer_email}.")
     except Exception as e:
@@ -1748,7 +1761,7 @@ def register():
             code_expiry = datetime.datetime.now() + datetime.timedelta(hours=24)
             auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
             send_code(email, gen_code)
-            
+
             flash("Account created successfully! Please check your email for a confirmation code.", "success")
 
             # --- Send ntfy notification for new user ---
@@ -1765,7 +1778,7 @@ def register():
         else:
             flash('Username and password are required', "danger")
     return render_template("auth.html", active_page='register', form='register')
-    
+
 @app.route("/confirm/<email>", methods=['GET', 'POST']) # snyk:disable=security-issue
 @limits(calls=15, period=TIME)
 def confirm(email):
@@ -1780,12 +1793,12 @@ def confirm(email):
         confirm_code = request.form.get("code")
         if confirm_code:
             hashed_obj = auth_conf.find_one({'email': email})
-            
+
             # Check if code exists and is not expired
             if not hashed_obj:
                 flash("No confirmation code found for this email.", "danger")
                 return redirect(url_for("confirm", email=email))
-            
+
             # Check for expiry
             if 'code_expiry' in hashed_obj and hashed_obj['code_expiry'] < datetime.datetime.now():
                 flash("This confirmation code has expired. Please register again to get a new code.", "danger")
@@ -1804,9 +1817,9 @@ def confirm(email):
         else:
             flash("Please enter the confirmation code.", "danger")
     return render_template("confirm.html", email=email, active_page='confirm')
-            
-        
-                    
+
+
+
 
 @app.route("/login", methods=['GET', 'POST'])
 @limits(calls=15, period=TIME)
@@ -1816,7 +1829,7 @@ def login():
         username = request.form.get("username")
         password = request.form.get("password")
         remember = request.form.get("remember") == "on" # Check if the "Remember Me" box was checked
-        
+
         # In PWA/Webview context, users expect to stay logged in
         # Default to true for better UX - users can explicitly log out if needed
         # Check if running as installed PWA or if remember checkbox is checked
@@ -1825,14 +1838,14 @@ def login():
                  request.headers.get('Sec-Fetch-Dest') == 'document'
         if is_pwa or remember:
             remember = True
-        
+
         user = users_conf.find_one({"username": username})
-        
+
         # Check if user exists but signed up via Google (no password set)
         if user and user.get('password') is None:
             flash("This account was created with Google. Please sign in with Google, or use 'Forgot Password' to set a password.", "info")
             return redirect(url_for('login'))
-        
+
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
                 flash('Please confirm your account first', "danger")
@@ -1843,8 +1856,8 @@ def login():
                 logout_user()
                 flash('Your account has been suspended. Please contact support.', 'danger')
                 return redirect(url_for('login'))
-                
-            
+
+
             user_obj = User(user)
             login_user(user_obj, remember=remember) # Pass the remember flag to login_user
             if current_user.is_admin and current_user.is_authenticated:
@@ -1915,14 +1928,14 @@ def google_callback():
         if not user.get('is_confirmed'):
             flash("Your account is not confirmed. Please check your email for a confirmation link or register again to receive a new one.", "warning")
             return redirect(url_for('login'))
-        
+
         # Check if the user is banned
         if user.get('is_banned'):
                 logout_user()
                 flash('Your account has been suspended. Please contact support.', 'danger')
                 return redirect(url_for('login'))
-                
-            
+
+
         user_obj = User(user)
         # Use 'remember=True' to persist the session across browser restarts
         login_user(user_obj, remember=True)
@@ -1942,7 +1955,7 @@ def google_callback():
         while users_conf.find_one({'username': username}):
             username = f"{base_username}{counter}"
             counter += 1
-        
+
         # Create user with no password (they can set one via forgot password if needed)
         users_conf.insert_one({
             'username': username,
@@ -1954,7 +1967,7 @@ def google_callback():
             'notify_new_posts': True,
             'google_signup': True  # Flag to indicate Google signup
         })
-        
+
         # Send ntfy notification for new user from Google signup
         try:
             ntfy_message = f"User '{username}' has registered via Google."
@@ -1965,7 +1978,7 @@ def google_callback():
                 ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New User on EchoWithin", "partying_face")
         except Exception as e:
             app.logger.error(f"Failed to enqueue ntfy notification for new Google user '{username}': {e}")
-        
+
         # Log the new user in
         user = users_conf.find_one({'email': email})
         user_obj = User(user)
@@ -2012,7 +2025,7 @@ def home():
     else:
         total_members = users_conf.count_documents({})
         total_posts = posts_conf.count_documents({})
-        
+
         # Most Active Member Calculation
         most_active_pipeline = [
             {"$group": {"_id": "$author", "post_count": {"$sum": 1}}},
@@ -2021,7 +2034,7 @@ def home():
         ]
         most_active_result = list(posts_conf.aggregate(most_active_pipeline))
         most_active_member = most_active_result[0] if most_active_result else None
-        
+
         # Cache the stats
         community_stats_cache['community_stats'] = {
             'total_members': total_members,
@@ -2031,7 +2044,7 @@ def home():
 
     # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
     hot_posts = []
-    
+
     # Check cache first (1 minute TTL for freshness)
     cache_key = 'home_hot_posts'
     if redis_cache:
@@ -2041,11 +2054,11 @@ def home():
                 hot_posts = json.loads(cached)
         except Exception:
             pass
-    
+
     if not hot_posts:
         try:
             seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-            
+
             # This pipeline calculates hot score with recency boost for new posts
             hot_posts_pipeline = [
                 # 1. Find recent posts
@@ -2126,7 +2139,7 @@ def home():
 
         except Exception as e:
             app.logger.error(f"Failed to calculate hot posts: {e}")
-    return render_template("home.html", username=current_user.username, active_page='home', 
+    return render_template("home.html", username=current_user.username, active_page='home',
                            title=page_title, description=page_description,
                            total_members=total_members, total_posts=total_posts,
                            most_active_member=most_active_member, hot_posts=hot_posts)
@@ -2146,7 +2159,7 @@ def blog():
         search_results = list(posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page))
         with app.app_context():
             search_results = prepare_posts(search_results)
-        
+
         page_title = f"Search results for '{query}'"
         page_description = f"Displaying search results for '{query}' on EchoWithin."
         return render_template("blog.html", posts=search_results, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
@@ -2156,11 +2169,11 @@ def blog():
     # 1. Always includes some recent posts (freshness)
     # 2. Mixes in older posts for discovery
     # 3. Changes on each reload for variety
-    
+
     import random
-    
+
     total_posts_count = posts_conf.count_documents({})
-    
+
     if total_posts_count <= 10:
         # If we have 10 or fewer posts, just show all of them randomly ordered
         all_posts = list(posts_conf.find({}).sort('timestamp', -1))
@@ -2172,46 +2185,46 @@ def blog():
         # - 4 most recent posts (guaranteed freshness)
         # - 3 posts from the past week (recent but not newest)
         # - 3 random posts from older content (discovery)
-        
+
         now = datetime.datetime.now(datetime.timezone.utc)
         one_week_ago = now - datetime.timedelta(days=7)
         one_month_ago = now - datetime.timedelta(days=30)
-        
+
         # Get the 4 most recent posts
         recent_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(4))
         recent_ids = [p['_id'] for p in recent_posts]
-        
+
         # Get posts from the past week (excluding the most recent 4)
         week_posts = list(posts_conf.find({
             '_id': {'$nin': recent_ids},
             'timestamp': {'$gte': one_week_ago}
         }).sort('timestamp', -1).limit(10))
-        
+
         # Randomly select 3 from the week posts (or all if less than 3)
         if len(week_posts) > 3:
             week_selection = random.sample(week_posts, 3)
         else:
             week_selection = week_posts
-        
+
         week_ids = [p['_id'] for p in week_selection]
         excluded_ids = recent_ids + week_ids
-        
+
         # Calculate how many more posts we need
         posts_needed = 10 - len(recent_posts) - len(week_selection)
-        
+
         # Get random older posts for discovery
         # Use aggregation with $sample for true random selection
         older_posts = list(posts_conf.aggregate([
             {'$match': {'_id': {'$nin': excluded_ids}}},
             {'$sample': {'size': max(posts_needed, 1)}}
         ]))
-        
+
         # Combine all posts
         combined_posts = recent_posts + week_selection + older_posts
-        
+
         # Fully shuffle all posts for a dynamic feed on every refresh
         random.shuffle(combined_posts)
-        
+
         with app.app_context():
             latest_posts_prepared = prepare_posts(combined_posts[:10])
 
@@ -2247,7 +2260,7 @@ def all_posts():
         # --- OPTIMIZED personalized feed ---
         user_id = ObjectId(current_user.id)
         user_id_str = str(current_user.id)
-        
+
         # Try to get cached interest profile from Redis (cache for 5 minutes)
         cache_key = f"user_interests:{user_id_str}"
         cached_interests = None
@@ -2258,10 +2271,10 @@ def all_posts():
                     cached_interests = json.loads(cached_data)
             except Exception:
                 pass
-        
+
         tag_scores = {}
         author_scores = {}
-        
+
         if cached_interests:
             tag_scores = cached_interests.get('tags', {})
             author_scores = cached_interests.get('authors', {})
@@ -2269,36 +2282,36 @@ def all_posts():
             # Build interest profile with limited queries
             WEIGHT_LIKED = 3.0
             WEIGHT_SAVED = 4.0
-            
+
             # Get user's liked and saved posts in ONE query via user document
             user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
             saved_ids = user_doc.get('saved_posts', []) if user_doc else []
-            
+
             # Combine liked + saved lookup in one query (limit to 100 most recent for performance)
             interest_query = {'$or': [
                 {'liked_by': user_id_str},
                 {'_id': {'$in': saved_ids[:50]}}  # Limit saved posts lookup
             ]}
             interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1, 'liked_by': 1}).limit(100))
-            
+
             for p in interest_posts:
                 is_liked = user_id_str in (p.get('liked_by') or [])
                 is_saved = p.get('_id') in saved_ids
                 weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
-                
+
                 for t in p.get('tags', []):
                     tag_scores[t] = tag_scores.get(t, 0) + weight
                 a = p.get('author_id')
                 if a and str(a) != user_id_str:
                     author_scores[str(a)] = author_scores.get(str(a), 0) + weight
-            
+
             # Cache the interest profile
             if redis_cache and (tag_scores or author_scores):
                 try:
                     redis_cache.setex(cache_key, 300, json.dumps({'tags': tag_scores, 'authors': author_scores}))
                 except Exception:
                     pass
-        
+
         # Fetch paginated posts with engagement data in a single aggregation
         pipeline = [
             {'$match': filter_query},
@@ -2320,9 +2333,9 @@ def all_posts():
             }},
             {'$project': {'comment_data': 0}}
         ]
-        
+
         page_posts = list(posts_conf.aggregate(pipeline))
-        
+
         # Score and sort the page posts (lightweight in-memory scoring)
         now = datetime.datetime.now(datetime.timezone.utc)
         for p in page_posts:
@@ -2349,29 +2362,29 @@ def all_posts():
                 recency = max(0, 1 - (hours_old / (24 * 7)))
                 score += recency * 5
             p['_score'] = score
-        
+
         # Sort by score (keep first 2 fixed by timestamp, rest by score)
         if len(page_posts) > 2:
             top_two = page_posts[:2]
             rest = sorted(page_posts[2:], key=lambda x: x.get('_score', 0), reverse=True)
             page_posts = top_two + rest
-        
+
         with app.app_context():
             posts = prepare_posts(page_posts)
     else:
         # Anonymous users: simple timestamp-sorted feed with slight randomization
         import random
-        
+
         # Efficient paginated query
         page_posts = list(posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page))
-        
+
         # Light shuffle for variety (keep first 2 fixed)
         if len(page_posts) > 2:
             top_two = page_posts[:2]
             rest = page_posts[2:]
             random.shuffle(rest)
             page_posts = top_two + rest
-        
+
         with app.app_context():
             posts = prepare_posts(page_posts)
 
@@ -2385,7 +2398,7 @@ def all_posts():
                 all_tags = json.loads(cached_tags)
         except Exception:
             pass
-    
+
     if all_tags is None:
         all_tags = posts_conf.distinct('tags')
         if redis_cache:
@@ -2410,7 +2423,7 @@ def get_all_posts_json():
     try:
         # Fetch all posts with necessary fields
         all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}))
-        
+
         # Convert ObjectId and datetime to strings and add the post URL
         for post in all_posts:
             post['_id'] = str(post['_id'])
@@ -2434,7 +2447,7 @@ def calculate_hot_score(post, comment_count):
     and includes all engagement signals (comments, likes, shares, views).
     """
     import math as math_module
-    
+
     post_time = post.get('created_at') or post.get('timestamp')
     if not post_time:
         return 0
@@ -2444,30 +2457,30 @@ def calculate_hot_score(post, comment_count):
         post_time = post_time.replace(tzinfo=datetime.timezone.utc)
 
     age_in_hours = (datetime.datetime.now(datetime.timezone.utc) - post_time).total_seconds() / 3600
-    
+
     # Get all engagement signals
     views = post.get('view_count', 0) or 0
     likes = post.get('likes_count', 0) or 0
     shares = post.get('share_count', 0) or 0
-    
+
     # Weighted engagement score: comments(5) + likes(3) + shares(4) + views(0.1)
     raw_score = (comment_count * 5) + (likes * 3) + (shares * 4) + (views * 0.1)
-    
+
     # Use logarithmic scaling to prevent viral posts from completely dominating
     # log1p(x) = log(1 + x), handles zero values safely
     log_score = math_module.log1p(raw_score) * 10
-    
+
     # Exponential time decay - posts lose 50% of their score every 12 hours
     # This creates a more aggressive decay than the gravity model
     half_life_hours = 12
     decay_factor = 0.5 ** (age_in_hours / half_life_hours)
-    
+
     # Boost for very recent posts (first 2 hours get extra visibility)
     if age_in_hours < 2:
         recency_boost = 1.5 - (age_in_hours * 0.25)  # 1.5x to 1.0x
     else:
         recency_boost = 1.0
-    
+
     return log_score * decay_factor * recency_boost
 
 @app.route('/api/posts/top-by-comments')
@@ -2477,7 +2490,7 @@ def get_top_posts_json():
     Uses MongoDB aggregation for better performance and Redis caching.
     """
     import math as math_module
-    
+
     # Check Redis cache first (cache for 2 minutes)
     cache_key = 'top_posts_by_engagement'
     if redis_cache:
@@ -2487,7 +2500,7 @@ def get_top_posts_json():
                 return jsonify(json.loads(cached))
         except Exception:
             pass
-    
+
     try:
         # Use aggregation pipeline for efficient server-side processing
         # This avoids loading all posts into Python memory
@@ -2533,24 +2546,24 @@ def get_top_posts_json():
             # Stage 6: Remove lookup helper field
             {'$project': {'comment_data': 0, 'likes_safe': 0, 'shares_safe': 0, 'views_safe': 0}}
         ]
-        
+
         posts = list(posts_conf.aggregate(pipeline))
-        
+
         # Apply recency factor in Python (complex time math is cleaner here)
         now = datetime.datetime.now(datetime.timezone.utc)
         results = []
-        
+
         for post in posts:
             if not post.get('slug'):
                 continue
-            
+
             # Get engagement values
             comment_count = post.get('comment_count', 0)
             likes = post.get('likes_count', 0) or 0
             shares = post.get('share_count', 0) or 0
             views = post.get('view_count', 0) or 0
             raw_engagement = post.get('raw_engagement', 0)
-            
+
             # Apply recency factor - posts decay over 30 days
             post_time = post.get('timestamp')
             recency_multiplier = 1.0
@@ -2560,9 +2573,9 @@ def get_top_posts_json():
                 days_old = (now - post_time).total_seconds() / 86400
                 # Logarithmic decay: loses 50% over 30 days, but never goes below 0.2
                 recency_multiplier = max(0.2, 1.0 - (math_module.log1p(days_old) / 10))
-            
+
             final_score = raw_engagement * recency_multiplier
-            
+
             # Format for JSON response
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
@@ -2576,18 +2589,18 @@ def get_top_posts_json():
             post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
             post.pop('raw_engagement', None)
             results.append(post)
-        
+
         # Sort by final score and limit to top 20
         results.sort(key=lambda x: x['engagement_score'], reverse=True)
         results = results[:20]
-        
+
         # Cache the results
         if redis_cache:
             try:
                 redis_cache.setex(cache_key, 120, json.dumps(results, default=str))
             except Exception:
                 pass
-        
+
         return jsonify(results)
     except Exception as e:
         app.logger.error(f"Error in get_top_posts_json: {e}")
@@ -2642,13 +2655,13 @@ def get_my_commented_posts_json():
     Returns text posts relevant to the user's activity:
     1. Posts AUTHORED by the user that have comments.
     2. Posts AUTHORED BY OTHERS where someone replied to the user's comment.
-    
+
     Sorted by most recent relevant activity.
     Unread status is determined by User.last_activity_check.
     """
     try:
         user_id = ObjectId(current_user.id)
-        
+
         # Get the timestamp when user last clicked "Mark all as read" (or default to old date)
         # IMPORTANT: Query directly from DB to avoid stale cached values in current_user
         user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
@@ -2656,7 +2669,7 @@ def get_my_commented_posts_json():
         if not last_check:
             # Default to 30 days ago if never checked, to avoid marking everything since beginning of time as unread
             last_check = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
-        
+
         if last_check.tzinfo is None:
             last_check = last_check.replace(tzinfo=datetime.timezone.utc)
 
@@ -2689,10 +2702,10 @@ def get_my_commented_posts_json():
                 'comment_count': {'$size': '$post_comments'},
                 'latest_activity': {'$max': '$post_comments.created_at'},
             }},
-            {'$limit': 50} 
+            {'$limit': 50}
         ]
         own_posts = list(posts_conf.aggregate(own_posts_pipeline))
-        
+
         for p in own_posts:
             p['activity_type'] = 'comment_on_my_post'
             # Determine effective last read time for this specific post
@@ -2700,7 +2713,7 @@ def get_my_commented_posts_json():
             post_last_viewed = p.get('author_last_viewed')
             if post_last_viewed and post_last_viewed.tzinfo is None:
                 post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
-            
+
             # Use a high default if never viewed, but actually we want to default to VERY OLD
             # so that last_check takes precedence.
             if not post_last_viewed:
@@ -2712,7 +2725,7 @@ def get_my_commented_posts_json():
         # A. Find all comment IDs authored by current user
         my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
         my_comment_ids = [c['_id'] for c in my_comments]
-        
+
         relevant_replies = []
         if my_comment_ids:
             # B. Find replies to those comments (where author is NOT me)
@@ -2730,7 +2743,7 @@ def get_my_commented_posts_json():
                 }}
             ]
             replies_grouped = list(comments_conf.aggregate(pipeline_replies))
-            
+
             # C. Fetch the actual posts with comment counts
             slugs = [g['_id'] for g in replies_grouped]
             if slugs:
@@ -2755,37 +2768,37 @@ def get_my_commented_posts_json():
                 ]
                 reply_posts_cursor = posts_conf.aggregate(replies_pipeline)
                 reply_map = {g['_id']: g for g in replies_grouped}
-                
+
                 for p in reply_posts_cursor:
                     # Only include if it's NOT my own post (already covered above)
                     if str(p.get('author_id')) == current_user.id:
                         continue
-                        
+
                     reply_data = reply_map.get(p['slug'])
                     p['latest_activity'] = reply_data['latest_reply']
                     p['activity_type'] = 'reply_to_my_comment'
-                    # p['extra_info'] = f"{reply_data['reply_count']} new replies" 
+                    # p['extra_info'] = f"{reply_data['reply_count']} new replies"
                     relevant_replies.append(p)
 
         # --- 3. Merge and Sort ---
         all_activities = own_posts + relevant_replies
-        
+
         # Sort by latest activity descending
         all_activities.sort(key=lambda x: x.get('latest_activity', datetime.datetime.min), reverse=True)
-        
+
         # Limit to 20 items
         all_activities = all_activities[:20]
-        
+
         # --- 4. Process for JSON Response ---
         unread_count = 0
         result_posts = []
-        
+
         for post in all_activities:
             # Determine unread status
             activity_time = post.get('latest_activity')
             if activity_time and activity_time.tzinfo is None:
                 activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
-            
+
             # Determine the threshold time for this specific post
             # For own posts, we calculated 'effective_read_time' above.
             # For replies, we fallback to 'last_check' (global).
@@ -2798,8 +2811,8 @@ def get_my_commented_posts_json():
             if activity_time and activity_time > threshold:
                 is_unread = True
                 unread_count += 1
-            
-            
+
+
             post_data = {
                 '_id': str(post['_id']),
                 'title': post.get('title', ''),
@@ -2810,7 +2823,7 @@ def get_my_commented_posts_json():
                 'author_id': str(post.get('author_id', '')),
                 'timestamp': post.get('timestamp').strftime('%b %d, %Y') if post.get('timestamp') else '',
                 'image_url': post.get('image_url'),
-                'image_urls': post.get('image_urls', []), 
+                'image_urls': post.get('image_urls', []),
                 'video_url': post.get('video_url'),
                 'comment_count': post.get('comment_count', 0), # Total comments on post
                 'likes_count': post.get('likes_count', 0),
@@ -2821,7 +2834,7 @@ def get_my_commented_posts_json():
                 'reactions': post.get('reactions', {})
             }
             result_posts.append(post_data)
-        
+
         response = jsonify({
             'posts': result_posts,
             'unread_count': unread_count,
@@ -2832,7 +2845,7 @@ def get_my_commented_posts_json():
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
-        
+
     except Exception as e:
         app.logger.error(f"Error in get_my_commented_posts_json: {e}", exc_info=True)
         return jsonify({'error': 'Could not retrieve posts'}), 500
@@ -2848,14 +2861,14 @@ def mark_all_comments_read():
     try:
         user_id = ObjectId(current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
-        
+
         # Start with current time as the marker
         leap_marker = now
-        
+
         # 1. Check for latest relevant comments on user's own posts
         user_posts = list(posts_conf.find({'author_id': user_id}, {'slug': 1}))
         user_post_slugs = [p['slug'] for p in user_posts]
-        
+
         if user_post_slugs:
             latest_comment = comments_conf.find_one(
                 {'post_slug': {'$in': user_post_slugs}, 'author_id': {'$ne': user_id}, 'is_deleted': {'$ne': True}},
@@ -2867,11 +2880,11 @@ def mark_all_comments_read():
                 if lc_time.tzinfo is None: lc_time = lc_time.replace(tzinfo=datetime.timezone.utc)
                 if lc_time > leap_marker:
                     leap_marker = lc_time
-        
+
         # 2. Check for latest replies to user's comments
         my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
         my_comment_ids = [c['_id'] for c in my_comments]
-        
+
         if my_comment_ids:
             latest_reply = comments_conf.find_one(
                 {'parent_id': {'$in': my_comment_ids}, 'author_id': {'$ne': user_id}, 'is_deleted': {'$ne': True}},
@@ -2889,13 +2902,13 @@ def mark_all_comments_read():
             {'_id': user_id},
             {'$set': {'last_activity_check': leap_marker}}
         )
-        
+
         # Clear user loader cache so the new timestamp is picked up on next request
         try:
             user_loader_cache.pop(f"user:{current_user.id}", None)
         except Exception:
             pass
-            
+
         return jsonify({'success': True, 'timestamp': leap_marker.isoformat()})
     except Exception as e:
         app.logger.error(f"Error marking all read: {e}")
@@ -2910,22 +2923,22 @@ def get_related_posts_json():
     Reduced from 8+ DB queries to 2-3 per request.
     """
     import math as math_module
-    
+
     try:
         user_id = ObjectId(current_user.id)
         user_id_str = str(current_user.id)
-        
+
         # NOTE: We don't cache results here because we want the feed to be
         # dynamic on every refresh (shuffle, different mix). We only cache
         # the user interest profile for performance.
-        
+
         # =====================================================
         # STEP 1: Get or Build User Interest Profile (Cached)
         # =====================================================
-        
+
         tag_scores = {}
         author_scores = {}
-        
+
         # Try to get cached interest profile (5 minute cache)
         interests_cache_key = f"user_interests_full:{user_id_str}"
         cached_interests = None
@@ -2938,40 +2951,40 @@ def get_related_posts_json():
                     author_scores = cached_interests.get('authors', {})
             except Exception:
                 pass
-        
+
         saved_post_ids = []
-        
+
         if not cached_interests:
             # Build interest profile with optimized queries
             WEIGHT_LIKED = 3.0
             WEIGHT_SAVED = 4.0
             WEIGHT_COMMENTED = 2.5
-            
+
             # Get user's saved posts from user document
             user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
             saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
-            
+
             # OPTIMIZED: Single query for liked + saved posts (limit 150 for performance)
             interest_query = {'$or': [
                 {'liked_by': user_id_str},
                 {'_id': {'$in': saved_post_ids[:75]}}  # Limit saved posts
             ]}
             interest_posts = list(posts_conf.find(
-                interest_query, 
+                interest_query,
                 {'tags': 1, 'author_id': 1, 'liked_by': 1, '_id': 1}
             ).limit(150))
-            
+
             for p in interest_posts:
                 is_liked = user_id_str in (p.get('liked_by') or [])
                 is_saved = p.get('_id') in saved_post_ids
                 weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
-                
+
                 for t in p.get('tags', []):
                     tag_scores[t] = tag_scores.get(t, 0) + weight
                 a = p.get('author_id')
                 if a and str(a) != user_id_str:
                     author_scores[str(a)] = author_scores.get(str(a), 0) + weight
-            
+
             # OPTIMIZED: Get commented posts in single query
             commented_slugs = comments_conf.distinct('post_slug', {'author_id': user_id})
             if commented_slugs:
@@ -2985,41 +2998,41 @@ def get_related_posts_json():
                     a = p.get('author_id')
                     if a and str(a) != user_id_str:
                         author_scores[str(a)] = author_scores.get(str(a), 0) + WEIGHT_COMMENTED
-            
+
             # Cache the interest profile
             if redis_cache and (tag_scores or author_scores):
                 try:
                     redis_cache.setex(interests_cache_key, 300, json.dumps({
-                        'tags': tag_scores, 
+                        'tags': tag_scores,
                         'authors': author_scores
                     }))
                 except Exception:
                     pass
-        
+
         # STEP 2: Get Candidate Posts (Optimized Aggregation)
         # =====================================================
-        
+
         # Smart Exclusion Logic:
         # 1. Time-based: Only exclude posts interacted with in last 7 days
         # 2. Re-engagement: Show again if post has new comments since user's last interaction
-        
+
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
         interacted_post_ids = set()
         posts_with_new_activity = set()  # Posts to RE-INCLUDE due to new comments
-        
+
         # Get user's recent comments with timestamps
         user_recent_comments = list(comments_conf.find(
             {'author_id': user_id, 'created_at': {'$gte': seven_days_ago}},
             {'post_slug': 1, 'created_at': 1}
         ).sort('created_at', -1).limit(100))
-        
+
         # Map of slug -> user's last comment time on that post
         user_last_comment_time = {}
         for c in user_recent_comments:
             slug = c.get('post_slug')
             if slug and slug not in user_last_comment_time:
                 user_last_comment_time[slug] = c.get('created_at')
-        
+
         # Check if posts have new comments since user's last interaction
         if user_last_comment_time:
             for slug, last_time in user_last_comment_time.items():
@@ -3035,7 +3048,7 @@ def get_related_posts_json():
                     post = posts_conf.find_one({'slug': slug}, {'_id': 1})
                     if post:
                         posts_with_new_activity.add(post['_id'])
-        
+
         # Get posts user RECENTLY commented on (last 7 days) - exclude unless new activity
         recently_commented_slugs = [c.get('post_slug') for c in user_recent_comments]
         if recently_commented_slugs:
@@ -3046,8 +3059,8 @@ def get_related_posts_json():
             for p in commented_posts_cursor:
                 if p['_id'] not in posts_with_new_activity:
                     interacted_post_ids.add(p['_id'])
-        
-        # Get posts user RECENTLY liked - we can't track exact like time, 
+
+        # Get posts user RECENTLY liked - we can't track exact like time,
         # so we use a heuristic: recent posts that user liked are likely recent interactions
         liked_posts_cursor = posts_conf.find(
             {'liked_by': user_id_str, 'timestamp': {'$gte': seven_days_ago}},
@@ -3056,7 +3069,7 @@ def get_related_posts_json():
         for p in liked_posts_cursor:
             if p['_id'] not in posts_with_new_activity:
                 interacted_post_ids.add(p['_id'])
-        
+
         # Saved posts - only recent saves (use post timestamp as proxy)
         if not saved_post_ids:
             user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
@@ -3069,7 +3082,7 @@ def get_related_posts_json():
             for p in saved_posts_recent:
                 if p['_id'] not in posts_with_new_activity:
                     interacted_post_ids.add(p['_id'])
-        
+
         # Build interest filter for candidates
         interest_filters = []
         if tag_scores:
@@ -3080,10 +3093,10 @@ def get_related_posts_json():
             top_author_oids = [ObjectId(a) for a in top_authors if ObjectId.is_valid(a)]
             if top_author_oids:
                 interest_filters.append({'author_id': {'$in': top_author_oids}})
-        
+
         # Build match query - SMART EXCLUSION
         interacted_list = list(interacted_post_ids) if interacted_post_ids else []
-        
+
         if interest_filters:
             match_query = {
                 'author_id': {'$ne': user_id},
@@ -3097,7 +3110,7 @@ def get_related_posts_json():
                 '_id': {'$nin': interacted_list},
                 'timestamp': {'$gte': seven_days_ago}
             }
-        
+
         # Use aggregation for efficient candidate fetching with comment counts
         pipeline = [
             {'$match': match_query},
@@ -3120,29 +3133,29 @@ def get_related_posts_json():
                 'comment_data': 0  # Remove lookup helper
             }}
         ]
-        
+
         candidate_posts = list(posts_conf.aggregate(pipeline))
-        
+
         # =====================================================
         # STEP 3: Score Candidates (In Memory - Fast)
         # =====================================================
-        
+
         now = datetime.datetime.now(datetime.timezone.utc)
         scored_posts = []
-        
+
         for post in candidate_posts:
             score = 0.0
-            
+
             # Tag relevance
             for tag in post.get('tags', []):
                 if tag in tag_scores:
                     score += tag_scores[tag] * 2
-            
+
             # Author preference
             post_author_id = str(post.get('author_id', ''))
             if post_author_id in author_scores:
                 score += author_scores[post_author_id] * 3
-            
+
             # Engagement (logarithmic to prevent viral domination)
             likes = post.get('likes_count', 0) or 0
             comments = post.get('comment_count', 0)
@@ -3150,7 +3163,7 @@ def get_related_posts_json():
             views = post.get('view_count', 0) or 0
             raw_engagement = (likes * 2) + (comments * 3) + (shares * 4) + (views * 0.1)
             score += math_module.log1p(raw_engagement) * 5  # Log scale
-            
+
             # Recency boost
             post_time = post.get('timestamp')
             if post_time:
@@ -3159,18 +3172,18 @@ def get_related_posts_json():
                 hours_old = (now - post_time).total_seconds() / 3600
                 recency_factor = max(0, 1 - (hours_old / (24 * 7)))
                 score += recency_factor * 10
-            
+
             # Diversity bonus for new topics
             unique_tags = set(post.get('tags', [])) - set(tag_scores.keys())
             if unique_tags:
                 score += len(unique_tags) * 0.5
-            
+
             post['_score'] = score
             scored_posts.append(post)
-        
+
         # Sort by score
         scored_posts.sort(key=lambda p: p['_score'], reverse=True)
-        
+
         # =====================================================
         # STEP 4: Build Mixed Feed (Prevents new posts from dominating)
         # =====================================================
@@ -3178,22 +3191,22 @@ def get_related_posts_json():
         # - ~4 slots: Fresh posts (< 48 hours old) - keeps feed feeling current
         # - ~4 slots: Proven quality (high engagement, any age) - best content surfaces
         # - ~7 slots: Personalized by interest score - tailored recommendations
-        
+
         fresh_posts = []      # < 48 hours old
         quality_posts = []    # High engagement (any age)
         interest_posts = []   # Best by personalization score
-        
+
         forty_eight_hours_ago = now - datetime.timedelta(hours=48)
-        
+
         for post in scored_posts:
             post_time = post.get('timestamp')
             if post_time:
                 if post_time.tzinfo is None:
                     post_time = post_time.replace(tzinfo=datetime.timezone.utc)
-                
+
                 # Categorize posts
                 engagement = (post.get('likes_count', 0) or 0) + (post.get('comment_count', 0) * 2)
-                
+
                 if post_time > forty_eight_hours_ago and len(fresh_posts) < 6:
                     fresh_posts.append(post)
                 elif engagement >= 5 and len(quality_posts) < 8:  # At least 5 engagement points
@@ -3202,23 +3215,23 @@ def get_related_posts_json():
                     interest_posts.append(post)
             else:
                 interest_posts.append(post)
-        
+
         # Build final mixed feed
         result_posts = []
         used_ids = set()
-        
+
         # Add fresh posts first (up to 4)
         for post in fresh_posts[:4]:
             if post['_id'] not in used_ids:
                 result_posts.append(post)
                 used_ids.add(post['_id'])
-        
+
         # Add quality posts (up to 4)
         for post in quality_posts[:4]:
             if post['_id'] not in used_ids:
                 result_posts.append(post)
                 used_ids.add(post['_id'])
-        
+
         # Fill remaining slots with interest-based posts (up to 15 total)
         for post in interest_posts:
             if len(result_posts) >= 15:
@@ -3226,7 +3239,7 @@ def get_related_posts_json():
             if post['_id'] not in used_ids:
                 result_posts.append(post)
                 used_ids.add(post['_id'])
-        
+
         # If still not at 15, add from any remaining categories
         all_remaining = fresh_posts[4:] + quality_posts[4:] + interest_posts
         for post in all_remaining:
@@ -3235,13 +3248,13 @@ def get_related_posts_json():
             if post['_id'] not in used_ids:
                 result_posts.append(post)
                 used_ids.add(post['_id'])
-        
+
         result_posts = result_posts[:15]
-        
+
         # Shuffle to mix tiers together (prevents predictable ordering)
         import random
         random.shuffle(result_posts)
-        
+
         for post in result_posts:
             post['_id'] = str(post['_id'])
             post['author_id'] = str(post.get('author_id'))
@@ -3250,9 +3263,9 @@ def get_related_posts_json():
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
             post.pop('_score', None)
             post.pop('liked_by', None)
-        
+
         return jsonify(result_posts)
-        
+
     except Exception as e:
         app.logger.error(f"Error in get_related_posts_json for user {current_user.id}: {e}")
         return jsonify({'error': 'Could not retrieve related posts'}), 500
@@ -3421,7 +3434,7 @@ def post():
         temp_image_paths = []
         temp_video_path = None
 
-        if title and content:  
+        if title and content:
             # Create a unique slug for SEO-friendly URLs
             base_slug = slugify(title)
             # Handle emoji-only or non-ASCII titles that result in empty slugs
@@ -3432,7 +3445,7 @@ def post():
             while posts_conf.find_one({'slug': slug}):
                 slug = f"{base_slug}-{counter}"
                 counter += 1
-            
+
             # Save files temporarily for background processing
             for img_file in images_files:
                 if img_file and img_file.filename and '.' in img_file.filename and img_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
@@ -3539,7 +3552,7 @@ def post():
         else:
             flash("Title and content cannot be empty.", "danger")
     return redirect(url_for("blog"))
-    
+
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """Serves locally uploaded files for backward compatibility."""
@@ -3570,11 +3583,11 @@ def view_post(slug):
     # --- Fetch Related Posts using Meilisearch (with caching) ---
     related_posts = []
     post_id_str = str(post['_id'])
-    
+
     # Try cache first
     related_cache_key = f"related_posts:{post_id_str}"
     cached_related = related_posts_cache.get(related_cache_key)
-    
+
     if cached_related is not None:
         related_posts = cached_related
     elif meili_index:
@@ -3601,7 +3614,7 @@ def view_post(slug):
             for p in related_posts:
                 if p.get('created_at'):
                     p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
-            
+
             # Cache the results (2 minute TTL)
             related_posts_cache[related_cache_key] = related_posts
         except Exception as e:
@@ -3667,7 +3680,7 @@ def view_post(slug):
         u = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'saved_posts': 1})
         if u and post['_id'] in u.get('saved_posts', []):
             is_saved = True
-        
+
             # Track when user views their own post (for unread comment detection)
         if str(post.get('author_id')) == current_user.id:
             try:
@@ -3678,7 +3691,7 @@ def view_post(slug):
                     projection={'created_at': 1},
                     sort=[('created_at', -1)]
                 )
-                
+
                 view_marker = now
                 if latest_p_comment and latest_p_comment.get('created_at'):
                     lp_time = latest_p_comment['created_at']
@@ -3728,19 +3741,19 @@ def api_record_post_view(post_id):
     """Increment the view count for a post once per user per day.
 
     This endpoint is intended to be called by client-side JS when a user first
-    visits the view_post page. It ensures that each user only increments the 
+    visits the view_post page. It ensures that each user only increments the
     view count once per day, regardless of how they arrive at the post (clicking title,
     comment button, or direct access).
     """
     try:
         # If user is not authenticated, use a guest identifier
         user_identifier = str(current_user.id) if current_user.is_authenticated else request.remote_addr
-        
+
         # Get today's date at midnight (start of day)
         now = datetime.datetime.now(datetime.timezone.utc)
         today_start = datetime.datetime(now.year, now.month, now.day)
         today_end = today_start + datetime.timedelta(days=1)
-        
+
         # Check if this user has already viewed this post today
         view_record = logs_conf.find_one({
             'type': 'post_view',
@@ -3748,7 +3761,7 @@ def api_record_post_view(post_id):
             'user_identifier': user_identifier,
             'timestamp': {'$gte': today_start, '$lt': today_end}
         })
-        
+
         # Only increment if they haven't viewed it today
         if not view_record:
             # Record the view in logs
@@ -3758,10 +3771,10 @@ def api_record_post_view(post_id):
                 'user_identifier': user_identifier,
                 'timestamp': datetime.datetime.now(datetime.timezone.utc)
             })
-            
+
             # Atomically increment the view count on the post
             res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
-        
+
         # Fetch the latest count
         post = posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
         view_count = post.get('view_count', 0) if post else 0
@@ -3787,15 +3800,15 @@ def subscribe_push():
     """Subscribe a user's device to push notifications."""
     if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
         return jsonify({'error': 'Push notifications not configured'}), 503
-    
+
     data = request.get_json()
     if not data or not data.get('endpoint') or not data.get('keys'):
         return jsonify({'error': 'Invalid subscription data'}), 400
-    
+
     try:
         user_id = ObjectId(current_user.id)
         new_endpoint = data['endpoint']
-        
+
         # Proactively clean up old/stale subscriptions for this user
         # This handles the case where a user reinstalls the app and gets a new endpoint
         # We delete all OTHER subscriptions for this user (keeping only the new one)
@@ -3805,7 +3818,7 @@ def subscribe_push():
         })
         if delete_result.deleted_count > 0:
             app.logger.info(f"Cleaned up {delete_result.deleted_count} old push subscription(s) for user {current_user.username}")
-        
+
         subscription_doc = {
             'user_id': user_id,
             'endpoint': new_endpoint,
@@ -3813,14 +3826,14 @@ def subscribe_push():
             'created_at': datetime.datetime.now(datetime.timezone.utc),
             'user_agent': request.headers.get('User-Agent', '')[:200]
         }
-        
+
         # Upsert - update if exists, insert if not
         push_subscriptions_conf.update_one(
             {'user_id': user_id, 'endpoint': new_endpoint},
             {'$set': subscription_doc},
             upsert=True
         )
-        
+
         app.logger.info(f"Push subscription saved for user {current_user.username}")
         return jsonify({'success': True, 'message': 'Subscribed to push notifications'})
     except Exception as e:
@@ -3835,13 +3848,13 @@ def unsubscribe_push():
     data = request.get_json()
     if not data or not data.get('endpoint'):
         return jsonify({'error': 'Invalid request'}), 400
-    
+
     try:
         result = push_subscriptions_conf.delete_one({
             'user_id': ObjectId(current_user.id),
             'endpoint': data['endpoint']
         })
-        
+
         if result.deleted_count > 0:
             app.logger.info(f"Push subscription removed for user {current_user.username}")
             return jsonify({'success': True, 'message': 'Unsubscribed from push notifications'})
@@ -3872,14 +3885,14 @@ def get_unread_notification_count():
         # Count unread notifications for this user
         # This counts: new comments on user's posts, replies to user's comments, etc.
         user_id = ObjectId(current_user.id)
-        
+
         # Get user's posts to check for new comments
         user_posts = posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1})
         user_post_slugs = [p.get('slug') for p in user_posts]
-        
+
         # Count new comments on user's posts (not by the user themselves) from last 24 hours
         yesterday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
-        
+
         unread_count = 0
         if user_post_slugs:
             unread_count = comments_conf.count_documents({
@@ -3887,7 +3900,7 @@ def get_unread_notification_count():
                 'author_id': {'$ne': user_id},
                 'created_at': {'$gte': yesterday}
             })
-        
+
         return jsonify({'count': unread_count})
     except Exception as e:
         app.logger.error(f"Failed to get unread notification count: {e}")
@@ -3965,13 +3978,13 @@ def api_post_comments(slug):
         res = comments_conf.insert_one(comment)
         comment['_id'] = res.inserted_id
         comment_id_str = str(res.inserted_id)
-        
+
         # Invalidate cached comment counts so lists update immediately
         try:
             comment_count_cache.clear()
         except Exception:
             pass
-        
+
         # --- Send push notification to post author ---
         try:
             send_push_notification_for_comment.queue(comment_id_str, slug)
@@ -3982,7 +3995,7 @@ def api_post_comments(slug):
                 ThreadPoolExecutor().submit(send_push_notification_for_comment, comment_id_str, slug)
         except Exception as e:
             app.logger.error(f"Failed to enqueue push notification for comment: {e}")
-        
+
         return jsonify(_serialize_comment(comment)), 201
     except Exception as e:
         app.logger.error(f"Failed to insert comment for {slug}: {e}")
@@ -4115,8 +4128,8 @@ def edit_post(post_id):
 
     page_title = f"Edit: {post.get('title')}"
     page_description = f"Edit the post titled '{post.get('title')}' on EchoWithin."
-    
-    return render_template('edit_post.html', post=post, active_page='blog', 
+
+    return render_template('edit_post.html', post=post, active_page='blog',
                            action=action, title=page_title, description=page_description,
                            )
 
@@ -4292,7 +4305,7 @@ def delete_post(post_id):
     if not post_to_delete or str(post_to_delete.get('author_id')) != current_user.id:
         flash("You are not authorized to delete this post.", "danger")
         return redirect(url_for('blog'))
-    
+
     # Delete the image from Cloudinary if it exists
     if post_to_delete.get('image_public_id'):
         try:
@@ -4443,7 +4456,7 @@ def admin_users():
         }).sort('username', 1)
     else:
         users = users_conf.find().sort('username', 1)
-    
+
     return render_template('admin_users.html', title="Manage Users", users=list(users), query=query)
 
 @app.route('/admin/users/ban/<user_id>', methods=['POST'])
@@ -4456,7 +4469,7 @@ def ban_user(user_id):
     if str(user_to_ban['_id']) == current_user.id:
         flash("You cannot ban yourself.", "danger")
         return redirect(url_for('admin_users'))
-    
+
     users_conf.update_one({'_id': ObjectId(user_id)}, {'$set': {'is_banned': True}})
     flash(f"User '{user_to_ban.get('username')}' has been banned.", "success")
     return redirect(url_for('admin_users'))
@@ -4482,13 +4495,13 @@ def delete_user(user_id):
     if str(user_to_delete['_id']) == current_user.id:
         flash("You cannot delete yourself.", "danger")
         return redirect(url_for('admin_users'))
-    
+
     # Also delete all posts by this user
     posts_conf.delete_many({'author_id': ObjectId(user_id)})
-    
+
     username = user_to_delete.get('username')
     users_conf.delete_one({'_id': ObjectId(user_id)})
-    
+
     flash(f"User '{username}' and all their posts have been permanently deleted.", "success")
     return redirect(url_for('admin_users'))
 
@@ -4520,7 +4533,7 @@ def profile(username):
         return redirect(url_for('home'))
 
     user_id = user['_id']
-    
+
     # --- Pagination for user posts ---
     page = request.args.get('page', 1, type=int)
     posts_per_page = 5
@@ -4528,7 +4541,7 @@ def profile(username):
     # --- Try to get cached stats ---
     stats_cache_key = f"profile_stats:{user_id}"
     cached_stats = profile_stats_cache.get(stats_cache_key)
-    
+
     if cached_stats:
         total_posts = cached_stats['total_posts']
         total_comments = cached_stats['total_comments']
@@ -4542,14 +4555,14 @@ def profile(username):
             'total_posts': total_posts,
             'total_comments': total_comments
         }
-    
+
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
 
     # --- Try to get cached posts for this page ---
     posts_cache_key = f"profile_posts:{user_id}:page{page}"
     cached_posts = profile_posts_cache.get(posts_cache_key)
-    
+
     if cached_posts:
         user_posts = cached_posts
     else:
@@ -4603,7 +4616,7 @@ def profile_settings(username):
                     cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
                 except Exception as e:
                     app.logger.error(f"Cloudinary avatar deletion failed for user {username}: {e}")
-            
+
             # Unset the fields in the database
             update_data['profile_image_url'] = None
             update_data['profile_image_public_id'] = None
@@ -4651,7 +4664,7 @@ def profile_settings(username):
 def personal_space():
     """Renders the user's personal space with saved posts and personal notes."""
     user = users_conf.find_one({'_id': ObjectId(current_user.id)})
-    
+
     # Fetch saved posts
     saved_post_ids = user.get('saved_posts', [])
     saved_posts = []
@@ -4663,17 +4676,17 @@ def personal_space():
         ordered_posts = [posts_map[pid] for pid in saved_post_ids if pid in posts_map]
         with app.app_context():
             saved_posts = prepare_posts(ordered_posts)
-            
+
     # Fetch personal posts (notes) and decrypt them
     personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = decrypt_note(note.get('content', ''))
         personal_posts.append(note)
-    
+
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
-    
+
     return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_page='personal_space', title=page_title, description=page_description)
 
 @app.route('/post/<post_id>/react', methods=['POST'])
@@ -4692,12 +4705,12 @@ def toggle_reaction_post(post_id):
             return jsonify({'error': 'Post not found'}), 404
 
         user_id = str(current_user.id)
-        
+
         # Reactions are stored as a dict: { "heart": [user_id, ...], "wow": [...] }
         reactions = post.get('reactions', {})
         if not isinstance(reactions, dict):
             reactions = {}
-            
+
         # For legacy compatibility, handle the old liked_by field if it exists
         liked_by = post.get('liked_by', [])
         if liked_by and 'heart' not in reactions:
@@ -4720,7 +4733,7 @@ def toggle_reaction_post(post_id):
             )
             is_added = False
         else:
-            # If user has OTHER reactions, they can either have multiple or we can swap. 
+            # If user has OTHER reactions, they can either have multiple or we can swap.
             # Usually people allow only one reaction type per user. Let's enforce one.
             for other_type in current_user_reactions:
                 posts_conf.update_one(
@@ -4730,7 +4743,7 @@ def toggle_reaction_post(post_id):
                         '$inc': {'likes_count': -1}
                     }
                 )
-            
+
             # Add new reaction
             posts_conf.update_one(
                 {'_id': post_oid},
@@ -4780,11 +4793,11 @@ def toggle_save_post(post_id):
                 return jsonify({'error': 'Post not found'}), 404
             flash('Post not found.', 'danger')
             return redirect(url_for('home'))
-            
+
         user_id = ObjectId(current_user.id)
         user = users_conf.find_one({'_id': user_id})
         saved_posts = user.get('saved_posts', [])
-        
+
         is_saved = False
         if post_oid in saved_posts:
             users_conf.update_one({'_id': user_id}, {'$pull': {'saved_posts': post_oid}})
@@ -4792,10 +4805,10 @@ def toggle_save_post(post_id):
         else:
             users_conf.update_one({'_id': user_id}, {'$addToSet': {'saved_posts': post_oid}})
             is_saved = True
-            
+
         if request.is_json:
             return jsonify({'saved': is_saved})
-            
+
         flash('Post saved!' if is_saved else 'Post removed from saved.', 'success')
         return redirect(request.referrer or url_for('view_post', slug=post['slug']))
     except Exception as e:
@@ -4818,17 +4831,17 @@ def share_post(post_id):
         post = posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'share_count': 1})
         if not post:
             return jsonify({'error': 'Post not found'}), 404
-        
+
         # Increment share count
         posts_conf.update_one({'_id': post_oid}, {'$inc': {'share_count': 1}})
-        
+
         # Get updated count
         updated_post = posts_conf.find_one({'_id': post_oid}, {'share_count': 1})
         share_count = updated_post.get('share_count', 1) if updated_post else 1
-        
+
         # Generate shareable URL
         share_url = url_for('view_post', slug=post['slug'], _external=True)
-        
+
         return jsonify({
             'success': True,
             'share_count': share_count,
@@ -4850,23 +4863,23 @@ def get_share_data(post_id):
         post = posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'content': 1, 'share_count': 1})
         if not post:
             return jsonify({'error': 'Post not found'}), 404
-        
+
         share_url = url_for('view_post', slug=post['slug'], _external=True)
         title = post.get('title', 'Check out this post')
-        
+
         # Create a short description from content
         content = post.get('content', '')
         # Strip HTML and truncate
         import re
         clean_content = re.sub('<[^<]+?>', '', content)
         description = clean_content[:150] + '...' if len(clean_content) > 150 else clean_content
-        
+
         # URL-encode for share links
         from urllib.parse import quote
         encoded_url = quote(share_url, safe='')
         encoded_title = quote(title, safe='')
         encoded_text = quote(f"{title} - {description}", safe='')
-        
+
         return jsonify({
             'share_url': share_url,
             'title': title,
@@ -4919,7 +4932,7 @@ def delete_personal_post(post_id):
         if not obj_id:
             flash('Invalid note ID.', 'danger')
             return redirect(url_for('personal_space'))
-        
+
         personal_posts_conf.delete_one({
             '_id': obj_id,
             'user_id': ObjectId(current_user.id)
@@ -4931,7 +4944,7 @@ def delete_personal_post(post_id):
     return redirect(url_for('personal_space'))
 
 @app.route('/contact', methods=['POST'])
-@limits(calls=5, period=60) 
+@limits(calls=5, period=60)
 def contact_developer():
     if request.method == 'POST':
         name = request.form.get('name')
@@ -5052,7 +5065,7 @@ def api_newsletter_subscribe():
     email = request.json.get('email')
     if not email or '@' not in email:
         return jsonify({'error': 'Invalid email address'}), 400
-    
+
     try:
         newsletter_conf.insert_one({
             'email': email,
@@ -5088,22 +5101,22 @@ def sitemap():
                 return response
         except Exception:
             pass
-    
+
     # Build sitemap XML
     base_url = request.url_root.rstrip('/')
     # Ensure base_url is HTTPS in production/if preferred
     if app.config.get('PREFERRED_URL_SCHEME') == 'https':
         base_url = base_url.replace('http://', 'https://')
-    
+
     # Import locally to avoid top-level clutter (or could be at top)
     from html import escape
-    
+
     # Start XML
     xml_parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
     ]
-    
+
     # Static pages with priority
     static_pages = [
         ('/', 1.0, 'daily'),
@@ -5111,36 +5124,36 @@ def sitemap():
         ('/about', 0.5, 'monthly'),
         ('/search', 0.6, 'weekly'),
     ]
-    
+
     for path, priority, changefreq in static_pages:
         xml_parts.append(f'''  <url>
     <loc>{escape(base_url + path)}</loc>
     <changefreq>{changefreq}</changefreq>
     <priority>{priority}</priority>
   </url>''')
-    
+
     # All blog posts
     try:
         posts = posts_conf.find(
             {},
             {'slug': 1, 'timestamp': 1, 'edited_at': 1}
         ).sort('timestamp', -1).limit(5000)
-        
+
         for post in posts:
             slug = post.get('slug')
             if not slug:
                 continue
-            
+
             # Use edited_at if available, otherwise timestamp
             lastmod = post.get('edited_at') or post.get('timestamp')
             lastmod_str = ''
             if lastmod:
                 if hasattr(lastmod, 'strftime'):
                     lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
-            
+
             # Escape the full URL
             full_url = f"{base_url}/post/{slug}"
-            
+
             xml_parts.append(f'''  <url>
     <loc>{escape(full_url)}</loc>{lastmod_str}
     <changefreq>weekly</changefreq>
@@ -5148,7 +5161,7 @@ def sitemap():
   </url>''')
     except Exception as e:
         app.logger.error(f"Error generating sitemap posts: {e}")
-    
+
     # User profiles (top 100 active authors)
     try:
         active_authors = posts_conf.aggregate([
@@ -5167,17 +5180,17 @@ def sitemap():
   </url>''')
     except Exception as e:
         app.logger.error(f"Error generating sitemap authors: {e}")
-    
+
     xml_parts.append('</urlset>')
     sitemap_xml = '\n'.join(xml_parts)
-    
+
     # Cache for 1 hour
     if redis_cache:
         try:
             redis_cache.setex(cache_key, 3600, sitemap_xml)
         except Exception:
             pass
-    
+
     response = make_response(sitemap_xml)
     response.headers['Content-Type'] = 'application/xml'
     return response

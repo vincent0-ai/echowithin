@@ -255,6 +255,8 @@ newsletter_conf.create_index('email', unique=True)
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
 # --- Performance indexes for faster queries ---
+# Index for slug lookups (fast post retrieval)
+posts_conf.create_index('slug', unique=True)
 # Index for liked_by lookups (personalized feed)
 posts_conf.create_index('liked_by')
 # Index for author lookups

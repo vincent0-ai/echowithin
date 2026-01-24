@@ -980,6 +980,39 @@ def send_weekly_newsletter():
         app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
 
 
+def send_single_webpush(sub, payload, vapid_private_key, vapid_claims):
+    """
+    Helper function to send a single web push notification.
+    Handles exceptions and removes expired subscriptions.
+    """
+    try:
+        subscription_info = {
+            'endpoint': sub['endpoint'],
+            'keys': sub['keys']
+        }
+        webpush(
+            subscription_info=subscription_info,
+            data=payload,
+            vapid_private_key=vapid_private_key,
+            vapid_claims=vapid_claims
+        )
+        app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
+        return True
+    except WebPushException as e:
+        # If subscription is expired or invalid, remove it
+        if e.response and e.response.status_code in [404, 410]:
+            try:
+                push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                app.logger.info(f"Removed expired push subscription: {sub.get('_id')}")
+            except Exception as db_e:
+                app.logger.error(f"Failed to delete expired subscription {sub.get('_id')}: {db_e}")
+        else:
+            app.logger.error(f"Push notification failed: {e}")
+    except Exception as e:
+        app.logger.error(f"Unexpected push error: {e}")
+    return False
+
+
 @rq.job
 def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None):
     """Send a web push notification to all devices subscribed by a user."""
@@ -1002,28 +1035,9 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None)
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-                app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
-            except WebPushException as e:
-                # If subscription is expired or invalid, remove it
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                    app.logger.info(f"Removed expired push subscription for user {user_id_str}")
-                else:
-                    app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
 
@@ -1065,25 +1079,9 @@ def send_push_notifications_for_new_post(post_id_str):
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
         
         app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} subscriptions")
     except Exception as e:
@@ -1138,25 +1136,9 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
             'badge': '/static/logo.png'
         })
         
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed for comment: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error for comment: {e}")
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            for sub in subscriptions:
+                executor.submit(send_single_webpush, sub, payload, VAPID_PRIVATE_KEY, VAPID_CLAIMS)
         
         app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
     except Exception as e:

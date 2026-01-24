@@ -895,20 +895,21 @@ def send_new_post_notifications(post_id_str):
                 {'email': 1, 'username': 1}
             )
 
-            for u in recipients_cursor:
-                try:
-                    recipient_email = u.get('email')
-                    recipient_name = u.get('username') or ''
-                    msg = Message(
-                        subject=subject,
-                        sender=get_env_variable('MAIL_USERNAME'),
-                        recipients=[recipient_email]
-                    )
-                    msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
-                    mail.send(msg)
-                    app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
-                except Exception as e:
-                    app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
+            with mail.connect() as conn:
+                for u in recipients_cursor:
+                    try:
+                        recipient_email = u.get('email')
+                        recipient_name = u.get('username') or ''
+                        msg = Message(
+                            subject=subject,
+                            sender=get_env_variable('MAIL_USERNAME'),
+                            recipients=[recipient_email]
+                        )
+                        msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
+                        conn.send(msg)
+                        app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
+                    except Exception as e:
+                        app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
     except Exception as e:
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
@@ -3305,7 +3306,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
 
     try:
         # 1. Resize (simple) and upload Images
-        def process_one_image(path):
+        for path in temp_image_paths:
             try:
                 # Resize image to max width/height while preserving aspect ratio to save bandwidth/storage
                 try:
@@ -3325,21 +3326,13 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
                 except Exception as ie:
                     app.logger.debug(f"Image resize/optimize skipped for {path}: {ie}")
 
-                return cloudinary.uploader.upload(path, folder="echowithin_posts")
-            except Exception as e:
-                app.logger.error(f"Cloudinary image upload failed for {path} in job for post {post_id_str}: {e}")
-                return None
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            # Map preserves order
-            results = executor.map(process_one_image, temp_image_paths)
-
-        for result in results:
-            if result:
-                url = result.get('secure_url')
-                pid = result.get('public_id')
+                upload_result = cloudinary.uploader.upload(path, folder="echowithin_posts")
+                url = upload_result.get('secure_url')
+                pid = upload_result.get('public_id')
                 if url: image_urls.append(url)
                 if pid: image_public_ids.append(pid)
+            except Exception as e:
+                app.logger.error(f"Cloudinary image upload failed for {path} in job for post {post_id_str}: {e}")
 
         # 2. Upload Video
         if temp_video_path:

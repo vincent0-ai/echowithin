@@ -3674,7 +3674,7 @@ def view_post(slug):
                 now = datetime.datetime.now(datetime.timezone.utc)
                 # Find latest comment on this specific post to ensure leap-safe read marker
                 latest_p_comment = comments_conf.find_one(
-                    {'post_slug': slug, 'author_id': {'$ne': current_user.id}, 'is_deleted': {'$ne': True}},
+                    {'post_slug': slug, 'author_id': {'$ne': ObjectId(current_user.id)}, 'is_deleted': {'$ne': True}},
                     projection={'created_at': 1},
                     sort=[('created_at', -1)]
                 )

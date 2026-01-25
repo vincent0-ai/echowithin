@@ -550,10 +550,11 @@ class User(UserMixin):
         self.id = str(user_data["_id"])
         self.username = user_data["username"]
         self.is_admin = user_data.get('is_admin', False)
-        self.is_admin = user_data.get('is_admin', False)
         self._is_active = user_data.get('is_confirmed', False)
         # Track when user last checked their activity tab
         self.last_activity_check = user_data.get('last_activity_check')
+        # Email notification preference: 'immediate', 'weekly', or 'none'
+        self.notification_preference = user_data.get('notification_preference', 'weekly')
 
     @property
     def is_active(self):
@@ -890,8 +891,22 @@ def send_new_post_notifications(post_id_str):
 
             subject = f"New post on EchoWithin: {post.get('title')}"
 
+            # Filter for users with 'immediate' notification preference
+            # Also support 'notify_new_posts' field for backward compatibility during migration
             recipients_cursor = users_conf.find(
-                {'is_confirmed': True, '$or': [{'notify_new_posts': True}, {'notify_new_posts': {'$exists': False}}]},
+                {
+                    'is_confirmed': True, 
+                    '$or': [
+                        {'notification_preference': 'immediate'},
+                        {
+                            'notification_preference': {'$exists': False},
+                            '$or': [
+                                {'notify_new_posts': True},
+                                {'notify_new_posts': {'$exists': False}}
+                            ]
+                        }
+                    ]
+                },
                 {'email': 1, 'username': 1}
             )
 
@@ -942,23 +957,30 @@ def send_weekly_newsletter():
             week_start = week_ago.strftime('%B %d')
             week_end = now.strftime('%B %d, %Y')
 
-            # Get all newsletter subscribers
-            subscribers = list(newsletter_conf.find({}, {'email': 1}))
+            # Get all newsletter subscribers AND users with 'weekly' notification preference
+            # Use a Set to avoid duplicates if someone is in both collections
+            recipient_emails = set()
+            
+            # Fetch from newsletter_subs
+            for sub in newsletter_conf.find({}, {'email': 1}):
+                if sub.get('email'):
+                    recipient_emails.add(sub['email'])
+            
+            # Fetch from users who want weekly notifications
+            for user in users_conf.find({'is_confirmed': True, 'notification_preference': 'weekly'}, {'email': 1}):
+                if user.get('email'):
+                    recipient_emails.add(user['email'])
 
-            if not subscribers:
-                app.logger.info("No newsletter subscribers found, skipping weekly newsletter")
+            if not recipient_emails:
+                app.logger.info("No recipients found for weekly newsletter, skipping")
                 return
 
             subject = f"EchoWithin Weekly Digest - {week_end}"
             sender_email = get_env_variable('MAIL_USERNAME')
 
             sent_count = 0
-            for subscriber in subscribers:
+            for recipient_email in recipient_emails:
                 try:
-                    recipient_email = subscriber.get('email')
-                    if not recipient_email:
-                        continue
-
                     msg = Message(
                         subject=subject,
                         sender=sender_email,
@@ -974,9 +996,9 @@ def send_weekly_newsletter():
                     sent_count += 1
                     app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
                 except Exception as e:
-                    app.logger.error(f"Failed to send weekly newsletter to {subscriber.get('email')}: {e}")
+                    app.logger.error(f"Failed to send weekly newsletter to {recipient_email}: {e}")
 
-            app.logger.info(f"Weekly newsletter sent to {sent_count} subscribers with {len(posts_list)} posts")
+            app.logger.info(f"Weekly newsletter sent to {sent_count} recipients with {len(posts_list)} posts")
     except Exception as e:
         app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
 
@@ -1739,8 +1761,8 @@ def register():
                 'password': hashed_password,
                 'is_confirmed': False, # Set to False to require email confirmation
                 'is_admin': False,
-                'join_date': datetime.datetime.now()
-                , 'notify_new_posts': True
+                'join_date': datetime.datetime.now(),
+                'notification_preference': 'weekly'
             })
 
             # --- Send email confirmation ---
@@ -1952,7 +1974,7 @@ def google_callback():
             'is_confirmed': True,
             'is_admin': False,
             'join_date': datetime.datetime.now(),
-            'notify_new_posts': True,
+            'notification_preference': 'weekly',
             'google_signup': True  # Flag to indicate Google signup
         })
 
@@ -4630,8 +4652,13 @@ def profile_settings(username):
                 flash("Invalid image format. Please use png, jpg, jpeg, or gif.", "danger")
 
         # Handle notification preference
-        notify_val = request.form.get('notify_new_posts')
-        update_data['notify_new_posts'] = True if notify_val in ('1', 'true', 'on') else False
+        notification_pref = request.form.get('notification_preference')
+        if notification_pref in ('immediate', 'weekly', 'none'):
+            update_data['notification_preference'] = notification_pref
+        elif request.form.get('notify_new_posts'):
+            # Legacy checkbox support for safety
+            notify_val = request.form.get('notify_new_posts')
+            update_data['notification_preference'] = 'immediate' if notify_val in ('1', 'true', 'on') else 'none'
 
         if update_data:
             try:

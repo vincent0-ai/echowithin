@@ -37,13 +37,38 @@
       </div>
 
       <div class="form-group">
-        <label for="notify_new_posts">
-          <input type="checkbox" id="notify_new_posts" name="notify_new_posts" value="1" {% if
-            user.get('notify_new_posts', True) %}checked{% endif %}>
-          Receive email notifications for new posts
-        </label>
-        <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">Uncheck to disable email notifications for new
-          posts on the platform.</p>
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Email Notifications</label>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Choose how often you'd like to receive email
+          updates for new posts.</p>
+
+        <div class="notification-pref-options" style="display: flex; flex-direction: column; gap: 0.8rem;">
+          <label class="radio-label" style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="notification_preference" value="immediate" {% if
+              user.get('notification_preference')=='immediate' %}checked{% endif %} style="margin-top: 0.3rem;">
+            <div>
+              <span style="font-weight: 500;">Immediate</span>
+              <p style="font-size: 0.85rem; color: #666; margin: 0;">Receive an email for every new post published.</p>
+            </div>
+          </label>
+
+          <label class="radio-label" style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="notification_preference" value="weekly" {% if
+              user.get('notification_preference', 'weekly' )=='weekly' %}checked{% endif %} style="margin-top: 0.3rem;">
+            <div>
+              <span style="font-weight: 500;">Weekly Digest</span>
+              <p style="font-size: 0.85rem; color: #666; margin: 0;">A weekly summary of all posts. (Recommended)</p>
+            </div>
+          </label>
+
+          <label class="radio-label" style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="notification_preference" value="none" {% if
+              user.get('notification_preference')=='none' %}checked{% endif %} style="margin-top: 0.3rem;">
+            <div>
+              <span style="font-weight: 500;">None</span>
+              <p style="font-size: 0.85rem; color: #666; margin: 0;">Disable email updates for new posts.</p>
+            </div>
+          </label>
+        </div>
       </div>
 
       <!-- Push Notifications Section -->

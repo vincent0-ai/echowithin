@@ -2702,7 +2702,8 @@ def get_my_commented_posts_json():
                                 {'$ne': ['$author_id', '$$owner_id']}
                             ]
                         }
-                    }}
+                    }},
+                    {'$sort': {'created_at': -1}}
                 ],
                 'as': 'post_comments'
             }},
@@ -2712,6 +2713,8 @@ def get_my_commented_posts_json():
                 'comment_count': {'$size': '$post_comments'},
                 'latest_activity': {'$max': '$post_comments.created_at'},
             }},
+            # IMPORTANT: Sort by latest activity BEFORE limiting
+            {'$sort': {'latest_activity': -1}},
             {'$limit': 50}
         ]
         own_posts = list(posts_conf.aggregate(own_posts_pipeline))
@@ -2818,9 +2821,28 @@ def get_my_commented_posts_json():
 
             # It's unread if the activity is newer than the threshold
             is_unread = False
-            if activity_time and activity_time > threshold:
-                is_unread = True
-                unread_count += 1
+            post_unread_count = 0
+            
+            # Count how many individual comments are unread for this specific post
+            post_comments = post.get('post_comments', [])
+            for c in post_comments:
+                c_time = c.get('created_at')
+                if c_time:
+                    if c_time.tzinfo is None:
+                        c_time = c_time.replace(tzinfo=datetime.timezone.utc)
+                    if c_time > threshold:
+                        is_unread = True
+                        post_unread_count += 1
+            
+            # For replies, we didn't fetch the individual comments in the merge above, 
+            # so we use a simplified count if it's unread.
+            if post.get('activity_type') == 'reply_to_my_comment':
+                 if activity_time and activity_time > threshold:
+                     is_unread = True
+                     # In this case we just count it as 1 unread activity for now
+                     post_unread_count = 1
+
+            unread_count += post_unread_count
 
 
             post_data = {
@@ -2908,9 +2930,11 @@ def mark_all_comments_read():
                     leap_marker = lr_time
 
         # Update the user's marker
+        # Add a 1ms offset to ensure we definitely mark the 'latest' as read
+        # MongoDB stores dates with millisecond precision
         users_conf.update_one(
             {'_id': user_id},
-            {'$set': {'last_activity_check': leap_marker}}
+            {'$set': {'last_activity_check': leap_marker + datetime.timedelta(milliseconds=1)}}
         )
 
         # Clear user loader cache so the new timestamp is picked up on next request
@@ -3892,23 +3916,40 @@ def push_subscription_status():
 def get_unread_notification_count():
     """Get the count of unread notifications for the current user (for PWA badge)."""
     try:
-        # Count unread notifications for this user
-        # This counts: new comments on user's posts, replies to user's comments, etc.
         user_id = ObjectId(current_user.id)
 
-        # Get user's posts to check for new comments
-        user_posts = posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1})
-        user_post_slugs = [p.get('slug') for p in user_posts]
+        # Get the threshold from user's last_activity_check
+        user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
+        threshold = user_doc.get('last_activity_check') if user_doc else None
+        
+        if not threshold:
+            threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        
+        if threshold.tzinfo is None:
+            threshold = threshold.replace(tzinfo=datetime.timezone.utc)
 
-        # Count new comments on user's posts (not by the user themselves) from last 24 hours
-        yesterday = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=24)
+        # 1. Count unread comments on user's own posts
+        user_posts = posts_conf.find({'author_id': user_id}, {'slug': 1})
+        user_post_slugs = [p.get('slug') for p in user_posts]
 
         unread_count = 0
         if user_post_slugs:
-            unread_count = comments_conf.count_documents({
+            unread_count += comments_conf.count_documents({
                 'post_slug': {'$in': user_post_slugs},
                 'author_id': {'$ne': user_id},
-                'created_at': {'$gte': yesterday}
+                'created_at': {'$gt': threshold},
+                'is_deleted': {'$ne': True}
+            })
+
+        # 2. Count unread replies to user's comments
+        my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
+        my_comment_ids = [c['_id'] for c in my_comments]
+        if my_comment_ids:
+            unread_count += comments_conf.count_documents({
+                'parent_id': {'$in': my_comment_ids},
+                'author_id': {'$ne': user_id},
+                'created_at': {'$gt': threshold},
+                'is_deleted': {'$ne': True}
             })
 
         return jsonify({'count': unread_count})

@@ -246,10 +246,12 @@ comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
 push_subscriptions_conf = db['push_subscriptions']
 newsletter_conf = db['newsletter_subs']
+user_post_views_conf = db['user_post_views']
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
 newsletter_conf.create_index('email', unique=True)
+user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
@@ -2720,18 +2722,6 @@ def get_my_commented_posts_json():
 
         for p in own_posts:
             p['activity_type'] = 'comment_on_my_post'
-            # Determine effective last read time for this specific post
-            # It is the LATER of: global mark-read time OR this post's specific last view
-            post_last_viewed = p.get('author_last_viewed')
-            if post_last_viewed and post_last_viewed.tzinfo is None:
-                post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
-
-            # Use a high default if never viewed, but actually we want to default to VERY OLD
-            # so that last_check takes precedence.
-            if not post_last_viewed:
-                p['effective_read_time'] = last_check
-            else:
-                p['effective_read_time'] = max(last_check, post_last_viewed)
 
         # --- 2. Fetch Posts where others replied to User's comments ---
         # A. Find all comment IDs authored by current user
@@ -2801,7 +2791,15 @@ def get_my_commented_posts_json():
         # Limit to 20 items
         all_activities = all_activities[:20]
 
-        # --- 4. Process for JSON Response ---
+        # --- 4. Fetch Per-User View Timestamps ---
+        post_ids = [post['_id'] for post in all_activities]
+        user_views = list(user_post_views_conf.find({
+            'user_id': user_id,
+            'post_id': {'$in': post_ids}
+        }))
+        user_view_map = {v['post_id']: v['last_viewed'] for v in user_views}
+
+        # --- 5. Process for JSON Response ---
         unread_count = 0
         result_posts = []
 
@@ -2812,35 +2810,42 @@ def get_my_commented_posts_json():
                 activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
 
             # Determine the threshold time for this specific post
-            # For own posts, we calculated 'effective_read_time' above.
-            # For replies, we fallback to 'last_check' (global).
-            threshold = post.get('effective_read_time', last_check)
-            if threshold.tzinfo is None:
-                threshold = threshold.replace(tzinfo=datetime.timezone.utc)
+            # Threshold is the LATER of: global mark-all-read OR this specific post's last view by user
+            post_last_viewed = user_view_map.get(post['_id'])
+            
+            # Legacy fallback: for own posts, check the old field if new one doesn't exist yet
+            if not post_last_viewed and str(post.get('author_id')) == current_user.id:
+                post_last_viewed = post.get('author_last_viewed')
+
+            if post_last_viewed and post_last_viewed.tzinfo is None:
+                post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+
+            threshold = last_check
+            if post_last_viewed:
+                threshold = max(last_check, post_last_viewed)
 
             # It's unread if the activity is newer than the threshold
             is_unread = False
             post_unread_count = 0
             
-            # Count how many individual comments are unread for this specific post
+            # For own posts, we have the list of comments from the aggregation
             post_comments = post.get('post_comments', [])
-            for c in post_comments:
-                c_time = c.get('created_at')
-                if c_time:
-                    if c_time.tzinfo is None:
-                        c_time = c_time.replace(tzinfo=datetime.timezone.utc)
-                    if c_time > threshold:
-                        is_unread = True
-                        post_unread_count += 1
+            if post_comments:
+                for c in post_comments:
+                    c_time = c.get('created_at')
+                    if c_time:
+                        if c_time.tzinfo is None:
+                            c_time = c_time.replace(tzinfo=datetime.timezone.utc)
+                        if c_time > threshold:
+                            is_unread = True
+                            post_unread_count += 1
+            else:
+                # For replies (or posts without post_comments data), fallback to simple activity_time check
+                if activity_time and activity_time > threshold:
+                    is_unread = True
+                    # In this case we just count it as 1 unread activity for now
+                    post_unread_count = 1
             
-            # For replies, we didn't fetch the individual comments in the merge above, 
-            # so we use a simplified count if it's unread.
-            if post.get('activity_type') == 'reply_to_my_comment':
-                 if activity_time and activity_time > threshold:
-                     is_unread = True
-                     # In this case we just count it as 1 unread activity for now
-                     post_unread_count = 1
-
             unread_count += post_unread_count
 
 
@@ -3599,14 +3604,23 @@ def view_post(slug):
         return redirect(url_for('blog'))
 
     # If current user is the author, update author_last_viewed
-    if current_user.is_authenticated and str(post.get('author_id')) == current_user.id:
+    if current_user.is_authenticated:
         try:
-            posts_conf.update_one(
-                {'_id': post['_id']},
-                {'$set': {'author_last_viewed': datetime.datetime.now(datetime.timezone.utc)}}
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            # 1. Update author-specific marker if they are the author
+            if str(post.get('author_id')) == current_user.id:
+                posts_conf.update_one(
+                    {'_id': post['_id']},\
+                    {'$set': {'author_last_viewed': now_utc}}
+                )
+            # 2. Update general user post view marker (used for Activity tab unread logic)
+            user_post_views_conf.update_one(
+                {'user_id': ObjectId(current_user.id), 'post_id': post['_id']},
+                {'$set': {'last_viewed': now_utc}},
+                upsert=True
             )
         except Exception as e:
-            app.logger.error(f"Failed to update author_last_viewed for post {slug}: {e}")
+            app.logger.error(f\"Failed to update view tracking for post {slug}: {e}\")
 
     # Convert post content from Markdown to HTML
     # The 'fenced_code' extension is crucial for handling code blocks (```)
@@ -3807,6 +3821,17 @@ def api_record_post_view(post_id):
 
             # Atomically increment the view count on the post
             res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+
+        # CRITICAL: Also update the per-user view marker so activity is marked as read
+        if current_user.is_authenticated:
+            try:
+                user_post_views_conf.update_one(
+                    {'user_id': ObjectId(current_user.id), 'post_id': ObjectId(post_id)},
+                    {'$set': {'last_viewed': datetime.datetime.now(datetime.timezone.utc)}},
+                    upsert=True
+                )
+            except Exception as ev:
+                app.logger.error(f"Failed to update per-user view for post {post_id}: {ev}")
 
         # Fetch the latest count
         post = posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})

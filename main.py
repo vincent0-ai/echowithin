@@ -2075,17 +2075,25 @@ def home():
             hot_posts_pipeline = [
                 # 1. Find recent posts
                 {'$match': {'timestamp': {'$gte': seven_days_ago}}},
-                # 2. Join with comments collection to get comment counts
+                # 2. Join with comments collection to get comment count (efficiently)
                 {'$lookup': {
                     'from': 'comments',
-                    'localField': 'slug',
-                    'foreignField': 'post_slug',
-                    'as': 'comments'
+                    'let': {'post_slug': '$slug'},
+                    'pipeline': [
+                        {'$match': {
+                            '$expr': {'$eq': ['$post_slug', '$$post_slug']},
+                            'is_deleted': {'$ne': True}
+                        }},
+                        {'$count': 'count'}
+                    ],
+                    'as': 'comment_data'
                 }},
                 # 3. Add fields for calculation
                 {'$addFields': {
-                    'comment_count': {'$size': '$comments'},
-                    'likes_count': {'$size': {'$ifNull': ['$liked_by', []]}},
+                    'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]},
+                    'likes_safe': {'$ifNull': ['$likes_count', 0]},
+                    'shares_safe': {'$ifNull': ['$share_count', 0]},
+                    'views_safe': {'$ifNull': ['$view_count', 0]},
                     'age_in_hours': {
                         '$divide': [
                             {'$subtract': ["$$NOW", '$timestamp']},
@@ -2095,13 +2103,13 @@ def home():
                 }},
                 # 4. Calculate the hot score WITH recency boost
                 {'$addFields': {
-                    # Base engagement score
+                    # Base engagement score (Standardized weights)
                     'engagement_score': {
                         '$add': [
                             {'$multiply': ['$comment_count', 5]},
-                            {'$multiply': ['$likes_count', 3]},
-                            {'$multiply': [{'$ifNull': ['$share_count', 0]}, 4]},
-                            {'$multiply': [{'$ifNull': ['$view_count', 0]}, 0.1]}
+                            {'$multiply': ['$likes_safe', 3]},
+                            {'$multiply': ['$shares_safe', 4]},
+                            {'$multiply': ['$views_safe', 0.1]}
                         ]
                     },
                     # Recency boost: posts < 2 hours get 1.5x, < 6 hours get 1.2x
@@ -2122,7 +2130,7 @@ def home():
                             '$recency_boost',
                             {'$divide': [
                                 {'$add': ['$engagement_score', 1]},  # +1 to avoid division issues
-                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Slightly less aggressive decay
+                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Time decay factor
                             ]}
                         ]
                     }

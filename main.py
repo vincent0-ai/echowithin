@@ -2083,7 +2083,7 @@ def home():
                 # 3. Add fields for calculation
                 {'$addFields': {
                     'comment_count': {'$size': '$comments'},
-                    'like_count': {'$size': {'$ifNull': ['$liked_by', []]}},
+                    'likes_count': {'$size': {'$ifNull': ['$liked_by', []]}},
                     'age_in_hours': {
                         '$divide': [
                             {'$subtract': ["$$NOW", '$timestamp']},
@@ -2097,7 +2097,7 @@ def home():
                     'engagement_score': {
                         '$add': [
                             {'$multiply': ['$comment_count', 5]},
-                            {'$multiply': ['$like_count', 3]},
+                            {'$multiply': ['$likes_count', 3]},
                             {'$multiply': [{'$ifNull': ['$share_count', 0]}, 4]},
                             {'$multiply': [{'$ifNull': ['$view_count', 0]}, 0.1]}
                         ]
@@ -2322,33 +2322,29 @@ def all_posts():
                 except Exception:
                     pass
 
-        # Fetch paginated posts with engagement data in a single aggregation
-        pipeline = [
-            {'$match': filter_query},
-            {'$sort': {'timestamp': -1}},
-            {'$skip': skip},
-            {'$limit': posts_per_page},
-            # Lookup comment counts
-            {'$lookup': {
-                'from': 'comments',
-                'let': {'slug': '$slug'},
-                'pipeline': [
-                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
-                    {'$count': 'count'}
-                ],
-                'as': 'comment_data'
-            }},
-            {'$addFields': {
-                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}
-            }},
-            {'$project': {'comment_data': 0}}
-        ]
-
-        page_posts = list(posts_conf.aggregate(pipeline))
-
-        # Score and sort the page posts (lightweight in-memory scoring)
+        # Fetch a larger pool of recent posts (e.g., top 50) for global personalization
+        # This ensures highly relevant content bubbles up even if not in the very last 10 posts
+        pool_size = 50
+        
+        # Use simple find().sort().limit() for the pool
+        pool_cursor = posts_conf.find(filter_query).sort('timestamp', -1).limit(pool_size)
+        all_pool_posts = list(pool_cursor)
+        
+        # Build set of URLs for batch comment counting
+        urls = []
+        for p in all_pool_posts:
+            # We need absolute URLs for prepare_posts logic compatibility
+            urls.append(url_for('view_post', slug=p.get('slug'), _external=True))
+            
+        # Get comment counts in one batch
+        counts_map = get_batch_comment_counts(tuple(sorted(urls)))
+        
+        # Score ALL posts in the pool
         now = datetime.datetime.now(datetime.timezone.utc)
-        for p in page_posts:
+        for p in all_pool_posts:
+            # Inject comment count early for scoring
+            p['comment_count'] = counts_map.get(p.get('slug'), 0)
+            
             score = 0.0
             # Tag matching
             for t in p.get('tags', []):
@@ -2360,7 +2356,7 @@ def all_posts():
                 score += author_scores[aid] * 3
             # Engagement score (capped)
             likes = p.get('likes_count', 0) or 0
-            comments = p.get('comment_count', 0)
+            comments = p['comment_count']
             engagement = (likes * 2) + (comments * 3)
             score += min(engagement, 30)
             # Recency boost
@@ -2373,11 +2369,14 @@ def all_posts():
                 score += recency * 5
             p['_score'] = score
 
-        # Sort by score (keep first 2 fixed by timestamp, rest by score)
-        if len(page_posts) > 2:
-            top_two = page_posts[:2]
-            rest = sorted(page_posts[2:], key=lambda x: x.get('_score', 0), reverse=True)
-            page_posts = top_two + rest
+        # Sort entire pool by score
+        all_pool_posts.sort(key=lambda x: x.get('_score', 0), reverse=True)
+        
+        # Select the specific page from the sorted pool
+        page_posts = all_pool_posts[skip : skip + posts_per_page]
+        
+        # If the pool is smaller than skip, we might need to fetch more or just return empty
+        # But for the first few pages, this is much better than before.
 
         with app.app_context():
             posts = prepare_posts(page_posts)

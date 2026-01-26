@@ -3610,7 +3610,7 @@ def view_post(slug):
             # 1. Update author-specific marker if they are the author
             if str(post.get('author_id')) == current_user.id:
                 posts_conf.update_one(
-                    {'_id': post['_id']},\
+                    {'_id': post['_id']},
                     {'$set': {'author_last_viewed': now_utc}}
                 )
             # 2. Update general user post view marker (used for Activity tab unread logic)
@@ -3620,7 +3620,7 @@ def view_post(slug):
                 upsert=True
             )
         except Exception as e:
-            app.logger.error(f\"Failed to update view tracking for post {slug}: {e}\")
+            app.logger.error(f"Failed to update view tracking for post {slug}: {e}")
 
     # Convert post content from Markdown to HTML
     # The 'fenced_code' extension is crucial for handling code blocks (```)

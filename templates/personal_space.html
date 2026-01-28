@@ -910,9 +910,11 @@
         function renderMarkdownWithMath(text) {
             if (!text) return '';
 
-            // 1. Protect code blocks, block math, and inline math before heuristics
+            // 1. First, run auto-detection to convert patterns to $...$ 
+            let processedText = autoDetectMath(text);
+
+            // 2. Now protect code blocks and extract ALL math patterns for KaTeX rendering
             const placeholders = [];
-            let processedText = text;
 
             // Protect code blocks (triple backticks)
             processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
@@ -926,55 +928,47 @@
                 return `%%PLACEHOLDER${placeholders.length - 1}%%`;
             });
 
-            // Protect block math ($$...$$)
+            // Extract and render block math ($$...$$)
             processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
-                placeholders.push({ type: 'blockmath', content: math });
-                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                try {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                } catch (e) { console.error('KaTeX block error:', e); }
+                return match; // Fallback: keep original
             });
 
-            // Protect inline math ($...$) - skip the ones with \n
+            // Extract and render inline math ($...$)
             processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
-                placeholders.push({ type: 'inlinemath', content: math });
-                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                try {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                } catch (e) { console.error('KaTeX inline error:', e); }
+                return match; // Fallback: keep original
             });
 
-            // 2. Now run heuristics only on the NOT protected parts
-            processedText = autoDetectMath(processedText);
-
-            // 3. Configure marked and parse
+            // 3. Configure marked and parse markdown
             if (typeof marked !== 'undefined') {
                 marked.setOptions({ breaks: true, gfm: true });
                 processedText = marked.parse(processedText);
             }
 
-            // 4. Restore placeholders and render math with KaTeX
+            // 4. Restore all placeholders
             processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
                 const item = placeholders[parseInt(index)];
-                if (item.type === 'code') {
-                    return item.content;
-                } else if (item.type === 'blockmath') {
-                    try {
-                        if (typeof katex !== 'undefined') {
-                            return katex.renderToString(item.content, { displayMode: true, throwOnError: false });
-                        }
-                    } catch (e) { console.error('KaTeX error:', e); }
-                    return `$$${item.content}$$`;
-                } else if (item.type === 'inlinemath') {
-                    try {
-                        if (typeof katex !== 'undefined') {
-                            return katex.renderToString(item.content, { displayMode: false, throwOnError: false });
-                        }
-                    } catch (e) { console.error('KaTeX error:', e); }
-                    return `$${item.content}$`;
-                }
-                return match;
+                return item ? item.content : match;
             });
 
-            // 5. Sanitize HTML
+            // 5. Sanitize HTML (allowing KaTeX elements)
             if (typeof DOMPurify !== 'undefined') {
                 processedText = DOMPurify.sanitize(processedText, {
-                    ADD_TAGS: ['semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot', 'msqrt', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'math'],
-                    ADD_ATTR: ['xmlns', 'encoding', 'mathvariant', 'columnalign', 'rowspacing', 'columnspacing', 'displaystyle', 'scriptlevel']
+                    ADD_TAGS: ['semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot', 'msqrt', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'math', 'span'],
+                    ADD_ATTR: ['xmlns', 'encoding', 'mathvariant', 'columnalign', 'rowspacing', 'columnspacing', 'displaystyle', 'scriptlevel', 'class', 'style', 'aria-hidden']
                 });
             }
 

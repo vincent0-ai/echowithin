@@ -795,129 +795,113 @@
         function autoDetectMath(text) {
             if (!text) return text;
 
-            // Don't process inside code blocks
-            const codeBlockPlaceholders = [];
+            // STEP 1: Protect content that should NOT be processed
+            const protectedBlocks = [];
+
+            // Protect code blocks (triple backticks)
             text = text.replace(/```[\s\S]*?```/g, (match) => {
-                codeBlockPlaceholders.push(match);
-                return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
+                protectedBlocks.push(match);
+                return `%%PROTECTED${protectedBlocks.length - 1}%%`;
             });
+
+            // Protect inline code (single backticks)
             text = text.replace(/`[^`]+`/g, (match) => {
-                codeBlockPlaceholders.push(match);
-                return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
+                protectedBlocks.push(match);
+                return `%%PROTECTED${protectedBlocks.length - 1}%%`;
             });
 
-            // STAGE 1: Detect COMPLETE LaTeX expressions first (prevents double-wrapping)
-            // These are already properly formatted LaTeX - just need $ delimiters
-
-            // Pattern: Full equations with latex commands (e.g., I = I_s(e^{V/nV_T} - 1))
-            // Match lines that look like equations with LaTeX-style subscripts/superscripts
-            text = text.replace(/([A-Za-z])_\{([^}]+)\}\s*=\s*[^*\n]+/g, (match) => {
-                // Only wrap if not already wrapped
-                if (!match.startsWith('$')) return `$${match}$`;
-                return match;
+            // Protect EXISTING block math ($$...$$) - user already formatted this
+            text = text.replace(/\$\$[\s\S]*?\$\$/g, (match) => {
+                protectedBlocks.push(match);
+                return `%%PROTECTED${protectedBlocks.length - 1}%%`;
             });
 
-            // Pattern: \frac{...}{...} with any content (including nested subscripts)
-            text = text.replace(/\\frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (match) => {
+            // Protect EXISTING inline math ($...$) - user already formatted this
+            text = text.replace(/\$[^$\n]+?\$/g, (match) => {
+                protectedBlocks.push(match);
+                return `%%PROTECTED${protectedBlocks.length - 1}%%`;
+            });
+
+            // STEP 2: Find and wrap COMPLETE LaTeX expressions
+            // Strategy: Match whole expressions that contain LaTeX commands (backslash patterns)
+
+            // Pattern: Complete expressions with \frac, \int, \sum, etc.
+            // Match from the LaTeX command to a reasonable end (before newline, before colon at end, or end of "equation-like" content)
+            text = text.replace(/\\(?:frac|int|sum|prod|lim|sqrt)\{[\s\S]*?\}(?:\{[\s\S]*?\})?(?:\s*[+\-=]?\s*[\w\d{}\\^_()]+)*/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: \int with limits and expression
-            text = text.replace(/\\int(?:_\{[^}]*\})?(?:\^\{[^}]*\})?\s*[^$\n]*?\s*d[a-z]/g, (match) => {
+            // Pattern: Standalone Greek letters and operators with backslash
+            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|text|textbf|mathrm|mathbf)(?:\{[^}]*\})?/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: \sqrt{...} or \sqrt[n]{...}
-            text = text.replace(/\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g, (match) => {
-                return `$${match}$`;
-            });
-
-            // Pattern: \sum, \prod, \lim with subscripts/superscripts
-            text = text.replace(/\\(sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (match) => {
-                return `$${match}$`;
-            });
-
-            // Pattern: Greek letters ALREADY escaped (like \beta, \alpha, \pi)
-            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm)\b/g, (match) => {
-                return `$${match}$`;
-            });
-
-            // Pattern: Trig/log functions ALREADY escaped
+            // Pattern: Trig/log functions with backslash
             text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: \mathbf{...}, \text{...}, \mathrm{...}, \textbf{...}
-            text = text.replace(/\\(mathbf|text|mathrm|textbf)\{[^}]*\}/g, (match) => {
-                return `$${match}$`;
-            });
+            // STEP 3: Detect simple patterns in PLAIN text (no backslashes)
+            // Only apply to text that doesn't look like it's already LaTeX
 
-            // Pattern: \left and \right delimiters with content between
-            text = text.replace(/\\left[(\[{][\s\S]*?\\right[)\]}]/g, (match) => {
-                return `$${match}$`;
-            });
-
-            // STAGE 2: Detect LaTeX-style subscripts/superscripts (multi-character in braces)
-            // Pattern: X_{anything} or X^{anything} (e.g., V_{dc}, V_{peak}, I_{DSS})
-            text = text.replace(/([A-Za-z])_\{([^}]+)\}/g, (match, base, sub) => {
-                // Check if already inside $ delimiters (crude check)
-                return `$${base}_{${sub}}$`;
-            });
-            text = text.replace(/([A-Za-z])\^\{([^}]+)\}/g, (match, base, exp) => {
-                return `$${base}^{${exp}}$`;
-            });
-
-            // STAGE 3: Simple subscripts/superscripts (single char, no braces)
-            // Pattern: any base^exponent (e.g., x^2, 2^3, (x+1)^2, a^n)
-            text = text.replace(/(\w|\))(\^)(\d+|[a-zA-Z])/g, (match, base, caret, exp) => {
-                return `$${base}^{${exp}}$`;
-            });
-
-            // Pattern: simple subscripts like x_1, a_n (single char subscript, no braces)
-            text = text.replace(/([a-zA-Z])_(\d+|[a-zA-Z])(?!\{)/g, (match, base, sub) => {
+            // Pattern: X_{multi-char} subscripts like V_{dc}, I_{DSS} (common in engineering)
+            text = text.replace(/\b([A-Za-z])_\{([^}]+)\}/g, (match, base, sub) => {
                 return `$${base}_{${sub}}$`;
             });
 
-            // Pattern: sqrt(expression) or √expression
-            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (match, content) => {
-                return `$\\sqrt{${content}}$`;
-            });
-            text = text.replace(/√(\w+|\([^)]+\))/g, (match, content) => {
-                return `$\\sqrt{${content}}$`;
+            // Pattern: X^{multi-char} superscripts
+            text = text.replace(/\b([A-Za-z])\^\{([^}]+)\}/g, (match, base, exp) => {
+                return `$${base}^{${exp}}$`;
             });
 
-            // Pattern: fractions a/b (numeric only to avoid false positives)
-            text = text.replace(/\b(\d+)\/(\d+)\b/g, (match, num, den) => {
+            // Pattern: Simple subscript (single char) like x_1, a_n - but NOT if followed by {
+            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])(?![{_^])/g, (match, base, sub) => {
+                return `$${base}_{${sub}}$`;
+            });
+
+            // Pattern: Simple superscript x^2, a^n - but NOT if followed by {
+            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])(?![{_^])/g, (match, base, exp) => {
+                return `$${base}^{${exp}}$`;
+            });
+
+            // Pattern: Numeric fractions 1/2, 3/4 (but not dates or paths)
+            text = text.replace(/(?<![\/\d])(\d+)\/(\d+)(?![\/\d])/g, (match, num, den) => {
                 return `$\\frac{${num}}{${den}}$`;
             });
 
-            // Pattern: common Greek letters when spelled out (for users who don't type backslash)
-            const greekMap = {
-                'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma',
-                'delta': '\\delta', 'epsilon': '\\epsilon', 'theta': '\\theta',
-                'lambda': '\\lambda', 'mu': '\\mu', 'pi': '\\pi',
-                'sigma': '\\sigma', 'omega': '\\omega', 'phi': '\\phi',
-                'infinity': '\\infty'
-            };
-            Object.entries(greekMap).forEach(([word, latex]) => {
-                const regex = new RegExp(`\\b${word}\\b`, 'gi');
-                text = text.replace(regex, `$${latex}$`);
+            // Pattern: sqrt(x) written without backslash
+            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (match, content) => {
+                return `$\\sqrt{${content}}$`;
             });
 
-            // Pattern: common operators
-            text = text.replace(/\+-/g, '$\\pm$');
-            text = text.replace(/(?<!=)>=(?!=)/g, ' $\\geq$ ');
-            text = text.replace(/(?<!=)<=(?!=)/g, ' $\\leq$ ');
-            text = text.replace(/!=(?!=)/g, ' $\\neq$ ');
+            // Pattern: Common Greek letter NAMES (spelled out, no backslash)
+            const greekWords = {
+                'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma',
+                'delta': '\\delta', 'theta': '\\theta', 'pi': '\\pi',
+                'sigma': '\\sigma', 'omega': '\\omega', 'lambda': '\\lambda',
+                'infinity': '\\infty'
+            };
+            for (const [word, latex] of Object.entries(greekWords)) {
+                // Only match as whole word, case insensitive
+                const regex = new RegExp(`(?<![a-zA-Z])${word}(?![a-zA-Z])`, 'gi');
+                text = text.replace(regex, `$${latex}$`);
+            }
 
-            // STAGE 4: Clean up double-wrapping ($$...$$ created by accident)
-            // Merge adjacent $ delimiters
-            text = text.replace(/\$\$/g, ' ');
-            text = text.replace(/\$ \$/g, ' ');
+            // STEP 4: Clean up any accidental double-wrapping
+            // Replace $$...content...$$ -> $...content...$ (when it's not block math)
+            // And merge adjacent delimiters like $...$$ or $$...$
+            text = text.replace(/\$\s*\$/g, ' '); // Remove empty $$ pairs
+            text = text.replace(/\$\$([^$]+)\$\$/g, (match, content) => {
+                // If it looks like it should be inline (short, no newlines), convert to single $
+                if (!content.includes('\n') && content.length < 100) {
+                    return `$${content}$`;
+                }
+                return match; // Keep as block math
+            });
 
-            // Restore code blocks
-            text = text.replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => {
-                return codeBlockPlaceholders[parseInt(index)];
+            // STEP 5: Restore protected blocks
+            text = text.replace(/%%PROTECTED(\d+)%%/g, (match, index) => {
+                return protectedBlocks[parseInt(index)];
             });
 
             return text;

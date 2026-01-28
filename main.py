@@ -44,6 +44,17 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask_wtf.csrf import CSRFProtect
 from urllib.parse import urlparse, urljoin
 
+# --- Global Configurations & shared state ---
+ENGAGEMENT_WEIGHTS = {
+    'comment': 5.0,
+    'reaction': 3.0,
+    'share': 4.0,
+    'view': 0.1
+}
+
+# Shared thread pool for background tasks (avoids overhead of creating new pools)
+executor = ThreadPoolExecutor(max_workers=10)
+
 app = Flask(__name__)
 csrf = CSRFProtect(app)
 
@@ -246,17 +257,20 @@ comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
 push_subscriptions_conf = db['push_subscriptions']
 newsletter_conf = db['newsletter_subs']
+user_post_views_conf = db['user_post_views']
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
 newsletter_conf.create_index('email', unique=True)
+user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
 # --- Performance indexes for faster queries ---
-# Index for liked_by lookups (personalized feed)
-posts_conf.create_index('liked_by')
+# Index for reactions lookups (personalized feed)
+posts_conf.create_index([('reactions.heart', 1)])
+posts_conf.create_index([('reactions.wow', 1)])
 # Index for author lookups
 posts_conf.create_index('author_id')
 # Index for timestamp sorting (most common sort)
@@ -892,20 +906,10 @@ def send_new_post_notifications(post_id_str):
             subject = f"New post on EchoWithin: {post.get('title')}"
 
             # Filter for users with 'immediate' notification preference
-            # Also support 'notify_new_posts' field for backward compatibility during migration
             recipients_cursor = users_conf.find(
                 {
-                    'is_confirmed': True, 
-                    '$or': [
-                        {'notification_preference': 'immediate'},
-                        {
-                            'notification_preference': {'$exists': False},
-                            '$or': [
-                                {'notify_new_posts': True},
-                                {'notify_new_posts': {'$exists': False}}
-                            ]
-                        }
-                    ]
+                    'is_confirmed': True,
+                    'notification_preference': 'immediate'
                 },
                 {'email': 1, 'username': 1}
             )
@@ -1627,27 +1631,35 @@ def prepare_posts(posts):
         return []
 
     # ---- Step 1: Build canonical URLs and deduplicate them ----
-    urls = set()
+    urls_to_fetch = set()
     for post in posts:
         post_url = url_for("view_post", slug=post.get("slug"), _external=True)
         post["url"] = post_url
-        urls.add(post_url)
 
-        # Ensure timestamp is timezone-aware (MongoDB stores naive UTC datetimes)
+        # Ensure timestamp is timezone-aware
         if post.get('timestamp') and post['timestamp'].tzinfo is None:
             post['timestamp'] = post['timestamp'].replace(tzinfo=datetime.timezone.utc)
         if post.get('edited_at') and post['edited_at'].tzinfo is None:
             post['edited_at'] = post['edited_at'].replace(tzinfo=datetime.timezone.utc)
 
-    # ---- Step 2: Batch-retrieve comment counts from internal comments collection ----
-    counts_map = get_batch_comment_counts(tuple(sorted(urls)))
+        # Only fetch count if not already present (e.g., from an aggregation pipeline)
+        if 'comment_count' not in post:
+            urls_to_fetch.add(post_url)
 
-    # ---- Step 3: Assign comment counts back into posts ----
-    for post in posts:
-        # Extract slug to look up counts_map (we stored counts by slug)
-        slug = post.get('slug')
-        # get_batch_comment_counts used slugs as keys; ensure counts_map is not None
-        post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
+    # ---- Step 2: Batch-retrieve comment counts ONLY if needed ----
+    if urls_to_fetch:
+        counts_map = get_batch_comment_counts(tuple(sorted(urls_to_fetch)))
+
+        # ---- Step 3: Assign comment counts back into posts ----
+        for post in posts:
+            if 'comment_count' not in post:
+                slug = post.get('slug')
+                post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
+    else:
+        # All posts already had comment_count, ensuring it's at least 0 if somehow None
+        for post in posts:
+            if post.get('comment_count') is None:
+                post['comment_count'] = 0
 
     return posts
 
@@ -1780,7 +1792,7 @@ def register():
             except redis.exceptions.ConnectionError as e:
                 app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
                 with app.app_context():
-                    ThreadPoolExecutor().submit(send_ntfy_notification, f"User '{username}' has registered.", "New User on EchoWithin", "partying_face")
+                    executor.submit(send_ntfy_notification, f"User '{username}' has registered.", "New User on EchoWithin", "partying_face")
             except Exception as e:
                 app.logger.error(f"Failed to enqueue ntfy notification for new user '{username}': {e}")
 
@@ -1985,7 +1997,7 @@ def google_callback():
         except redis.exceptions.ConnectionError as e:
             app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
             with app.app_context():
-                ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New User on EchoWithin", "partying_face")
+                executor.submit(send_ntfy_notification, ntfy_message, "New User on EchoWithin", "partying_face")
         except Exception as e:
             app.logger.error(f"Failed to enqueue ntfy notification for new Google user '{username}': {e}")
 
@@ -2073,17 +2085,25 @@ def home():
             hot_posts_pipeline = [
                 # 1. Find recent posts
                 {'$match': {'timestamp': {'$gte': seven_days_ago}}},
-                # 2. Join with comments collection to get comment counts
+                # 2. Join with comments collection to get comment count (efficiently)
                 {'$lookup': {
                     'from': 'comments',
-                    'localField': 'slug',
-                    'foreignField': 'post_slug',
-                    'as': 'comments'
+                    'let': {'post_slug': '$slug'},
+                    'pipeline': [
+                        {'$match': {
+                            '$expr': {'$eq': ['$post_slug', '$$post_slug']},
+                            'is_deleted': {'$ne': True}
+                        }},
+                        {'$count': 'count'}
+                    ],
+                    'as': 'comment_data'
                 }},
                 # 3. Add fields for calculation
                 {'$addFields': {
-                    'comment_count': {'$size': '$comments'},
-                    'like_count': {'$size': {'$ifNull': ['$liked_by', []]}},
+                    'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]},
+                    'likes_safe': {'$ifNull': ['$likes_count', 0]},
+                    'shares_safe': {'$ifNull': ['$share_count', 0]},
+                    'views_safe': {'$ifNull': ['$view_count', 0]},
                     'age_in_hours': {
                         '$divide': [
                             {'$subtract': ["$$NOW", '$timestamp']},
@@ -2093,13 +2113,13 @@ def home():
                 }},
                 # 4. Calculate the hot score WITH recency boost
                 {'$addFields': {
-                    # Base engagement score
+                    # Base engagement score (Standardized weights)
                     'engagement_score': {
                         '$add': [
-                            {'$multiply': ['$comment_count', 5]},
-                            {'$multiply': ['$like_count', 3]},
-                            {'$multiply': [{'$ifNull': ['$share_count', 0]}, 4]},
-                            {'$multiply': [{'$ifNull': ['$view_count', 0]}, 0.1]}
+                            {'$multiply': ['$comment_count', ENGAGEMENT_WEIGHTS['comment']]},
+                            {'$multiply': ['$likes_safe', ENGAGEMENT_WEIGHTS['reaction']]},
+                            {'$multiply': ['$shares_safe', ENGAGEMENT_WEIGHTS['share']]},
+                            {'$multiply': ['$views_safe', ENGAGEMENT_WEIGHTS['view']]}
                         ]
                     },
                     # Recency boost: posts < 2 hours get 1.5x, < 6 hours get 1.2x
@@ -2120,7 +2140,7 @@ def home():
                             '$recency_boost',
                             {'$divide': [
                                 {'$add': ['$engagement_score', 1]},  # +1 to avoid division issues
-                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Slightly less aggressive decay
+                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Time decay factor
                             ]}
                         ]
                     }
@@ -2296,12 +2316,16 @@ def all_posts():
             user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
             saved_ids = user_doc.get('saved_posts', []) if user_doc else []
 
-            # Combine liked + saved lookup in one query (limit to 100 most recent for performance)
+            # Combine interacted + saved lookup in one query (limit to 100 most recent for performance)
             interest_query = {'$or': [
-                {'liked_by': user_id_str},
+                {'reactions.heart': user_id_str},
+                {'reactions.wow': user_id_str},
+                {'reactions.insightful': user_id_str},
+                {'reactions.laugh': user_id_str},
+                {'reactions.sad': user_id_str},
                 {'_id': {'$in': saved_ids[:50]}}  # Limit saved posts lookup
             ]}
-            interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1, 'liked_by': 1}).limit(100))
+            interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1}).limit(100))
 
             for p in interest_posts:
                 is_liked = user_id_str in (p.get('liked_by') or [])
@@ -2321,33 +2345,29 @@ def all_posts():
                 except Exception:
                     pass
 
-        # Fetch paginated posts with engagement data in a single aggregation
-        pipeline = [
-            {'$match': filter_query},
-            {'$sort': {'timestamp': -1}},
-            {'$skip': skip},
-            {'$limit': posts_per_page},
-            # Lookup comment counts
-            {'$lookup': {
-                'from': 'comments',
-                'let': {'slug': '$slug'},
-                'pipeline': [
-                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
-                    {'$count': 'count'}
-                ],
-                'as': 'comment_data'
-            }},
-            {'$addFields': {
-                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}
-            }},
-            {'$project': {'comment_data': 0}}
-        ]
-
-        page_posts = list(posts_conf.aggregate(pipeline))
-
-        # Score and sort the page posts (lightweight in-memory scoring)
+        # Fetch a larger pool of recent posts (e.g., top 50) for global personalization
+        # This ensures highly relevant content bubbles up even if not in the very last 10 posts
+        pool_size = 50
+        
+        # Use simple find().sort().limit() for the pool
+        pool_cursor = posts_conf.find(filter_query).sort('timestamp', -1).limit(pool_size)
+        all_pool_posts = list(pool_cursor)
+        
+        # Build set of URLs for batch comment counting
+        urls = []
+        for p in all_pool_posts:
+            # We need absolute URLs for prepare_posts logic compatibility
+            urls.append(url_for('view_post', slug=p.get('slug'), _external=True))
+            
+        # Get comment counts in one batch
+        counts_map = get_batch_comment_counts(tuple(sorted(urls)))
+        
+        # Score ALL posts in the pool
         now = datetime.datetime.now(datetime.timezone.utc)
-        for p in page_posts:
+        for p in all_pool_posts:
+            # Inject comment count early for scoring
+            p['comment_count'] = counts_map.get(p.get('slug'), 0)
+            
             score = 0.0
             # Tag matching
             for t in p.get('tags', []):
@@ -2359,8 +2379,8 @@ def all_posts():
                 score += author_scores[aid] * 3
             # Engagement score (capped)
             likes = p.get('likes_count', 0) or 0
-            comments = p.get('comment_count', 0)
-            engagement = (likes * 2) + (comments * 3)
+            comments = p['comment_count']
+            engagement = (comments * ENGAGEMENT_WEIGHTS['comment']) + (likes * ENGAGEMENT_WEIGHTS['reaction'])
             score += min(engagement, 30)
             # Recency boost
             post_time = p.get('timestamp')
@@ -2372,11 +2392,14 @@ def all_posts():
                 score += recency * 5
             p['_score'] = score
 
-        # Sort by score (keep first 2 fixed by timestamp, rest by score)
-        if len(page_posts) > 2:
-            top_two = page_posts[:2]
-            rest = sorted(page_posts[2:], key=lambda x: x.get('_score', 0), reverse=True)
-            page_posts = top_two + rest
+        # Sort entire pool by score
+        all_pool_posts.sort(key=lambda x: x.get('_score', 0), reverse=True)
+        
+        # Select the specific page from the sorted pool
+        page_posts = all_pool_posts[skip : skip + posts_per_page]
+        
+        # If the pool is smaller than skip, we might need to fetch more or just return empty
+        # But for the first few pages, this is much better than before.
 
         with app.app_context():
             posts = prepare_posts(page_posts)
@@ -2431,7 +2454,7 @@ def get_all_posts_json():
     """Returns all posts as a JSON object for client-side rendering."""
     try:
         # Fetch all posts with necessary fields
-        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}))
+        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'share_count': 1, 'reactions': 1}))
 
         # Convert ObjectId and datetime to strings and add the post URL
         for post in all_posts:
@@ -2441,7 +2464,7 @@ def get_all_posts_json():
             post['timestamp'] = post['timestamp'].strftime('%b %d, %Y at %I:%M %p')
             post['url'] = url_for('view_post', slug=post['slug'], _external=True)
             # Convert liked_by ObjectIds to strings for JS comparison
-            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
+
 
         return jsonify(all_posts)
     except Exception as e:
@@ -2518,7 +2541,7 @@ def get_top_posts_json():
             {'$project': {
                 '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1,
                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1,
-                'image_status': 1, 'video_url': 1, 'likes_count': 1, 'liked_by': 1,
+                'image_status': 1, 'video_url': 1, 'likes_count': 1,
                 'share_count': 1, 'view_count': 1, 'reactions': 1
             }},
             # Stage 2: Lookup comment counts
@@ -2542,10 +2565,10 @@ def get_top_posts_json():
             {'$addFields': {
                 'raw_engagement': {
                     '$add': [
-                        {'$multiply': ['$comment_count', 5]},
-                        {'$multiply': ['$likes_safe', 3]},
-                        {'$multiply': ['$shares_safe', 2]},
-                        {'$multiply': ['$views_safe', 0.1]}
+                        {'$multiply': ['$comment_count', ENGAGEMENT_WEIGHTS['comment']]},
+                        {'$multiply': ['$likes_safe', ENGAGEMENT_WEIGHTS['reaction']]},
+                        {'$multiply': ['$shares_safe', ENGAGEMENT_WEIGHTS['share']]},
+                        {'$multiply': ['$views_safe', ENGAGEMENT_WEIGHTS['view']]}
                     ]
                 }
             }},
@@ -2595,7 +2618,7 @@ def get_top_posts_json():
             post['share_count'] = shares
             post['view_count'] = views
             post['engagement_score'] = round(final_score, 2)
-            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
+
             post.pop('raw_engagement', None)
             results.append(post)
 
@@ -2624,7 +2647,7 @@ def get_hot_posts_json():
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
         recent_posts = list(posts_conf.find(
             {'created_at': {'$gte': seven_days_ago}},
-            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'liked_by': 1, 'share_count': 1, 'reactions': 1}
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'share_count': 1, 'reactions': 1}
         ))
 
         # Get comment counts for these posts
@@ -2647,7 +2670,7 @@ def get_hot_posts_json():
             post['likes_count'] = post.get('likes_count', 0)
             post['share_count'] = post.get('share_count', 0)
             # Convert liked_by ObjectIds to strings for JS comparison
-            post['liked_by'] = [str(uid) for uid in post.get('liked_by', [])]
+
             scored_posts.append(post)
 
         # Sort by hot score and return top 20
@@ -2720,18 +2743,6 @@ def get_my_commented_posts_json():
 
         for p in own_posts:
             p['activity_type'] = 'comment_on_my_post'
-            # Determine effective last read time for this specific post
-            # It is the LATER of: global mark-read time OR this post's specific last view
-            post_last_viewed = p.get('author_last_viewed')
-            if post_last_viewed and post_last_viewed.tzinfo is None:
-                post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
-
-            # Use a high default if never viewed, but actually we want to default to VERY OLD
-            # so that last_check takes precedence.
-            if not post_last_viewed:
-                p['effective_read_time'] = last_check
-            else:
-                p['effective_read_time'] = max(last_check, post_last_viewed)
 
         # --- 2. Fetch Posts where others replied to User's comments ---
         # A. Find all comment IDs authored by current user
@@ -2801,7 +2812,15 @@ def get_my_commented_posts_json():
         # Limit to 20 items
         all_activities = all_activities[:20]
 
-        # --- 4. Process for JSON Response ---
+        # --- 4. Fetch Per-User View Timestamps ---
+        post_ids = [post['_id'] for post in all_activities]
+        user_views = list(user_post_views_conf.find({
+            'user_id': user_id,
+            'post_id': {'$in': post_ids}
+        }))
+        user_view_map = {v['post_id']: v['last_viewed'] for v in user_views}
+
+        # --- 5. Process for JSON Response ---
         unread_count = 0
         result_posts = []
 
@@ -2812,35 +2831,42 @@ def get_my_commented_posts_json():
                 activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
 
             # Determine the threshold time for this specific post
-            # For own posts, we calculated 'effective_read_time' above.
-            # For replies, we fallback to 'last_check' (global).
-            threshold = post.get('effective_read_time', last_check)
-            if threshold.tzinfo is None:
-                threshold = threshold.replace(tzinfo=datetime.timezone.utc)
+            # Threshold is the LATER of: global mark-all-read OR this specific post's last view by user
+            post_last_viewed = user_view_map.get(post['_id'])
+            
+            # Legacy fallback: for own posts, check the old field if new one doesn't exist yet
+            if not post_last_viewed and str(post.get('author_id')) == current_user.id:
+                post_last_viewed = post.get('author_last_viewed')
+
+            if post_last_viewed and post_last_viewed.tzinfo is None:
+                post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+
+            threshold = last_check
+            if post_last_viewed:
+                threshold = max(last_check, post_last_viewed)
 
             # It's unread if the activity is newer than the threshold
             is_unread = False
             post_unread_count = 0
             
-            # Count how many individual comments are unread for this specific post
+            # For own posts, we have the list of comments from the aggregation
             post_comments = post.get('post_comments', [])
-            for c in post_comments:
-                c_time = c.get('created_at')
-                if c_time:
-                    if c_time.tzinfo is None:
-                        c_time = c_time.replace(tzinfo=datetime.timezone.utc)
-                    if c_time > threshold:
-                        is_unread = True
-                        post_unread_count += 1
+            if post_comments:
+                for c in post_comments:
+                    c_time = c.get('created_at')
+                    if c_time:
+                        if c_time.tzinfo is None:
+                            c_time = c_time.replace(tzinfo=datetime.timezone.utc)
+                        if c_time > threshold:
+                            is_unread = True
+                            post_unread_count += 1
+            else:
+                # For replies (or posts without post_comments data), fallback to simple activity_time check
+                if activity_time and activity_time > threshold:
+                    is_unread = True
+                    # In this case we just count it as 1 unread activity for now
+                    post_unread_count = 1
             
-            # For replies, we didn't fetch the individual comments in the merge above, 
-            # so we use a simplified count if it's unread.
-            if post.get('activity_type') == 'reply_to_my_comment':
-                 if activity_time and activity_time > threshold:
-                     is_unread = True
-                     # In this case we just count it as 1 unread activity for now
-                     post_unread_count = 1
-
             unread_count += post_unread_count
 
 
@@ -2989,28 +3015,41 @@ def get_related_posts_json():
 
         if not cached_interests:
             # Build interest profile with optimized queries
-            WEIGHT_LIKED = 3.0
-            WEIGHT_SAVED = 4.0
-            WEIGHT_COMMENTED = 2.5
+            WEIGHT_REACTED = ENGAGEMENT_WEIGHTS['reaction']
+            WEIGHT_SAVED = ENGAGEMENT_WEIGHTS['share'] # Use share weight for Saved posts
+            WEIGHT_COMMENTED = ENGAGEMENT_WEIGHTS['comment'] / 2.0 # Interest is half the value of a single post boost
 
             # Get user's saved posts from user document
             user_doc = users_conf.find_one({'_id': user_id}, {'saved_posts': 1})
             saved_post_ids = user_doc.get('saved_posts', []) if user_doc else []
 
-            # OPTIMIZED: Single query for liked + saved posts (limit 150 for performance)
+            # OPTIMIZED: Single query for interacted + saved posts (limit 150 for performance)
+            # Find posts where user has any type of reaction
             interest_query = {'$or': [
-                {'liked_by': user_id_str},
+                {'reactions.heart': user_id_str},
+                {'reactions.wow': user_id_str},
+                {'reactions.insightful': user_id_str},
+                {'reactions.laugh': user_id_str},
+                {'reactions.sad': user_id_str},
                 {'_id': {'$in': saved_post_ids[:75]}}  # Limit saved posts
             ]}
             interest_posts = list(posts_conf.find(
                 interest_query,
-                {'tags': 1, 'author_id': 1, 'liked_by': 1, '_id': 1}
+                {'tags': 1, 'author_id': 1, 'reactions': 1, '_id': 1}
             ).limit(150))
 
             for p in interest_posts:
-                is_liked = user_id_str in (p.get('liked_by') or [])
+                # Check if user reacted (any type)
+                has_reacted = False
+                reactions_dict = p.get('reactions', {})
+                if isinstance(reactions_dict, dict):
+                    for uids in reactions_dict.values():
+                        if user_id_str in uids:
+                            has_reacted = True
+                            break
+                
                 is_saved = p.get('_id') in saved_post_ids
-                weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
+                weight = (WEIGHT_REACTED if has_reacted else 0) + (WEIGHT_SAVED if is_saved else 0)
 
                 for t in p.get('tags', []):
                     tag_scores[t] = tag_scores.get(t, 0) + weight
@@ -3093,10 +3132,19 @@ def get_related_posts_json():
                 if p['_id'] not in posts_with_new_activity:
                     interacted_post_ids.add(p['_id'])
 
-        # Get posts user RECENTLY liked - we can't track exact like time,
-        # so we use a heuristic: recent posts that user liked are likely recent interactions
+        # Get posts user RECENTLY reacted to - we can't track exact time,
+        # so we use a heuristic: recent posts that user reacted to are likely recent interactions
         liked_posts_cursor = posts_conf.find(
-            {'liked_by': user_id_str, 'timestamp': {'$gte': seven_days_ago}},
+            {
+                '$or': [
+                    {'reactions.heart': user_id_str},
+                    {'reactions.wow': user_id_str},
+                    {'reactions.insightful': user_id_str},
+                    {'reactions.laugh': user_id_str},
+                    {'reactions.sad': user_id_str}
+                ], 
+                'timestamp': {'$gte': seven_days_ago}
+            },
             {'_id': 1}
         ).limit(100)
         for p in liked_posts_cursor:
@@ -3424,7 +3472,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
             except redis.exceptions.ConnectionError as e:
                 app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check. Error: {e}")
                 with app.app_context():
-                    ThreadPoolExecutor().submit(process_image_for_nsfw, post_id_str, image_urls[0], image_public_ids[0])
+                    executor.submit(process_image_for_nsfw, post_id_str, image_urls[0], image_public_ids[0])
             except Exception as e:
                 app.logger.error(f"Failed to enqueue NSFW job for post {post_id_str}: {e}")
 
@@ -3434,7 +3482,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         except redis.exceptions.ConnectionError as e:
             app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
             with app.app_context():
-                ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+                executor.submit(send_new_post_notifications, post_id_str)
         except Exception as e:
             app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}", exc_info=True)
 
@@ -3535,7 +3583,7 @@ def post():
                     app.logger.warning(f"Redis connection failed. Falling back to thread for media processing. Error: {e}")
                     # Fallback: Run the job in a background thread
                     with app.app_context():
-                        ThreadPoolExecutor().submit(process_post_media, post_id_str, temp_image_paths, temp_video_path)
+                        executor.submit(process_post_media, post_id_str, temp_image_paths, temp_video_path)
                 except Exception as e: # Catch other potential errors
                     app.logger.error(f"Failed to process media for post {post_id_str}: {e}")
                     # If enqueuing fails for a non-connection reason, delete the post to avoid orphans
@@ -3549,7 +3597,7 @@ def post():
                 except redis.exceptions.ConnectionError as e:
                     app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
                     with app.app_context():
-                        ThreadPoolExecutor().submit(send_new_post_notifications, post_id_str)
+                        executor.submit(send_new_post_notifications, post_id_str)
                 except Exception as e:
                     app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
                 # If no media, index immediately
@@ -3566,7 +3614,7 @@ def post():
             except redis.exceptions.ConnectionError as e:
                 app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
                 with app.app_context():
-                    ThreadPoolExecutor().submit(send_ntfy_notification, ntfy_message, "New Post Created", "tada")
+                    executor.submit(send_ntfy_notification, ntfy_message, "New Post Created", "tada")
             except Exception as e:
                 app.logger.error(f"Failed to enqueue ntfy notification for new post: {e}")
 
@@ -3577,7 +3625,7 @@ def post():
             except redis.exceptions.ConnectionError as e:
                 app.logger.warning(f"Redis connection failed. Falling back to thread for push notifications. Error: {e}")
                 with app.app_context():
-                    ThreadPoolExecutor().submit(send_push_notifications_for_new_post, post_id_str)
+                    executor.submit(send_push_notifications_for_new_post, post_id_str)
             except Exception as e:
                 app.logger.error(f"Failed to enqueue push notification for new post: {e}")
 
@@ -3599,14 +3647,23 @@ def view_post(slug):
         return redirect(url_for('blog'))
 
     # If current user is the author, update author_last_viewed
-    if current_user.is_authenticated and str(post.get('author_id')) == current_user.id:
+    if current_user.is_authenticated:
         try:
-            posts_conf.update_one(
-                {'_id': post['_id']},
-                {'$set': {'author_last_viewed': datetime.datetime.now(datetime.timezone.utc)}}
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            # 1. Update author-specific marker if they are the author
+            if str(post.get('author_id')) == current_user.id:
+                posts_conf.update_one(
+                    {'_id': post['_id']},
+                    {'$set': {'author_last_viewed': now_utc}}
+                )
+            # 2. Update general user post view marker (used for Activity tab unread logic)
+            user_post_views_conf.update_one(
+                {'user_id': ObjectId(current_user.id), 'post_id': post['_id']},
+                {'$set': {'last_viewed': now_utc}},
+                upsert=True
             )
         except Exception as e:
-            app.logger.error(f"Failed to update author_last_viewed for post {slug}: {e}")
+            app.logger.error(f"Failed to update view tracking for post {slug}: {e}")
 
     # Convert post content from Markdown to HTML
     # The 'fenced_code' extension is crucial for handling code blocks (```)
@@ -3807,6 +3864,17 @@ def api_record_post_view(post_id):
 
             # Atomically increment the view count on the post
             res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+
+        # CRITICAL: Also update the per-user view marker so activity is marked as read
+        if current_user.is_authenticated:
+            try:
+                user_post_views_conf.update_one(
+                    {'user_id': ObjectId(current_user.id), 'post_id': ObjectId(post_id)},
+                    {'$set': {'last_viewed': datetime.datetime.now(datetime.timezone.utc)}},
+                    upsert=True
+                )
+            except Exception as ev:
+                app.logger.error(f"Failed to update per-user view for post {post_id}: {ev}")
 
         # Fetch the latest count
         post = posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
@@ -4042,7 +4110,7 @@ def api_post_comments(slug):
         except redis.exceptions.ConnectionError as e:
             app.logger.warning(f"Redis connection failed. Falling back to thread for comment push notification. Error: {e}")
             with app.app_context():
-                ThreadPoolExecutor().submit(send_push_notification_for_comment, comment_id_str, slug)
+                executor.submit(send_push_notification_for_comment, comment_id_str, slug)
         except Exception as e:
             app.logger.error(f"Failed to enqueue push notification for comment: {e}")
 
@@ -4265,7 +4333,7 @@ def update_post(post_id):
                 except redis.exceptions.ConnectionError as ntfy_e:
                     app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {ntfy_e}")
                     with app.app_context():
-                        ThreadPoolExecutor().submit(send_ntfy_notification, message, "NSFW Content Detected", "see_no_evil")
+                        executor.submit(send_ntfy_notification, message, "NSFW Content Detected", "see_no_evil")
                 except Exception as ntfy_e:
                     app.logger.error(f"Failed to enqueue ntfy notification for NSFW content: {ntfy_e}")
 
@@ -4691,14 +4759,9 @@ def profile_settings(username):
             else:
                 flash("Invalid image format. Please use png, jpg, jpeg, or gif.", "danger")
 
-        # Handle notification preference
         notification_pref = request.form.get('notification_preference')
         if notification_pref in ('immediate', 'weekly', 'none'):
             update_data['notification_preference'] = notification_pref
-        elif request.form.get('notify_new_posts'):
-            # Legacy checkbox support for safety
-            notify_val = request.form.get('notify_new_posts')
-            update_data['notification_preference'] = 'immediate' if notify_val in ('1', 'true', 'on') else 'none'
 
         if update_data:
             try:
@@ -4766,11 +4829,6 @@ def toggle_reaction_post(post_id):
         if not isinstance(reactions, dict):
             reactions = {}
 
-        # For legacy compatibility, handle the old liked_by field if it exists
-        liked_by = post.get('liked_by', [])
-        if liked_by and 'heart' not in reactions:
-            reactions['heart'] = liked_by
-
         current_user_reactions = [] # Which types this user has on this post
         for r_type, users in reactions.items():
             if user_id in users:
@@ -4815,9 +4873,7 @@ def toggle_reaction_post(post_id):
         reaction_counts = {r: len(u) for r, u in new_reactions.items()}
         total_count = updated_post.get('likes_count', 0)
 
-        # Clear legacy fields if we moved them
-        if 'liked_by' in updated_post:
-            posts_conf.update_one({'_id': post_oid}, {'$unset': {'liked_by': ""}})
+
 
         return jsonify({
             'success': True,
@@ -4830,11 +4886,7 @@ def toggle_reaction_post(post_id):
         app.logger.error(f"Error toggling reaction for post {post_id}: {e}")
         return jsonify({'error': 'Internal error'}), 500
 
-@app.route('/post/<post_id>/toggle_like', methods=['POST'])
-@login_required
-def toggle_like_post(post_id):
-    """Legacy endpoint for the simple like button."""
-    return toggle_reaction_post(post_id)
+
 
 @app.route('/post/<post_id>/toggle_save', methods=['POST'])
 @login_required
@@ -5300,7 +5352,7 @@ def internal_server_error(e):
         except redis.exceptions.ConnectionError as ntfy_e:
             app.logger.warning(f"Redis connection failed. Falling back to thread for 500 error ntfy notification. Error: {ntfy_e}")
             with app.app_context():
-                ThreadPoolExecutor().submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+                executor.submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
         except Exception as ntfy_e:
             app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
     except Exception as log_e:

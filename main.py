@@ -2191,48 +2191,47 @@ def blog():
         with app.app_context():
             latest_posts_prepared = prepare_posts(all_posts)
     else:
-        # Mixed feed algorithm:
-        # - 4 most recent posts (guaranteed freshness)
-        # - 3 posts from the past week (recent but not newest)
-        # - 3 random posts from older content (discovery)
+        # Mixed feed algorithm (Tuned 2026-01-28):
+        # - 2 most recent posts (reduced recency bias)
+        # - 4 posts from the past MONTH (broadened "recent" scope)
+        # - 4 random posts from older content (increased discovery)
 
         now = datetime.datetime.now(datetime.timezone.utc)
-        one_week_ago = now - datetime.timedelta(days=7)
         one_month_ago = now - datetime.timedelta(days=30)
-
-        # Get the 4 most recent posts
-        recent_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(4))
+        
+        # 1. Get the 2 most recent posts (The "Headlines")
+        recent_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(2))
         recent_ids = [p['_id'] for p in recent_posts]
 
-        # Get posts from the past week (excluding the most recent 4)
-        week_posts = list(posts_conf.find({
+        # 2. Get posts from the past MONTH (The "Recent Discussions")
+        # Exclude the top 2 we just picked.
+        month_posts = list(posts_conf.find({
             '_id': {'$nin': recent_ids},
-            'timestamp': {'$gte': one_week_ago}
-        }).sort('timestamp', -1).limit(10))
+            'timestamp': {'$gte': one_month_ago}
+        }).sort('timestamp', -1).limit(20)) # Fetch enough to shuffle well
 
-        # Randomly select 3 from the week posts (or all if less than 3)
-        if len(week_posts) > 3:
-            week_selection = random.sample(week_posts, 3)
+        # Randomly select 4 from this month bucket
+        if len(month_posts) > 4:
+            month_selection = random.sample(month_posts, 4)
         else:
-            week_selection = week_posts
+            month_selection = month_posts
 
-        week_ids = [p['_id'] for p in week_selection]
-        excluded_ids = recent_ids + week_ids
+        month_ids = [p['_id'] for p in month_selection]
+        excluded_ids = recent_ids + month_ids
 
-        # Calculate how many more posts we need
-        posts_needed = 10 - len(recent_posts) - len(week_selection)
+        # 3. Calculate how many more posts we need to reach 10
+        posts_needed = 10 - len(recent_posts) - len(month_selection)
 
-        # Get random older posts for discovery
-        # Use aggregation with $sample for true random selection
+        # Get random older posts for discovery (The "Archives")
         older_posts = list(posts_conf.aggregate([
             {'$match': {'_id': {'$nin': excluded_ids}}},
             {'$sample': {'size': max(posts_needed, 1)}}
         ]))
 
-        # Combine all posts
-        combined_posts = recent_posts + week_selection + older_posts
+        # Combine all buckets
+        combined_posts = recent_posts + month_selection + older_posts
 
-        # Fully shuffle all posts for a dynamic feed on every refresh
+        # Fully shuffle all posts so the "headlines" aren't always at the very top
         random.shuffle(combined_posts)
 
         with app.app_context():

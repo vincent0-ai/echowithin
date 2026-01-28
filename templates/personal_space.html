@@ -806,16 +806,24 @@
                 return `%%CODEBLOCK${codeBlockPlaceholders.length - 1}%%`;
             });
 
-            // IMPORTANT: Detect raw LaTeX commands WITHOUT $ delimiters (common in AI output)
-            // Match \int, \frac, \sum, \prod, \lim and wrap entire expression in $...$
+            // STAGE 1: Detect COMPLETE LaTeX expressions first (prevents double-wrapping)
+            // These are already properly formatted LaTeX - just need $ delimiters
 
-            // Pattern: \int with optional limits and expression (e.g., \int_{a}^{b} f(x) dx)
-            text = text.replace(/\\int(?:_\{[^}]*\})?(?:\^\{[^}]*\})?\s*[^$\n]*?\s*d[a-z]/g, (match) => {
+            // Pattern: Full equations with latex commands (e.g., I = I_s(e^{V/nV_T} - 1))
+            // Match lines that look like equations with LaTeX-style subscripts/superscripts
+            text = text.replace(/([A-Za-z])_\{([^}]+)\}\s*=\s*[^*\n]+/g, (match) => {
+                // Only wrap if not already wrapped
+                if (!match.startsWith('$')) return `$${match}$`;
+                return match;
+            });
+
+            // Pattern: \frac{...}{...} with any content (including nested subscripts)
+            text = text.replace(/\\frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: \frac{...}{...}
-            text = text.replace(/\\frac\{[^}]*\}\{[^}]*\}/g, (match) => {
+            // Pattern: \int with limits and expression
+            text = text.replace(/\\int(?:_\{[^}]*\})?(?:\^\{[^}]*\})?\s*[^$\n]*?\s*d[a-z]/g, (match) => {
                 return `$${match}$`;
             });
 
@@ -829,40 +837,44 @@
                 return `$${match}$`;
             });
 
-            // Pattern: \sin, \cos, \tan, \ln, \log, \exp (trig and log functions)
+            // Pattern: Greek letters ALREADY escaped (like \beta, \alpha, \pi)
+            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm)\b/g, (match) => {
+                return `$${match}$`;
+            });
+
+            // Pattern: Trig/log functions ALREADY escaped
             text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: \mathbf{...}, \text{...}, \mathrm{...}
+            // Pattern: \mathbf{...}, \text{...}, \mathrm{...}, \textbf{...}
             text = text.replace(/\\(mathbf|text|mathrm|textbf)\{[^}]*\}/g, (match) => {
                 return `$${match}$`;
             });
 
-            // Pattern: Standalone [...] with subscript/superscript (evaluation notation like [t^2]_0^3)
-            text = text.replace(/\[[^\]]+\](?:_\{?[^}\s]+\}?)?(?:\^\{?[^}\s]+\}?)?/g, (match) => {
-                if (match.includes('_') || match.includes('^')) {
-                    return `$${match}$`;
-                }
-                return match;
+            // Pattern: \left and \right delimiters with content between
+            text = text.replace(/\\left[(\[{][\s\S]*?\\right[)\]}]/g, (match) => {
+                return `$${match}$`;
             });
 
-            // Auto-detect patterns and wrap them in $...$ for KaTeX
-
-            // Pattern: any base^exponent (e.g., x^2, 2^3, (x+1)^2, a^n)
-            // Matches: letter/number/closing-paren followed by ^ and number/letter/braces
-            text = text.replace(/(\w|\))(\^)(\d+|[a-zA-Z]|\{[^}]+\})/g, (match, base, caret, exp) => {
-                if (exp.startsWith('{')) {
-                    return `$${base}^${exp}$`;
-                }
+            // STAGE 2: Detect LaTeX-style subscripts/superscripts (multi-character in braces)
+            // Pattern: X_{anything} or X^{anything} (e.g., V_{dc}, V_{peak}, I_{DSS})
+            text = text.replace(/([A-Za-z])_\{([^}]+)\}/g, (match, base, sub) => {
+                // Check if already inside $ delimiters (crude check)
+                return `$${base}_{${sub}}$`;
+            });
+            text = text.replace(/([A-Za-z])\^\{([^}]+)\}/g, (match, base, exp) => {
                 return `$${base}^{${exp}}$`;
             });
 
-            // Pattern: subscripts like x_1, a_n, x_i
-            text = text.replace(/([a-zA-Z])_(\d+|[a-zA-Z]|\{[^}]+\})/g, (match, base, sub) => {
-                if (sub.startsWith('{')) {
-                    return `$${base}_${sub}$`;
-                }
+            // STAGE 3: Simple subscripts/superscripts (single char, no braces)
+            // Pattern: any base^exponent (e.g., x^2, 2^3, (x+1)^2, a^n)
+            text = text.replace(/(\w|\))(\^)(\d+|[a-zA-Z])/g, (match, base, caret, exp) => {
+                return `$${base}^{${exp}}$`;
+            });
+
+            // Pattern: simple subscripts like x_1, a_n (single char subscript, no braces)
+            text = text.replace(/([a-zA-Z])_(\d+|[a-zA-Z])(?!\{)/g, (match, base, sub) => {
                 return `$${base}_{${sub}}$`;
             });
 
@@ -874,12 +886,12 @@
                 return `$\\sqrt{${content}}$`;
             });
 
-            // Pattern: fractions a/b (more flexible - any word chars around /)
+            // Pattern: fractions a/b (numeric only to avoid false positives)
             text = text.replace(/\b(\d+)\/(\d+)\b/g, (match, num, den) => {
                 return `$\\frac{${num}}{${den}}$`;
             });
 
-            // Pattern: common Greek letters when spelled out
+            // Pattern: common Greek letters when spelled out (for users who don't type backslash)
             const greekMap = {
                 'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma',
                 'delta': '\\delta', 'epsilon': '\\epsilon', 'theta': '\\theta',
@@ -893,10 +905,15 @@
             });
 
             // Pattern: common operators
-            text = text.replace(/\+\-/g, '$\\pm$');
+            text = text.replace(/\+-/g, '$\\pm$');
             text = text.replace(/(?<!=)>=(?!=)/g, ' $\\geq$ ');
             text = text.replace(/(?<!=)<=(?!=)/g, ' $\\leq$ ');
             text = text.replace(/!=(?!=)/g, ' $\\neq$ ');
+
+            // STAGE 4: Clean up double-wrapping ($$...$$ created by accident)
+            // Merge adjacent $ delimiters
+            text = text.replace(/\$\$/g, ' ');
+            text = text.replace(/\$ \$/g, ' ');
 
             // Restore code blocks
             text = text.replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => {

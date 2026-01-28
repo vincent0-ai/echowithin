@@ -795,113 +795,69 @@
         function autoDetectMath(text) {
             if (!text) return text;
 
-            // Master list of protected content - anything wrapped gets added here immediately
-            const protectedBlocks = [];
+            // Protect code blocks from processing (these we DO need to protect)
+            const codeBlocks = [];
+            text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
+            text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
 
-            function protect(content) {
-                protectedBlocks.push(content);
-                return `%%MATH${protectedBlocks.length - 1}%%`;
-            }
+            // Protect EXISTING $...$ and $$...$$ (user already formatted these)
+            const existingMath = [];
+            text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
+            text = text.replace(/\$[^\$\n]+?\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
 
-            // STEP 1: Protect code blocks first (never process)
-            text = text.replace(/```[\s\S]*?```/g, (match) => protect(match));
-            text = text.replace(/`[^`]+`/g, (match) => protect(match));
+            // Helper: wrap with $...$ if not empty
+            const wrap = (content) => `$${content}$`;
 
-            // STEP 2: Protect EXISTING math delimiters (user already formatted)
-            text = text.replace(/\$\$[\s\S]*?\$\$/g, (match) => protect(match));
-            text = text.replace(/\$[^$\n]+?\$/g, (match) => protect(match));
+            // DETECT PATTERNS - just add $...$ delimiters, no placeholders
+            // Order matters: detect complex/longer patterns first
 
-            // STEP 3: Detect and wrap LaTeX expressions - IMMEDIATELY protect each match
-            // The key is: once we wrap something, it becomes a placeholder so later patterns won't touch it
+            // \frac{...}{...}
+            text = text.replace(/\\frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
+                (m) => wrap(m));
 
-            // Pattern: \frac{...}{...} - wrap and protect immediately
-            text = text.replace(/\\frac\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // \sqrt{...} or \sqrt[n]{...}
+            text = text.replace(/\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g, (m) => wrap(m));
 
-            // Pattern: \int with optional limits and integrand
-            text = text.replace(/\\int(?:_\{[^}]*\})?(?:\^\{[^}]*\})?\s*[^$\n]*?\s*d[a-z]/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // \int, \sum, \prod, \lim with limits
+            text = text.replace(/\\(int|sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (m) => wrap(m));
 
-            // Pattern: \sqrt{...} or \sqrt[n]{...}
-            text = text.replace(/\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // \left...\right pairs
+            text = text.replace(/\\left[({\[][\s\S]*?\\right[)}\]]/g, (m) => wrap(m));
 
-            // Pattern: \sum, \prod, \lim with subscripts/superscripts
-            text = text.replace(/\\(sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // Greek letters and operators with backslash
+            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|text|mathrm)\b(?:\{[^}]*\})?/g,
+                (m) => wrap(m));
 
-            // Pattern: \left...\right pairs
-            text = text.replace(/\\left[(\[{][\s\S]*?\\right[)\]}]/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // Trig/log functions
+            text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (m) => wrap(m));
 
-            // Pattern: Greek letters/operators with backslash (standalone)
-            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm)\b/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // X_{multi} subscripts (V_{dc}, I_{DSS})
+            text = text.replace(/([A-Za-z])_\{([^}]+)\}/g, (m, base, sub) => wrap(`${base}_{${sub}}`));
 
-            // Pattern: \text{...}, \textbf{...}, etc.
-            text = text.replace(/\\(text|textbf|mathrm|mathbf)\{[^}]*\}/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // X^{multi} superscripts
+            text = text.replace(/([A-Za-z])\^\{([^}]+)\}/g, (m, base, exp) => wrap(`${base}^{${exp}}`));
 
-            // Pattern: Trig/log functions with backslash
-            text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (match) => {
-                return protect(`$${match}$`);
-            });
+            // Simple subscript x_1 (single char)
+            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])(?![{_^])/g, (m, base, sub) => wrap(`${base}_{${sub}}`));
 
-            // STEP 4: Detect simple patterns (these run AFTER LaTeX commands are protected)
+            // Simple superscript x^2 (single char)  
+            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])(?![{_^])/g, (m, base, exp) => wrap(`${base}^{${exp}}`));
 
-            // Pattern: X_{multi-char} subscripts like V_{dc}, I_{DSS}
-            text = text.replace(/\b([A-Za-z])_\{([^}]+)\}/g, (match, base, sub) => {
-                return protect(`$${base}_{${sub}}$`);
-            });
+            // Numeric fractions 1/2
+            text = text.replace(/(?<![\/\d])(\d+)\/(\d+)(?![\/\d])/g, (m, n, d) => wrap(`\\frac{${n}}{${d}}`));
 
-            // Pattern: X^{multi-char} superscripts
-            text = text.replace(/\b([A-Za-z])\^\{([^}]+)\}/g, (match, base, exp) => {
-                return protect(`$${base}^{${exp}}$`);
-            });
+            // sqrt(x) without backslash
+            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (m, c) => wrap(`\\sqrt{${c}}`));
 
-            // Pattern: Simple subscript like I_C, x_1 (single char, not followed by {)
-            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])(?![{_^])/g, (match, base, sub) => {
-                return protect(`$${base}_{${sub}}$`);
-            });
+            // Clean up: merge adjacent $$ into single expression where sensible
+            // $a$ $b$ -> keep separate, but $$$ -> invalid, fix
+            text = text.replace(/\$\s*\$/g, ' ');
 
-            // Pattern: Simple superscript x^2, a^n (single char, not followed by {)
-            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])(?![{_^])/g, (match, base, exp) => {
-                return protect(`$${base}^{${exp}}$`);
-            });
+            // Restore existing math
+            text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
 
-            // Pattern: Numeric fractions 1/2, 3/4
-            text = text.replace(/(?<![\/\d])(\d+)\/(\d+)(?![\/\d])/g, (match, num, den) => {
-                return protect(`$\\frac{${num}}{${den}}$`);
-            });
-
-            // Pattern: sqrt(x) without backslash
-            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (match, content) => {
-                return protect(`$\\sqrt{${content}}$`);
-            });
-
-            // Pattern: Spelled-out Greek letters
-            const greekWords = {
-                'alpha': '\\alpha', 'beta': '\\beta', 'gamma': '\\gamma',
-                'delta': '\\delta', 'theta': '\\theta', 'pi': '\\pi',
-                'sigma': '\\sigma', 'omega': '\\omega', 'lambda': '\\lambda',
-                'infinity': '\\infty'
-            };
-            for (const [word, latex] of Object.entries(greekWords)) {
-                const regex = new RegExp(`(?<![a-zA-Z])${word}(?![a-zA-Z])`, 'gi');
-                text = text.replace(regex, (match) => protect(`$${latex}$`));
-            }
-
-            // STEP 5: Restore ALL protected blocks
-            text = text.replace(/%%MATH(\d+)%%/g, (match, index) => {
-                return protectedBlocks[parseInt(index)];
-            });
+            // Restore code blocks  
+            text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
 
             return text;
         }

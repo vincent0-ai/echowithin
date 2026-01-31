@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v3';
-const STATIC_CACHE = 'echowithin-static-v3';
-const PAGES_CACHE = 'echowithin-pages-v3';
-const POSTS_CACHE = 'echowithin-posts-v3';
+const CACHE_NAME = 'echowithin-v4';
+const STATIC_CACHE = 'echowithin-static-v4';
+const PAGES_CACHE = 'echowithin-pages-v4';
+const POSTS_CACHE = 'echowithin-posts-v4';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -69,17 +69,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
-  
+
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
   }
-  
+
   // Skip external requests
   if (url.origin !== location.origin) {
     return;
   }
-  
+
   // Skip API requests - they should always go to network
   if (url.pathname.startsWith('/api/')) {
     return;
@@ -98,7 +98,7 @@ self.addEventListener('fetch', event => {
                   cache.put(request, response);
                 });
               }
-            }).catch(() => {})
+            }).catch(() => { })
           );
           return cachedResponse;
         }
@@ -188,7 +188,7 @@ self.addEventListener('fetch', event => {
 // Push notification event handler
 self.addEventListener('push', event => {
   console.log('Push notification received:', event);
-  
+
   let data = {
     title: 'EchoWithin',
     body: 'You have a new notification',
@@ -197,7 +197,7 @@ self.addEventListener('push', event => {
     icon: '/static/logo.png',
     badge: '/static/logo.png'
   };
-  
+
   if (event.data) {
     try {
       data = { ...data, ...event.data.json() };
@@ -206,7 +206,7 @@ self.addEventListener('push', event => {
       data.body = event.data.text();
     }
   }
-  
+
   const options = {
     body: data.body,
     icon: data.icon || '/static/logo.png',
@@ -220,7 +220,7 @@ self.addEventListener('push', event => {
       { action: 'close', title: 'Dismiss' }
     ]
   };
-  
+
   event.waitUntil(
     self.registration.showNotification(data.title, options)
   );
@@ -230,13 +230,13 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   console.log('Notification clicked:', event);
   event.notification.close();
-  
+
   if (event.action === 'close') {
     return;
   }
-  
+
   const urlToOpen = event.notification.data?.url || '/';
-  
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       // Check if there's already a window open with this URL
@@ -256,7 +256,7 @@ self.addEventListener('notificationclick', event => {
 // Handle push subscription change (e.g., when browser refreshes subscription)
 self.addEventListener('pushsubscriptionchange', event => {
   console.log('Push subscription changed:', event);
-  
+
   event.waitUntil(
     // Re-subscribe and update the server
     self.registration.pushManager.subscribe({

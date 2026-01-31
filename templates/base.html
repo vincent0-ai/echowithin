@@ -393,11 +393,83 @@
 </body>
 
 <script>
+    // --- Capacitor Native App Support ---
+    // Hide splash screen when page is ready (for Capacitor app)
+    // Also handles deep linking from notifications
+    (function () {
+        // Check if running in Capacitor
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+            // Wait for Capacitor plugins to be ready
+            document.addEventListener('deviceready', function () {
+                // Hide splash screen with a nice fade
+                if (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+                    window.Capacitor.Plugins.SplashScreen.hide();
+                }
+            }, false);
+
+            // Fallback: hide splash after window load if deviceready didn't fire
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+                        window.Capacitor.Plugins.SplashScreen.hide();
+                    }
+                }, 500);
+            });
+
+            // Handle deep links from notifications
+            if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+                window.Capacitor.Plugins.App.addListener('appUrlOpen', function (event) {
+                    // Navigate to the deep link URL
+                    if (event.url) {
+                        const url = new URL(event.url);
+                        if (url.pathname) {
+                            window.location.href = url.pathname;
+                        }
+                    }
+                });
+            }
+
+            // Register FCM token if logged in
+            const isLoggedIn = document.body.dataset.userLoggedIn === 'true';
+            if (isLoggedIn && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
+                window.Capacitor.Plugins.PushNotifications.requestPermissions().then(function (result) {
+                    if (result.receive === 'granted') {
+                        window.Capacitor.Plugins.PushNotifications.register();
+                    }
+                });
+
+                window.Capacitor.Plugins.PushNotifications.addListener('registration', function (token) {
+                    // Send token to backend
+                    fetch('/api/fcm/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({ token: token.value, platform: 'android' })
+                    });
+                });
+
+                // Handle notification clicks
+                window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
+                    const data = notification.notification.data;
+                    if (data && data.url) {
+                        window.location.href = data.url;
+                    }
+                });
+            }
+        }
+    })();
+
     // PWA Install Prompt handling
     let deferredPrompt;
 
-    // Check if app is already installed (running in standalone mode)
+    // Check if app is already installed (running in standalone mode or native app)
     function isAppInstalled() {
+        // Check if running in Capacitor native app
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+            return true;
+        }
         // Check display-mode media query (works for most browsers)
         if (window.matchMedia('(display-mode: standalone)').matches) {
             return true;

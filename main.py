@@ -44,6 +44,14 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask_wtf.csrf import CSRFProtect
 from urllib.parse import urlparse, urljoin
 
+# Firebase Admin SDK for FCM (native app push notifications)
+try:
+    import firebase_admin
+    from firebase_admin import credentials, messaging
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+
 # --- Global Configurations & shared state ---
 ENGAGEMENT_WEIGHTS = {
     'comment': 5.0,
@@ -159,6 +167,39 @@ VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
 VAPID_CLAIMS = {"sub": "mailto:" + os.environ.get('MAIL_USERNAME', 'admin@echowithin.com')}
 
+# --- Firebase Admin SDK Configuration for FCM (Native App Push) ---
+# This is separate from web push - it's for the native Android/iOS apps
+# Can load credentials from:
+#   1. FIREBASE_CREDENTIALS env var (JSON string - recommended for production)
+#   2. FIREBASE_SERVICE_ACCOUNT env var pointing to a file path
+#   3. Default file: firebase-service-account.json
+FIREBASE_INITIALIZED = False
+if FIREBASE_AVAILABLE:
+    firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS', '').strip()
+    firebase_service_account = os.environ.get('FIREBASE_SERVICE_ACCOUNT', 'firebase-service-account.json')
+    
+    try:
+        if firebase_creds_json:
+            # Load from environment variable (JSON string)
+            cred_dict = json.loads(firebase_creds_json)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            FIREBASE_INITIALIZED = True
+            app.logger.info('Firebase Admin SDK initialized from FIREBASE_CREDENTIALS env var')
+        elif os.path.exists(firebase_service_account):
+            # Load from file
+            cred = credentials.Certificate(firebase_service_account)
+            firebase_admin.initialize_app(cred)
+            FIREBASE_INITIALIZED = True
+            app.logger.info('Firebase Admin SDK initialized from file')
+        else:
+            app.logger.debug('Firebase credentials not found, FCM notifications disabled')
+    except json.JSONDecodeError as e:
+        app.logger.warning(f'Invalid JSON in FIREBASE_CREDENTIALS env var: {e}')
+    except Exception as e:
+        app.logger.warning(f'Failed to initialize Firebase Admin SDK: {e}')
+
+
 app.config['MAIL_SERVER'] = get_env_variable('MAIL_SERVER')
 app.config['MAIL_PORT'] = int(get_env_variable('MAIL_PORT'))
 app.config['MAIL_USE_SSL'] = True
@@ -256,6 +297,7 @@ announcements_conf = db['announcements']
 comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
 push_subscriptions_conf = db['push_subscriptions']
+fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 newsletter_conf = db['newsletter_subs']
 user_post_views_conf = db['user_post_views']
 
@@ -1117,6 +1159,158 @@ def send_push_notifications_for_new_post(post_id_str):
         app.logger.error(f"Error in send_push_notifications_for_new_post: {e}", exc_info=True)
 
 
+# --- Firebase Cloud Messaging (FCM) for Native Apps ---
+# These functions handle push notifications for the native Android/iOS apps
+# They work alongside web push - both systems coexist
+
+def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None):
+    """Send FCM notification to all registered devices for a user (native app).
+    
+    This is called alongside web push to ensure both browser and native app users
+    receive notifications.
+    """
+    if not FIREBASE_INITIALIZED:
+        return 0
+    
+    try:
+        # Get all FCM tokens for this user
+        tokens = list(fcm_tokens_conf.find({'user_id': ObjectId(user_id_str)}))
+        if not tokens:
+            return 0
+        
+        sent_count = 0
+        for token_doc in tokens:
+            try:
+                message = messaging.Message(
+                    notification=messaging.Notification(
+                        title=title,
+                        body=body,
+                    ),
+                    data={
+                        'url': url or '/',
+                        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                        **(data or {})
+                    },
+                    token=token_doc['token'],
+                    android=messaging.AndroidConfig(
+                        priority='high',
+                        notification=messaging.AndroidNotification(
+                            icon='ic_launcher',
+                            color='#6366f1',
+                            click_action='OPEN_APP',
+                        ),
+                    ),
+                )
+                messaging.send(message)
+                sent_count += 1
+            except messaging.UnregisteredError:
+                # Token is invalid, remove it
+                fcm_tokens_conf.delete_one({'_id': token_doc['_id']})
+                app.logger.debug(f"Removed invalid FCM token for user {user_id_str}")
+            except Exception as e:
+                app.logger.error(f"FCM send error for user {user_id_str}: {e}")
+        
+        return sent_count
+    except Exception as e:
+        app.logger.error(f"Error in send_fcm_notification_to_user: {e}")
+        return 0
+
+
+def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
+    """Send FCM notifications to multiple tokens at once (for broadcast notifications)."""
+    if not FIREBASE_INITIALIZED or not tokens_list:
+        return 0
+    
+    try:
+        messages = []
+        for token_doc in tokens_list:
+            messages.append(messaging.Message(
+                notification=messaging.Notification(
+                    title=title,
+                    body=body,
+                ),
+                data={
+                    'url': url or '/',
+                    **(data or {})
+                },
+                token=token_doc['token'],
+                android=messaging.AndroidConfig(
+                    priority='high',
+                    notification=messaging.AndroidNotification(
+                        icon='ic_launcher',
+                        color='#6366f1',
+                    ),
+                ),
+            ))
+        
+        # Send in batches of 500 (FCM limit)
+        sent_count = 0
+        for i in range(0, len(messages), 500):
+            batch = messages[i:i+500]
+            response = messaging.send_each(batch)
+            sent_count += response.success_count
+            
+            # Remove failed tokens
+            for idx, send_response in enumerate(response.responses):
+                if not send_response.success:
+                    if hasattr(send_response, 'exception') and isinstance(send_response.exception, messaging.UnregisteredError):
+                        fcm_tokens_conf.delete_one({'_id': tokens_list[i + idx]['_id']})
+        
+        return sent_count
+    except Exception as e:
+        app.logger.error(f"Error in send_fcm_notifications_batch: {e}")
+        return 0
+
+
+@app.route('/api/fcm/register', methods=['POST'])
+@login_required
+def register_fcm_token():
+    """Register an FCM token for the current user (called from native app)."""
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Token is required'}), 400
+        
+        # Upsert the token for this user
+        fcm_tokens_conf.update_one(
+            {'user_id': ObjectId(current_user.id), 'token': token},
+            {'$set': {
+                'user_id': ObjectId(current_user.id),
+                'token': token,
+                'updated_at': datetime.datetime.now(datetime.timezone.utc),
+                'platform': data.get('platform', 'android'),
+            }},
+            upsert=True
+        )
+        
+        app.logger.info(f"FCM token registered for user {current_user.id}")
+        return jsonify({'success': True, 'message': 'Token registered'})
+    except Exception as e:
+        app.logger.error(f"Error registering FCM token: {e}")
+        return jsonify({'error': 'Failed to register token'}), 500
+
+
+@app.route('/api/fcm/unregister', methods=['POST'])
+@login_required
+def unregister_fcm_token():
+    """Unregister an FCM token (called when user logs out of native app)."""
+    try:
+        data = request.get_json()
+        token = data.get('token')
+        
+        if token:
+            fcm_tokens_conf.delete_one({'user_id': ObjectId(current_user.id), 'token': token})
+        else:
+            # Remove all tokens for this user
+            fcm_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
+        
+        return jsonify({'success': True, 'message': 'Token unregistered'})
+    except Exception as e:
+        app.logger.error(f"Error unregistering FCM token: {e}")
+        return jsonify({'error': 'Failed to unregister token'}), 500
+
 @rq.job
 def send_push_notification_for_comment(comment_id_str, post_slug):
     """Send push notification to post author when someone comments on their post."""
@@ -1184,6 +1378,16 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
                     app.logger.error(f"Push notification failed for comment: {e}")
             except Exception as e:
                 app.logger.error(f"Unexpected push error for comment: {e}")
+
+        # Also send FCM notification to native app users
+        if post_author_id:
+            send_fcm_notification_to_user(
+                str(post_author_id),
+                title,
+                body,
+                url=post_url,
+                data={'type': 'comment', 'comment_id': comment_id_str}
+            )
 
         app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
     except Exception as e:

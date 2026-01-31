@@ -14,3 +14,5 @@ test_*.py
 mock_*.py
 fix_emoji_slugs.py
 locustfile.py
+mobile-app/
+firebase-service-account.json

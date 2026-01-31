@@ -11,6 +11,8 @@ venv/
 FEATURES_ADDED.md
 worker.py
 test_*.py
+test_*
+debug_*
 mock_*.py
 fix_emoji_slugs.py
 locustfile.py

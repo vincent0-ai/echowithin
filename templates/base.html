@@ -584,16 +584,16 @@
 
         // Check if push is supported
         if (!('PushManager' in window)) {
-            console.log('Push notifications not supported');
-            return;
+        console.log('Push notifications not supported');
+        return;
         }
 
-    // Check if we're on iOS (Safari on iOS has limited push notification support)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        // Check if we're on iOS (Safari on iOS has limited push notification support)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-    // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
-    if (isIOS) {
+        // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
+        if (isIOS) {
         console.log('iOS detected - Push notifications have limited support');
         // On iOS, we'll only attempt notifications if explicitly requested by user
         // You may want to add a UI button for users to enable notifications

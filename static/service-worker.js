@@ -13,7 +13,6 @@ const STATIC_ASSETS = [
   '/static/custom_styles.css',
   '/static/script.js',
   '/static/logo.png',
-  '/static/coffee-bean.png',
   '/static/manifest.json'
 ];
 

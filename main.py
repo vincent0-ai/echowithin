@@ -1188,7 +1188,7 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                     ),
                     data={
                         'url': url or '/',
-                        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                        'click_action': url or '/',  # URL to open when clicked
                         **(data or {})
                     },
                     token=token_doc['token'],
@@ -1197,7 +1197,9 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                         notification=messaging.AndroidNotification(
                             icon='ic_launcher',
                             color='#6366f1',
-                            click_action='OPEN_APP',
+                            channel_id='default',
+                            # Use deep link URL for click action
+                            click_action='FCM_PLUGIN_ACTIVITY',
                         ),
                     ),
                 )
@@ -1231,6 +1233,7 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                 ),
                 data={
                     'url': url or '/',
+                    'click_action': url or '/',
                     **(data or {})
                 },
                 token=token_doc['token'],
@@ -1239,6 +1242,8 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                     notification=messaging.AndroidNotification(
                         icon='ic_launcher',
                         color='#6366f1',
+                        channel_id='default',
+                        click_action='FCM_PLUGIN_ACTIVITY',
                     ),
                 ),
             ))

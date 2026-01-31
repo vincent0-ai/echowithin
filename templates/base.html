@@ -582,11 +582,11 @@
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
         if (!isLoggedIn) return;
 
-    // Check if push is supported
-    if (!('PushManager' in window)) {
-        console.log('Push notifications not supported');
-        return;
-    }
+        // Check if push is supported
+        if (!('PushManager' in window)) {
+            console.log('Push notifications not supported');
+            return;
+        }
 
     // Check if we're on iOS (Safari on iOS has limited push notification support)
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;

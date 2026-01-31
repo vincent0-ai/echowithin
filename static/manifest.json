@@ -16,7 +16,7 @@
       "purpose": "any"
     },
     {
-      "src": "/static/logo.png",
+      "src": "/static/logo_maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -34,7 +34,10 @@
       "purpose": "any"
     }
   ],
-  "categories": ["productivity", "social"],
+  "categories": [
+    "productivity",
+    "social"
+  ],
   "id": "/",
   "prefer_related_applications": false
 }

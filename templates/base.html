@@ -429,9 +429,11 @@
                 });
             }
 
-            // Register FCM token if logged in
+            // Register FCM token if logged in (only once per session to avoid slowness)
             const isLoggedIn = document.body.dataset.userLoggedIn === 'true';
-            if (isLoggedIn && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
+            const fcmRegistered = sessionStorage.getItem('fcm_token_registered');
+
+            if (isLoggedIn && !fcmRegistered && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
                 window.Capacitor.Plugins.PushNotifications.requestPermissions().then(function (result) {
                     if (result.receive === 'granted') {
                         window.Capacitor.Plugins.PushNotifications.register();
@@ -439,6 +441,7 @@
                 });
 
                 window.Capacitor.Plugins.PushNotifications.addListener('registration', function (token) {
+                    console.log('Push registration successful, token:', token.value);
                     // Send token to backend
                     fetch('/api/fcm/register', {
                         method: 'POST',
@@ -447,6 +450,10 @@
                             'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                         },
                         body: JSON.stringify({ token: token.value, platform: 'android' })
+                    }).then(response => {
+                        if (response.ok) {
+                            sessionStorage.setItem('fcm_token_registered', 'true');
+                        }
                     });
                 });
 
@@ -582,18 +589,18 @@
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
         if (!isLoggedIn) return;
 
-        // Check if push is supported
-        if (!('PushManager' in window)) {
+    // Check if push is supported
+    if (!('PushManager' in window)) {
         console.log('Push notifications not supported');
         return;
-        }
+    }
 
-        // Check if we're on iOS (Safari on iOS has limited push notification support)
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    // Check if we're on iOS (Safari on iOS has limited push notification support)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isIOSSafari = isIOS && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 
-        // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
-        if (isIOS) {
+    // iOS Safari only supports web push on iOS 16.4+ and requires user interaction
+    if (isIOS) {
         console.log('iOS detected - Push notifications have limited support');
         // On iOS, we'll only attempt notifications if explicitly requested by user
         // You may want to add a UI button for users to enable notifications

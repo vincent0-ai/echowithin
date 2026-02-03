@@ -795,7 +795,7 @@
         function autoDetectMath(text) {
             if (!text) return text;
 
-            // Protect code blocks from processing (these we DO need to protect)
+            // Protect code blocks from processing
             const codeBlocks = [];
             text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
             text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
@@ -808,24 +808,81 @@
             // Helper: wrap with $...$ if not empty
             const wrap = (content) => `$${content}$`;
 
-            // DETECT PATTERNS - just add $...$ delimiters, no placeholders
-            // Order matters: detect complex/longer patterns first
+            // Helper: find matching brace from a given position
+            function findMatchingBrace(str, startIndex) {
+                if (str[startIndex] !== '{') return -1;
+                let depth = 1;
+                for (let i = startIndex + 1; i < str.length; i++) {
+                    if (str[i] === '{') depth++;
+                    else if (str[i] === '}') {
+                        depth--;
+                        if (depth === 0) return i;
+                    }
+                }
+                return -1;
+            }
 
-            // \frac{...}{...}
-            text = text.replace(/\\frac\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}/g,
-                (m) => wrap(m));
+            // Helper: extract content between balanced braces
+            function extractBracedContent(str, startIndex) {
+                if (str[startIndex] !== '{') return null;
+                const endIndex = findMatchingBrace(str, startIndex);
+                if (endIndex === -1) return null;
+                return { content: str.substring(startIndex + 1, endIndex), endIndex: endIndex };
+            }
 
-            // \sqrt{...} or \sqrt[n]{...}
-            text = text.replace(/\\sqrt(?:\[[^\]]*\])?\{[^}]*\}/g, (m) => wrap(m));
+            // Process \frac, \sqrt, \left...\right with balanced brace matching
+            let result = '';
+            let i = 0;
+            while (i < text.length) {
+                // Check for \frac{...}{...}
+                if (text.substring(i, i + 5) === '\\frac' && text[i + 5] === '{') {
+                    const firstBrace = extractBracedContent(text, i + 5);
+                    if (firstBrace && text[firstBrace.endIndex + 1] === '{') {
+                        const secondBrace = extractBracedContent(text, firstBrace.endIndex + 1);
+                        if (secondBrace) {
+                            const fullMatch = text.substring(i, secondBrace.endIndex + 1);
+                            result += wrap(fullMatch);
+                            i = secondBrace.endIndex + 1;
+                            continue;
+                        }
+                    }
+                }
+                // Check for \sqrt{...} or \sqrt[n]{...}
+                else if (text.substring(i, i + 5) === '\\sqrt') {
+                    let j = i + 5;
+                    if (text[j] === '[') {
+                        const closeBracket = text.indexOf(']', j);
+                        if (closeBracket !== -1) j = closeBracket + 1;
+                    }
+                    if (text[j] === '{') {
+                        const braceContent = extractBracedContent(text, j);
+                        if (braceContent) {
+                            const fullMatch = text.substring(i, braceContent.endIndex + 1);
+                            result += wrap(fullMatch);
+                            i = braceContent.endIndex + 1;
+                            continue;
+                        }
+                    }
+                }
+                // Check for \left...\right pairs  
+                else if (text.substring(i, i + 5) === '\\left') {
+                    const rightMatch = text.substring(i).match(/^\\left[\(\[\{][\s\S]*?\\right[\)\]\}]/);
+                    if (rightMatch) {
+                        result += wrap(rightMatch[0]);
+                        i += rightMatch[0].length;
+                        continue;
+                    }
+                }
+                result += text[i];
+                i++;
+            }
+            text = result;
 
             // \int, \sum, \prod, \lim with limits
             text = text.replace(/\\(int|sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (m) => wrap(m));
 
-            // \left...\right pairs
-            text = text.replace(/\\left[({\[][\s\S]*?\\right[)}\]]/g, (m) => wrap(m));
-
-            // Greek letters and operators with backslash
-            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|text|mathrm)\b(?:\{[^}]*\})?/g,
+            // Greek letters and operators (added \dots, \ldots, \cdots)
+            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm)\b(?:\{[^}]*\})?/g,
                 (m) => wrap(m));
 
             // Trig/log functions
@@ -843,14 +900,13 @@
             // Simple superscript x^2 (single char)  
             text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])(?![{_^])/g, (m, base, exp) => wrap(`${base}^{${exp}}`));
 
-            // Numeric fractions 1/2
-            text = text.replace(/(?<![\/\d])(\d+)\/(\d+)(?![\/\d])/g, (m, n, d) => wrap(`\\frac{${n}}{${d}}`));
+            // Numeric fractions 1/2 (compatible pattern without lookbehind)
+            text = text.replace(/(^|[^\/\d])(\d+)\/(\d+)(?![\/\d])/g, (m, prefix, n, d) => prefix + wrap(`\\frac{${n}}{${d}}`));
 
             // sqrt(x) without backslash
             text = text.replace(/\bsqrt\(([^)]+)\)/gi, (m, c) => wrap(`\\sqrt{${c}}`));
 
-            // Clean up: merge adjacent $$ into single expression where sensible
-            // $a$ $b$ -> keep separate, but $$$ -> invalid, fix
+            // Clean up: merge adjacent empty $$ 
             text = text.replace(/\$\s*\$/g, ' ');
 
             // Restore existing math
@@ -861,6 +917,7 @@
 
             return text;
         }
+
         // Function to render markdown with math support
         function renderMarkdownWithMath(text) {
             if (!text) return '';

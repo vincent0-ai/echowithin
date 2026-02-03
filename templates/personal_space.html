@@ -795,137 +795,128 @@
         function autoDetectMath(text) {
             if (!text) return text;
 
-            // Protect code blocks from processing
+            // DEBUG: See exactly what's in the string (escaped)
+            console.log('[autoDetectMath] Raw string (JSON):', JSON.stringify(text.substring(0, 200)));
+
+            // Protect code blocks
             const codeBlocks = [];
             text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
             text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
 
-            // Protect EXISTING $...$ and $$...$$ (user already formatted these)
+            // Protect EXISTING $...$
             const existingMath = [];
             text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
             text = text.replace(/\$[^\$\n]+?\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
 
-            // Helper: wrap with $...$ if not empty
             const wrap = (content) => `$${content}$`;
 
-            // Helper: find matching brace from a given position
-            function findMatchingBrace(str, startIndex) {
-                if (str[startIndex] !== '{') return -1;
+            function extractBracedContent(str, startIndex) {
+                if (str[startIndex] !== '{') return null;
                 let depth = 1;
                 for (let i = startIndex + 1; i < str.length; i++) {
                     if (str[i] === '{') depth++;
                     else if (str[i] === '}') {
                         depth--;
-                        if (depth === 0) return i;
+                        if (depth === 0) return { content: str.substring(startIndex + 1, i), endIndex: i };
                     }
                 }
-                return -1;
+                return null;
             }
 
-            // Helper: extract content between balanced braces
-            function extractBracedContent(str, startIndex) {
-                if (str[startIndex] !== '{') return null;
-                const endIndex = findMatchingBrace(str, startIndex);
-                if (endIndex === -1) return null;
-                return { content: str.substring(startIndex + 1, endIndex), endIndex: endIndex };
-            }
-
-            // Process \frac, \sqrt, \left...\right with balanced brace matching
+            // More robust detection for \frac, \sqrt, etc. using Regex to find the start
+            // This handles cases where it might be \\frac or \frac
             let result = '';
-            let i = 0;
-            // DEBUG: Log first 200 chars to see what we're working with
-            console.log('[autoDetectMath] Processing text (first 200 chars):', text.substring(0, 200));
-            console.log('[autoDetectMath] Contains \\frac?', text.includes('\\frac'));
-            while (i < text.length) {
-                // Check for \frac{...}{...}
-                // DEBUG: Log when we hit a backslash
-                if (text[i] === '\\') {
-                    console.log('[autoDetectMath] Found backslash at', i, 'next 10 chars:', JSON.stringify(text.substring(i, i + 10)));
-                }
-                if (text.substring(i, i + 5) === '\\frac' && text[i + 5] === '{') {
-                    console.log('[autoDetectMath] MATCHED \\frac{ at position', i);
+            let lastIdx = 0;
+            // Match \frac{ or \\frac{
+            const mathRegex = /\\{1,2}(frac|sqrt|left|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm|sin|cos|tan|int|sum)\b/g;
 
-                    const firstBrace = extractBracedContent(text, i + 5);
-                    if (firstBrace && text[firstBrace.endIndex + 1] === '{') {
-                        const secondBrace = extractBracedContent(text, firstBrace.endIndex + 1);
-                        if (secondBrace) {
-                            const fullMatch = text.substring(i, secondBrace.endIndex + 1);
-                            result += wrap(fullMatch);
-                            i = secondBrace.endIndex + 1;
-                            continue;
+            let match;
+            while ((match = mathRegex.exec(text)) !== null) {
+                result += text.substring(lastIdx, match.index);
+                const cmd = match[1];
+                let matchedWhole = false;
+
+                if (cmd === 'frac') {
+                    let j = match.index + match[0].length;
+                    if (text[j] === '{') {
+                        const first = extractBracedContent(text, j);
+                        if (first && text[first.endIndex + 1] === '{') {
+                            const second = extractBracedContent(text, first.endIndex + 1);
+                            if (second) {
+                                result += wrap(text.substring(match.index, second.endIndex + 1));
+                                lastIdx = second.endIndex + 1;
+                                mathRegex.lastIndex = lastIdx;
+                                matchedWhole = true;
+                            }
                         }
                     }
-                }
-                // Check for \sqrt{...} or \sqrt[n]{...}
-                else if (text.substring(i, i + 5) === '\\sqrt') {
-                    let j = i + 5;
+                } else if (cmd === 'sqrt') {
+                    let j = match.index + match[0].length;
                     if (text[j] === '[') {
-                        const closeBracket = text.indexOf(']', j);
-                        if (closeBracket !== -1) j = closeBracket + 1;
+                        const endBrkt = text.indexOf(']', j);
+                        if (endBrkt !== -1) j = endBrkt + 1;
                     }
                     if (text[j] === '{') {
-                        const braceContent = extractBracedContent(text, j);
-                        if (braceContent) {
-                            const fullMatch = text.substring(i, braceContent.endIndex + 1);
-                            result += wrap(fullMatch);
-                            i = braceContent.endIndex + 1;
-                            continue;
+                        const content = extractBracedContent(text, j);
+                        if (content) {
+                            result += wrap(text.substring(match.index, content.endIndex + 1));
+                            lastIdx = content.endIndex + 1;
+                            mathRegex.lastIndex = lastIdx;
+                            matchedWhole = true;
                         }
                     }
-                }
-                // Check for \left...\right pairs  
-                else if (text.substring(i, i + 5) === '\\left') {
-                    const rightMatch = text.substring(i).match(/^\\left[\(\[\{][\s\S]*?\\right[\)\]\}]/);
-                    if (rightMatch) {
-                        result += wrap(rightMatch[0]);
-                        i += rightMatch[0].length;
-                        continue;
+                } else if (cmd === 'left') {
+                    const remaining = text.substring(match.index);
+                    const leftRightMatch = remaining.match(/^\\{1,2}left[\(\[\{][\s\S]*?\\{1,2}right[\)\]\}]/);
+                    if (leftRightMatch) {
+                        result += wrap(leftRightMatch[0]);
+                        lastIdx = match.index + leftRightMatch[0].length;
+                        mathRegex.lastIndex = lastIdx;
+                        matchedWhole = true;
                     }
+                } else {
+                    // Simple commands like \alpha, \approx, or \int_{...}
+                    let currentIdx = match.index + match[0].length;
+                    // Check for subscripts/superscripts attached to the command like \int_{a}^{b} or \alpha_{1}
+                    while (currentIdx < text.length && (text[currentIdx] === '_' || text[currentIdx] === '^')) {
+                        if (text[currentIdx + 1] === '{') {
+                            const braced = extractBracedContent(text, currentIdx + 1);
+                            if (braced) currentIdx = braced.endIndex + 1;
+                            else break;
+                        } else {
+                            currentIdx += 2; // move past _x or ^x
+                        }
+                    }
+                    result += wrap(text.substring(match.index, currentIdx));
+                    lastIdx = currentIdx;
+                    mathRegex.lastIndex = lastIdx;
+                    matchedWhole = true;
                 }
-                result += text[i];
-                i++;
+
+                if (!matchedWhole) {
+                    result += text.substring(match.index, match.index + match[0].length);
+                    lastIdx = match.index + match[0].length;
+                }
             }
+            result += text.substring(lastIdx);
             text = result;
 
-            // \int, \sum, \prod, \lim with limits
-            text = text.replace(/\\(int|sum|prod|lim)(?:_\{[^}]*\})?(?:\^\{[^}]*\})?/g, (m) => wrap(m));
+            // X_multi and Simple patterns (only if not already wrapped)
+            text = text.replace(/(?<!\$[^$]*)([A-Za-z0-9])_\{([^}]+)\}(?![^$]*\$)/g, (m, b, s) => wrap(`${b}_{${s}}`));
+            text = text.replace(/(?<!\$[^$]*)([A-Za-z0-9])\^\{([^}]+)\}(?![^$]*\$)/g, (m, b, e) => wrap(`${b}^{${e}}`));
+            text = text.replace(/(?<!\$[^$]*)\b([A-Za-z])_([0-9a-zA-Z])\b(?![^$]*\$)/g, (m, b, s) => wrap(`${b}_{${s}}`));
+            text = text.replace(/(?<!\$[^$]*)\b([A-Za-z0-9])\^([0-9a-zA-Z])\b(?![^$]*\$)/g, (m, b, e) => wrap(`${b}^{${e}}`));
 
-            // Greek letters and operators (added \dots, \ldots, \cdots)
-            text = text.replace(/\\(alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm)\b(?:\{[^}]*\})?/g,
-                (m) => wrap(m));
+            // Numeric fractions 1/2
+            text = text.replace(/(^|[^\/\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
 
-            // Trig/log functions
-            text = text.replace(/\\(sin|cos|tan|cot|sec|csc|ln|log|exp)\b/g, (m) => wrap(m));
-
-            // X_{multi} subscripts (V_{dc}, I_{DSS})
-            text = text.replace(/([A-Za-z])_\{([^}]+)\}/g, (m, base, sub) => wrap(`${base}_{${sub}}`));
-
-            // X^{multi} superscripts
-            text = text.replace(/([A-Za-z])\^\{([^}]+)\}/g, (m, base, exp) => wrap(`${base}^{${exp}}`));
-
-            // Simple subscript x_1 (single char)
-            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])(?![{_^])/g, (m, base, sub) => wrap(`${base}_{${sub}}`));
-
-            // Simple superscript x^2 (single char)  
-            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])(?![{_^])/g, (m, base, exp) => wrap(`${base}^{${exp}}`));
-
-            // Numeric fractions 1/2 (compatible pattern without lookbehind)
-            text = text.replace(/(^|[^\/\d])(\d+)\/(\d+)(?![\/\d])/g, (m, prefix, n, d) => prefix + wrap(`\\frac{${n}}{${d}}`));
-
-            // sqrt(x) without backslash
-            text = text.replace(/\bsqrt\(([^)]+)\)/gi, (m, c) => wrap(`\\sqrt{${c}}`));
-
-            // Clean up: merge adjacent empty $$ 
-            text = text.replace(/\$\s*\$/g, ' ');
-
-            // Restore existing math
+            // Restore
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
-
-            // Restore code blocks  
             text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
 
             return text;
         }
+
 
         // Function to render markdown with math support
         function renderMarkdownWithMath(text) {

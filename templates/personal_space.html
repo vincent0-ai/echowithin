@@ -838,8 +838,13 @@
             console.log('[autoDetectMath] Contains \\frac?', text.includes('\\frac'));
             while (i < text.length) {
                 // Check for \frac{...}{...}
-
+                // DEBUG: Log when we hit a backslash
+                if (text[i] === '\\') {
+                    console.log('[autoDetectMath] Found backslash at', i, 'next 10 chars:', JSON.stringify(text.substring(i, i + 10)));
+                }
                 if (text.substring(i, i + 5) === '\\frac' && text[i + 5] === '{') {
+                    console.log('[autoDetectMath] MATCHED \\frac{ at position', i);
+
                     const firstBrace = extractBracedContent(text, i + 5);
                     if (firstBrace && text[firstBrace.endIndex + 1] === '{') {
                         const secondBrace = extractBracedContent(text, firstBrace.endIndex + 1);

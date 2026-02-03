@@ -833,8 +833,12 @@
             // Process \frac, \sqrt, \left...\right with balanced brace matching
             let result = '';
             let i = 0;
+            // DEBUG: Log first 200 chars to see what we're working with
+            console.log('[autoDetectMath] Processing text (first 200 chars):', text.substring(0, 200));
+            console.log('[autoDetectMath] Contains \\frac?', text.includes('\\frac'));
             while (i < text.length) {
                 // Check for \frac{...}{...}
+
                 if (text.substring(i, i + 5) === '\\frac' && text[i + 5] === '{') {
                     const firstBrace = extractBracedContent(text, i + 5);
                     if (firstBrace && text[firstBrace.endIndex + 1] === '{') {

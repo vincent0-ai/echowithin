@@ -2107,36 +2107,68 @@ def login():
 def google_login():
     # Define the scopes required to access user's email and profile information
     scope = ['openid', 'email', 'profile']
-    google = OAuth2Session(GOOGLE_CLIENT_ID, scope=scope, redirect_uri=url_for('google_callback', _external=True))
+    google = OAuth2Session(GOOGLE_CLIENT_ID, scope=scope, redirect_uri=url_for('google_callback', _external=True, _scheme='https'))
     authorization_url, state = google.authorization_url(
         'https://accounts.google.com/o/oauth2/auth',
         prompt='consent' # Force the consent screen to be shown on first login.
     )
     session['oauth_state'] = state
+    
+    # Backup state in Redis to handle session loss during mobile context switching (webview -> system browser)
+    if redis_cache:
+        try:
+            redis_cache.setex(f"oauth_state:{state}", 600, "1") # 10 minute TTL
+            app.logger.info(f"OAuth state backed up in Redis: {state[:8]}...")
+        except Exception as e:
+            app.logger.warning(f"Failed to backup OAuth state in Redis: {e}")
+
     # Support for mobile app redirection
-    platform = request.args.get('platform')
+    platform = request.args.get('platform', 'desktop')
     if platform == 'mobile':
         session['oauth_platform'] = 'mobile'
+        # Also backup platform choice if Redis is available
+        if redis_cache:
+            try:
+                redis_cache.setex(f"oauth_platform:{state}", 600, 'mobile')
+            except Exception:
+                pass
     
     return redirect(authorization_url)
 
 @app.route('/google_callback')
 def google_callback():
-    # If state is not in session, it's a possible replay attack or the user
-    # has already completed the flow. Redirect to login to be safe.
+    state_from_url = request.args.get('state')
+    
+    # If state is not in session, try to recover it from Redis (handles context switching on mobile)
+    if 'oauth_state' not in session and state_from_url:
+        if redis_cache:
+            try:
+                if redis_cache.exists(f"oauth_state:{state_from_url}"):
+                    session['oauth_state'] = state_from_url
+                    app.logger.info(f"Recovered state from Redis for {state_from_url[:8]}...")
+                    # Also recover platform if it was saved
+                    platform_saved = redis_cache.get(f"oauth_platform:{state_from_url}")
+                    if platform_saved:
+                        session['oauth_platform'] = platform_saved
+            except Exception as e:
+                app.logger.warning(f"Error checking Redis for state recovery: {e}")
+
+    # If state is still not in session, it's a possible replay attack or session loss
     if 'oauth_state' not in session:
-        flash("Authentication session expired or was already used. Please try logging in again.", "warning")
+        app.logger.warning("Authentication session missing and could not be recovered from Redis.")
+        flash("Authentication session expired (session mismatch). Please try logging in again.", "warning")
         return redirect(url_for('login'))
 
     # Get the state from the session. We will pop it only after successful token fetch
-    # to avoid "session expired" errors on accidental double-loads or pre-fetches (common in some mobile/PWA browsers).
+    # to avoid "session expired" errors on accidental double-loads or pre-fetches.
     oauth_state = session.get('oauth_state')
 
     # Recreate the session with the same redirect_uri to fetch the token
+    # Crucially, ensure the URI is consistent with the login call (use _scheme='https')
     google = OAuth2Session(
         GOOGLE_CLIENT_ID,
         state=oauth_state,
-        redirect_uri=url_for('google_callback', _external=True))
+        redirect_uri=url_for('google_callback', _external=True, _scheme='https'))
     try:
         token = google.fetch_token(
             'https://oauth2.googleapis.com/token',
@@ -2147,11 +2179,23 @@ def google_callback():
         app.logger.error(f"Failed to fetch Google OAuth OAuth2Session: {e}", exc_info=True)
         # If fetching token fails, we should clear the state to allow a fresh start next time
         session.pop('oauth_state', None)
+        if state_from_url and redis_cache:
+            try:
+                redis_cache.delete(f"oauth_state:{state_from_url}")
+                redis_cache.delete(f"oauth_platform:{state_from_url}")
+            except Exception:
+                pass
         flash("Authentication failed. Please try again.", "danger")
         return redirect(url_for('login'))
 
-    # If successful, we can now safely pop the state
+    # If successful, we can now safely pop the state from session and Redis
     session.pop('oauth_state', None)
+    if state_from_url and redis_cache:
+        try:
+            redis_cache.delete(f"oauth_state:{state_from_url}")
+            redis_cache.delete(f"oauth_platform:{state_from_url}")
+        except Exception:
+            pass
     google = OAuth2Session(GOOGLE_CLIENT_ID, token=token)
     response = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
     user_info = response.json()
@@ -2183,8 +2227,14 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile login completed for {user['username']}")
-            # Redirect to the app's custom scheme to bring user back to the app
-            return redirect("echowithin://open?path=/home")
+            # Redirect to the app's custom scheme. Android uses 'echowithin://open', iOS often 'EchoWithin://'
+            # We'll try to be robust here.
+            try:
+                # Redirecting to a deep link
+                return redirect("echowithin://open?path=/home")
+            except Exception as e:
+                app.logger.error(f"Deep link redirect failed: {e}")
+                return redirect(url_for('home'))
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
@@ -2234,7 +2284,7 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile signup completed for {username}")
-            # Redirect to the app's custom scheme to bring user back to the app
+            # Redirect to the app's custom scheme
             return redirect("echowithin://open?path=/home")
 
         next_url = session.pop('oauth_next', None)

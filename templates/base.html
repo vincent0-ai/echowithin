@@ -448,32 +448,73 @@
                 }, 500);
             });
 
+            // Helper function to handle deep link URLs
+            function handleDeepLink(deepLinkUrl) {
+                if (!deepLinkUrl) return false;
+                
+                console.log('Processing deep link:', deepLinkUrl);
+                try {
+                    const url = new URL(deepLinkUrl);
+                    // Handle echowithin://open?path=/foo&bar=baz
+                    if (url.protocol === 'echowithin:' && url.host === 'open') {
+                        const path = url.searchParams.get('path') || '/';
+                        // Create a new URL starting with the path
+                        const targetUrl = new URL(path, window.location.origin);
+                        // Append all original search params (excluding 'path')
+                        url.searchParams.forEach((value, key) => {
+                            if (key !== 'path') targetUrl.searchParams.set(key, value);
+                        });
+                        console.log('Deep link redirecting to:', targetUrl.pathname + targetUrl.search);
+                        
+                        // Close the system browser (if open from OAuth flow)
+                        if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                            window.Capacitor.Plugins.Browser.close().catch(function() {
+                                // Ignore errors if browser wasn't open
+                            });
+                        }
+                        
+                        window.location.href = targetUrl.pathname + targetUrl.search;
+                        return true;
+                    } else if (url.pathname && url.pathname !== '/') {
+                        // Fallback for standard https deep links
+                        // Close the system browser (if open from OAuth flow)
+                        if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                            window.Capacitor.Plugins.Browser.close().catch(function() {
+                                // Ignore errors if browser wasn't open
+                            });
+                        }
+                        
+                        window.location.href = url.pathname + url.search;
+                        return true;
+                    }
+                } catch (e) {
+                    console.error('Error parsing deep link URL:', e);
+                }
+                return false;
+            }
+
             // Handle deep links (e.g., from Google OAuth redirect or notifications)
             if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-                window.Capacitor.Plugins.App.addListener('appUrlOpen', function (event) {
-                    console.log('App opened with URL:', event.url);
-                    if (event.url) {
-                        try {
-                            const url = new URL(event.url);
-                            // Handle echowithin://open?path=/foo&bar=baz
-                            if (url.protocol === 'echowithin:' && url.host === 'open') {
-                                const path = url.searchParams.get('path') || '/';
-                                // Create a new URL starting with the path
-                                const targetUrl = new URL(path, window.location.origin);
-                                // Append all original search params (excluding 'path')
-                                url.searchParams.forEach((value, key) => {
-                                    if (key !== 'path') targetUrl.searchParams.set(key, value);
-                                });
-                                console.log('Deep link redirecting to:', targetUrl.pathname + targetUrl.search);
-                                window.location.href = targetUrl.pathname + targetUrl.search;
-                            } else if (url.pathname && url.pathname !== '/') {
-                                // Fallback for standard https deep links
-                                window.location.href = url.pathname + url.search;
+                // Check for cold-start deep link (app launched via deep link)
+                // This is critical for OAuth redirects when app is not running
+                window.Capacitor.Plugins.App.getLaunchUrl().then(function (result) {
+                    if (result && result.url) {
+                        console.log('App launched with URL (cold start):', result.url);
+                        if (handleDeepLink(result.url)) {
+                            // Hide splash after redirect is initiated
+                            if (window.Capacitor.Plugins.SplashScreen) {
+                                window.Capacitor.Plugins.SplashScreen.hide();
                             }
-                        } catch (e) {
-                            console.error('Error parsing deep link URL:', e);
                         }
                     }
+                }).catch(function (err) {
+                    console.error('Error getting launch URL:', err);
+                });
+
+                // Listen for deep links when app is already running (warm start)
+                window.Capacitor.Plugins.App.addListener('appUrlOpen', function (event) {
+                    console.log('App opened with URL (warm start):', event.url);
+                    handleDeepLink(event.url);
                     // Always ensure splash is hidden even if link fails
                     if (window.Capacitor.Plugins.SplashScreen) {
                         window.Capacitor.Plugins.SplashScreen.hide();

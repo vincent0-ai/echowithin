@@ -828,7 +828,7 @@
             }
 
             // Regex for common LaTeX commands
-            const mathRegex = /\\{1,4}(frac|sqrt|left|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm|sin|cos|tan|int|sum|prod|lim|log|ln|exp)\b/g;
+            const mathRegex = /\\{1,4}(frac|sqrt|left|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm|bold|it|vec|hat|bar|tilde|Delta|Gamma|Omega|Phi|Psi|Sigma|Theta|Xi|partial|nabla|degree|micro|sin|cos|tan|int|sum|prod|lim|log|ln|exp)\b/g;
 
             let result = '';
             let lastIdx = 0;
@@ -874,8 +874,16 @@
                         matchedWhole = true;
                     }
                 } else {
-                    // Commands like \alpha or \int_{a}^{b}
+                    // Commands like \alpha, \text{...}, or \int_{a}^{b}
                     let currentIdx = match.index + match[0].length;
+
+                    // Consumes a braced argument if present (e.g., \text{V}, \mathrm{x})
+                    const bracedArg = extractBracedContent(text, currentIdx);
+                    if (bracedArg) {
+                        currentIdx = bracedArg.endIndex + 1;
+                    }
+
+                    // Check for subscripts/superscripts attached to the command (or the braced arg)
                     while (currentIdx < text.length) {
                         let i = currentIdx;
                         while (i < text.length && /\s/.test(text[i])) i++;

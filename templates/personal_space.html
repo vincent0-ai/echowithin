@@ -827,13 +827,14 @@
                 return null;
             }
 
-            // Regex for common LaTeX commands
-            const mathRegex = /\\{1,4}(frac|sqrt|left|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|sigma|omega|phi|rho|tau|eta|nu|xi|psi|chi|zeta|infty|times|cdot|approx|neq|leq|geq|pm|dots|ldots|cdots|text|mathrm|bold|it|vec|hat|bar|tilde|Delta|Gamma|Omega|Phi|Psi|Sigma|Theta|Xi|partial|nabla|degree|micro|sin|cos|tan|int|sum|prod|lim|log|ln|exp)\b/g;
+            // Commands sorted by length (longest first) to ensure greedy matching
+            const mathCmds = ['approx', 'cdots', 'degree', 'delta', 'epsilon', 'gamma', 'infty', 'lambda', 'ldots', 'micro', 'nabla', 'partial', 'sigma', 'theta', 'times', 'alpha', 'beta', 'bold', 'cdot', 'frac', 'int', 'left', 'prod', 'sqrt', 'text', 'vec', 'bar', 'cos', 'exp', 'hat', 'lim', 'log', 'rho', 'sin', 'sum', 'tan', 'eta', 'nu', 'phi', 'psi', 'rho', 'tau', 'mu', 'pi', 'xi', 'it'];
+            const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
 
             let result = '';
             let lastIdx = 0;
             let match;
-            while ((match = mathRegex.exec(text)) !== null) {
+            while ((match = cmdRegex.exec(text)) !== null) {
                 result += text.substring(lastIdx, match.index);
                 const cmd = match[1];
                 let matchedWhole = false;
@@ -846,7 +847,7 @@
                         if (second) {
                             result += wrap(text.substring(match.index, second.endIndex + 1));
                             lastIdx = second.endIndex + 1;
-                            mathRegex.lastIndex = lastIdx;
+                            cmdRegex.lastIndex = lastIdx;
                             matchedWhole = true;
                         }
                     }
@@ -861,7 +862,7 @@
                     if (content) {
                         result += wrap(text.substring(match.index, content.endIndex + 1));
                         lastIdx = content.endIndex + 1;
-                        mathRegex.lastIndex = lastIdx;
+                        cmdRegex.lastIndex = lastIdx;
                         matchedWhole = true;
                     }
                 } else if (cmd === 'left') {
@@ -870,20 +871,14 @@
                     if (leftRightMatch) {
                         result += wrap(leftRightMatch[0]);
                         lastIdx = match.index + leftRightMatch[0].length;
-                        mathRegex.lastIndex = lastIdx;
+                        cmdRegex.lastIndex = lastIdx;
                         matchedWhole = true;
                     }
                 } else {
-                    // Commands like \alpha, \text{...}, or \int_{a}^{b}
                     let currentIdx = match.index + match[0].length;
-
-                    // Consumes a braced argument if present (e.g., \text{V}, \mathrm{x})
                     const bracedArg = extractBracedContent(text, currentIdx);
-                    if (bracedArg) {
-                        currentIdx = bracedArg.endIndex + 1;
-                    }
+                    if (bracedArg) currentIdx = bracedArg.endIndex + 1;
 
-                    // Check for subscripts/superscripts attached to the command (or the braced arg)
                     while (currentIdx < text.length) {
                         let i = currentIdx;
                         while (i < text.length && /\s/.test(text[i])) i++;
@@ -897,7 +892,7 @@
                     }
                     result += wrap(text.substring(match.index, currentIdx));
                     lastIdx = currentIdx;
-                    mathRegex.lastIndex = lastIdx;
+                    cmdRegex.lastIndex = lastIdx;
                     matchedWhole = true;
                 }
 
@@ -909,15 +904,11 @@
             result += text.substring(lastIdx);
             text = result;
 
-            // X_multi and simple patterns
+            // Simple scripts with balanced parentheses
             const tempM = [];
             text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
-            text = text.replace(/([A-Za-z0-9])_\{([^}]+)\}/g, (m, b, s) => wrap(`${b}_{${s}}`));
-            text = text.replace(/([A-Za-z0-9])\^\{([^}]+)\}/g, (m, b, e) => wrap(`${b}^{${e}}`));
-            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])\b/g, (m, b, s) => wrap(`${b}_{${s}}`));
-            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])\b/g, (m, b, e) => wrap(`${b}^{${e}}`));
-
-            // Restore temp math placeholders
+            // Matches (expr)^2 or x^2
+            text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
             text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
 
             // Numeric fractions 1/2
@@ -927,6 +918,7 @@
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
             text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
 
+            console.log('[autoDetectMath] Final result:', JSON.stringify(text.substring(0, 300)));
             return text;
         }
 
@@ -984,21 +976,16 @@
                 processedText = marked.parse(processedText);
             }
 
-            // 4. Restore all placeholders
+            // 4. Sanitize Markdown HTML BEFORE restoring KaTeX
+            if (typeof DOMPurify !== 'undefined') {
+                processedText = DOMPurify.sanitize(processedText);
+            }
+
+            // 5. Restore ALL placeholders (including rendered KaTeX)
             processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
                 const item = placeholders[parseInt(index)];
                 return item ? item.content : match;
             });
-
-            // 5. Sanitize HTML (allowing KaTeX elements and SVG)
-            if (typeof DOMPurify !== 'undefined') {
-                processedText = DOMPurify.sanitize(processedText, {
-                    ADD_TAGS: ['semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot', 'msqrt', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'math', 'span',
-                        'svg', 'path', 'g', 'rect', 'line', 'circle', 'ellipse', 'polyline', 'polygon', 'use', 'defs', 'symbol', 'clipPath'],
-                    ADD_ATTR: ['xmlns', 'encoding', 'mathvariant', 'columnalign', 'rowspacing', 'columnspacing', 'displaystyle', 'scriptlevel', 'class', 'style', 'aria-hidden',
-                        'd', 'viewBox', 'fill', 'stroke', 'stroke-width', 'points', 'x', 'y', 'width', 'height', 'transform', 'id']
-                });
-            }
 
             return processedText;
         }

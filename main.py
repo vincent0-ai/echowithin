@@ -2113,10 +2113,11 @@ def google_login():
         prompt='consent' # Force the consent screen to be shown on first login.
     )
     session['oauth_state'] = state
-    # Store the next URL in session for redirect after Google login
-    next_url = request.args.get('next')
-    if next_url and is_safe_url(next_url):
-        session['oauth_next'] = next_url
+    # Support for mobile app redirection
+    platform = request.args.get('platform')
+    if platform == 'mobile':
+        session['oauth_platform'] = 'mobile'
+    
     return redirect(authorization_url)
 
 @app.route('/google_callback')
@@ -2127,8 +2128,9 @@ def google_callback():
         flash("Authentication session expired or was already used. Please try logging in again.", "warning")
         return redirect(url_for('login'))
 
-    # Pop the state from the session immediately to prevent reuse (e.g., in a PWA/browser race condition)
-    oauth_state = session.pop('oauth_state', None)
+    # Get the state from the session. We will pop it only after successful token fetch
+    # to avoid "session expired" errors on accidental double-loads or pre-fetches (common in some mobile/PWA browsers).
+    oauth_state = session.get('oauth_state')
 
     # Recreate the session with the same redirect_uri to fetch the token
     google = OAuth2Session(
@@ -2142,9 +2144,14 @@ def google_callback():
             authorization_response=request.url
         )
     except Exception as e:
-        app.logger.error(f"Failed to fetch Google OAuth token: {e}", exc_info=True)
+        app.logger.error(f"Failed to fetch Google OAuth OAuth2Session: {e}", exc_info=True)
+        # If fetching token fails, we should clear the state to allow a fresh start next time
+        session.pop('oauth_state', None)
         flash("Authentication failed. Please try again.", "danger")
         return redirect(url_for('login'))
+
+    # If successful, we can now safely pop the state
+    session.pop('oauth_state', None)
     google = OAuth2Session(GOOGLE_CLIENT_ID, token=token)
     response = google.get('https://www.googleapis.com/oauth2/v2/userinfo')
     user_info = response.json()
@@ -2172,6 +2179,12 @@ def google_callback():
         login_user(user_obj, remember=True)
         flash(f"Welcome back, {user['username']}!", "success")
         # Redirect to stored next URL or home
+        # Check if we need to redirect back to the mobile app
+        platform = session.pop('oauth_platform', None)
+        if platform == 'mobile':
+            app.logger.info(f"Mobile login completed for {user['username']}")
+            return redirect(url_for('home'))
+
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
             next_url = url_for('home')
@@ -2216,6 +2229,12 @@ def google_callback():
         login_user(user_obj, remember=True)
         flash(f"Account created successfully! Welcome, {username}!", "success")
         # Redirect to stored next URL or home
+        # Check if we need to redirect back to the mobile app
+        platform = session.pop('oauth_platform', None)
+        if platform == 'mobile':
+            app.logger.info(f"Mobile signup completed for {username}")
+            return redirect(url_for('home'))
+
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
             next_url = url_for('home')

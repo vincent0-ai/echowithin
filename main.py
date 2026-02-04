@@ -5477,6 +5477,7 @@ def mobile_auth():
                 # Log them in within THIS context (the app's webview)
                 user_obj = User(user)
                 login_user(user_obj, remember=True)
+                app.logger.info(f"Successfully bridged mobile session for user {user['username']} via OTLT.")
                 flash(f"Welcome back to the app, {user['username']}!", "success")
                 return redirect(url_for('home'))
             else:

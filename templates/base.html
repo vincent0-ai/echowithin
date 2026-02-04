@@ -442,6 +442,10 @@
                             console.error('Error parsing deep link URL:', e);
                         }
                     }
+                    // Always ensure splash is hidden even if link fails
+                    if (window.Capacitor.Plugins.SplashScreen) {
+                        window.Capacitor.Plugins.SplashScreen.hide();
+                    }
                 });
             }
 

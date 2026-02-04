@@ -114,6 +114,27 @@
         const switchLinks = document.querySelectorAll('.switch-tab');
         const forms = document.querySelectorAll('.auth-form');
 
+        // Detect if running in mobile app context and update Google login links
+        const isMobileApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        if (isMobileApp) {
+            console.log('Mobile app detected, updating Google login links...');
+            const googleLinks = document.querySelectorAll('.google-button');
+            googleLinks.forEach(link => {
+                try {
+                    const url = new URL(link.href);
+                    url.searchParams.set('platform', 'mobile');
+                    link.href = url.toString();
+                } catch (e) {
+                    // Fallback for relative URLs if any
+                    if (link.href.includes('?')) {
+                        link.href += '&platform=mobile';
+                    } else {
+                        link.href += '?platform=mobile';
+                    }
+                }
+            });
+        }
+
         function switchForm(formId) {
             tabButtons.forEach(button => {
                 button.classList.toggle('active', button.dataset.form === formId);

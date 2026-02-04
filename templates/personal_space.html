@@ -795,8 +795,7 @@
         function autoDetectMath(text) {
             if (!text) return text;
 
-            // DEBUG: See exactly what's in the string
-            console.log('[autoDetectMath] Processing:', JSON.stringify(text.substring(0, 300)));
+
 
             // Protect code blocks
             const codeBlocks = [];
@@ -828,7 +827,7 @@
             }
 
             // Commands sorted by length (longest first) to ensure greedy matching
-            const mathCmds = ['approx', 'cdots', 'degree', 'delta', 'epsilon', 'gamma', 'infty', 'lambda', 'ldots', 'micro', 'nabla', 'partial', 'sigma', 'theta', 'times', 'alpha', 'beta', 'bold', 'cdot', 'frac', 'int', 'left', 'prod', 'sqrt', 'text', 'vec', 'bar', 'cos', 'exp', 'hat', 'lim', 'log', 'rho', 'sin', 'sum', 'tan', 'eta', 'nu', 'phi', 'psi', 'rho', 'tau', 'mu', 'pi', 'xi', 'it'];
+            const mathCmds = ['approx', 'cdots', 'degree', 'delta', 'epsilon', 'gamma', 'infty', 'lambda', 'ldots', 'micro', 'nabla', 'partial', 'sigma', 'theta', 'times', 'alpha', 'beta', 'bold', 'cdot', 'frac', 'int', 'left', 'prod', 'sqrt', 'text', 'vec', 'bar', 'cos', 'exp', 'hat', 'lim', 'log', 'rho', 'sin', 'sum', 'tan', 'eta', 'nu', 'phi', 'psi', 'rho', 'tau', 'mu', 'pi', 'xi', 'it', 'mathbf', 'mathcal', 'mathbb', 'mathfrak', 'mathsf', 'mathtt', 'mathit', 'mathrm', 'bm'];
             const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
 
             let result = '';
@@ -918,7 +917,7 @@
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
             text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
 
-            console.log('[autoDetectMath] Final result:', JSON.stringify(text.substring(0, 300)));
+
             return text;
         }
 
@@ -953,7 +952,7 @@
                         placeholders.push({ type: 'rendered', content: rendered });
                         return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                     }
-                } catch (e) { console.error('KaTeX block error:', e); }
+                } catch (e) { }
                 return match; // Fallback: keep original
             });
 
@@ -966,7 +965,7 @@
                         placeholders.push({ type: 'rendered', content: rendered });
                         return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                     }
-                } catch (e) { console.error('KaTeX inline error:', e); }
+                } catch (e) { }
                 return match;
             });
 

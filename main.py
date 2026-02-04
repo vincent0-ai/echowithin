@@ -2233,7 +2233,7 @@ def google_callback():
             if redis_cache:
                 try:
                     # Store user_id mapping to token for 60 seconds
-                    redis_cache.setex(f"mobile_auth:{otlt_token}", 60, str(user['_id']))
+                    redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
                     url_with_token = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
                     app.logger.info(f"Redirecting to mobile deep link with OTLT: {otlt_token[:8]}...")
                     return redirect(url_with_token)
@@ -2296,7 +2296,7 @@ def google_callback():
             otlt_token = secrets.token_urlsafe(32)
             if redis_cache:
                 try:
-                    redis_cache.setex(f"mobile_auth:{otlt_token}", 60, str(user['_id']))
+                    redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
                     return redirect(f"echowithin://open?path=/mobile_auth&token={otlt_token}")
                 except Exception as e:
                     app.logger.error(f"Failed to store OTLT in Redis (signup): {e}")
@@ -2310,34 +2310,6 @@ def google_callback():
 
 
 
-@app.route('/mobile_auth')
-def mobile_auth():
-    """Bridge route to transfer session from system browser to App WebView."""
-    token = request.args.get('token')
-    if not token:
-        flash("Invalid authentication request.", "danger")
-        return redirect(url_for('login'))
-
-    user_id = None
-    if redis_cache:
-        try:
-            user_id = redis_cache.get(f"mobile_auth:{token}")
-            if user_id:
-                # Token is one-time use
-                redis_cache.delete(f"mobile_auth:{token}")
-                # String to object conversion handled by User class
-                user = users_conf.find_one({'_id': ObjectId(user_id)})
-                if user:
-                    user_obj = User(user)
-                    login_user(user_obj, remember=True)
-                    app.logger.info(f"Mobile bridge login successful for {user['username']}")
-                    flash(f"Welcome to the app, {user['username']}!", "success")
-                    return redirect(url_for('home'))
-        except Exception as e:
-            app.logger.error(f"Mobile auth bridge error: {e}")
-
-    flash("Authentication session expired or invalid. Please try again.", "warning")
-    return redirect(url_for('login'))
 
 
 

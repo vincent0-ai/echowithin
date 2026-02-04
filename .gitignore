@@ -1,5 +1,6 @@
 .env
 secret.py
+.vscode/
 __pycache__/
 TODO.md
 *.md

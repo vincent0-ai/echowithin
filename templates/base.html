@@ -20,6 +20,7 @@
 
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='capacitor.js') }}"></script>
     <style>
         /* Comment counter styles (server-provided counts shown via .comment-count-display) */
         .comment-count-display {
@@ -495,6 +496,10 @@
     function isAppInstalled() {
         // Check if running in Capacitor native app
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+            return true;
+        }
+        // Redundant check for EchoWithin custom User-Agent or specific mobile indicators
+        if (navigator.userAgent.includes('Capacitor') || navigator.userAgent.includes('EchoWithinApp')) {
             return true;
         }
         // Check display-mode media query (works for most browsers)

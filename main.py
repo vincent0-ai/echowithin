@@ -2310,6 +2310,37 @@ def google_callback():
 
 
 
+@app.route('/mobile_auth')
+def mobile_auth():
+    """Bridge route to transfer session from system browser to App WebView."""
+    token = request.args.get('token')
+    if not token:
+        flash("Invalid authentication request.", "danger")
+        return redirect(url_for('login'))
+
+    user_id = None
+    if redis_cache:
+        try:
+            user_id = redis_cache.get(f"mobile_auth:{token}")
+            if user_id:
+                # Token is one-time use
+                redis_cache.delete(f"mobile_auth:{token}")
+                # String to object conversion handled by User class
+                user = users_conf.find_one({'_id': ObjectId(user_id)})
+                if user:
+                    user_obj = User(user)
+                    login_user(user_obj, remember=True)
+                    app.logger.info(f"Mobile bridge login successful for {user['username']}")
+                    flash(f"Welcome to the app, {user['username']}!", "success")
+                    return redirect(url_for('home'))
+        except Exception as e:
+            app.logger.error(f"Mobile auth bridge error: {e}")
+
+    flash("Authentication session expired or invalid. Please try again.", "warning")
+    return redirect(url_for('login'))
+
+
+
 @app.route('/service-worker.js')
 def service_worker():
     """Serve the service worker from the root path for proper scope."""

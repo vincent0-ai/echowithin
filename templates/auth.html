@@ -117,10 +117,35 @@
         // Detect if running in mobile app context
         const isMobileApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
         if (isMobileApp) {
-            console.log('Mobile app detected - Google login will happen in WebView');
-            // No special handling needed - just let the normal navigation happen
-            // The OAuth flow will complete within the app's WebView context
-            // and cookies/session will be preserved automatically
+            console.log('Mobile app detected, setting up Google login for system browser...');
+            const googleLinks = document.querySelectorAll('.google-button');
+            googleLinks.forEach(link => {
+                // Append platform param so server knows to use mobile redirect flow
+                try {
+                    const url = new URL(link.href);
+                    url.searchParams.set('platform', 'mobile');
+                    link.href = url.toString();
+                } catch (e) {
+                    if (link.href.includes('?')) link.href += '&platform=mobile';
+                    else link.href += '?platform=mobile';
+                }
+
+                // Open in system browser (required by Google OAuth policy)
+                link.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    console.log('Opening Google Login in System Browser:', link.href);
+                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                        try {
+                            await window.Capacitor.Plugins.Browser.open({ url: link.href });
+                        } catch (err) {
+                            console.error('Failed to open browser:', err);
+                            window.open(link.href, '_system');
+                        }
+                    } else {
+                        window.open(link.href, '_system');
+                    }
+                });
+            });
         }
 
         function switchForm(formId) {

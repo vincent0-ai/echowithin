@@ -2149,7 +2149,11 @@ def google_callback():
                     # Also recover platform if it was saved
                     platform_saved = redis_cache.get(f"oauth_platform:{state_from_url}")
                     if platform_saved:
+                        # Redis returns bytes, decode to string
+                        if isinstance(platform_saved, bytes):
+                            platform_saved = platform_saved.decode('utf-8')
                         session['oauth_platform'] = platform_saved
+                        app.logger.info(f"Recovered platform from Redis: {platform_saved}")
             except Exception as e:
                 app.logger.warning(f"Error checking Redis for state recovery: {e}")
 

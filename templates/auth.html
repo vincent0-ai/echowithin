@@ -120,18 +120,32 @@
             console.log('Mobile app detected, updating Google login links...');
             const googleLinks = document.querySelectorAll('.google-button');
             googleLinks.forEach(link => {
+                // Append platform param
                 try {
                     const url = new URL(link.href);
                     url.searchParams.set('platform', 'mobile');
                     link.href = url.toString();
                 } catch (e) {
-                    // Fallback for relative URLs if any
-                    if (link.href.includes('?')) {
-                        link.href += '&platform=mobile';
-                    } else {
-                        link.href += '?platform=mobile';
-                    }
+                    if (link.href.includes('?')) link.href += '&platform=mobile';
+                    else link.href += '?platform=mobile';
                 }
+
+                // Force open in System Browser to ensure Deep Link works correctly
+                link.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    console.log('Opening Google Login in System Browser:', link.href);
+                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                        try {
+                            await window.Capacitor.Plugins.Browser.open({ url: link.href });
+                        } catch (err) {
+                            console.error('Failed to open browser:', err);
+                            // Fallback
+                            window.location.href = link.href;
+                        }
+                    } else {
+                        window.location.href = link.href;
+                    }
+                });
             });
         }
 

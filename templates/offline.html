@@ -1,25 +1,26 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>Offline - EchoWithin</title>
+<title>Offline - EchoWithin</title>
 {% endblock %}
 
 {% block content %}
 <div class="content-wrapper" style="text-align: center; padding: 3rem 1rem;">
     <h1>You're Offline</h1>
     <p style="color: #666; margin: 1rem 0;">It looks like you've lost your internet connection.</p>
-    
+
     <div id="cached-pages" style="margin: 2rem auto; max-width: 600px; display: none;">
         <h3 style="margin-bottom: 1rem;"><i class="fas fa-bookmark"></i> Your Cached Pages</h3>
-        <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">You can still view these pages you've visited before:</p>
+        <p style="color: #666; font-size: 0.9rem; margin-bottom: 1rem;">You can still view these pages you've visited
+            before:</p>
         <div id="cached-list" style="text-align: left;"></div>
     </div>
-    
-    
+
+
     <button onclick="location.reload()" class="btn edit-btn" style="margin-top: 1rem;">
         <i class="fas fa-sync-alt"></i> Try Again
     </button>
-    
+
     <p style="margin-top: 2rem; font-size: 0.9rem; color: #888;">
         Your connection will be restored automatically when available.
     </p>
@@ -30,41 +31,41 @@
     window.addEventListener('online', () => {
         location.reload();
     });
-    
+
     // Show cached pages that user can navigate to
     async function showCachedPages() {
         if ('caches' in window) {
             try {
-                const pagesCache = await caches.open('echowithin-pages-v3');
-                const postsCache = await caches.open('echowithin-posts-v3');
-                
+                const pagesCache = await caches.open('echowithin-pages-v4');
+                const postsCache = await caches.open('echowithin-posts-v4');
+
                 const [pagesKeys, postsKeys] = await Promise.all([
                     pagesCache.keys(),
                     postsCache.keys()
                 ]);
-                
+
                 const allKeys = [...pagesKeys, ...postsKeys];
-                
+
                 if (allKeys.length > 0) {
                     const cachedPagesDiv = document.getElementById('cached-pages');
                     const cachedList = document.getElementById('cached-list');
-                    
+
                     // Filter and display cached pages
                     const displayedUrls = new Set();
                     let html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">';
-                    
+
                     for (const request of allKeys) {
                         const url = new URL(request.url);
                         const path = url.pathname;
-                        
+
                         // Skip duplicates and certain paths
                         if (displayedUrls.has(path) || path === '/offline') continue;
                         displayedUrls.add(path);
-                        
+
                         // Determine display name
                         let displayName = path;
                         let icon = 'fas fa-file';
-                        
+
                         if (path === '/' || path === '/home') {
                             displayName = 'Home';
                             icon = 'fas fa-home';
@@ -82,14 +83,14 @@
                             displayName = path.replace('/profile/', '@');
                             icon = 'fas fa-user';
                         }
-                        
+
                         html += `<a href="${path}" class="btn" style="background: #667eea; color: white; text-decoration: none; font-size: 0.85rem;">
                             <i class="${icon}"></i> ${displayName}
                         </a>`;
                     }
-                    
+
                     html += '</div>';
-                    
+
                     if (displayedUrls.size > 0) {
                         cachedList.innerHTML = html;
                         cachedPagesDiv.style.display = 'block';
@@ -100,7 +101,7 @@
             }
         }
     }
-    
+
     // Show cached pages on load
     showCachedPages();
 </script>

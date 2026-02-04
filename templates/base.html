@@ -416,14 +416,30 @@
                 }, 500);
             });
 
-            // Handle deep links from notifications
+            // Handle deep links (e.g., from Google OAuth redirect or notifications)
             if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
                 window.Capacitor.Plugins.App.addListener('appUrlOpen', function (event) {
-                    // Navigate to the deep link URL
+                    console.log('App opened with URL:', event.url);
                     if (event.url) {
-                        const url = new URL(event.url);
-                        if (url.pathname) {
-                            window.location.href = url.pathname;
+                        try {
+                            const url = new URL(event.url);
+                            // Handle echowithin://open?path=/foo&bar=baz
+                            if (url.protocol === 'echowithin:' && url.host === 'open') {
+                                const path = url.searchParams.get('path') || '/';
+                                // Create a new URL starting with the path
+                                const targetUrl = new URL(path, window.location.origin);
+                                // Append all original search params (excluding 'path')
+                                url.searchParams.forEach((value, key) => {
+                                    if (key !== 'path') targetUrl.searchParams.set(key, value);
+                                });
+                                console.log('Deep link redirecting to:', targetUrl.pathname + targetUrl.search);
+                                window.location.href = targetUrl.pathname + targetUrl.search;
+                            } else if (url.pathname && url.pathname !== '/') {
+                                // Fallback for standard https deep links
+                                window.location.href = url.pathname + url.search;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing deep link URL:', e);
                         }
                     }
                 });
@@ -587,7 +603,7 @@
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
-        if (!isLoggedIn) return;
+    if (!isLoggedIn) return;
 
     // Check if push is supported
     if (!('PushManager' in window)) {

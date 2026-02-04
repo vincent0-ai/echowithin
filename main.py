@@ -2227,14 +2227,21 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile login completed for {user['username']}")
-            # Redirect to the app's custom scheme. Android uses 'echowithin://open', iOS often 'EchoWithin://'
-            # We'll try to be robust here.
-            try:
-                # Redirecting to a deep link
-                return redirect("echowithin://open?path=/home")
-            except Exception as e:
-                app.logger.error(f"Deep link redirect failed: {e}")
-                return redirect(url_for('home'))
+            
+            # Generate a one-time login token to bridge the session to the app's webview
+            otlt_token = secrets.token_urlsafe(32)
+            if redis_cache:
+                try:
+                    # Store user_id mapping to token for 60 seconds
+                    redis_cache.setex(f"mobile_auth:{otlt_token}", 60, str(user['_id']))
+                    url_with_token = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
+                    app.logger.info(f"Redirecting to mobile deep link with OTLT: {otlt_token[:8]}...")
+                    return redirect(url_with_token)
+                except Exception as e:
+                    app.logger.error(f"Failed to store OTLT in Redis: {e}")
+            
+            # Fallback to home if Redis fails
+            return redirect("echowithin://open?path=/home")
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
@@ -2284,7 +2291,16 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile signup completed for {username}")
-            # Redirect to the app's custom scheme
+            
+            # Generate OTLT for signup as well
+            otlt_token = secrets.token_urlsafe(32)
+            if redis_cache:
+                try:
+                    redis_cache.setex(f"mobile_auth:{otlt_token}", 60, str(user['_id']))
+                    return redirect(f"echowithin://open?path=/mobile_auth&token={otlt_token}")
+                except Exception as e:
+                    app.logger.error(f"Failed to store OTLT in Redis (signup): {e}")
+
             return redirect("echowithin://open?path=/home")
 
         next_url = session.pop('oauth_next', None)
@@ -5438,6 +5454,41 @@ def favicon():
     else:
         # If no favicon exists, return a 204 No Content response to prevent 404 errors in the log.
         return '', 204
+@app.route('/mobile_auth')
+def mobile_auth():
+    """Bridges the authentication from system browser to the mobile app's webview context."""
+    token = request.args.get('token')
+    if not token:
+        app.logger.warning("Mobile auth attempted without token.")
+        return redirect(url_for('login'))
+
+    if not redis_cache:
+        app.logger.error("Mobile auth failed: Redis not available.")
+        return redirect(url_for('login'))
+
+    try:
+        user_id = redis_cache.get(f"mobile_auth:{token}")
+        if user_id:
+            # Clean up token immediately (one-time use)
+            redis_cache.delete(f"mobile_auth:{token}")
+            
+            user = users_conf.find_one({'_id': ObjectId(user_id)})
+            if user:
+                # Log them in within THIS context (the app's webview)
+                user_obj = User(user)
+                login_user(user_obj, remember=True)
+                flash(f"Welcome back to the app, {user['username']}!", "success")
+                return redirect(url_for('home'))
+            else:
+                app.logger.warning(f"Mobile auth token valid but user {user_id} not found.")
+        else:
+            app.logger.warning(f"Expired or invalid mobile auth token: {token[:8]}...")
+    except Exception as e:
+        app.logger.error(f"Error during mobile auth bridged login: {e}")
+
+    flash("Login session expired. Please try again.", "warning")
+    return redirect(url_for('login'))
+
 
 @app.route('/logout')
 def logout():

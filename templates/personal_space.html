@@ -902,10 +902,15 @@
             text = result;
 
             // X_multi and simple patterns
-            text = text.replace(/(?<!\$[^$]*)([A-Za-z0-9])_\{([^}]+)\}(?![^$]*\$)/g, (m, b, s) => wrap(`${b}_{${s}}`));
-            text = text.replace(/(?<!\$[^$]*)([A-Za-z0-9])\^\{([^}]+)\}(?![^$]*\$)/g, (m, b, e) => wrap(`${b}^{${e}}`));
-            text = text.replace(/(?<!\$[^$]*)\b([A-Za-z])_([0-9a-zA-Z])\b(?![^$]*\$)/g, (m, b, s) => wrap(`${b}_{${s}}`));
-            text = text.replace(/(?<!\$[^$]*)\b([A-Za-z0-9])\^([0-9a-zA-Z])\b(?![^$]*\$)/g, (m, b, e) => wrap(`${b}^{${e}}`));
+            const tempM = [];
+            text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
+            text = text.replace(/([A-Za-z0-9])_\{([^}]+)\}/g, (m, b, s) => wrap(`${b}_{${s}}`));
+            text = text.replace(/([A-Za-z0-9])\^\{([^}]+)\}/g, (m, b, e) => wrap(`${b}^{${e}}`));
+            text = text.replace(/\b([A-Za-z])_([0-9a-zA-Z])\b/g, (m, b, s) => wrap(`${b}_{${s}}`));
+            text = text.replace(/\b([A-Za-z0-9])\^([0-9a-zA-Z])\b/g, (m, b, e) => wrap(`${b}^{${e}}`));
+
+            // Restore temp math placeholders
+            text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
 
             // Numeric fractions 1/2
             text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
@@ -953,7 +958,8 @@
             });
 
             // Extract and render inline math ($...$)
-            processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
+            // Using a more inclusive regex that allows internal newlines
+            processedText = processedText.replace(/\$([\s\S]+?)\$/g, (match, math) => {
                 try {
                     if (typeof katex !== 'undefined') {
                         const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
@@ -961,7 +967,7 @@
                         return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                     }
                 } catch (e) { console.error('KaTeX inline error:', e); }
-                return match; // Fallback: keep original
+                return match;
             });
 
             // 3. Configure marked and parse markdown
@@ -976,11 +982,13 @@
                 return item ? item.content : match;
             });
 
-            // 5. Sanitize HTML (allowing KaTeX elements)
+            // 5. Sanitize HTML (allowing KaTeX elements and SVG)
             if (typeof DOMPurify !== 'undefined') {
                 processedText = DOMPurify.sanitize(processedText, {
-                    ADD_TAGS: ['semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot', 'msqrt', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'math', 'span'],
-                    ADD_ATTR: ['xmlns', 'encoding', 'mathvariant', 'columnalign', 'rowspacing', 'columnspacing', 'displaystyle', 'scriptlevel', 'class', 'style', 'aria-hidden']
+                    ADD_TAGS: ['semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'msup', 'msub', 'mfrac', 'mroot', 'msqrt', 'mtext', 'mspace', 'mtable', 'mtr', 'mtd', 'mover', 'munder', 'munderover', 'math', 'span',
+                        'svg', 'path', 'g', 'rect', 'line', 'circle', 'ellipse', 'polyline', 'polygon', 'use', 'defs', 'symbol', 'clipPath'],
+                    ADD_ATTR: ['xmlns', 'encoding', 'mathvariant', 'columnalign', 'rowspacing', 'columnspacing', 'displaystyle', 'scriptlevel', 'class', 'style', 'aria-hidden',
+                        'd', 'viewBox', 'fill', 'stroke', 'stroke-width', 'points', 'x', 'y', 'width', 'height', 'transform', 'id']
                 });
             }
 

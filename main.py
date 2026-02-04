@@ -2234,14 +2234,19 @@ def google_callback():
                 try:
                     # Store user_id mapping to token for 60 seconds
                     redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    url_with_token = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
+                    deep_link_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
                     app.logger.info(f"Redirecting to mobile deep link with OTLT: {otlt_token[:8]}...")
-                    return redirect(url_with_token)
+                    # Use HTML page with JavaScript redirect (browsers block direct redirects to custom schemes)
+                    return render_template('mobile_redirect.html', 
+                                         deep_link_url=deep_link_url,
+                                         fallback_url=url_for('home', _external=True))
                 except Exception as e:
                     app.logger.error(f"Failed to store OTLT in Redis: {e}")
             
             # Fallback to home if Redis fails
-            return redirect("echowithin://open?path=/home")
+            return render_template('mobile_redirect.html',
+                                 deep_link_url="echowithin://open?path=/home",
+                                 fallback_url=url_for('home', _external=True))
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
@@ -2297,11 +2302,17 @@ def google_callback():
             if redis_cache:
                 try:
                     redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    return redirect(f"echowithin://open?path=/mobile_auth&token={otlt_token}")
+                    deep_link_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
+                    # Use HTML page with JavaScript redirect (browsers block direct redirects to custom schemes)
+                    return render_template('mobile_redirect.html',
+                                         deep_link_url=deep_link_url,
+                                         fallback_url=url_for('home', _external=True))
                 except Exception as e:
                     app.logger.error(f"Failed to store OTLT in Redis (signup): {e}")
 
-            return redirect("echowithin://open?path=/home")
+            return render_template('mobile_redirect.html',
+                                 deep_link_url="echowithin://open?path=/home",
+                                 fallback_url=url_for('home', _external=True))
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):

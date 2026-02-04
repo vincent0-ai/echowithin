@@ -114,39 +114,13 @@
         const switchLinks = document.querySelectorAll('.switch-tab');
         const forms = document.querySelectorAll('.auth-form');
 
-        // Detect if running in mobile app context and update Google login links
+        // Detect if running in mobile app context
         const isMobileApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
         if (isMobileApp) {
-            console.log('Mobile app detected, updating Google login links...');
-            const googleLinks = document.querySelectorAll('.google-button');
-            googleLinks.forEach(link => {
-                // Append platform param
-                try {
-                    const url = new URL(link.href);
-                    url.searchParams.set('platform', 'mobile');
-                    link.href = url.toString();
-                } catch (e) {
-                    if (link.href.includes('?')) link.href += '&platform=mobile';
-                    else link.href += '?platform=mobile';
-                }
-
-                // Force open in System Browser to ensure Deep Link works correctly
-                link.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    console.log('Opening Google Login in System Browser:', link.href);
-                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                        try {
-                            await window.Capacitor.Plugins.Browser.open({ url: link.href });
-                        } catch (err) {
-                            console.error('Failed to open browser:', err);
-                            // Fallback
-                            window.location.href = link.href;
-                        }
-                    } else {
-                        window.location.href = link.href;
-                    }
-                });
-            });
+            console.log('Mobile app detected - Google login will happen in WebView');
+            // No special handling needed - just let the normal navigation happen
+            // The OAuth flow will complete within the app's WebView context
+            // and cookies/session will be preserved automatically
         }
 
         function switchForm(formId) {

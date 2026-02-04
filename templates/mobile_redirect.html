@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting to EchoWithin App...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 400px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        p {
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            padding: 12px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 15px;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        .fallback {
+            margin-top: 30px;
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Opening EchoWithin App...</h1>
+        <p>You've successfully signed in! Redirecting you to the app.</p>
+        
+        <div id="manual-action" style="display: none;">
+            <p>If the app doesn't open automatically:</p>
+            <a href="{{ deep_link_url }}" class="btn" id="open-app-btn">Open EchoWithin App</a>
+        </div>
+        
+        <div class="fallback">
+            <p>Having trouble? <a href="{{ fallback_url }}" style="color: white;">Continue in browser</a></p>
+        </div>
+    </div>
+
+    <script>
+        const deepLinkUrl = "{{ deep_link_url }}";
+        const fallbackUrl = "{{ fallback_url }}";
+        
+        // Build Android Intent URL (more reliable than custom scheme on Android Chrome)
+        function buildIntentUrl(customUrl) {
+            // Parse the custom URL: echowithin://open?path=/mobile_auth&token=xxx
+            try {
+                const url = new URL(customUrl);
+                const path = url.searchParams.get('path') || '/';
+                const token = url.searchParams.get('token') || '';
+                
+                // Build intent URL
+                // Format: intent://open?path=X&token=Y#Intent;scheme=echowithin;package=xyz.echowithin.app;end
+                let intentUrl = 'intent://open?path=' + encodeURIComponent(path);
+                if (token) {
+                    intentUrl += '&token=' + encodeURIComponent(token);
+                }
+                intentUrl += '#Intent;scheme=echowithin;package=xyz.echowithin.app;end';
+                return intentUrl;
+            } catch (e) {
+                console.error('Error building intent URL:', e);
+                return null;
+            }
+        }
+        
+        // Detect if Android
+        const isAndroid = /android/i.test(navigator.userAgent);
+        const intentUrl = isAndroid ? buildIntentUrl(deepLinkUrl) : null;
+        
+        // Try multiple methods to open the app
+        function openApp() {
+            console.log('Attempting to open app with:', deepLinkUrl);
+            console.log('Is Android:', isAndroid);
+            if (intentUrl) {
+                console.log('Intent URL:', intentUrl);
+            }
+            
+            // Method 1: For Android, try intent URL first (most reliable)
+            if (isAndroid && intentUrl) {
+                console.log('Trying Android Intent URL...');
+                window.location.href = intentUrl;
+                
+                // Show manual button after delay
+                setTimeout(function() {
+                    document.getElementById('manual-action').style.display = 'block';
+                    // Update the button to use intent URL on Android
+                    document.getElementById('open-app-btn').href = intentUrl;
+                }, 2000);
+                return;
+            }
+            
+            // Method 2: Create an invisible iframe (works on some browsers)
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = deepLinkUrl;
+            document.body.appendChild(iframe);
+            
+            // Method 3: Also try direct location change after a short delay
+            setTimeout(function() {
+                window.location.href = deepLinkUrl;
+            }, 100);
+            
+            // Method 4: Use an anchor click
+            setTimeout(function() {
+                const link = document.createElement('a');
+                link.href = deepLinkUrl;
+                link.click();
+            }, 300);
+            
+            // Show manual button after a delay in case auto-redirect fails
+            setTimeout(function() {
+                document.getElementById('manual-action').style.display = 'block';
+            }, 2000);
+            
+            // Fallback to web version after longer delay if app doesn't open
+            setTimeout(function() {
+                // Check if page is still visible (app didn't open)
+                if (!document.hidden) {
+                    console.log('App did not open, user may need to click manually');
+                }
+            }, 3000);
+        }
+        
+        // Start the redirect process
+        openApp();
+        
+        // Handle visibility change - if user returns to this page, show manual button
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                document.getElementById('manual-action').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

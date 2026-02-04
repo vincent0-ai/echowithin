@@ -2183,7 +2183,8 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile login completed for {user['username']}")
-            return redirect(url_for('home'))
+            # Redirect to the app's custom scheme to bring user back to the app
+            return redirect("echowithin://open?path=/home")
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):
@@ -2233,7 +2234,8 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             app.logger.info(f"Mobile signup completed for {username}")
-            return redirect(url_for('home'))
+            # Redirect to the app's custom scheme to bring user back to the app
+            return redirect("echowithin://open?path=/home")
 
         next_url = session.pop('oauth_next', None)
         if not next_url or not is_safe_url(next_url):

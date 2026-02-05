@@ -17,7 +17,7 @@ debug_*
 mock_*.py
 fix_emoji_slugs.py
 locustfile.py
-mobile-app/
+
 firebase-service-account.json
 patch_base.py
 scripts/

@@ -1,0 +1,8 @@
+node_modules/
+npm-debug.log
+.DS_Store
+.env*
+
+# Capacitor
+ios/App/App/public
+android/app/src/main/assets/public

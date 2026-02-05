@@ -2137,6 +2137,12 @@ def google_login():
 
 @app.route('/google_callback')
 def google_callback():
+    # If user is already authenticated (duplicate request after successful login),
+    # just redirect them to home without showing an error
+    if current_user.is_authenticated:
+        app.logger.info(f"Google callback hit but user {current_user.username} already authenticated - redirecting to home")
+        return redirect(url_for('home'))
+    
     state_from_url = request.args.get('state')
     
     # If state is not in session, try to recover it from Redis (handles context switching on mobile)
@@ -2154,6 +2160,8 @@ def google_callback():
                             platform_saved = platform_saved.decode('utf-8')
                         session['oauth_platform'] = platform_saved
                         app.logger.info(f"Recovered platform from Redis: {platform_saved}")
+                else:
+                    app.logger.warning(f"OAuth state {state_from_url[:8]}... not found in Redis (may have been consumed)")
             except Exception as e:
                 app.logger.warning(f"Error checking Redis for state recovery: {e}")
 

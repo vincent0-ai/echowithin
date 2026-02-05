@@ -87,15 +87,19 @@
         const httpsDeepLink = "{{ https_deep_link | default('') }}";
         const fallbackUrl = "{{ fallback_url }}";
         
-        console.log('Deep link URLs:', { deepLinkUrl, httpsDeepLink, fallbackUrl });
+        console.log('Mobile redirect page loaded');
+        console.log('Custom scheme URL:', deepLinkUrl);
+        console.log('HTTPS deep link:', httpsDeepLink);
+        console.log('Fallback URL:', fallbackUrl);
         
-        // Build Android Intent URL (for custom scheme fallback)
+        // Build Android Intent URL (most reliable method for custom schemes on Android)
         function buildIntentUrl(customUrl) {
             try {
                 const url = new URL(customUrl);
                 const path = url.searchParams.get('path') || '/';
                 const token = url.searchParams.get('token') || '';
                 
+                // Intent URL format that Chrome understands
                 let intentUrl = 'intent://open?path=' + encodeURIComponent(path);
                 if (token) {
                     intentUrl += '&token=' + encodeURIComponent(token);
@@ -113,35 +117,29 @@
         const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
         const intentUrl = isAndroid ? buildIntentUrl(deepLinkUrl) : null;
         
-        console.log('Platform detection:', { isAndroid, isIOS });
+        console.log('Platform:', isAndroid ? 'Android' : (isIOS ? 'iOS' : 'Other'));
+        if (intentUrl) console.log('Intent URL:', intentUrl);
         
-        // Try to open the app
         function openApp() {
-            console.log('Starting app open sequence...');
+            console.log('Attempting to open app...');
             
-            // Strategy 1: On Android, use HTTPS App Link first (most reliable)
-            // This works because AndroidManifest has autoVerify for blog.echowithin.xyz
-            if (isAndroid && httpsDeepLink) {
-                console.log('Android: Trying HTTPS App Link:', httpsDeepLink);
+            // On Android, use Intent URL - this is the MOST reliable method
+            // It will open the app if installed, or fail gracefully
+            if (isAndroid && intentUrl) {
+                console.log('Android: Using Intent URL (most reliable)');
+                window.location.href = intentUrl;
                 
-                // For HTTPS app links, we can do a direct redirect
-                // Android will intercept and open in the app if it's a verified app link
-                window.location.href = httpsDeepLink;
-                
-                // Show manual button after delay in case it didn't work
+                // Show manual button after delay
                 setTimeout(function() {
                     document.getElementById('manual-action').style.display = 'block';
-                    // Update button to use intent URL as backup
-                    if (intentUrl) {
-                        document.getElementById('open-app-btn').href = intentUrl;
-                    }
+                    document.getElementById('open-app-btn').href = intentUrl;
                 }, 2500);
                 return;
             }
             
-            // Strategy 2: iOS - use custom scheme directly
+            // On iOS, use custom scheme directly
             if (isIOS) {
-                console.log('iOS: Trying custom scheme:', deepLinkUrl);
+                console.log('iOS: Using custom scheme');
                 window.location.href = deepLinkUrl;
                 
                 setTimeout(function() {
@@ -150,24 +148,19 @@
                 return;
             }
             
-            // Strategy 3: Fallback - try intent URL, then custom scheme
-            if (intentUrl) {
-                console.log('Fallback: Trying intent URL:', intentUrl);
-                window.location.href = intentUrl;
-            } else {
-                console.log('Fallback: Trying custom scheme:', deepLinkUrl);
-                window.location.href = deepLinkUrl;
-            }
+            // Fallback for other platforms
+            console.log('Fallback: Trying custom scheme');
+            window.location.href = deepLinkUrl;
             
             setTimeout(function() {
                 document.getElementById('manual-action').style.display = 'block';
             }, 2000);
         }
         
-        // Start the redirect process
+        // Start redirect immediately
         openApp();
         
-        // Handle visibility change - if user returns to this page, show manual button
+        // If user comes back to this page, show manual button
         document.addEventListener('visibilitychange', function() {
             if (!document.hidden) {
                 document.getElementById('manual-action').style.display = 'block';

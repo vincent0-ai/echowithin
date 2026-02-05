@@ -876,52 +876,160 @@
             }
 
             // Commands sorted by length (longest first) to ensure greedy matching
+            // Comprehensive list for math, physics, chemistry, and advanced notation
             const mathCmds = [
-                // Logic & relations
-                'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow', 'leftrightarrow', 'Leftrightarrow',
-                'longrightarrow', 'Longrightarrow', 'longleftarrow', 'Longleftarrow',
-                'iff', 'implies', 'sim', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor', 'oplus', 'otimes',
-                'forall', 'exists', 'nexists', 'therefore', 'because',
-                // Set theory
-                'emptyset', 'varnothing', 'subset', 'subseteq', 'supset', 'supseteq', 'cup', 'cap', 'setminus',
-                'in', 'notin', 'ni',
-                // Comparisons
-                'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'approx', 'equiv', 'cong', 'propto', 'sim',
-                // Greek letters
-                'alpha', 'beta', 'gamma', 'Gamma', 'delta', 'Delta', 'epsilon', 'varepsilon', 'zeta',
-                'eta', 'theta', 'Theta', 'vartheta', 'iota', 'kappa', 'lambda', 'Lambda', 'mu', 'nu',
-                'xi', 'Xi', 'omicron', 'pi', 'Pi', 'varpi', 'rho', 'varrho', 'sigma', 'Sigma', 'varsigma',
-                'tau', 'upsilon', 'Upsilon', 'phi', 'Phi', 'varphi', 'chi', 'psi', 'Psi', 'omega', 'Omega',
-                // Operators & functions
-                'frac', 'sqrt', 'sum', 'prod', 'int', 'iint', 'iiint', 'oint', 'lim', 'limsup', 'liminf',
-                'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan',
-                'sinh', 'cosh', 'tanh', 'coth', 'log', 'ln', 'exp', 'det', 'dim', 'ker', 'deg', 'gcd', 'lcm',
-                'min', 'max', 'sup', 'inf', 'arg', 'mod', 'bmod', 'pmod',
-                // Accents & decorations
-                'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde', 'overline', 'underline',
-                'overbrace', 'underbrace',
-                // Spacing & misc
-                'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'times', 'div', 'pm', 'mp',
-                'infty', 'partial', 'nabla', 'degree', 'micro',
-                // Delimiters
-                'left', 'right', 'langle', 'rangle', 'lfloor', 'rfloor', 'lceil', 'rceil', 'lvert', 'rvert',
-                // Formatting
-                'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt',
-                'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'bm', 'bold',
-                // Misc symbols
-                'bullet', 'circ', 'star', 'dagger', 'ddagger', 'checkmark', 'prime'
+                // === ARROWS & LOGIC ===
+                'longleftrightarrow', 'Longleftrightarrow', 'hookrightarrow', 'hookleftarrow',
+                'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow', 
+                'longleftarrow', 'Longleftarrow', 'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow',
+                'uparrow', 'Uparrow', 'downarrow', 'Downarrow', 'updownarrow', 'Updownarrow',
+                'nearrow', 'searrow', 'swarrow', 'nwarrow', 'mapsto', 'longmapsto',
+                'rightharpoonup', 'rightharpoondown', 'leftharpoonup', 'leftharpoondown',
+                'rightleftharpoons', 'leftrightharpoons', 'curvearrowright', 'curvearrowleft',
+                'circlearrowright', 'circlearrowleft', 'looparrowright', 'looparrowleft',
+                'twoheadrightarrow', 'twoheadleftarrow', 'leadsto',
+                'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor', 
+                'oplus', 'otimes', 'odot', 'ominus', 'oslash',
+                'forall', 'exists', 'nexists', 'therefore', 'because', 'top', 'bot', 'vdash', 'dashv', 'models',
+                
+                // === SET THEORY ===
+                'emptyset', 'varnothing', 'subset', 'subseteq', 'subsetneq', 'supset', 'supseteq', 'supsetneq',
+                'sqsubset', 'sqsubseteq', 'sqsupset', 'sqsupseteq',
+                'cup', 'cap', 'bigcup', 'bigcap', 'setminus', 'smallsetminus',
+                'in', 'notin', 'ni', 'owns',
+                
+                // === RELATIONS & COMPARISONS ===
+                'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'leqslant', 'geqslant',
+                'll', 'gg', 'lll', 'ggg', 'lesssim', 'gtrsim', 'lessgtr', 'gtrless',
+                'prec', 'succ', 'preceq', 'succeq', 'precneq', 'succneq',
+                'approx', 'approxeq', 'thickapprox', 'equiv', 'cong', 'ncong', 'sim', 'simeq', 'nsim',
+                'propto', 'varpropto', 'parallel', 'nparallel', 'perp', 'asymp',
+                'doteq', 'triangleq', 'circeq', 'bumpeq', 'Bumpeq',
+                'coloneq', 'eqcolon', 'coloncolon',
+                
+                // === GREEK LETTERS (lowercase) ===
+                'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
+                'iota', 'kappa', 'varkappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'varpi',
+                'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+                // === GREEK LETTERS (uppercase) ===
+                'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
+                
+                // === CALCULUS & ANALYSIS ===
+                'partial', 'nabla', 'grad', 'diverge', 'curl',
+                'int', 'iint', 'iiint', 'iiiint', 'oint', 'oiint', 'oiiint', 'intop', 'smallint',
+                'sum', 'prod', 'coprod', 'bigoplus', 'bigotimes', 'bigodot', 'biguplus', 'bigsqcup',
+                'lim', 'limsup', 'liminf', 'varlimsup', 'varliminf', 'injlim', 'projlim', 'varinjlim', 'varprojlim',
+                'to', 'gets', 'infty',
+                
+                // === FUNCTIONS ===
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
+                'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+                'arcsinh', 'arccosh', 'arctanh', 'arccoth',
+                'log', 'ln', 'lg', 'exp', 'Re', 'Im',
+                'det', 'dim', 'ker', 'coker', 'image', 'rank', 'nullity',
+                'deg', 'gcd', 'lcm', 'hom', 'Hom', 'End', 'Aut', 'Ker', 'Im',
+                'min', 'max', 'sup', 'inf', 'arg', 'sgn', 'sign',
+                'mod', 'bmod', 'pmod',
+                'Pr', 'tr', 'Tr', 'diag', 'erf', 'erfc', 'sinc',
+                
+                // === FRACTIONS & ROOTS ===
+                'frac', 'dfrac', 'tfrac', 'cfrac', 'sfrac', 'nicefrac',
+                'sqrt', 'cbrt', 'root',
+                'binom', 'dbinom', 'tbinom', 'choose',
+                
+                // === ACCENTS & DECORATIONS ===
+                'hat', 'widehat', 'check', 'widecheck', 'tilde', 'widetilde',
+                'acute', 'grave', 'breve', 'bar', 'overline', 'underline',
+                'vec', 'overrightarrow', 'overleftarrow', 'overleftrightarrow',
+                'underrightarrow', 'underleftarrow', 'underleftrightarrow',
+                'dot', 'ddot', 'dddot', 'ddddot', 'mathring',
+                'overbrace', 'underbrace', 'overgroup', 'undergroup',
+                'overlinesegment', 'underlinesegment',
+                'boxed', 'cancel', 'bcancel', 'xcancel', 'cancelto', 'sout', 'not',
+                
+                // === PHYSICS & VECTORS ===
+                'hbar', 'planck', 'hslash',
+                'ell', 'wp', 'aleph', 'beth', 'gimel', 'daleth',
+                'Angstrom', 'AA',
+                'degree', 'celsius', 'ohm', 'micro', 'angstrom',
+                'vec', 'bm', 'boldsymbol', 'pmb',
+                'tensor', 'ketbra', 'braket', 'Bra', 'Ket', 'bra', 'ket', 'dyad',
+                'mel', 'matrixel', 'ev', 'expectationvalue',
+                'commutator', 'anticommutator', 'poissonbracket',
+                'dd', 'dv', 'pdv', 'var', 'fdv', 'abs', 'norm', 'eval', 'order',
+                'gradient', 'divergence', 'laplacian',
+                'cross', 'vdot', 'vectorbold', 'vectorarrow', 'vectorunit',
+                'qty', 'quantity', 'pqty', 'bqty', 'vqty', 'Bqty', 'absolutevalue', 
+                
+                // === MATRICES & LINEAR ALGEBRA ===
+                'begin', 'end', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix',
+                'smallmatrix', 'array', 'cases', 'rcases', 'dcases',
+                'aligned', 'gathered', 'split', 'multline', 'equation', 'align',
+                
+                // === SPACING ===
+                'quad', 'qquad', 'thinspace', 'medspace', 'thickspace', 'negthinspace', 'negmedspace', 'negthickspace',
+                'enspace', 'space', 'nobreakspace',
+                
+                // === DOTS & MISC SYMBOLS ===
+                'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'iddots', 'dotsb', 'dotsc', 'dotsi', 'dotsm', 'dotso',
+                'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet', 'diamond', 'lozenge',
+                'dagger', 'ddagger', 'amalg',
+                'triangle', 'triangledown', 'triangleleft', 'triangleright',
+                'bigtriangleup', 'bigtriangledown', 'vartriangle', 'blacktriangle', 'blacktriangledown',
+                'square', 'blacksquare', 'Box', 'Diamond',
+                'checkmark', 'maltese', 'clubsuit', 'diamondsuit', 'heartsuit', 'spadesuit',
+                'sharp', 'flat', 'natural',
+                'surd', 'angle', 'measuredangle', 'sphericalangle',
+                'prime', 'backprime', 'dprime', 'trprime', 'qprime',
+                
+                // === DELIMITERS ===
+                'left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'Biggl', 'Biggr',
+                'langle', 'rangle', 'lang', 'rang',
+                'lfloor', 'rfloor', 'lceil', 'rceil',
+                'lvert', 'rvert', 'lVert', 'rVert',
+                'lbrace', 'rbrace', 'lbrack', 'rbrack',
+                'ulcorner', 'urcorner', 'llcorner', 'lrcorner',
+                'llbracket', 'rrbracket', 'lmoustache', 'rmoustache',
+                
+                // === TEXT & FORMATTING ===
+                'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt', 'textup', 'textsl', 'textsc',
+                'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
+                'bm', 'bold', 'boldsymbol', 'pmb',
+                'rm', 'bf', 'it', 'sf', 'tt', 'cal', 'scr', 'frak', 'Bbb',
+                'operatorname', 'DeclareMathOperator',
+                'displaystyle', 'textstyle', 'scriptstyle', 'scriptscriptstyle',
+                'tiny', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge',
+                'color', 'textcolor', 'colorbox', 'fcolorbox',
+                'hspace', 'vspace', 'kern', 'mkern', 'mskip', 'hskip', 'rule', 'Rule', 'phantom', 'vphantom', 'hphantom',
+                
+                // === CHEMISTRY (basic) ===
+                'ce', 'pu', 'bond', 'arrow',
+                
+                // === NUMBER SETS ===
+                'N', 'Z', 'Q', 'R', 'C', 'H', 'O', 'F', 'P'
             ];
             const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
 
             let result = '';
             let lastIdx = 0;
             let match;
+            
+            // Commands that take two braced arguments like \frac{a}{b}
+            const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'cfrac', 'binom', 'dbinom', 'tbinom', 'overset', 'underset', 'stackrel'];
+            // Commands that take one braced argument (or optional + braced)
+            const oneArgCmds = ['sqrt', 'cbrt', 'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde', 
+                               'overline', 'underline', 'overbrace', 'underbrace', 'boxed', 'cancel', 'bcancel', 'xcancel',
+                               'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
+                               'bm', 'boldsymbol', 'operatorname', 'color', 'textcolor', 'phantom', 'abs', 'norm'];
+            
             while ((match = cmdRegex.exec(text)) !== null) {
                 result += text.substring(lastIdx, match.index);
                 const cmd = match[1];
                 let matchedWhole = false;
 
-                if (cmd === 'frac') {
+                if (twoArgCmds.includes(cmd)) {
+                    // Handle two-argument commands like \frac{a}{b}
                     let j = match.index + match[0].length;
                     const first = extractBracedContent(text, j);
                     if (first) {
@@ -933,7 +1041,8 @@
                             matchedWhole = true;
                         }
                     }
-                } else if (cmd === 'sqrt') {
+                } else if (cmd === 'sqrt' || cmd === 'cbrt' || cmd === 'root') {
+                    // Handle sqrt with optional nth root: \sqrt[n]{x}
                     let j = match.index + match[0].length;
                     while (j < text.length && /\s/.test(text[j])) j++;
                     if (text[j] === '[') {
@@ -948,11 +1057,22 @@
                         matchedWhole = true;
                     }
                 } else if (cmd === 'left') {
+                    // Handle \left...\right pairs
                     const remaining = text.substring(match.index);
-                    const leftRightMatch = remaining.match(/^\\{1,4}left[\s]*[\(\[\{][\s\S]*?\\{1,4}right[\s]*[\)\]\}]/);
+                    const leftRightMatch = remaining.match(/^\\{1,4}left[\s]*[\(\[\{\|\\][\s\S]*?\\{1,4}right[\s]*[\)\]\}\|\\]/);
                     if (leftRightMatch) {
                         result += wrap(leftRightMatch[0]);
                         lastIdx = match.index + leftRightMatch[0].length;
+                        cmdRegex.lastIndex = lastIdx;
+                        matchedWhole = true;
+                    }
+                } else if (cmd === 'begin') {
+                    // Handle \begin{env}...\end{env} blocks
+                    const remaining = text.substring(match.index);
+                    const envMatch = remaining.match(/^\\begin\{([^}]+)\}([\s\S]*?)\\end\{\1\}/);
+                    if (envMatch) {
+                        result += wrap(envMatch[0]);
+                        lastIdx = match.index + envMatch[0].length;
                         cmdRegex.lastIndex = lastIdx;
                         matchedWhole = true;
                     }
@@ -989,12 +1109,115 @@
             // Simple scripts with balanced parentheses
             const tempM = [];
             text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
-            // Matches (expr)^2 or x^2
+            // Matches (expr)^2 or x^2 or x_i or x_{ij}
             text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
             text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
 
-            // Numeric fractions 1/2
+            // Numeric fractions like 1/2, 3/4 (but not in dates like 2/5/2026)
             text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
+            
+            // Physics/Quantum Mechanics: Dirac bra-ket notation |ψ⟩ or ⟨ψ|
+            // Match |...⟩ or ⟨...| patterns
+            text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
+            text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
+            
+            // Common physics constants: ℏ (h-bar)
+            text = text.replace(/ℏ/g, wrap('\\hbar'));
+            
+            // Angstrom symbol
+            text = text.replace(/Å/g, wrap('\\text{Å}'));
+            
+            // Degree symbol (when not already in math mode)
+            text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
+            
+            // Plus-minus: ±
+            text = text.replace(/±/g, wrap('\\pm'));
+            
+            // Multiplication dot: ·
+            text = text.replace(/(\d+)\s*[·∙]\s*(\d+)/g, (m, a, b) => wrap(`${a} \\cdot ${b}`));
+            
+            // Common relation symbols
+            text = text.replace(/≠/g, wrap('\\neq'));
+            text = text.replace(/≤/g, wrap('\\leq'));
+            text = text.replace(/≥/g, wrap('\\geq'));
+            text = text.replace(/≈/g, wrap('\\approx'));
+            text = text.replace(/≡/g, wrap('\\equiv'));
+            text = text.replace(/∝/g, wrap('\\propto'));
+            
+            // Set/logic symbols
+            text = text.replace(/∈/g, wrap('\\in'));
+            text = text.replace(/∉/g, wrap('\\notin'));
+            text = text.replace(/⊂/g, wrap('\\subset'));
+            text = text.replace(/⊆/g, wrap('\\subseteq'));
+            text = text.replace(/⊃/g, wrap('\\supset'));
+            text = text.replace(/⊇/g, wrap('\\supseteq'));
+            text = text.replace(/∪/g, wrap('\\cup'));
+            text = text.replace(/∩/g, wrap('\\cap'));
+            text = text.replace(/∅/g, wrap('\\emptyset'));
+            text = text.replace(/∀/g, wrap('\\forall'));
+            text = text.replace(/∃/g, wrap('\\exists'));
+            
+            // Arrows
+            text = text.replace(/→/g, wrap('\\rightarrow'));
+            text = text.replace(/←/g, wrap('\\leftarrow'));
+            text = text.replace(/↔/g, wrap('\\leftrightarrow'));
+            text = text.replace(/⇒/g, wrap('\\Rightarrow'));
+            text = text.replace(/⇐/g, wrap('\\Leftarrow'));
+            text = text.replace(/⇔/g, wrap('\\Leftrightarrow'));
+            text = text.replace(/↑/g, wrap('\\uparrow'));
+            text = text.replace(/↓/g, wrap('\\downarrow'));
+            
+            // Calculus symbols
+            text = text.replace(/∂/g, wrap('\\partial'));
+            text = text.replace(/∇/g, wrap('\\nabla'));
+            text = text.replace(/∫/g, wrap('\\int'));
+            text = text.replace(/∬/g, wrap('\\iint'));
+            text = text.replace(/∭/g, wrap('\\iiint'));
+            text = text.replace(/∮/g, wrap('\\oint'));
+            text = text.replace(/∑/g, wrap('\\sum'));
+            text = text.replace(/∏/g, wrap('\\prod'));
+            text = text.replace(/∞/g, wrap('\\infty'));
+            
+            // Greek letters (Unicode to LaTeX)
+            text = text.replace(/α/g, wrap('\\alpha'));
+            text = text.replace(/β/g, wrap('\\beta'));
+            text = text.replace(/γ/g, wrap('\\gamma'));
+            text = text.replace(/δ/g, wrap('\\delta'));
+            text = text.replace(/ε/g, wrap('\\epsilon'));
+            text = text.replace(/ζ/g, wrap('\\zeta'));
+            text = text.replace(/η/g, wrap('\\eta'));
+            text = text.replace(/θ/g, wrap('\\theta'));
+            text = text.replace(/ι/g, wrap('\\iota'));
+            text = text.replace(/κ/g, wrap('\\kappa'));
+            text = text.replace(/λ/g, wrap('\\lambda'));
+            text = text.replace(/μ/g, wrap('\\mu'));
+            text = text.replace(/ν/g, wrap('\\nu'));
+            text = text.replace(/ξ/g, wrap('\\xi'));
+            text = text.replace(/π/g, wrap('\\pi'));
+            text = text.replace(/ρ/g, wrap('\\rho'));
+            text = text.replace(/σ/g, wrap('\\sigma'));
+            text = text.replace(/τ/g, wrap('\\tau'));
+            text = text.replace(/υ/g, wrap('\\upsilon'));
+            text = text.replace(/φ/g, wrap('\\phi'));
+            text = text.replace(/χ/g, wrap('\\chi'));
+            text = text.replace(/ψ/g, wrap('\\psi'));
+            text = text.replace(/ω/g, wrap('\\omega'));
+            text = text.replace(/Γ/g, wrap('\\Gamma'));
+            text = text.replace(/Δ/g, wrap('\\Delta'));
+            text = text.replace(/Θ/g, wrap('\\Theta'));
+            text = text.replace(/Λ/g, wrap('\\Lambda'));
+            text = text.replace(/Ξ/g, wrap('\\Xi'));
+            text = text.replace(/Π/g, wrap('\\Pi'));
+            text = text.replace(/Σ/g, wrap('\\Sigma'));
+            text = text.replace(/Φ/g, wrap('\\Phi'));
+            text = text.replace(/Ψ/g, wrap('\\Psi'));
+            text = text.replace(/Ω/g, wrap('\\Omega'));
+            
+            // Multiplication: ×
+            text = text.replace(/×/g, wrap('\\times'));
+            
+            // Division: ÷
+            text = text.replace(/÷/g, wrap('\\div'));;
 
             // Restore
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);

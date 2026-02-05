@@ -331,6 +331,55 @@
         .note-content .katex-display {
             margin: 0.5em 0;
             overflow-x: auto;
+            overflow-y: hidden;
+            padding: 0.5em 0;
+        }
+
+        .note-content .katex {
+            font-size: 1.1em;
+        }
+
+        /* Ensure inline KaTeX doesn't break layout */
+        .note-content .katex-html {
+            white-space: nowrap;
+        }
+
+        /* Better table styling for math/truth tables */
+        .note-content table {
+            border-collapse: collapse;
+            width: auto;
+            max-width: 100%;
+            margin: 1em 0;
+            font-size: 0.95em;
+            overflow-x: auto;
+            display: block;
+        }
+
+        .note-content th,
+        .note-content td {
+            border: 1px solid #ccc;
+            padding: 0.5em 0.75em;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .note-content th {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+
+        .note-content tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .note-content tbody tr:hover {
+            background: #f5f5f5;
+        }
+
+        /* KaTeX inside tables */
+        .note-content td .katex,
+        .note-content th .katex {
+            font-size: 1em;
         }
 
         .note-footer {
@@ -827,7 +876,41 @@
             }
 
             // Commands sorted by length (longest first) to ensure greedy matching
-            const mathCmds = ['approx', 'cdots', 'degree', 'delta', 'epsilon', 'gamma', 'infty', 'lambda', 'ldots', 'micro', 'nabla', 'partial', 'sigma', 'theta', 'times', 'alpha', 'beta', 'bold', 'cdot', 'frac', 'int', 'left', 'prod', 'sqrt', 'text', 'vec', 'bar', 'cos', 'exp', 'hat', 'lim', 'log', 'rho', 'sin', 'sum', 'tan', 'eta', 'nu', 'phi', 'psi', 'rho', 'tau', 'mu', 'pi', 'xi', 'it', 'mathbf', 'mathcal', 'mathbb', 'mathfrak', 'mathsf', 'mathtt', 'mathit', 'mathrm', 'bm'];
+            const mathCmds = [
+                // Logic & relations
+                'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow', 'leftrightarrow', 'Leftrightarrow',
+                'longrightarrow', 'Longrightarrow', 'longleftarrow', 'Longleftarrow',
+                'iff', 'implies', 'sim', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor', 'oplus', 'otimes',
+                'forall', 'exists', 'nexists', 'therefore', 'because',
+                // Set theory
+                'emptyset', 'varnothing', 'subset', 'subseteq', 'supset', 'supseteq', 'cup', 'cap', 'setminus',
+                'in', 'notin', 'ni',
+                // Comparisons
+                'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'approx', 'equiv', 'cong', 'propto', 'sim',
+                // Greek letters
+                'alpha', 'beta', 'gamma', 'Gamma', 'delta', 'Delta', 'epsilon', 'varepsilon', 'zeta',
+                'eta', 'theta', 'Theta', 'vartheta', 'iota', 'kappa', 'lambda', 'Lambda', 'mu', 'nu',
+                'xi', 'Xi', 'omicron', 'pi', 'Pi', 'varpi', 'rho', 'varrho', 'sigma', 'Sigma', 'varsigma',
+                'tau', 'upsilon', 'Upsilon', 'phi', 'Phi', 'varphi', 'chi', 'psi', 'Psi', 'omega', 'Omega',
+                // Operators & functions
+                'frac', 'sqrt', 'sum', 'prod', 'int', 'iint', 'iiint', 'oint', 'lim', 'limsup', 'liminf',
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan',
+                'sinh', 'cosh', 'tanh', 'coth', 'log', 'ln', 'exp', 'det', 'dim', 'ker', 'deg', 'gcd', 'lcm',
+                'min', 'max', 'sup', 'inf', 'arg', 'mod', 'bmod', 'pmod',
+                // Accents & decorations
+                'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde', 'overline', 'underline',
+                'overbrace', 'underbrace',
+                // Spacing & misc
+                'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'times', 'div', 'pm', 'mp',
+                'infty', 'partial', 'nabla', 'degree', 'micro',
+                // Delimiters
+                'left', 'right', 'langle', 'rangle', 'lfloor', 'rfloor', 'lceil', 'rceil', 'lvert', 'rvert',
+                // Formatting
+                'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt',
+                'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'bm', 'bold',
+                // Misc symbols
+                'bullet', 'circ', 'star', 'dagger', 'ddagger', 'checkmark', 'prime'
+            ];
             const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
 
             let result = '';

@@ -2236,13 +2236,17 @@ def google_callback():
             otlt_token = secrets.token_urlsafe(32)
             if redis_cache:
                 try:
-                    # Store user_id mapping to token for 60 seconds
+                    # Store user_id mapping to token for 5 minutes
                     redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    deep_link_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
+                    # Use HTTPS app link - more reliable than custom scheme on Android
+                    # The app has android:autoVerify for blog.echowithin.xyz
+                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    # Also provide custom scheme as fallback
+                    custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
                     app.logger.info(f"Redirecting to mobile deep link with OTLT: {otlt_token[:8]}...")
-                    # Use HTML page with JavaScript redirect (browsers block direct redirects to custom schemes)
                     return render_template('mobile_redirect.html', 
-                                         deep_link_url=deep_link_url,
+                                         deep_link_url=custom_scheme_url,
+                                         https_deep_link=https_deep_link,
                                          fallback_url=url_for('home', _external=True))
                 except Exception as e:
                     app.logger.error(f"Failed to store OTLT in Redis: {e}")
@@ -2250,6 +2254,7 @@ def google_callback():
             # Fallback to home if Redis fails
             return render_template('mobile_redirect.html',
                                  deep_link_url="echowithin://open?path=/home",
+                                 https_deep_link=url_for('home', _external=True, _scheme='https'),
                                  fallback_url=url_for('home', _external=True))
 
         next_url = session.pop('oauth_next', None)
@@ -2306,16 +2311,19 @@ def google_callback():
             if redis_cache:
                 try:
                     redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    deep_link_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
-                    # Use HTML page with JavaScript redirect (browsers block direct redirects to custom schemes)
+                    # Use HTTPS app link - more reliable than custom scheme on Android
+                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
                     return render_template('mobile_redirect.html',
-                                         deep_link_url=deep_link_url,
+                                         deep_link_url=custom_scheme_url,
+                                         https_deep_link=https_deep_link,
                                          fallback_url=url_for('home', _external=True))
                 except Exception as e:
                     app.logger.error(f"Failed to store OTLT in Redis (signup): {e}")
 
             return render_template('mobile_redirect.html',
                                  deep_link_url="echowithin://open?path=/home",
+                                 https_deep_link=url_for('home', _external=True, _scheme='https'),
                                  fallback_url=url_for('home', _external=True))
 
         next_url = session.pop('oauth_next', None)

@@ -455,16 +455,24 @@
                 console.log('Processing deep link:', deepLinkUrl);
                 try {
                     const url = new URL(deepLinkUrl);
+                    console.log('Deep link parsed - protocol:', url.protocol, 'host:', url.host, 'search:', url.search);
+                    
                     // Handle echowithin://open?path=/foo&bar=baz
-                    if (url.protocol === 'echowithin:' && url.host === 'open') {
+                    // Also handle case where host might be empty or different
+                    if (url.protocol === 'echowithin:') {
+                        // Get path from query params (our format: echowithin://open?path=/mobile_auth&token=xxx)
                         const path = url.searchParams.get('path') || '/';
+                        console.log('Deep link path extracted:', path);
+                        
                         // Create a new URL starting with the path
                         const targetUrl = new URL(path, window.location.origin);
                         // Append all original search params (excluding 'path')
                         url.searchParams.forEach((value, key) => {
                             if (key !== 'path') targetUrl.searchParams.set(key, value);
                         });
-                        console.log('Deep link redirecting to:', targetUrl.pathname + targetUrl.search);
+                        
+                        const finalUrl = targetUrl.pathname + targetUrl.search;
+                        console.log('Deep link redirecting to:', finalUrl);
                         
                         // Close the system browser (if open from OAuth flow)
                         if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
@@ -473,10 +481,13 @@
                             });
                         }
                         
-                        window.location.href = targetUrl.pathname + targetUrl.search;
+                        // Use replace to prevent back button from returning to this intermediate state
+                        window.location.replace(finalUrl);
                         return true;
-                    } else if (url.pathname && url.pathname !== '/') {
-                        // Fallback for standard https deep links
+                    } else if (url.protocol === 'https:' && url.host === 'blog.echowithin.xyz' && url.pathname && url.pathname !== '/') {
+                        // Handle https deep links to our domain
+                        console.log('HTTPS deep link to:', url.pathname);
+                        
                         // Close the system browser (if open from OAuth flow)
                         if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
                             window.Capacitor.Plugins.Browser.close().catch(function() {
@@ -484,11 +495,26 @@
                             });
                         }
                         
-                        window.location.href = url.pathname + url.search;
+                        window.location.replace(url.pathname + url.search);
                         return true;
                     }
                 } catch (e) {
                     console.error('Error parsing deep link URL:', e);
+                    // Fallback: try to extract path manually if URL parsing fails
+                    try {
+                        const match = deepLinkUrl.match(/[?&]path=([^&]+)/);
+                        if (match) {
+                            const path = decodeURIComponent(match[1]);
+                            const tokenMatch = deepLinkUrl.match(/[?&]token=([^&]+)/);
+                            const token = tokenMatch ? tokenMatch[1] : '';
+                            const finalUrl = token ? path + '?token=' + token : path;
+                            console.log('Fallback deep link redirect to:', finalUrl);
+                            window.location.replace(finalUrl);
+                            return true;
+                        }
+                    } catch (fallbackErr) {
+                        console.error('Fallback parsing also failed:', fallbackErr);
+                    }
                 }
                 return false;
             }

@@ -5487,6 +5487,10 @@ def mobile_auth():
     try:
         user_id = redis_cache.get(f"mobile_auth:{token}")
         if user_id:
+            # Redis returns bytes, decode to string
+            if isinstance(user_id, bytes):
+                user_id = user_id.decode('utf-8')
+            
             # Clean up token immediately (one-time use)
             redis_cache.delete(f"mobile_auth:{token}")
             

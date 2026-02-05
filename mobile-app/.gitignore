@@ -1,8 +1,39 @@
+# General
 node_modules/
 npm-debug.log
 .DS_Store
 .env*
+dist/
+www/
 
 # Capacitor
 ios/App/App/public
 android/app/src/main/assets/public
+
+# Android
+.gradle/
+build/
+!gradle-wrapper.jar
+.idea/
+*.iml
+local.properties
+*.jks
+*.keystore
+key.properties
+google-services.json
+
+# iOS
+pods/
+*.lock
+*.xcworkspace
+!default.mode1v3
+!default.pbxuser
+!default.perspectivev3
+xcuserdata
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.dSYM
+GoogleService-Info.plist

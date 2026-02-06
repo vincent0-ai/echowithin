@@ -695,7 +695,7 @@
             <span class="badge">{{ saved_posts|length }}</span>
         </button>
         <button data-tab="notes" role="tab" aria-selected="false">
-            Notes <i class="fas fa-lock" style="font-size: 0.7rem; opacity: 0.7;"></i>
+            Notes
             <span class="badge">{{ personal_posts|length }}</span>
         </button>
     </div>
@@ -760,7 +760,7 @@
         <div class="create-note-card">
             <div
                 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; color: #666; font-size: 0.85rem;">
-                <i class="fas fa-shield-alt"></i> Your notes are encrypted and only visible to you
+                Your notes are encrypted and only visible to you
             </div>
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -775,14 +775,14 @@
                     <span class="char-count"><span id="char-count">0</span>/8000</span>
                     <label class="preview-toggle">
                         <input type="checkbox" id="preview-toggle">
-                        <i class="fas fa-eye"></i> Preview
+                        Preview
                     </label>
                     <button type="submit" class="btn comment-btn" id="add-note-btn">
                         <i class="fas fa-plus"></i> Add Note
                     </button>
                 </div>
                 <div class="note-preview" id="note-preview">
-                    <div class="note-preview-label"><i class="fas fa-eye"></i> Preview</div>
+                    <div class="note-preview-label"> Preview</div>
                     <div class="note-content" id="preview-content"></div>
                 </div>
             </form>
@@ -880,7 +880,7 @@
             const mathCmds = [
                 // === ARROWS & LOGIC ===
                 'longleftrightarrow', 'Longleftrightarrow', 'hookrightarrow', 'hookleftarrow',
-                'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow', 
+                'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow',
                 'longleftarrow', 'Longleftarrow', 'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow',
                 'uparrow', 'Uparrow', 'downarrow', 'Downarrow', 'updownarrow', 'Updownarrow',
                 'nearrow', 'searrow', 'swarrow', 'nwarrow', 'mapsto', 'longmapsto',
@@ -888,16 +888,16 @@
                 'rightleftharpoons', 'leftrightharpoons', 'curvearrowright', 'curvearrowleft',
                 'circlearrowright', 'circlearrowleft', 'looparrowright', 'looparrowleft',
                 'twoheadrightarrow', 'twoheadleftarrow', 'leadsto',
-                'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor', 
+                'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor',
                 'oplus', 'otimes', 'odot', 'ominus', 'oslash',
                 'forall', 'exists', 'nexists', 'therefore', 'because', 'top', 'bot', 'vdash', 'dashv', 'models',
-                
+
                 // === SET THEORY ===
                 'emptyset', 'varnothing', 'subset', 'subseteq', 'subsetneq', 'supset', 'supseteq', 'supsetneq',
                 'sqsubset', 'sqsubseteq', 'sqsupset', 'sqsupseteq',
                 'cup', 'cap', 'bigcup', 'bigcap', 'setminus', 'smallsetminus',
                 'in', 'notin', 'ni', 'owns',
-                
+
                 // === RELATIONS & COMPARISONS ===
                 'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'leqslant', 'geqslant',
                 'll', 'gg', 'lll', 'ggg', 'lesssim', 'gtrsim', 'lessgtr', 'gtrless',
@@ -906,21 +906,21 @@
                 'propto', 'varpropto', 'parallel', 'nparallel', 'perp', 'asymp',
                 'doteq', 'triangleq', 'circeq', 'bumpeq', 'Bumpeq',
                 'coloneq', 'eqcolon', 'coloncolon',
-                
+
                 // === GREEK LETTERS (lowercase) ===
                 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
                 'iota', 'kappa', 'varkappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'varpi',
                 'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
                 // === GREEK LETTERS (uppercase) ===
                 'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
-                
+
                 // === CALCULUS & ANALYSIS ===
                 'partial', 'nabla', 'grad', 'diverge', 'curl',
                 'int', 'iint', 'iiint', 'iiiint', 'oint', 'oiint', 'oiiint', 'intop', 'smallint',
                 'sum', 'prod', 'coprod', 'bigoplus', 'bigotimes', 'bigodot', 'biguplus', 'bigsqcup',
                 'lim', 'limsup', 'liminf', 'varlimsup', 'varliminf', 'injlim', 'projlim', 'varinjlim', 'varprojlim',
                 'to', 'gets', 'infty',
-                
+
                 // === FUNCTIONS ===
                 'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
                 'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
@@ -932,12 +932,12 @@
                 'min', 'max', 'sup', 'inf', 'arg', 'sgn', 'sign',
                 'mod', 'bmod', 'pmod',
                 'Pr', 'tr', 'Tr', 'diag', 'erf', 'erfc', 'sinc',
-                
+
                 // === FRACTIONS & ROOTS ===
                 'frac', 'dfrac', 'tfrac', 'cfrac', 'sfrac', 'nicefrac',
                 'sqrt', 'cbrt', 'root',
                 'binom', 'dbinom', 'tbinom', 'choose',
-                
+
                 // === ACCENTS & DECORATIONS ===
                 'hat', 'widehat', 'check', 'widecheck', 'tilde', 'widetilde',
                 'acute', 'grave', 'breve', 'bar', 'overline', 'underline',
@@ -947,7 +947,7 @@
                 'overbrace', 'underbrace', 'overgroup', 'undergroup',
                 'overlinesegment', 'underlinesegment',
                 'boxed', 'cancel', 'bcancel', 'xcancel', 'cancelto', 'sout', 'not',
-                
+
                 // === PHYSICS & VECTORS ===
                 'hbar', 'planck', 'hslash',
                 'ell', 'wp', 'aleph', 'beth', 'gimel', 'daleth',
@@ -960,17 +960,17 @@
                 'dd', 'dv', 'pdv', 'var', 'fdv', 'abs', 'norm', 'eval', 'order',
                 'gradient', 'divergence', 'laplacian',
                 'cross', 'vdot', 'vectorbold', 'vectorarrow', 'vectorunit',
-                'qty', 'quantity', 'pqty', 'bqty', 'vqty', 'Bqty', 'absolutevalue', 
-                
+                'qty', 'quantity', 'pqty', 'bqty', 'vqty', 'Bqty', 'absolutevalue',
+
                 // === MATRICES & LINEAR ALGEBRA ===
                 'begin', 'end', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix',
                 'smallmatrix', 'array', 'cases', 'rcases', 'dcases',
                 'aligned', 'gathered', 'split', 'multline', 'equation', 'align',
-                
+
                 // === SPACING ===
                 'quad', 'qquad', 'thinspace', 'medspace', 'thickspace', 'negthinspace', 'negmedspace', 'negthickspace',
                 'enspace', 'space', 'nobreakspace',
-                
+
                 // === DOTS & MISC SYMBOLS ===
                 'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'iddots', 'dotsb', 'dotsc', 'dotsi', 'dotsm', 'dotso',
                 'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet', 'diamond', 'lozenge',
@@ -982,7 +982,7 @@
                 'sharp', 'flat', 'natural',
                 'surd', 'angle', 'measuredangle', 'sphericalangle',
                 'prime', 'backprime', 'dprime', 'trprime', 'qprime',
-                
+
                 // === DELIMITERS ===
                 'left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'Biggl', 'Biggr',
                 'langle', 'rangle', 'lang', 'rang',
@@ -991,7 +991,7 @@
                 'lbrace', 'rbrace', 'lbrack', 'rbrack',
                 'ulcorner', 'urcorner', 'llcorner', 'lrcorner',
                 'llbracket', 'rrbracket', 'lmoustache', 'rmoustache',
-                
+
                 // === TEXT & FORMATTING ===
                 'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt', 'textup', 'textsl', 'textsc',
                 'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
@@ -1002,10 +1002,10 @@
                 'tiny', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge',
                 'color', 'textcolor', 'colorbox', 'fcolorbox',
                 'hspace', 'vspace', 'kern', 'mkern', 'mskip', 'hskip', 'rule', 'Rule', 'phantom', 'vphantom', 'hphantom',
-                
+
                 // === CHEMISTRY (basic) ===
                 'ce', 'pu', 'bond', 'arrow',
-                
+
                 // === NUMBER SETS ===
                 'N', 'Z', 'Q', 'R', 'C', 'H', 'O', 'F', 'P'
             ];
@@ -1014,15 +1014,15 @@
             let result = '';
             let lastIdx = 0;
             let match;
-            
+
             // Commands that take two braced arguments like \frac{a}{b}
             const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'cfrac', 'binom', 'dbinom', 'tbinom', 'overset', 'underset', 'stackrel'];
             // Commands that take one braced argument (or optional + braced)
-            const oneArgCmds = ['sqrt', 'cbrt', 'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde', 
-                               'overline', 'underline', 'overbrace', 'underbrace', 'boxed', 'cancel', 'bcancel', 'xcancel',
-                               'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
-                               'bm', 'boldsymbol', 'operatorname', 'color', 'textcolor', 'phantom', 'abs', 'norm'];
-            
+            const oneArgCmds = ['sqrt', 'cbrt', 'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde',
+                'overline', 'underline', 'overbrace', 'underbrace', 'boxed', 'cancel', 'bcancel', 'xcancel',
+                'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
+                'bm', 'boldsymbol', 'operatorname', 'color', 'textcolor', 'phantom', 'abs', 'norm'];
+
             while ((match = cmdRegex.exec(text)) !== null) {
                 result += text.substring(lastIdx, match.index);
                 const cmd = match[1];
@@ -1115,27 +1115,27 @@
 
             // Numeric fractions like 1/2, 3/4 (but not in dates like 2/5/2026)
             text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
-            
+
             // Physics/Quantum Mechanics: Dirac bra-ket notation |ψ⟩ or ⟨ψ|
             // Match |...⟩ or ⟨...| patterns
             text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
             text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
-            
+
             // Common physics constants: ℏ (h-bar)
             text = text.replace(/ℏ/g, wrap('\\hbar'));
-            
+
             // Angstrom symbol
             text = text.replace(/Å/g, wrap('\\text{Å}'));
-            
+
             // Degree symbol (when not already in math mode)
             text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
-            
+
             // Plus-minus: ±
             text = text.replace(/±/g, wrap('\\pm'));
-            
+
             // Multiplication dot: ·
             text = text.replace(/(\d+)\s*[·∙]\s*(\d+)/g, (m, a, b) => wrap(`${a} \\cdot ${b}`));
-            
+
             // Common relation symbols
             text = text.replace(/≠/g, wrap('\\neq'));
             text = text.replace(/≤/g, wrap('\\leq'));
@@ -1143,7 +1143,7 @@
             text = text.replace(/≈/g, wrap('\\approx'));
             text = text.replace(/≡/g, wrap('\\equiv'));
             text = text.replace(/∝/g, wrap('\\propto'));
-            
+
             // Set/logic symbols
             text = text.replace(/∈/g, wrap('\\in'));
             text = text.replace(/∉/g, wrap('\\notin'));
@@ -1156,7 +1156,7 @@
             text = text.replace(/∅/g, wrap('\\emptyset'));
             text = text.replace(/∀/g, wrap('\\forall'));
             text = text.replace(/∃/g, wrap('\\exists'));
-            
+
             // Arrows
             text = text.replace(/→/g, wrap('\\rightarrow'));
             text = text.replace(/←/g, wrap('\\leftarrow'));
@@ -1166,7 +1166,7 @@
             text = text.replace(/⇔/g, wrap('\\Leftrightarrow'));
             text = text.replace(/↑/g, wrap('\\uparrow'));
             text = text.replace(/↓/g, wrap('\\downarrow'));
-            
+
             // Calculus symbols
             text = text.replace(/∂/g, wrap('\\partial'));
             text = text.replace(/∇/g, wrap('\\nabla'));
@@ -1177,7 +1177,7 @@
             text = text.replace(/∑/g, wrap('\\sum'));
             text = text.replace(/∏/g, wrap('\\prod'));
             text = text.replace(/∞/g, wrap('\\infty'));
-            
+
             // Greek letters (Unicode to LaTeX)
             text = text.replace(/α/g, wrap('\\alpha'));
             text = text.replace(/β/g, wrap('\\beta'));
@@ -1212,10 +1212,10 @@
             text = text.replace(/Φ/g, wrap('\\Phi'));
             text = text.replace(/Ψ/g, wrap('\\Psi'));
             text = text.replace(/Ω/g, wrap('\\Omega'));
-            
+
             // Multiplication: ×
             text = text.replace(/×/g, wrap('\\times'));
-            
+
             // Division: ÷
             text = text.replace(/÷/g, wrap('\\div'));;
 

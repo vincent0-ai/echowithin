@@ -2344,6 +2344,36 @@ def google_callback():
 
 
 
+@app.route('/.well-known/assetlinks.json')
+def android_assetlinks():
+    """Serve Android App Links verification file for automatic deep link handling.
+    
+    This allows the Android app to be verified as the official handler for
+    blog.echowithin.xyz URLs, enabling automatic redirect from browser to app
+    after Google authentication completes.
+    
+    IMPORTANT: Update the sha256_cert_fingerprints with your actual signing key:
+    - For debug builds: keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+    - For release builds: use your production signing key fingerprint
+    """
+    assetlinks = [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "xyz.echowithin.app",
+            "sha256_cert_fingerprints": [
+                # Debug key fingerprint - add release key fingerprint when releasing to Play Store
+                "EE:89:BD:8D:85:44:66:17:40:74:46:6B:57:15:AB:56:81:CE:40:99:21:D2:59:72:12:FE:4B:B9:5B:DC:E7:5E"
+            ]
+        }
+    }]
+    response = make_response(json.dumps(assetlinks))
+    response.headers['Content-Type'] = 'application/json'
+    # Required headers for Android verification
+    response.headers['Cache-Control'] = 'public, max-age=86400'  # Cache for 24 hours
+    return response
+
+
 @app.route('/service-worker.js')
 def service_worker():
     """Serve the service worker from the root path for proper scope."""

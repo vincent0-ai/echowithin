@@ -4885,16 +4885,10 @@ def admin_announcements():
 @admin_required
 def pin_announcement(announcement_id):
     try:
-        def _pin_transaction(session):
-            # This logic runs as an atomic transaction.
-            # 1. Unpin any currently pinned announcement.
-            announcements_conf.update_many({'is_pinned': True}, {'$set': {'is_pinned': False}}, session=session)
-            # 2. Pin the new one.
-            announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}}, session=session)
-
-        # Start a client session for transaction
-        with client.start_session() as session:
-            session.with_transaction(_pin_transaction)
+        # Unpin any currently pinned announcement first
+        announcements_conf.update_many({'is_pinned': True}, {'$set': {'is_pinned': False}})
+        # Pin the new one
+        announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
         flash('Announcement has been pinned.', 'success')
     except Exception as e:
         app.logger.error(f"Error pinning announcement {announcement_id}: {e}")

@@ -296,6 +296,7 @@ auth_conf = db['auth']
 announcements_conf = db['announcements']
 comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
+note_shares_conf = db['note_shares']
 push_subscriptions_conf = db['push_subscriptions']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 newsletter_conf = db['newsletter_subs']
@@ -5403,6 +5404,179 @@ def delete_personal_post(post_id):
         app.logger.error(f"Error deleting personal post {post_id}: {e}")
         flash('Could not delete note.', 'danger')
     return redirect(url_for('personal_space'))
+
+
+# ----------------- Note Sharing Endpoints -----------------
+
+@app.route('/personal_post/share/<post_id>', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_create_share(post_id):
+    """Generates a share link for a personal note."""
+    obj_id = safe_object_id(post_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    # Verify ownership
+    note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    data = request.get_json() or {}
+    permissions = data.get('permissions', 'view')
+    if permissions not in ['view', 'edit']:
+        permissions = 'view'
+
+    access_code = data.get('access_code')
+    access_code_hash = None
+    if access_code:
+        access_code_hash = generate_password_hash(access_code)
+
+    expires_in = data.get('expires_in')  # '1h', '1d', '7d', 'never'
+    expires_at = None
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if expires_in == '1h':
+        expires_at = now + datetime.timedelta(hours=1)
+    elif expires_in == '1d':
+        expires_at = now + datetime.timedelta(days=1)
+    elif expires_in == '7d':
+        expires_at = now + datetime.timedelta(days=7)
+
+    share_id = secrets.token_urlsafe(16)
+    
+    note_shares_conf.insert_one({
+        'share_id': share_id,
+        'note_id': obj_id,
+        'owner_id': ObjectId(current_user.id),
+        'permissions': permissions,
+        'access_code_hash': access_code_hash,
+        'expires_at': expires_at,
+        'created_at': now
+    })
+
+    share_url = url_for('view_shared_note', share_id=share_id, _external=True)
+    return jsonify({
+        'success': True,
+        'share_url': share_url,
+        'share_id': share_id
+    })
+
+
+@app.route('/share/note/<share_id>', methods=['GET', 'POST'])
+@limits(calls=30, period=60)
+def view_shared_note(share_id):
+    """Public route to view or edit a shared note."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        abort(404)
+
+    # Check expiration
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            note_shares_conf.delete_one({'_id': share['_id']})
+            return render_template('shared_note.html', expired=True)
+
+    # Check access code
+    requires_code = bool(share.get('access_code_hash'))
+    if requires_code:
+        if request.method == 'POST':
+            code = request.form.get('access_code')
+            if not code or not check_password_hash(share['access_code_hash'], code):
+                flash('Invalid access code.', 'danger')
+                return render_template('shared_note.html', share_id=share_id, requires_code=True)
+            # Store in session that this share is unlocked
+            session[f'unlocked_{share_id}'] = True
+            return redirect(url_for('view_shared_note', share_id=share_id))
+        
+        if not session.get(f'unlocked_{share_id}'):
+            return render_template('shared_note.html', share_id=share_id, requires_code=True)
+
+    # Fetch the note
+    note = personal_posts_conf.find_one({'_id': share['note_id']})
+    if not note:
+        abort(404)
+
+    # Decrypt note content
+    content = decrypt_note(note.get('content', ''))
+    
+    return render_template('shared_note.html', 
+                           share_id=share_id, 
+                           content=content, 
+                           permissions=share['permissions'],
+                           note_id=str(note['_id']))
+
+
+@app.route('/share/note/<share_id>/edit', methods=['POST'])
+@limits(calls=10, period=60)
+def api_edit_shared_note(share_id):
+    """Allows editing a shared note if permission granted."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share or share['permissions'] != 'edit':
+        return jsonify({'error': 'Unauthorized or invalid share'}), 403
+
+    # Check access code session
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
+
+    # Check expiration
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify({'error': 'Link expired'}), 410
+
+    data = request.get_json() or {}
+    content = data.get('content')
+    if not content or not content.strip():
+        return jsonify({'error': 'Content cannot be empty'}), 400
+
+    content = content.strip()[:8000]
+    encrypted_content = encrypt_note(content)
+    
+    personal_posts_conf.update_one(
+        {'_id': share['note_id']},
+        {'$set': {'content': encrypted_content, 'encrypted': True}}
+    )
+    
+    return jsonify({'success': True})
+
+
+@app.route('/personal_post/revoke_share/<share_id>', methods=['POST'])
+@login_required
+def api_revoke_share(share_id):
+    """Revokes a share link."""
+    result = note_shares_conf.delete_one({
+        'share_id': share_id,
+        'owner_id': ObjectId(current_user.id)
+    })
+    if result.deleted_count > 0:
+        return jsonify({'success': True})
+    return jsonify({'error': 'Share link not found or unauthorized'}), 404
+
+
+@app.route('/personal_post/shares/<post_id>')
+@login_required
+def api_get_note_shares(post_id):
+    """Returns all active share links for a note."""
+    obj_id = safe_object_id(post_id)
+    if not obj_id:
+        return jsonify([])
+    
+    shares = list(note_shares_conf.find({'note_id': obj_id, 'owner_id': ObjectId(current_user.id)}))
+    for s in shares:
+        s['_id'] = str(s['_id'])
+        s['note_id'] = str(s['note_id'])
+        s['owner_id'] = str(s['owner_id'])
+        s['url'] = url_for('view_shared_note', share_id=s['share_id'], _external=True)
+        if s.get('expires_at'):
+             s['expires_at'] = s['expires_at'].isoformat()
+    
+    return jsonify(shares)
+
 
 @app.route('/contact', methods=['POST'])
 @limits(calls=5, period=60)

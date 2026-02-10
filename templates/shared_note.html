@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+
+{% block head_meta %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+{% endblock %}
+
+{% block title %}
+<title>Shared Note - EchoWithin</title>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="shared-note-container">
+        {% if expired %}
+        <div class="error-state">
+            <i class="fas fa-hourglass-end"></i>
+            <h2>Link Expired</h2>
+            <p>This sharing link has expired or been revoked by the owner.</p>
+            <a href="{{ url_for('home') }}" class="btn comment-btn">Go Home</a>
+        </div>
+        {% elif requires_code %}
+        <div class="auth-state">
+            <i class="fas fa-lock"></i>
+            <h2>Access Code Required</h2>
+            <p>Please enter the access code provided by the owner to view this note.</p>
+            <form action="{{ url_for('view_shared_note', share_id=share_id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="input-group">
+                    <input type="password" name="access_code" placeholder="Enter code..." required autofocus>
+                    <button type="submit" class="btn comment-btn">Unlock Note</button>
+                </div>
+            </form>
+        </div>
+        {% else %}
+        <div class="note-card-shared">
+            <div class="shared-note-header">
+                <div class="owner-info">
+                    <i class="fas fa-share-alt"></i> Shared Note
+                </div>
+                <div class="permissions-badge {{ permissions }}">
+                    <i class="fas fa-{{ 'pen' if permissions == 'edit' else 'eye' }}"></i>
+                    {{ permissions.capitalize() }} Access
+                </div>
+            </div>
+
+            {% if permissions == 'edit' %}
+            <div class="edit-interface">
+                <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                <div class="edit-actions">
+                    <span id="save-status"></span>
+                    <button id="save-shared-btn" class="btn comment-btn">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="note-content rendered-note" data-raw="{{ content | e }}"></div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <style>
+        .shared-note-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .error-state,
+        .auth-state {
+            text-align: center;
+            background: white;
+            padding: 3rem 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        }
+
+        .error-state i,
+        .auth-state i {
+            font-size: 4rem;
+            color: #ccc;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-state .input-group {
+            display: flex;
+            gap: 0.5rem;
+            max-width: 400px;
+            margin: 1.5rem auto 0;
+        }
+
+        .auth-state input {
+            flex: 1;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .note-card-shared {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            border-left: 6px solid #3e2217;
+        }
+
+        .shared-note-header {
+            padding: 1rem 1.5rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .owner-info {
+            font-weight: 600;
+            color: #555;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .permissions-badge {
+            font-size: 0.8rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .permissions-badge.view {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .permissions-badge.edit {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .note-content {
+            padding: 1.5rem;
+            line-height: 1.7;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        /* Markdown & Math Styling */
+        .rendered-note h1,
+        .rendered-note h2,
+        .rendered-note h3 {
+            margin-top: 1.5rem;
+            color: #3e2217;
+        }
+
+        .rendered-note p {
+            margin-bottom: 1rem;
+        }
+
+        .rendered-note code {
+            background: #f0f0f0;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .rendered-note pre {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 1px solid #eee;
+        }
+
+        .rendered-note blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 1rem;
+            color: #666;
+            margin: 1rem 0;
+        }
+
+        /* Edit Styles */
+        .edit-interface {
+            padding: 1.5rem;
+        }
+
+        #edit-content {
+            width: 100%;
+            min-height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 1rem;
+            font-family: inherit;
+            font-size: 1.1rem;
+            resize: vertical;
+            margin-bottom: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        #edit-content:focus {
+            outline: none;
+            border-color: #3e2217;
+            box-shadow: 0 0 0 3px rgba(62, 34, 23, 0.1);
+        }
+
+        .edit-actions {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        #save-status {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        @media (max-width: 600px) {
+            .auth-state .input-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Function to auto-detect and convert common math patterns to LaTeX
+            function autoDetectMath(text) {
+                if (!text) return text;
+
+                // Protect code blocks
+                const codeBlocks = [];
+                text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
+                text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
+
+                // Protect EXISTING $...$
+                const existingMath = [];
+                text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
+                text = text.replace(/\$[^\$]+?\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
+
+                const wrap = (content) => `$${content}$`;
+
+                function extractBracedContent(str, startIndex) {
+                    let i = startIndex;
+                    while (i < str.length && /\s/.test(str[i])) i++;
+                    if (str[i] !== '{') return null;
+                    let depth = 1;
+                    for (let k = i + 1; k < str.length; k++) {
+                        if (str[k] === '{') depth++;
+                        else if (str[k] === '}') {
+                            depth--;
+                            if (depth === 0) return { content: str.substring(i + 1, k), endIndex: k };
+                        }
+                    }
+                    return null;
+                }
+
+                const mathCmds = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega', 'int', 'sum', 'prod', 'lim', 'infty', 'partial', 'nabla', 'sqrt', 'frac', 'approx', 'neq', 'leq', 'geq', 'pm', 'mp', 'times', 'div', 'rightarrow', 'leftarrow', 'leftrightarrow', 'Rightarrow', 'Leftarrow', 'Leftrightarrow', 'hat', 'bar', 'vec', 'dot', 'tilde'];
+                const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
+
+                let result = '';
+                let lastIdx = 0;
+                let match;
+                const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'binom'];
+
+                while ((match = cmdRegex.exec(text)) !== null) {
+                    result += text.substring(lastIdx, match.index);
+                    const cmd = match[1];
+                    let matchedWhole = false;
+
+                    if (twoArgCmds.includes(cmd)) {
+                        let j = match.index + match[0].length;
+                        const first = extractBracedContent(text, j);
+                        if (first) {
+                            const second = extractBracedContent(text, first.endIndex + 1);
+                            if (second) {
+                                result += wrap(text.substring(match.index, second.endIndex + 1));
+                                lastIdx = second.endIndex + 1;
+                                cmdRegex.lastIndex = lastIdx;
+                                matchedWhole = true;
+                            }
+                        }
+                    } else {
+                        let currentIdx = match.index + match[0].length;
+                        const bracedArg = extractBracedContent(text, currentIdx);
+                        if (bracedArg) currentIdx = bracedArg.endIndex + 1;
+                        result += wrap(text.substring(match.index, currentIdx));
+                        lastIdx = currentIdx;
+                        cmdRegex.lastIndex = lastIdx;
+                        matchedWhole = true;
+                    }
+
+                    if (!matchedWhole) {
+                        result += text.substring(match.index, match.index + match[0].length);
+                        lastIdx = match.index + match[0].length;
+                    }
+                }
+                result += text.substring(lastIdx);
+                text = result;
+
+                // Numeric fractions like 1/2
+                text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
+
+                // Restore
+                text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
+                text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
+                return text;
+            }
+
+            // Function to render markdown with math support
+            function renderMarkdownWithMath(text) {
+                if (!text) return '';
+                let processedText = autoDetectMath(text);
+                const placeholders = [];
+
+                // Protect code
+                processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
+                    placeholders.push({ type: 'code', content: match });
+                    return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                });
+                processedText = processedText.replace(/`[^`]+`/g, (match) => {
+                    placeholders.push({ type: 'code', content: match });
+                    return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                });
+
+                // Render math
+                processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                    return match;
+                });
+                processedText = processedText.replace(/\$([\s\S]+?)\$/g, (match, math) => {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                    return match;
+                });
+
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({ breaks: true, gfm: true });
+                    processedText = marked.parse(processedText);
+                }
+
+                if (typeof DOMPurify !== 'undefined') {
+                    processedText = DOMPurify.sanitize(processedText);
+                }
+
+                processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
+                    const item = placeholders[parseInt(index)];
+                    return item ? item.content : match;
+                });
+
+                return processedText;
+            }
+
+            const rawNoteElements = document.querySelectorAll('.rendered-note');
+            rawNoteElements.forEach(el => {
+                const rawMarkdown = el.getAttribute('data-raw');
+                if (rawMarkdown) {
+                    const textarea = document.createElement('textarea');
+                    textarea.innerHTML = rawMarkdown;
+                    el.innerHTML = renderMarkdownWithMath(textarea.value);
+                }
+            });
+
+            // Save functionality for shared edit
+            const saveBtn = document.getElementById('save-shared-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async function () {
+                    const content = document.getElementById('edit-content').value;
+                    const status = document.getElementById('save-status');
+
+                    saveBtn.disabled = true;
+                    status.textContent = 'Saving...';
+
+                    try {
+                        const response = await fetch(`/share/note/{{ share_id }}/edit`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ content: content })
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            status.textContent = 'Last saved at ' + new Date().toLocaleTimeString();
+                            status.style.color = 'green';
+                        } else {
+                            status.textContent = 'Error: ' + (result.error || 'Unknown error');
+                            status.style.color = 'red';
+                        }
+                    } catch (e) {
+                        status.textContent = 'Network error. Try again.';
+                        status.style.color = 'red';
+                    } finally {
+                        saveBtn.disabled = false;
+                        setTimeout(() => {
+                            if (status.style.color === 'green') status.textContent = '';
+                        }, 3000);
+                    }
+                });
+            }
+        });
+    </script>
+</div>
+{% endblock %}

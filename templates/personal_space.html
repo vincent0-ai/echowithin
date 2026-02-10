@@ -624,6 +624,53 @@
 
 
         }
+
+        /* --- Sharing UI Styles --- */
+        .btn-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px;
+            color: #666;
+            transition: color 0.2s;
+            font-size: 1.1rem;
+        }
+
+        .share-note-btn:hover {
+            color: #3e2217;
+        }
+
+        .share-link-item {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            margin-bottom: 0.5rem;
+        }
+
+        .share-link-url {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .share-link-url input {
+            flex: 1;
+            padding: 0.3rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            background: #fff;
+        }
+
+        .share-link-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #777;
+        }
     </style>
 
     <!-- Header with stats -->
@@ -790,6 +837,10 @@
                         <button type="button" class="copy-note-btn" title="Copy note" data-content="{{ note.content }}">
                             <i class="far fa-copy"></i>
                         </button>
+                        <button type="button" class="btn-icon share-note-btn" title="Share note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-share-alt"></i>
+                        </button>
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -809,6 +860,61 @@
             <p>Write private notes that only you can see.</p>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Share Note Modal -->
+<div id="share-modal" class="custom-modal-overlay">
+    <div class="custom-modal" style="max-width: 500px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
+                <i class="fas fa-share-alt"></i> Share Note
+            </h2>
+            <button class="btn-icon" onclick="closeShareModal()"><i class="fas fa-times"></i></button>
+        </div>
+
+        <div id="share-config">
+            <div style="margin-bottom: 1rem;">
+                <label
+                    style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Permissions</label>
+                <select id="share-permissions"
+                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff;">
+                    <option value="view">View Only</option>
+                    <option value="edit">Can Edit</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label
+                    style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Expiration</label>
+                <select id="share-expiry"
+                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff;">
+                    <option value="never">Never</option>
+                    <option value="1h">1 Hour</option>
+                    <option value="1d">1 Day</option>
+                    <option value="7d">7 Days</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Access Code
+                    (Optional)</label>
+                <input type="text" id="share-code" placeholder="Leave blank for no code"
+                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd;">
+            </div>
+
+            <button id="generate-share-link" class="btn comment-btn"
+                style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px;">
+                Generate Share Link
+            </button>
+        </div>
+
+        <div id="active-shares-container" style="margin-top: 1.5rem; display: none;">
+            <label
+                style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; border-top: 1px solid #eee; padding-top: 1rem;">Active
+                Links</label>
+            <div id="share-links-list"></div>
+        </div>
     </div>
 </div>
 
@@ -1448,6 +1554,153 @@
                 addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
             });
         }
+
+        // --- Note Sharing Logic ---
+        let currentShareNoteId = null;
+
+        document.querySelectorAll('.share-note-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentShareNoteId = btn.dataset.id;
+                openShareModal();
+                loadExistingShares(currentShareNoteId);
+            });
+        });
+
+        function openShareModal() {
+            const modal = document.getElementById('share-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+
+                // Reset fields
+                document.getElementById('share-permissions').value = 'view';
+                document.getElementById('share-expiry').value = 'never';
+                document.getElementById('share-code').value = '';
+
+                document.addEventListener('keydown', handleShareModalEsc);
+            }
+        }
+
+        window.closeShareModal = function () {
+            const modal = document.getElementById('share-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                document.removeEventListener('keydown', handleShareModalEsc);
+            }
+        };
+
+        function handleShareModalEsc(e) {
+            if (e.key === 'Escape') closeShareModal();
+        }
+
+        async function loadExistingShares(noteId) {
+            const list = document.getElementById('share-links-list');
+            const container = document.getElementById('active-shares-container');
+            if (!list || !container) return;
+
+            try {
+                const response = await fetch(`/personal_post/shares/${noteId}`);
+                const shares = await response.json();
+
+                if (shares.length > 0) {
+                    container.style.display = 'block';
+                    list.innerHTML = shares.map(s => `
+                        <div class="share-link-item">
+                            <div class="share-link-url">
+                                <input type="text" value="${s.url}" readonly onclick="this.select()">
+                                <button class="btn-icon" onclick="copyShareUrl('${s.url}', this)" title="Copy Link">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                            </div>
+                            <div class="share-link-meta">
+                                <span>
+                                    <i class="fas fa-${s.permissions === 'edit' ? 'pen' : 'eye'}"></i> ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
+                                    ${s.expires_at ? ' | Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
+                                </span>
+                                <button class="delete-btn" style="background:none; border:none; padding:5px; font-size:0.8rem;" onclick="revokeShare('${s.share_id}', this)" title="Revoke">
+                                    <i class="fas fa-trash-alt"></i> Revoke
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.style.display = 'none';
+                    list.innerHTML = '';
+                }
+            } catch (e) {
+                console.error('Error loading shares:', e);
+            }
+        }
+
+        const generateBtn = document.getElementById('generate-share-link');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', async () => {
+                const permissions = document.getElementById('share-permissions').value;
+                const expires_in = document.getElementById('share-expiry').value;
+                const access_code = document.getElementById('share-code').value;
+
+                generateBtn.disabled = true;
+                const originalText = generateBtn.textContent;
+                generateBtn.textContent = 'Generating...';
+
+                try {
+                    const response = await fetch(`/personal_post/share/${currentShareNoteId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({
+                            permissions,
+                            expires_in,
+                            access_code
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        loadExistingShares(currentShareNoteId);
+                        document.getElementById('share-code').value = '';
+                    } else {
+                        alert('Error: ' + (result.error || 'Unknown error'));
+                    }
+                } catch (e) {
+                    alert('Network error. Try again.');
+                } finally {
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = originalText;
+                }
+            });
+        }
+
+        window.revokeShare = async function (shareId, btn) {
+            if (!confirm('Revoke this link? It will immediately stop working.')) return;
+
+            try {
+                const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
+
+                if (response.ok) {
+                    loadExistingShares(currentShareNoteId);
+                }
+            } catch (e) {
+                console.error('Error revoking share:', e);
+            }
+        };
+
+        window.copyShareUrl = function (text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = btn.querySelector('i');
+                const originalClass = icon.className;
+                icon.className = 'fas fa-check';
+                setTimeout(() => { icon.className = originalClass; }, 1500);
+            });
+        };
     });
 </script>
 {% endblock %}

@@ -205,7 +205,6 @@
         .rendered-note table {
             border-collapse: collapse;
             width: 100%;
-            min-width: 500px;
             margin: 0;
             font-size: 1rem;
         }
@@ -215,6 +214,8 @@
             border: 1px solid #ddd;
             padding: 0.75rem 1rem;
             text-align: left;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .rendered-note th {
@@ -482,18 +483,27 @@
             function renderMarkdownWithMath(text) {
                 if (!text) return '';
 
-                // 1. Pre-process text to convert tabs to markdown tables
-                const lines = text.split('\n');
+                // 1. Pre-process: strip trailing tab characters from every line
+                const rawLines = text.split('\n');
+                const lines = rawLines.map(line => line.replace(/\t+$/, ''));
+
+                // 2. Convert only genuine tab-separated data into markdown tables
                 let inTabTable = false;
                 let processedLines = [];
 
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
-                    const cells = line.split('\t');
-                    // Only treat as a table if there's at least one TAB separating two pieces of non-whitespace content
-                    const hasSubstantialContent = cells.filter(c => c.trim().length > 0).length >= 2;
+                    if (!line.includes('\t')) {
+                        if (inTabTable) processedLines.push('');
+                        inTabTable = false;
+                        processedLines.push(line);
+                        continue;
+                    }
 
-                    if (line.includes('\t') && hasSubstantialContent) {
+                    const cells = line.split('\t');
+                    const filledCells = cells.filter(c => c.trim().length > 0);
+
+                    if (filledCells.length >= 2) {
                         const formattedCells = cells.map(c => c.trim() || ' ');
                         const mdLine = '| ' + formattedCells.join(' | ') + ' |';
                         if (!inTabTable) {
@@ -506,7 +516,7 @@
                     } else {
                         if (inTabTable) processedLines.push('');
                         inTabTable = false;
-                        processedLines.push(line);
+                        processedLines.push(line.replace(/\t/g, ' '));
                     }
                 }
                 text = processedLines.join('\n');

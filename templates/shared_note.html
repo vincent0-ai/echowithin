@@ -66,9 +66,9 @@
     <style>
         .shared-note-container {
             max-width: 1000px;
-            /* Increased from 800px */
-            margin: 2rem auto;
-            padding: 0 1.5rem;
+            margin: 1.5rem auto;
+            padding: 0 0.75rem;
+            /* Reduced from 1.5rem */
         }
 
         .error-state,
@@ -107,7 +107,8 @@
             border-radius: 16px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             overflow: hidden;
-            border-left: 6px solid #3e2217;
+            border-left: none;
+            /* Removed thick border */
             width: 100%;
         }
 
@@ -191,6 +192,39 @@
             margin: 1rem 0;
         }
 
+        /* Table Styling */
+        .rendered-note table {
+            border-collapse: collapse;
+            width: auto;
+            max-width: 100%;
+            margin: 1.5em 0;
+            font-size: 1rem;
+            overflow-x: auto;
+            display: block;
+        }
+
+        .rendered-note th,
+        .rendered-note td {
+            border: 1px solid #ddd;
+            padding: 0.75rem 1rem;
+            text-align: left;
+        }
+
+        .rendered-note th {
+            background: #fdfaf8;
+            font-weight: 600;
+            color: #3e2217;
+            border-bottom: 2px solid #3e2217;
+        }
+
+        .rendered-note tr:nth-child(even) {
+            background-color: #fcfcfc;
+        }
+
+        .rendered-note tr:hover {
+            background-color: #f9f9f9;
+        }
+
         /* Edit Styles */
         .edit-interface {
             padding: 1.5rem;
@@ -229,8 +263,8 @@
 
         @media (max-width: 600px) {
             .shared-note-container {
-                padding: 0 0.5rem;
-                /* Wider on mobile */
+                padding: 0 0.25rem;
+                /* Reduced from 0.5rem */
                 margin: 1rem auto;
             }
 

@@ -311,7 +311,6 @@
             margin: 1em 0;
             font-size: 0.95em;
             overflow-x: auto;
-            display: block;
         }
 
         .note-content th,
@@ -1200,40 +1199,25 @@
             // Simple scripts with balanced parentheses
             const tempM = [];
             text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
-            // Matches (expr)^2 or x^2 or x_i or x_{ij}
             text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
             text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
 
-            // Numeric fractions like 1/2, 3/4 (but not in dates like 2/5/2026)
+            // Numeric fractions like 1/2
             text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
 
-            // Physics/Quantum Mechanics: Dirac bra-ket notation |ψ⟩ or ⟨ψ|
-            // Match |...⟩ or ⟨...| patterns
-            text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
-            text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
-
-            // Common physics constants: ℏ (h-bar)
-            text = text.replace(/ℏ/g, wrap('\\hbar'));
-
-            // Angstrom symbol
-            text = text.replace(/Å/g, wrap('\\text{Å}'));
-
-            // Degree symbol (when not already in math mode)
-            text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
-
-            // Plus-minus: ±
+            // Symbols
             text = text.replace(/±/g, wrap('\\pm'));
-
-            // Multiplication dot: ·
-            text = text.replace(/(\d+)\s*[·∙]\s*(\d+)/g, (m, a, b) => wrap(`${a} \\cdot ${b}`));
-
-            // Common relation symbols
+            text = text.replace(/ℏ/g, wrap('\\hbar'));
+            text = text.replace(/Å/g, wrap('\\text{Å}'));
+            text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
             text = text.replace(/≠/g, wrap('\\neq'));
             text = text.replace(/≤/g, wrap('\\leq'));
             text = text.replace(/≥/g, wrap('\\geq'));
             text = text.replace(/≈/g, wrap('\\approx'));
-            text = text.replace(/≡/g, wrap('\\equiv'));
-            text = text.replace(/∝/g, wrap('\\propto'));
+
+            // Dirac Notation
+            text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
+            text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
 
             // Set/logic symbols
             text = text.replace(/∈/g, wrap('\\in'));

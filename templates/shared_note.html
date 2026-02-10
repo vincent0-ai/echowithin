@@ -489,12 +489,16 @@
 
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
-                    if (line.includes('\t')) {
-                        const cells = line.split('\t').map(c => c.trim() || ' ');
-                        const mdLine = '| ' + cells.join(' | ') + ' |';
+                    const cells = line.split('\t');
+                    // Only treat as a table if there's at least one TAB separating two pieces of non-whitespace content
+                    const hasSubstantialContent = cells.filter(c => c.trim().length > 0).length >= 2;
+
+                    if (line.includes('\t') && hasSubstantialContent) {
+                        const formattedCells = cells.map(c => c.trim() || ' ');
+                        const mdLine = '| ' + formattedCells.join(' | ') + ' |';
                         if (!inTabTable) {
                             processedLines.push(mdLine);
-                            processedLines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+                            processedLines.push('| ' + formattedCells.map(() => '---').join(' | ') + ' |');
                             inTabTable = true;
                         } else {
                             processedLines.push(mdLine);

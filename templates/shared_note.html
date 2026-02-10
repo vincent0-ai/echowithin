@@ -150,7 +150,8 @@
         }
 
         .note-content {
-            padding: 1.5rem;
+            padding: 1.5rem 3rem 1.5rem 3.5rem;
+            /* Increased padding, especially to the left */
             line-height: 1.7;
             font-size: 1.1rem;
             color: #333;
@@ -192,15 +193,21 @@
             margin: 1rem 0;
         }
 
-        /* Table Styling */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            background: white;
+            width: 100%;
+        }
+
         .rendered-note table {
             border-collapse: collapse;
-            width: auto;
-            max-width: 100%;
-            margin: 1.5em 0;
+            width: 100%;
+            min-width: 500px;
+            margin: 0;
             font-size: 1rem;
-            overflow-x: auto;
-            display: block;
         }
 
         .rendered-note th,
@@ -302,7 +309,8 @@
             }
 
             .note-content {
-                padding: 1rem;
+                padding: 1rem 1.25rem;
+                /* Increased horizontal padding for mobile */
             }
         }
     </style>
@@ -470,49 +478,96 @@
                 return text;
             }
 
-            // Render markdown with math support
+            // Function to render markdown with math support
             function renderMarkdownWithMath(text) {
                 if (!text) return '';
+
+                // 1. Pre-process text to convert tabs to markdown tables
+                const lines = text.split('\n');
+                let inTabTable = false;
+                let processedLines = [];
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line.includes('\t')) {
+                        const cells = line.split('\t').map(c => c.trim() || ' ');
+                        const mdLine = '| ' + cells.join(' | ') + ' |';
+                        if (!inTabTable) {
+                            processedLines.push(mdLine);
+                            processedLines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+                            inTabTable = true;
+                        } else {
+                            processedLines.push(mdLine);
+                        }
+                    } else {
+                        if (inTabTable) processedLines.push('');
+                        inTabTable = false;
+                        processedLines.push(line);
+                    }
+                }
+                text = processedLines.join('\n');
+
+                // 2. Run auto-detection to convert patterns to $...$ 
                 let processedText = autoDetectMath(text);
+
+                // 3. Protect code blocks and extract ALL math patterns
                 const placeholders = [];
 
-                // Protect code
                 processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
                     placeholders.push({ type: 'code', content: match });
                     return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                 });
+
                 processedText = processedText.replace(/`[^`]+`/g, (match) => {
                     placeholders.push({ type: 'code', content: match });
                     return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                 });
 
-                // Render math
                 processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
-                    if (typeof katex !== 'undefined') {
-                        const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
-                        placeholders.push({ type: 'rendered', content: rendered });
-                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                    }
-                    return match;
-                });
-                processedText = processedText.replace(/\$([\s\S]+?)\$/g, (match, math) => {
-                    if (typeof katex !== 'undefined') {
-                        const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
-                        placeholders.push({ type: 'rendered', content: rendered });
-                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                    }
+                    try {
+                        if (typeof katex !== 'undefined') {
+                            const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
+                            placeholders.push({ type: 'rendered', content: rendered });
+                            return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                        }
+                    } catch (e) { }
                     return match;
                 });
 
+                // Restriction: Inline math should not span lines
+                processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
+                    try {
+                        if (typeof katex !== 'undefined') {
+                            const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
+                            placeholders.push({ type: 'rendered', content: rendered });
+                            return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                        }
+                    } catch (e) { }
+                    return match;
+                });
+
+                // 4. Configure marked with table renderer
                 if (typeof marked !== 'undefined') {
-                    marked.setOptions({ breaks: true, gfm: true });
+                    const renderer = new marked.Renderer();
+                    renderer.table = (header, body) => {
+                        return `<div class="table-wrapper">
+                        <table>
+                            <thead>${header}</thead>
+                            <tbody>${body}</tbody>
+                        </table>
+                    </div>`;
+                    };
+
+                    marked.setOptions({ renderer: renderer, breaks: true, gfm: true });
                     processedText = marked.parse(processedText);
                 }
 
+                // 5. Sanitize Markdown HTML BEFORE restoring KaTeX
                 if (typeof DOMPurify !== 'undefined') {
                     processedText = DOMPurify.sanitize(processedText);
                 }
 
+                // 6. Restore ALL placeholders
                 processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
                     const item = placeholders[parseInt(index)];
                     return item ? item.content : match;

@@ -304,14 +304,21 @@
             text-decoration: underline;
         }
 
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            background: white;
+            width: 100%;
+        }
+
         .note-content table {
             border-collapse: collapse;
-            width: auto;
-            max-width: 100%;
-            margin: 1em 0;
+            width: 100%;
+            min-width: 500px;
+            /* Ensures scrolling triggers on mobile */
             font-size: 0.95em;
-            overflow-x: auto;
-            display: block;
         }
 
         .note-content th,
@@ -750,10 +757,10 @@
             <i class="fas fa-compass"></i>
             Explore Posts
         </a>
-        <a href="{{ url_for('create_post') }}" class="quick-action-btn">
-            <i class="fas fa-pen"></i>
-            Create Post
-        </a>
+        <button type="button" id="quick-create-note" class="quick-action-btn">
+            <i class="fas fa-sticky-note"></i>
+            Create a Note
+        </button>
     </div>
 
     <!-- Tab Navigation -->
@@ -1343,10 +1350,37 @@
         function renderMarkdownWithMath(text) {
             if (!text) return '';
 
-            // 1. First, run auto-detection to convert patterns to $...$ 
+            // 1. Pre-process text to convert tabs to markdown tables if they look like data
+            // (Common for pasting from Excel/Google Sheets)
+            const lines = text.split('\n');
+            let inTabTable = false;
+            let processedLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line.includes('\t')) {
+                    const cells = line.split('\t').map(c => c.trim() || ' ');
+                    const mdLine = '| ' + cells.join(' | ') + ' |';
+                    if (!inTabTable) {
+                        // Add header separator if this is the start of a table
+                        processedLines.push(mdLine);
+                        processedLines.push('| ' + cells.map(() => '---').join(' | ') + ' |');
+                        inTabTable = true;
+                    } else {
+                        processedLines.push(mdLine);
+                    }
+                } else {
+                    if (inTabTable) processedLines.push(''); // Break table
+                    inTabTable = false;
+                    processedLines.push(line);
+                }
+            }
+            text = processedLines.join('\n');
+
+            // 2. Run auto-detection to convert patterns to $...$ 
             let processedText = autoDetectMath(text);
 
-            // 2. Now protect code blocks and extract ALL math patterns for KaTeX rendering
+            // 3. Protect code blocks and extract ALL math patterns
             const placeholders = [];
 
             // Protect code blocks (triple backticks)
@@ -1370,12 +1404,12 @@
                         return `%%PLACEHOLDER${placeholders.length - 1}%%`;
                     }
                 } catch (e) { }
-                return match; // Fallback: keep original
+                return match;
             });
 
             // Extract and render inline math ($...$)
-            // Using a more inclusive regex that allows internal newlines
-            processedText = processedText.replace(/\$([\s\S]+?)\$/g, (match, math) => {
+            // Restriction: Inline math should not span more than one newline to avoid capturing large text blocks
+            processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
                 try {
                     if (typeof katex !== 'undefined') {
                         const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
@@ -1386,18 +1420,30 @@
                 return match;
             });
 
-            // 3. Configure marked and parse markdown
+            // 4. Configure marked with custom table renderer
             if (typeof marked !== 'undefined') {
-                marked.setOptions({ breaks: true, gfm: true });
+                const renderer = new marked.Renderer();
+
+                // Wrap tables in a scrollable div
+                renderer.table = (header, body) => {
+                    return `<div class="table-wrapper">
+                        <table>
+                            <thead>${header}</thead>
+                            <tbody>${body}</tbody>
+                        </table>
+                    </div>`;
+                };
+
+                marked.setOptions({ renderer: renderer, breaks: true, gfm: true });
                 processedText = marked.parse(processedText);
             }
 
-            // 4. Sanitize Markdown HTML BEFORE restoring KaTeX
+            // 5. Sanitize Markdown HTML BEFORE restoring KaTeX
             if (typeof DOMPurify !== 'undefined') {
                 processedText = DOMPurify.sanitize(processedText);
             }
 
-            // 5. Restore ALL placeholders (including rendered KaTeX)
+            // 6. Restore ALL placeholders
             processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
                 const item = placeholders[parseInt(index)];
                 return item ? item.content : match;
@@ -1444,9 +1490,9 @@
         const tabButtons = document.querySelectorAll('.tab-nav button');
         const tabPanels = document.querySelectorAll('.tab-panel');
 
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                const tabId = button.dataset.tab;
+        function switchToTab(tabId) {
+            const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);
+            if (button) {
                 tabButtons.forEach(b => {
                     b.classList.remove('active');
                     b.setAttribute('aria-selected', 'false');
@@ -1455,8 +1501,27 @@
                 button.classList.add('active');
                 button.setAttribute('aria-selected', 'true');
                 document.getElementById('tab-' + tabId).classList.add('active');
+            }
+        }
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                switchToTab(button.dataset.tab);
             });
         });
+
+        // Quick create note button
+        const quickCreateBtn = document.getElementById('quick-create-note');
+        if (quickCreateBtn) {
+            quickCreateBtn.addEventListener('click', () => {
+                switchToTab('notes');
+                const noteInput = document.getElementById('note-input');
+                if (noteInput) {
+                    noteInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => noteInput.focus(), 500);
+                }
+            });
+        }
 
         // Character counter for notes
         const noteInput = document.getElementById('note-input');

@@ -225,6 +225,35 @@
             background-color: #f9f9f9;
         }
 
+        /* Reset KaTeX internal tables so math doesn't look like data tables */
+        .rendered-note .katex table,
+        .rendered-note .katex-display table {
+            border-collapse: initial;
+            display: inline-table;
+            margin: 0;
+            border: none;
+            overflow: visible;
+            font-size: inherit;
+            width: auto;
+        }
+
+        .rendered-note .katex td,
+        .rendered-note .katex th,
+        .rendered-note .katex-display td,
+        .rendered-note .katex-display th {
+            border: none;
+            padding: 0;
+            background: none !important;
+            white-space: nowrap;
+        }
+
+        .rendered-note .katex tr,
+        .rendered-note .katex-display tr,
+        .rendered-note .katex tr:hover,
+        .rendered-note .katex-display tr:hover {
+            background: none !important;
+        }
+
         /* Edit Styles */
         .edit-interface {
             padding: 1.5rem;

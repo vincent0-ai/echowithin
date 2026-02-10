@@ -311,6 +311,7 @@
             margin: 1em 0;
             font-size: 0.95em;
             overflow-x: auto;
+            display: block;
         }
 
         .note-content th,
@@ -334,7 +335,41 @@
             background: #f5f5f5;
         }
 
-        /* KaTeX inside tables */
+        /* === CRITICAL: Reset styles for KaTeX internal tables === */
+        /* KaTeX uses <table> elements internally for fractions, matrices, etc. */
+        /* Without these resets, math renders with data-table borders/backgrounds */
+        .note-content .katex table,
+        .note-content .katex-display table {
+            border-collapse: initial;
+            display: inline-table;
+            margin: 0;
+            border: none;
+            overflow: visible;
+            font-size: inherit;
+            width: auto;
+        }
+
+        .note-content .katex td,
+        .note-content .katex th,
+        .note-content .katex-display td,
+        .note-content .katex-display th {
+            border: none;
+            padding: 0;
+            background: none !important;
+            white-space: nowrap;
+        }
+
+        .note-content .katex tr,
+        .note-content .katex-display tr {
+            background: none !important;
+        }
+
+        .note-content .katex tr:hover,
+        .note-content .katex-display tr:hover {
+            background: none !important;
+        }
+
+        /* KaTeX inside data tables */
         .note-content td .katex,
         .note-content th .katex {
             font-size: 1em;
@@ -362,6 +397,7 @@
         .note-content .katex-html {
             white-space: nowrap;
         }
+
 
 
 

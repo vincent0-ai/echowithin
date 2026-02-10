@@ -65,9 +65,10 @@
 
     <style>
         .shared-note-container {
-            max-width: 800px;
+            max-width: 1000px;
+            /* Increased from 800px */
             margin: 2rem auto;
-            padding: 0 1rem;
+            padding: 0 1.5rem;
         }
 
         .error-state,
@@ -107,6 +108,7 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             overflow: hidden;
             border-left: 6px solid #3e2217;
+            width: 100%;
         }
 
         .shared-note-header {
@@ -151,6 +153,8 @@
             line-height: 1.7;
             font-size: 1.1rem;
             color: #333;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         /* Markdown & Math Styling */
@@ -194,7 +198,7 @@
 
         #edit-content {
             width: 100%;
-            min-height: 300px;
+            min-height: 400px;
             border: 1px solid #ddd;
             border-radius: 12px;
             padding: 1rem;
@@ -224,15 +228,25 @@
         }
 
         @media (max-width: 600px) {
+            .shared-note-container {
+                padding: 0 0.5rem;
+                /* Wider on mobile */
+                margin: 1rem auto;
+            }
+
             .auth-state .input-group {
                 flex-direction: column;
+            }
+
+            .note-content {
+                padding: 1rem;
             }
         }
     </style>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // Function to auto-detect and convert common math patterns to LaTeX
+            // Full Math Auto-Detection Function (Synced from personal_space.html)
             function autoDetectMath(text) {
                 if (!text) return text;
 
@@ -263,13 +277,27 @@
                     return null;
                 }
 
-                const mathCmds = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega', 'int', 'sum', 'prod', 'lim', 'infty', 'partial', 'nabla', 'sqrt', 'frac', 'approx', 'neq', 'leq', 'geq', 'pm', 'mp', 'times', 'div', 'rightarrow', 'leftarrow', 'leftrightarrow', 'Rightarrow', 'Leftarrow', 'Leftrightarrow', 'hat', 'bar', 'vec', 'dot', 'tilde'];
+                const mathCmds = [
+                    'longleftrightarrow', 'Longleftrightarrow', 'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow', 'longleftarrow', 'Longleftarrow', 'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow',
+                    'uparrow', 'Uparrow', 'downarrow', 'Downarrow', 'updownarrow', 'Updownarrow', 'nearrow', 'searrow', 'swarrow', 'nwarrow', 'mapsto', 'longmapsto',
+                    'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor', 'oplus', 'otimes', 'odot', 'ominus', 'oslash',
+                    'forall', 'exists', 'nexists', 'therefore', 'because', 'subset', 'subseteq', 'subsetneq', 'supset', 'supseteq', 'supsetneq', 'cup', 'cap', 'bigcup', 'bigcap', 'setminus', 'in', 'notin', 'ni',
+                    'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'll', 'gg', 'approx', 'approxeq', 'equiv', 'cong', 'sim', 'simeq', 'propto', 'parallel', 'perp',
+                    'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'varrho', 'sigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+                    'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
+                    'partial', 'nabla', 'int', 'iint', 'iiint', 'oint', 'sum', 'prod', 'lim', 'infty', 'frac', 'dfrac', 'tfrac', 'cfrac', 'sqrt', 'cbrt', 'root', 'binom', 'dbinom', 'tbinom',
+                    'hat', 'widehat', 'check', 'tilde', 'widetilde', 'acute', 'grave', 'breve', 'bar', 'overline', 'underline', 'vec', 'dot', 'ddot', 'overbrace', 'underbrace', 'boxed', 'cancel',
+                    'hbar', 'AA', 'angstrom', 'Bra', 'Ket', 'bra', 'ket', 'braket', 'abs', 'norm', 'eval', 'dd', 'dv', 'pdv', 'tensor',
+                    'begin', 'end', 'matrix', 'pmatrix', 'bmatrix', 'vmatrix', 'Vmatrix', 'cases', 'aligned', 'gathered', 'split',
+                    'cdot', 'cdots', 'ldots', 'dots', 'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet', 'diamond', 'lozenge',
+                    'left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr', 'bm', 'boldsymbol', 'bold', 'color', 'textcolor', 'phantom'
+                ];
                 const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
 
                 let result = '';
                 let lastIdx = 0;
                 let match;
-                const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'binom'];
+                const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'cfrac', 'binom', 'dbinom', 'tbinom', 'overset', 'underset', 'stackrel'];
 
                 while ((match = cmdRegex.exec(text)) !== null) {
                     result += text.substring(lastIdx, match.index);
@@ -288,10 +316,54 @@
                                 matchedWhole = true;
                             }
                         }
+                    } else if (cmd === 'sqrt' || cmd === 'cbrt' || cmd === 'root') {
+                        let j = match.index + match[0].length;
+                        while (j < text.length && /\s/.test(text[j])) j++;
+                        if (text[j] === '[') {
+                            const endBrkt = text.indexOf(']', j);
+                            if (endBrkt !== -1) j = endBrkt + 1;
+                        }
+                        const content = extractBracedContent(text, j);
+                        if (content) {
+                            result += wrap(text.substring(match.index, content.endIndex + 1));
+                            lastIdx = content.endIndex + 1;
+                            cmdRegex.lastIndex = lastIdx;
+                            matchedWhole = true;
+                        }
+                    } else if (cmd === 'left') {
+                        const remaining = text.substring(match.index);
+                        const leftRightMatch = remaining.match(/^\\{1,4}left[\s]*[\(\[\{\|\\][\s\S]*?\\{1,4}right[\s]*[\)\]\}\|\\]/);
+                        if (leftRightMatch) {
+                            result += wrap(leftRightMatch[0]);
+                            lastIdx = match.index + leftRightMatch[0].length;
+                            cmdRegex.lastIndex = lastIdx;
+                            matchedWhole = true;
+                        }
+                    } else if (cmd === 'begin') {
+                        const remaining = text.substring(match.index);
+                        const envMatch = remaining.match(/^\\begin\{([^}]+)\}([\s\S]*?)\\end\{\1\}/);
+                        if (envMatch) {
+                            result += wrap(envMatch[0]);
+                            lastIdx = match.index + envMatch[0].length;
+                            cmdRegex.lastIndex = lastIdx;
+                            matchedWhole = true;
+                        }
                     } else {
                         let currentIdx = match.index + match[0].length;
                         const bracedArg = extractBracedContent(text, currentIdx);
                         if (bracedArg) currentIdx = bracedArg.endIndex + 1;
+
+                        while (currentIdx < text.length) {
+                            let i = currentIdx;
+                            while (i < text.length && /\s/.test(text[i])) i++;
+                            if (text[i] === '_' || text[i] === '^') {
+                                i++;
+                                const braced = extractBracedContent(text, i);
+                                if (braced) currentIdx = braced.endIndex + 1;
+                                else if (/[a-zA-Z0-9]/.test(text[i])) currentIdx = i + 1;
+                                else break;
+                            } else break;
+                        }
                         result += wrap(text.substring(match.index, currentIdx));
                         lastIdx = currentIdx;
                         cmdRegex.lastIndex = lastIdx;
@@ -306,8 +378,28 @@
                 result += text.substring(lastIdx);
                 text = result;
 
+                // Simple scripts with balanced parentheses
+                const tempM = [];
+                text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
+                text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
+                text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
+
                 // Numeric fractions like 1/2
                 text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
+
+                // Symbols
+                text = text.replace(/±/g, wrap('\\pm'));
+                text = text.replace(/ℏ/g, wrap('\\hbar'));
+                text = text.replace(/Å/g, wrap('\\text{Å}'));
+                text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
+                text = text.replace(/≠/g, wrap('\\neq'));
+                text = text.replace(/≤/g, wrap('\\leq'));
+                text = text.replace(/≥/g, wrap('\\geq'));
+                text = text.replace(/≈/g, wrap('\\approx'));
+
+                // Dirac Notation
+                text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
+                text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
 
                 // Restore
                 text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
@@ -315,7 +407,7 @@
                 return text;
             }
 
-            // Function to render markdown with math support
+            // Render markdown with math support
             function renderMarkdownWithMath(text) {
                 if (!text) return '';
                 let processedText = autoDetectMath(text);
@@ -370,9 +462,9 @@
             rawNoteElements.forEach(el => {
                 const rawMarkdown = el.getAttribute('data-raw');
                 if (rawMarkdown) {
-                    const textarea = document.createElement('textarea');
-                    textarea.innerHTML = rawMarkdown;
-                    el.innerHTML = renderMarkdownWithMath(textarea.value);
+                    const decoded = document.createElement('textarea');
+                    decoded.innerHTML = rawMarkdown;
+                    el.innerHTML = renderMarkdownWithMath(decoded.value);
                 }
             });
 

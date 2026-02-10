@@ -1618,7 +1618,7 @@
                                     <i class="fas fa-${s.permissions === 'edit' ? 'pen' : 'eye'}"></i> ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
                                     ${s.expires_at ? ' | Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
                                 </span>
-                                <button class="delete-btn" style="background:none; border:none; padding:5px; font-size:0.8rem;" onclick="revokeShare('${s.share_id}', this)" title="Revoke">
+                                <button class="revoke-link-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" onclick="revokeShare('${s.share_id}', this)" title="Revoke">
                                     <i class="fas fa-trash-alt"></i> Revoke
                                 </button>
                             </div>

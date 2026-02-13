@@ -964,8 +964,7 @@
 
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
-            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }
-        };
+            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
         const CSRF_TOKEN = '{{ csrf_token() }}';
         const commentsList = document.getElementById('comments-list');
         const commentCountEl = document.getElementById('comment-count');

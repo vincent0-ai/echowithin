@@ -146,7 +146,8 @@ app.config["SECRET_KEY"] = get_env_variable('SECRET')
 # UPLOAD_FOLDER is kept for backward compatibility with old posts.
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov'}
+ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv'}
+ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
 MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10 MB limit for uploaded videos
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -5447,17 +5448,54 @@ def api_create_share(post_id):
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
-    data = request.get_json() or {}
-    permissions = data.get('permissions', 'view')
+    is_valentine = False
+    valentine_photo = None
+    valentine_audio = None
+
+    if request.is_json:
+        data = request.get_json() or {}
+        permissions = data.get('permissions', 'view')
+        expires_in = data.get('expires_in')
+        access_code = data.get('access_code')
+        is_valentine = data.get('is_valentine', False)
+        valentine_photo = data.get('valentine_photo')
+        valentine_audio = data.get('valentine_audio')
+    else:
+        # Handle multipart/form-data
+        permissions = request.form.get('permissions', 'view')
+        expires_in = request.form.get('expires_in')
+        access_code = request.form.get('access_code')
+        is_valentine = request.form.get('is_valentine') == 'true'
+        
+        # Handle file uploads
+        if is_valentine:
+            photo_file = request.files.get('valentine_photo')
+            if photo_file and photo_file.filename:
+                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+                if ext in ALLOWED_IMAGE_EXTENSIONS:
+                    filename = secure_filename(f"val_photo_{secrets.token_hex(8)}.{ext}")
+                    path = os.path.join(app.config['UPLOAD_FOLDER'], 'valentine', filename)
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    photo_file.save(path)
+                    valentine_photo = f"/static/uploads/valentine/{filename}"
+
+            audio_file = request.files.get('valentine_audio')
+            if audio_file and audio_file.filename:
+                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+                if ext in ALLOWED_AUDIO_EXTENSIONS:
+                    filename = secure_filename(f"val_audio_{secrets.token_hex(8)}.{ext}")
+                    path = os.path.join(app.config['UPLOAD_FOLDER'], 'valentine', filename)
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    audio_file.save(path)
+                    valentine_audio = f"/static/uploads/valentine/{filename}"
+
     if permissions not in ['view', 'edit']:
         permissions = 'view'
 
-    access_code = data.get('access_code')
     access_code_hash = None
     if access_code:
         access_code_hash = generate_password_hash(access_code)
 
-    expires_in = data.get('expires_in')  # '1h', '1d', '7d', 'never'
     expires_at = None
     now = datetime.datetime.now(datetime.timezone.utc)
     if expires_in == '1h':
@@ -5477,9 +5515,9 @@ def api_create_share(post_id):
         'access_code_hash': access_code_hash,
         'expires_at': expires_at,
         'created_at': now,
-        'is_valentine': data.get('is_valentine', False),
-        'valentine_photo': data.get('valentine_photo'),
-        'valentine_audio': data.get('valentine_audio')
+        'is_valentine': is_valentine,
+        'valentine_photo': valentine_photo,
+        'valentine_audio': valentine_audio
     })
 
     share_url = url_for('view_shared_note', share_id=share_id, _external=True)

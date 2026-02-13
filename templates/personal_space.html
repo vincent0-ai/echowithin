@@ -1021,6 +1021,13 @@
                 </select>
             </div>
 
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Access Code
+                    (Optional)</label>
+                <input type="text" id="share-code" placeholder="Leave blank for no code"
+                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd;">
+            </div>
+
             <div style="margin-bottom: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
                 <label
                     style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d; cursor: pointer;">
@@ -1836,6 +1843,7 @@
         document.querySelectorAll('.share-note-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 currentShareNoteId = btn.dataset.id;
+                console.log('Opening share modal for note:', currentShareNoteId);
                 openShareModal();
                 loadExistingShares(currentShareNoteId);
             });
@@ -1922,6 +1930,13 @@
                 const valentine_photo = document.getElementById('share-valentine-photo').files[0];
                 const valentine_audio = document.getElementById('share-valentine-audio').files[0];
 
+                if (!currentShareNoteId) {
+                    alert('Error: No note selected. Please close and re-open the share modal.');
+                    return;
+                }
+
+                console.log('Generating share link for:', currentShareNoteId);
+
                 generateBtn.disabled = true;
                 const originalText = generateBtn.textContent;
                 generateBtn.textContent = 'Generating...';
@@ -1935,10 +1950,13 @@
                     if (valentine_photo) formData.append('valentine_photo', valentine_photo);
                     if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
                     const response = await fetch(`/personal_post/share/${currentShareNoteId}`, {
                         method: 'POST',
                         headers: {
-                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            'X-CSRFToken': csrfToken
                         },
                         body: formData
                     });
@@ -2290,6 +2308,14 @@
                 setBanner('offline'); // Show offline banner even if no pending notes
             }
         });
+        // Valentine toggle helper
+        const vToggle = document.getElementById('share-valentine');
+        if (vToggle) {
+            vToggle.addEventListener('change', () => {
+                const opts = document.getElementById('valentine-options');
+                if (opts) opts.style.display = vToggle.checked ? 'block' : 'none';
+            });
+        }
     })();
 </script>
 {% endblock %}

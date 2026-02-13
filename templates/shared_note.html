@@ -58,6 +58,14 @@
             </div>
             {% endif %}
 
+            {% if valentine_audio %}
+            <div style="text-align: center; margin-top: 1rem;">
+                <button id="music-control-btn" class="btn comment-btn">
+                    <i class="fas fa-play"></i> Play Music
+                </button>
+            </div>
+            {% endif %}
+
             <div class="note-card-shared">
                 <div class="shared-note-header">
                     <div class="owner-info">
@@ -1157,7 +1165,7 @@
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
             const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
-        const CSRF_TOKEN = '{{ csrf_token() }}';
+            const CSRF_TOKEN = '{{ csrf_token() }}';
         const commentsList = document.getElementById('comments-list');
         const commentCountEl = document.getElementById('comment-count');
 
@@ -1325,9 +1333,24 @@
                 revealBtn.style.display = 'none';
                 vContent.style.display = 'block';
                 if (vAudio) {
-                    vAudio.play().catch(e => console.log('Playback triggered on interaction: ', e));
+                    vAudio.play().then(() => {
+                        if (musicBtn) musicBtn.innerHTML = '<i class="fas fa-pause"></i> Pause Music';
+                    }).catch(e => console.log('Playback triggered on interaction: ', e));
                 }
                 startHeartsAnimation();
+            });
+        }
+
+        const musicBtn = document.getElementById('music-control-btn');
+        if (musicBtn && vAudio) {
+            musicBtn.addEventListener('click', () => {
+                if (vAudio.paused) {
+                    vAudio.play();
+                    musicBtn.innerHTML = '<i class="fas fa-pause"></i> Pause Music';
+                } else {
+                    vAudio.pause();
+                    musicBtn.innerHTML = '<i class="fas fa-play"></i> Play Music';
+                }
             });
         }
 

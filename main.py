@@ -297,6 +297,8 @@ announcements_conf = db['announcements']
 comments_conf = db['comments']
 personal_posts_conf = db['personal_posts']
 note_shares_conf = db['note_shares']
+note_versions_conf = db['note_versions']
+note_discussions_conf = db['note_discussions']
 push_subscriptions_conf = db['push_subscriptions']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 newsletter_conf = db['newsletter_subs']
@@ -327,6 +329,9 @@ comments_conf.create_index('author_id')
 # Compound index for engagement-based sorting (hot/top posts)
 posts_conf.create_index([('likes_count', -1), ('timestamp', -1)])
 posts_conf.create_index([('view_count', -1)])
+# Index for note versions and discussions
+note_versions_conf.create_index([('note_id', 1), ('created_at', -1)])
+note_discussions_conf.create_index([('share_id', 1), ('created_at', -1)])
 
 # --- Encryption utilities for personal notes ---
 # Derive a Fernet key from the app's SECRET_KEY for encrypting personal notes
@@ -5536,7 +5541,34 @@ def api_edit_shared_note(share_id):
 
     content = content.strip()[:8000]
     encrypted_content = encrypt_note(content)
-    
+
+    # --- Version Control: snapshot previous content before overwriting ---
+    note = personal_posts_conf.find_one({'_id': share['note_id']})
+    if note and note.get('content'):
+        # Get editor identity
+        editor_name = 'Anonymous'
+        editor_id = None
+        if current_user.is_authenticated:
+            editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+            editor_id = ObjectId(current_user.id)
+
+        note_versions_conf.insert_one({
+            'note_id': share['note_id'],
+            'share_id': share_id,
+            'editor_name': editor_name,
+            'editor_id': editor_id,
+            'content': note['content'],  # previous encrypted content
+            'encrypted': note.get('encrypted', True),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+
+        # Cap at 50 versions per note
+        version_count = note_versions_conf.count_documents({'note_id': share['note_id']})
+        if version_count > 50:
+            oldest = note_versions_conf.find({'note_id': share['note_id']}).sort('created_at', 1).limit(version_count - 50)
+            for old_ver in oldest:
+                note_versions_conf.delete_one({'_id': old_ver['_id']})
+
     personal_posts_conf.update_one(
         {'_id': share['note_id']},
         {'$set': {'content': encrypted_content, 'encrypted': True}}
@@ -5576,6 +5608,154 @@ def api_get_note_shares(post_id):
              s['expires_at'] = s['expires_at'].isoformat()
     
     return jsonify(shares)
+
+
+@app.route('/personal_post/versions/<post_id>')
+@login_required
+@limits(calls=20, period=60)
+def api_get_note_versions(post_id):
+    """Returns version history for a note (owner only)."""
+    obj_id = safe_object_id(post_id)
+    if not obj_id:
+        return jsonify([]), 400
+
+    # Verify ownership
+    note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    versions = list(note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
+    result = []
+    for v in versions:
+        # Decrypt the content for the owner to view
+        decrypted = decrypt_note(v['content']) if v.get('encrypted', True) else v.get('content', '')
+        result.append({
+            '_id': str(v['_id']),
+            'editor_name': v.get('editor_name', 'Unknown'),
+            'content': decrypted,
+            'created_at': v['created_at'].isoformat() if v.get('created_at') else None
+        })
+    return jsonify(result)
+
+
+# --- Note Discussion Routes (Login Required) ---
+
+@app.route('/share/note/<share_id>/comments', methods=['GET'])
+@limits(calls=30, period=60)
+def api_get_note_comments(share_id):
+    """Fetch all comments for a shared note."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify([]), 404
+
+    comments = list(note_discussions_conf.find({
+        'share_id': share_id,
+        'parent_id': None
+    }).sort('created_at', -1))
+
+    result = []
+    for c in comments:
+        # Get replies
+        replies = list(note_discussions_conf.find({
+            'parent_id': c['_id']
+        }).sort('created_at', 1))
+
+        result.append({
+            '_id': str(c['_id']),
+            'author_name': c.get('author_name', 'Unknown'),
+            'author_id': str(c.get('author_id', '')),
+            'content': c['content'],
+            'created_at': c['created_at'].isoformat() if c.get('created_at') else None,
+            'replies': [{
+                '_id': str(r['_id']),
+                'author_name': r.get('author_name', 'Unknown'),
+                'author_id': str(r.get('author_id', '')),
+                'content': r['content'],
+                'created_at': r['created_at'].isoformat() if r.get('created_at') else None
+            } for r in replies]
+        })
+    return jsonify(result)
+
+
+@app.route('/share/note/<share_id>/comments', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_post_note_comment(share_id):
+    """Post a new comment on a shared note (login required)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    if not content or len(content) > 2000:
+        return jsonify({'error': 'Comment must be 1-2000 characters'}), 400
+
+    # Sanitize
+    content = bleach.clean(content, tags=[], strip=True)
+
+    comment = {
+        'share_id': share_id,
+        'note_id': share['note_id'],
+        'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
+        'author_id': ObjectId(current_user.id),
+        'content': content,
+        'parent_id': None,
+        'created_at': datetime.datetime.now(datetime.timezone.utc)
+    }
+    result = note_discussions_conf.insert_one(comment)
+
+    return jsonify({
+        'success': True,
+        '_id': str(result.inserted_id),
+        'author_name': comment['author_name'],
+        'content': comment['content'],
+        'created_at': comment['created_at'].isoformat()
+    })
+
+
+@app.route('/share/note/<share_id>/comments/<comment_id>/replies', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_post_note_reply(share_id, comment_id):
+    """Reply to a comment on a shared note (login required)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+
+    parent_id = safe_object_id(comment_id)
+    if not parent_id:
+        return jsonify({'error': 'Invalid comment ID'}), 400
+
+    parent = note_discussions_conf.find_one({'_id': parent_id, 'share_id': share_id})
+    if not parent:
+        return jsonify({'error': 'Parent comment not found'}), 404
+
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    if not content or len(content) > 2000:
+        return jsonify({'error': 'Reply must be 1-2000 characters'}), 400
+
+    content = bleach.clean(content, tags=[], strip=True)
+
+    reply = {
+        'share_id': share_id,
+        'note_id': share['note_id'],
+        'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
+        'author_id': ObjectId(current_user.id),
+        'content': content,
+        'parent_id': parent_id,
+        'created_at': datetime.datetime.now(datetime.timezone.utc)
+    }
+    result = note_discussions_conf.insert_one(reply)
+
+    return jsonify({
+        'success': True,
+        '_id': str(result.inserted_id),
+        'author_name': reply['author_name'],
+        'content': reply['content'],
+        'created_at': reply['created_at'].isoformat()
+    })
 
 
 @app.route('/contact', methods=['POST'])

@@ -16,6 +16,11 @@
     <div class="shared-note-container {% if is_valentine %}valentine-note{% endif %}">
         {% if is_valentine %}
         <div class="hearts-container" id="hearts-container"></div>
+        {% if is_valentine and valentine_audio %}
+        <audio id="valentine-audio" loop autoplay preload="auto">
+            <source src="{{ valentine_audio }}">
+        </audio>
+        {% endif %}
         {% endif %}
         {% if expired %}
         <div class="error-state">
@@ -44,12 +49,6 @@
             <div class="envelope-icon"><i class="fas fa-envelope-open-text"></i></div>
             <h2>A special message for you</h2>
             <p>Click to open your Valentine's surprise</p>
-
-            {% if valentine_audio %}
-            <audio id="valentine-audio" loop>
-                <source src="{{ valentine_audio }}" type="audio/mpeg">
-            </audio>
-            {% endif %}
         </div>
 
         <div id="valentine-content" class="valentine-content-hidden">
@@ -1156,8 +1155,9 @@
             }
 
             // --- Discussion System ---
+            const SHARE_ID = '{{ share_id }}';
             const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
-        const CSRF_TOKEN = '{{ csrf_token() }}';
+            const CSRF_TOKEN = '{{ csrf_token() }}';
         const commentsList = document.getElementById('comments-list');
         const commentCountEl = document.getElementById('comment-count');
 
@@ -1325,7 +1325,7 @@
                 revealBtn.style.display = 'none';
                 vContent.style.display = 'block';
                 if (vAudio) {
-                    vAudio.play().catch(e => console.log('Autoplay blocked, user interaction required: ', e));
+                    vAudio.play().catch(e => console.log('Playback triggered on interaction: ', e));
                 }
                 startHeartsAnimation();
             });

@@ -5389,6 +5389,26 @@ def create_personal_post():
         flash('Content cannot be empty.', 'danger')
     return redirect(url_for('personal_space'))
 
+@app.route('/personal_post/create_json', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def create_personal_post_json():
+    """Creates a new personal note via JSON API (for offline sync)."""
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    if not content:
+        return jsonify({'error': 'Content cannot be empty'}), 400
+
+    content = content[:8000]
+    encrypted_content = encrypt_note(content)
+    result = personal_posts_conf.insert_one({
+        'user_id': ObjectId(current_user.id),
+        'content': encrypted_content,
+        'encrypted': True,
+        'created_at': datetime.datetime.now(datetime.timezone.utc)
+    })
+    return jsonify({'success': True, 'id': str(result.inserted_id)})
+
 @app.route('/personal_post/delete/<post_id>', methods=['POST'])
 @login_required
 @limits(calls=20, period=60)

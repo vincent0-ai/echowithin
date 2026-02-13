@@ -358,6 +358,8 @@
                 <a href="{{ url_for('profile', username=current_user.username) }}"
                     class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}"><i
+                        class="fas fa-sticky-note"></i> Notes</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}
@@ -451,50 +453,50 @@
             // Helper function to handle deep link URLs
             function handleDeepLink(deepLinkUrl) {
                 if (!deepLinkUrl) return false;
-                
+
                 console.log('Processing deep link:', deepLinkUrl);
                 try {
                     const url = new URL(deepLinkUrl);
                     console.log('Deep link parsed - protocol:', url.protocol, 'host:', url.host, 'search:', url.search);
-                    
+
                     // Handle echowithin://open?path=/foo&bar=baz
                     // Also handle case where host might be empty or different
                     if (url.protocol === 'echowithin:') {
                         // Get path from query params (our format: echowithin://open?path=/mobile_auth&token=xxx)
                         const path = url.searchParams.get('path') || '/';
                         console.log('Deep link path extracted:', path);
-                        
+
                         // Create a new URL starting with the path
                         const targetUrl = new URL(path, window.location.origin);
                         // Append all original search params (excluding 'path')
                         url.searchParams.forEach((value, key) => {
                             if (key !== 'path') targetUrl.searchParams.set(key, value);
                         });
-                        
+
                         const finalUrl = targetUrl.pathname + targetUrl.search;
                         console.log('Deep link redirecting to:', finalUrl);
-                        
+
                         // Close the system browser (if open from OAuth flow)
                         if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                            window.Capacitor.Plugins.Browser.close().catch(function() {
+                            window.Capacitor.Plugins.Browser.close().catch(function () {
                                 // Ignore errors if browser wasn't open
                             });
                         }
-                        
+
                         // Use replace to prevent back button from returning to this intermediate state
                         window.location.replace(finalUrl);
                         return true;
                     } else if (url.protocol === 'https:' && url.host === 'blog.echowithin.xyz' && url.pathname && url.pathname !== '/') {
                         // Handle https deep links to our domain
                         console.log('HTTPS deep link to:', url.pathname);
-                        
+
                         // Close the system browser (if open from OAuth flow)
                         if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                            window.Capacitor.Plugins.Browser.close().catch(function() {
+                            window.Capacitor.Plugins.Browser.close().catch(function () {
                                 // Ignore errors if browser wasn't open
                             });
                         }
-                        
+
                         window.location.replace(url.pathname + url.search);
                         return true;
                     }
@@ -713,7 +715,8 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
     if (!isLoggedIn) return;
 
     // Check if push is supported

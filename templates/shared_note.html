@@ -1331,11 +1331,15 @@
             revealBtn.addEventListener('click', () => {
                 console.log('Valentine reveal clicked');
                 revealBtn.style.display = 'none';
-                vContent.style.display = 'block';
                 if (vAudio) {
+                    console.log('Attempting to play audio. Source:', vAudio.currentSrc);
                     vAudio.play().then(() => {
+                        console.log('Audio playback started successfully');
                         if (musicBtn) musicBtn.innerHTML = '<i class="fas fa-pause"></i> Pause Music';
-                    }).catch(e => console.log('Playback triggered on interaction: ', e));
+                    }).catch(e => {
+                        console.error('Playback failed/blocked:', e);
+                        // If autoplay fails, we at least tried. The manual button is the backup.
+                    });
                 }
                 startHeartsAnimation();
             });

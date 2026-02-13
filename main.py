@@ -5484,7 +5484,9 @@ def api_create_share(post_id):
                 ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
                 if ext in ALLOWED_AUDIO_EXTENSIONS:
                     try:
-                        upload_result = cloudinary.uploader.upload(audio_file, resource_type="video", folder="echowithin_valentine")
+                        # Ensure we are at the start of the file
+                        audio_file.seek(0)
+                        upload_result = cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
                         valentine_audio = upload_result.get('secure_url')
                     except Exception as e:
                         app.logger.error(f"Valentine audio upload failed: {e}")

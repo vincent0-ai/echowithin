@@ -21,3 +21,4 @@ locustfile.py
 firebase-service-account.json
 patch_base.py
 scripts/
+fix_valentine.py

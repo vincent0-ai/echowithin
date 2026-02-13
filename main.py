@@ -5476,7 +5476,10 @@ def api_create_share(post_id):
         'permissions': permissions,
         'access_code_hash': access_code_hash,
         'expires_at': expires_at,
-        'created_at': now
+        'created_at': now,
+        'is_valentine': data.get('is_valentine', False),
+        'valentine_photo': data.get('valentine_photo'),
+        'valentine_audio': data.get('valentine_audio')
     })
 
     share_url = url_for('view_shared_note', share_id=share_id, _external=True)
@@ -5531,7 +5534,10 @@ def view_shared_note(share_id):
                            share_id=share_id, 
                            content=content, 
                            permissions=share['permissions'],
-                           note_id=str(note['_id']))
+                           note_id=str(note['_id']),
+                           is_valentine=share.get('is_valentine', False),
+                           valentine_photo=share.get('valentine_photo'),
+                           valentine_audio=share.get('valentine_audio'))
 
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
@@ -5663,38 +5669,44 @@ def api_get_note_versions(post_id):
 @app.route('/share/note/<share_id>/comments', methods=['GET'])
 @limits(calls=30, period=60)
 def api_get_note_comments(share_id):
-    """Fetch all comments for a shared note."""
+    """Fetch all comments for a shared note, organized into a recursive tree."""
     share = note_shares_conf.find_one({'share_id': share_id})
     if not share:
         return jsonify([]), 404
 
-    comments = list(note_discussions_conf.find({
-        'share_id': share_id,
-        'parent_id': None
-    }).sort('created_at', -1))
+    # Fetch all comments for this share
+    all_comments = list(note_discussions_conf.find({
+        'share_id': share_id
+    }).sort('created_at', 1))  # Sort by time so replies come after parents
 
-    result = []
-    for c in comments:
-        # Get replies
-        replies = list(note_discussions_conf.find({
-            'parent_id': c['_id']
-        }).sort('created_at', 1))
-
-        result.append({
-            '_id': str(c['_id']),
+    # Build Map for easy lookup and nesting
+    comment_map = {}
+    roots = []
+    
+    for c in all_comments:
+        c_id = str(c['_id'])
+        comment_map[c_id] = {
+            '_id': c_id,
             'author_name': c.get('author_name', 'Unknown'),
             'author_id': str(c.get('author_id', '')),
             'content': c['content'],
             'created_at': c['created_at'].isoformat() if c.get('created_at') else None,
-            'replies': [{
-                '_id': str(r['_id']),
-                'author_name': r.get('author_name', 'Unknown'),
-                'author_id': str(r.get('author_id', '')),
-                'content': r['content'],
-                'created_at': r['created_at'].isoformat() if r.get('created_at') else None
-            } for r in replies]
-        })
-    return jsonify(result)
+            'replies': []
+        }
+
+    for c in all_comments:
+        c_id = str(c['_id'])
+        p_id = str(c.get('parent_id')) if c.get('parent_id') else None
+        
+        if p_id and p_id in comment_map:
+            comment_map[p_id]['replies'].append(comment_map[c_id])
+        else:
+            roots.append(comment_map[c_id])
+
+    # Reverse roots so newest top-level comments are first
+    roots.reverse()
+    
+    return jsonify(roots)
 
 
 @app.route('/share/note/<share_id>/comments', methods=['POST'])

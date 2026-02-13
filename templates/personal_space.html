@@ -1021,11 +1021,25 @@
                 </select>
             </div>
 
-            <div style="margin-bottom: 1rem;">
-                <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Access Code
-                    (Optional)</label>
-                <input type="text" id="share-code" placeholder="Leave blank for no code"
-                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd;">
+            <div style="margin-bottom: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
+                <label
+                    style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d; cursor: pointer;">
+                    <input type="checkbox" id="share-valentine"> <i class="fas fa-heart"></i> Valentine Surprise
+                </label>
+                <div id="valentine-options" style="display: none; margin-top: 0.5rem; padding-left: 1.5rem;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <label style="display: block; margin-bottom: 0.2rem; font-size: 0.8rem; color: #666;">Photo URL
+                            (Optional)</label>
+                        <input type="url" id="share-valentine-photo" placeholder="https://..."
+                            style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 0.2rem; font-size: 0.8rem; color: #666;">Background
+                            Audio URL (.mp3)</label>
+                        <input type="url" id="share-valentine-audio" placeholder="https://..."
+                            style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem;">
+                    </div>
+                </div>
             </div>
 
             <button id="generate-share-link" class="btn comment-btn"
@@ -1837,6 +1851,10 @@
                 document.getElementById('share-permissions').value = 'view';
                 document.getElementById('share-expiry').value = 'never';
                 document.getElementById('share-code').value = '';
+                document.getElementById('share-valentine').checked = false;
+                document.getElementById('share-valentine-photo').value = '';
+                document.getElementById('share-valentine-audio').value = '';
+                document.getElementById('valentine-options').style.display = 'none';
 
                 document.addEventListener('keydown', handleShareModalEsc);
             }
@@ -1900,6 +1918,9 @@
                 const permissions = document.getElementById('share-permissions').value;
                 const expires_in = document.getElementById('share-expiry').value;
                 const access_code = document.getElementById('share-code').value;
+                const is_valentine = document.getElementById('share-valentine').checked;
+                const valentine_photo = document.getElementById('share-valentine-photo').value;
+                const valentine_audio = document.getElementById('share-valentine-audio').value;
 
                 generateBtn.disabled = true;
                 const originalText = generateBtn.textContent;
@@ -1915,7 +1936,10 @@
                         body: JSON.stringify({
                             permissions,
                             expires_in,
-                            access_code
+                            access_code,
+                            is_valentine,
+                            valentine_photo,
+                            valentine_audio
                         })
                     });
 

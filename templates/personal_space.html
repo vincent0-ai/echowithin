@@ -1049,6 +1049,17 @@
                 </div>
             </div>
 
+
+
+            <div id="share-upload-progress" style="display: none; margin-bottom: 1rem;">
+                <div style="height: 6px; background: #eee; border-radius: 3px; overflow: hidden;">
+                    <div id="share-progress-bar"
+                        style="width: 0%; height: 100%; background: #3e2217; transition: width 0.3s;"></div>
+                </div>
+                <div id="share-progress-text"
+                    style="font-size: 0.75rem; color: #666; margin-top: 0.3rem; text-align: center;">Uploading: 0%</div>
+            </div>
+
             <button id="generate-share-link" class="btn comment-btn"
                 style="width: 100%; padding: 0.75rem; font-weight: 600; border-radius: 8px;">
                 Generate Share Link
@@ -1930,10 +1941,9 @@
                 const valentine_photo = document.getElementById('share-valentine-photo').files[0];
                 const valentine_audio = document.getElementById('share-valentine-audio').files[0];
 
-                if (!currentShareNoteId) {
-                    alert('Error: No note selected. Please close and re-open the share modal.');
-                    return;
-                }
+                const progressArea = document.getElementById('share-upload-progress');
+                const progressBar = document.getElementById('share-progress-bar');
+                const progressText = document.getElementById('share-progress-text');
 
                 console.log('Generating share link for:', currentShareNoteId);
 
@@ -1953,26 +1963,54 @@
                     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
                     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-                    const response = await fetch(`/personal_post/share/${currentShareNoteId}`, {
-                        method: 'POST',
-                        headers: {
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: formData
-                    });
+                    if (progressArea) progressArea.style.display = 'block';
 
-                    const result = await response.json();
-                    if (result.success) {
-                        loadExistingShares(currentShareNoteId);
-                        document.getElementById('share-code').value = '';
-                    } else {
-                        alert('Error: ' + (result.error || 'Unknown error'));
-                    }
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `/personal_post/share/${currentShareNoteId}`, true);
+                    xhr.setRequestHeader('X-CSRFToken', csrfToken);
+
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            if (progressBar) progressBar.style.width = percent + '%';
+                            if (progressText) progressText.textContent = `Uploading: ${percent}%`;
+                        }
+                    };
+
+                    xhr.onload = function () {
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = originalText;
+                        if (progressArea) progressArea.style.display = 'none';
+
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const result = JSON.parse(xhr.responseText);
+                            if (result.success) {
+                                loadExistingShares(currentShareNoteId);
+                                document.getElementById('share-code').value = '';
+                                if (progressBar) progressBar.style.width = '0%';
+                            } else {
+                                alert('Error: ' + (result.error || 'Unknown error'));
+                            }
+                        } else {
+                            alert('Server error: ' + xhr.status);
+                        }
+                    };
+
+                    xhr.onerror = function () {
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = originalText;
+                        if (progressArea) progressArea.style.display = 'none';
+                        alert('Network error. Try again.');
+                    };
+
+                    xhr.send(formData);
+
                 } catch (e) {
-                    alert('Network error. Try again.');
-                } finally {
+                    console.error('Error during share generation:', e);
                     generateBtn.disabled = false;
                     generateBtn.textContent = originalText;
+                    if (progressArea) progressArea.style.display = 'none';
+                    alert('An error occurred. Please try again.');
                 }
             });
         }

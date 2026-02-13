@@ -1156,7 +1156,6 @@
             }
 
             // --- Discussion System ---
-            const SHARE_ID = '{{ share_id }}';
             const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
         const CSRF_TOKEN = '{{ csrf_token() }}';
         const commentsList = document.getElementById('comments-list');
@@ -1312,44 +1311,47 @@
 
         // Load comments on page load
         loadComments();
-    // Valentine surprise logic
-    {% if is_valentine %}
-    const revealBtn = document.getElementById('valentine-reveal');
-    const vContent = document.getElementById('valentine-content');
-    const vAudio = document.getElementById('valentine-audio');
-    const heartsContainer = document.getElementById('hearts-container');
 
-    if (revealBtn) {
-        revealBtn.addEventListener('click', () => {
-            revealBtn.style.display = 'none';
-            vContent.style.display = 'block';
-            if (vAudio) {
-                vAudio.play().catch(e => console.log('Autoplay blocked, user interaction required: ', e));
-            }
-            startHeartsAnimation();
-        });
-    }
+        // Valentine surprise logic
+        {% if is_valentine %}
+        const revealBtn = document.getElementById('valentine-reveal');
+        const vContent = document.getElementById('valentine-content');
+        const vAudio = document.getElementById('valentine-audio');
+        const heartsContainer = document.getElementById('hearts-container');
 
-    function createHeart() {
-        const heart = document.createElement('div');
-        heart.className = 'heart';
-        heart.innerHTML = '<i class="fas fa-heart"></i>';
-        heart.style.left = Math.random() * 100 + 'vw';
-        heart.style.animationDuration = (Math.random() * 3 + 2) + 's';
-        heart.style.fontSize = (Math.random() * 1 + 0.5) + 'rem';
-        heart.style.color = ['#ff4d6d', '#ff8fa3', '#ffcad4'][Math.floor(Math.random() * 3)];
-        
-        heartsContainer.appendChild(heart);
+        if (revealBtn) {
+            revealBtn.addEventListener('click', () => {
+                console.log('Valentine reveal clicked');
+                revealBtn.style.display = 'none';
+                vContent.style.display = 'block';
+                if (vAudio) {
+                    vAudio.play().catch(e => console.log('Autoplay blocked, user interaction required: ', e));
+                }
+                startHeartsAnimation();
+            });
+        }
 
-        setTimeout(() => {
-            heart.remove();
-        }, 5000);
-    }
+        function createHeart() {
+            const heart = document.createElement('div');
+            heart.className = 'heart';
+            heart.innerHTML = '<i class="fas fa-heart"></i>';
+            heart.style.left = Math.random() * 100 + 'vw';
+            heart.style.animationDuration = (Math.random() * 3 + 2) + 's';
+            heart.style.fontSize = (Math.random() * 1 + 0.5) + 'rem';
+            heart.style.color = ['#ff4d6d', '#ff8fa3', '#ffcad4'][Math.floor(Math.random() * 3)];
 
-    function startHeartsAnimation() {
-        setInterval(createHeart, 300);
-    }
-    {% endif %}
+            heartsContainer.appendChild(heart);
+
+            setTimeout(() => {
+                heart.remove();
+            }, 5000);
+        }
+
+        function startHeartsAnimation() {
+            setInterval(createHeart, 300);
+        }
+        {% endif %}
+    });
 
     </script>
 </div>

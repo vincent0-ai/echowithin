@@ -358,8 +358,8 @@
                 <a href="{{ url_for('profile', username=current_user.username) }}"
                     class="{{ 'active' if active_page == 'profile' }}">Profile</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
-                <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}"><i
-                        class="fas fa-sticky-note"></i> Notes</a>
+                <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
+                    Notes</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}

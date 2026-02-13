@@ -1331,6 +1331,7 @@
             revealBtn.addEventListener('click', () => {
                 console.log('Valentine reveal clicked');
                 revealBtn.style.display = 'none';
+                vContent.style.display = 'block';
                 if (vAudio) {
                     console.log('Attempting to play audio. Source:', vAudio.currentSrc);
                     vAudio.play().then(() => {

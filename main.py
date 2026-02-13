@@ -5473,21 +5473,21 @@ def api_create_share(post_id):
             if photo_file and photo_file.filename:
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
                 if ext in ALLOWED_IMAGE_EXTENSIONS:
-                    filename = secure_filename(f"val_photo_{secrets.token_hex(8)}.{ext}")
-                    path = os.path.join(app.config['UPLOAD_FOLDER'], 'valentine', filename)
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    photo_file.save(path)
-                    valentine_photo = f"/static/uploads/valentine/{filename}"
+                    try:
+                        upload_result = cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
+                        valentine_photo = upload_result.get('secure_url')
+                    except Exception as e:
+                        app.logger.error(f"Valentine photo upload failed: {e}")
 
             audio_file = request.files.get('valentine_audio')
             if audio_file and audio_file.filename:
                 ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
                 if ext in ALLOWED_AUDIO_EXTENSIONS:
-                    filename = secure_filename(f"val_audio_{secrets.token_hex(8)}.{ext}")
-                    path = os.path.join(app.config['UPLOAD_FOLDER'], 'valentine', filename)
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    audio_file.save(path)
-                    valentine_audio = f"/static/uploads/valentine/{filename}"
+                    try:
+                        upload_result = cloudinary.uploader.upload(audio_file, resource_type="video", folder="echowithin_valentine")
+                        valentine_audio = upload_result.get('secure_url')
+                    except Exception as e:
+                        app.logger.error(f"Valentine audio upload failed: {e}")
 
     if permissions not in ['view', 'edit']:
         permissions = 'view'

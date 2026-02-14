@@ -293,7 +293,13 @@
             font-size: 1.2rem;
             cursor: pointer;
             transition: transform 0.2s;
-            /* Ensure it sits above footer */
+            /* Prevent jitter on Android WebView */
+            -webkit-transform: translateZ(0);
+            transform: translateZ(0);
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            will-change: transform;
+            touch-action: manipulation;
         }
 
         .mobile-fab:active {
@@ -649,7 +655,7 @@
         // Also set a flag to prevent any future showing
         window.__pwaInstalled = true;
 
-        // Show reload button for native app
+        // Show reload button for installed app (PWA and native)
         const reloadBtn = document.getElementById('mobile-reload-btn');
         if (reloadBtn) reloadBtn.style.display = 'flex';
     }
@@ -720,6 +726,7 @@
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+
 
     if (!isLoggedIn) return;
 

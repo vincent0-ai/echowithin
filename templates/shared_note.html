@@ -93,8 +93,30 @@
                         <i class="fas fa-{{ 'pen' if permissions == 'edit' else 'eye' }}"></i>
                         {{ permissions.capitalize() }} Access
                     </div>
+                    {% if permissions == 'edit' %}
+                    <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
+                        <i class="fas fa-pen"></i> Edit
+                    </button>
+                    {% endif %}
                 </div>
+
+                {% if permissions == 'edit' %}
+                <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"></div>
+                <div class="edit-interface" id="edit-interface" style="display: none;">
+                    <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                    <div class="edit-actions">
+                        <span id="save-status"></span>
+                        <button id="cancel-edit-btn" class="btn btn-cancel" type="button">
+                            <i class="fas fa-times"></i> Cancel
+                        </button>
+                        <button id="save-shared-btn" class="btn comment-btn">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </div>
+                {% else %}
                 <div class="note-content rendered-note" data-raw="{{ content | e }}"></div>
+                {% endif %}
             </div>
         </div>
         {% else %}

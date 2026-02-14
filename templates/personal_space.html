@@ -989,13 +989,15 @@
 </div>
 
 <!-- Share Note Modal -->
-<div id="share-modal" class="custom-modal-overlay">
+<div id="share-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeShareModal()">
     <div class="custom-modal" style="max-width: 500px; text-align: left;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; position: sticky; top: 0; background: white; padding-bottom: 0.5rem; border-bottom: 1px solid #eee; z-index: 10;">
             <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
                 <i class="fas fa-share-alt"></i> Share Note
             </h2>
-            <button class="btn-icon" onclick="closeShareModal()"><i class="fas fa-times"></i></button>
+            <button class="btn-icon" onclick="closeShareModal()" style="display: none;"><i
+                    class="fas fa-times"></i></button>
         </div>
 
         <div id="share-config">
@@ -1864,6 +1866,7 @@
 
         // --- Note Sharing Logic ---
         let currentShareNoteId = null;
+        let lastShareNoteId = null;
 
         document.querySelectorAll('.share-note-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1880,14 +1883,17 @@
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
 
-                // Reset fields
-                document.getElementById('share-permissions').value = 'view';
-                document.getElementById('share-expiry').value = 'never';
-                document.getElementById('share-code').value = '';
-                document.getElementById('surprise-theme').value = 'none';
-                document.getElementById('share-surprise-photo').value = '';
-                document.getElementById('share-surprise-audio').value = '';
-                document.getElementById('surprise-options').style.display = 'none';
+                // Reset fields ONLY if opening a different note
+                if (currentShareNoteId !== lastShareNoteId) {
+                    document.getElementById('share-permissions').value = 'view';
+                    document.getElementById('share-expiry').value = 'never';
+                    document.getElementById('share-code').value = '';
+                    document.getElementById('surprise-theme').value = 'none';
+                    document.getElementById('share-surprise-photo').value = '';
+                    document.getElementById('share-surprise-audio').value = '';
+                    document.getElementById('surprise-options').style.display = 'none';
+                    lastShareNoteId = currentShareNoteId;
+                }
 
                 document.addEventListener('keydown', handleShareModalEsc);
             }

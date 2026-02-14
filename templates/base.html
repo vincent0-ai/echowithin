@@ -56,6 +56,10 @@
             width: 90%;
             max-width: 400px;
             text-align: center;
+            max-height: 90vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         .custom-modal-content p {
@@ -716,6 +720,7 @@
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+
     if (!isLoggedIn) return;
 
     // Check if push is supported

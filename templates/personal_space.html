@@ -978,7 +978,7 @@
                                         title="{{ share.permissions }} access"></i>
                                     {{ share.share_url[-20:] }}
                                 </span>
-                                <button type="button" onclick="copyShareLink(this, '{{ share.share_url }}')"
+                                <button type="button" onclick="copyShareUrl('{{ share.share_url }}', this)"
                                     title="Copy link"
                                     style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
                                     <i class="far fa-copy"></i>
@@ -1870,9 +1870,7 @@
             btn.addEventListener('click', () => {
                 const content = btn.dataset.content;
                 navigator.clipboard.writeText(content).then(() => {
-                    const icon = btn.querySelector('i');
-                    icon.className = 'fas fa-check';
-                    setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);
+                    showCopyFeedback(btn);
                 });
             });
         });
@@ -1884,16 +1882,6 @@
             // Close all other dropdowns
             document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
             dropdown.style.display = isOpen ? 'none' : 'block';
-        }
-
-        // Copy share link to clipboard
-        function copyShareLink(btn, url) {
-            navigator.clipboard.writeText(url).then(() => {
-                // Brief visual feedback
-                const icon = btn.querySelector('i');
-                icon.className = 'fas fa-check';
-                setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);
-            });
         }
 
         // Close dropdowns when clicking outside
@@ -2144,13 +2132,40 @@
         };
 
         window.copyShareUrl = function (text, btn) {
+            if (!navigator.clipboard) {
+                // Fallback for non-secure contexts or missing API
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showCopyFeedback(btn);
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                    alert("Copy failed. Please manually copy the link.");
+                }
+                document.body.removeChild(textArea);
+                return;
+            }
+
             navigator.clipboard.writeText(text).then(() => {
-                const icon = btn.querySelector('i');
+                showCopyFeedback(btn);
+            }).catch(err => {
+                console.error('Clipboard API failed:', err);
+                alert("Copy failed. Please manually copy the link.");
+            });
+        };
+
+        function showCopyFeedback(btn) {
+            if (!btn) return;
+            const icon = btn.querySelector('i');
+            if (icon) {
                 const originalClass = icon.className;
                 icon.className = 'fas fa-check';
                 setTimeout(() => { icon.className = originalClass; }, 1500);
-            });
-        };
+            }
+        }
 
         // --- Version History Logic ---
         document.querySelectorAll('.version-history-btn').forEach(btn => {

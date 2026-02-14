@@ -954,6 +954,45 @@
                             <i class="fas fa-lock"></i>
                         </span>
                     </span>
+                    {% set note_id_str = note._id|string %}
+                    {% if active_shares_map.get(note_id_str) %}
+                    <div class="active-links-badge"
+                        style="position: relative; display: inline-flex; align-items: center;">
+                        <button type="button" class="active-link-toggle" onclick="toggleShareDropdown(this)"
+                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;">
+                            <i class="fas fa-link"></i> {{ active_shares_map[note_id_str]|length }} Active
+                        </button>
+                        <div class="share-dropdown"
+                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.5rem; min-width: 260px; z-index: 100;">
+                            {% for share in active_shares_map[note_id_str] %}
+                            <div class="share-link-item"
+                                style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem; border-radius: 8px; background: #f9f9f9; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                                <span
+                                    style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555;">
+                                    {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
+                                        style="color: #ff4d6d;"></i>{% endif %}
+                                    <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
+                                        style="color: #888; margin-right: 2px;"
+                                        title="{{ share.permissions }} access"></i>
+                                    {{ share.share_url[-20:] }}
+                                </span>
+                                <button type="button" onclick="copyShareLink('{{ share.share_url }}')" title="Copy link"
+                                    style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                                <form action="{{ url_for('api_revoke_share', share_id=share.share_id) }}" method="POST"
+                                    style="display:inline; margin: 0;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" title="Revoke link"
+                                        style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="note-actions">
                         <button type="button" class="copy-note-btn" title="Copy note" data-content="{{ note.content }}">
                             <i class="far fa-copy"></i>
@@ -1833,6 +1872,33 @@
                     setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);
                 });
             });
+        });
+
+        // Share link dropdown toggle
+        function toggleShareDropdown(btn) {
+            const dropdown = btn.nextElementSibling;
+            const isOpen = dropdown.style.display === 'block';
+            // Close all other dropdowns
+            document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+            dropdown.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // Copy share link to clipboard
+        function copyShareLink(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                // Brief visual feedback
+                const btn = event.currentTarget;
+                const icon = btn.querySelector('i');
+                icon.className = 'fas fa-check';
+                setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);
+            });
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.active-links-badge')) {
+                document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+            }
         });
 
         // Confirm delete for notes

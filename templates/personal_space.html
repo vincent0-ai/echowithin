@@ -959,8 +959,10 @@
                     <div class="active-links-badge"
                         style="position: relative; display: inline-flex; align-items: center;">
                         <button type="button" class="active-link-toggle" onclick="toggleShareDropdown(this)"
-                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;">
-                            <i class="fas fa-link"></i> {{ active_shares_map[note_id_str]|length }} Active
+                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
+                            title="This note has active share links — click to view or manage them">
+                            <i class="fas fa-link"></i> {{ active_shares_map[note_id_str]|length }} Shared Link{{ 's' if
+                            active_shares_map[note_id_str]|length > 1 }}
                         </button>
                         <div class="share-dropdown"
                             style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.5rem; min-width: 260px; z-index: 100;">

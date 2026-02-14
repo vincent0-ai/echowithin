@@ -44,6 +44,7 @@
             </form>
         </div>
         {% else %}
+{% if surprise_theme != 'none' %}
         <div id="valentine-reveal" class="valentine-envelope">
             <div class="valentine-badge">
                 {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Surprise
@@ -130,6 +131,7 @@
             {% else %}
             <div class="note-content rendered-note" data-raw="{{ content | e }}"></div>
             {% endif %}
+{% endif %}
         </div>
         {% endif %}
 

@@ -5449,6 +5449,7 @@ def api_create_share(post_id):
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
     is_valentine = False
+    surprise_theme = 'none'
     valentine_photo = None
     valentine_audio = None
 
@@ -5457,7 +5458,12 @@ def api_create_share(post_id):
         permissions = data.get('permissions', 'view')
         expires_in = data.get('expires_in')
         access_code = data.get('access_code')
+        surprise_theme = data.get('surprise_theme', 'none')
+        # Backward compatibility for clients still sending is_valentine
         is_valentine = data.get('is_valentine', False)
+        if is_valentine and surprise_theme == 'none':
+            surprise_theme = 'valentine'
+            
         valentine_photo = data.get('valentine_photo')
         valentine_audio = data.get('valentine_audio')
     else:
@@ -5465,10 +5471,13 @@ def api_create_share(post_id):
         permissions = request.form.get('permissions', 'view')
         expires_in = request.form.get('expires_in')
         access_code = request.form.get('access_code')
+        surprise_theme = request.form.get('surprise_theme', 'none')
         is_valentine = request.form.get('is_valentine') == 'true'
+        if is_valentine and surprise_theme == 'none':
+            surprise_theme = 'valentine'
         
         # Handle file uploads
-        if is_valentine:
+        if surprise_theme != 'none':
             photo_file = request.files.get('valentine_photo')
             if photo_file and photo_file.filename:
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
@@ -5517,7 +5526,7 @@ def api_create_share(post_id):
         'access_code_hash': access_code_hash,
         'expires_at': expires_at,
         'created_at': now,
-        'is_valentine': is_valentine,
+        'surprise_theme': surprise_theme,
         'valentine_photo': valentine_photo,
         'valentine_audio': valentine_audio
     })
@@ -5570,12 +5579,18 @@ def view_shared_note(share_id):
     # Decrypt note content
     content = decrypt_note(note.get('content', ''))
     
+    # Determine surprise theme (with compatibility for old is_valentine flag)
+    surprise_theme = share.get('surprise_theme')
+    if not surprise_theme:
+        surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
+    
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
                            permissions=share['permissions'],
                            note_id=str(note['_id']),
-                           is_valentine=share.get('is_valentine', False),
+                           surprise_theme=surprise_theme,
+                           is_valentine=(surprise_theme != 'none'),
                            valentine_photo=share.get('valentine_photo'),
                            valentine_audio=share.get('valentine_audio'))
 

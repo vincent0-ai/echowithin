@@ -1030,20 +1030,34 @@
 
             <div style="margin-bottom: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
                 <label
-                    style="display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d; cursor: pointer;">
-                    <input type="checkbox" id="share-valentine"> <i class="fas fa-heart"></i> Valentine Surprise
+                    style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d;">
+                    <i class="fas fa-gift"></i> Surprise Theme (Optional)
                 </label>
-                <div id="valentine-options" style="display: none; margin-top: 0.5rem; padding-left: 1.5rem;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <label style="display: block; margin-bottom: 0.2rem; font-size: 0.8rem; color: #666;">Upload
-                            Photo (Optional)</label>
-                        <input type="file" id="share-valentine-photo" accept="image/*"
+                <select id="surprise-theme"
+                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff;">
+                    <option value="none">Standard Shared Note (None)</option>
+                    <option value="valentine">Valentine Surprise ❤️</option>
+                    <option value="birthday">Birthday Surprise 🎂</option>
+                    <option value="anniversary">Anniversary Surprise 💍</option>
+                    <option value="celebration">Celebration/Generic Surprise 🎉</option>
+                </select>
+
+                <div id="surprise-options"
+                    style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: #fff5f7; border-radius: 12px; border: 1px dashed #ff4d6d;">
+                    <div style="margin-bottom: 0.75rem;">
+                        <label
+                            style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
+                            <i class="fas fa-image"></i> Personal Photo (Optional)
+                        </label>
+                        <input type="file" id="share-surprise-photo" accept="image/*"
                             style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff;">
                     </div>
                     <div>
-                        <label style="display: block; margin-bottom: 0.2rem; font-size: 0.8rem; color: #666;">Upload
-                            Music (.mp3, .wav) (Optional)</label>
-                        <input type="file" id="share-valentine-audio" accept="audio/*"
+                        <label
+                            style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
+                            <i class="fas fa-music"></i> Background Music (Optional)
+                        </label>
+                        <input type="file" id="share-surprise-audio" accept="audio/*"
                             style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff;">
                     </div>
                 </div>
@@ -1870,10 +1884,10 @@
                 document.getElementById('share-permissions').value = 'view';
                 document.getElementById('share-expiry').value = 'never';
                 document.getElementById('share-code').value = '';
-                document.getElementById('share-valentine').checked = false;
-                document.getElementById('share-valentine-photo').value = '';
-                document.getElementById('share-valentine-audio').value = '';
-                document.getElementById('valentine-options').style.display = 'none';
+                document.getElementById('surprise-theme').value = 'none';
+                document.getElementById('share-surprise-photo').value = '';
+                document.getElementById('share-surprise-audio').value = '';
+                document.getElementById('surprise-options').style.display = 'none';
 
                 document.addEventListener('keydown', handleShareModalEsc);
             }
@@ -1931,15 +1945,24 @@
             }
         }
 
+        // Surprise theme toggle listener
+        const themeSelect = document.getElementById('surprise-theme');
+        const themeOptions = document.getElementById('surprise-options');
+        if (themeSelect && themeOptions) {
+            themeSelect.addEventListener('change', () => {
+                themeOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
+            });
+        }
+
         const generateBtn = document.getElementById('generate-share-link');
         if (generateBtn) {
             generateBtn.addEventListener('click', async () => {
                 const permissions = document.getElementById('share-permissions').value;
                 const expires_in = document.getElementById('share-expiry').value;
                 const access_code = document.getElementById('share-code').value;
-                const is_valentine = document.getElementById('share-valentine').checked;
-                const valentine_photo = document.getElementById('share-valentine-photo').files[0];
-                const valentine_audio = document.getElementById('share-valentine-audio').files[0];
+                const surprise_theme = document.getElementById('surprise-theme').value;
+                const valentine_photo = document.getElementById('share-surprise-photo').files[0];
+                const valentine_audio = document.getElementById('share-surprise-audio').files[0];
 
                 const progressArea = document.getElementById('share-upload-progress');
                 const progressBar = document.getElementById('share-progress-bar');
@@ -1956,7 +1979,7 @@
                     formData.append('permissions', permissions);
                     formData.append('expires_in', expires_in);
                     formData.append('access_code', access_code);
-                    formData.append('is_valentine', is_valentine);
+                    formData.append('surprise_theme', surprise_theme);
                     if (valentine_photo) formData.append('valentine_photo', valentine_photo);
                     if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 

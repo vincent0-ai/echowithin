@@ -13,10 +13,11 @@
 
 {% block content %}
 <div class="content-wrapper">
-    <div class="shared-note-container {% if is_valentine %}valentine-note{% endif %}">
-        {% if is_valentine %}
-        <div class="hearts-container" id="hearts-container"></div>
-        {% if is_valentine and valentine_audio %}
+    <div
+        class="shared-note-container {% if surprise_theme != 'none' %}surprise-note theme-{{ surprise_theme }}{% endif %}">
+        {% if surprise_theme != 'none' %}
+        <div class="animation-container" id="surprise-animation-container"></div>
+        {% if valentine_audio %}
         <audio id="valentine-audio" loop autoplay preload="auto">
             <source src="{{ valentine_audio }}">
         </audio>
@@ -43,12 +44,25 @@
             </form>
         </div>
         {% else %}
-        {% if is_valentine %}
         <div id="valentine-reveal" class="valentine-envelope">
-            <div class="valentine-badge"><i class="fas fa-heart"></i> Personal Surprise</div>
-            <div class="envelope-icon"><i class="fas fa-envelope-open-text"></i></div>
-            <h2>A special message for you</h2>
-            <p>Click to open your Valentine's surprise</p>
+            <div class="valentine-badge">
+                {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Surprise
+                {% elif surprise_theme == 'anniversary' %}<i class="fas fa-ring"></i> Anniversary Surprise
+                {% elif surprise_theme == 'celebration' %}<i class="fas fa-party-popper"></i> Celebration
+                {% else %}<i class="fas fa-heart"></i> Personal Surprise{% endif %}
+            </div>
+            <div class="envelope-icon">
+                {% if surprise_theme == 'birthday' %}<i class="fas fa-gift"></i>
+                {% elif surprise_theme == 'celebration' %}<i class="fas fa-glass-cheers"></i>
+                {% else %}<i class="fas fa-envelope-open-text"></i>{% endif %}
+            </div>
+            <h2>
+                {% if surprise_theme == 'birthday' %}Happy Birthday!
+                {% elif surprise_theme == 'anniversary' %}Happy Anniversary!
+                {% elif surprise_theme == 'celebration' %}Congratulations!
+                {% else %}A special message for you{% endif %}
+            </h2>
+            <p>Click to open your surprise</p>
         </div>
 
         <div id="valentine-content" class="valentine-content-hidden">
@@ -69,7 +83,10 @@
             <div class="note-card-shared">
                 <div class="shared-note-header">
                     <div class="owner-info">
-                        <i class="fas fa-heart"></i> Valentine Note
+                        {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Note
+                        {% elif surprise_theme == 'anniversary' %}<i class="fas fa-ring"></i> Anniversary Note
+                        {% elif surprise_theme == 'celebration' %}<i class="fas fa-party-popper"></i> Celebration Note
+                        {% else %}<i class="fas fa-heart"></i> Valentine Note{% endif %}
                     </div>
                     <div class="permissions-badge {{ permissions }}">
                         <i class="fas fa-{{ 'pen' if permissions == 'edit' else 'eye' }}"></i>
@@ -685,15 +702,14 @@
             z-index: 10;
         }
 
-        .heart {
+        .surprise-particle {
             position: absolute;
-            color: #ff4d6d;
-            font-size: 1.5rem;
-            animation: heartFall linear forwards;
-            opacity: 0.7;
+            pointer-events: none;
+            z-index: 10;
+            animation: particleFall linear forwards;
         }
 
-        @keyframes heartFall {
+        @keyframes particleFall {
             0% {
                 transform: translateY(-10vh) rotate(0deg);
                 opacity: 0;
@@ -1320,33 +1336,29 @@
         // Load comments on page load
         loadComments();
 
-        // Valentine surprise logic
-        {% if is_valentine %}
+        // Surprise logic
+        const surpriseTheme = '{{ surprise_theme }}';
         const revealBtn = document.getElementById('valentine-reveal');
         const vContent = document.getElementById('valentine-content');
         const vAudio = document.getElementById('valentine-audio');
-        const heartsContainer = document.getElementById('hearts-container');
+        const animationContainer = document.getElementById('surprise-animation-container');
 
-        if (revealBtn) {
+        const musicBtn = document.getElementById('music-control-btn');
+
+        if (revealBtn && surpriseTheme !== 'none') {
             revealBtn.addEventListener('click', () => {
-                console.log('Valentine reveal clicked');
+                console.log('Surprise reveal clicked, theme:', surpriseTheme);
                 revealBtn.style.display = 'none';
                 vContent.style.display = 'block';
                 if (vAudio) {
-                    console.log('Attempting to play audio. Source:', vAudio.currentSrc);
                     vAudio.play().then(() => {
-                        console.log('Audio playback started successfully');
                         if (musicBtn) musicBtn.innerHTML = '<i class="fas fa-pause"></i> Pause Music';
-                    }).catch(e => {
-                        console.error('Playback failed/blocked:', e);
-                        // If autoplay fails, we at least tried. The manual button is the backup.
-                    });
+                    }).catch(e => console.error('Playback failed:', e));
                 }
-                startHeartsAnimation();
+                startSurpriseAnimation(surpriseTheme);
             });
         }
 
-        const musicBtn = document.getElementById('music-control-btn');
         if (musicBtn && vAudio) {
             musicBtn.addEventListener('click', () => {
                 if (vAudio.paused) {
@@ -1359,26 +1371,44 @@
             });
         }
 
-        function createHeart() {
-            const heart = document.createElement('div');
-            heart.className = 'heart';
-            heart.innerHTML = '<i class="fas fa-heart"></i>';
-            heart.style.left = Math.random() * 100 + 'vw';
-            heart.style.animationDuration = (Math.random() * 3 + 2) + 's';
-            heart.style.fontSize = (Math.random() * 1 + 0.5) + 'rem';
-            heart.style.color = ['#ff4d6d', '#ff8fa3', '#ffcad4'][Math.floor(Math.random() * 3)];
+        function createParticle(theme) {
+            if (!animationContainer) return;
+            const particle = document.createElement('div');
+            particle.className = 'surprise-particle';
 
-            heartsContainer.appendChild(heart);
+            let content = '';
+            let color = '';
 
-            setTimeout(() => {
-                heart.remove();
-            }, 5000);
+            if (theme === 'valentine') {
+                content = '<i class="fas fa-heart"></i>';
+                color = ['#ff4d6d', '#ff8fa3', '#ffcad4'][Math.floor(Math.random() * 3)];
+            } else if (theme === 'birthday') {
+                content = '<i class="fas fa-square"></i>';
+                color = ['#ffbe0b', '#fb5607', '#ff006e', '#8338ec', '#3a86ff'][Math.floor(Math.random() * 5)];
+            } else if (theme === 'celebration' || theme === 'anniversary') {
+                content = '<i class="fas fa-star"></i>';
+                color = ['#ffd700', '#fff', '#ffd700', '#f8f8f8'][Math.floor(Math.random() * 4)];
+            } else {
+                content = '<i class="fas fa-circle"></i>';
+                color = '#fff';
+            }
+
+            particle.innerHTML = content;
+            particle.style.left = Math.random() * 100 + 'vw';
+            particle.style.animationDuration = (Math.random() * 3 + 2) + 's';
+            particle.style.fontSize = (Math.random() * 1 + 0.5) + 'rem';
+            particle.style.color = color;
+            particle.style.position = 'absolute';
+            particle.style.top = '-10vh';
+            particle.style.opacity = '0.7';
+
+            animationContainer.appendChild(particle);
+            setTimeout(() => particle.remove(), 5000);
         }
 
-        function startHeartsAnimation() {
-            setInterval(createHeart, 300);
+        function startSurpriseAnimation(theme) {
+            setInterval(() => createParticle(theme), 300);
         }
-        {% endif %}
     });
 
     </script>

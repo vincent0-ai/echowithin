@@ -958,7 +958,7 @@
                     {% if active_shares_map.get(note_id_str) %}
                     <div class="active-links-badge"
                         style="position: relative; display: inline-flex; align-items: center;">
-                        <button type="button" class="active-link-toggle" onclick="toggleShareDropdown(this)"
+                        <button type="button" class="active-link-toggle"
                             style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
                             title="This note has active share links — click to view or manage them">
                             <i class="fas fa-link"></i> {{ active_shares_map[note_id_str]|length }} Shared Link{{ 's' if
@@ -1865,47 +1865,48 @@
             });
         }
 
-        // Copy content handler (unified delegated listener)
+        // Global delegated click handler for all note interactions
         document.body.addEventListener('click', (e) => {
-            const btn = e.target.closest('.copy-btn');
-            if (btn) {
-                const text = btn.dataset.copyText;
-                if (!text) return;
-
-                if (!navigator.clipboard) {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    try {
-                        document.execCommand('copy');
-                        showCopyFeedback(btn);
-                    } catch (err) {
-                        console.error('Copy failed:', err);
+            // 1. Handle Copy Buttons
+            const copyBtn = e.target.closest('.copy-btn');
+            if (copyBtn) {
+                const text = copyBtn.dataset.copyText;
+                if (text) {
+                    if (!navigator.clipboard) {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = text;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            showCopyFeedback(copyBtn);
+                        } catch (err) { console.error('Copy failed:', err); }
+                        document.body.removeChild(textArea);
+                    } else {
+                        navigator.clipboard.writeText(text).then(() => {
+                            showCopyFeedback(copyBtn);
+                        }).catch(err => { console.error('Clipboard failed:', err); });
                     }
-                    document.body.removeChild(textArea);
-                    return;
                 }
-
-                navigator.clipboard.writeText(text).then(() => {
-                    showCopyFeedback(btn);
-                }).catch(err => {
-                    console.error('Clipboard copy failed:', err);
-                });
+                return;
             }
-        });
 
-        // Share link dropdown toggle
-        function toggleShareDropdown(btn) {
-            const dropdown = btn.nextElementSibling;
-            const isOpen = dropdown.style.display === 'block';
-            // Close all other dropdowns
-            document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
-            dropdown.style.display = isOpen ? 'none' : 'block';
-        }
+            // 2. Handle Shared Link Dropdown Toggles
+            const toggleBtn = e.target.closest('.active-link-toggle');
+            if (toggleBtn) {
+                e.preventDefault();
+                const dropdown = toggleBtn.nextElementSibling;
+                const isOpen = dropdown.style.display === 'block';
 
-        // Close dropdowns when clicking outside
-        document.addEventListener('click', (e) => {
+                // Close all other share dropdowns
+                document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+
+                // Toggle this one
+                if (dropdown) dropdown.style.display = isOpen ? 'none' : 'block';
+                return;
+            }
+
+            // 3. Close open dropdowns when clicking elsewhere
             if (!e.target.closest('.active-links-badge')) {
                 document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
             }

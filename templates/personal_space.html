@@ -983,14 +983,11 @@
                                     style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
                                     <i class="far fa-copy"></i>
                                 </button>
-                                <form action="{{ url_for('api_revoke_share', share_id=share.share_id) }}" method="POST"
-                                    style="display:inline; margin: 0;">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" title="Revoke link"
-                                        style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </form>
+                                <button type="button" class="revoke-btn" data-share-id="{{ share.share_id }}"
+                                    title="Revoke link"
+                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                             {% endfor %}
                         </div>
@@ -1906,7 +1903,60 @@
                 return;
             }
 
-            // 3. Close open dropdowns when clicking elsewhere
+            // 3. Handle Share Revocation
+            const revokeBtn = e.target.closest('.revoke-btn');
+            if (revokeBtn) {
+                const shareId = revokeBtn.dataset.shareId;
+                const confirmMsg = 'Revoke this link? It will immediately stop working.';
+
+                const performRevoke = async () => {
+                    revokeBtn.disabled = true;
+                    try {
+                        const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            // If we are in the share modal, reload the specific list
+                            if (currentShareNoteId) {
+                                loadExistingShares(currentShareNoteId);
+                            }
+                            // If we are in the badge dropdown, remove the row or refresh page
+                            const row = revokeBtn.closest('.share-link-item');
+                            if (row) {
+                                row.style.opacity = '0.5';
+                                row.style.pointerEvents = 'none';
+                                setTimeout(() => {
+                                    row.remove();
+                                    // If dropdown is empty now, maybe hide the badge? 
+                                    // For simplicity, we can let user refresh or just leave it empty.
+                                });
+                            }
+                        } else {
+                            alert(result.error || 'Failed to revoke link');
+                            revokeBtn.disabled = false;
+                        }
+                    } catch (err) {
+                        console.error('Revoke failed:', err);
+                        alert('Network error. Please try again.');
+                        revokeBtn.disabled = false;
+                    }
+                };
+
+                if (typeof window.showCustomConfirm === 'function') {
+                    window.showCustomConfirm(confirmMsg, confirmed => {
+                        if (confirmed) performRevoke();
+                    });
+                } else if (confirm(confirmMsg)) {
+                    performRevoke();
+                }
+                return;
+            }
+
+            // 4. Close open dropdowns when clicking elsewhere
             if (!e.target.closest('.active-links-badge')) {
                 document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
             }
@@ -2024,7 +2074,7 @@
                                     <i class="fas fa-${s.permissions === 'edit' ? 'pen' : 'eye'}"></i> ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
                                     ${s.expires_at ? ' | Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
                                 </span>
-                                <button class="revoke-link-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" onclick="revokeShare('${s.share_id}', this)" title="Revoke">
+                                <button class="revoke-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" data-share-id="${s.share_id}" title="Revoke">
                                     <i class="fas fa-trash-alt"></i> Revoke
                                 </button>
                             </div>
@@ -2133,24 +2183,7 @@
             });
         }
 
-        window.revokeShare = async function (shareId, btn) {
-            if (!confirm('Revoke this link? It will immediately stop working.')) return;
 
-            try {
-                const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    }
-                });
-
-                if (response.ok) {
-                    loadExistingShares(currentShareNoteId);
-                }
-            } catch (e) {
-                console.error('Error revoking share:', e);
-            }
-        };
 
         window.copyShareUrl = function (text, btn) {
             // Unify legacy call path

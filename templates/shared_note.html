@@ -1355,7 +1355,7 @@
 
         // Toggle reply form
         window.toggleReplyForm = function (btn) {
-            const parent = btn.closest('.comment-card') || btn.closest('.reply-card');
+            const parent = btn.closest('.reply-card, .comment-card');
             const existingForm = parent.querySelector(':scope > .reply-form');
             if (existingForm) {
                 existingForm.remove();

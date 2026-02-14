@@ -1369,7 +1369,13 @@
         const musicBtn = document.getElementById('music-control-btn');
 
         if (revealBtn && surpriseTheme !== 'none') {
-            revealBtn.addEventListener('click', () => {
+            let revealed = false;
+            revealBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (revealed) return;
+                revealed = true;
+                revealBtn.style.pointerEvents = 'none';
                 console.log('Surprise reveal clicked, theme:', surpriseTheme);
                 revealBtn.style.display = 'none';
                 vContent.style.display = 'block';
@@ -1379,7 +1385,7 @@
                     }).catch(e => console.error('Playback failed:', e));
                 }
                 startSurpriseAnimation(surpriseTheme);
-            });
+            }, { once: true });
         }
 
         if (musicBtn && vAudio) {

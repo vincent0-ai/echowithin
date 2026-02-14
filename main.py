@@ -5747,7 +5747,7 @@ def api_get_note_comments(share_id):
             'author_name': c.get('author_name', 'Unknown'),
             'author_id': str(c.get('author_id', '')),
             'content': c['content'],
-            'created_at': c['created_at'].isoformat() if c.get('created_at') else None,
+            'created_at': (c['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat() if c.get('created_at') and c['created_at'].tzinfo is None else c['created_at'].isoformat()) if c.get('created_at') else None,
             'replies': []
         }
 

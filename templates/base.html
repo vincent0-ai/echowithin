@@ -361,6 +361,9 @@
                     <a href="https://youtube.com/@echowithin-k9y?si=cvGJDwaxcveOUJuC" target="_blank"
                         rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
                 </div>
+                <button id="install-button" class="install-btn" style="display: none;" onclick="promptInstall()">
+                    Install
+                </button>
             </div>
             <nav class="nav-links" id="nav-links">
                 {% if current_user.is_authenticated %}
@@ -378,9 +381,7 @@
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% endif %}
-                <button id="install-button" class="install-btn" style="display: none;" onclick="promptInstall()">
-                    <i class="fas fa-download"></i> Install
-                </button>
+
             </nav>
         </div>
         <div class="overlay" id="overlay"></div>
@@ -726,6 +727,7 @@
     async function initPushNotifications(registration) {
         // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+
 
 
     if (!isLoggedIn) return;

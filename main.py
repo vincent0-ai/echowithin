@@ -93,7 +93,7 @@ login_manager.login_view = 'login'  # snyk:disable=security-issue
 
 # Secure session cookie settings
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from accessing the cookie
-app.config['SESSION_COOKIE_SECURE'] = True # Only send cookie over HTTPS (set to True in production)
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true' # Only send cookie over HTTPS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
 # Configure permanent session lifetime for "Remember Me"
@@ -101,7 +101,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
 
 # Flask-Login "Remember Me" cookie settings - CRITICAL for PWA persistence
 app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=30)
-app.config['REMEMBER_COOKIE_SECURE'] = True  # Only send over HTTPS
+app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']  # Only send over HTTPS
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JS access
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 app.config['REMEMBER_COOKIE_REFRESH_EACH_REQUEST'] = True  # Extend cookie on each visit
@@ -2018,6 +2018,7 @@ def register():
     return render_template("auth.html", active_page='register', form='register')
 
 @app.route("/confirm/<email>", methods=['GET', 'POST']) # snyk:disable=security-issue
+@csrf.exempt
 @limits(calls=15, period=TIME)
 def confirm(email):
     user = users_conf.find_one({"email": email})

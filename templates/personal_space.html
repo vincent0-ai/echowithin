@@ -978,7 +978,8 @@
                                         title="{{ share.permissions }} access"></i>
                                     {{ share.share_url[-20:] }}
                                 </span>
-                                <button type="button" onclick="copyShareLink('{{ share.share_url }}')" title="Copy link"
+                                <button type="button" onclick="copyShareLink(this, '{{ share.share_url }}')"
+                                    title="Copy link"
                                     style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
                                     <i class="far fa-copy"></i>
                                 </button>
@@ -1886,10 +1887,9 @@
         }
 
         // Copy share link to clipboard
-        function copyShareLink(url) {
+        function copyShareLink(btn, url) {
             navigator.clipboard.writeText(url).then(() => {
                 // Brief visual feedback
-                const btn = event.currentTarget;
                 const icon = btn.querySelector('i');
                 icon.className = 'fas fa-check';
                 setTimeout(() => { icon.className = 'far fa-copy'; }, 1500);

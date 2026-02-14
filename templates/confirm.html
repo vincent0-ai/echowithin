@@ -3,15 +3,18 @@
 
 
 {% block content %}
+
 <body>
     <main>
         <div class="auth-container">
             <div class="auth-forms">
                 <form class="auth-form active" method="POST" action="{{ url_for('confirm', email=email) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <h2 class="form-title">Confirm Your Email</h2>
                     <p class="form-description">Please enter the 6-digit confirmation code sent to {{ email }}.</p>
                     <div class="inputs">
-                        <input class="form-input" type="text" name="code" placeholder="Confirmation Code" maxlength="6" pattern="[0-9]{6}" required>
+                        <input class="form-input" type="text" name="code" placeholder="Confirmation Code" maxlength="6"
+                            pattern="[0-9]{6}" required>
                     </div>
                     <button type="submit" class="form-button">Confirm</button>
                 </form>

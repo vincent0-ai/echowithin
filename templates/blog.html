@@ -402,6 +402,7 @@
             const ownerControls = isOwner ? `
             <a href="/edit_post/${post._id}?action=edit" class="btn edit-btn">Edit</a>
             <form action="/delete_post/${post._id}" method="POST" class="delete-post-form" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="${document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content')}">
                 <button type="submit" class="btn delete-btn">Delete</button>
             </form>` : '';
 

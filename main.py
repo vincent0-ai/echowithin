@@ -5746,7 +5746,7 @@ def api_get_note_comments(share_id):
             '_id': c_id,
             'author_name': c.get('author_name', 'Unknown'),
             'author_id': str(c.get('author_id', '')),
-            'content': c['content'],
+            'content': decrypt_note(c['content']) if c.get('encrypted', False) else c['content'],
             'created_at': (c['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat() if c.get('created_at') and c['created_at'].tzinfo is None else c['created_at'].isoformat()) if c.get('created_at') else None,
             'replies': []
         }
@@ -5788,7 +5788,8 @@ def api_post_note_comment(share_id):
         'note_id': share['note_id'],
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
-        'content': content,
+        'content': encrypt_note(content),
+        'encrypted': True,
         'parent_id': None,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
@@ -5798,7 +5799,7 @@ def api_post_note_comment(share_id):
         'success': True,
         '_id': str(result.inserted_id),
         'author_name': comment['author_name'],
-        'content': comment['content'],
+        'content': content,
         'created_at': comment['created_at'].isoformat()
     })
 
@@ -5832,7 +5833,8 @@ def api_post_note_reply(share_id, comment_id):
         'note_id': share['note_id'],
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
-        'content': content,
+        'content': encrypt_note(content),
+        'encrypted': True,
         'parent_id': parent_id,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
@@ -5842,7 +5844,7 @@ def api_post_note_reply(share_id, comment_id):
         'success': True,
         '_id': str(result.inserted_id),
         'author_name': reply['author_name'],
-        'content': reply['content'],
+        'content': content,
         'created_at': reply['created_at'].isoformat()
     })
 

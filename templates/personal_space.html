@@ -978,7 +978,7 @@
                                         title="{{ share.permissions }} access"></i>
                                     {{ share.share_url[-20:] }}
                                 </span>
-                                <button type="button" onclick="copyShareUrl('{{ share.share_url }}', this)"
+                                <button type="button" class="copy-btn" data-copy-text="{{ share.share_url }}"
                                     title="Copy link"
                                     style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
                                     <i class="far fa-copy"></i>
@@ -997,7 +997,7 @@
                     </div>
                     {% endif %}
                     <div class="note-actions">
-                        <button type="button" class="copy-note-btn" title="Copy note" data-content="{{ note.content }}">
+                        <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
                             <i class="far fa-copy"></i>
                         </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
@@ -1865,14 +1865,34 @@
             });
         }
 
-        // Copy note content (copies raw markdown, not rendered)
-        document.querySelectorAll('.copy-note-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const content = btn.dataset.content;
-                navigator.clipboard.writeText(content).then(() => {
+        // Copy content handler (unified delegated listener)
+        document.body.addEventListener('click', (e) => {
+            const btn = e.target.closest('.copy-btn');
+            if (btn) {
+                const text = btn.dataset.copyText;
+                if (!text) return;
+
+                if (!navigator.clipboard) {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        showCopyFeedback(btn);
+                    } catch (err) {
+                        console.error('Copy failed:', err);
+                    }
+                    document.body.removeChild(textArea);
+                    return;
+                }
+
+                navigator.clipboard.writeText(text).then(() => {
                     showCopyFeedback(btn);
+                }).catch(err => {
+                    console.error('Clipboard copy failed:', err);
                 });
-            });
+            }
         });
 
         // Share link dropdown toggle
@@ -1994,7 +2014,7 @@
                         <div class="share-link-item">
                             <div class="share-link-url">
                                 <input type="text" value="${s.url}" readonly onclick="this.select()">
-                                <button class="btn-icon" onclick="copyShareUrl('${s.url}', this)" title="Copy Link">
+                                <button class="btn-icon copy-btn" data-copy-text="${s.url}" title="Copy Link">
                                     <i class="far fa-copy"></i>
                                 </button>
                             </div>
@@ -2132,29 +2152,18 @@
         };
 
         window.copyShareUrl = function (text, btn) {
-            if (!navigator.clipboard) {
-                // Fallback for non-secure contexts or missing API
+            // Unify legacy call path
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => showCopyFeedback(btn));
+            } else {
                 const textArea = document.createElement("textarea");
                 textArea.value = text;
                 document.body.appendChild(textArea);
                 textArea.select();
-                try {
-                    document.execCommand('copy');
-                    showCopyFeedback(btn);
-                } catch (err) {
-                    console.error('Fallback copy failed:', err);
-                    alert("Copy failed. Please manually copy the link.");
-                }
+                document.execCommand('copy');
                 document.body.removeChild(textArea);
-                return;
-            }
-
-            navigator.clipboard.writeText(text).then(() => {
                 showCopyFeedback(btn);
-            }).catch(err => {
-                console.error('Clipboard API failed:', err);
-                alert("Copy failed. Please manually copy the link.");
-            });
+            }
         };
 
         function showCopyFeedback(btn) {

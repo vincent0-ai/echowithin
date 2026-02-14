@@ -5597,6 +5597,7 @@ def view_shared_note(share_id):
 
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
+@csrf.exempt
 @limits(calls=10, period=60)
 def api_edit_shared_note(share_id):
     """Allows editing a shared note if permission granted."""

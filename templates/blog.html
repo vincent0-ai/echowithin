@@ -265,6 +265,21 @@
                         // Add unread indicator
                         const unreadClass = p.has_unread ? 'has-unread-comments' : '';
 
+                        // Handle surprise unlock notifications differently
+                        if (p.activity_type === 'surprise_unlocked') {
+                            const unreadBadge = p.has_unread ?
+                                `<span class="unread-indicator" style="background-color: #ff4d6d">Surprise opened!</span>` : '';
+                            const timeAgo = p.unlocked_at ? new Date(p.unlocked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+                            html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}
+                                <div class="post-item" style="position: relative;">
+                                    <h3><a href="${p.url}"><i class="fas fa-gift" style="color: #ff4d6d;"></i> ${p.title}</a></h3>
+                                    <div class="post-content-rendered">${p.content}</div>
+                                    <div class="post-meta"><i class="far fa-clock"></i> ${timeAgo}</div>
+                                </div>
+                            </div>`;
+                            return;
+                        }
+
                         // Determine badge text based on activity type
                         let badgeText = 'New comments!';
                         let badgeColor = 'red'; // default

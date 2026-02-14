@@ -304,6 +304,7 @@ push_subscriptions_conf = db['push_subscriptions']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 newsletter_conf = db['newsletter_subs']
 user_post_views_conf = db['user_post_views']
+unlock_notifications_conf = db['unlock_notifications']
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -3171,8 +3172,28 @@ def get_my_commented_posts_json():
                     # p['extra_info'] = f"{reply_data['reply_count']} new replies"
                     relevant_replies.append(p)
 
-        # --- 3. Merge and Sort ---
-        all_activities = own_posts + relevant_replies
+        # --- 3. Fetch Surprise Unlock Notifications ---
+        unlock_notifs = list(unlock_notifications_conf.find(
+            {'owner_id': ObjectId(current_user.id)},
+            sort=[('unlocked_at', -1)],
+            limit=20
+        ))
+        
+        unlock_activities = []
+        for notif in unlock_notifs:
+            unlock_activities.append({
+                '_id': notif['_id'],
+                'activity_type': 'surprise_unlocked',
+                'latest_activity': notif['unlocked_at'],
+                'share_id': notif.get('share_id'),
+                'unlocked_by_name': notif.get('unlocked_by_name', 'Someone'),
+                'surprise_theme': notif.get('surprise_theme', 'none'),
+                'is_read': notif.get('is_read', False),
+                'unlocked_at': notif['unlocked_at']
+            })
+
+        # --- 4. Merge and Sort ---
+        all_activities = own_posts + relevant_replies + unlock_activities
 
         # Sort by latest activity descending
         all_activities.sort(key=lambda x: x.get('latest_activity', datetime.datetime.min), reverse=True)
@@ -3180,19 +3201,68 @@ def get_my_commented_posts_json():
         # Limit to 20 items
         all_activities = all_activities[:20]
 
-        # --- 4. Fetch Per-User View Timestamps ---
-        post_ids = [post['_id'] for post in all_activities]
+        # --- 5. Fetch Per-User View Timestamps ---
+        post_ids = [post['_id'] for post in all_activities if post.get('activity_type') != 'surprise_unlocked']
         user_views = list(user_post_views_conf.find({
             'user_id': user_id,
             'post_id': {'$in': post_ids}
         }))
         user_view_map = {v['post_id']: v['last_viewed'] for v in user_views}
 
-        # --- 5. Process for JSON Response ---
+        # --- 6. Process for JSON Response ---
         unread_count = 0
         result_posts = []
 
         for post in all_activities:
+            # Handle surprise unlock notifications separately
+            if post.get('activity_type') == 'surprise_unlocked':
+                activity_time = post.get('unlocked_at')
+                if activity_time and activity_time.tzinfo is None:
+                    activity_time = activity_time.replace(tzinfo=datetime.timezone.utc)
+                
+                is_unread = not post.get('is_read', False)
+                if is_unread:
+                    # Also check against last_check
+                    if activity_time and activity_time > last_check:
+                        unread_count += 1
+                    else:
+                        is_unread = False
+                
+                theme_labels = {
+                    'valentine': '❤️ Valentine',
+                    'birthday': '🎂 Birthday',
+                    'anniversary': '💍 Anniversary',
+                    'celebration': '🎉 Celebration'
+                }
+                theme_label = theme_labels.get(post.get('surprise_theme', ''), '🎁 Surprise')
+                
+                post_data = {
+                    '_id': str(post['_id']),
+                    'activity_type': 'surprise_unlocked',
+                    'has_unread': is_unread,
+                    'share_id': post.get('share_id'),
+                    'unlocked_by_name': post.get('unlocked_by_name', 'Someone'),
+                    'surprise_theme': post.get('surprise_theme'),
+                    'theme_label': theme_label,
+                    'unlocked_at': activity_time.isoformat() if activity_time else None,
+                    'latest_comment_at': activity_time.isoformat() if activity_time else None,
+                    'title': f"{theme_label} surprise unlocked",
+                    'url': url_for('view_shared_note', share_id=post.get('share_id')) if post.get('share_id') else '#',
+                    'content': f"{post.get('unlocked_by_name', 'Someone')} opened your {theme_label} surprise note",
+                    'author': post.get('unlocked_by_name', 'Someone'),
+                    'slug': '',
+                    'author_id': '',
+                    'timestamp': activity_time.strftime('%b %d, %Y') if activity_time else '',
+                    'image_url': None,
+                    'image_urls': [],
+                    'video_url': None,
+                    'comment_count': 0,
+                    'likes_count': 0,
+                    'share_count': 0,
+                    'reactions': {}
+                }
+                result_posts.append(post_data)
+                continue
             # Determine unread status
             activity_time = post.get('latest_activity')
             if activity_time and activity_time.tzinfo is None:
@@ -5453,6 +5523,7 @@ def api_create_share(post_id):
     surprise_theme = 'none'
     valentine_photo = None
     valentine_audio = None
+    use_typewriter = False
 
     if request.is_json:
         data = request.get_json() or {}
@@ -5467,6 +5538,7 @@ def api_create_share(post_id):
             
         valentine_photo = data.get('valentine_photo')
         valentine_audio = data.get('valentine_audio')
+        use_typewriter = data.get('use_typewriter', False)
     else:
         # Handle multipart/form-data
         permissions = request.form.get('permissions', 'view')
@@ -5476,6 +5548,7 @@ def api_create_share(post_id):
         is_valentine = request.form.get('is_valentine') == 'true'
         if is_valentine and surprise_theme == 'none':
             surprise_theme = 'valentine'
+        use_typewriter = request.form.get('use_typewriter') == 'true'
         
         # Handle file uploads
         if surprise_theme != 'none':
@@ -5529,7 +5602,8 @@ def api_create_share(post_id):
         'created_at': now,
         'surprise_theme': surprise_theme,
         'valentine_photo': valentine_photo,
-        'valentine_audio': valentine_audio
+        'valentine_audio': valentine_audio,
+        'use_typewriter': use_typewriter
     })
 
     share_url = url_for('view_shared_note', share_id=share_id, _external=True)
@@ -5585,6 +5659,27 @@ def view_shared_note(share_id):
     if not surprise_theme:
         surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
     
+    # Record unlock notification for surprise notes (once per session)
+    if surprise_theme != 'none' and not session.get(f'notified_{share_id}'):
+        try:
+            visitor_name = current_user.username if current_user.is_authenticated else 'Anonymous visitor'
+            visitor_id = str(current_user.id) if current_user.is_authenticated else None
+            unlock_notifications_conf.insert_one({
+                'share_id': share_id,
+                'note_id': share['note_id'],
+                'owner_id': share['owner_id'],
+                'unlocked_by': visitor_id,
+                'unlocked_by_name': visitor_name,
+                'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
+                'surprise_theme': surprise_theme,
+                'is_read': False
+            })
+            session[f'notified_{share_id}'] = True
+        except Exception as e:
+            app.logger.error(f"Failed to record unlock notification: {e}")
+    
+    use_typewriter = share.get('use_typewriter', False)
+    
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
@@ -5593,7 +5688,8 @@ def view_shared_note(share_id):
                            surprise_theme=surprise_theme,
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=share.get('valentine_photo'),
-                           valentine_audio=share.get('valentine_audio'))
+                           valentine_audio=share.get('valentine_audio'),
+                           use_typewriter=use_typewriter)
 
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])

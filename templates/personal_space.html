@@ -838,18 +838,18 @@
 
     <!-- Tab Navigation -->
     <div class="tab-nav" role="tablist">
-        <button class="active" data-tab="saved" role="tab" aria-selected="true">
-            Saved
+        <button data-tab="saved" role="tab" aria-selected="false">
+            Saved Posts
             <span class="badge">{{ saved_posts|length }}</span>
         </button>
-        <button data-tab="notes" role="tab" aria-selected="false">
+        <button class="active" data-tab="notes" role="tab" aria-selected="true">
             Notes
             <span class="badge">{{ personal_posts|length }}</span>
         </button>
     </div>
 
     <!-- Saved Posts Tab -->
-    <div id="tab-saved" class="tab-panel active" role="tabpanel">
+    <div id="tab-saved" class="tab-panel" role="tabpanel">
         {% if saved_posts %}
         <div class="search-filter">
             <input type="text" id="saved-search" placeholder="Search saved posts..." aria-label="Search saved posts">
@@ -904,7 +904,7 @@
     </div>
 
     <!-- Notes Tab -->
-    <div id="tab-notes" class="tab-panel" role="tabpanel">
+    <div id="tab-notes" class="tab-panel active" role="tabpanel">
         <!-- Offline Status Banner -->
         <div id="offline-banner" class="offline-banner">
             <i class="fas fa-wifi-slash"></i>
@@ -1061,6 +1061,16 @@
                         </label>
                         <input type="file" id="share-surprise-audio" accept="audio/*"
                             style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff;">
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <label
+                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: #666; cursor: pointer;">
+                            <input type="checkbox" id="use-typewriter"
+                                style="accent-color: #ff4d6d; width: 16px; height: 16px;">
+                            <i class="fas fa-keyboard"></i> Typewriter Effect
+                        </label>
+                        <small style="color: #999; font-size: 0.75rem; margin-left: 1.6rem; display: block;">Text
+                            reveals letter by letter for a personal touch</small>
                     </div>
                 </div>
             </div>
@@ -1891,6 +1901,7 @@
                     document.getElementById('surprise-theme').value = 'none';
                     document.getElementById('share-surprise-photo').value = '';
                     document.getElementById('share-surprise-audio').value = '';
+                    document.getElementById('use-typewriter').checked = false;
                     document.getElementById('surprise-options').style.display = 'none';
                     lastShareNoteId = currentShareNoteId;
                 }
@@ -1986,6 +1997,7 @@
                     formData.append('expires_in', expires_in);
                     formData.append('access_code', access_code);
                     formData.append('surprise_theme', surprise_theme);
+                    formData.append('use_typewriter', document.getElementById('use-typewriter').checked ? 'true' : 'false');
                     if (valentine_photo) formData.append('valentine_photo', valentine_photo);
                     if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 

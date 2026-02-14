@@ -837,6 +837,30 @@
             gap: 0.4rem;
             margin-bottom: 1rem;
         }
+
+        /* Typewriter effect styles */
+        .typewriter-active {
+            min-height: 2em;
+        }
+
+        .typewriter-cursor {
+            display: inline;
+            color: #ff4d6d;
+            font-weight: 300;
+            animation: blink-cursor 0.6s step-end infinite;
+        }
+
+        @keyframes blink-cursor {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0;
+            }
+        }
     </style>
 
     <script>
@@ -1361,6 +1385,7 @@
 
         // Surprise logic
         const surpriseTheme = '{{ surprise_theme }}';
+        const useTypewriter = {{ 'true' if use_typewriter else 'false' }};
         const revealBtn = document.getElementById('valentine-reveal');
         const vContent = document.getElementById('valentine-content');
         const vAudio = document.getElementById('valentine-audio');
@@ -1385,6 +1410,14 @@
                     }).catch(e => console.error('Playback failed:', e));
                 }
                 startSurpriseAnimation(surpriseTheme);
+
+                // Typewriter effect
+                if (useTypewriter) {
+                    const noteEl = vContent.querySelector('.rendered-note');
+                    if (noteEl) {
+                        typewriterAnimate(noteEl);
+                    }
+                }
             }, { once: true });
         }
 
@@ -1437,6 +1470,88 @@
 
         function startSurpriseAnimation(theme) {
             setInterval(() => createParticle(theme), 300);
+        }
+
+        // --- Typewriter Effect ---
+        function typewriterAnimate(element) {
+            const fullHTML = element.innerHTML;
+            element.innerHTML = '';
+            element.classList.add('typewriter-active');
+
+            // Create cursor element
+            const cursor = document.createElement('span');
+            cursor.className = 'typewriter-cursor';
+            cursor.textContent = '|';
+            element.appendChild(cursor);
+
+            // Parse HTML into segments: tags (instant) and text (typed)
+            const segments = [];
+            let i = 0;
+            while (i < fullHTML.length) {
+                if (fullHTML[i] === '<') {
+                    // Find end of tag
+                    const end = fullHTML.indexOf('>', i);
+                    if (end !== -1) {
+                        segments.push({ type: 'tag', content: fullHTML.substring(i, end + 1) });
+                        i = end + 1;
+                    } else {
+                        segments.push({ type: 'char', content: fullHTML[i] });
+                        i++;
+                    }
+                } else if (fullHTML[i] === '&') {
+                    // Handle HTML entities like &amp; &lt; etc.
+                    const semiIdx = fullHTML.indexOf(';', i);
+                    if (semiIdx !== -1 && semiIdx - i < 10) {
+                        segments.push({ type: 'char', content: fullHTML.substring(i, semiIdx + 1) });
+                        i = semiIdx + 1;
+                    } else {
+                        segments.push({ type: 'char', content: fullHTML[i] });
+                        i++;
+                    }
+                } else {
+                    segments.push({ type: 'char', content: fullHTML[i] });
+                    i++;
+                }
+            }
+
+            let segIdx = 0;
+            let buffer = '';
+
+            function typeNext() {
+                if (segIdx >= segments.length) {
+                    // Done typing — remove cursor
+                    element.innerHTML = fullHTML;
+                    return;
+                }
+
+                const seg = segments[segIdx];
+                segIdx++;
+
+                if (seg.type === 'tag') {
+                    // Add tags instantly (no delay)
+                    buffer += seg.content;
+                    element.innerHTML = buffer;
+                    element.appendChild(cursor);
+                    typeNext(); // immediately process next segment
+                } else {
+                    // Type characters with delay
+                    buffer += seg.content;
+                    element.innerHTML = buffer;
+                    element.appendChild(cursor);
+
+                    // Variable speed: slower at punctuation
+                    let delay = 25;
+                    const ch = seg.content;
+                    if (ch === '.' || ch === '!' || ch === '?') delay = 120;
+                    else if (ch === ',') delay = 80;
+                    else if (ch === '\n') delay = 60;
+
+                    setTimeout(typeNext, delay);
+                }
+            }
+
+            // Small initial delay before starting
+            setTimeout(typeNext, 400);
         }
     });
 

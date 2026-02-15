@@ -5690,23 +5690,46 @@ def view_shared_note(share_id):
         surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
     
     # Record unlock notification for surprise notes (once per session)
-    if surprise_theme != 'none' and not session.get(f'notified_{share_id}'):
+    is_owner = current_user.is_authenticated and str(current_user.id) == str(share['owner_id'])
+    
+    if is_owner:
+        # Mark all unread notifications for this share as read when owner views it
         try:
+            unlock_notifications_conf.update_many(
+                {'share_id': share_id, 'owner_id': share['owner_id'], 'is_read': False},
+                {'$set': {'is_read': True}}
+            )
+        except Exception as e:
+            app.logger.error(f"Failed to mark notifications as read: {e}")
+    elif surprise_theme != 'none':
+        try:
+            notif_id_key = f'notif_id_{share_id}'
+            notif_id = session.get(notif_id_key)
             visitor_name = current_user.username if current_user.is_authenticated else 'Anonymous visitor'
             visitor_id = str(current_user.id) if current_user.is_authenticated else None
-            unlock_notifications_conf.insert_one({
-                'share_id': share_id,
-                'note_id': share['note_id'],
-                'owner_id': share['owner_id'],
-                'unlocked_by': visitor_id,
-                'unlocked_by_name': visitor_name,
-                'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
-                'surprise_theme': surprise_theme,
-                'is_read': False
-            })
-            session[f'notified_{share_id}'] = True
+            
+            if not notif_id:
+                # First time in session: Record notification
+                res = unlock_notifications_conf.insert_one({
+                    'share_id': share_id,
+                    'note_id': share['note_id'],
+                    'owner_id': share['owner_id'],
+                    'unlocked_by': visitor_id,
+                    'unlocked_by_name': visitor_name,
+                    'unlocked_at': datetime.datetime.now(datetime.timezone.utc),
+                    'surprise_theme': surprise_theme,
+                    'is_read': False
+                })
+                session[notif_id_key] = str(res.inserted_id)
+                session[f'notified_{share_id}'] = True # Backward compatibility
+            elif current_user.is_authenticated:
+                # Promotion logic: Update anonymous notif with name if user just logged in
+                unlock_notifications_conf.update_one(
+                    {'_id': ObjectId(notif_id), 'unlocked_by': None},
+                    {'$set': {'unlocked_by': visitor_id, 'unlocked_by_name': visitor_name}}
+                )
         except Exception as e:
-            app.logger.error(f"Failed to record unlock notification: {e}")
+            app.logger.error(f"Failed to handle unlock notification: {e}")
     
     use_typewriter = share.get('use_typewriter', False)
     
@@ -5715,6 +5738,7 @@ def view_shared_note(share_id):
                            content=content, 
                            permissions=share['permissions'],
                            note_id=str(note['_id']),
+                           is_owner=is_owner,
                            surprise_theme=surprise_theme,
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=share.get('valentine_photo'),
@@ -5817,6 +5841,30 @@ def api_get_note_shares(post_id):
              s['expires_at'] = s['expires_at'].isoformat()
     
     return jsonify(shares)
+
+
+@app.route('/api/share/<share_id>/history')
+@login_required
+def api_get_share_history(share_id):
+    """Returns access history for a specific share link (owner only)."""
+    share = note_shares_conf.find_one({'share_id': share_id, 'owner_id': ObjectId(current_user.id)})
+    if not share:
+        return jsonify({'error': 'Unauthorized or invalid share'}), 403
+    
+    history = list(unlock_notifications_conf.find(
+        {'share_id': share_id, 'owner_id': ObjectId(current_user.id)},
+        sort=[('unlocked_at', -1)]
+    ).limit(50))
+    
+    result = []
+    for h in history:
+        result.append({
+            '_id': str(h['_id']),
+            'unlocked_by_name': h.get('unlocked_by_name', 'Anonymous visitor'),
+            'unlocked_at': h['unlocked_at'].isoformat() if h.get('unlocked_at') else None,
+            'surprise_theme': h.get('surprise_theme', 'none')
+        })
+    return jsonify(result)
 
 
 @app.route('/personal_post/versions/<post_id>')

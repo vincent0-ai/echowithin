@@ -272,7 +272,7 @@
                             const timeAgo = p.unlocked_at ? new Date(p.unlocked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
                             html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}
                                 <div class="post-item" style="position: relative;">
-                                    <h3><a href="${p.url}"><i class="fas fa-gift" style="color: #ff4d6d;"></i> ${p.title}</a></h3>
+                                    <h3><a href="${p.url}" class="activity-link surprise-activity-link"><i class="fas fa-gift" style="color: #ff4d6d;"></i> ${p.title}</a></h3>
                                     <div class="post-content-rendered">${p.content}</div>
                                     <div class="post-meta"><i class="far fa-clock"></i> ${timeAgo}</div>
                                 </div>
@@ -311,6 +311,30 @@
                     container.innerHTML = '<p>Unable to load your activity.</p>';
                 });
         }
+
+        // Immediate UI feedback for clicking activities
+        document.body.addEventListener('click', function (e) {
+            const link = e.target.closest('.activity-link, .record-view-link');
+            if (link) {
+                const wrapper = link.closest('.post-wrapper');
+                if (wrapper && (wrapper.classList.contains('has-unread-comments') || wrapper.querySelector('.unread-indicator'))) {
+                    wrapper.classList.remove('has-unread-comments');
+                    const badge = wrapper.querySelector('.unread-indicator');
+                    if (badge) badge.style.display = 'none';
+
+                    // Update global count badge
+                    const globalBadge = document.getElementById('my-commented-badge');
+                    if (globalBadge) {
+                        let count = parseInt(globalBadge.textContent) || 0;
+                        if (count > 0) {
+                            count--;
+                            globalBadge.textContent = count;
+                            if (count === 0) globalBadge.style.display = 'none';
+                        }
+                    }
+                }
+            }
+        });
 
         // Handle "Mark all as read" click
         const markReadBtn = document.getElementById('mark-all-read-btn');

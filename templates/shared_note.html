@@ -98,6 +98,11 @@
                         <i class="fas fa-pen"></i> Edit
                     </button>
                     {% endif %}
+                    {% if is_owner %}
+                    <button id="view-history-btn" class="btn btn-history" type="button">
+                        <i class="fas fa-history"></i> Access History
+                    </button>
+                    {% endif %}
                 </div>
 
                 {% if permissions == 'edit' %}
@@ -184,6 +189,21 @@
                 <!-- Comments loaded dynamically -->
             </div>
         </div>
+
+        <!-- History Modal -->
+        {% if is_owner %}
+        <div id="history-modal" class="history-modal">
+            <div class="history-modal-content">
+                <div class="history-modal-header">
+                    <h3><i class="fas fa-history"></i> Note Access History</h3>
+                    <button id="close-history-btn" class="close-btn">&times;</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading context...</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         {% endif %}
     </div>
 
@@ -414,6 +434,115 @@
 
         .btn-edit-toggle.active i::before {
             content: '\f00d';
+        }
+
+        /* History Button Styles */
+        .btn-history {
+            background: #f0e6dc;
+            color: #3e2217;
+            border: 1px solid #dcd0c5;
+            padding: 0.5rem 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .btn-history:hover {
+            background: #e6d8cc;
+            transform: translateY(-1px);
+        }
+
+        /* History Modal Styles */
+        .history-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .history-modal-content {
+            background: white;
+            width: 100%;
+            max-width: 450px;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+
+        .history-modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fdfaf8;
+        }
+
+        .history-modal-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #3e2217;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+
+        .history-list {
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f8f8f8;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .history-user {
+            font-weight: 600;
+            color: #3e2217;
+            font-size: 0.9rem;
+        }
+
+        .history-time {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .history-theme {
+            font-size: 0.7rem;
+            background: #f0e6dc;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            margin-left: 0.5rem;
         }
 
         /* Cancel Button */
@@ -1560,6 +1689,56 @@
             // Small initial delay before starting
             setTimeout(typeNext, 400);
         }
+
+        // --- History Modal Logic ---
+        {% if is_owner %}
+        const historyBtn = document.getElementById('view-history-btn');
+        const historyModal = document.getElementById('history-modal');
+        const historyList = document.getElementById('history-list');
+        const closeHistoryBtn = document.getElementById('close-history-btn');
+
+        if (historyBtn && historyModal) {
+            historyBtn.addEventListener('click', async () => {
+                historyModal.style.display = 'flex';
+                historyList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading access history...</div>';
+
+                try {
+                    const resp = await fetch(`/api/share/${SHARE_ID}/history`);
+                    const data = await resp.json();
+
+                    if (data.error) {
+                        historyList.innerHTML = `<p style="color:red; text-align:center;">${data.error}</p>`;
+                        return;
+                    }
+
+                    if (!data.length) {
+                        historyList.innerHTML = '<p style="text-align:center; color:#888; padding:1rem;">No history records found yet.</p>';
+                        return;
+                    }
+
+                    historyList.innerHTML = data.map(h => `
+                        <div class="history-item">
+                            <div>
+                                <div class="history-user"><i class="far fa-user"></i> ${h.unlocked_by_name}</div>
+                                <div class="history-time">${new Date(h.unlocked_at).toLocaleString()}</div>
+                            </div>
+                            ${h.surprise_theme !== 'none' ? `<span class="history-theme">${h.surprise_theme}</span>` : ''}
+                        </div>
+                    `).join('');
+                } catch (e) {
+                    historyList.innerHTML = '<p style="color:red; text-align:center;">Failed to load history.</p>';
+                }
+            });
+
+            closeHistoryBtn.addEventListener('click', () => {
+                historyModal.style.display = 'none';
+            });
+
+            window.addEventListener('click', (e) => {
+                if (e.target === historyModal) historyModal.style.display = 'none';
+            });
+        }
+        {% endif %}
     });
 
     </script>

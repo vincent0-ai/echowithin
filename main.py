@@ -589,6 +589,63 @@ def to_local_filter(dt):
     except (ValueError, TypeError, AttributeError):
         return dt
 
+def extract_cloudinary_public_id(url):
+    """
+    Extracts the public_id from a Cloudinary URL.
+    Example: https://res.cloudinary.com/demo/image/upload/v12345678/folder/sample.jpg
+    Returns: 'folder/sample'
+    """
+    if not url or 'res.cloudinary.com' not in url:
+        return None
+    
+    # Split by '/upload/' and remove version (v...) and extension
+    try:
+        parts = url.split('/upload/')
+        if len(parts) < 2:
+            return None
+        
+        path = parts[1]
+        # Skip version if present (e.g., v12345678/)
+        if path.startswith('v') and '/' in path:
+            path = path.split('/', 1)[1]
+        
+        # Remove extension
+        if '.' in path:
+            path = path.rsplit('.', 1)[0]
+        
+        return path
+    except Exception:
+        return None
+
+def cleanup_share_media(share):
+    """
+    Checks if media files in a share are used elsewhere. 
+    If not, deletes them from Cloudinary to save storage.
+    """
+    media_fields = ['valentine_photo', 'valentine_audio']
+    for field in media_fields:
+        url = share.get(field)
+        if not url:
+            continue
+            
+        # Check if any OTHER active share uses this exact URL
+        try:
+            other_usage = note_shares_conf.find_one({
+                field: url,
+                '_id': {'$ne': share['_id']}
+            })
+            
+            if not other_usage:
+                # No other share uses this file. Safe to delete from Cloudinary.
+                public_id = extract_cloudinary_public_id(url)
+                if public_id:
+                    # Cloudinary destroy: audio/video are resource_type="video"
+                    res_type = "video" if field == 'valentine_audio' else "image"
+                    cloudinary.uploader.destroy(public_id, resource_type=res_type)
+                    app.logger.info(f"Deleted orphaned Cloudinary media: {public_id} (Type: {res_type})")
+        except Exception as e:
+            app.logger.error(f"Failed to cleanup media {url}: {e}")
+
 from markupsafe import Markup
 
 @app.template_filter('localtime')
@@ -5522,11 +5579,29 @@ def delete_personal_post(post_id):
             flash('Invalid note ID.', 'danger')
             return redirect(url_for('personal_space'))
 
-        personal_posts_conf.delete_one({
-            '_id': obj_id,
-            'user_id': ObjectId(current_user.id)
-        })
-        flash('Personal note deleted.', 'success')
+        # Fetch the note to verify ownership
+        note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            flash('Note not found or unauthorized.', 'danger')
+            return redirect(url_for('personal_space'))
+
+        # --- Cascading Deletion ---
+        # 1. Cleanup all share links and their media
+        shares = note_shares_conf.find({'note_id': obj_id})
+        for share in shares:
+            cleanup_share_media(share)
+            note_shares_conf.delete_one({'_id': share['_id']})
+        
+        # 2. Cleanup all versions
+        note_versions_conf.delete_many({'note_id': obj_id})
+        
+        # 3. Cleanup all unlock notifications
+        unlock_notifications_conf.delete_many({'note_id': obj_id})
+
+        # 4. Final: Delete the note itself
+        personal_posts_conf.delete_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        
+        flash('Personal note and all associated shares/media deleted.', 'success')
     except Exception as e:
         app.logger.error(f"Error deleting personal post {post_id}: {e}")
         flash('Could not delete note.', 'danger')
@@ -5658,6 +5733,8 @@ def view_shared_note(share_id):
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
         if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            # Cleanup media before deleting share record
+            cleanup_share_media(share)
             note_shares_conf.delete_one({'_id': share['_id']})
             return render_template('shared_note.html', expired=True)
 
@@ -5814,11 +5891,14 @@ def api_edit_shared_note(share_id):
 @login_required
 def api_revoke_share(share_id):
     """Revokes a share link."""
-    result = note_shares_conf.delete_one({
+    share = note_shares_conf.find_one({
         'share_id': share_id,
         'owner_id': ObjectId(current_user.id)
     })
-    if result.deleted_count > 0:
+    if share:
+        # Cleanup media before deleting share record
+        cleanup_share_media(share)
+        note_shares_conf.delete_one({'_id': share['_id']})
         return jsonify({'success': True})
     return jsonify({'error': 'Share link not found or unauthorized'}), 404
 

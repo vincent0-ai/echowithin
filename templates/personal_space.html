@@ -1138,10 +1138,6 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="8000"
                     required></textarea>
-                <div class="format-hint">
-                    Supports: <code>**bold**</code> <code>*italic*</code> <code>`code`</code> <code>$math$</code>
-                    <code>$$block math$$</code>
-                </div>
                 <div class="create-note-footer">
                     <span class="char-count"><span id="char-count">0</span>/8000</span>
                     <label class="preview-toggle">
@@ -1787,21 +1783,25 @@
                 }
 
                 // Delete Confirmations (Delegated)
-                if (e.target && e.target.id === 'confirm-delete-me' && window.pendingDeleteForm) {
+                if (e.target.closest('#confirm-delete-me') && window.pendingDeleteForm) {
+                    window.closeDeleteModal();
                     const modeInput = document.createElement('input');
                     modeInput.type = 'hidden';
                     modeInput.name = 'mode';
                     modeInput.value = 'me';
                     window.pendingDeleteForm.appendChild(modeInput);
                     window.pendingDeleteForm.submit();
+                    return;
                 }
-                if (e.target && e.target.id === 'confirm-delete-everyone' && window.pendingDeleteForm) {
+                if (e.target.closest('#confirm-delete-everyone') && window.pendingDeleteForm) {
+                    window.closeDeleteModal();
                     const modeInput = document.createElement('input');
                     modeInput.type = 'hidden';
                     modeInput.name = 'mode';
                     modeInput.value = 'everyone';
                     window.pendingDeleteForm.appendChild(modeInput);
                     window.pendingDeleteForm.submit();
+                    return;
                 }
 
                 // Close open dropdowns when clicking elsewhere
@@ -2615,8 +2615,7 @@
             let searchAbortController = null;
             let isSearchActive = false;
 
-            function clearNoteSearch() {
-                if (noteSearchInput) noteSearchInput.value = '';
+            function resetSearchResults() {
                 if (noteSearchClear) noteSearchClear.classList.remove('visible');
                 if (noteSearchStatus) noteSearchStatus.classList.remove('visible');
                 if (searchResultsContainer) {
@@ -2631,9 +2630,14 @@
                 );
             }
 
+            function clearNoteSearch() {
+                if (noteSearchInput) noteSearchInput.value = '';
+                resetSearchResults();
+            }
+
             async function performNoteSearch(query) {
                 if (!query || query.length < 2) {
-                    clearNoteSearch();
+                    resetSearchResults();
                     if (noteSearchClear && query) noteSearchClear.classList.add('visible');
                     return;
                 }
@@ -2741,7 +2745,7 @@
                     }
                     clearTimeout(searchDebounceTimer);
                     if (val.length < 2) {
-                        clearNoteSearch();
+                        resetSearchResults();
                         if (val.length > 0 && noteSearchClear) noteSearchClear.classList.add('visible');
                         return;
                     }

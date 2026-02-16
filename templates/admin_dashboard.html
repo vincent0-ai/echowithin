@@ -5,7 +5,8 @@
 <div class="container admin-dashboard-page-container py-4 px-3">
   <h1>Admin Dashboard</h1>
   <div class="d-flex flex-column flex-sm-row gap-2 mb-4">
-    <button id="reindex-btn" class="btn btn-primary ">Reindex Search</button>
+    <button id="reindex-btn" class="btn btn-primary">Reindex Posts</button>
+    <button id="reindex-notes-btn" class="btn btn-primary" style="background: #6a5acd;">Reindex Notes</button>
   </div>
 
   <!-- CSV Export Section -->
@@ -204,9 +205,28 @@
       headers: { 'X-CSRFToken': csrfToken }
     });
     const json = await res.json();
-    alert(JSON.stringify(json));
+    alert(json.message || JSON.stringify(json));
     btn.disabled = false;
-    btn.textContent = 'Reindex Search';
+    btn.textContent = 'Reindex Posts';
+  });
+
+  document.getElementById('reindex-notes-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('reindex-notes-btn');
+    btn.disabled = true;
+    btn.textContent = 'Reindexing Notes...';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    try {
+      const res = await fetch('/admin/reindex_notes_meili', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken }
+      });
+      const json = await res.json();
+      alert(json.message || JSON.stringify(json));
+    } catch (err) {
+      alert('Failed to reindex notes: ' + err.message);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Reindex Notes';
   });
 </script>
 {% endblock %}

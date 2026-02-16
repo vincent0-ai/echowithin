@@ -673,6 +673,29 @@ def reindex_all_posts_to_meili(batch_size: int = 1000):
         app.logger.error(f'Error during reindex_all_posts_to_meili: {e}')
         raise
 
+def reindex_all_notes_to_meili(batch_size: int = 500):
+    """Reindex ALL users' personal notes into Meilisearch in batches."""
+    if not meili_notes_index:
+        raise RuntimeError('Meilisearch notes index not configured')
+    try:
+        last_id = None
+        total = 0
+        while True:
+            query = {} if last_id is None else {'_id': {'$gt': last_id}}
+            notes = list(personal_posts_conf.find(query).sort('_id', 1).limit(batch_size))
+            if not notes:
+                break
+            docs = [_note_to_meili_doc(n) for n in notes]
+            meili_notes_index.add_documents(docs, primary_key='id')
+            total += len(docs)
+            last_id = notes[-1]['_id']
+        app.logger.info(f'Reindexed {total} notes into Meilisearch')
+        return total
+    except Exception as e:
+        app.logger.error(f'Error during reindex_all_notes_to_meili: {e}')
+        raise
+
+
 @app.template_filter('linkify')
 def linkify_filter(text):
     """A Jinja2 filter to turn URLs in text into clickable links."""
@@ -2003,6 +2026,20 @@ def reindex_meili_job():
         app.logger.error(f'Meilisearch reindex job failed: {e}', exc_info=True)
 
     return counts_map
+
+
+@app.route('/admin/reindex_notes_meili', methods=['POST'])
+@login_required
+@admin_required
+def admin_reindex_notes_meili():
+    if not meili_notes_index:
+        return jsonify({'error': 'Meilisearch notes index not configured'}), 500
+    try:
+        total = reindex_all_notes_to_meili()
+        return jsonify({'status': 'completed', 'message': f'Reindexed {total} notes'})
+    except Exception as e:
+        app.logger.error(f'Error reindexing notes: {e}')
+        return jsonify({'error': 'Notes reindex failed'}), 500
 
 
 @app.route('/feed.xml')

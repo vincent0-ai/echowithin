@@ -1991,12 +1991,14 @@
 
             // Confirm delete for notes with mode support
             let pendingDeleteForm = null;
-            document.querySelectorAll('.delete-note-form').forEach(form => {
-                form.addEventListener('submit', (e) => {
+            // Delegated listener for delete note forms (more robust)
+            document.addEventListener('submit', (e) => {
+                const form = e.target;
+                if (form && form.classList.contains('delete-note-form')) {
                     e.preventDefault();
                     pendingDeleteForm = form;
                     openDeleteModal();
-                });
+                }
             });
 
             function openDeleteModal() {
@@ -2272,11 +2274,13 @@
             }
 
             // --- Version History Logic ---
-            document.querySelectorAll('.version-history-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+            // Delegated listener for version history buttons
+            document.body.addEventListener('click', (e) => {
+                const btn = e.target.closest('.version-history-btn');
+                if (btn) {
                     const noteId = btn.dataset.id;
                     openVersionModal(noteId);
-                });
+                }
             });
 
             function openVersionModal(noteId) {

@@ -1,42 +1,133 @@
 {% extends "base.html" %}
 
-{% block title %}<title>Terms and Conditions</title>{% endblock %}
+{% block title %}<title>Terms of Service - EchoWithin</title>{% endblock %}
 
 {% block content %}
 <div class="content-wrapper">
-    <h1>Terms and Conditions</h1>
-    <p>Last updated: December 3, 2025</p>
+    <h1>Terms of Service</h1>
+    <p class="last-updated">Last updated: February 16, 2026</p>
 
-    <section>
-        <h2>1. Acceptance of Terms</h2>
-        <p>By accessing and using EchoWithin, you accept and agree to be bound by these Terms and Conditions. If you do not agree, please do not use the service.</p>
-    </section>
+    <div class="terms-container">
+        <section>
+            <h2>1. Acceptance of Terms</h2>
+            <p>By accessing or using EchoWithin ("the Platform"), you agree to be bound by these Terms of Service. If
+                you do not agree to these terms, you must not use our services.</p>
+        </section>
 
-    <section>
-        <h2>2. Use of Content</h2>
-        <p>All content posted on EchoWithin is provided by users. You are responsible for the content you post and must ensure it complies with applicable laws and these Terms.</p>
-    </section>
+        <section>
+            <h2>2. Service Overview</h2>
+            <p>EchoWithin provides a hybrid platform for digital expression, including:</p>
+            <ul>
+                <li><strong>Public Blogs</strong>: Shared community content and discussions.</li>
+                <li><strong>Personal Space</strong>: Private, encrypted note-taking for personal thoughts.</li>
+                <li><strong>Shared Notes</strong>: Secure, temporary content sharing with optional surprise themes and
+                    access controls.</li>
+            </ul>
+        </section>
 
-    <section>
-        <h2>3. User Conduct</h2>
-        <p>You agree not to post illegal, abusive, or infringing material. EchoWithin reserves the right to remove content that violates these Terms.</p>
-    </section>
+        <section>
+            <h2>3. Privacy & Data Sovereignty</h2>
+            <p>We prioritize your privacy. <strong>Personal Notes</strong> are encrypted at rest using industry-standard
+                protocols. Our team cannot read the contents of your private personal notes. You are solely responsible
+                for maintaining the confidentiality of your account credentials and for all activities that occur under
+                your account.</p>
+        </section>
 
-    <section>
-        <h2>4. Intellectual Property</h2>
-        <p>Content you submit remains yours. By submitting content, you grant EchoWithin a license to host and display it.</p>
-    </section>
+        <section>
+            <h2>4. Shared Content & Surprises</h2>
+            <p>When sharing notes via links:</p>
+            <ul>
+                <li><strong>Revocation</strong>: You may revoke shared links manually, or set them to expire
+                    automatically. We do not guarantee access to shared links after expiration.</li>
+                <li><strong>Access Codes</strong>: If you protect a note with an access code, you are responsible for
+                    distributing that code only to intended recipients.</li>
+                <li><strong>Media Ethics</strong>: Any media (photos/audio) uploaded for "Surprise Themes" must be owned
+                    by you or used with permission and must comply with our safety guidelines.</li>
+                <li><strong>Data Persistence (Total Purge)</strong>: When a recipient "Saves" a shared note, they create
+                    a personal copy. However, to ensure user safety and content control, all copies remain linked to the
+                    original. If the original owner chooses to <strong>"Delete for Everyone"</strong>, all cloned copies
+                    will be permanently purged from the platform.</li>
+            </ul>
+        </section>
 
-    <section>
-        <h2>5. Limitation of Liability</h2>
-        <p>To the extent permitted by law, EchoWithin is not liable for any indirect, incidental, or consequential damages.</p>
-    </section>
+        <section>
+            <h2>5. Community Guidelines & Moderation</h2>
+            <p>To maintain a safe and productive community, you agree NOT to:</p>
+            <ul>
+                <li>Post or share illegal, abusive, harassing, or defamatory content.</li>
+                <li>Infringe upon the intellectual property rights of others.</li>
+                <li>Engage in automated scraping or systematic data collection without permission.</li>
+            </ul>
+            <p>EchoWithin reserves the right to remove any content (including blog posts and comments) and suspend or
+                terminate accounts that violate these guidelines.</p>
+        </section>
 
-    <section>
-        <h2>6. Changes to Terms</h2>
-        <p>We may update these Terms from time to time. Continued use after changes implies acceptance of the new Terms.</p>
-    </section>
+        <section>
+            <h2>6. Communications & Notifications</h2>
+            <p>By creating an account, you may receive automated service emails (notifications, newsletters). We comply
+                with RFC 8058 "One-Click Unsubscribe" standards. You may opt out of non-essential communications at any
+                time via the unsubscribe links provided in our emails.</p>
+        </section>
 
-    <p>If you have questions about these terms, please contact the site administrator.</p>
+        <section>
+            <h2>7. Data Removal & "Hard Delete" Policy</h2>
+            <p>At EchoWithin, "Delete" means delete. When you choose to remove a blog post, a comment, or a personal
+                note, the following occurs:</p>
+            <ul>
+                <li><strong>Permanent Removal</strong>: The record is immediately purged from our active databases. We
+                    do not use "soft-deletes" or keep hidden copies of your deleted content.</li>
+                <li><strong>Cascading Media Cleanup</strong>: Any associated media (images/audio) stored in our cloud
+                    storage is permanently destroyed if not linked to other active content.</li>
+                <li><strong>Irreversibility</strong>: Once data is deleted, it cannot be recovered by our team. You are
+                    encouraged to maintain your own backups of important personal notes.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>8. Limitation of Liability</h2>
+            <p>EchoWithin is provided "as is." While we strive for 100% uptime and data integrity (including background
+                sync for offline notes), we are not liable for data loss, service interruptions, or damages arising from
+                your use of the platform.</p>
+        </section>
+
+        <section>
+            <h2>9. Changes to Terms</h2>
+            <p>We may update these terms to reflect new features or legal requirements. We will notify you of
+                significant changes, and continued use of the Platform constitutes acceptance of the updated terms.</p>
+        </section>
+    </div>
+
+    <div class="contact-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+        <p>Questions? Contact our administration team via the dashboard support channels.</p>
+    </div>
 </div>
+
+<style>
+    .terms-container section {
+        margin-bottom: 2rem;
+    }
+
+    .terms-container h2 {
+        color: var(--primary-color);
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+    }
+
+    .terms-container p,
+    .terms-container li {
+        color: #444;
+        line-height: 1.6;
+    }
+
+    .terms-container ul {
+        margin-bottom: 1rem;
+        padding-left: 1.5rem;
+    }
+
+    .last-updated {
+        font-style: italic;
+        color: #777;
+        margin-bottom: 2rem;
+    }
+</style>
 {% endblock %}

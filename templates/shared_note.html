@@ -134,6 +134,12 @@
                     <i class="fas fa-{{ 'pen' if permissions == 'eye' else 'eye' }}"></i>
                     {{ permissions.capitalize() }} Access
                 </div>
+                {% if current_user.is_authenticated and not is_owner %}
+                <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
+                    <i class="fas fa-bookmark"></i> Save to My Notes
+                </button>
+                {% endif %}
+
                 {% if permissions == 'edit' %}
                 <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
                     <i class="fas fa-pen"></i> Edit
@@ -455,6 +461,35 @@
         .btn-history:hover {
             background: #e6d8cc;
             transform: translateY(-1px);
+        }
+
+        /* Save to Notes Button */
+        .btn-save-note {
+            background: #fdfaf8;
+            color: #f91880;
+            border: 1px solid #f91880;
+            padding: 0.5rem 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.2s;
+            font-weight: 600;
+        }
+
+        .btn-save-note:hover {
+            background: #f91880;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .btn-save-note.saved {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-color: #2e7d32;
+            cursor: default;
         }
 
         /* History Modal Styles */
@@ -1362,8 +1397,10 @@
 
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
-            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
-            const CSRF_TOKEN = '{{ csrf_token() }}';
+            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }
+        };
+        };
+        const CSRF_TOKEN = '{{ csrf_token() }}';
         const commentsList = document.getElementById('comments-list');
         const commentCountEl = document.getElementById('comment-count');
 
@@ -1739,6 +1776,38 @@
             });
         }
         {% endif %}
+
+        // --- Save Shared Note Logic ---
+        const saveBtn = document.getElementById('save-to-notes-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                const shareId = saveBtn.getAttribute('data-share-id');
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+                try {
+                    const resp = await fetch(`/shared_note/save/${shareId}`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': CSRF_TOKEN }
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                        saveBtn.classList.add('saved');
+                        // Show a subtle success toast if available, otherwise alert
+                        alert(data.message);
+                    } else {
+                        alert(data.error || 'Failed to save note');
+                        saveBtn.disabled = false;
+                        saveBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
+                    }
+                } catch (e) {
+                    alert('Network error. Please try again.');
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
+                }
+            });
+        }
     });
 
     </script>

@@ -170,7 +170,7 @@
                 data-current-reaction="{{ ns.user_reaction|default('') }}" {% if not current_user.is_authenticated
                 %}disabled title="Log in to react" {% endif %}>
                 <span class="reaction-icon">
-                    {% if ns.user_reaction == 'heart' %}❤️
+                    {% if ns.user_reaction == 'heart' %}<i class="fas fa-heart"></i>
                     {% elif ns.user_reaction == 'wow' %}😮
                     {% elif ns.user_reaction == 'insightful' %}💡
                     {% elif ns.user_reaction == 'laugh' %}😂
@@ -180,7 +180,7 @@
                 <span class="likes-count">{{ post.likes_count|default(0) }}</span>
             </button>
             <div class="reaction-menu">
-                <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                <button class="reaction-option" data-reaction="heart" title="Love"><i class="fas fa-heart"></i></button>
                 <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
                 <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
                 <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>

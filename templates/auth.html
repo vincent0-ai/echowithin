@@ -77,9 +77,14 @@
                         <i class="far fa-eye password-toggle-icon"></i>
                     </div>
                 </div>
-                <div class="form-footer" style="margin-top: 0; margin-bottom: 1rem; font-size: 0.8rem;">
-                    <p>By continuing, you agree to our <a href="{{ url_for('terms') }}" target="_blank">Terms of
-                            Service</a>.</p>
+                <div class="form-footer"
+                    style="margin-top: 1rem; margin-bottom: 1rem; font-size: 0.9rem; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
+                    <input type="checkbox" name="agree_terms" id="agree_terms" required style="margin-top: 3px;">
+                    <label for="agree_terms" style="cursor: pointer; color: #555;">
+                        I agree to the <a href="{{ url_for('terms') }}" target="_blank"
+                            style="color: var(--primary-color); text-decoration: underline;">Terms of Service</a> and
+                        understand that my private notes are encrypted.
+                    </label>
                 </div>
                 <button type="submit" class="form-button">Register</button>
                 <div class="form-separator">

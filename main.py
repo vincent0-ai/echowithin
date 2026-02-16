@@ -2088,6 +2088,11 @@ def register():
         username = request.form.get("username")
         email = request.form.get("email")
         password = request.form.get("password")
+        agree_terms = request.form.get("agree_terms")
+
+        if not agree_terms:
+            flash("You must agree to the Terms of Service to create an account.", "danger")
+            return redirect(url_for('register', form='register'))
 
         if username and password and email:
             # 1. Check if username is already taken
@@ -4700,22 +4705,14 @@ def api_delete_comment(comment_id):
         if str(comment.get('author_id')) != current_user.id and not current_user.is_admin:
             return jsonify({'error': 'Not authorized'}), 403
 
-        # Check if the comment has replies
-        has_replies = comments_conf.count_documents({'parent_id': ObjectId(comment_id), 'is_deleted': False}) > 0
-
-        if has_replies:
-            # Soft-delete: keep the comment as a placeholder for replies, but clear its content.
-            comments_conf.update_one(
+        # Absolute Hard-Delete Policy: All comments and their sub-replies are purged.
+        # This ensuring a "Total Purge" as requested by our users for safety and privacy.
+        comments_conf.delete_many({
+            '$or': [
                 {'_id': ObjectId(comment_id)},
-                {'$set': {
-                    'is_deleted': True,
-                    'content': '[deleted]',
-                    'author_username': '[deleted]'
-                }}
-            )
-        else:
-            # Hard-delete: no replies, so we can remove it completely.
-            comments_conf.delete_one({'_id': ObjectId(comment_id)})
+                {'parent_id': ObjectId(comment_id)}
+            ]
+        })
 
         try:
             comment_count_cache.clear()
@@ -5647,8 +5644,9 @@ def create_personal_post_json():
 @login_required
 @limits(calls=20, period=60)
 def delete_personal_post(post_id):
-    """Deletes a personal note/post."""
+    """Deletes a personal note/post with mode support (me/everyone)."""
     try:
+        mode = request.form.get('mode', 'me')  # Default to 'me' for safety
         obj_id = safe_object_id(post_id)
         if not obj_id:
             flash('Invalid note ID.', 'danger')
@@ -5660,25 +5658,35 @@ def delete_personal_post(post_id):
             flash('Note not found or unauthorized.', 'danger')
             return redirect(url_for('personal_space'))
 
-        # --- Cascading Deletion ---
-        # 1. Cleanup all share links and their media
-        shares = note_shares_conf.find({'note_id': obj_id})
+        # --- Cascading Deletion Logic ---
+        if mode == 'everyone':
+            # Purge original + all clones
+            clone_ids = [c['_id'] for c in personal_posts_conf.find({'source_note_id': obj_id}, {'_id': 1})]
+            target_ids = [obj_id] + clone_ids
+            msg_suffix = f"and {len(clone_ids)} copy/copies deleted for everyone."
+        else:
+            # Delete only this specific note (clones remain if they exists)
+            target_ids = [obj_id]
+            msg_suffix = "deleted from your space."
+
+        # 1. Cleanup all share links and their media for target notes
+        shares = note_shares_conf.find({'note_id': {'$in': target_ids}})
         for share in shares:
             cleanup_share_media(share)
             note_shares_conf.delete_one({'_id': share['_id']})
-        
-        # 2. Cleanup all versions
-        note_versions_conf.delete_many({'note_id': obj_id})
-        
-        # 3. Cleanup all unlock notifications
-        unlock_notifications_conf.delete_many({'note_id': obj_id})
 
-        # 4. Final: Delete the note itself
-        personal_posts_conf.delete_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
-        
-        flash('Personal note and all associated shares/media deleted.', 'success')
+        # 2. Cleanup all versions for target notes
+        note_versions_conf.delete_many({'note_id': {'$in': target_ids}})
+
+        # 3. Cleanup all unlock notifications for target notes
+        unlock_notifications_conf.delete_many({'note_id': {'$in': target_ids}})
+
+        # 4. Final: Delete entries from personal_posts_conf
+        personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
+
+        flash(f'Personal note {msg_suffix}', 'success')
     except Exception as e:
-        app.logger.error(f"Error deleting personal post {post_id}: {e}")
+        app.logger.error(f"Error deleting personal post {post_id} (Mode: {mode}): {e}")
         flash('Could not delete note.', 'danger')
     return redirect(url_for('personal_space'))
 
@@ -5896,6 +5904,46 @@ def view_shared_note(share_id):
                            valentine_photo=share.get('valentine_photo'),
                            valentine_audio=share.get('valentine_audio'),
                            use_typewriter=use_typewriter)
+
+
+@app.route('/shared_note/save/<share_id>', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_save_shared_note(share_id):
+    """Clones a shared note into the current user's personal space."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share link not found'}), 404
+
+    # Check expiration
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify({'error': 'Link expired'}), 410
+
+    # Check access code session
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
+
+    # Fetch the original note
+    original_note = personal_posts_conf.find_one({'_id': share['note_id']})
+    if not original_note:
+        return jsonify({'error': 'Original note not found'}), 404
+
+    # Clone the note for the current user
+    # Note: We track source_note_id to allow original owners to "Delete for Everyone"
+    personal_posts_conf.insert_one({
+        'user_id': ObjectId(current_user.id),
+        'content': original_note.get('content'),
+        'encrypted': original_note.get('encrypted', True),
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'source_note_id': share['note_id'],
+        'source_share_id': share_id
+    })
+
+    return jsonify({'success': True, 'message': 'Note saved to your personal space!'})
 
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])

@@ -532,8 +532,9 @@ body {
     color: #f91880;
 }
 
-.like-btn.liked i {
-    color: #f91880;
+.like-btn.liked i,
+.reaction-btn.reacted .fa-heart {
+    color: #f91880 !important;
 }
 
 .like-btn:disabled {
@@ -574,10 +575,73 @@ body {
     flex-wrap: wrap;
 }
 
-.post-interaction {
-    margin-top: 1rem;
-    border-top: 1px solid #eee;
-    padding-top: 1rem;
+/* Reaction Styles - Refined for Icons */
+.reaction-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    background: transparent;
+    border: 1px solid #dee2e6;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #71767b;
+}
+
+.reaction-btn:hover:not(:disabled) {
+    background-color: rgba(249, 24, 128, 0.1);
+    border-color: #f91880;
+    color: #f91880;
+}
+
+.reaction-btn.reacted {
+    border-color: #f91880;
+    color: #f91880;
+}
+
+.reaction-icon i {
+    font-size: 1.1rem;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.reaction-btn:active .reaction-icon i {
+    transform: scale(1.4);
+}
+
+.reaction-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background: white;
+    border-radius: 30px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    gap: 0.5rem;
+    margin-bottom: 8px;
+}
+
+.reaction-container:hover .reaction-menu {
+    display: flex;
+}
+
+.reaction-option {
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: transform 0.2s;
+    padding: 0.2rem;
+}
+
+.reaction-option:hover {
+    transform: scale(1.3);
+}
+
+.reaction-option i.fa-heart {
+    color: #f91880;
 }
 
 .comment-form-container {

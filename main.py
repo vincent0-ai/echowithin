@@ -5395,7 +5395,19 @@ def personal_space():
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
 
-    return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_shares_map=active_shares_map, active_page='personal_space', title=page_title, description=page_description)
+    # Build a map of note_ids that have clones saved by other users
+    # (for determining whether to show "Delete for Everyone" option)
+    has_clones_map = {}
+    if note_ids:
+        # Find notes where other users cloned from these note_ids
+        clone_pipeline = [
+            {'$match': {'source_note_id': {'$in': note_ids}, 'user_id': {'$ne': ObjectId(current_user.id)}}},
+            {'$group': {'_id': '$source_note_id', 'count': {'$sum': 1}}}
+        ]
+        for doc in personal_posts_conf.aggregate(clone_pipeline):
+            has_clones_map[str(doc['_id'])] = doc['count']
+
+    return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_shares_map=active_shares_map, has_clones_map=has_clones_map, active_page='personal_space', title=page_title, description=page_description)
 
 @app.route('/post/<post_id>/react', methods=['POST'])
 @login_required
@@ -5639,6 +5651,135 @@ def create_personal_post_json():
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
     return jsonify({'success': True, 'id': str(result.inserted_id)})
+
+
+@app.route('/personal_post/edit/<post_id>', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def edit_personal_post(post_id):
+    """Edits an existing personal note with version control."""
+    try:
+        data = request.get_json() or {}
+        content = data.get('content', '').strip()
+        if not content:
+            return jsonify({'error': 'Content cannot be empty'}), 400
+
+        content = content[:8000]
+        obj_id = safe_object_id(post_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid note ID'}), 400
+
+        note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        # Version control: snapshot previous content before overwriting
+        if note.get('content'):
+            editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+            note_versions_conf.insert_one({
+                'note_id': obj_id,
+                'share_id': None,
+                'editor_name': editor_name,
+                'editor_id': ObjectId(current_user.id),
+                'content': note['content'],
+                'encrypted': note.get('encrypted', True),
+                'created_at': datetime.datetime.now(datetime.timezone.utc)
+            })
+            # Cap at 50 versions per note
+            version_count = note_versions_conf.count_documents({'note_id': obj_id})
+            if version_count > 50:
+                oldest = note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
+                for old_ver in oldest:
+                    note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+        encrypted_content = encrypt_note(content)
+        personal_posts_conf.update_one(
+            {'_id': obj_id},
+            {'$set': {'content': encrypted_content, 'encrypted': True}}
+        )
+
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"Error editing personal post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
+
+@app.route('/personal_post/sync/<post_id>', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def sync_personal_post(post_id):
+    """Syncs a cloned note with the original source note content."""
+    try:
+        obj_id = safe_object_id(post_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid note ID'}), 400
+
+        # Find the cloned note owned by current user
+        note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        source_note_id = note.get('source_note_id')
+        source_share_id = note.get('source_share_id')
+        if not source_note_id:
+            return jsonify({'error': 'This note is not a saved copy — nothing to sync'}), 400
+
+        # Verify the share still exists and grants edit permission
+        if source_share_id:
+            share = note_shares_conf.find_one({'share_id': source_share_id})
+            if not share:
+                return jsonify({'error': 'The original share link no longer exists'}), 404
+            if share.get('permissions') != 'edit':
+                return jsonify({'error': 'You need edit permission to sync with the original'}), 403
+            # Check expiration
+            if share.get('expires_at'):
+                expires_at = share['expires_at']
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+                if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+                    return jsonify({'error': 'The share link has expired'}), 410
+        else:
+            return jsonify({'error': 'No share link associated with this copy'}), 400
+
+        # Fetch the original note
+        original_note = personal_posts_conf.find_one({'_id': source_note_id})
+        if not original_note:
+            return jsonify({'error': 'Original note no longer exists'}), 404
+
+        # Version control: snapshot current content before overwriting
+        if note.get('content'):
+            editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+            note_versions_conf.insert_one({
+                'note_id': obj_id,
+                'share_id': None,
+                'editor_name': editor_name + ' (sync)',
+                'editor_id': ObjectId(current_user.id),
+                'content': note['content'],
+                'encrypted': note.get('encrypted', True),
+                'created_at': datetime.datetime.now(datetime.timezone.utc)
+            })
+            version_count = note_versions_conf.count_documents({'note_id': obj_id})
+            if version_count > 50:
+                oldest = note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
+                for old_ver in oldest:
+                    note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+        # Update the cloned note with the original's content
+        personal_posts_conf.update_one(
+            {'_id': obj_id},
+            {'$set': {
+                'content': original_note.get('content'),
+                'encrypted': original_note.get('encrypted', True)
+            }}
+        )
+
+        # Decrypt for returning to frontend
+        updated_content = decrypt_note(original_note.get('content', ''))
+        return jsonify({'success': True, 'content': updated_content, 'message': 'Note synced with original!'})
+    except Exception as e:
+        app.logger.error(f"Error syncing personal post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
 
 @app.route('/personal_post/delete/<post_id>', methods=['POST'])
 @login_required

@@ -465,14 +465,14 @@
             const isAuthenticated = !!currentUserId;
 
             const reactionEmojisJS = {
-                'heart': '❤️',
+                'heart': '<i class="fas fa-heart"></i>',
                 'wow': '😮',
                 'insightful': '💡',
                 'laugh': '😂',
                 'sad': '😢'
             };
 
-            const reactionIcon = userReaction ? (reactionEmojisJS[userReaction] || '❤️') : '<i class="far fa-heart"></i>';
+            const reactionIcon = userReaction ? (reactionEmojisJS[userReaction] || '<i class="fas fa-heart"></i>') : '<i class="far fa-heart"></i>';
 
             const reactionButton = `
             <div class="reaction-container" data-post-id="${post._id}">
@@ -483,7 +483,7 @@
                     <span class="likes-count">${likesCount}</span>
                 </button>
                 <div class="reaction-menu">
-                    <button class="reaction-option" data-reaction="heart" title="Love">❤️</button>
+                    <button class="reaction-option" data-reaction="heart" title="Love"><i class="fas fa-heart"></i></button>
                     <button class="reaction-option" data-reaction="wow" title="Wow">😮</button>
                     <button class="reaction-option" data-reaction="insightful" title="Insightful">💡</button>
                     <button class="reaction-option" data-reaction="laugh" title="Haha">😂</button>

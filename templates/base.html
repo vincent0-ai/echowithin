@@ -982,7 +982,7 @@
 
         // --- Reaction System Handler (Global) ---
         const reactionEmojis = {
-            'heart': '❤️',
+            'heart': '<i class="fas fa-heart"></i>',
             'wow': '😮',
             'insightful': '💡',
             'laugh': '😂',
@@ -1062,7 +1062,7 @@
                 if (data.reaction) {
                     btn.classList.add('reacted');
                     btn.dataset.currentReaction = data.reaction;
-                    iconSpan.textContent = reactionEmojis[data.reaction] || '❤️';
+                    iconSpan.innerHTML = reactionEmojis[data.reaction] || '<i class="fas fa-heart"></i>';
                 } else {
                     btn.classList.remove('reacted');
                     btn.dataset.currentReaction = '';

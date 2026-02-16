@@ -448,6 +448,65 @@
             color: #d32f2f;
         }
 
+        .note-actions .edit-note-btn:hover {
+            color: #1565c0;
+            background: #e3f2fd;
+        }
+
+        .note-actions .sync-note-btn {
+            color: #2e7d32;
+        }
+
+        .note-actions .sync-note-btn:hover {
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+
+        .note-actions .sync-note-btn.syncing {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* Source badge for saved/cloned notes */
+        .source-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: #e3f2fd;
+            color: #1565c0;
+            border-radius: 20px;
+            padding: 0.15rem 0.5rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        /* Edit modal */
+        .edit-note-textarea {
+            width: 100%;
+            min-height: 150px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0.75rem;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .edit-note-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(62, 34, 23, 0.1);
+        }
+
+        .edit-char-count {
+            font-size: 0.8rem;
+            color: #999;
+            text-align: right;
+            margin-top: 0.3rem;
+        }
+
         /* Create note form */
         .create-note-card {
             background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
@@ -944,7 +1003,7 @@
         {% if personal_posts %}
         <div class="personal-notes-list">
             {% for note in personal_posts %}
-            <div class="note-card">
+            <div class="note-card" data-note-id="{{ note._id }}" {% if note.source_note_id %}data-source-note-id="{{ note.source_note_id }}"{% endif %} {% if note.source_share_id %}data-source-share-id="{{ note.source_share_id }}"{% endif %}>
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}"></div>
                 <div class="note-footer">
                     <span class="note-date">
@@ -953,6 +1012,11 @@
                         <span style="margin-left: 0.5rem; color: #4caf50; font-size: 0.75rem;" title="Encrypted">
                             <i class="fas fa-lock"></i>
                         </span>
+                        {% if note.source_note_id %}
+                        <span class="source-badge" title="Saved from a shared note">
+                            <i class="fas fa-bookmark"></i> Saved copy
+                        </span>
+                        {% endif %}
                     </span>
                     {% set note_id_str = note._id|string %}
                     {% if active_shares_map.get(note_id_str) %}
@@ -997,6 +1061,16 @@
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
                             <i class="far fa-copy"></i>
                         </button>
+                        <button type="button" class="btn-icon edit-note-btn" title="Edit note"
+                            data-id="{{ note._id }}" data-raw="{{ note.content | e }}">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        {% if note.source_note_id and note.source_share_id %}
+                        <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
+                            data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        {% endif %}
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
@@ -1005,8 +1079,11 @@
                             data-id="{{ note._id }}">
                             <i class="fas fa-clock-rotate-left"></i>
                         </button>
+                        {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
-                            style="display:inline;" class="delete-note-form">
+                            style="display:inline;" class="delete-note-form"
+                            data-has-shares="{{ 'true' if active_shares_map.get(nid_str) else 'false' }}"
+                            data-has-clones="{{ 'true' if has_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="delete-btn" title="Delete note">
                                 <i class="far fa-trash-alt"></i>
@@ -1142,31 +1219,49 @@
 
 <!-- Note Deletion Mode Modal -->
 <div id="delete-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeDeleteModal()">
-        <div class="custom-modal" style="max-width: 450px; text-align: left;">
-            <div style="margin-bottom: 1.5rem;">
-                <h3 style="color: #3e2217; margin-bottom: 0.5rem;"><i class="fas fa-trash-alt"></i> Delete Note</h3>
-                <p id="delete-modal-msg" style="color: #666; font-size: 0.95rem; line-height: 1.4;">Choose how you want
-                    to delete this note. "Delete for Everyone" will attempt to purge all copies of this note that others
-                    may have saved.</p>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                <button id="confirm-delete-me" class="btn"
-                    style="padding: 0.8rem; background: #f8f9fa; color: #333; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: left; transition: background 0.2s;">
-                    <div style="font-weight: 600;"><i class="fas fa-user-minus"></i> Delete for Me</div>
-                    <div style="opacity: 0.7; font-size: 0.75rem; font-weight: 400; margin-left: 1.6rem;">Removes it
-                        from your personal space only.</div>
-                </button>
-                <button id="confirm-delete-everyone" class="btn delete-btn"
-                    style="padding: 0.8rem; border-radius: 8px; cursor: pointer; text-align: left;">
-                    <div style="font-weight: 600;"><i class="fas fa-users-slash"></i> Delete for Everyone</div>
-                    <div style="opacity: 0.8; font-size: 0.75rem; font-weight: 400; margin-left: 1.6rem;">Purges
-                        original and all saved copies platform-wide.</div>
-                </button>
-                <button onclick="closeDeleteModal()" class="btn edit-btn"
-                    style="margin-top: 0.5rem; padding: 0.6rem; border-radius: 8px; cursor: pointer;">Cancel</button>
-            </div>
+    <div class="custom-modal" style="max-width: 450px; text-align: left;">
+        <div style="margin-bottom: 1.5rem;">
+            <h3 style="color: #3e2217; margin-bottom: 0.5rem;"><i class="fas fa-trash-alt"></i> Delete Note</h3>
+            <p id="delete-modal-msg" style="color: #666; font-size: 0.95rem; line-height: 1.4;"></p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <button id="confirm-delete-me" class="btn"
+                style="padding: 0.8rem; background: #f8f9fa; color: #333; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: left; transition: background 0.2s;">
+                <div style="font-weight: 600;"><i class="fas fa-user-minus"></i> Delete for Me</div>
+                <div style="opacity: 0.7; font-size: 0.75rem; font-weight: 400; margin-left: 1.6rem;">Removes it
+                    from your personal space only.</div>
+            </button>
+            <button id="confirm-delete-everyone" class="btn delete-btn"
+                style="padding: 0.8rem; border-radius: 8px; cursor: pointer; text-align: left; display: none;">
+                <div style="font-weight: 600;"><i class="fas fa-users-slash"></i> Delete for Everyone</div>
+                <div style="opacity: 0.8; font-size: 0.75rem; font-weight: 400; margin-left: 1.6rem;">Purges
+                    original and all saved copies platform-wide.</div>
+            </button>
+            <button onclick="closeDeleteModal()" class="btn edit-btn"
+                style="margin-top: 0.5rem; padding: 0.6rem; border-radius: 8px; cursor: pointer;">Cancel</button>
         </div>
     </div>
+</div>
+
+<!-- Edit Note Modal -->
+<div id="edit-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeEditModal()">
+    <div class="custom-modal" style="max-width: 600px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
+                <i class="fas fa-pen"></i> Edit Note
+            </h2>
+            <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000" placeholder="Edit your note..."></textarea>
+        <div class="edit-char-count"><span id="edit-char-count">0</span>/8000</div>
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+            <button onclick="closeEditModal()" class="btn edit-btn" style="padding: 0.6rem 1.2rem; border-radius: 8px;">Cancel</button>
+            <button id="save-edit-btn" class="btn comment-btn" style="padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600;">
+                <i class="fas fa-save"></i> Save Changes
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- KaTeX for math rendering -->
 
@@ -1265,9 +1360,19 @@
                 if (e.key === 'Escape') window.closeDeleteModal();
             };
 
-            window.openDeleteModal = function () {
+            window.openDeleteModal = function (hasShares, hasClones) {
                 const modal = document.getElementById('delete-note-modal');
+                const everyoneBtn = document.getElementById('confirm-delete-everyone');
+                const msgEl = document.getElementById('delete-modal-msg');
                 if (modal) {
+                    // Show "Delete for Everyone" only if note has active shares or clones
+                    const showEveryone = hasShares || hasClones;
+                    if (everyoneBtn) everyoneBtn.style.display = showEveryone ? '' : 'none';
+                    if (msgEl) {
+                        msgEl.textContent = showEveryone
+                            ? 'Choose how you want to delete this note. "Delete for Everyone" will attempt to purge all copies of this note that others may have saved.'
+                            : 'Are you sure you want to delete this note? This action cannot be undone.';
+                    }
                     modal.style.display = 'flex';
                     document.body.style.overflow = 'hidden';
                     document.addEventListener('keydown', window.handleDeleteModalEsc);
@@ -1280,6 +1385,38 @@
                     modal.style.display = 'none';
                     document.body.style.overflow = '';
                     document.removeEventListener('keydown', window.handleDeleteModalEsc);
+                }
+            };
+
+            // Edit modal helpers
+            window.handleEditModalEsc = function (e) {
+                if (e.key === 'Escape') window.closeEditModal();
+            };
+
+            window.currentEditNoteId = null;
+
+            window.openEditModal = function (noteId, content) {
+                const modal = document.getElementById('edit-note-modal');
+                const textarea = document.getElementById('edit-note-content');
+                const charCount = document.getElementById('edit-char-count');
+                if (modal && textarea) {
+                    window.currentEditNoteId = noteId;
+                    textarea.value = content;
+                    if (charCount) charCount.textContent = content.length;
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    textarea.focus();
+                    document.addEventListener('keydown', window.handleEditModalEsc);
+                }
+            };
+
+            window.closeEditModal = function () {
+                const modal = document.getElementById('edit-note-modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                    window.currentEditNoteId = null;
+                    document.removeEventListener('keydown', window.handleEditModalEsc);
                 }
             };
 
@@ -1413,6 +1550,26 @@
 
             // 1. Global Delegated Click Handler
             document.addEventListener('click', (e) => {
+                // Edit Note
+                const editBtn = e.target.closest('.edit-note-btn');
+                if (editBtn) {
+                    const noteId = editBtn.dataset.id;
+                    const rawContent = editBtn.dataset.raw;
+                    // Decode HTML entities
+                    const tmp = document.createElement('textarea');
+                    tmp.innerHTML = rawContent;
+                    window.openEditModal(noteId, tmp.value);
+                    return;
+                }
+
+                // Sync Note
+                const syncBtn = e.target.closest('.sync-note-btn');
+                if (syncBtn && !syncBtn.classList.contains('syncing')) {
+                    const noteId = syncBtn.dataset.id;
+                    window.syncNote(noteId, syncBtn);
+                    return;
+                }
+
                 // Version History
                 const versionBtn = e.target.closest('.version-history-btn');
                 if (versionBtn) {
@@ -1478,9 +1635,141 @@
                 if (form && form.classList.contains('delete-note-form')) {
                     e.preventDefault();
                     window.pendingDeleteForm = form;
-                    if (typeof window.openDeleteModal === 'function') window.openDeleteModal();
+                    const hasShares = form.dataset.hasShares === 'true';
+                    const hasClones = form.dataset.hasClones === 'true';
+                    if (typeof window.openDeleteModal === 'function') window.openDeleteModal(hasShares, hasClones);
                 }
             });
+
+            // Save Edit Handler
+            window.saveNoteEdit = async function () {
+                const noteId = window.currentEditNoteId;
+                const textarea = document.getElementById('edit-note-content');
+                const saveBtn = document.getElementById('save-edit-btn');
+                if (!noteId || !textarea) return;
+
+                const content = textarea.value.trim();
+                if (!content) {
+                    alert('Content cannot be empty.');
+                    return;
+                }
+
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+                try {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                    const response = await fetch(`/personal_post/edit/${noteId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({ content: content })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        // Update the note card in-place
+                        const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                        if (noteCard) {
+                            const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                            if (contentEl) {
+                                contentEl.setAttribute('data-raw', content);
+                                if (typeof renderMarkdownWithMath === 'function') {
+                                    contentEl.innerHTML = renderMarkdownWithMath(content);
+                                } else {
+                                    contentEl.textContent = content;
+                                }
+                            }
+                            // Update edit button data-raw
+                            const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                            if (editBtnEl) {
+                                const tmp = document.createElement('textarea');
+                                tmp.textContent = content;
+                                editBtnEl.dataset.raw = tmp.innerHTML;
+                            }
+                            // Update copy button
+                            const copyBtnEl = noteCard.querySelector('.copy-btn');
+                            if (copyBtnEl) copyBtnEl.dataset.copyText = content;
+                        }
+                        window.closeEditModal();
+                    } else {
+                        alert(result.error || 'Failed to save changes.');
+                    }
+                } catch (err) {
+                    console.error('Edit failed:', err);
+                    alert('Network error. Please try again.');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                }
+            };
+
+            // Sync Note Handler
+            window.syncNote = async function (noteId, btn) {
+                const icon = btn.querySelector('i');
+                btn.classList.add('syncing');
+                if (icon) icon.className = 'fas fa-spinner fa-spin';
+
+                try {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                    const response = await fetch(`/personal_post/sync/${noteId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        // Update note content in-place
+                        const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                        if (noteCard && result.content) {
+                            const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                            if (contentEl) {
+                                contentEl.setAttribute('data-raw', result.content);
+                                if (typeof renderMarkdownWithMath === 'function') {
+                                    contentEl.innerHTML = renderMarkdownWithMath(result.content);
+                                } else {
+                                    contentEl.textContent = result.content;
+                                }
+                            }
+                            // Update edit button data-raw
+                            const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                            if (editBtnEl) {
+                                const tmp = document.createElement('textarea');
+                                tmp.textContent = result.content;
+                                editBtnEl.dataset.raw = tmp.innerHTML;
+                            }
+                            // Update copy button
+                            const copyBtnEl = noteCard.querySelector('.copy-btn');
+                            if (copyBtnEl) copyBtnEl.dataset.copyText = result.content;
+                        }
+                        // Brief success flash
+                        if (icon) {
+                            icon.className = 'fas fa-check';
+                            btn.style.color = '#2e7d32';
+                            setTimeout(() => {
+                                icon.className = 'fas fa-sync-alt';
+                                btn.style.color = '';
+                            }, 2000);
+                        }
+                    } else {
+                        alert(result.error || 'Failed to sync note.');
+                        if (icon) icon.className = 'fas fa-sync-alt';
+                    }
+                } catch (err) {
+                    console.error('Sync failed:', err);
+                    alert('Network error. Please try again.');
+                    if (icon) icon.className = 'fas fa-sync-alt';
+                } finally {
+                    btn.classList.remove('syncing');
+                }
+            };
         })();
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -2141,6 +2430,23 @@
                 noteForm.addEventListener('submit', () => {
                     addNoteBtn.disabled = true;
                     addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                });
+            }
+
+            // --- Edit Note Modal Bindings ---
+            const editTextarea = document.getElementById('edit-note-content');
+            const editCharCount = document.getElementById('edit-char-count');
+            const saveEditBtn = document.getElementById('save-edit-btn');
+
+            if (editTextarea && editCharCount) {
+                editTextarea.addEventListener('input', () => {
+                    editCharCount.textContent = editTextarea.value.length;
+                });
+            }
+
+            if (saveEditBtn) {
+                saveEditBtn.addEventListener('click', () => {
+                    if (typeof window.saveNoteEdit === 'function') window.saveNoteEdit();
                 });
             }
 

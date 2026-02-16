@@ -501,6 +501,127 @@ if MEILI_URL and MEILI_MASTER_KEY:
     except Exception as e:
         app.logger.error(f'Failed to initialize Meilisearch client: {e}')
 
+# --- Meilisearch index for personal notes ---
+meili_notes_index = None
+if meili_client:
+    try:
+        try:
+            meili_notes_index = meili_client.get_index('personal_notes')
+        except Exception:
+            try:
+                meili_client.create_index(uid='personal_notes', options={'primaryKey': 'id'})
+            except Exception as ce:
+                app.logger.debug(f'create_index personal_notes returned error (continuing): {ce}')
+            try:
+                meili_notes_index = meili_client.index('personal_notes')
+            except Exception as ie:
+                app.logger.error(f'Failed to obtain Meili personal_notes index object: {ie}')
+                meili_notes_index = None
+
+        if meili_notes_index:
+            try:
+                meili_notes_index.update_searchable_attributes(['content'])
+            except Exception as e:
+                app.logger.debug(f'Failed to update personal_notes searchable attributes: {e}')
+            try:
+                meili_notes_index.update_filterable_attributes(['user_id', 'created_at'])
+            except Exception as e:
+                app.logger.debug(f'Failed to update personal_notes filterable attributes: {e}')
+            try:
+                meili_notes_index.update_sortable_attributes(['created_at'])
+            except Exception as e:
+                app.logger.debug(f'Failed to update personal_notes sortable attributes: {e}')
+            try:
+                meili_notes_index.update_typo_tolerance({
+                    'enabled': True,
+                    'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
+                })
+            except Exception as e:
+                app.logger.debug(f'Failed to configure personal_notes typo tolerance: {e}')
+            try:
+                meili_notes_index.update_ranking_rules([
+                    'words',
+                    'typo',
+                    'proximity',
+                    'attribute',
+                    'sort',
+                    'exactness',
+                    'created_at:desc'
+                ])
+            except Exception as e:
+                app.logger.debug(f'Failed to configure personal_notes ranking rules: {e}')
+            app.logger.info('Connected to Meilisearch and configured index `personal_notes`.')
+    except Exception as e:
+        app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
+
+
+def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
+    """Convert a MongoDB personal note document to Meilisearch document shape."""
+    content = decrypted_content if decrypted_content is not None else decrypt_note(note_doc.get('content', ''))
+    return {
+        'id': str(note_doc.get('_id')),
+        'user_id': str(note_doc.get('user_id')),
+        'content': content,
+        'created_at': int((note_doc.get('created_at') or datetime.datetime.now(datetime.timezone.utc)).timestamp()),
+    }
+
+
+def index_note_to_meili(note_id: str, decrypted_content=None):
+    """Index a single personal note into Meilisearch. Safe no-op if not configured."""
+    if not meili_notes_index:
+        return False
+    try:
+        note = personal_posts_conf.find_one({'_id': ObjectId(note_id)})
+        if not note:
+            return False
+        doc = _note_to_meili_doc(note, decrypted_content)
+        meili_notes_index.add_documents([doc])
+        return True
+    except Exception as e:
+        app.logger.error(f'Error indexing note {note_id} to Meili: {e}')
+        return False
+
+
+def remove_note_from_meili(note_id: str):
+    """Remove a personal note from Meilisearch index."""
+    if not meili_notes_index:
+        return False
+    try:
+        meili_notes_index.delete_document(note_id)
+        return True
+    except Exception as e:
+        app.logger.error(f'Error removing note {note_id} from Meili: {e}')
+        return False
+
+
+def remove_notes_from_meili(note_ids: list):
+    """Remove multiple personal notes from Meilisearch index."""
+    if not meili_notes_index or not note_ids:
+        return False
+    try:
+        str_ids = [str(nid) for nid in note_ids]
+        meili_notes_index.delete_documents(ids=str_ids)
+        return True
+    except Exception as e:
+        app.logger.error(f'Error removing notes from Meili: {e}')
+        return False
+
+
+def reindex_user_notes_to_meili(user_id: str):
+    """Reindex all personal notes for a specific user into Meilisearch."""
+    if not meili_notes_index:
+        return False
+    try:
+        notes = list(personal_posts_conf.find({'user_id': ObjectId(user_id)}))
+        if not notes:
+            return True
+        docs = [_note_to_meili_doc(n) for n in notes]
+        meili_notes_index.add_documents(docs, primary_key='id')
+        return True
+    except Exception as e:
+        app.logger.error(f'Error reindexing notes for user {user_id}: {e}')
+        return False
+
 
 def _post_to_meili_doc(post_doc: dict) -> dict:
     """Convert a MongoDB post document to Meilisearch document shape."""
@@ -5620,12 +5741,14 @@ def create_personal_post():
         content = content.strip()[:8000]
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content)
-        personal_posts_conf.insert_one({
+        result = personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
             'content': encrypted_content,
             'encrypted': True,  # Flag to indicate this note is encrypted
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
+        # Index decrypted content to Meilisearch for search
+        index_note_to_meili(str(result.inserted_id), decrypted_content=content)
         flash('Personal note added securely.', 'success')
     else:
         flash('Content cannot be empty.', 'danger')
@@ -5650,7 +5773,129 @@ def create_personal_post_json():
         'encrypted': True,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
+    # Index decrypted content to Meilisearch for search
+    index_note_to_meili(str(result.inserted_id), decrypted_content=content)
     return jsonify({'success': True, 'id': str(result.inserted_id)})
+
+
+@app.route('/personal_post/search')
+@login_required
+def search_personal_notes():
+    """Search personal notes using Meilisearch with phrase match and highlighting."""
+    query = request.args.get('q', '').strip()
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = min(50, max(1, int(request.args.get('per_page', 20))))
+
+    if not query:
+        return jsonify({'results': [], 'total': 0, 'query': ''})
+
+    if not meili_notes_index:
+        # Fallback: simple MongoDB text search on decrypted notes
+        try:
+            notes_raw = list(personal_posts_conf.find({
+                'user_id': ObjectId(current_user.id)
+            }).sort('created_at', -1))
+            q_lower = query.lower()
+            results = []
+            for note in notes_raw:
+                content = decrypt_note(note.get('content', ''))
+                if q_lower in content.lower():
+                    # Simple highlight: wrap matches in <mark>
+                    import re as re_mod
+                    highlighted = re_mod.sub(
+                        f'({re_mod.escape(query)})',
+                        r'<mark class="search-highlight">\1</mark>',
+                        content,
+                        flags=re_mod.IGNORECASE
+                    )
+                    # Crop around first match
+                    match_pos = content.lower().find(q_lower)
+                    start = max(0, match_pos - 80)
+                    end = min(len(content), match_pos + len(query) + 80)
+                    snippet_raw = content[start:end]
+                    snippet_hl = re_mod.sub(
+                        f'({re_mod.escape(query)})',
+                        r'<mark class="search-highlight">\1</mark>',
+                        snippet_raw,
+                        flags=re_mod.IGNORECASE
+                    )
+                    if start > 0:
+                        snippet_hl = '...' + snippet_hl
+                    if end < len(content):
+                        snippet_hl = snippet_hl + '...'
+                    results.append({
+                        'id': str(note['_id']),
+                        'content_highlighted': highlighted,
+                        'snippet': snippet_hl,
+                        'created_at': note.get('created_at').isoformat() if note.get('created_at') else None
+                    })
+            total = len(results)
+            paginated = results[(page - 1) * per_page: page * per_page]
+            return jsonify({'results': paginated, 'total': total, 'query': query})
+        except Exception as e:
+            app.logger.error(f'Fallback note search error: {e}')
+            return jsonify({'results': [], 'total': 0, 'query': query, 'error': 'Search failed'}), 500
+
+    try:
+        search_params = {
+            'limit': per_page,
+            'offset': (page - 1) * per_page,
+            'filter': f'user_id = "{current_user.id}"',
+            'attributesToHighlight': ['content'],
+            'attributesToCrop': ['content'],
+            'cropLength': 40,
+            'cropMarker': '...',
+            'highlightPreTag': '<mark class="search-highlight">',
+            'highlightPostTag': '</mark>',
+            'showMatchesPosition': True,
+            'sort': ['created_at:desc'],
+            'matchingStrategy': 'all'
+        }
+
+        search_result = meili_notes_index.search(query, search_params)
+        total = search_result.get('estimatedTotalHits', search_result.get('nbHits', 0))
+        hits = search_result.get('hits', [])
+        results = []
+        for h in hits:
+            formatted = h.get('_formatted', {})
+            content_highlighted = formatted.get('content') or h.get('content', '')
+            snippet = formatted.get('content') or h.get('content', '')[:300]
+            # Get match positions for client-side use
+            matches_position = h.get('_matchesPosition', {})
+            results.append({
+                'id': h.get('id'),
+                'content_highlighted': content_highlighted,
+                'snippet': snippet,
+                'created_at': datetime.datetime.fromtimestamp(
+                    h.get('created_at'), tz=datetime.timezone.utc
+                ).isoformat() if h.get('created_at') else None,
+                'matches_position': matches_position
+            })
+        return jsonify({
+            'results': results,
+            'total': total,
+            'query': query,
+            'page': page,
+            'per_page': per_page,
+            'processing_time_ms': search_result.get('processingTimeMs', 0)
+        })
+    except Exception as e:
+        app.logger.error(f'Meili note search error: {e}')
+        return jsonify({'results': [], 'total': 0, 'query': query, 'error': 'Search failed'}), 500
+
+
+@app.route('/personal_post/reindex_notes', methods=['POST'])
+@login_required
+def reindex_my_notes():
+    """Reindex the current user's notes into Meilisearch."""
+    try:
+        success = reindex_user_notes_to_meili(current_user.id)
+        if success:
+            return jsonify({'success': True, 'message': 'Notes reindexed successfully'})
+        return jsonify({'error': 'Meilisearch not configured'}), 500
+    except Exception as e:
+        app.logger.error(f'Error reindexing notes for user {current_user.id}: {e}')
+        return jsonify({'error': 'Reindex failed'}), 500
 
 
 @app.route('/personal_post/edit/<post_id>', methods=['POST'])
@@ -5697,6 +5942,9 @@ def edit_personal_post(post_id):
             {'_id': obj_id},
             {'$set': {'content': encrypted_content, 'encrypted': True}}
         )
+
+        # Re-index with updated decrypted content
+        index_note_to_meili(post_id, decrypted_content=content)
 
         return jsonify({'success': True})
     except Exception as e:
@@ -5822,7 +6070,10 @@ def delete_personal_post(post_id):
         # 3. Cleanup all unlock notifications for target notes
         unlock_notifications_conf.delete_many({'note_id': {'$in': target_ids}})
 
-        # 4. Final: Delete entries from personal_posts_conf
+        # 4. Remove from Meilisearch index
+        remove_notes_from_meili(target_ids)
+
+        # 5. Final: Delete entries from personal_posts_conf
         personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
         flash(f'Personal note {msg_suffix}', 'success')

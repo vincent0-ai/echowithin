@@ -1242,6 +1242,11 @@
                             <i class="fas fa-pen"></i>
                         </button>
                         {% if note.source_note_id and note.source_share_id %}
+                        <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}"
+                            class="btn-icon" title="View original shared note &amp; discussion" target="_blank"
+                            style="color: #7b1fa2; text-decoration: none;">
+                            <i class="fas fa-external-link-alt"></i>
+                        </a>
                         <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
                             <i class="fas fa-sync-alt"></i>

@@ -265,6 +265,34 @@ blog_feed_cache = TTLCache(maxsize=1, ttl=15)
 # User loader cache - CRITICAL for performance (30 second TTL)
 # This caches user objects to avoid DB query on every single request
 user_loader_cache = TTLCache(maxsize=512, ttl=30)
+# Weekly winners cache: stores the most recent winners (1 hour TTL)
+weekly_winners_cache = TTLCache(maxsize=1, ttl=3600)
+
+
+def get_active_achievements(user_id):
+    """Returns a list of achievement keys for the given user_id based on latest winners."""
+    user_id_str = str(user_id)
+    cached_winners = weekly_winners_cache.get('latest')
+    
+    if cached_winners is None:
+        latest = weekly_winners_conf.find_one(sort=[('week_end', -1)])
+        if latest:
+            cached_winners = latest.get('winners', {})
+            weekly_winners_cache['latest'] = cached_winners
+        else:
+            cached_winners = {}
+            weekly_winners_cache['latest'] = {}
+
+    achievements = []
+    if cached_winners:
+        if cached_winners.get('most_active') and str(cached_winners['most_active']['_id']) == user_id_str:
+            achievements.append('most_active')
+        if cached_winners.get('most_engager') and str(cached_winners['most_engager']['_id']) == user_id_str:
+            achievements.append('most_engager')
+        if cached_winners.get('top_contributor') and str(cached_winners['top_contributor']['_id']) == user_id_str:
+            achievements.append('top_contributor')
+            
+    return achievements
 
 
 def limits(calls, period):
@@ -305,6 +333,7 @@ fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notificatio
 newsletter_conf = db['newsletter_subs']
 user_post_views_conf = db['user_post_views']
 unlock_notifications_conf = db['unlock_notifications']
+weekly_winners_conf = db['weekly_winners']
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -946,12 +975,15 @@ def process_image_for_nsfw(post_id, image_url, public_id):
 def send_code(email, gen_code=None, retries=3, delay=2):
     for attempt in range(retries):
         try:
+            sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
             msg = Message(
                 subject="Your EchoWithin Verification Code",
-                sender=get_env_variable('MAIL_USERNAME'),
+                sender=sender,
                 recipients=[email]
             )
             msg.html = render_template("verify.html", code=gen_code)
+            # Add plain text version for deliverability
+            msg.body = f"Your EchoWithin verification code is: {gen_code}\n\nIf you didn't request this, please ignore this email."
             mail.send(msg)
             app.logger.info(f"Verification email sent to {email}")
             return True
@@ -967,7 +999,7 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
             sender_email = app.config.get('MAIL_DEFAULT_SENDER') or get_env_variable('MAIL_USERNAME')
             msg = Message(
                 subject="EchoWithin Password Reset",
-                sender=sender_email,
+                sender=f"EchoWithin <{sender_email}>",
                 recipients=[email]
             )
             reset_url = url_for('reset_password', token=reset_token, _external=True)
@@ -1026,12 +1058,27 @@ def send_new_post_notifications(post_id_str):
                     try:
                         recipient_email = u.get('email')
                         recipient_name = u.get('username') or ''
+                        
+                        # Generate unsubscribe token
+                        secret = app.config["SECRET_KEY"]
+                        unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
+                        unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                        
                         msg = Message(
                             subject=subject,
-                            sender=get_env_variable('MAIL_USERNAME'),
+                            sender=f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>",
                             recipients=[recipient_email]
                         )
-                        msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name)
+                        msg.html = render_template('new_post_notification.html', post=post, post_url=post_url, recipient_name=recipient_name, unsub_url=unsub_url)
+                        # Add plain text version
+                        msg.body = f"Hello {recipient_name},\n\nA new post has been published on EchoWithin: \"{post.get('title')}\" by {post.get('author')}.\n\nView post: {post_url}\n\nTo unsubscribe from these notifications, visit: {unsub_url}"
+                        
+                        # Add List-Unsubscribe headers for spam protection (RFC 8058)
+                        msg.extra_headers = {
+                            'List-Unsubscribe': f"<{unsub_url}>",
+                            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+                        }
+                        
                         conn.send(msg)
                         app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
                     except Exception as e:
@@ -1092,17 +1139,36 @@ def send_weekly_newsletter():
             sent_count = 0
             for recipient_email in recipient_emails:
                 try:
+                    # Generate unsubscribe token
+                    secret = app.config["SECRET_KEY"]
+                    unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
+                    unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                    
                     msg = Message(
                         subject=subject,
-                        sender=sender_email,
+                        sender=f"EchoWithin <{sender_email}>",
                         recipients=[recipient_email]
                     )
                     msg.html = render_template(
                         'weekly_newsletter.html',
                         posts=posts_list,
                         week_start=week_start,
-                        week_end=week_end
+                        week_end=week_end,
+                        unsub_url=unsub_url
                     )
+                    # Add plain text summary
+                    text_body = f"EchoWithin Weekly Digest ({week_start} - {week_end})\n\n"
+                    for p in posts_list[:5]:
+                        text_body += f"- {p.get('title')} ({p.get('url')})\n"
+                    text_body += f"\nUnsubscribe: {unsub_url}"
+                    msg.body = text_body
+
+                    # Add List-Unsubscribe headers
+                    msg.extra_headers = {
+                        'List-Unsubscribe': f"<{unsub_url}>",
+                        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+                    }
+
                     mail.send(msg)
                     sent_count += 1
                     app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
@@ -1924,11 +1990,18 @@ def prepare_posts(posts):
     if urls_to_fetch:
         counts_map = get_batch_comment_counts(tuple(sorted(urls_to_fetch)))
 
-        # ---- Step 3: Assign comment counts back into posts ----
-        for post in posts:
-            if 'comment_count' not in post:
-                slug = post.get('slug')
-                post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
+    # ---- Step 3: Assign comment counts and achievements back into posts ----
+    for post in posts:
+        if 'comment_count' not in post:
+            slug = post.get('slug')
+            post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
+        
+        # Inject author achievements
+        author_id = post.get('author_id')
+        if author_id:
+            post['author_achievements'] = get_active_achievements(author_id)
+        else:
+            post['author_achievements'] = []
     else:
         # All posts already had comment_count, ensuring it's at least 0 if somehow None
         for post in posts:
@@ -5193,7 +5266,8 @@ def profile(username):
                            page=page,
                            total_pages=total_pages,
                            total_posts=total_posts,
-                           total_comments=total_comments)
+                           total_comments=total_comments,
+                           user_achievements=get_active_achievements(user_id))
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
@@ -5547,6 +5621,7 @@ def create_personal_post():
     else:
         flash('Content cannot be empty.', 'danger')
     return redirect(url_for('personal_space'))
+
 
 @app.route('/personal_post/create_json', methods=['POST'])
 @login_required
@@ -6257,6 +6332,85 @@ def logout():
     logout_user() # Use Flask-Login to properly log the user out
     flash('You have been logged out.', 'info')
     return redirect(url_for('dashboard'))
+
+
+@app.route('/api/ai/suggest-tags', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_suggest_tags():
+    """Suggest tags for a blog post using JigsawStack AI."""
+    data = request.get_json() or {}
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+    
+    if not title and not content:
+        return jsonify({'tags': []})
+
+    # Use JigsawStack Keyphrase Extraction for better efficiency and lower token usage.
+    try:
+        api_key = get_env_variable('JIGSAW_API_KEY')
+        
+        # We cleanup the content slightly to reduce tokens and use a more direct API
+        # Keyphrase extraction is faster and uses fewer output tokens than summary.
+        clean_text = f"{title}\n\n{content[:800]}"
+        
+        api_response = requests.post(
+            'https://api.jigsawstack.com/v1/ai/keyphrase_extraction',
+            json={"text": clean_text},
+            headers={"x-api-key": api_key}
+        )
+        
+        tags = []
+        if api_response.status_code == 200:
+            data = api_response.json()
+            # The API returns a list of keyphrases directly
+            keyphrases = data.get('keyphrases', [])
+            # Filter and take max 5
+            for k in keyphrases:
+                tag = k.strip().lower()
+                if len(tag) > 2 and tag not in tags:
+                    tags.append(tag)
+                if len(tags) >= 5:
+                    break
+        
+        # If AI didn't give good results, fallback to title words
+        if not tags:
+            tags = [w.lower() for w in title.split() if len(w) > 3][:5]
+            
+        return jsonify({'tags': tags})
+        
+    except Exception as e:
+        app.logger.error(f"Error in tag suggestion: {e}")
+        return jsonify({'tags': []})
+
+
+@app.route('/unsubscribe/<email>/<token>', methods=['GET', 'POST'])
+@csrf.exempt
+@limits(calls=5, period=60)
+def unsubscribe(email, token):
+    """Handles unsubscribing from emails via link or one-click header (RFC 8058)."""
+    if not email or not token:
+        return render_template('unsubscribe_result.html', success=False, message="Invalid unsubscribe request.")
+
+    # Verify token
+    secret = app.config["SECRET_KEY"]
+    expected_token = hashlib.sha256(f"{secret}{email}unsubscribe".encode()).hexdigest()
+    
+    if token != expected_token:
+        # Check if the user exists - if not, just say success to be safe/silent
+        return render_template('unsubscribe_result.html', success=False, message="Invalid or expired unsubscribe link.")
+
+    # Update preferences
+    users_conf.update_one({'email': email}, {'$set': {'notification_preference': 'none'}})
+    # Also remove from newsletter collection if present
+    newsletter_conf.delete_one({'email': email})
+
+    if request.method == 'POST':
+        # RFC 8058 one-click unsubscribe
+        return jsonify({'success': True, 'message': 'Unsubscribed successfully'})
+
+    return render_template('unsubscribe_result.html', success=True, 
+                           message=f"You have been successfully unsubscribed from all EchoWithin automated emails for {email}.")
 
 
 @app.route('/api/newsletter/subscribe', methods=['POST'])

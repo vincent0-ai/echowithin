@@ -107,7 +107,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📧 EchoWithin Weekly Digest</h1>
+            <h1>EchoWithin Weekly Digest</h1>
             <p>Your weekly roundup of new posts from {{ week_start }} to {{ week_end }}</p>
         </div>
 
@@ -135,7 +135,9 @@
         {% endif %}
 
         <div class="footer">
-            <p>You're receiving this because you subscribed to the EchoWithin newsletter.</p>
+            <p>You're receiving this because you subscribed to the EchoWithin newsletter.
+                If you no longer wish to receive these emails, you can <a href="{{ unsub_url }}">unsubscribe</a> at any
+                time.</p>
             <p>Visit us at <a href="https://blog.echowithin.xyz">blog.echowithin.xyz</a></p>
         </div>
     </div>

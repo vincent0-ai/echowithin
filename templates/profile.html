@@ -18,6 +18,31 @@
                 <div class="stat-item"><strong>{{ total_posts }}</strong> Posts</div>
                 <div class="stat-item"><strong>{{ total_comments }}</strong> Comments</div>
             </div>
+
+            {% if user_achievements %}
+            <div class="profile-achievements" style="margin-top: 1rem; text-align: left;">
+                <h4
+                    style="font-size: 0.9rem; color: #666; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Last Week's Wins</h4>
+                <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    {% if 'most_active' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most platform activity last week">MOST ACTIVE</span>
+                    {% endif %}
+                    {% if 'most_engager' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most comments written last week">MOST ENGAGER</span>
+                    {% endif %}
+                    {% if 'top_contributor' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most likes received last week">TOP CONTRIBUTOR</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             <div class="profile-meta">
                 {% if user.join_date %}
                 <div class="profile-meta-item">

@@ -13,13 +13,20 @@
         <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form"
             id="edit-post-form" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="text" name="title" class="form-input" placeholder="Post Title" value="{{ post.title }}"
-                required>
-            <textarea name="content" class="form-input" placeholder="What's on your mind?" rows="10"
+            <input type="text" id="title" name="title" class="form-input" placeholder="Post Title"
+                value="{{ post.title }}" required>
+            <textarea id="content" name="content" class="form-input" placeholder="What's on your mind?" rows="10"
                 required>{{ post.content }}</textarea>
 
             <div class="form-group">
-                <label for="tags">Tags</label>
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; margin-top: 1rem;">
+                    <label for="tags" style="margin-bottom: 0;">Tags</label>
+                    <button type="button" id="suggest-tags-btn" class="btn"
+                        style="padding: 0.2rem 0.6rem; font-size: 0.8rem; background: #f0e6dc; color: #3e2217; border: 1px solid #dcd0c5; border-radius: 4px; cursor: pointer;">
+                        <i class="fas fa-magic"></i> Magic Tags
+                    </button>
+                </div>
                 <select id="tags" name="tags" class="form-input" multiple size="8">
                     <optgroup label="General Topics">
                         <option value="Education" {% if 'Education' in post.tags %}selected{% endif %}>Education
@@ -233,11 +240,63 @@
 
         // Initialize Choices.js for the tags dropdown on the edit page
         const tagsElement = document.getElementById('tags');
+        let choices;
         if (tagsElement) {
-            const choices = new Choices(tagsElement, {
+            choices = new Choices(tagsElement, {
                 removeItemButton: true,
                 placeholder: true,
                 placeholderValue: 'Select tags...',
+                addChoices: true,
+                addItems: true,
+            });
+        }
+
+        // Tag Suggestion Logic
+        const suggestBtn = document.getElementById('suggest-tags-btn');
+        if (suggestBtn && choices) {
+            suggestBtn.addEventListener('click', async () => {
+                const title = document.getElementById('title').value;
+                const content = document.getElementById('content').value;
+
+                if (!title && !content) {
+                    alert('Please enter a title or content first.');
+                    return;
+                }
+
+                suggestBtn.disabled = true;
+                suggestBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Thinking...';
+
+                try {
+                    const response = await fetch('/api/ai/suggest-tags', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ title, content })
+                    });
+                    const data = await response.json();
+
+                    if (data.tags && data.tags.length > 0) {
+                        data.tags.forEach(tag => {
+                            // Check if choice already exists
+                            const existing = choices._store.choices.find(c => c.value.toLowerCase() === tag.toLowerCase());
+                            if (!existing) {
+                                choices.setChoices([{ value: tag, label: tag, selected: true }], 'value', 'label', false);
+                            } else if (!existing.selected) {
+                                choices.setChoiceByValue(existing.value);
+                            }
+                        });
+                    } else {
+                        alert('No tags suggested. Try adding more content.');
+                    }
+                } catch (error) {
+                    console.error('Tag suggestion failed:', error);
+                    alert('Failed to get suggestions. Please try again.');
+                } finally {
+                    suggestBtn.disabled = false;
+                    suggestBtn.innerHTML = '<i class="fas fa-magic"></i> Magic Tags';
+                }
             });
         }
     });

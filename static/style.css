@@ -515,25 +515,25 @@ body {
     border-radius: 20px;
     cursor: pointer;
     font-size: 0.8rem;
-    color: #6c757d;
+    color: #71767b;
     transition: all 0.2s ease;
     white-space: nowrap;
 }
 
 .like-btn:hover:not(:disabled) {
-    background-color: #ffe6e9;
-    border-color: #e91e63;
-    color: #e91e63;
+    background-color: #fff0f5;
+    border-color: #f91880;
+    color: #f91880;
 }
 
 .like-btn.liked {
-    background-color: #ffe6e9;
-    border-color: #e91e63;
-    color: #e91e63;
+    background-color: #fff0f5;
+    border-color: #f91880;
+    color: #f91880;
 }
 
 .like-btn.liked i {
-    color: #e91e63;
+    color: #f91880;
 }
 
 .like-btn:disabled {

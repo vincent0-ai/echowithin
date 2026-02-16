@@ -55,6 +55,21 @@ def run_cleanup_expired_auth():
         print(f"Error: The script at {script_path} was not found.")
 
 
+def run_weekly_achievements():
+    """
+    Runs the weekly_achievements.py script to calculate winners.
+    """
+    script_path = os.path.join(os.path.dirname(__file__), 'weekly_achievements.py')
+    print(f"Scheduler triggered. Running weekly achievements script: {script_path}")
+    try:
+        subprocess.run(['python', script_path], check=True)
+        print("Successfully executed weekly_achievements.py")
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing weekly_achievements.py: {e}")
+    except FileNotFoundError:
+        print(f"Error: The script at {script_path} was not found.")
+
+
 if __name__ == '__main__':
     # Schedule the log email job to run every day at 01:00 AM server time.
     schedule.every().day.at("01:00").do(run_schedule_log_email)
@@ -64,10 +79,14 @@ if __name__ == '__main__':
     
     # Schedule auth cleanup to run every hour to remove expired tokens/codes
     schedule.every().hour.do(run_cleanup_expired_auth)
+
+    # Schedule weekly achievements to run every Monday at 00:01 AM server time
+    schedule.every().monday.at("00:01").do(run_weekly_achievements)
     
     print("Scheduler started. Waiting for scheduled jobs...")
     print("  - Daily log email: 01:00 AM")
     print("  - Weekly newsletter: Sunday 09:00 AM")
+    print("  - Weekly achievements: Monday 00:01 AM")
     print("  - Auth cleanup: Every hour")
     while True:
         schedule.run_pending()

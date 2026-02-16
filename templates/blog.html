@@ -497,6 +497,21 @@
                 <span class="share-count">${shareCount}</span>
             </button>`;
 
+            let achievementsHtml = '';
+            if (post.author_achievements && post.author_achievements.length > 0) {
+                achievementsHtml = `<span class="author-achievements-inline" style="display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;">`;
+                if (post.author_achievements.includes('most_active')) {
+                    achievementsHtml += `<span style="background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most platform activity last week">ACTIVE</span>`;
+                }
+                if (post.author_achievements.includes('most_engager')) {
+                    achievementsHtml += `<span style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most comments written last week">ENGAGER</span>`;
+                }
+                if (post.author_achievements.includes('top_contributor')) {
+                    achievementsHtml += `<span style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most likes received last week">TOP</span>`;
+                }
+                achievementsHtml += `</span>`;
+            }
+
             return `
         <div class="post-item" style="position: relative;">
             <h3><a href="${post.url}" class="record-view-link" data-post-id="${post._id}">${post.title}</a></h3>
@@ -506,7 +521,7 @@
             <div class="post-content-rendered">${previewContent}</div>
             ${post.edited_at
                     ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
-                    : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp}</div>`
+                    : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp} ${achievementsHtml}</div>`
                 }
             <div class="post-actions">
                 ${reactionButton}

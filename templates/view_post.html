@@ -197,10 +197,31 @@
         <div class="post-meta">
             {% if post.edited_at %}
             Edited on {{ post.edited_at|localtime }} by <strong><a
-                    href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
+                    href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>
             {% else %}
             Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
             {{ post.timestamp|localtime }}
+            {% endif %}
+
+            {% if post.author_achievements %}
+            <span class="author-achievements-inline"
+                style="display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;">
+                {% if 'most_active' in post.author_achievements %}
+                <span
+                    style="background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most platform activity last week">ACTIVE</span>
+                {% endif %}
+                {% if 'most_engager' in post.author_achievements %}
+                <span
+                    style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most comments written last week">ENGAGER</span>
+                {% endif %}
+                {% if 'top_contributor' in post.author_achievements %}
+                <span
+                    style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most likes received last week">TOP</span>
+                {% endif %}
+            </span>
             {% endif %}
         </div>
 
@@ -357,6 +378,7 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
         const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+
     const form = document.getElementById('comment-form');
     let currentPage = {{ comment_page | default (1) }};
     const perPage = {{ per_page | default (10) }};

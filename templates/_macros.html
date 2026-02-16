@@ -129,6 +129,27 @@
         <span class="relative-time" data-timestamp="{{ post.timestamp.isoformat() if post.timestamp else '' }}">{{
             post.timestamp|localtime }}</span>
         {% endif %}
+
+        {% if post.author_achievements %}
+        <span class="author-achievements-inline"
+            style="display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;">
+            {% if 'most_active' in post.author_achievements %}
+            <span
+                style="background: #e0f2f1; color: #00796b; border: 1px solid #b2dfdb; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                title="Most platform activity last week">ACTIVE</span>
+            {% endif %}
+            {% if 'most_engager' in post.author_achievements %}
+            <span
+                style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                title="Most comments written last week">ENGAGER</span>
+            {% endif %}
+            {% if 'top_contributor' in post.author_achievements %}
+            <span
+                style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                title="Most likes received last week">TOP</span>
+            {% endif %}
+        </span>
+        {% endif %}
     </div>
 
     {# --- Actions: Like button + Share button + Comment count + Edit/Delete --- #}

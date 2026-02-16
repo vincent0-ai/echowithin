@@ -5938,9 +5938,10 @@ def edit_personal_post(post_id):
                     note_versions_conf.delete_one({'_id': old_ver['_id']})
 
         encrypted_content = encrypt_note(content)
+        now = datetime.datetime.now(datetime.timezone.utc)
         personal_posts_conf.update_one(
             {'_id': obj_id},
-            {'$set': {'content': encrypted_content, 'encrypted': True}}
+            {'$set': {'content': encrypted_content, 'encrypted': True, 'updated_at': now}}
         )
 
         # Re-index with updated decrypted content
@@ -5956,7 +5957,7 @@ def edit_personal_post(post_id):
 @login_required
 @limits(calls=10, period=60)
 def sync_personal_post(post_id):
-    """Syncs a cloned note with the original source note content."""
+    """Bidirectional sync: pushes clone changes to original if newer, or pulls original changes to clone."""
     try:
         obj_id = safe_object_id(post_id)
         if not obj_id:
@@ -5994,36 +5995,106 @@ def sync_personal_post(post_id):
         if not original_note:
             return jsonify({'error': 'Original note no longer exists'}), 404
 
-        # Version control: snapshot current content before overwriting
-        if note.get('content'):
-            editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
-            note_versions_conf.insert_one({
-                'note_id': obj_id,
-                'share_id': None,
-                'editor_name': editor_name + ' (sync)',
-                'editor_id': ObjectId(current_user.id),
-                'content': note['content'],
-                'encrypted': note.get('encrypted', True),
-                'created_at': datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+
+        # Determine sync direction by comparing last-modified timestamps
+        clone_modified = note.get('updated_at') or note.get('created_at') or now
+        original_modified = original_note.get('updated_at') or original_note.get('created_at') or now
+        # Ensure timezone-aware comparison
+        if clone_modified.tzinfo is None:
+            clone_modified = clone_modified.replace(tzinfo=datetime.timezone.utc)
+        if original_modified.tzinfo is None:
+            original_modified = original_modified.replace(tzinfo=datetime.timezone.utc)
+
+        # Check if content is actually different
+        if note.get('content') == original_note.get('content'):
+            decrypted = decrypt_note(note.get('content', ''))
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'none',
+                'message': 'Already in sync — no changes found.'
             })
-            version_count = note_versions_conf.count_documents({'note_id': obj_id})
-            if version_count > 50:
-                oldest = note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
-                for old_ver in oldest:
-                    note_versions_conf.delete_one({'_id': old_ver['_id']})
 
-        # Update the cloned note with the original's content
-        personal_posts_conf.update_one(
-            {'_id': obj_id},
-            {'$set': {
-                'content': original_note.get('content'),
-                'encrypted': original_note.get('encrypted', True)
-            }}
-        )
+        if clone_modified > original_modified:
+            # --- PUSH: Clone is newer → push clone's content to the original ---
+            # Version-snapshot the original before overwriting
+            if original_note.get('content'):
+                note_versions_conf.insert_one({
+                    'note_id': source_note_id,
+                    'share_id': source_share_id,
+                    'editor_name': editor_name + ' (sync push)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': original_note['content'],
+                    'encrypted': original_note.get('encrypted', True),
+                    'created_at': now
+                })
+                version_count = note_versions_conf.count_documents({'note_id': source_note_id})
+                if version_count > 50:
+                    oldest = note_versions_conf.find({'note_id': source_note_id}).sort('created_at', 1).limit(version_count - 50)
+                    for old_ver in oldest:
+                        note_versions_conf.delete_one({'_id': old_ver['_id']})
 
-        # Decrypt for returning to frontend
-        updated_content = decrypt_note(original_note.get('content', ''))
-        return jsonify({'success': True, 'content': updated_content, 'message': 'Note synced with original!'})
+            # Push clone content to original
+            personal_posts_conf.update_one(
+                {'_id': source_note_id},
+                {'$set': {
+                    'content': note.get('content'),
+                    'encrypted': note.get('encrypted', True),
+                    'updated_at': now
+                }}
+            )
+
+            # Re-index original in Meilisearch
+            decrypted = decrypt_note(note.get('content', ''))
+            index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
+
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'push',
+                'message': 'Your changes have been pushed to the original note.'
+            })
+        else:
+            # --- PULL: Original is newer → pull original's content to the clone ---
+            # Version-snapshot the clone before overwriting
+            if note.get('content'):
+                note_versions_conf.insert_one({
+                    'note_id': obj_id,
+                    'share_id': None,
+                    'editor_name': editor_name + ' (sync pull)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': note['content'],
+                    'encrypted': note.get('encrypted', True),
+                    'created_at': now
+                })
+                version_count = note_versions_conf.count_documents({'note_id': obj_id})
+                if version_count > 50:
+                    oldest = note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
+                    for old_ver in oldest:
+                        note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+            # Pull original content to clone
+            personal_posts_conf.update_one(
+                {'_id': obj_id},
+                {'$set': {
+                    'content': original_note.get('content'),
+                    'encrypted': original_note.get('encrypted', True),
+                    'updated_at': now
+                }}
+            )
+
+            # Re-index clone in Meilisearch
+            decrypted = decrypt_note(original_note.get('content', ''))
+            index_note_to_meili(post_id, decrypted_content=decrypted)
+
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'pull',
+                'message': 'Note updated with latest changes from the original.'
+            })
     except Exception as e:
         app.logger.error(f"Error syncing personal post {post_id}: {e}")
         return jsonify({'error': 'Internal error'}), 500

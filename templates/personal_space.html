@@ -1169,9 +1169,6 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="note-search-hint">
-                Tip: Use <code>"quotes"</code> for exact phrases
-            </div>
         </div>
 
         <div class="note-search-status" id="note-search-status">
@@ -1905,7 +1902,7 @@
                     });
                     const result = await response.json();
                     if (result.success) {
-                        // Update note content in-place
+                        // Update note content in-place (for both push and pull)
                         const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
                         if (noteCard && result.content) {
                             const contentEl = noteCard.querySelector('.note-content.rendered-note');
@@ -1928,14 +1925,31 @@
                             const copyBtnEl = noteCard.querySelector('.copy-btn');
                             if (copyBtnEl) copyBtnEl.dataset.copyText = result.content;
                         }
-                        // Brief success flash
+                        // Direction-aware success feedback
+                        const direction = result.direction || 'pull';
                         if (icon) {
-                            icon.className = 'fas fa-check';
-                            btn.style.color = '#2e7d32';
+                            if (direction === 'push') {
+                                icon.className = 'fas fa-arrow-up';
+                                btn.style.color = '#1565c0';
+                                btn.title = 'Pushed your changes to the original';
+                            } else if (direction === 'pull') {
+                                icon.className = 'fas fa-arrow-down';
+                                btn.style.color = '#2e7d32';
+                                btn.title = 'Pulled latest changes from the original';
+                            } else {
+                                icon.className = 'fas fa-check';
+                                btn.style.color = '#2e7d32';
+                                btn.title = 'Already in sync';
+                            }
                             setTimeout(() => {
                                 icon.className = 'fas fa-sync-alt';
                                 btn.style.color = '';
-                            }, 2000);
+                                btn.title = 'Sync with original';
+                            }, 3000);
+                        }
+                        // Show a brief toast if available, or title tooltip is enough
+                        if (result.message && typeof window.showFlashMessage === 'function') {
+                            window.showFlashMessage(result.message, 'success');
                         }
                     } else {
                         alert(result.error || 'Failed to sync note.');

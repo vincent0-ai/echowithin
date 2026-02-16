@@ -1138,9 +1138,10 @@
             <div id="share-links-list"></div>
         </div>
     </div>
+</div>
 
-    <!-- Note Deletion Mode Modal -->
-    <div id="delete-note-modal" class="custom-modal-overlay">
+<!-- Note Deletion Mode Modal -->
+<div id="delete-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeDeleteModal()">
         <div class="custom-modal" style="max-width: 450px; text-align: left;">
             <div style="margin-bottom: 1.5rem;">
                 <h3 style="color: #3e2217; margin-bottom: 0.5rem;"><i class="fas fa-trash-alt"></i> Delete Note</h3>
@@ -1167,10 +1168,10 @@
         </div>
     </div>
 
-    <!-- KaTeX for math rendering -->
+<!-- KaTeX for math rendering -->
 
-    <!-- Version History Modal -->
-    <div id="version-modal" class="custom-modal-overlay">
+<!-- Version History Modal -->
+<div id="version-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeVersionModal()">
         <div class="custom-modal" style="max-width: 600px; text-align: left; max-height: 80vh; overflow-y: auto;">
             <div
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; position: sticky; top: 0; background: white; padding-bottom: 0.5rem; border-bottom: 1px solid #eee;">
@@ -1260,11 +1261,16 @@
         // --- Immediate Event Handlers & Global Helpers ---
         (function () {
             // Helper Functions (Exposed to Window for global access)
+            window.handleDeleteModalEsc = function (e) {
+                if (e.key === 'Escape') window.closeDeleteModal();
+            };
+
             window.openDeleteModal = function () {
                 const modal = document.getElementById('delete-note-modal');
                 if (modal) {
                     modal.style.display = 'flex';
                     document.body.style.overflow = 'hidden';
+                    document.addEventListener('keydown', window.handleDeleteModalEsc);
                 }
             };
 
@@ -1273,6 +1279,7 @@
                 if (modal) {
                     modal.style.display = 'none';
                     document.body.style.overflow = '';
+                    document.removeEventListener('keydown', window.handleDeleteModalEsc);
                 }
             };
 

@@ -1009,12 +1009,9 @@
                     <span class="note-date">
                         <i class="far fa-clock"></i>
                         {{ note.created_at|localtime }}
-                        <span style="margin-left: 0.5rem; color: #4caf50; font-size: 0.75rem;" title="Encrypted">
-                            <i class="fas fa-lock"></i>
-                        </span>
                         {% if note.source_note_id %}
                         <span class="source-badge" title="Saved from a shared note">
-                            <i class="fas fa-bookmark"></i> Saved copy
+                             Saved copy
                         </span>
                         {% endif %}
                     </span>

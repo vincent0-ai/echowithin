@@ -1061,24 +1061,20 @@ def load_user(user_id):
 
 def check_image_for_nsfw(image_path):
     """
-    Checks an image for NSFW content using the Sightengine API.
-    Returns True if NSFW, False otherwise. This has been updated to use JigsawStack.
+    Checks an image for NSFW content using JigsawStack validate/nsfw.
+    Returns True if NSFW, False otherwise.
     """
     try:
-        # Initialize the JigsawStack client
         client = JigsawStack(api_key=get_env_variable('JIGSAW_API_KEY'))
-
-        # Perform the NSFW check using the SDK
-        # The SDK handles opening and sending the file
-        response = client.image.nsfw(image_path=image_path)
-
-        # The response is a Pydantic model, access the result like this:
-        return response.nsfw.is_nsfw
+        response = client.validate.nsfw({
+            'url': image_path  # image_path should be a URL or file_store_key
+        })
+        # Response has flat boolean fields: nsfw, nudity, gore
+        return getattr(response, 'nsfw', False)
 
     except Exception as e:
-        # Catch exceptions from the JigsawStack library (e.g., API errors, network issues)
-        app.logger.error(f"Error calling JigsawStack API via SDK: {e}")
-        return False # Fail open on API error, assuming the image is safe
+        app.logger.error(f"Error calling JigsawStack NSFW API via SDK: {e}")
+        return False  # Fail open on API error
 
 
 @rq.job
@@ -1090,16 +1086,19 @@ def process_image_for_nsfw(post_id, image_url, public_id):
     app.logger.info(f"Starting NSFW check job for post {post_id} on image URL: {image_url}")
 
     try:
-        # Use JigsawStack for NSFW detection via API
+        # Use JigsawStack NSFW detection via REST API (POST /v1/validate/nsfw)
         api_response = requests.post(
-            'https://api.jigsawstack.com/v1/ai/nsfw',
-            json={"image_url": image_url},
-            headers={"x-api-key": get_env_variable('JIGSAW_API_KEY')}
+            'https://api.jigsawstack.com/v1/validate/nsfw',
+            json={"url": image_url},
+            headers={"x-api-key": get_env_variable('JIGSAW_API_KEY')},
+            timeout=20
         )
         if api_response.status_code == 200:
             data = api_response.json()
-            is_nsfw = data.get('nsfw', {}).get('is_nsfw', False)
+            # Response has flat booleans: nsfw, nudity, gore
+            is_nsfw = data.get('nsfw', False)
         else:
+            app.logger.warning(f"NSFW API returned status {api_response.status_code} for post {post_id}")
             is_nsfw = False
 
         if is_nsfw:
@@ -6932,32 +6931,28 @@ def api_suggest_tags():
         api_key = get_env_variable('JIGSAW_API_KEY')
         clean_text = f"{title}\n\n{content[:800]}"
 
-        # Use JigsawStack text classification to match against our predefined tags
+        # Use JigsawStack Classification API (POST /v1/classification)
+        # with multiple_labels to pick relevant tags from our predefined list
         api_response = requests.post(
-            'https://api.jigsawstack.com/v1/ai/text_classifier',
+            'https://api.jigsawstack.com/v1/classification',
             json={
-                'text': clean_text,
-                'tags': PREDEFINED_TAGS,
+                'dataset': [{'type': 'text', 'value': clean_text}],
+                'labels': [{'type': 'text', 'value': t} for t in PREDEFINED_TAGS],
+                'multiple_labels': True,
             },
             headers={'x-api-key': api_key},
+            timeout=15,
         )
 
         tags = []
         if api_response.status_code == 200:
             result = api_response.json()
-            # The API returns tags scored by relevance
-            classifications = result.get('tags', result.get('results', []))
-            if isinstance(classifications, list):
-                for item in classifications:
-                    if isinstance(item, dict):
-                        tag = item.get('tag') or item.get('label', '')
-                        score = item.get('score') or item.get('confidence', 0)
-                        if tag and score >= 0.3:
-                            tags.append(tag)
-                    elif isinstance(item, str):
-                        tags.append(item)
-                    if len(tags) >= 4:
-                        break
+            # predictions is [[label1, label2, ...]] when multiple_labels=True
+            predictions = result.get('predictions', [])
+            if predictions and isinstance(predictions[0], list):
+                tags = predictions[0][:4]
+            elif predictions and isinstance(predictions[0], str):
+                tags = predictions[:4]
 
         # Fallback: simple keyword matching against predefined tags
         if not tags:

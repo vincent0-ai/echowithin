@@ -1345,13 +1345,14 @@
             }
 
             // --- Save Functionality (with re-render) ---
-            const saveBtn = document.getElementById('save-shared-btn');
-            if (saveBtn) {
-                saveBtn.addEventListener('click', async function () {
+            // --- Save Functionality (with re-render) ---
+            const saveSharedBtn = document.getElementById('save-shared-btn');
+            if (saveSharedBtn) {
+                saveSharedBtn.addEventListener('click', async function () {
                     const content = editContent.value;
                     const status = document.getElementById('save-status');
 
-                    saveBtn.disabled = true;
+                    saveSharedBtn.disabled = true;
                     status.textContent = 'Saving...';
 
                     try {
@@ -1390,7 +1391,7 @@
                         status.textContent = 'Network error. Try again.';
                         status.style.color = 'red';
                     } finally {
-                        saveBtn.disabled = false;
+                        saveSharedBtn.disabled = false;
                     }
                 });
             }
@@ -1776,12 +1777,13 @@
         {% endif %}
 
         // --- Save Shared Note Logic ---
-        const saveBtn = document.getElementById('save-to-notes-btn');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async () => {
-                const shareId = saveBtn.getAttribute('data-share-id');
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        // --- Save Shared Note Logic ---
+        const saveToNotesBtn = document.getElementById('save-to-notes-btn');
+        if (saveToNotesBtn) {
+            saveToNotesBtn.addEventListener('click', async () => {
+                const shareId = saveToNotesBtn.getAttribute('data-share-id');
+                saveToNotesBtn.disabled = true;
+                saveToNotesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
                 try {
                     const resp = await fetch(`/shared_note/save/${shareId}`, {
@@ -1790,19 +1792,19 @@
                     });
                     const data = await resp.json();
                     if (data.success) {
-                        saveBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
-                        saveBtn.classList.add('saved');
+                        saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                        saveToNotesBtn.classList.add('saved');
                         // Show a subtle success toast if available, otherwise alert
                         alert(data.message);
                     } else {
                         alert(data.error || 'Failed to save note');
-                        saveBtn.disabled = false;
-                        saveBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
+                        saveToNotesBtn.disabled = false;
+                        saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
                     }
                 } catch (e) {
                     alert('Network error. Please try again.');
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
+                    saveToNotesBtn.disabled = false;
+                    saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
                 }
             });
         }

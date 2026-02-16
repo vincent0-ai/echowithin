@@ -1257,6 +1257,225 @@
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
     <script>
+        // --- Immediate Event Handlers & Global Helpers ---
+        (function () {
+            // Helper Functions (Exposed to Window for global access)
+            window.openDeleteModal = function () {
+                const modal = document.getElementById('delete-note-modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                }
+            };
+
+            window.closeDeleteModal = function () {
+                const modal = document.getElementById('delete-note-modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            };
+
+            window.openVersionModal = function (noteId) {
+                const modal = document.getElementById('version-modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                    if (window.loadVersionHistory) window.loadVersionHistory(noteId);
+                    document.addEventListener('keydown', window.handleVersionModalEsc);
+                }
+            };
+
+            window.closeVersionModal = function () {
+                const modal = document.getElementById('version-modal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = '';
+                    document.removeEventListener('keydown', window.handleVersionModalEsc);
+                }
+            };
+
+            window.handleVersionModalEsc = function (e) {
+                if (e.key === 'Escape') window.closeVersionModal();
+            };
+
+            window.loadVersionHistory = async function (noteId) {
+                const list = document.getElementById('version-list');
+                if (!list) return;
+
+                list.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+                try {
+                    const response = await fetch(`/personal_post/versions/${noteId}`);
+                    const versions = await response.json();
+
+                    if (!Array.isArray(versions) || versions.length === 0) {
+                        list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
+                        return;
+                    }
+
+                    list.innerHTML = versions.map((v, i) => {
+                        const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
+                        const preview = (v.content || '').substring(0, 200);
+                        const hasMore = (v.content || '').length > 200;
+                        return `
+                        <div class="version-card">
+                            <div class="version-header">
+                                <span class="version-editor"><i class="fas fa-user-edit"></i> ${v.editor_name}</span>
+                                <span class="version-time">${ts}</span>
+                            </div>
+                            <div class="version-preview" id="vp-${i}">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}${hasMore ? '...' : ''}</div>
+                            ${hasMore ? `<button class="version-toggle" onclick="window.toggleVersionPreview('${i}')">Show full content</button>` : ''}
+                        </div>
+                    `;
+                    }).join('');
+
+                    window._versionContents = {};
+                    versions.forEach((v, i) => {
+                        window._versionContents[i] = v.content || '';
+                    });
+                } catch (e) {
+                    list.innerHTML = '<div class="version-empty" style="color: #d32f2f;">Failed to load version history.</div>';
+                    console.error('Error loading versions:', e);
+                }
+            };
+
+            window.toggleVersionPreview = function (index) {
+                const el = document.getElementById(`vp-${index}`);
+                const btn = el.parentElement.querySelector('.version-toggle');
+                if (!el || !btn) return;
+
+                if (el.classList.contains('expanded')) {
+                    el.classList.remove('expanded');
+                    const preview = (window._versionContents[index] || '').substring(0, 200);
+                    el.textContent = preview + '...';
+                    btn.textContent = 'Show full content';
+                } else {
+                    el.classList.add('expanded');
+                    el.textContent = window._versionContents[index] || '';
+                    btn.textContent = 'Show less';
+                }
+            };
+
+            window.handleRevoke = async function (revokeBtn) {
+                const shareId = revokeBtn.dataset.shareId;
+                const confirmMsg = 'Revoke this link? It will immediately stop working.';
+
+                const performRevoke = async () => {
+                    revokeBtn.disabled = true;
+                    try {
+                        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                        const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': csrfToken
+                            }
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            // Try to reload shares if we know the note ID
+                            // But we might be in a different context.
+                            const row = revokeBtn.closest('.share-link-item');
+                            if (row) {
+                                row.style.opacity = '0.5';
+                                row.style.pointerEvents = 'none';
+                                setTimeout(() => row.remove(), 500);
+                            }
+                        } else {
+                            alert(result.error || 'Failed to revoke link');
+                            revokeBtn.disabled = false;
+                        }
+                    } catch (err) {
+                        console.error('Revoke failed:', err);
+                        alert('Network error. Please try again.');
+                        revokeBtn.disabled = false;
+                    }
+                };
+
+                if (typeof window.showCustomConfirm === 'function') {
+                    window.showCustomConfirm(confirmMsg, confirmed => {
+                        if (confirmed) performRevoke();
+                    });
+                } else if (confirm(confirmMsg)) {
+                    performRevoke();
+                }
+            };
+
+
+            // 1. Global Delegated Click Handler
+            document.addEventListener('click', (e) => {
+                // Version History
+                const versionBtn = e.target.closest('.version-history-btn');
+                if (versionBtn) {
+                    const noteId = versionBtn.dataset.id;
+                    window.openVersionModal(noteId);
+                    return;
+                }
+
+                // Copy Buttons
+                const copyBtn = e.target.closest('.copy-btn');
+                if (copyBtn) {
+                    const text = copyBtn.dataset.copyText;
+                    if (text && window.copyShareUrl) window.copyShareUrl(text, copyBtn);
+                    return;
+                }
+
+                // Share Link Dropdown Toggles
+                const toggleBtn = e.target.closest('.active-link-toggle');
+                if (toggleBtn) {
+                    e.preventDefault();
+                    const dropdown = toggleBtn.nextElementSibling;
+                    if (!dropdown) return;
+                    const isOpen = dropdown.style.display === 'block';
+                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+                    dropdown.style.display = isOpen ? 'none' : 'block';
+                    return;
+                }
+
+                // Share Revocation
+                const revokeBtn = e.target.closest('.revoke-btn');
+                if (revokeBtn) {
+                    window.handleRevoke(revokeBtn);
+                    return;
+                }
+
+                // Delete Confirmations (Delegated)
+                if (e.target && e.target.id === 'confirm-delete-me' && window.pendingDeleteForm) {
+                    const modeInput = document.createElement('input');
+                    modeInput.type = 'hidden';
+                    modeInput.name = 'mode';
+                    modeInput.value = 'me';
+                    window.pendingDeleteForm.appendChild(modeInput);
+                    window.pendingDeleteForm.submit();
+                }
+                if (e.target && e.target.id === 'confirm-delete-everyone' && window.pendingDeleteForm) {
+                    const modeInput = document.createElement('input');
+                    modeInput.type = 'hidden';
+                    modeInput.name = 'mode';
+                    modeInput.value = 'everyone';
+                    window.pendingDeleteForm.appendChild(modeInput);
+                    window.pendingDeleteForm.submit();
+                }
+
+                // Close open dropdowns when clicking elsewhere
+                if (!e.target.closest('.active-links-badge') && !toggleBtn) {
+                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+                }
+            });
+
+            // 2. Delete Form Handler
+            document.addEventListener('submit', (e) => {
+                const form = e.target;
+                if (form && form.classList.contains('delete-note-form')) {
+                    e.preventDefault();
+                    window.pendingDeleteForm = form;
+                    if (typeof window.openDeleteModal === 'function') window.openDeleteModal();
+                }
+            });
+        })();
+
         document.addEventListener('DOMContentLoaded', function () {
             // Function to auto-detect and convert common math patterns to LaTeX
             function autoDetectMath(text) {
@@ -1889,155 +2108,9 @@
                 });
             }
 
-            // Global delegated click handler for all note interactions
-            document.body.addEventListener('click', (e) => {
-                // 1. Handle Copy Buttons
-                const copyBtn = e.target.closest('.copy-btn');
-                if (copyBtn) {
-                    const text = copyBtn.dataset.copyText;
-                    if (text) {
-                        if (!navigator.clipboard) {
-                            const textArea = document.createElement("textarea");
-                            textArea.value = text;
-                            document.body.appendChild(textArea);
-                            textArea.select();
-                            try {
-                                document.execCommand('copy');
-                                showCopyFeedback(copyBtn);
-                            } catch (err) { console.error('Copy failed:', err); }
-                            document.body.removeChild(textArea);
-                        } else {
-                            navigator.clipboard.writeText(text).then(() => {
-                                showCopyFeedback(copyBtn);
-                            }).catch(err => { console.error('Clipboard failed:', err); });
-                        }
-                    }
-                    return;
-                }
+            // (Global click handler moved to top-level IIFE for performance)
 
-                // 2. Handle Shared Link Dropdown Toggles
-                const toggleBtn = e.target.closest('.active-link-toggle');
-                if (toggleBtn) {
-                    e.preventDefault();
-                    const dropdown = toggleBtn.nextElementSibling;
-                    const isOpen = dropdown.style.display === 'block';
-
-                    // Close all other share dropdowns
-                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
-
-                    // Toggle this one
-                    if (dropdown) dropdown.style.display = isOpen ? 'none' : 'block';
-                    return;
-                }
-
-                // 3. Handle Share Revocation
-                const revokeBtn = e.target.closest('.revoke-btn');
-                if (revokeBtn) {
-                    const shareId = revokeBtn.dataset.shareId;
-                    const confirmMsg = 'Revoke this link? It will immediately stop working.';
-
-                    const performRevoke = async () => {
-                        revokeBtn.disabled = true;
-                        try {
-                            const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
-                                method: 'POST',
-                                headers: {
-                                    'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                                }
-                            });
-                            const result = await response.json();
-                            if (result.success) {
-                                // If we are in the share modal, reload the specific list
-                                if (currentShareNoteId) {
-                                    loadExistingShares(currentShareNoteId);
-                                }
-                                // If we are in the badge dropdown, remove the row or refresh page
-                                const row = revokeBtn.closest('.share-link-item');
-                                if (row) {
-                                    row.style.opacity = '0.5';
-                                    row.style.pointerEvents = 'none';
-                                    setTimeout(() => {
-                                        row.remove();
-                                        // If dropdown is empty now, maybe hide the badge? 
-                                        // For simplicity, we can let user refresh or just leave it empty.
-                                    });
-                                }
-                            } else {
-                                alert(result.error || 'Failed to revoke link');
-                                revokeBtn.disabled = false;
-                            }
-                        } catch (err) {
-                            console.error('Revoke failed:', err);
-                            alert('Network error. Please try again.');
-                            revokeBtn.disabled = false;
-                        }
-                    };
-
-                    if (typeof window.showCustomConfirm === 'function') {
-                        window.showCustomConfirm(confirmMsg, confirmed => {
-                            if (confirmed) performRevoke();
-                        });
-                    } else if (confirm(confirmMsg)) {
-                        performRevoke();
-                    }
-                    return;
-                }
-
-                // 4. Close open dropdowns when clicking elsewhere
-                if (!e.target.closest('.active-links-badge')) {
-                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
-                }
-            });
-
-            // Confirm delete for notes with mode support
-            let pendingDeleteForm = null;
-            // Delegated listener for delete note forms (more robust)
-            document.addEventListener('submit', (e) => {
-                const form = e.target;
-                if (form && form.classList.contains('delete-note-form')) {
-                    e.preventDefault();
-                    pendingDeleteForm = form;
-                    openDeleteModal();
-                }
-            });
-
-            function openDeleteModal() {
-                const modal = document.getElementById('delete-note-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-                }
-            }
-
-            window.closeDeleteModal = function () {
-                const modal = document.getElementById('delete-note-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                }
-            }
-
-            document.getElementById('confirm-delete-me')?.addEventListener('click', () => {
-                if (pendingDeleteForm) {
-                    const modeInput = document.createElement('input');
-                    modeInput.type = 'hidden';
-                    modeInput.name = 'mode';
-                    modeInput.value = 'me';
-                    pendingDeleteForm.appendChild(modeInput);
-                    pendingDeleteForm.submit();
-                }
-            });
-
-            document.getElementById('confirm-delete-everyone')?.addEventListener('click', () => {
-                if (pendingDeleteForm) {
-                    const modeInput = document.createElement('input');
-                    modeInput.type = 'hidden';
-                    modeInput.name = 'mode';
-                    modeInput.value = 'everyone';
-                    pendingDeleteForm.appendChild(modeInput);
-                    pendingDeleteForm.submit();
-                }
-            });
+            // (Delete logic moved to top-level IIFE)
 
             // Confirm unsave for posts
             document.querySelectorAll('.unsave-form').forEach(form => {
@@ -2273,97 +2346,7 @@
                 }
             }
 
-            // --- Version History Logic ---
-            // Delegated listener for version history buttons
-            document.body.addEventListener('click', (e) => {
-                const btn = e.target.closest('.version-history-btn');
-                if (btn) {
-                    const noteId = btn.dataset.id;
-                    openVersionModal(noteId);
-                }
-            });
-
-            function openVersionModal(noteId) {
-                const modal = document.getElementById('version-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-                    loadVersionHistory(noteId);
-                    document.addEventListener('keydown', handleVersionModalEsc);
-                }
-            }
-
-            window.closeVersionModal = function () {
-                const modal = document.getElementById('version-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                    document.removeEventListener('keydown', handleVersionModalEsc);
-                }
-            };
-
-            function handleVersionModalEsc(e) {
-                if (e.key === 'Escape') closeVersionModal();
-            }
-
-            async function loadVersionHistory(noteId) {
-                const list = document.getElementById('version-list');
-                if (!list) return;
-
-                list.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-
-                try {
-                    const response = await fetch(`/personal_post/versions/${noteId}`);
-                    const versions = await response.json();
-
-                    if (!Array.isArray(versions) || versions.length === 0) {
-                        list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
-                        return;
-                    }
-
-                    list.innerHTML = versions.map((v, i) => {
-                        const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
-                        const preview = (v.content || '').substring(0, 200);
-                        const hasMore = (v.content || '').length > 200;
-                        return `
-                        <div class="version-card">
-                            <div class="version-header">
-                                <span class="version-editor"><i class="fas fa-user-edit"></i> ${v.editor_name}</span>
-                                <span class="version-time">${ts}</span>
-                            </div>
-                            <div class="version-preview" id="vp-${i}">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}${hasMore ? '...' : ''}</div>
-                            ${hasMore ? `<button class="version-toggle" onclick="toggleVersionPreview('${i}', '${v._id}')">Show full content</button>` : ''}
-                        </div>
-                    `;
-                    }).join('');
-
-                    // Store full contents for expansion
-                    window._versionContents = {};
-                    versions.forEach((v, i) => {
-                        window._versionContents[i] = v.content || '';
-                    });
-                } catch (e) {
-                    list.innerHTML = '<div class="version-empty" style="color: #d32f2f;">Failed to load version history.</div>';
-                    console.error('Error loading versions:', e);
-                }
-            }
-
-            window.toggleVersionPreview = function (index) {
-                const el = document.getElementById(`vp-${index}`);
-                const btn = el.parentElement.querySelector('.version-toggle');
-                if (!el || !btn) return;
-
-                if (el.classList.contains('expanded')) {
-                    el.classList.remove('expanded');
-                    const preview = (window._versionContents[index] || '').substring(0, 200);
-                    el.textContent = preview + '...';
-                    btn.textContent = 'Show full content';
-                } else {
-                    el.classList.add('expanded');
-                    el.textContent = window._versionContents[index] || '';
-                    btn.textContent = 'Show less';
-                }
-            };
+            // (Version history logic moved to top-level IIFE)
         });
     </script>
 

@@ -6899,53 +6899,79 @@ def logout():
     return redirect(url_for('dashboard'))
 
 
+# Canonical list of predefined tags — Magic Tags will only pick from these
+PREDEFINED_TAGS = [
+    # General Topics
+    'Education', 'Law', 'Politics', 'Business', 'Science',
+    'Philosophy', 'History', 'Environment', 'Announcement',
+    # Tech & Innovation
+    'Technology', 'Programming', 'Cybersecurity',
+    # Vibe & Tone
+    'Motivation', 'Meme', 'Rant', 'Opinion', 'Storytime',
+    'Deep Dive', 'Quick Read', 'Advice', 'How To',
+    # Lifestyle & Student Life
+    'University Life', 'Productivity', 'Mental Health', 'Career',
+    'Health', 'Finance', 'Relationships', 'Gaming', 'Music',
+    'Art', 'Sports', 'Travel', 'Food', 'Entertainment',
+]
+
+
 @app.route('/api/ai/suggest-tags', methods=['POST'])
 @login_required
 @limits(calls=10, period=60)
 def api_suggest_tags():
-    """Suggest tags for a blog post using JigsawStack AI."""
+    """Suggest tags for a blog post by classifying content against predefined tags."""
     data = request.get_json() or {}
     title = data.get('title', '').strip()
     content = data.get('content', '').strip()
-    
+
     if not title and not content:
         return jsonify({'tags': []})
 
-    # Use JigsawStack Keyphrase Extraction for better efficiency and lower token usage.
     try:
         api_key = get_env_variable('JIGSAW_API_KEY')
-        
-        # We cleanup the content slightly to reduce tokens and use a more direct API
-        # Keyphrase extraction is faster and uses fewer output tokens than summary.
         clean_text = f"{title}\n\n{content[:800]}"
-        
+
+        # Use JigsawStack text classification to match against our predefined tags
         api_response = requests.post(
-            'https://api.jigsawstack.com/v1/ai/keyphrase_extraction',
-            json={"text": clean_text},
-            headers={"x-api-key": api_key}
+            'https://api.jigsawstack.com/v1/ai/text_classifier',
+            json={
+                'text': clean_text,
+                'tags': PREDEFINED_TAGS,
+            },
+            headers={'x-api-key': api_key},
         )
-        
+
         tags = []
         if api_response.status_code == 200:
-            data = api_response.json()
-            # The API returns a list of keyphrases directly
-            keyphrases = data.get('keyphrases', [])
-            # Filter and take max 5
-            for k in keyphrases:
-                tag = k.strip().lower()
-                if len(tag) > 2 and tag not in tags:
-                    tags.append(tag)
-                if len(tags) >= 5:
-                    break
-        
-        # If AI didn't give good results, fallback to title words
+            result = api_response.json()
+            # The API returns tags scored by relevance
+            classifications = result.get('tags', result.get('results', []))
+            if isinstance(classifications, list):
+                for item in classifications:
+                    if isinstance(item, dict):
+                        tag = item.get('tag') or item.get('label', '')
+                        score = item.get('score') or item.get('confidence', 0)
+                        if tag and score >= 0.3:
+                            tags.append(tag)
+                    elif isinstance(item, str):
+                        tags.append(item)
+                    if len(tags) >= 4:
+                        break
+
+        # Fallback: simple keyword matching against predefined tags
         if not tags:
-            tags = [w.lower() for w in title.split() if len(w) > 3][:5]
-            
+            text_lower = clean_text.lower()
+            for t in PREDEFINED_TAGS:
+                if t.lower() in text_lower:
+                    tags.append(t)
+                if len(tags) >= 4:
+                    break
+
         return jsonify({'tags': tags})
-        
+
     except Exception as e:
-        app.logger.error(f"Error in tag suggestion: {e}")
+        app.logger.error(f'Error in tag suggestion: {e}')
         return jsonify({'tags': []})
 
 

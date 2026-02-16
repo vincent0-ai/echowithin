@@ -64,6 +64,8 @@
                         </option>
                         <option value="Quick Read" {% if 'Quick Read' in post.tags %}selected{% endif %}>Quick Read
                         </option>
+                        <option value="Advice" {% if 'Advice' in post.tags %}selected{% endif %}>Advice</option>
+                        <option value="How To" {% if 'How To' in post.tags %}selected{% endif %}>How To</option>
                     </optgroup>
                     <optgroup label="Lifestyle & Student Life">
                         <option value="University Life" {% if 'University Life' in post.tags %}selected{% endif %}>
@@ -73,11 +75,16 @@
                         <option value="Mental Health" {% if 'Mental Health' in post.tags %}selected{% endif %}>Mental
                             Health</option>
                         <option value="Career" {% if 'Career' in post.tags %}selected{% endif %}>Career</option>
+                        <option value="Health" {% if 'Health' in post.tags %}selected{% endif %}>Health</option>
+                        <option value="Finance" {% if 'Finance' in post.tags %}selected{% endif %}>Finance</option>
+                        <option value="Relationships" {% if 'Relationships' in post.tags %}selected{% endif %}>Relationships</option>
                         <option value="Gaming" {% if 'Gaming' in post.tags %}selected{% endif %}>Gaming</option>
                         <option value="Music" {% if 'Music' in post.tags %}selected{% endif %}>Music</option>
                         <option value="Art" {% if 'Art' in post.tags %}selected{% endif %}>Art</option>
+                        <option value="Sports" {% if 'Sports' in post.tags %}selected{% endif %}>Sports</option>
                         <option value="Travel" {% if 'Travel' in post.tags %}selected{% endif %}>Travel</option>
                         <option value="Food" {% if 'Food' in post.tags %}selected{% endif %}>Food</option>
+                        <option value="Entertainment" {% if 'Entertainment' in post.tags %}selected{% endif %}>Entertainment</option>
                     </optgroup>
                 </select>
             </div>
@@ -279,11 +286,9 @@
 
                     if (data.tags && data.tags.length > 0) {
                         data.tags.forEach(tag => {
-                            // Check if choice already exists
+                            // Only select from existing predefined choices
                             const existing = choices._store.choices.find(c => c.value.toLowerCase() === tag.toLowerCase());
-                            if (!existing) {
-                                choices.setChoices([{ value: tag, label: tag, selected: true }], 'value', 'label', false);
-                            } else if (!existing.selected) {
+                            if (existing && !existing.selected) {
                                 choices.setChoiceByValue(existing.value);
                             }
                         });

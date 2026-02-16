@@ -128,16 +128,22 @@
         <div class="note-card-shared">
             <div class="shared-note-header">
                 <div class="owner-info">
-                    <i class="fas fa-share-alt"></i> Shared Note
+                     Shared Note
                 </div>
                 <div class="permissions-badge {{ permissions }}">
                     <i class="fas fa-{{ 'pen' if permissions == 'eye' else 'eye' }}"></i>
                     {{ permissions.capitalize() }} Access
                 </div>
                 {% if current_user.is_authenticated and not is_owner %}
-                <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
-                    <i class="fas fa-bookmark"></i> Save to My Notes
+                {% if already_saved %}
+                <button id="save-to-notes-btn" class="btn btn-save-note saved" type="button" data-share-id="{{ share_id }}" disabled>
+                     Already Saved
                 </button>
+                {% else %}
+                <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
+                     Save to My Notes
+                </button>
+                {% endif %}
                 {% endif %}
 
                 {% if permissions == 'edit' %}
@@ -1779,7 +1785,7 @@
         // --- Save Shared Note Logic ---
         // --- Save Shared Note Logic ---
         const saveToNotesBtn = document.getElementById('save-to-notes-btn');
-        if (saveToNotesBtn) {
+        if (saveToNotesBtn && !saveToNotesBtn.disabled) {
             saveToNotesBtn.addEventListener('click', async () => {
                 const shareId = saveToNotesBtn.getAttribute('data-share-id');
                 saveToNotesBtn.disabled = true;
@@ -1794,8 +1800,9 @@
                     if (data.success) {
                         saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
                         saveToNotesBtn.classList.add('saved');
-                        // Show a subtle success toast if available, otherwise alert
-                        alert(data.message);
+                    } else if (data.already_saved) {
+                        saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Already Saved';
+                        saveToNotesBtn.classList.add('saved');
                     } else {
                         alert(data.error || 'Failed to save note');
                         saveToNotesBtn.disabled = false;

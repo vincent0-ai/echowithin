@@ -6355,13 +6355,22 @@ def view_shared_note(share_id):
             app.logger.error(f"Failed to handle unlock notification: {e}")
     
     use_typewriter = share.get('use_typewriter', False)
-    
+
+    # Check if current user already saved this note
+    already_saved = False
+    if current_user.is_authenticated and not is_owner:
+        already_saved = personal_posts_conf.count_documents({
+            'user_id': ObjectId(current_user.id),
+            'source_note_id': share['note_id']
+        }) > 0
+
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
                            permissions=share['permissions'],
                            note_id=str(note['_id']),
                            is_owner=is_owner,
+                           already_saved=already_saved,
                            surprise_theme=surprise_theme,
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=share.get('valentine_photo'),
@@ -6394,6 +6403,14 @@ def api_save_shared_note(share_id):
     original_note = personal_posts_conf.find_one({'_id': share['note_id']})
     if not original_note:
         return jsonify({'error': 'Original note not found'}), 404
+
+    # Prevent duplicate saves — check if user already has a clone
+    existing_clone = personal_posts_conf.find_one({
+        'user_id': ObjectId(current_user.id),
+        'source_note_id': share['note_id']
+    })
+    if existing_clone:
+        return jsonify({'error': 'You already have this note saved', 'already_saved': True}), 409
 
     # Clone the note for the current user
     # Note: We track source_note_id to allow original owners to "Delete for Everyone"

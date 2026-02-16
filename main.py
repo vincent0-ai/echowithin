@@ -6914,6 +6914,68 @@ PREDEFINED_TAGS = [
     'Art', 'Sports', 'Travel', 'Food', 'Entertainment',
 ]
 
+# Expanded keyword map for NLP fallback — maps keywords/phrases to predefined tags
+_TAG_KEYWORDS = {
+    'Education': ['education', 'school', 'learn', 'study', 'student', 'academic', 'course', 'class', 'lecture', 'exam', 'degree', 'teacher', 'professor', 'curriculum', 'scholarship'],
+    'Law': ['law', 'legal', 'court', 'judge', 'attorney', 'lawyer', 'justice', 'constitution', 'legislation', 'rights', 'criminal', 'civil', 'statute'],
+    'Politics': ['politics', 'political', 'government', 'election', 'democracy', 'policy', 'vote', 'congress', 'parliament', 'president', 'campaign', 'senator'],
+    'Business': ['business', 'company', 'startup', 'entrepreneur', 'market', 'revenue', 'profit', 'invest', 'economy', 'commerce', 'corporate', 'trade', 'management'],
+    'Science': ['science', 'scientific', 'research', 'experiment', 'biology', 'chemistry', 'physics', 'theory', 'hypothesis', 'lab', 'discovery', 'atom', 'molecule'],
+    'Philosophy': ['philosophy', 'philosophical', 'ethics', 'morality', 'existential', 'meaning', 'truth', 'logic', 'consciousness', 'metaphysics', 'epistemology'],
+    'History': ['history', 'historical', 'ancient', 'century', 'civilization', 'war', 'empire', 'dynasty', 'revolution', 'colonial', 'medieval'],
+    'Environment': ['environment', 'climate', 'pollution', 'sustainability', 'ecology', 'green', 'carbon', 'renewable', 'conservation', 'recycle', 'deforestation'],
+    'Announcement': ['announcement', 'announce', 'update', 'notice', 'official', 'launching', 'introducing', 'new feature', 'release'],
+    'Technology': ['technology', 'tech', 'software', 'hardware', 'computer', 'digital', 'internet', 'app', 'device', 'innovation', 'ai', 'artificial intelligence', 'machine learning', 'data'],
+    'Programming': ['programming', 'code', 'coding', 'developer', 'python', 'javascript', 'java', 'api', 'framework', 'debug', 'algorithm', 'frontend', 'backend', 'database', 'git', 'html', 'css', 'react', 'flask', 'django', 'node'],
+    'Cybersecurity': ['cybersecurity', 'security', 'hack', 'hacker', 'vulnerability', 'encryption', 'malware', 'firewall', 'phishing', 'breach', 'password', 'cyber'],
+    'Motivation': ['motivation', 'motivate', 'inspire', 'inspiration', 'dream', 'goal', 'success', 'achieve', 'believe', 'never give up', 'keep going', 'hustle', 'grind', 'determination'],
+    'Meme': ['meme', 'funny', 'lol', 'lmao', 'humor', 'joke', 'hilarious', 'comedy', 'sarcasm'],
+    'Rant': ['rant', 'frustrated', 'annoyed', 'angry', 'fed up', 'sick of', 'tired of', 'ridiculous', 'unacceptable', 'complaint'],
+    'Opinion': ['opinion', 'think', 'believe', 'perspective', 'view', 'stance', 'take', 'unpopular opinion', 'hot take', 'controversial'],
+    'Storytime': ['storytime', 'story time', 'story', 'happened to me', 'experience', 'let me tell you', 'true story', 'once upon', 'anecdote'],
+    'Deep Dive': ['deep dive', 'in-depth', 'analysis', 'breakdown', 'comprehensive', 'detailed', 'explore', 'thorough', 'investigation'],
+    'Quick Read': ['quick read', 'short', 'brief', 'quick', 'summary', 'tldr', 'tl;dr', 'in a nutshell', 'overview'],
+    'Advice': ['advice', 'tip', 'tips', 'recommend', 'suggestion', 'guide', 'help', 'how to deal', 'what to do', 'should you'],
+    'How To': ['how to', 'tutorial', 'step by step', 'guide', 'walkthrough', 'instructions', 'setup', 'install', 'configure', 'build'],
+    'University Life': ['university', 'college', 'campus', 'dorm', 'freshman', 'semester', 'gpa', 'major', 'minor', 'lecture hall', 'roommate', 'sorority', 'fraternity'],
+    'Productivity': ['productivity', 'productive', 'efficiency', 'time management', 'organize', 'focus', 'habit', 'routine', 'workflow', 'planner', 'prioritize'],
+    'Mental Health': ['mental health', 'anxiety', 'depression', 'stress', 'therapy', 'therapist', 'self care', 'self-care', 'wellbeing', 'burnout', 'overwhelm', 'mindfulness', 'meditation'],
+    'Career': ['career', 'job', 'interview', 'resume', 'cv', 'hire', 'salary', 'promotion', 'internship', 'profession', 'workplace', 'linkedin', 'networking'],
+    'Health': ['health', 'healthy', 'fitness', 'exercise', 'workout', 'diet', 'nutrition', 'medical', 'doctor', 'hospital', 'disease', 'wellness', 'vitamin'],
+    'Finance': ['finance', 'financial', 'money', 'budget', 'saving', 'invest', 'stock', 'crypto', 'debt', 'loan', 'income', 'expense', 'bank', 'wealth'],
+    'Relationships': ['relationship', 'dating', 'love', 'partner', 'breakup', 'marriage', 'couple', 'romance', 'friendship', 'toxic', 'trust', 'communication'],
+    'Gaming': ['gaming', 'game', 'gamer', 'playstation', 'xbox', 'nintendo', 'pc gaming', 'esports', 'fps', 'rpg', 'multiplayer', 'steam', 'twitch', 'fortnite', 'valorant'],
+    'Music': ['music', 'song', 'album', 'artist', 'concert', 'playlist', 'genre', 'rap', 'hip hop', 'rock', 'pop', 'beat', 'melody', 'spotify'],
+    'Art': ['art', 'artist', 'painting', 'drawing', 'sculpture', 'design', 'creative', 'illustration', 'gallery', 'aesthetic', 'canvas', 'sketch'],
+    'Sports': ['sports', 'football', 'soccer', 'basketball', 'tennis', 'cricket', 'athlete', 'team', 'match', 'tournament', 'championship', 'league', 'trophy', 'coach'],
+    'Travel': ['travel', 'trip', 'vacation', 'holiday', 'destination', 'flight', 'hotel', 'backpack', 'explore', 'adventure', 'tourist', 'passport', 'abroad'],
+    'Food': ['food', 'recipe', 'cook', 'cooking', 'meal', 'restaurant', 'eat', 'delicious', 'cuisine', 'ingredient', 'bake', 'chef', 'snack', 'breakfast', 'dinner', 'lunch'],
+    'Entertainment': ['entertainment', 'movie', 'film', 'tv', 'show', 'series', 'netflix', 'anime', 'drama', 'celebrity', 'streaming', 'trailer', 'review', 'podcast'],
+}
+
+
+def _nlp_suggest_tags(text: str, max_tags: int = 4) -> list:
+    """Free local NLP tag suggestion — no API tokens used.
+    Scores each predefined tag by counting keyword hits in the text,
+    then returns the top-scoring tags."""
+    text_lower = text.lower()
+    scores = {}
+    for tag, keywords in _TAG_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            if kw in text_lower:
+                # Longer keyword matches are worth more (more specific)
+                score += 1 + len(kw) / 20
+        if score > 0:
+            scores[tag] = score
+
+    if not scores:
+        return []
+
+    # Sort by score descending and return top tags
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [tag for tag, _ in ranked[:max_tags]]
+
 
 @app.route('/api/ai/suggest-tags', methods=['POST'])
 @login_required
@@ -6927,12 +6989,11 @@ def api_suggest_tags():
     if not title and not content:
         return jsonify({'tags': []})
 
+    clean_text = f"{title}\n\n{content[:800]}"
+
+    # Try JigsawStack Classification API first
     try:
         api_key = get_env_variable('JIGSAW_API_KEY')
-        clean_text = f"{title}\n\n{content[:800]}"
-
-        # Use JigsawStack Classification API (POST /v1/classification)
-        # with multiple_labels to pick relevant tags from our predefined list
         api_response = requests.post(
             'https://api.jigsawstack.com/v1/classification',
             json={
@@ -6944,30 +7005,25 @@ def api_suggest_tags():
             timeout=15,
         )
 
-        tags = []
         if api_response.status_code == 200:
             result = api_response.json()
-            # predictions is [[label1, label2, ...]] when multiple_labels=True
             predictions = result.get('predictions', [])
+            tags = []
             if predictions and isinstance(predictions[0], list):
                 tags = predictions[0][:4]
             elif predictions and isinstance(predictions[0], str):
                 tags = predictions[:4]
+            if tags:
+                return jsonify({'tags': tags})
 
-        # Fallback: simple keyword matching against predefined tags
-        if not tags:
-            text_lower = clean_text.lower()
-            for t in PREDEFINED_TAGS:
-                if t.lower() in text_lower:
-                    tags.append(t)
-                if len(tags) >= 4:
-                    break
-
-        return jsonify({'tags': tags})
-
+        # API returned non-200 (e.g. 402 quota exceeded) — fall through to NLP
+        app.logger.info(f'JigsawStack classify returned {api_response.status_code}, falling back to NLP')
     except Exception as e:
-        app.logger.error(f'Error in tag suggestion: {e}')
-        return jsonify({'tags': []})
+        app.logger.warning(f'JigsawStack classify failed, falling back to NLP: {e}')
+
+    # ---- Free NLP fallback (no API tokens used) ----
+    tags = _nlp_suggest_tags(clean_text)
+    return jsonify({'tags': tags})
 
 
 @app.route('/unsubscribe/<email>/<token>', methods=['GET', 'POST'])

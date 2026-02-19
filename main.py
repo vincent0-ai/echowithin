@@ -1324,49 +1324,61 @@ def send_weekly_newsletter():
 
 
 @rq.job
-def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None):
-    """Send a web push notification to all devices subscribed by a user."""
-    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
-        app.logger.debug("VAPID keys not configured, skipping push notification")
-        return
-
+def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None, extra_data=None):
+    """Send a push notification (Web Push and FCM) to all devices of a user."""
     try:
-        subscriptions = list(push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
-        if not subscriptions:
-            app.logger.debug(f"No push subscriptions found for user {user_id_str}")
-            return
+        # 1. Send Web Push (PWA)
+        if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
+            subscriptions = list(push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
+            if subscriptions:
+                payload = json.dumps({
+                    'title': title,
+                    'body': body,
+                    'url': url or '/',
+                    'tag': tag or 'echowithin',
+                    'icon': '/static/logo.png',
+                    'badge': '/static/logo.png'
+                })
 
-        payload = json.dumps({
-            'title': title,
-            'body': body,
-            'url': url or '/',
-            'tag': tag or 'echowithin',
-            'icon': '/static/logo.png',
-            'badge': '/static/logo.png'
-        })
+                for sub in subscriptions:
+                    try:
+                        subscription_info = {
+                            'endpoint': sub['endpoint'],
+                            'keys': sub['keys']
+                        }
+                        webpush(
+                            subscription_info=subscription_info,
+                            data=payload,
+                            vapid_private_key=VAPID_PRIVATE_KEY,
+                            vapid_claims=VAPID_CLAIMS
+                        )
+                    except WebPushException as e:
+                        if e.response and e.response.status_code in [404, 410]:
+                            push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                        else:
+                            app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
+                    except Exception as e:
+                        app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+        else:
+            app.logger.debug("VAPID keys not configured, skipping web push")
 
-        for sub in subscriptions:
+        # 2. Send FCM (Native App)
+        if FIREBASE_INITIALIZED:
             try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
+                fcm_data = {'tag': tag or 'echowithin'}
+                if extra_data:
+                    fcm_data.update(extra_data)
+                
+                send_fcm_notification_to_user(
+                    user_id_str, 
+                    title, 
+                    body, 
+                    url=url,
+                    data=fcm_data
                 )
-                app.logger.debug(f"Push notification sent to subscription {sub['endpoint'][:50]}...")
-            except WebPushException as e:
-                # If subscription is expired or invalid, remove it
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                    app.logger.info(f"Removed expired push subscription for user {user_id_str}")
-                else:
-                    app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
             except Exception as e:
-                app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+                app.logger.error(f"FCM notification failed for user {user_id_str}: {e}")
+
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
 
@@ -1428,7 +1440,25 @@ def send_push_notifications_for_new_post(post_id_str):
             except Exception as e:
                 app.logger.error(f"Unexpected push error: {e}")
 
-        app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} subscriptions")
+        # Also send FCM notifications to native app users
+        if FIREBASE_INITIALIZED:
+            try:
+                # Get all native app users (exclude author)
+                tokens_query = {'user_id': {'$ne': author_id}} if author_id else {}
+                tokens = list(fcm_tokens_conf.find(tokens_query))
+                if tokens:
+                    num_fcm_sent = send_fcm_notifications_batch(
+                        tokens, 
+                        title, 
+                        body, 
+                        url=post_url,
+                        data={'type': 'new_post', 'post_id': post_id_str}
+                    )
+                    app.logger.info(f"Sent FCM notifications for new post {post_id_str} to {num_fcm_sent} devices")
+            except Exception as e:
+                app.logger.error(f"FCM batch sending failed for new post {post_id_str}: {e}")
+
+        app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} web subscriptions")
     except Exception as e:
         app.logger.error(f"Error in send_push_notifications_for_new_post: {e}", exc_info=True)
 
@@ -1592,11 +1622,7 @@ def unregister_fcm_token():
 
 @rq.job
 def send_push_notification_for_comment(comment_id_str, post_slug):
-    """Send push notification to post author when someone comments on their post."""
-    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
-        app.logger.debug("VAPID keys not configured, skipping comment push notification")
-        return
-
+    """Send push notification to post author and parent comment author."""
     try:
         comment = comments_conf.find_one({'_id': ObjectId(comment_id_str)})
         if not comment:
@@ -1608,17 +1634,11 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
             app.logger.error(f"Post with slug {post_slug} not found for comment notification")
             return
 
-        # Don't notify if the commenter is the post author
-        post_author_id = post.get('author_id')
         commenter_id = comment.get('author_id')
-        if post_author_id and commenter_id and str(post_author_id) == str(commenter_id):
-            app.logger.debug("Skipping notification - commenter is post author")
-            return
-
         commenter_username = comment.get('author_username', 'Someone')
-        title = "New Comment on Your Post"
-        body = f'{commenter_username} commented on "{post.get("title")}"'
-
+        post_author_id = post.get('author_id')
+        
+        post_url = None
         with app.app_context():
             try:
                 post_url = url_for('view_post', slug=post_slug, _external=True)
@@ -1626,49 +1646,42 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
                 base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
                 post_url = f"{base_url}/post/{post_slug}"
 
-        # Send to all devices of the post author
-        subscriptions = list(push_subscriptions_conf.find({'user_id': post_author_id}))
+        notified_user_ids = set()
 
-        payload = json.dumps({
-            'title': title,
-            'body': body,
-            'url': post_url,
-            'tag': f'comment-{comment_id_str}',
-            'icon': '/static/logo.png',
-            'badge': '/static/logo.png'
-        })
+        # 1. Notify Parent Comment Author (if it's a reply)
+        parent_id = comment.get('parent_id')
+        if parent_id:
+            parent_comment = comments_conf.find_one({'_id': parent_id})
+            if parent_comment:
+                parent_author_id = parent_comment.get('author_id')
+                # Don't notify if replying to oneself
+                if parent_author_id and str(parent_author_id) != str(commenter_id):
+                    title = "New Reply to Your Comment"
+                    body = f'{commenter_username} replied to your comment on "{post.get("title")}"'
+                    send_push_notification_to_user(
+                        str(parent_author_id), 
+                        title, 
+                        body, 
+                        url=post_url, 
+                        tag=f'reply-{comment_id_str}',
+                        extra_data={'type': 'comment_reply', 'comment_id': comment_id_str}
+                    )
+                    notified_user_ids.add(str(parent_author_id))
 
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed for comment: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error for comment: {e}")
-
-        # Also send FCM notification to native app users
-        if post_author_id:
-            send_fcm_notification_to_user(
-                str(post_author_id),
-                title,
-                body,
-                url=post_url,
-                data={'type': 'comment', 'comment_id': comment_id_str}
+        # 2. Notify Post Author (if not already notified as parent author and not the commenter)
+        if post_author_id and str(post_author_id) != str(commenter_id) and str(post_author_id) not in notified_user_ids:
+            title = "New Comment on Your Post"
+            body = f'{commenter_username} commented on "{post.get("title")}"'
+            send_push_notification_to_user(
+                str(post_author_id), 
+                title, 
+                body, 
+                url=post_url, 
+                tag=f'comment-{comment_id_str}',
+                extra_data={'type': 'comment', 'comment_id': comment_id_str}
             )
 
-        app.logger.info(f"Sent comment push notification to post author for comment {comment_id_str}")
+        app.logger.info(f"Sent comment push notifications for comment {comment_id_str}")
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_for_comment: {e}", exc_info=True)
 

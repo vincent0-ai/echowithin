@@ -3538,12 +3538,12 @@ def get_my_commented_posts_json():
                         is_unread = False
                 
                 theme_labels = {
-                    'valentine': '❤️ Valentine',
-                    'birthday': '🎂 Birthday',
-                    'anniversary': '💍 Anniversary',
-                    'celebration': '🎉 Celebration'
+                    'valentine': 'Valentine',
+                    'birthday': 'Birthday',
+                    'anniversary': 'Anniversary',
+                    'celebration': 'Celebration'
                 }
-                theme_label = theme_labels.get(post.get('surprise_theme', ''), '🎁 Surprise')
+                theme_label = theme_labels.get(post.get('surprise_theme', ''), 'Surprise')
                 
                 post_data = {
                     '_id': str(post['_id']),

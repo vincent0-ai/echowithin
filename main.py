@@ -8,6 +8,7 @@ import bleach
 import base64
 from flask_rq2 import RQ
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 from flask_mail import Mail, Message
 from concurrent.futures import ThreadPoolExecutor
@@ -65,6 +66,7 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.
@@ -562,6 +564,8 @@ def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
         'id': str(note_doc.get('_id')),
         'user_id': str(note_doc.get('user_id')),
         'content': content,
+        'reference': note_doc.get('reference', ''),
+        'tags': note_doc.get('tags', []),
         'created_at': int((note_doc.get('created_at') or datetime.datetime.now(datetime.timezone.utc)).timestamp()),
     }
 
@@ -5793,7 +5797,9 @@ def create_personal_post():
         result = personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
             'content': encrypted_content,
-            'encrypted': True,  # Flag to indicate this note is encrypted
+            'encrypted': True,
+            'reference': request.form.get('reference', '').strip()[:200],
+            'tags': [t.strip() for t in request.form.get('tags', '').split(',') if t.strip()][:10],
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
         # Index decrypted content to Meilisearch for search
@@ -5820,6 +5826,8 @@ def create_personal_post_json():
         'user_id': ObjectId(current_user.id),
         'content': encrypted_content,
         'encrypted': True,
+        'reference': data.get('reference', '').strip()[:200],
+        'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
     # Index decrypted content to Meilisearch for search
@@ -5990,11 +5998,25 @@ def edit_personal_post(post_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         personal_posts_conf.update_one(
             {'_id': obj_id},
-            {'$set': {'content': encrypted_content, 'encrypted': True, 'updated_at': now}}
+            {'$set': {
+                'content': encrypted_content, 
+                'encrypted': True, 
+                'reference': data.get('reference', '').strip()[:200],
+                'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
+                'updated_at': now
+            }}
         )
 
         # Re-index with updated decrypted content
         index_note_to_meili(post_id, decrypted_content=content)
+
+        # Broadcast update to other devices/sessions for real-time sync
+        socketio.emit('note_changed', {
+            'note_id': post_id, 
+            'content': content,
+            'reference': data.get('reference', ''),
+            'tags': data.get('tags', [])
+        }, room=str(current_user.id))
 
         return jsonify({'success': True})
     except Exception as e:
@@ -6475,6 +6497,36 @@ def api_save_shared_note(share_id):
     return jsonify({'success': True, 'message': 'Note saved to your personal space!'})
 
 
+# --- WebSocket Real-time collaboration ---
+@socketio.on('join_note')
+def handle_join_note(data):
+    share_id = data.get('share_id')
+    if share_id:
+        join_room(share_id)
+        app.logger.info(f"User joined note room: {share_id}")
+
+@socketio.on('leave_note')
+def handle_leave_note(data):
+    share_id = data.get('share_id')
+    if share_id:
+        leave_room(share_id)
+        app.logger.info(f"User left note room: {share_id}")
+
+@socketio.on('note_update')
+def handle_note_update(data):
+    share_id = data.get('share_id')
+    content = data.get('content')
+    if share_id and content:
+        # Broadcast the update to others in the same room
+        emit('note_changed', {'content': content}, room=share_id, include_self=False)
+
+@socketio.on('discussion_new_comment')
+def handle_discussion_new_comment(data):
+    share_id = data.get('share_id')
+    comment_data = data.get('comment')
+    if share_id and comment_data:
+        emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
+
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
 @csrf.exempt
 @limits(calls=10, period=60)
@@ -6701,6 +6753,13 @@ def api_post_note_comment(share_id):
     }
     result = note_discussions_conf.insert_one(comment)
 
+    # Broadcast to all users watching this note
+    socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'author_name': comment['author_name'],
+        'type': 'comment'
+    }, room=share_id, include_self=False)
+
     return jsonify({
         'success': True,
         '_id': str(result.inserted_id),
@@ -6745,6 +6804,13 @@ def api_post_note_reply(share_id, comment_id):
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
     result = note_discussions_conf.insert_one(reply)
+
+    # Broadcast to all users watching this note
+    socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'author_name': reply['author_name'],
+        'type': 'reply'
+    }, room=share_id, include_self=False)
 
     return jsonify({
         'success': True,

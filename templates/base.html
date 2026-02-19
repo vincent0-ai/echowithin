@@ -18,6 +18,7 @@
     <link rel="canonical" href="{{ canonical_url or request.base_url }}" />
     {% endblock %}
 
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
     <script src="{{ url_for('static', filename='capacitor.js') }}"></script>
@@ -725,8 +726,8 @@
 
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
-        // Only for logged in users (check if user is authenticated)
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+
 
 
 

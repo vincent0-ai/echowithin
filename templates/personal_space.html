@@ -833,9 +833,17 @@
         }
 
         @keyframes searchPulse {
-            0% { box-shadow: 0 0 0 0 rgba(232, 168, 124, 0.6); }
-            50% { box-shadow: 0 0 0 6px rgba(232, 168, 124, 0.2); }
-            100% { box-shadow: 0 0 0 3px rgba(232, 168, 124, 0.5); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(232, 168, 124, 0.6);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(232, 168, 124, 0.2);
+            }
+
+            100% {
+                box-shadow: 0 0 0 3px rgba(232, 168, 124, 0.5);
+            }
         }
 
         /* Mobile optimizations */
@@ -1138,6 +1146,21 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="8000"
                     required></textarea>
+                <div class="note-metadata-inputs"
+                    style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                    <div class="input-group-meta" style="flex: 1; min-width: 200px;">
+                        <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Reference
+                            (e.g. John 3:16)</label>
+                        <input type="text" name="reference" id="note-reference" placeholder="Reference..."
+                            style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem;">
+                    </div>
+                    <div class="input-group-meta" style="flex: 1; min-width: 200px;">
+                        <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Tags (comma
+                            separated)</label>
+                        <input type="text" name="tags" id="note-tags" placeholder="Bible Study, Personal, Faith..."
+                            style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem;">
+                    </div>
+                </div>
                 <div class="create-note-footer">
                     <span class="char-count"><span id="char-count">0</span>/8000</span>
                     <label class="preview-toggle">
@@ -1160,7 +1183,8 @@
         <div class="note-search-wrapper">
             <div class="note-search-bar">
                 <i class="fas fa-search search-icon"></i>
-                <input type="text" id="note-search-input" placeholder="Search your notes..." autocomplete="off" aria-label="Search notes">
+                <input type="text" id="note-search-input" placeholder="Search your notes..." autocomplete="off"
+                    aria-label="Search notes">
                 <button type="button" class="search-clear" id="note-search-clear" title="Clear search">
                     <i class="fas fa-times"></i>
                 </button>
@@ -1178,15 +1202,37 @@
 
         <div class="personal-notes-list" id="notes-list-container">
             {% for note in personal_posts %}
-            <div class="note-card" data-note-id="{{ note._id }}" {% if note.source_note_id %}data-source-note-id="{{ note.source_note_id }}"{% endif %} {% if note.source_share_id %}data-source-share-id="{{ note.source_share_id }}"{% endif %}>
+            <div class="note-card" data-note-id="{{ note._id }}" {% if note.source_note_id
+                %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
+                %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}"></div>
+                {% if note.reference or note.tags %}
+                <div class="note-metadata-display"
+                    style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                    {% if note.reference %}
+                    <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">
+                        <i class="fas fa-book-open" style="color: #3e2217; margin-right: 2px;"></i> {{ note.reference }}
+                    </div>
+                    {% endif %}
+                    {% if note.tags %}
+                    <div class="note-tags-display" style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                        {% for tag in note.tags %}
+                        <span class="note-tag-badge"
+                            style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">
+                            <i class="fas fa-tag" style="font-size: 0.6rem;"></i> {{ tag }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <div class="note-footer">
                     <span class="note-date">
                         <i class="far fa-clock"></i>
                         {{ note.created_at|localtime }}
                         {% if note.source_note_id %}
                         <span class="source-badge" title="Saved from a shared note">
-                             Saved copy
+                            Saved copy
                         </span>
                         {% endif %}
                     </span>
@@ -1233,13 +1279,14 @@
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
                             <i class="far fa-copy"></i>
                         </button>
-                        <button type="button" class="btn-icon edit-note-btn" title="Edit note"
-                            data-id="{{ note._id }}" data-raw="{{ note.content | e }}">
+                        <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
+                            data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'>
                             <i class="fas fa-pen"></i>
                         </button>
                         {% if note.source_note_id and note.source_share_id %}
-                        <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}"
-                            class="btn-icon" title="View original shared note &amp; discussion" target="_blank"
+                        <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
+                            title="View original shared note &amp; discussion" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
@@ -1429,11 +1476,26 @@
             </h2>
             <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
         </div>
-        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000" placeholder="Edit your note..."></textarea>
+        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000"
+            placeholder="Edit your note..."></textarea>
+        <div class="edit-metadata-inputs" style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+            <div class="input-group-meta" style="flex: 1; min-width: 180px;">
+                <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Reference</label>
+                <input type="text" id="edit-note-reference"
+                    style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem;">
+            </div>
+            <div class="input-group-meta" style="flex: 1; min-width: 180px;">
+                <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Tags</label>
+                <input type="text" id="edit-note-tags"
+                    style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem;">
+            </div>
+        </div>
         <div class="edit-char-count"><span id="edit-char-count">0</span>/8000</div>
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
-            <button onclick="closeEditModal()" class="btn edit-btn" style="padding: 0.6rem 1.2rem; border-radius: 8px;">Cancel</button>
-            <button id="save-edit-btn" class="btn comment-btn" style="padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600;">
+            <button onclick="closeEditModal()" class="btn edit-btn"
+                style="padding: 0.6rem 1.2rem; border-radius: 8px;">Cancel</button>
+            <button id="save-edit-btn" class="btn comment-btn"
+                style="padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600;">
                 <i class="fas fa-save"></i> Save Changes
             </button>
         </div>
@@ -1444,202 +1506,235 @@
 
 <!-- Version History Modal -->
 <div id="version-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeVersionModal()">
-        <div class="custom-modal" style="max-width: 600px; text-align: left; max-height: 80vh; overflow-y: auto;">
-            <div
-                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; position: sticky; top: 0; background: white; padding-bottom: 0.5rem; border-bottom: 1px solid #eee;">
-                <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
-                    <i class="fas fa-clock-rotate-left"></i> Version History
-                </h2>
-                <button class="btn-icon" onclick="closeVersionModal()"><i class="fas fa-times"></i></button>
-            </div>
-            <div id="version-list" style="display: flex; flex-direction: column; gap: 1rem;">
-                <div style="text-align: center; color: #999; padding: 2rem;">Loading...</div>
-            </div>
+    <div class="custom-modal" style="max-width: 600px; text-align: left; max-height: 80vh; overflow-y: auto;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; position: sticky; top: 0; background: white; padding-bottom: 0.5rem; border-bottom: 1px solid #eee;">
+            <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
+                <i class="fas fa-clock-rotate-left"></i> Version History
+            </h2>
+            <button class="btn-icon" onclick="closeVersionModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="version-list" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div style="text-align: center; color: #999; padding: 2rem;">Loading...</div>
         </div>
     </div>
+</div>
 
-    <style>
-        .version-card {
-            background: #faf7f4;
-            border-radius: 10px;
-            padding: 1rem;
-            border-left: 3px solid #3e2217;
-        }
+<style>
+    .version-card {
+        background: #faf7f4;
+        border-radius: 10px;
+        padding: 1rem;
+        border-left: 3px solid #3e2217;
+    }
 
-        .version-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
+    .version-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
 
-        .version-editor {
-            font-weight: 600;
-            color: #3e2217;
-            font-size: 0.9rem;
-        }
+    .version-editor {
+        font-weight: 600;
+        color: #3e2217;
+        font-size: 0.9rem;
+    }
 
-        .version-time {
-            font-size: 0.8rem;
-            color: #999;
-        }
+    .version-time {
+        font-size: 0.8rem;
+        color: #999;
+    }
 
-        .version-preview {
-            font-size: 0.85rem;
-            color: #555;
-            line-height: 1.5;
-            max-height: 100px;
-            overflow: hidden;
-            white-space: pre-wrap;
-            word-break: break-word;
-            position: relative;
-        }
+    .version-preview {
+        font-size: 0.85rem;
+        color: #555;
+        line-height: 1.5;
+        max-height: 100px;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-word;
+        position: relative;
+    }
 
-        .version-preview.expanded {
-            max-height: none;
-        }
+    .version-preview.expanded {
+        max-height: none;
+    }
 
-        .version-toggle {
-            background: none;
-            border: none;
-            color: #3e2217;
-            cursor: pointer;
-            font-size: 0.8rem;
-            padding: 0.25rem 0;
-            font-weight: 600;
-        }
+    .version-toggle {
+        background: none;
+        border: none;
+        color: #3e2217;
+        cursor: pointer;
+        font-size: 0.8rem;
+        padding: 0.25rem 0;
+        font-weight: 600;
+    }
 
-        .version-toggle:hover {
-            text-decoration: underline;
-        }
+    .version-toggle:hover {
+        text-decoration: underline;
+    }
 
-        .version-empty {
-            text-align: center;
-            color: #999;
-            padding: 2rem;
-        }
-    </style>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    .version-empty {
+        text-align: center;
+        color: #999;
+        padding: 2rem;
+    }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
-    <!-- Marked.js for markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<!-- Marked.js for markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 
-    <!-- DOMPurify for sanitization -->
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<!-- DOMPurify for sanitization -->
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
-    <script>
-        // --- Immediate Event Handlers & Global Helpers ---
-        (function () {
-            // Helper Functions (Exposed to Window for global access)
-            window.handleDeleteModalEsc = function (e) {
-                if (e.key === 'Escape') window.closeDeleteModal();
-            };
+<script>
+    // --- Immediate Event Handlers & Global Helpers ---
+    (function () {
+        // --- Socket.IO Integration ---
+        const socket = io();
+        socket.on('connect', () => console.log('Connected to real-time sync server'));
 
-            window.openDeleteModal = function (hasShares, hasClones) {
-                const modal = document.getElementById('delete-note-modal');
-                const everyoneBtn = document.getElementById('confirm-delete-everyone');
-                const msgEl = document.getElementById('delete-modal-msg');
-                if (modal) {
-                    // Show "Delete for Everyone" only if note has active shares or clones
-                    const showEveryone = hasShares || hasClones;
-                    if (everyoneBtn) everyoneBtn.style.display = showEveryone ? '' : 'none';
-                    if (msgEl) {
-                        msgEl.textContent = showEveryone
-                            ? 'Choose how you want to delete this note. "Delete for Everyone" will attempt to purge all copies of this note that others may have saved.'
-                            : 'Are you sure you want to delete this note? This action cannot be undone.';
+        // Listen for updates from other devices/collaborators
+        socket.on('note_changed', (data) => {
+            const noteCard = document.querySelector(`.note-card[data-note-id="${data.note_id}"]`);
+            if (noteCard) {
+                const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                if (contentEl) {
+                    contentEl.setAttribute('data-raw', data.content);
+                    if (typeof renderMarkdownWithMath === 'function') {
+                        contentEl.innerHTML = renderMarkdownWithMath(data.content);
+                    } else {
+                        contentEl.textContent = data.content;
                     }
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-                    document.addEventListener('keydown', window.handleDeleteModalEsc);
                 }
-            };
-
-            window.closeDeleteModal = function () {
-                const modal = document.getElementById('delete-note-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                    document.removeEventListener('keydown', window.handleDeleteModalEsc);
+                // Update edit button data-raw
+                const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                if (editBtnEl) {
+                    const tmp = document.createElement('textarea');
+                    tmp.textContent = data.content;
+                    editBtnEl.dataset.raw = tmp.innerHTML;
+                    if (data.reference !== undefined) editBtnEl.dataset.reference = data.reference;
+                    if (data.tags !== undefined) editBtnEl.dataset.tags = JSON.stringify(data.tags);
                 }
-            };
+            }
+        });
 
-            // Edit modal helpers
-            window.handleEditModalEsc = function (e) {
-                if (e.key === 'Escape') window.closeEditModal();
-            };
+        // Helper Functions (Exposed to Window for global access)
+        window.handleDeleteModalEsc = function (e) {
+            if (e.key === 'Escape') window.closeDeleteModal();
+        };
 
-            window.currentEditNoteId = null;
-
-            window.openEditModal = function (noteId, content) {
-                const modal = document.getElementById('edit-note-modal');
-                const textarea = document.getElementById('edit-note-content');
-                const charCount = document.getElementById('edit-char-count');
-                if (modal && textarea) {
-                    window.currentEditNoteId = noteId;
-                    textarea.value = content;
-                    if (charCount) charCount.textContent = content.length;
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-                    textarea.focus();
-                    document.addEventListener('keydown', window.handleEditModalEsc);
+        window.openDeleteModal = function (hasShares, hasClones) {
+            const modal = document.getElementById('delete-note-modal');
+            const everyoneBtn = document.getElementById('confirm-delete-everyone');
+            const msgEl = document.getElementById('delete-modal-msg');
+            if (modal) {
+                // Show "Delete for Everyone" only if note has active shares or clones
+                const showEveryone = hasShares || hasClones;
+                if (everyoneBtn) everyoneBtn.style.display = showEveryone ? '' : 'none';
+                if (msgEl) {
+                    msgEl.textContent = showEveryone
+                        ? 'Choose how you want to delete this note. "Delete for Everyone" will attempt to purge all copies of this note that others may have saved.'
+                        : 'Are you sure you want to delete this note? This action cannot be undone.';
                 }
-            };
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                document.addEventListener('keydown', window.handleDeleteModalEsc);
+            }
+        };
 
-            window.closeEditModal = function () {
-                const modal = document.getElementById('edit-note-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                    window.currentEditNoteId = null;
-                    document.removeEventListener('keydown', window.handleEditModalEsc);
+        window.closeDeleteModal = function () {
+            const modal = document.getElementById('delete-note-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                document.removeEventListener('keydown', window.handleDeleteModalEsc);
+            }
+        };
+
+        // Edit modal helpers
+        window.handleEditModalEsc = function (e) {
+            if (e.key === 'Escape') window.closeEditModal();
+        };
+
+        window.currentEditNoteId = null;
+
+        window.openEditModal = function (noteId, content, reference = '', tags = []) {
+            const modal = document.getElementById('edit-note-modal');
+            const textarea = document.getElementById('edit-note-content');
+            const refInput = document.getElementById('edit-note-reference');
+            const tagsInput = document.getElementById('edit-note-tags');
+            const charCount = document.getElementById('edit-char-count');
+            if (modal && textarea) {
+                window.currentEditNoteId = noteId;
+                textarea.value = content;
+                if (refInput) refInput.value = reference || '';
+                if (tagsInput) tagsInput.value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
+                if (charCount) charCount.textContent = content.length;
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                textarea.focus();
+                document.addEventListener('keydown', window.handleEditModalEsc);
+            }
+        };
+
+        window.closeEditModal = function () {
+            const modal = document.getElementById('edit-note-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                window.currentEditNoteId = null;
+                document.removeEventListener('keydown', window.handleEditModalEsc);
+            }
+        };
+
+        window.openVersionModal = function (noteId) {
+            const modal = document.getElementById('version-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                if (window.loadVersionHistory) window.loadVersionHistory(noteId);
+                document.addEventListener('keydown', window.handleVersionModalEsc);
+            }
+        };
+
+        window.closeVersionModal = function () {
+            const modal = document.getElementById('version-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                document.removeEventListener('keydown', window.handleVersionModalEsc);
+            }
+        };
+
+        window.handleVersionModalEsc = function (e) {
+            if (e.key === 'Escape') window.closeVersionModal();
+        };
+
+        window.loadVersionHistory = async function (noteId) {
+            const list = document.getElementById('version-list');
+            if (!list) return;
+
+            list.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+            try {
+                const response = await fetch(`/personal_post/versions/${noteId}`);
+                const versions = await response.json();
+
+                if (!Array.isArray(versions) || versions.length === 0) {
+                    list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
+                    return;
                 }
-            };
 
-            window.openVersionModal = function (noteId) {
-                const modal = document.getElementById('version-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-                    if (window.loadVersionHistory) window.loadVersionHistory(noteId);
-                    document.addEventListener('keydown', window.handleVersionModalEsc);
-                }
-            };
-
-            window.closeVersionModal = function () {
-                const modal = document.getElementById('version-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                    document.removeEventListener('keydown', window.handleVersionModalEsc);
-                }
-            };
-
-            window.handleVersionModalEsc = function (e) {
-                if (e.key === 'Escape') window.closeVersionModal();
-            };
-
-            window.loadVersionHistory = async function (noteId) {
-                const list = document.getElementById('version-list');
-                if (!list) return;
-
-                list.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-
-                try {
-                    const response = await fetch(`/personal_post/versions/${noteId}`);
-                    const versions = await response.json();
-
-                    if (!Array.isArray(versions) || versions.length === 0) {
-                        list.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
-                        return;
-                    }
-
-                    list.innerHTML = versions.map((v, i) => {
-                        const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
-                        const preview = (v.content || '').substring(0, 200);
-                        const hasMore = (v.content || '').length > 200;
-                        return `
+                list.innerHTML = versions.map((v, i) => {
+                    const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
+                    const preview = (v.content || '').substring(0, 200);
+                    const hasMore = (v.content || '').length > 200;
+                    return `
                         <div class="version-card">
                             <div class="version-header">
                                 <span class="version-editor"><i class="fas fa-user-edit"></i> ${v.editor_name}</span>
@@ -1649,1055 +1744,1069 @@
                             ${hasMore ? `<button class="version-toggle" onclick="window.toggleVersionPreview('${i}')">Show full content</button>` : ''}
                         </div>
                     `;
-                    }).join('');
+                }).join('');
 
-                    window._versionContents = {};
-                    versions.forEach((v, i) => {
-                        window._versionContents[i] = v.content || '';
-                    });
-                } catch (e) {
-                    list.innerHTML = '<div class="version-empty" style="color: #d32f2f;">Failed to load version history.</div>';
-                    console.error('Error loading versions:', e);
-                }
-            };
+                window._versionContents = {};
+                versions.forEach((v, i) => {
+                    window._versionContents[i] = v.content || '';
+                });
+            } catch (e) {
+                list.innerHTML = '<div class="version-empty" style="color: #d32f2f;">Failed to load version history.</div>';
+                console.error('Error loading versions:', e);
+            }
+        };
 
-            window.toggleVersionPreview = function (index) {
-                const el = document.getElementById(`vp-${index}`);
-                const btn = el.parentElement.querySelector('.version-toggle');
-                if (!el || !btn) return;
+        window.toggleVersionPreview = function (index) {
+            const el = document.getElementById(`vp-${index}`);
+            const btn = el.parentElement.querySelector('.version-toggle');
+            if (!el || !btn) return;
 
-                if (el.classList.contains('expanded')) {
-                    el.classList.remove('expanded');
-                    const preview = (window._versionContents[index] || '').substring(0, 200);
-                    el.textContent = preview + '...';
-                    btn.textContent = 'Show full content';
-                } else {
-                    el.classList.add('expanded');
-                    el.textContent = window._versionContents[index] || '';
-                    btn.textContent = 'Show less';
-                }
-            };
+            if (el.classList.contains('expanded')) {
+                el.classList.remove('expanded');
+                const preview = (window._versionContents[index] || '').substring(0, 200);
+                el.textContent = preview + '...';
+                btn.textContent = 'Show full content';
+            } else {
+                el.classList.add('expanded');
+                el.textContent = window._versionContents[index] || '';
+                btn.textContent = 'Show less';
+            }
+        };
 
-            window.handleRevoke = async function (revokeBtn) {
-                const shareId = revokeBtn.dataset.shareId;
-                const confirmMsg = 'Revoke this link? It will immediately stop working.';
+        window.handleRevoke = async function (revokeBtn) {
+            const shareId = revokeBtn.dataset.shareId;
+            const confirmMsg = 'Revoke this link? It will immediately stop working.';
 
-                const performRevoke = async () => {
-                    revokeBtn.disabled = true;
-                    try {
-                        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            const performRevoke = async () => {
+                revokeBtn.disabled = true;
+                try {
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-                        const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRFToken': csrfToken
-                            }
-                        });
-                        const result = await response.json();
-                        if (result.success) {
-                            // Try to reload shares if we know the note ID
-                            // But we might be in a different context.
-                            const row = revokeBtn.closest('.share-link-item');
-                            if (row) {
-                                row.style.opacity = '0.5';
-                                row.style.pointerEvents = 'none';
-                                setTimeout(() => row.remove(), 500);
-                            }
-                        } else {
-                            alert(result.error || 'Failed to revoke link');
-                            revokeBtn.disabled = false;
+                    const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': csrfToken
                         }
-                    } catch (err) {
-                        console.error('Revoke failed:', err);
-                        alert('Network error. Please try again.');
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        // Try to reload shares if we know the note ID
+                        // But we might be in a different context.
+                        const row = revokeBtn.closest('.share-link-item');
+                        if (row) {
+                            row.style.opacity = '0.5';
+                            row.style.pointerEvents = 'none';
+                            setTimeout(() => row.remove(), 500);
+                        }
+                    } else {
+                        alert(result.error || 'Failed to revoke link');
                         revokeBtn.disabled = false;
                     }
-                };
-
-                if (typeof window.showCustomConfirm === 'function') {
-                    window.showCustomConfirm(confirmMsg, confirmed => {
-                        if (confirmed) performRevoke();
-                    });
-                } else if (confirm(confirmMsg)) {
-                    performRevoke();
-                }
-            };
-
-
-            // 1. Global Delegated Click Handler
-            document.addEventListener('click', (e) => {
-                // Edit Note
-                const editBtn = e.target.closest('.edit-note-btn');
-                if (editBtn) {
-                    const noteId = editBtn.dataset.id;
-                    const rawContent = editBtn.dataset.raw;
-                    // Decode HTML entities
-                    const tmp = document.createElement('textarea');
-                    tmp.innerHTML = rawContent;
-                    window.openEditModal(noteId, tmp.value);
-                    return;
-                }
-
-                // Sync Note
-                const syncBtn = e.target.closest('.sync-note-btn');
-                if (syncBtn && !syncBtn.classList.contains('syncing')) {
-                    const noteId = syncBtn.dataset.id;
-                    window.syncNote(noteId, syncBtn);
-                    return;
-                }
-
-                // Version History
-                const versionBtn = e.target.closest('.version-history-btn');
-                if (versionBtn) {
-                    const noteId = versionBtn.dataset.id;
-                    window.openVersionModal(noteId);
-                    return;
-                }
-
-                // Copy Buttons
-                const copyBtn = e.target.closest('.copy-btn');
-                if (copyBtn) {
-                    const text = copyBtn.dataset.copyText;
-                    if (text && window.copyShareUrl) window.copyShareUrl(text, copyBtn);
-                    return;
-                }
-
-                // Share Link Dropdown Toggles
-                const toggleBtn = e.target.closest('.active-link-toggle');
-                if (toggleBtn) {
-                    e.preventDefault();
-                    const dropdown = toggleBtn.nextElementSibling;
-                    if (!dropdown) return;
-                    const isOpen = dropdown.style.display === 'block';
-                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
-                    dropdown.style.display = isOpen ? 'none' : 'block';
-                    return;
-                }
-
-                // Share Revocation
-                const revokeBtn = e.target.closest('.revoke-btn');
-                if (revokeBtn) {
-                    window.handleRevoke(revokeBtn);
-                    return;
-                }
-
-                // Delete Confirmations (Delegated)
-                if (e.target.closest('#confirm-delete-me') && window.pendingDeleteForm) {
-                    window.closeDeleteModal();
-                    const modeInput = document.createElement('input');
-                    modeInput.type = 'hidden';
-                    modeInput.name = 'mode';
-                    modeInput.value = 'me';
-                    window.pendingDeleteForm.appendChild(modeInput);
-                    window.pendingDeleteForm.submit();
-                    return;
-                }
-                if (e.target.closest('#confirm-delete-everyone') && window.pendingDeleteForm) {
-                    window.closeDeleteModal();
-                    const modeInput = document.createElement('input');
-                    modeInput.type = 'hidden';
-                    modeInput.name = 'mode';
-                    modeInput.value = 'everyone';
-                    window.pendingDeleteForm.appendChild(modeInput);
-                    window.pendingDeleteForm.submit();
-                    return;
-                }
-
-                // Close open dropdowns when clicking elsewhere
-                if (!e.target.closest('.active-links-badge') && !toggleBtn) {
-                    document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
-                }
-            });
-
-            // 2. Delete Form Handler
-            document.addEventListener('submit', (e) => {
-                const form = e.target;
-                if (form && form.classList.contains('delete-note-form')) {
-                    e.preventDefault();
-                    window.pendingDeleteForm = form;
-                    const hasShares = form.dataset.hasShares === 'true';
-                    const hasClones = form.dataset.hasClones === 'true';
-                    if (typeof window.openDeleteModal === 'function') window.openDeleteModal(hasShares, hasClones);
-                }
-            });
-
-            // Save Edit Handler
-            window.saveNoteEdit = async function () {
-                const noteId = window.currentEditNoteId;
-                const textarea = document.getElementById('edit-note-content');
-                const saveBtn = document.getElementById('save-edit-btn');
-                if (!noteId || !textarea) return;
-
-                const content = textarea.value.trim();
-                if (!content) {
-                    alert('Content cannot be empty.');
-                    return;
-                }
-
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-                try {
-                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-
-                    const response = await fetch(`/personal_post/edit/${noteId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: JSON.stringify({ content: content })
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                        // Update the note card in-place
-                        const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-                        if (noteCard) {
-                            const contentEl = noteCard.querySelector('.note-content.rendered-note');
-                            if (contentEl) {
-                                contentEl.setAttribute('data-raw', content);
-                                if (typeof renderMarkdownWithMath === 'function') {
-                                    contentEl.innerHTML = renderMarkdownWithMath(content);
-                                } else {
-                                    contentEl.textContent = content;
-                                }
-                            }
-                            // Update edit button data-raw
-                            const editBtnEl = noteCard.querySelector('.edit-note-btn');
-                            if (editBtnEl) {
-                                const tmp = document.createElement('textarea');
-                                tmp.textContent = content;
-                                editBtnEl.dataset.raw = tmp.innerHTML;
-                            }
-                            // Update copy button
-                            const copyBtnEl = noteCard.querySelector('.copy-btn');
-                            if (copyBtnEl) copyBtnEl.dataset.copyText = content;
-                        }
-                        window.closeEditModal();
-                    } else {
-                        alert(result.error || 'Failed to save changes.');
-                    }
                 } catch (err) {
-                    console.error('Edit failed:', err);
+                    console.error('Revoke failed:', err);
                     alert('Network error. Please try again.');
-                } finally {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                    revokeBtn.disabled = false;
                 }
             };
 
-            // Sync Note Handler
-            window.syncNote = async function (noteId, btn) {
-                const icon = btn.querySelector('i');
-                btn.classList.add('syncing');
-                if (icon) icon.className = 'fas fa-spinner fa-spin';
+            if (typeof window.showCustomConfirm === 'function') {
+                window.showCustomConfirm(confirmMsg, confirmed => {
+                    if (confirmed) performRevoke();
+                });
+            } else if (confirm(confirmMsg)) {
+                performRevoke();
+            }
+        };
 
-                try {
-                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-                    const response = await fetch(`/personal_post/sync/${noteId}`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': csrfToken
-                        }
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                        // Update note content in-place (for both push and pull)
-                        const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-                        if (noteCard && result.content) {
-                            const contentEl = noteCard.querySelector('.note-content.rendered-note');
-                            if (contentEl) {
-                                contentEl.setAttribute('data-raw', result.content);
-                                if (typeof renderMarkdownWithMath === 'function') {
-                                    contentEl.innerHTML = renderMarkdownWithMath(result.content);
-                                } else {
-                                    contentEl.textContent = result.content;
-                                }
-                            }
-                            // Update edit button data-raw
-                            const editBtnEl = noteCard.querySelector('.edit-note-btn');
-                            if (editBtnEl) {
-                                const tmp = document.createElement('textarea');
-                                tmp.textContent = result.content;
-                                editBtnEl.dataset.raw = tmp.innerHTML;
-                            }
-                            // Update copy button
-                            const copyBtnEl = noteCard.querySelector('.copy-btn');
-                            if (copyBtnEl) copyBtnEl.dataset.copyText = result.content;
-                        }
-                        // Direction-aware success feedback
-                        const direction = result.direction || 'pull';
-                        if (icon) {
-                            if (direction === 'push') {
-                                icon.className = 'fas fa-arrow-up';
-                                btn.style.color = '#1565c0';
-                                btn.title = 'Pushed your changes to the original';
-                            } else if (direction === 'pull') {
-                                icon.className = 'fas fa-arrow-down';
-                                btn.style.color = '#2e7d32';
-                                btn.title = 'Pulled latest changes from the original';
+        // 1. Global Delegated Click Handler
+        document.addEventListener('click', (e) => {
+            // Edit Note
+            const editBtn = e.target.closest('.edit-note-btn');
+            if (editBtn) {
+                const noteId = editBtn.dataset.id;
+                const rawContent = editBtn.dataset.raw;
+                const reference = editBtn.dataset.reference || '';
+                const tagsStr = editBtn.dataset.tags || '[]';
+                let tags = [];
+                try { tags = JSON.parse(tagsStr); } catch (e) { }
+
+                // Decode HTML entities
+                const tmp = document.createElement('textarea');
+                tmp.innerHTML = rawContent;
+                window.openEditModal(noteId, tmp.value, reference, tags);
+                return;
+            }
+
+            // Sync Note
+            const syncBtn = e.target.closest('.sync-note-btn');
+            if (syncBtn && !syncBtn.classList.contains('syncing')) {
+                const noteId = syncBtn.dataset.id;
+                window.syncNote(noteId, syncBtn);
+                return;
+            }
+
+            // Version History
+            const versionBtn = e.target.closest('.version-history-btn');
+            if (versionBtn) {
+                const noteId = versionBtn.dataset.id;
+                window.openVersionModal(noteId);
+                return;
+            }
+
+            // Copy Buttons
+            const copyBtn = e.target.closest('.copy-btn');
+            if (copyBtn) {
+                const text = copyBtn.dataset.copyText;
+                if (text && window.copyShareUrl) window.copyShareUrl(text, copyBtn);
+                return;
+            }
+
+            // Share Link Dropdown Toggles
+            const toggleBtn = e.target.closest('.active-link-toggle');
+            if (toggleBtn) {
+                e.preventDefault();
+                const dropdown = toggleBtn.nextElementSibling;
+                if (!dropdown) return;
+                const isOpen = dropdown.style.display === 'block';
+                document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+                dropdown.style.display = isOpen ? 'none' : 'block';
+                return;
+            }
+
+            // Share Revocation
+            const revokeBtn = e.target.closest('.revoke-btn');
+            if (revokeBtn) {
+                window.handleRevoke(revokeBtn);
+                return;
+            }
+
+            // Delete Confirmations (Delegated)
+            if (e.target.closest('#confirm-delete-me') && window.pendingDeleteForm) {
+                window.closeDeleteModal();
+                const modeInput = document.createElement('input');
+                modeInput.type = 'hidden';
+                modeInput.name = 'mode';
+                modeInput.value = 'me';
+                window.pendingDeleteForm.appendChild(modeInput);
+                window.pendingDeleteForm.submit();
+                return;
+            }
+            if (e.target.closest('#confirm-delete-everyone') && window.pendingDeleteForm) {
+                window.closeDeleteModal();
+                const modeInput = document.createElement('input');
+                modeInput.type = 'hidden';
+                modeInput.name = 'mode';
+                modeInput.value = 'everyone';
+                window.pendingDeleteForm.appendChild(modeInput);
+                window.pendingDeleteForm.submit();
+                return;
+            }
+
+            // Close open dropdowns when clicking elsewhere
+            if (!e.target.closest('.active-links-badge') && !toggleBtn) {
+                document.querySelectorAll('.share-dropdown').forEach(d => d.style.display = 'none');
+            }
+        });
+
+        // 2. Delete Form Handler
+        document.addEventListener('submit', (e) => {
+            const form = e.target;
+            if (form && form.classList.contains('delete-note-form')) {
+                e.preventDefault();
+                window.pendingDeleteForm = form;
+                const hasShares = form.dataset.hasShares === 'true';
+                const hasClones = form.dataset.hasClones === 'true';
+                if (typeof window.openDeleteModal === 'function') window.openDeleteModal(hasShares, hasClones);
+            }
+        });
+
+        // Save Edit Handler
+        window.saveNoteEdit = async function () {
+            const noteId = window.currentEditNoteId;
+            const textarea = document.getElementById('edit-note-content');
+            const saveBtn = document.getElementById('save-edit-btn');
+            if (!noteId || !textarea) return;
+
+            const content = textarea.value.trim();
+            if (!content) {
+                alert('Content cannot be empty.');
+                return;
+            }
+
+            const refInput = document.getElementById('edit-note-reference');
+            const tagsInput = document.getElementById('edit-note-tags');
+            const reference = refInput ? refInput.value.trim() : '';
+            const tags = tagsInput ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                const response = await fetch(`/personal_post/edit/${noteId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        reference: reference,
+                        tags: tags
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    // Update the note card in-place
+                    const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                    if (noteCard) {
+                        const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                        if (contentEl) {
+                            contentEl.setAttribute('data-raw', content);
+                            if (typeof renderMarkdownWithMath === 'function') {
+                                contentEl.innerHTML = renderMarkdownWithMath(content);
                             } else {
-                                icon.className = 'fas fa-check';
-                                btn.style.color = '#2e7d32';
-                                btn.title = 'Already in sync';
+                                contentEl.textContent = content;
                             }
-                            setTimeout(() => {
-                                icon.className = 'fas fa-sync-alt';
-                                btn.style.color = '';
-                                btn.title = 'Sync with original';
-                            }, 3000);
                         }
-                        // Show a brief toast if available, or title tooltip is enough
-                        if (result.message && typeof window.showFlashMessage === 'function') {
-                            window.showFlashMessage(result.message, 'success');
+                        // Update edit button data-raw
+                        const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                        if (editBtnEl) {
+                            const tmp = document.createElement('textarea');
+                            tmp.textContent = content;
+                            editBtnEl.dataset.raw = tmp.innerHTML;
                         }
-                    } else {
-                        alert(result.error || 'Failed to sync note.');
-                        if (icon) icon.className = 'fas fa-sync-alt';
+                        // Update copy button
+                        const copyBtnEl = noteCard.querySelector('.copy-btn');
+                        if (copyBtnEl) copyBtnEl.dataset.copyText = content;
                     }
-                } catch (err) {
-                    console.error('Sync failed:', err);
-                    alert('Network error. Please try again.');
+                    window.closeEditModal();
+                } else {
+                    alert(result.error || 'Failed to save changes.');
+                }
+            } catch (err) {
+                console.error('Edit failed:', err);
+                alert('Network error. Please try again.');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+            }
+        };
+
+        // Sync Note Handler
+        window.syncNote = async function (noteId, btn) {
+            const icon = btn.querySelector('i');
+            btn.classList.add('syncing');
+            if (icon) icon.className = 'fas fa-spinner fa-spin';
+
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                const response = await fetch(`/personal_post/sync/${noteId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    // Update note content in-place (for both push and pull)
+                    const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                    if (noteCard && result.content) {
+                        const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                        if (contentEl) {
+                            contentEl.setAttribute('data-raw', result.content);
+                            if (typeof renderMarkdownWithMath === 'function') {
+                                contentEl.innerHTML = renderMarkdownWithMath(result.content);
+                            } else {
+                                contentEl.textContent = result.content;
+                            }
+                        }
+                        // Update edit button data-raw
+                        const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                        if (editBtnEl) {
+                            const tmp = document.createElement('textarea');
+                            tmp.textContent = result.content;
+                            editBtnEl.dataset.raw = tmp.innerHTML;
+                        }
+                        // Update copy button
+                        const copyBtnEl = noteCard.querySelector('.copy-btn');
+                        if (copyBtnEl) copyBtnEl.dataset.copyText = result.content;
+                    }
+                    // Direction-aware success feedback
+                    const direction = result.direction || 'pull';
+                    if (icon) {
+                        if (direction === 'push') {
+                            icon.className = 'fas fa-arrow-up';
+                            btn.style.color = '#1565c0';
+                            btn.title = 'Pushed your changes to the original';
+                        } else if (direction === 'pull') {
+                            icon.className = 'fas fa-arrow-down';
+                            btn.style.color = '#2e7d32';
+                            btn.title = 'Pulled latest changes from the original';
+                        } else {
+                            icon.className = 'fas fa-check';
+                            btn.style.color = '#2e7d32';
+                            btn.title = 'Already in sync';
+                        }
+                        setTimeout(() => {
+                            icon.className = 'fas fa-sync-alt';
+                            btn.style.color = '';
+                            btn.title = 'Sync with original';
+                        }, 3000);
+                    }
+                    // Show a brief toast if available, or title tooltip is enough
+                    if (result.message && typeof window.showFlashMessage === 'function') {
+                        window.showFlashMessage(result.message, 'success');
+                    }
+                } else {
+                    alert(result.error || 'Failed to sync note.');
                     if (icon) icon.className = 'fas fa-sync-alt';
-                } finally {
-                    btn.classList.remove('syncing');
                 }
-            };
-        })();
+            } catch (err) {
+                console.error('Sync failed:', err);
+                alert('Network error. Please try again.');
+                if (icon) icon.className = 'fas fa-sync-alt';
+            } finally {
+                btn.classList.remove('syncing');
+            }
+        };
+    })();
 
-        document.addEventListener('DOMContentLoaded', function () {
-            // Function to auto-detect and convert common math patterns to LaTeX
-            function autoDetectMath(text) {
-                if (!text) return text;
+    document.addEventListener('DOMContentLoaded', function () {
+        // Function to auto-detect and convert common math patterns to LaTeX
+        function autoDetectMath(text) {
+            if (!text) return text;
 
 
 
-                // Protect code blocks
-                const codeBlocks = [];
-                text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
-                text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
+            // Protect code blocks
+            const codeBlocks = [];
+            text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
+            text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
 
-                // Protect EXISTING $...$
-                const existingMath = [];
-                text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
-                text = text.replace(/\$[^\$]+?\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
+            // Protect EXISTING $...$
+            const existingMath = [];
+            text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
+            text = text.replace(/\$[^\$]+?\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
 
-                const wrap = (content) => `$${content}$`;
+            const wrap = (content) => `$${content}$`;
 
-                function extractBracedContent(str, startIndex) {
-                    // Skip optional whitespace before the brace
-                    let i = startIndex;
-                    while (i < str.length && /\s/.test(str[i])) i++;
+            function extractBracedContent(str, startIndex) {
+                // Skip optional whitespace before the brace
+                let i = startIndex;
+                while (i < str.length && /\s/.test(str[i])) i++;
 
-                    if (str[i] !== '{') return null;
-                    let depth = 1;
-                    for (let k = i + 1; k < str.length; k++) {
-                        if (str[k] === '{') depth++;
-                        else if (str[k] === '}') {
-                            depth--;
-                            if (depth === 0) return { content: str.substring(i + 1, k), endIndex: k };
+                if (str[i] !== '{') return null;
+                let depth = 1;
+                for (let k = i + 1; k < str.length; k++) {
+                    if (str[k] === '{') depth++;
+                    else if (str[k] === '}') {
+                        depth--;
+                        if (depth === 0) return { content: str.substring(i + 1, k), endIndex: k };
+                    }
+                }
+                return null;
+            }
+
+            // Commands sorted by length (longest first) to ensure greedy matching
+            // Comprehensive list for math, physics, chemistry, and advanced notation
+            const mathCmds = [
+                // === ARROWS & LOGIC ===
+                'longleftrightarrow', 'Longleftrightarrow', 'hookrightarrow', 'hookleftarrow',
+                'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow',
+                'longleftarrow', 'Longleftarrow', 'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow',
+                'uparrow', 'Uparrow', 'downarrow', 'Downarrow', 'updownarrow', 'Updownarrow',
+                'nearrow', 'searrow', 'swarrow', 'nwarrow', 'mapsto', 'longmapsto',
+                'rightharpoonup', 'rightharpoondown', 'leftharpoonup', 'leftharpoondown',
+                'rightleftharpoons', 'leftrightharpoons', 'curvearrowright', 'curvearrowleft',
+                'circlearrowright', 'circlearrowleft', 'looparrowright', 'looparrowleft',
+                'twoheadrightarrow', 'twoheadleftarrow', 'leadsto',
+                'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor',
+                'oplus', 'otimes', 'odot', 'ominus', 'oslash',
+                'forall', 'exists', 'nexists', 'therefore', 'because', 'top', 'bot', 'vdash', 'dashv', 'models',
+
+                // === SET THEORY ===
+                'emptyset', 'varnothing', 'subset', 'subseteq', 'subsetneq', 'supset', 'supseteq', 'supsetneq',
+                'sqsubset', 'sqsubseteq', 'sqsupset', 'sqsupseteq',
+                'cup', 'cap', 'bigcup', 'bigcap', 'setminus', 'smallsetminus',
+                'in', 'notin', 'ni', 'owns',
+
+                // === RELATIONS & COMPARISONS ===
+                'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'leqslant', 'geqslant',
+                'll', 'gg', 'lll', 'ggg', 'lesssim', 'gtrsim', 'lessgtr', 'gtrless',
+                'prec', 'succ', 'preceq', 'succeq', 'precneq', 'succneq',
+                'approx', 'approxeq', 'thickapprox', 'equiv', 'cong', 'ncong', 'sim', 'simeq', 'nsim',
+                'propto', 'varpropto', 'parallel', 'nparallel', 'perp', 'asymp',
+                'doteq', 'triangleq', 'circeq', 'bumpeq', 'Bumpeq',
+                'coloneq', 'eqcolon', 'coloncolon',
+
+                // === GREEK LETTERS (lowercase) ===
+                'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
+                'iota', 'kappa', 'varkappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'varpi',
+                'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
+                // === GREEK LETTERS (uppercase) ===
+                'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
+
+                // === CALCULUS & ANALYSIS ===
+                'partial', 'nabla', 'grad', 'diverge', 'curl',
+                'int', 'iint', 'iiint', 'iiiint', 'oint', 'oiint', 'oiiint', 'intop', 'smallint',
+                'sum', 'prod', 'coprod', 'bigoplus', 'bigotimes', 'bigodot', 'biguplus', 'bigsqcup',
+                'lim', 'limsup', 'liminf', 'varlimsup', 'varliminf', 'injlim', 'projlim', 'varinjlim', 'varprojlim',
+                'to', 'gets', 'infty',
+
+                // === FUNCTIONS ===
+                'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
+                'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
+                'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
+                'arcsinh', 'arccosh', 'arctanh', 'arccoth',
+                'log', 'ln', 'lg', 'exp', 'Re', 'Im',
+                'det', 'dim', 'ker', 'coker', 'image', 'rank', 'nullity',
+                'deg', 'gcd', 'lcm', 'hom', 'Hom', 'End', 'Aut', 'Ker', 'Im',
+                'min', 'max', 'sup', 'inf', 'arg', 'sgn', 'sign',
+                'mod', 'bmod', 'pmod',
+                'Pr', 'tr', 'Tr', 'diag', 'erf', 'erfc', 'sinc',
+
+                // === FRACTIONS & ROOTS ===
+                'frac', 'dfrac', 'tfrac', 'cfrac', 'sfrac', 'nicefrac',
+                'sqrt', 'cbrt', 'root',
+                'binom', 'dbinom', 'tbinom', 'choose',
+
+                // === ACCENTS & DECORATIONS ===
+                'hat', 'widehat', 'check', 'widecheck', 'tilde', 'widetilde',
+                'acute', 'grave', 'breve', 'bar', 'overline', 'underline',
+                'vec', 'overrightarrow', 'overleftarrow', 'overleftrightarrow',
+                'underrightarrow', 'underleftarrow', 'underleftrightarrow',
+                'dot', 'ddot', 'dddot', 'ddddot', 'mathring',
+                'overbrace', 'underbrace', 'overgroup', 'undergroup',
+                'overlinesegment', 'underlinesegment',
+                'boxed', 'cancel', 'bcancel', 'xcancel', 'cancelto', 'sout', 'not',
+
+                // === PHYSICS & VECTORS ===
+                'hbar', 'planck', 'hslash',
+                'ell', 'wp', 'aleph', 'beth', 'gimel', 'daleth',
+                'Angstrom', 'AA',
+                'degree', 'celsius', 'ohm', 'micro', 'angstrom',
+                'vec', 'bm', 'boldsymbol', 'pmb',
+                'tensor', 'ketbra', 'braket', 'Bra', 'Ket', 'bra', 'ket', 'dyad',
+                'mel', 'matrixel', 'ev', 'expectationvalue',
+                'commutator', 'anticommutator', 'poissonbracket',
+                'dd', 'dv', 'pdv', 'var', 'fdv', 'abs', 'norm', 'eval', 'order',
+                'gradient', 'divergence', 'laplacian',
+                'cross', 'vdot', 'vectorbold', 'vectorarrow', 'vectorunit',
+                'qty', 'quantity', 'pqty', 'bqty', 'vqty', 'Bqty', 'absolutevalue',
+
+                // === MATRICES & LINEAR ALGEBRA ===
+                'begin', 'end', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix',
+                'smallmatrix', 'array', 'cases', 'rcases', 'dcases',
+                'aligned', 'gathered', 'split', 'multline', 'equation', 'align',
+
+                // === SPACING ===
+                'quad', 'qquad', 'thinspace', 'medspace', 'thickspace', 'negthinspace', 'negmedspace', 'negthickspace',
+                'enspace', 'space', 'nobreakspace',
+
+                // === DOTS & MISC SYMBOLS ===
+                'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'iddots', 'dotsb', 'dotsc', 'dotsi', 'dotsm', 'dotso',
+                'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet', 'diamond', 'lozenge',
+                'dagger', 'ddagger', 'amalg',
+                'triangle', 'triangledown', 'triangleleft', 'triangleright',
+                'bigtriangleup', 'bigtriangledown', 'vartriangle', 'blacktriangle', 'blacktriangledown',
+                'square', 'blacksquare', 'Box', 'Diamond',
+                'checkmark', 'maltese', 'clubsuit', 'diamondsuit', 'heartsuit', 'spadesuit',
+                'sharp', 'flat', 'natural',
+                'surd', 'angle', 'measuredangle', 'sphericalangle',
+                'prime', 'backprime', 'dprime', 'trprime', 'qprime',
+
+                // === DELIMITERS ===
+                'left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'Biggl', 'Biggr',
+                'langle', 'rangle', 'lang', 'rang',
+                'lfloor', 'rfloor', 'lceil', 'rceil',
+                'lvert', 'rvert', 'lVert', 'rVert',
+                'lbrace', 'rbrace', 'lbrack', 'rbrack',
+                'ulcorner', 'urcorner', 'llcorner', 'lrcorner',
+                'llbracket', 'rrbracket', 'lmoustache', 'rmoustache',
+
+                // === TEXT & FORMATTING ===
+                'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt', 'textup', 'textsl', 'textsc',
+                'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
+                'bm', 'bold', 'boldsymbol', 'pmb',
+                'rm', 'bf', 'it', 'sf', 'tt', 'cal', 'scr', 'frak', 'Bbb',
+                'operatorname', 'DeclareMathOperator',
+                'displaystyle', 'textstyle', 'scriptstyle', 'scriptscriptstyle',
+                'tiny', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge',
+                'color', 'textcolor', 'colorbox', 'fcolorbox',
+                'hspace', 'vspace', 'kern', 'mkern', 'mskip', 'hskip', 'rule', 'Rule', 'phantom', 'vphantom', 'hphantom',
+
+                // === CHEMISTRY (basic) ===
+                'ce', 'pu', 'bond', 'arrow',
+
+                // === NUMBER SETS ===
+                'N', 'Z', 'Q', 'R', 'C', 'H', 'O', 'F', 'P'
+            ];
+            const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
+
+            let result = '';
+            let lastIdx = 0;
+            let match;
+
+            // Commands that take two braced arguments like \frac{a}{b}
+            const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'cfrac', 'binom', 'dbinom', 'tbinom', 'overset', 'underset', 'stackrel'];
+            // Commands that take one braced argument (or optional + braced)
+            const oneArgCmds = ['sqrt', 'cbrt', 'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde',
+                'overline', 'underline', 'overbrace', 'underbrace', 'boxed', 'cancel', 'bcancel', 'xcancel',
+                'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
+                'bm', 'boldsymbol', 'operatorname', 'color', 'textcolor', 'phantom', 'abs', 'norm'];
+
+            while ((match = cmdRegex.exec(text)) !== null) {
+                result += text.substring(lastIdx, match.index);
+                const cmd = match[1];
+                let matchedWhole = false;
+
+                if (twoArgCmds.includes(cmd)) {
+                    // Handle two-argument commands like \frac{a}{b}
+                    let j = match.index + match[0].length;
+                    const first = extractBracedContent(text, j);
+                    if (first) {
+                        const second = extractBracedContent(text, first.endIndex + 1);
+                        if (second) {
+                            result += wrap(text.substring(match.index, second.endIndex + 1));
+                            lastIdx = second.endIndex + 1;
+                            cmdRegex.lastIndex = lastIdx;
+                            matchedWhole = true;
                         }
                     }
-                    return null;
-                }
-
-                // Commands sorted by length (longest first) to ensure greedy matching
-                // Comprehensive list for math, physics, chemistry, and advanced notation
-                const mathCmds = [
-                    // === ARROWS & LOGIC ===
-                    'longleftrightarrow', 'Longleftrightarrow', 'hookrightarrow', 'hookleftarrow',
-                    'leftrightarrow', 'Leftrightarrow', 'longrightarrow', 'Longrightarrow',
-                    'longleftarrow', 'Longleftarrow', 'rightarrow', 'Rightarrow', 'leftarrow', 'Leftarrow',
-                    'uparrow', 'Uparrow', 'downarrow', 'Downarrow', 'updownarrow', 'Updownarrow',
-                    'nearrow', 'searrow', 'swarrow', 'nwarrow', 'mapsto', 'longmapsto',
-                    'rightharpoonup', 'rightharpoondown', 'leftharpoonup', 'leftharpoondown',
-                    'rightleftharpoons', 'leftrightharpoons', 'curvearrowright', 'curvearrowleft',
-                    'circlearrowright', 'circlearrowleft', 'looparrowright', 'looparrowleft',
-                    'twoheadrightarrow', 'twoheadleftarrow', 'leadsto',
-                    'iff', 'implies', 'impliedby', 'neg', 'lnot', 'wedge', 'land', 'vee', 'lor',
-                    'oplus', 'otimes', 'odot', 'ominus', 'oslash',
-                    'forall', 'exists', 'nexists', 'therefore', 'because', 'top', 'bot', 'vdash', 'dashv', 'models',
-
-                    // === SET THEORY ===
-                    'emptyset', 'varnothing', 'subset', 'subseteq', 'subsetneq', 'supset', 'supseteq', 'supsetneq',
-                    'sqsubset', 'sqsubseteq', 'sqsupset', 'sqsupseteq',
-                    'cup', 'cap', 'bigcup', 'bigcap', 'setminus', 'smallsetminus',
-                    'in', 'notin', 'ni', 'owns',
-
-                    // === RELATIONS & COMPARISONS ===
-                    'neq', 'ne', 'leq', 'le', 'geq', 'ge', 'leqslant', 'geqslant',
-                    'll', 'gg', 'lll', 'ggg', 'lesssim', 'gtrsim', 'lessgtr', 'gtrless',
-                    'prec', 'succ', 'preceq', 'succeq', 'precneq', 'succneq',
-                    'approx', 'approxeq', 'thickapprox', 'equiv', 'cong', 'ncong', 'sim', 'simeq', 'nsim',
-                    'propto', 'varpropto', 'parallel', 'nparallel', 'perp', 'asymp',
-                    'doteq', 'triangleq', 'circeq', 'bumpeq', 'Bumpeq',
-                    'coloneq', 'eqcolon', 'coloncolon',
-
-                    // === GREEK LETTERS (lowercase) ===
-                    'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta', 'theta', 'vartheta',
-                    'iota', 'kappa', 'varkappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'pi', 'varpi',
-                    'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi', 'varphi', 'chi', 'psi', 'omega',
-                    // === GREEK LETTERS (uppercase) ===
-                    'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega',
-
-                    // === CALCULUS & ANALYSIS ===
-                    'partial', 'nabla', 'grad', 'diverge', 'curl',
-                    'int', 'iint', 'iiint', 'iiiint', 'oint', 'oiint', 'oiiint', 'intop', 'smallint',
-                    'sum', 'prod', 'coprod', 'bigoplus', 'bigotimes', 'bigodot', 'biguplus', 'bigsqcup',
-                    'lim', 'limsup', 'liminf', 'varlimsup', 'varliminf', 'injlim', 'projlim', 'varinjlim', 'varprojlim',
-                    'to', 'gets', 'infty',
-
-                    // === FUNCTIONS ===
-                    'sin', 'cos', 'tan', 'cot', 'sec', 'csc',
-                    'arcsin', 'arccos', 'arctan', 'arccot', 'arcsec', 'arccsc',
-                    'sinh', 'cosh', 'tanh', 'coth', 'sech', 'csch',
-                    'arcsinh', 'arccosh', 'arctanh', 'arccoth',
-                    'log', 'ln', 'lg', 'exp', 'Re', 'Im',
-                    'det', 'dim', 'ker', 'coker', 'image', 'rank', 'nullity',
-                    'deg', 'gcd', 'lcm', 'hom', 'Hom', 'End', 'Aut', 'Ker', 'Im',
-                    'min', 'max', 'sup', 'inf', 'arg', 'sgn', 'sign',
-                    'mod', 'bmod', 'pmod',
-                    'Pr', 'tr', 'Tr', 'diag', 'erf', 'erfc', 'sinc',
-
-                    // === FRACTIONS & ROOTS ===
-                    'frac', 'dfrac', 'tfrac', 'cfrac', 'sfrac', 'nicefrac',
-                    'sqrt', 'cbrt', 'root',
-                    'binom', 'dbinom', 'tbinom', 'choose',
-
-                    // === ACCENTS & DECORATIONS ===
-                    'hat', 'widehat', 'check', 'widecheck', 'tilde', 'widetilde',
-                    'acute', 'grave', 'breve', 'bar', 'overline', 'underline',
-                    'vec', 'overrightarrow', 'overleftarrow', 'overleftrightarrow',
-                    'underrightarrow', 'underleftarrow', 'underleftrightarrow',
-                    'dot', 'ddot', 'dddot', 'ddddot', 'mathring',
-                    'overbrace', 'underbrace', 'overgroup', 'undergroup',
-                    'overlinesegment', 'underlinesegment',
-                    'boxed', 'cancel', 'bcancel', 'xcancel', 'cancelto', 'sout', 'not',
-
-                    // === PHYSICS & VECTORS ===
-                    'hbar', 'planck', 'hslash',
-                    'ell', 'wp', 'aleph', 'beth', 'gimel', 'daleth',
-                    'Angstrom', 'AA',
-                    'degree', 'celsius', 'ohm', 'micro', 'angstrom',
-                    'vec', 'bm', 'boldsymbol', 'pmb',
-                    'tensor', 'ketbra', 'braket', 'Bra', 'Ket', 'bra', 'ket', 'dyad',
-                    'mel', 'matrixel', 'ev', 'expectationvalue',
-                    'commutator', 'anticommutator', 'poissonbracket',
-                    'dd', 'dv', 'pdv', 'var', 'fdv', 'abs', 'norm', 'eval', 'order',
-                    'gradient', 'divergence', 'laplacian',
-                    'cross', 'vdot', 'vectorbold', 'vectorarrow', 'vectorunit',
-                    'qty', 'quantity', 'pqty', 'bqty', 'vqty', 'Bqty', 'absolutevalue',
-
-                    // === MATRICES & LINEAR ALGEBRA ===
-                    'begin', 'end', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix',
-                    'smallmatrix', 'array', 'cases', 'rcases', 'dcases',
-                    'aligned', 'gathered', 'split', 'multline', 'equation', 'align',
-
-                    // === SPACING ===
-                    'quad', 'qquad', 'thinspace', 'medspace', 'thickspace', 'negthinspace', 'negmedspace', 'negthickspace',
-                    'enspace', 'space', 'nobreakspace',
-
-                    // === DOTS & MISC SYMBOLS ===
-                    'cdot', 'cdots', 'ldots', 'dots', 'vdots', 'ddots', 'iddots', 'dotsb', 'dotsc', 'dotsi', 'dotsm', 'dotso',
-                    'times', 'div', 'pm', 'mp', 'ast', 'star', 'circ', 'bullet', 'diamond', 'lozenge',
-                    'dagger', 'ddagger', 'amalg',
-                    'triangle', 'triangledown', 'triangleleft', 'triangleright',
-                    'bigtriangleup', 'bigtriangledown', 'vartriangle', 'blacktriangle', 'blacktriangledown',
-                    'square', 'blacksquare', 'Box', 'Diamond',
-                    'checkmark', 'maltese', 'clubsuit', 'diamondsuit', 'heartsuit', 'spadesuit',
-                    'sharp', 'flat', 'natural',
-                    'surd', 'angle', 'measuredangle', 'sphericalangle',
-                    'prime', 'backprime', 'dprime', 'trprime', 'qprime',
-
-                    // === DELIMITERS ===
-                    'left', 'right', 'bigl', 'bigr', 'Bigl', 'Bigr', 'biggl', 'biggr', 'Biggl', 'Biggr',
-                    'langle', 'rangle', 'lang', 'rang',
-                    'lfloor', 'rfloor', 'lceil', 'rceil',
-                    'lvert', 'rvert', 'lVert', 'rVert',
-                    'lbrace', 'rbrace', 'lbrack', 'rbrack',
-                    'ulcorner', 'urcorner', 'llcorner', 'lrcorner',
-                    'llbracket', 'rrbracket', 'lmoustache', 'rmoustache',
-
-                    // === TEXT & FORMATTING ===
-                    'text', 'textbf', 'textit', 'textrm', 'textsf', 'texttt', 'textup', 'textsl', 'textsc',
-                    'mathbf', 'mathit', 'mathrm', 'mathsf', 'mathtt', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
-                    'bm', 'bold', 'boldsymbol', 'pmb',
-                    'rm', 'bf', 'it', 'sf', 'tt', 'cal', 'scr', 'frak', 'Bbb',
-                    'operatorname', 'DeclareMathOperator',
-                    'displaystyle', 'textstyle', 'scriptstyle', 'scriptscriptstyle',
-                    'tiny', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge',
-                    'color', 'textcolor', 'colorbox', 'fcolorbox',
-                    'hspace', 'vspace', 'kern', 'mkern', 'mskip', 'hskip', 'rule', 'Rule', 'phantom', 'vphantom', 'hphantom',
-
-                    // === CHEMISTRY (basic) ===
-                    'ce', 'pu', 'bond', 'arrow',
-
-                    // === NUMBER SETS ===
-                    'N', 'Z', 'Q', 'R', 'C', 'H', 'O', 'F', 'P'
-                ];
-                const cmdRegex = new RegExp('\\\\{1,4}(' + mathCmds.join('|') + ')(?![a-zA-Z])', 'g');
-
-                let result = '';
-                let lastIdx = 0;
-                let match;
-
-                // Commands that take two braced arguments like \frac{a}{b}
-                const twoArgCmds = ['frac', 'dfrac', 'tfrac', 'cfrac', 'binom', 'dbinom', 'tbinom', 'overset', 'underset', 'stackrel'];
-                // Commands that take one braced argument (or optional + braced)
-                const oneArgCmds = ['sqrt', 'cbrt', 'hat', 'bar', 'vec', 'dot', 'ddot', 'tilde', 'widehat', 'widetilde',
-                    'overline', 'underline', 'overbrace', 'underbrace', 'boxed', 'cancel', 'bcancel', 'xcancel',
-                    'text', 'textbf', 'textit', 'textrm', 'mathbf', 'mathit', 'mathrm', 'mathcal', 'mathbb', 'mathfrak', 'mathscr',
-                    'bm', 'boldsymbol', 'operatorname', 'color', 'textcolor', 'phantom', 'abs', 'norm'];
-
-                while ((match = cmdRegex.exec(text)) !== null) {
-                    result += text.substring(lastIdx, match.index);
-                    const cmd = match[1];
-                    let matchedWhole = false;
-
-                    if (twoArgCmds.includes(cmd)) {
-                        // Handle two-argument commands like \frac{a}{b}
-                        let j = match.index + match[0].length;
-                        const first = extractBracedContent(text, j);
-                        if (first) {
-                            const second = extractBracedContent(text, first.endIndex + 1);
-                            if (second) {
-                                result += wrap(text.substring(match.index, second.endIndex + 1));
-                                lastIdx = second.endIndex + 1;
-                                cmdRegex.lastIndex = lastIdx;
-                                matchedWhole = true;
-                            }
-                        }
-                    } else if (cmd === 'sqrt' || cmd === 'cbrt' || cmd === 'root') {
-                        // Handle sqrt with optional nth root: \sqrt[n]{x}
-                        let j = match.index + match[0].length;
-                        while (j < text.length && /\s/.test(text[j])) j++;
-                        if (text[j] === '[') {
-                            const endBrkt = text.indexOf(']', j);
-                            if (endBrkt !== -1) j = endBrkt + 1;
-                        }
-                        const content = extractBracedContent(text, j);
-                        if (content) {
-                            result += wrap(text.substring(match.index, content.endIndex + 1));
-                            lastIdx = content.endIndex + 1;
-                            cmdRegex.lastIndex = lastIdx;
-                            matchedWhole = true;
-                        }
-                    } else if (cmd === 'left') {
-                        // Handle \left...\right pairs
-                        const remaining = text.substring(match.index);
-                        const leftRightMatch = remaining.match(/^\\{1,4}left[\s]*[\(\[\{\|\\][\s\S]*?\\{1,4}right[\s]*[\)\]\}\|\\]/);
-                        if (leftRightMatch) {
-                            result += wrap(leftRightMatch[0]);
-                            lastIdx = match.index + leftRightMatch[0].length;
-                            cmdRegex.lastIndex = lastIdx;
-                            matchedWhole = true;
-                        }
-                    } else if (cmd === 'begin') {
-                        // Handle \begin{env}...\end{env} blocks
-                        const remaining = text.substring(match.index);
-                        const envMatch = remaining.match(/^\\begin\{([^}]+)\}([\s\S]*?)\\end\{\1\}/);
-                        if (envMatch) {
-                            result += wrap(envMatch[0]);
-                            lastIdx = match.index + envMatch[0].length;
-                            cmdRegex.lastIndex = lastIdx;
-                            matchedWhole = true;
-                        }
-                    } else {
-                        let currentIdx = match.index + match[0].length;
-                        const bracedArg = extractBracedContent(text, currentIdx);
-                        if (bracedArg) currentIdx = bracedArg.endIndex + 1;
-
-                        while (currentIdx < text.length) {
-                            let i = currentIdx;
-                            while (i < text.length && /\s/.test(text[i])) i++;
-                            if (text[i] === '_' || text[i] === '^') {
-                                i++;
-                                const braced = extractBracedContent(text, i);
-                                if (braced) currentIdx = braced.endIndex + 1;
-                                else if (/[a-zA-Z0-9]/.test(text[i])) currentIdx = i + 1;
-                                else break;
-                            } else break;
-                        }
-                        result += wrap(text.substring(match.index, currentIdx));
-                        lastIdx = currentIdx;
+                } else if (cmd === 'sqrt' || cmd === 'cbrt' || cmd === 'root') {
+                    // Handle sqrt with optional nth root: \sqrt[n]{x}
+                    let j = match.index + match[0].length;
+                    while (j < text.length && /\s/.test(text[j])) j++;
+                    if (text[j] === '[') {
+                        const endBrkt = text.indexOf(']', j);
+                        if (endBrkt !== -1) j = endBrkt + 1;
+                    }
+                    const content = extractBracedContent(text, j);
+                    if (content) {
+                        result += wrap(text.substring(match.index, content.endIndex + 1));
+                        lastIdx = content.endIndex + 1;
                         cmdRegex.lastIndex = lastIdx;
                         matchedWhole = true;
                     }
-
-                    if (!matchedWhole) {
-                        result += text.substring(match.index, match.index + match[0].length);
-                        lastIdx = match.index + match[0].length;
+                } else if (cmd === 'left') {
+                    // Handle \left...\right pairs
+                    const remaining = text.substring(match.index);
+                    const leftRightMatch = remaining.match(/^\\{1,4}left[\s]*[\(\[\{\|\\][\s\S]*?\\{1,4}right[\s]*[\)\]\}\|\\]/);
+                    if (leftRightMatch) {
+                        result += wrap(leftRightMatch[0]);
+                        lastIdx = match.index + leftRightMatch[0].length;
+                        cmdRegex.lastIndex = lastIdx;
+                        matchedWhole = true;
                     }
+                } else if (cmd === 'begin') {
+                    // Handle \begin{env}...\end{env} blocks
+                    const remaining = text.substring(match.index);
+                    const envMatch = remaining.match(/^\\begin\{([^}]+)\}([\s\S]*?)\\end\{\1\}/);
+                    if (envMatch) {
+                        result += wrap(envMatch[0]);
+                        lastIdx = match.index + envMatch[0].length;
+                        cmdRegex.lastIndex = lastIdx;
+                        matchedWhole = true;
+                    }
+                } else {
+                    let currentIdx = match.index + match[0].length;
+                    const bracedArg = extractBracedContent(text, currentIdx);
+                    if (bracedArg) currentIdx = bracedArg.endIndex + 1;
+
+                    while (currentIdx < text.length) {
+                        let i = currentIdx;
+                        while (i < text.length && /\s/.test(text[i])) i++;
+                        if (text[i] === '_' || text[i] === '^') {
+                            i++;
+                            const braced = extractBracedContent(text, i);
+                            if (braced) currentIdx = braced.endIndex + 1;
+                            else if (/[a-zA-Z0-9]/.test(text[i])) currentIdx = i + 1;
+                            else break;
+                        } else break;
+                    }
+                    result += wrap(text.substring(match.index, currentIdx));
+                    lastIdx = currentIdx;
+                    cmdRegex.lastIndex = lastIdx;
+                    matchedWhole = true;
                 }
-                result += text.substring(lastIdx);
-                text = result;
 
-                // Simple scripts with balanced parentheses
-                const tempM = [];
-                text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
-                text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
-                text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
-
-                // Numeric fractions like 1/2
-                text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
-
-                // Symbols
-                text = text.replace(/±/g, wrap('\\pm'));
-                text = text.replace(/ℏ/g, wrap('\\hbar'));
-                text = text.replace(/Å/g, wrap('\\text{Å}'));
-                text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
-                text = text.replace(/≠/g, wrap('\\neq'));
-                text = text.replace(/≤/g, wrap('\\leq'));
-                text = text.replace(/≥/g, wrap('\\geq'));
-                text = text.replace(/≈/g, wrap('\\approx'));
-
-                // Dirac Notation
-                text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
-                text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
-
-                // Set/logic symbols
-                text = text.replace(/∈/g, wrap('\\in'));
-                text = text.replace(/∉/g, wrap('\\notin'));
-                text = text.replace(/⊂/g, wrap('\\subset'));
-                text = text.replace(/⊆/g, wrap('\\subseteq'));
-                text = text.replace(/⊃/g, wrap('\\supset'));
-                text = text.replace(/⊇/g, wrap('\\supseteq'));
-                text = text.replace(/∪/g, wrap('\\cup'));
-                text = text.replace(/∩/g, wrap('\\cap'));
-                text = text.replace(/∅/g, wrap('\\emptyset'));
-                text = text.replace(/∀/g, wrap('\\forall'));
-                text = text.replace(/∃/g, wrap('\\exists'));
-
-                // Arrows
-                text = text.replace(/→/g, wrap('\\rightarrow'));
-                text = text.replace(/←/g, wrap('\\leftarrow'));
-                text = text.replace(/↔/g, wrap('\\leftrightarrow'));
-                text = text.replace(/⇒/g, wrap('\\Rightarrow'));
-                text = text.replace(/⇐/g, wrap('\\Leftarrow'));
-                text = text.replace(/⇔/g, wrap('\\Leftrightarrow'));
-                text = text.replace(/↑/g, wrap('\\uparrow'));
-                text = text.replace(/↓/g, wrap('\\downarrow'));
-
-                // Calculus symbols
-                text = text.replace(/∂/g, wrap('\\partial'));
-                text = text.replace(/∇/g, wrap('\\nabla'));
-                text = text.replace(/∫/g, wrap('\\int'));
-                text = text.replace(/∬/g, wrap('\\iint'));
-                text = text.replace(/∭/g, wrap('\\iiint'));
-                text = text.replace(/∮/g, wrap('\\oint'));
-                text = text.replace(/∑/g, wrap('\\sum'));
-                text = text.replace(/∏/g, wrap('\\prod'));
-                text = text.replace(/∞/g, wrap('\\infty'));
-
-                // Greek letters (Unicode to LaTeX)
-                text = text.replace(/α/g, wrap('\\alpha'));
-                text = text.replace(/β/g, wrap('\\beta'));
-                text = text.replace(/γ/g, wrap('\\gamma'));
-                text = text.replace(/δ/g, wrap('\\delta'));
-                text = text.replace(/ε/g, wrap('\\epsilon'));
-                text = text.replace(/ζ/g, wrap('\\zeta'));
-                text = text.replace(/η/g, wrap('\\eta'));
-                text = text.replace(/θ/g, wrap('\\theta'));
-                text = text.replace(/ι/g, wrap('\\iota'));
-                text = text.replace(/κ/g, wrap('\\kappa'));
-                text = text.replace(/λ/g, wrap('\\lambda'));
-                text = text.replace(/μ/g, wrap('\\mu'));
-                text = text.replace(/ν/g, wrap('\\nu'));
-                text = text.replace(/ξ/g, wrap('\\xi'));
-                text = text.replace(/π/g, wrap('\\pi'));
-                text = text.replace(/ρ/g, wrap('\\rho'));
-                text = text.replace(/σ/g, wrap('\\sigma'));
-                text = text.replace(/τ/g, wrap('\\tau'));
-                text = text.replace(/υ/g, wrap('\\upsilon'));
-                text = text.replace(/φ/g, wrap('\\phi'));
-                text = text.replace(/χ/g, wrap('\\chi'));
-                text = text.replace(/ψ/g, wrap('\\psi'));
-                text = text.replace(/ω/g, wrap('\\omega'));
-                text = text.replace(/Γ/g, wrap('\\Gamma'));
-                text = text.replace(/Δ/g, wrap('\\Delta'));
-                text = text.replace(/Θ/g, wrap('\\Theta'));
-                text = text.replace(/Λ/g, wrap('\\Lambda'));
-                text = text.replace(/Ξ/g, wrap('\\Xi'));
-                text = text.replace(/Π/g, wrap('\\Pi'));
-                text = text.replace(/Σ/g, wrap('\\Sigma'));
-                text = text.replace(/Φ/g, wrap('\\Phi'));
-                text = text.replace(/Ψ/g, wrap('\\Psi'));
-                text = text.replace(/Ω/g, wrap('\\Omega'));
-
-                // Multiplication: ×
-                text = text.replace(/×/g, wrap('\\times'));
-
-                // Division: ÷
-                text = text.replace(/÷/g, wrap('\\div'));;
-
-                // Restore
-                text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
-                text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
-
-
-                return text;
+                if (!matchedWhole) {
+                    result += text.substring(match.index, match.index + match[0].length);
+                    lastIdx = match.index + match[0].length;
+                }
             }
+            result += text.substring(lastIdx);
+            text = result;
+
+            // Simple scripts with balanced parentheses
+            const tempM = [];
+            text = text.replace(/\$[^$]+\$/g, (m) => { tempM.push(m); return `%%TM${tempM.length - 1}%%`; });
+            text = text.replace(/(\(([^\(\)]+|(?:\([^\(\)]*\)))\)|[A-Za-z0-9])([\^_])(\{([^}]+)\}|[A-Za-z0-9])/g, (m) => wrap(m));
+            text = text.replace(/%%TM(\d+)%%/g, (m, i) => tempM[parseInt(i)]);
+
+            // Numeric fractions like 1/2
+            text = text.replace(/(^|[^\/\\\d])(\d+)\/(\d+)(?![\/\d])/g, (m, p, n, d) => p + wrap(`\\frac{${n}}{${d}}`));
+
+            // Symbols
+            text = text.replace(/±/g, wrap('\\pm'));
+            text = text.replace(/ℏ/g, wrap('\\hbar'));
+            text = text.replace(/Å/g, wrap('\\text{Å}'));
+            text = text.replace(/(\d+)°/g, (m, num) => wrap(`${num}^{\\circ}`));
+            text = text.replace(/≠/g, wrap('\\neq'));
+            text = text.replace(/≤/g, wrap('\\leq'));
+            text = text.replace(/≥/g, wrap('\\geq'));
+            text = text.replace(/≈/g, wrap('\\approx'));
+
+            // Dirac Notation
+            text = text.replace(/\|([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)⟩/g, (m, inner) => wrap(`|${inner}\\rangle`));
+            text = text.replace(/⟨([A-Za-z0-9αβγδεζηθικλμνξπρστυφχψω\s\+\-\*\/\^\_\{\}\\]+)\|/g, (m, inner) => wrap(`\\langle ${inner}|`));
+
+            // Set/logic symbols
+            text = text.replace(/∈/g, wrap('\\in'));
+            text = text.replace(/∉/g, wrap('\\notin'));
+            text = text.replace(/⊂/g, wrap('\\subset'));
+            text = text.replace(/⊆/g, wrap('\\subseteq'));
+            text = text.replace(/⊃/g, wrap('\\supset'));
+            text = text.replace(/⊇/g, wrap('\\supseteq'));
+            text = text.replace(/∪/g, wrap('\\cup'));
+            text = text.replace(/∩/g, wrap('\\cap'));
+            text = text.replace(/∅/g, wrap('\\emptyset'));
+            text = text.replace(/∀/g, wrap('\\forall'));
+            text = text.replace(/∃/g, wrap('\\exists'));
+
+            // Arrows
+            text = text.replace(/→/g, wrap('\\rightarrow'));
+            text = text.replace(/←/g, wrap('\\leftarrow'));
+            text = text.replace(/↔/g, wrap('\\leftrightarrow'));
+            text = text.replace(/⇒/g, wrap('\\Rightarrow'));
+            text = text.replace(/⇐/g, wrap('\\Leftarrow'));
+            text = text.replace(/⇔/g, wrap('\\Leftrightarrow'));
+            text = text.replace(/↑/g, wrap('\\uparrow'));
+            text = text.replace(/↓/g, wrap('\\downarrow'));
+
+            // Calculus symbols
+            text = text.replace(/∂/g, wrap('\\partial'));
+            text = text.replace(/∇/g, wrap('\\nabla'));
+            text = text.replace(/∫/g, wrap('\\int'));
+            text = text.replace(/∬/g, wrap('\\iint'));
+            text = text.replace(/∭/g, wrap('\\iiint'));
+            text = text.replace(/∮/g, wrap('\\oint'));
+            text = text.replace(/∑/g, wrap('\\sum'));
+            text = text.replace(/∏/g, wrap('\\prod'));
+            text = text.replace(/∞/g, wrap('\\infty'));
+
+            // Greek letters (Unicode to LaTeX)
+            text = text.replace(/α/g, wrap('\\alpha'));
+            text = text.replace(/β/g, wrap('\\beta'));
+            text = text.replace(/γ/g, wrap('\\gamma'));
+            text = text.replace(/δ/g, wrap('\\delta'));
+            text = text.replace(/ε/g, wrap('\\epsilon'));
+            text = text.replace(/ζ/g, wrap('\\zeta'));
+            text = text.replace(/η/g, wrap('\\eta'));
+            text = text.replace(/θ/g, wrap('\\theta'));
+            text = text.replace(/ι/g, wrap('\\iota'));
+            text = text.replace(/κ/g, wrap('\\kappa'));
+            text = text.replace(/λ/g, wrap('\\lambda'));
+            text = text.replace(/μ/g, wrap('\\mu'));
+            text = text.replace(/ν/g, wrap('\\nu'));
+            text = text.replace(/ξ/g, wrap('\\xi'));
+            text = text.replace(/π/g, wrap('\\pi'));
+            text = text.replace(/ρ/g, wrap('\\rho'));
+            text = text.replace(/σ/g, wrap('\\sigma'));
+            text = text.replace(/τ/g, wrap('\\tau'));
+            text = text.replace(/υ/g, wrap('\\upsilon'));
+            text = text.replace(/φ/g, wrap('\\phi'));
+            text = text.replace(/χ/g, wrap('\\chi'));
+            text = text.replace(/ψ/g, wrap('\\psi'));
+            text = text.replace(/ω/g, wrap('\\omega'));
+            text = text.replace(/Γ/g, wrap('\\Gamma'));
+            text = text.replace(/Δ/g, wrap('\\Delta'));
+            text = text.replace(/Θ/g, wrap('\\Theta'));
+            text = text.replace(/Λ/g, wrap('\\Lambda'));
+            text = text.replace(/Ξ/g, wrap('\\Xi'));
+            text = text.replace(/Π/g, wrap('\\Pi'));
+            text = text.replace(/Σ/g, wrap('\\Sigma'));
+            text = text.replace(/Φ/g, wrap('\\Phi'));
+            text = text.replace(/Ψ/g, wrap('\\Psi'));
+            text = text.replace(/Ω/g, wrap('\\Omega'));
+
+            // Multiplication: ×
+            text = text.replace(/×/g, wrap('\\times'));
+
+            // Division: ÷
+            text = text.replace(/÷/g, wrap('\\div'));;
+
+            // Restore
+            text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
+            text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
 
 
-            // Function to render markdown with math support
-            function renderMarkdownWithMath(text) {
-                if (!text) return '';
+            return text;
+        }
 
-                // 1. Pre-process: strip trailing tab characters from every line
-                // Many copy-pastes from spreadsheets/docs add trailing tabs to text lines,
-                // which would incorrectly trigger table conversion
-                const rawLines = text.split('\n');
-                const lines = rawLines.map(line => line.replace(/\t+$/, ''));
 
-                // 2. Convert only genuine tab-separated data into markdown tables
-                // A line qualifies as a table row ONLY if it has tabs AND at least 2 cells with real content
-                let inTabTable = false;
-                let processedLines = [];
+        // Function to render markdown with math support
+        function renderMarkdownWithMath(text) {
+            if (!text) return '';
 
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i];
-                    if (!line.includes('\t')) {
-                        if (inTabTable) processedLines.push(''); // blank line to close table in markdown
-                        inTabTable = false;
-                        processedLines.push(line);
-                        continue;
-                    }
+            // 1. Pre-process: strip trailing tab characters from every line
+            // Many copy-pastes from spreadsheets/docs add trailing tabs to text lines,
+            // which would incorrectly trigger table conversion
+            const rawLines = text.split('\n');
+            const lines = rawLines.map(line => line.replace(/\t+$/, ''));
 
-                    const cells = line.split('\t');
-                    const filledCells = cells.filter(c => c.trim().length > 0);
+            // 2. Convert only genuine tab-separated data into markdown tables
+            // A line qualifies as a table row ONLY if it has tabs AND at least 2 cells with real content
+            let inTabTable = false;
+            let processedLines = [];
 
-                    if (filledCells.length >= 2) {
-                        const formattedCells = cells.map(c => c.trim() || ' ');
-                        const mdLine = '| ' + formattedCells.join(' | ') + ' |';
-                        if (!inTabTable) {
-                            processedLines.push(mdLine);
-                            processedLines.push('| ' + formattedCells.map(() => '---').join(' | ') + ' |');
-                            inTabTable = true;
-                        } else {
-                            processedLines.push(mdLine);
-                        }
-                    } else {
-                        // Line has tabs but only 1 cell with content — treat as normal text (strip tabs)
-                        if (inTabTable) processedLines.push('');
-                        inTabTable = false;
-                        processedLines.push(line.replace(/\t/g, ' '));
-                    }
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.includes('\t')) {
+                    if (inTabTable) processedLines.push(''); // blank line to close table in markdown
+                    inTabTable = false;
+                    processedLines.push(line);
+                    continue;
                 }
-                text = processedLines.join('\n');
 
-                // 2. Run auto-detection to convert patterns to $...$ 
-                let processedText = autoDetectMath(text);
+                const cells = line.split('\t');
+                const filledCells = cells.filter(c => c.trim().length > 0);
 
-                // 3. Protect code blocks and extract ALL math patterns
-                const placeholders = [];
+                if (filledCells.length >= 2) {
+                    const formattedCells = cells.map(c => c.trim() || ' ');
+                    const mdLine = '| ' + formattedCells.join(' | ') + ' |';
+                    if (!inTabTable) {
+                        processedLines.push(mdLine);
+                        processedLines.push('| ' + formattedCells.map(() => '---').join(' | ') + ' |');
+                        inTabTable = true;
+                    } else {
+                        processedLines.push(mdLine);
+                    }
+                } else {
+                    // Line has tabs but only 1 cell with content — treat as normal text (strip tabs)
+                    if (inTabTable) processedLines.push('');
+                    inTabTable = false;
+                    processedLines.push(line.replace(/\t/g, ' '));
+                }
+            }
+            text = processedLines.join('\n');
 
-                // Protect code blocks (triple backticks)
-                processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
-                    placeholders.push({ type: 'code', content: match });
-                    return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                });
+            // 2. Run auto-detection to convert patterns to $...$ 
+            let processedText = autoDetectMath(text);
 
-                // Protect inline code (single backticks)
-                processedText = processedText.replace(/`[^`]+`/g, (match) => {
-                    placeholders.push({ type: 'code', content: match });
-                    return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                });
+            // 3. Protect code blocks and extract ALL math patterns
+            const placeholders = [];
 
-                // Extract and render block math ($$...$$)
-                processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
-                    try {
-                        if (typeof katex !== 'undefined') {
-                            const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
-                            placeholders.push({ type: 'rendered', content: rendered });
-                            return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                        }
-                    } catch (e) { }
-                    return match;
-                });
+            // Protect code blocks (triple backticks)
+            processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
+                placeholders.push({ type: 'code', content: match });
+                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+            });
 
-                // Extract and render inline math ($...$)
-                // Restriction: Inline math should not span more than one newline to avoid capturing large text blocks
-                processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
-                    try {
-                        if (typeof katex !== 'undefined') {
-                            const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
-                            placeholders.push({ type: 'rendered', content: rendered });
-                            return `%%PLACEHOLDER${placeholders.length - 1}%%`;
-                        }
-                    } catch (e) { }
-                    return match;
-                });
+            // Protect inline code (single backticks)
+            processedText = processedText.replace(/`[^`]+`/g, (match) => {
+                placeholders.push({ type: 'code', content: match });
+                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+            });
 
-                // 4. Configure marked with custom table renderer
-                if (typeof marked !== 'undefined') {
-                    const renderer = new marked.Renderer();
+            // Extract and render block math ($$...$$)
+            processedText = processedText.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
+                try {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                } catch (e) { }
+                return match;
+            });
 
-                    // Wrap tables in a scrollable div
-                    renderer.table = (header, body) => {
-                        return `<div class="table-wrapper">
+            // Extract and render inline math ($...$)
+            // Restriction: Inline math should not span more than one newline to avoid capturing large text blocks
+            processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
+                try {
+                    if (typeof katex !== 'undefined') {
+                        const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
+                        placeholders.push({ type: 'rendered', content: rendered });
+                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                    }
+                } catch (e) { }
+                return match;
+            });
+
+            // 4. Configure marked with custom table renderer
+            if (typeof marked !== 'undefined') {
+                const renderer = new marked.Renderer();
+
+                // Wrap tables in a scrollable div
+                renderer.table = (header, body) => {
+                    return `<div class="table-wrapper">
                         <table>
                             <thead>${header}</thead>
                             <tbody>${body}</tbody>
                         </table>
                     </div>`;
-                    };
-
-                    marked.setOptions({ renderer: renderer, breaks: true, gfm: true });
-                    processedText = marked.parse(processedText);
-                }
-
-                // 5. Sanitize Markdown HTML BEFORE restoring KaTeX
-                if (typeof DOMPurify !== 'undefined') {
-                    processedText = DOMPurify.sanitize(processedText);
-                }
-
-                // 6. Restore ALL placeholders
-                processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
-                    const item = placeholders[parseInt(index)];
-                    return item ? item.content : match;
-                });
-
-                return processedText;
-            }
-
-            // Render all saved notes on page load
-            function renderAllNotes() {
-                document.querySelectorAll('.rendered-note').forEach(el => {
-                    const rawContent = el.dataset.raw || '';
-                    const textarea = document.createElement('textarea');
-                    textarea.innerHTML = rawContent;
-                    const decoded = textarea.value;
-                    el.innerHTML = renderMarkdownWithMath(decoded);
-                });
-            }
-
-            // Wait for KaTeX to load, then render
-            function waitForLibraries(callback, maxWait = 5000) {
-                const start = Date.now();
-                const check = () => {
-                    if (typeof katex !== 'undefined' && typeof marked !== 'undefined') {
-                        callback();
-                    } else if (Date.now() - start < maxWait) {
-                        setTimeout(check, 100);
-                    } else {
-                        console.warn('Libraries not loaded, rendering plain text');
-                        document.querySelectorAll('.rendered-note').forEach(el => {
-                            const rawContent = el.dataset.raw || '';
-                            const textarea = document.createElement('textarea');
-                            textarea.innerHTML = rawContent;
-                            el.textContent = textarea.value;
-                        });
-                    }
                 };
-                check();
+
+                marked.setOptions({ renderer: renderer, breaks: true, gfm: true });
+                processedText = marked.parse(processedText);
             }
 
-            waitForLibraries(renderAllNotes);
-
-            // Tab switching
-            const tabButtons = document.querySelectorAll('.tab-nav button');
-            const tabPanels = document.querySelectorAll('.tab-panel');
-
-            function switchToTab(tabId) {
-                const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);
-                if (button) {
-                    tabButtons.forEach(b => {
-                        b.classList.remove('active');
-                        b.setAttribute('aria-selected', 'false');
-                    });
-                    tabPanels.forEach(p => p.classList.remove('active'));
-                    button.classList.add('active');
-                    button.setAttribute('aria-selected', 'true');
-                    document.getElementById('tab-' + tabId).classList.add('active');
-                }
+            // 5. Sanitize Markdown HTML BEFORE restoring KaTeX
+            if (typeof DOMPurify !== 'undefined') {
+                processedText = DOMPurify.sanitize(processedText);
             }
 
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    switchToTab(button.dataset.tab);
-                });
+            // 6. Restore ALL placeholders
+            processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
+                const item = placeholders[parseInt(index)];
+                return item ? item.content : match;
             });
 
-            // Quick create note button
-            const quickCreateBtn = document.getElementById('quick-create-note');
-            if (quickCreateBtn) {
-                quickCreateBtn.addEventListener('click', () => {
-                    switchToTab('notes');
-                    const noteInput = document.getElementById('note-input');
-                    if (noteInput) {
-                        noteInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        setTimeout(() => noteInput.focus(), 500);
-                    }
-                });
-            }
+            return processedText;
+        }
 
-            // Character counter for notes
-            const noteInput = document.getElementById('note-input');
-            const charCount = document.getElementById('char-count');
-            const charCountContainer = charCount?.parentElement;
+        // Render all saved notes on page load
+        function renderAllNotes() {
+            document.querySelectorAll('.rendered-note').forEach(el => {
+                const rawContent = el.dataset.raw || '';
+                const textarea = document.createElement('textarea');
+                textarea.innerHTML = rawContent;
+                const decoded = textarea.value;
+                el.innerHTML = renderMarkdownWithMath(decoded);
+            });
+        }
 
-            if (noteInput && charCount) {
-                noteInput.addEventListener('input', () => {
-                    const len = noteInput.value.length;
-                    charCount.textContent = len;
-                    charCountContainer.classList.remove('warning', 'danger');
-                    if (len > 1800) {
-                        charCountContainer.classList.add('danger');
-                    } else if (len > 1500) {
-                        charCountContainer.classList.add('warning');
-                    }
-                });
-            }
-
-            // Live preview toggle
-            const previewToggle = document.getElementById('preview-toggle');
-            const previewContainer = document.getElementById('note-preview');
-            const previewContent = document.getElementById('preview-content');
-
-            if (previewToggle && previewContainer && noteInput) {
-                previewToggle.addEventListener('change', () => {
-                    previewContainer.classList.toggle('active', previewToggle.checked);
-                    if (previewToggle.checked) updatePreview();
-                });
-
-                let previewTimeout;
-                noteInput.addEventListener('input', () => {
-                    if (previewToggle.checked) {
-                        clearTimeout(previewTimeout);
-                        previewTimeout = setTimeout(updatePreview, 300);
-                    }
-                });
-
-                function updatePreview() {
-                    const text = noteInput.value;
-                    if (text.trim()) {
-                        previewContent.innerHTML = renderMarkdownWithMath(text);
-                    } else {
-                        previewContent.innerHTML = '<span style="color: #999; font-style: italic;">Preview will appear here...</span>';
-                    }
-                }
-            }
-
-            // Search saved posts
-            const searchInput = document.getElementById('saved-search');
-            const savedPosts = document.querySelectorAll('.saved-post-card');
-
-            if (searchInput) {
-                searchInput.addEventListener('input', () => {
-                    const query = searchInput.value.toLowerCase().trim();
-                    savedPosts.forEach(card => {
-                        const title = card.dataset.title || '';
-                        const author = card.dataset.author || '';
-                        if (title.includes(query) || author.includes(query)) {
-                            card.style.display = '';
-                        } else {
-                            card.style.display = 'none';
-                        }
+        // Wait for KaTeX to load, then render
+        function waitForLibraries(callback, maxWait = 5000) {
+            const start = Date.now();
+            const check = () => {
+                if (typeof katex !== 'undefined' && typeof marked !== 'undefined') {
+                    callback();
+                } else if (Date.now() - start < maxWait) {
+                    setTimeout(check, 100);
+                } else {
+                    console.warn('Libraries not loaded, rendering plain text');
+                    document.querySelectorAll('.rendered-note').forEach(el => {
+                        const rawContent = el.dataset.raw || '';
+                        const textarea = document.createElement('textarea');
+                        textarea.innerHTML = rawContent;
+                        el.textContent = textarea.value;
                     });
+                }
+            };
+            check();
+        }
+
+        waitForLibraries(renderAllNotes);
+
+        // Tab switching
+        const tabButtons = document.querySelectorAll('.tab-nav button');
+        const tabPanels = document.querySelectorAll('.tab-panel');
+
+        function switchToTab(tabId) {
+            const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);
+            if (button) {
+                tabButtons.forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
                 });
+                tabPanels.forEach(p => p.classList.remove('active'));
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+                document.getElementById('tab-' + tabId).classList.add('active');
             }
+        }
 
-            // --- Note Search with Meilisearch ---
-            const noteSearchInput = document.getElementById('note-search-input');
-            const noteSearchClear = document.getElementById('note-search-clear');
-            const noteSearchStatus = document.getElementById('note-search-status');
-            const noteSearchStatusText = document.getElementById('note-search-status-text');
-            const noteSearchStats = document.getElementById('note-search-stats');
-            const searchResultsContainer = document.getElementById('search-results-container');
-            const notesListContainer = document.getElementById('notes-list-container');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                switchToTab(button.dataset.tab);
+            });
+        });
 
-            let searchDebounceTimer = null;
-            let searchAbortController = null;
-            let isSearchActive = false;
-
-            function resetSearchResults() {
-                if (noteSearchClear) noteSearchClear.classList.remove('visible');
-                if (noteSearchStatus) noteSearchStatus.classList.remove('visible');
-                if (searchResultsContainer) {
-                    searchResultsContainer.classList.remove('visible');
-                    searchResultsContainer.innerHTML = '';
+        // Quick create note button
+        const quickCreateBtn = document.getElementById('quick-create-note');
+        if (quickCreateBtn) {
+            quickCreateBtn.addEventListener('click', () => {
+                switchToTab('notes');
+                const noteInput = document.getElementById('note-input');
+                if (noteInput) {
+                    noteInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => noteInput.focus(), 500);
                 }
-                if (notesListContainer) notesListContainer.style.display = '';
-                isSearchActive = false;
-                // Remove any active match highlights
-                document.querySelectorAll('.note-card.search-active-match').forEach(
-                    c => c.classList.remove('search-active-match')
-                );
-            }
+            });
+        }
 
-            function clearNoteSearch() {
-                if (noteSearchInput) noteSearchInput.value = '';
+        // Character counter for notes
+        const noteInput = document.getElementById('note-input');
+        const charCount = document.getElementById('char-count');
+        const charCountContainer = charCount?.parentElement;
+
+        if (noteInput && charCount) {
+            noteInput.addEventListener('input', () => {
+                const len = noteInput.value.length;
+                charCount.textContent = len;
+                charCountContainer.classList.remove('warning', 'danger');
+                if (len > 1800) {
+                    charCountContainer.classList.add('danger');
+                } else if (len > 1500) {
+                    charCountContainer.classList.add('warning');
+                }
+            });
+        }
+
+        // Live preview toggle
+        const previewToggle = document.getElementById('preview-toggle');
+        const previewContainer = document.getElementById('note-preview');
+        const previewContent = document.getElementById('preview-content');
+
+        if (previewToggle && previewContainer && noteInput) {
+            previewToggle.addEventListener('change', () => {
+                previewContainer.classList.toggle('active', previewToggle.checked);
+                if (previewToggle.checked) updatePreview();
+            });
+
+            let previewTimeout;
+            noteInput.addEventListener('input', () => {
+                if (previewToggle.checked) {
+                    clearTimeout(previewTimeout);
+                    previewTimeout = setTimeout(updatePreview, 300);
+                }
+            });
+
+            function updatePreview() {
+                const text = noteInput.value;
+                if (text.trim()) {
+                    previewContent.innerHTML = renderMarkdownWithMath(text);
+                } else {
+                    previewContent.innerHTML = '<span style="color: #999; font-style: italic;">Preview will appear here...</span>';
+                }
+            }
+        }
+
+        // Search saved posts
+        const searchInput = document.getElementById('saved-search');
+        const savedPosts = document.querySelectorAll('.saved-post-card');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.toLowerCase().trim();
+                savedPosts.forEach(card => {
+                    const title = card.dataset.title || '';
+                    const author = card.dataset.author || '';
+                    if (title.includes(query) || author.includes(query)) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            });
+        }
+
+        // --- Note Search with Meilisearch ---
+        const noteSearchInput = document.getElementById('note-search-input');
+        const noteSearchClear = document.getElementById('note-search-clear');
+        const noteSearchStatus = document.getElementById('note-search-status');
+        const noteSearchStatusText = document.getElementById('note-search-status-text');
+        const noteSearchStats = document.getElementById('note-search-stats');
+        const searchResultsContainer = document.getElementById('search-results-container');
+        const notesListContainer = document.getElementById('notes-list-container');
+
+        let searchDebounceTimer = null;
+        let searchAbortController = null;
+        let isSearchActive = false;
+
+        function resetSearchResults() {
+            if (noteSearchClear) noteSearchClear.classList.remove('visible');
+            if (noteSearchStatus) noteSearchStatus.classList.remove('visible');
+            if (searchResultsContainer) {
+                searchResultsContainer.classList.remove('visible');
+                searchResultsContainer.innerHTML = '';
+            }
+            if (notesListContainer) notesListContainer.style.display = '';
+            isSearchActive = false;
+            // Remove any active match highlights
+            document.querySelectorAll('.note-card.search-active-match').forEach(
+                c => c.classList.remove('search-active-match')
+            );
+        }
+
+        function clearNoteSearch() {
+            if (noteSearchInput) noteSearchInput.value = '';
+            resetSearchResults();
+        }
+
+        async function performNoteSearch(query) {
+            if (!query || query.length < 2) {
                 resetSearchResults();
+                if (noteSearchClear && query) noteSearchClear.classList.add('visible');
+                return;
             }
 
-            async function performNoteSearch(query) {
-                if (!query || query.length < 2) {
-                    resetSearchResults();
-                    if (noteSearchClear && query) noteSearchClear.classList.add('visible');
-                    return;
-                }
+            // Cancel previous request
+            if (searchAbortController) searchAbortController.abort();
+            searchAbortController = new AbortController();
 
-                // Cancel previous request
-                if (searchAbortController) searchAbortController.abort();
-                searchAbortController = new AbortController();
+            // Show loading state
+            isSearchActive = true;
+            if (noteSearchStatus) {
+                noteSearchStatusText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+                noteSearchStats.textContent = '';
+                noteSearchStatus.classList.add('visible');
+            }
+            if (notesListContainer) notesListContainer.style.display = 'none';
 
-                // Show loading state
-                isSearchActive = true;
+            try {
+                const resp = await fetch(`/personal_post/search?q=${encodeURIComponent(query)}`, {
+                    signal: searchAbortController.signal
+                });
+                const data = await resp.json();
+
+                if (!isSearchActive) return; // User cleared search while request was in-flight
+
+                const total = data.total || 0;
+                const results = data.results || [];
+                const processingTime = data.processing_time_ms;
+
+                // Update status
                 if (noteSearchStatus) {
-                    noteSearchStatusText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
-                    noteSearchStats.textContent = '';
+                    noteSearchStatusText.textContent = total === 0
+                        ? `No notes found for "${query}"`
+                        : `${total} note${total !== 1 ? 's' : ''} found`;
+                    noteSearchStats.textContent = processingTime !== undefined
+                        ? `${processingTime}ms`
+                        : '';
                     noteSearchStatus.classList.add('visible');
                 }
-                if (notesListContainer) notesListContainer.style.display = 'none';
 
-                try {
-                    const resp = await fetch(`/personal_post/search?q=${encodeURIComponent(query)}`, {
-                        signal: searchAbortController.signal
-                    });
-                    const data = await resp.json();
-
-                    if (!isSearchActive) return; // User cleared search while request was in-flight
-
-                    const total = data.total || 0;
-                    const results = data.results || [];
-                    const processingTime = data.processing_time_ms;
-
-                    // Update status
-                    if (noteSearchStatus) {
-                        noteSearchStatusText.textContent = total === 0
-                            ? `No notes found for "${query}"`
-                            : `${total} note${total !== 1 ? 's' : ''} found`;
-                        noteSearchStats.textContent = processingTime !== undefined
-                            ? `${processingTime}ms`
-                            : '';
-                        noteSearchStatus.classList.add('visible');
-                    }
-
-                    if (searchResultsContainer) {
-                        if (results.length === 0) {
-                            searchResultsContainer.innerHTML = `
+                if (searchResultsContainer) {
+                    if (results.length === 0) {
+                        searchResultsContainer.innerHTML = `
                                 <div style="text-align: center; padding: 2rem 1rem; color: #888;">
                                     <i class="fas fa-search" style="font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; display: block;"></i>
                                     <p style="margin: 0;">No notes match <strong>"${query.replace(/</g, '&lt;')}"</strong></p>
                                     <p style="font-size: 0.8rem; margin-top: 0.5rem; color: #aaa;">Try different keywords or use <code>"quotes"</code> for exact phrases</p>
                                 </div>
                             `;
-                        } else {
-                            searchResultsContainer.innerHTML = results.map(r => {
-                                const dateStr = r.created_at
-                                    ? new Date(r.created_at).toLocaleDateString(undefined, {
-                                        year: 'numeric', month: 'short', day: 'numeric',
-                                        hour: '2-digit', minute: '2-digit'
-                                    })
-                                    : '';
-                                // Use snippet (cropped + highlighted)
-                                const snippet = r.snippet || r.content_highlighted || '';
-                                return `
+                    } else {
+                        searchResultsContainer.innerHTML = results.map(r => {
+                            const dateStr = r.created_at
+                                ? new Date(r.created_at).toLocaleDateString(undefined, {
+                                    year: 'numeric', month: 'short', day: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                })
+                                : '';
+                            // Use snippet (cropped + highlighted)
+                            const snippet = r.snippet || r.content_highlighted || '';
+                            return `
                                     <div class="search-result-card" data-note-id="${r.id}" onclick="window.scrollToNote('${r.id}')">
                                         <div class="search-result-snippet">${snippet}</div>
                                         <div class="search-result-meta">
@@ -2706,181 +2815,181 @@
                                         </div>
                                     </div>
                                 `;
-                            }).join('');
-                        }
-                        searchResultsContainer.classList.add('visible');
+                        }).join('');
                     }
-                } catch (err) {
-                    if (err.name === 'AbortError') return; // Cancelled — a new search is in progress
-                    console.error('Note search error:', err);
-                    if (noteSearchStatus) {
-                        noteSearchStatusText.textContent = 'Search failed. Please try again.';
-                        noteSearchStatus.classList.add('visible');
-                    }
+                    searchResultsContainer.classList.add('visible');
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return; // Cancelled — a new search is in progress
+                console.error('Note search error:', err);
+                if (noteSearchStatus) {
+                    noteSearchStatusText.textContent = 'Search failed. Please try again.';
+                    noteSearchStatus.classList.add('visible');
                 }
             }
+        }
 
-            // Scroll to & highlight a note card from search results
-            window.scrollToNote = function(noteId) {
-                // Show the notes list temporarily
-                if (notesListContainer) notesListContainer.style.display = '';
-                if (searchResultsContainer) searchResultsContainer.classList.remove('visible');
+        // Scroll to & highlight a note card from search results
+        window.scrollToNote = function (noteId) {
+            // Show the notes list temporarily
+            if (notesListContainer) notesListContainer.style.display = '';
+            if (searchResultsContainer) searchResultsContainer.classList.remove('visible');
 
-                const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-                if (noteCard) {
-                    // Remove previous highlights
-                    document.querySelectorAll('.note-card.search-active-match').forEach(
-                        c => c.classList.remove('search-active-match')
-                    );
-                    noteCard.classList.add('search-active-match');
-                    noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+            if (noteCard) {
+                // Remove previous highlights
+                document.querySelectorAll('.note-card.search-active-match').forEach(
+                    c => c.classList.remove('search-active-match')
+                );
+                noteCard.classList.add('search-active-match');
+                noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        if (noteSearchInput) {
+            noteSearchInput.addEventListener('input', () => {
+                const val = noteSearchInput.value.trim();
+                if (noteSearchClear) {
+                    noteSearchClear.classList.toggle('visible', val.length > 0);
                 }
-            };
+                clearTimeout(searchDebounceTimer);
+                if (val.length < 2) {
+                    resetSearchResults();
+                    if (val.length > 0 && noteSearchClear) noteSearchClear.classList.add('visible');
+                    return;
+                }
+                searchDebounceTimer = setTimeout(() => performNoteSearch(val), 300);
+            });
 
-            if (noteSearchInput) {
-                noteSearchInput.addEventListener('input', () => {
-                    const val = noteSearchInput.value.trim();
-                    if (noteSearchClear) {
-                        noteSearchClear.classList.toggle('visible', val.length > 0);
-                    }
-                    clearTimeout(searchDebounceTimer);
-                    if (val.length < 2) {
-                        resetSearchResults();
-                        if (val.length > 0 && noteSearchClear) noteSearchClear.classList.add('visible');
-                        return;
-                    }
-                    searchDebounceTimer = setTimeout(() => performNoteSearch(val), 300);
-                });
-
-                // Handle Enter key for immediate search
-                noteSearchInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        clearTimeout(searchDebounceTimer);
-                        const val = noteSearchInput.value.trim();
-                        if (val.length >= 2) performNoteSearch(val);
-                    }
-                    if (e.key === 'Escape') {
-                        clearNoteSearch();
-                        noteSearchInput.blur();
-                    }
-                });
-            }
-
-            if (noteSearchClear) {
-                noteSearchClear.addEventListener('click', () => {
-                    clearNoteSearch();
-                    if (noteSearchInput) noteSearchInput.focus();
-                });
-            }
-
-            // (Global click handler moved to top-level IIFE for performance)
-
-            // (Delete logic moved to top-level IIFE)
-
-            // Confirm unsave for posts
-            document.querySelectorAll('.unsave-form').forEach(form => {
-                form.addEventListener('submit', (e) => {
+            // Handle Enter key for immediate search
+            noteSearchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (typeof window.showCustomConfirm === 'function') {
-                        window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
-                            if (confirmed) form.submit();
-                        });
-                    } else if (confirm('Remove this post from your saved list?')) {
-                        form.submit();
-                    }
-                });
-            });
-
-            // Prevent double submission
-            const noteForm = document.getElementById('create-note-form');
-            const addNoteBtn = document.getElementById('add-note-btn');
-
-            if (noteForm && addNoteBtn) {
-                noteForm.addEventListener('submit', () => {
-                    addNoteBtn.disabled = true;
-                    addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-                });
-            }
-
-            // --- Edit Note Modal Bindings ---
-            const editTextarea = document.getElementById('edit-note-content');
-            const editCharCount = document.getElementById('edit-char-count');
-            const saveEditBtn = document.getElementById('save-edit-btn');
-
-            if (editTextarea && editCharCount) {
-                editTextarea.addEventListener('input', () => {
-                    editCharCount.textContent = editTextarea.value.length;
-                });
-            }
-
-            if (saveEditBtn) {
-                saveEditBtn.addEventListener('click', () => {
-                    if (typeof window.saveNoteEdit === 'function') window.saveNoteEdit();
-                });
-            }
-
-            // --- Note Sharing Logic ---
-            let currentShareNoteId = null;
-            let lastShareNoteId = null;
-
-            document.querySelectorAll('.share-note-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    currentShareNoteId = btn.dataset.id;
-                    console.log('Opening share modal for note:', currentShareNoteId);
-                    openShareModal();
-                    loadExistingShares(currentShareNoteId);
-                });
-            });
-
-            function openShareModal() {
-                const modal = document.getElementById('share-modal');
-                if (modal) {
-                    modal.style.display = 'flex';
-                    document.body.style.overflow = 'hidden';
-
-                    // Reset fields ONLY if opening a different note
-                    if (currentShareNoteId !== lastShareNoteId) {
-                        document.getElementById('share-permissions').value = 'view';
-                        document.getElementById('share-expiry').value = 'never';
-                        document.getElementById('share-code').value = '';
-                        document.getElementById('surprise-theme').value = 'none';
-                        document.getElementById('share-surprise-photo').value = '';
-                        document.getElementById('share-surprise-audio').value = '';
-                        document.getElementById('use-typewriter').checked = false;
-                        document.getElementById('surprise-options').style.display = 'none';
-                        lastShareNoteId = currentShareNoteId;
-                    }
-
-                    document.addEventListener('keydown', handleShareModalEsc);
+                    clearTimeout(searchDebounceTimer);
+                    const val = noteSearchInput.value.trim();
+                    if (val.length >= 2) performNoteSearch(val);
                 }
-            }
-
-            window.closeShareModal = function () {
-                const modal = document.getElementById('share-modal');
-                if (modal) {
-                    modal.style.display = 'none';
-                    document.body.style.overflow = '';
-                    document.removeEventListener('keydown', handleShareModalEsc);
+                if (e.key === 'Escape') {
+                    clearNoteSearch();
+                    noteSearchInput.blur();
                 }
-            };
+            });
+        }
 
-            function handleShareModalEsc(e) {
-                if (e.key === 'Escape') closeShareModal();
+        if (noteSearchClear) {
+            noteSearchClear.addEventListener('click', () => {
+                clearNoteSearch();
+                if (noteSearchInput) noteSearchInput.focus();
+            });
+        }
+
+        // (Global click handler moved to top-level IIFE for performance)
+
+        // (Delete logic moved to top-level IIFE)
+
+        // Confirm unsave for posts
+        document.querySelectorAll('.unsave-form').forEach(form => {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (typeof window.showCustomConfirm === 'function') {
+                    window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
+                        if (confirmed) form.submit();
+                    });
+                } else if (confirm('Remove this post from your saved list?')) {
+                    form.submit();
+                }
+            });
+        });
+
+        // Prevent double submission
+        const noteForm = document.getElementById('create-note-form');
+        const addNoteBtn = document.getElementById('add-note-btn');
+
+        if (noteForm && addNoteBtn) {
+            noteForm.addEventListener('submit', () => {
+                addNoteBtn.disabled = true;
+                addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            });
+        }
+
+        // --- Edit Note Modal Bindings ---
+        const editTextarea = document.getElementById('edit-note-content');
+        const editCharCount = document.getElementById('edit-char-count');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+
+        if (editTextarea && editCharCount) {
+            editTextarea.addEventListener('input', () => {
+                editCharCount.textContent = editTextarea.value.length;
+            });
+        }
+
+        if (saveEditBtn) {
+            saveEditBtn.addEventListener('click', () => {
+                if (typeof window.saveNoteEdit === 'function') window.saveNoteEdit();
+            });
+        }
+
+        // --- Note Sharing Logic ---
+        let currentShareNoteId = null;
+        let lastShareNoteId = null;
+
+        document.querySelectorAll('.share-note-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentShareNoteId = btn.dataset.id;
+                console.log('Opening share modal for note:', currentShareNoteId);
+                openShareModal();
+                loadExistingShares(currentShareNoteId);
+            });
+        });
+
+        function openShareModal() {
+            const modal = document.getElementById('share-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+
+                // Reset fields ONLY if opening a different note
+                if (currentShareNoteId !== lastShareNoteId) {
+                    document.getElementById('share-permissions').value = 'view';
+                    document.getElementById('share-expiry').value = 'never';
+                    document.getElementById('share-code').value = '';
+                    document.getElementById('surprise-theme').value = 'none';
+                    document.getElementById('share-surprise-photo').value = '';
+                    document.getElementById('share-surprise-audio').value = '';
+                    document.getElementById('use-typewriter').checked = false;
+                    document.getElementById('surprise-options').style.display = 'none';
+                    lastShareNoteId = currentShareNoteId;
+                }
+
+                document.addEventListener('keydown', handleShareModalEsc);
             }
+        }
 
-            async function loadExistingShares(noteId) {
-                const list = document.getElementById('share-links-list');
-                const container = document.getElementById('active-shares-container');
-                if (!list || !container) return;
+        window.closeShareModal = function () {
+            const modal = document.getElementById('share-modal');
+            if (modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+                document.removeEventListener('keydown', handleShareModalEsc);
+            }
+        };
 
-                try {
-                    const response = await fetch(`/personal_post/shares/${noteId}`);
-                    const shares = await response.json();
+        function handleShareModalEsc(e) {
+            if (e.key === 'Escape') closeShareModal();
+        }
 
-                    if (shares.length > 0) {
-                        container.style.display = 'block';
-                        list.innerHTML = shares.map(s => `
+        async function loadExistingShares(noteId) {
+            const list = document.getElementById('share-links-list');
+            const container = document.getElementById('active-shares-container');
+            if (!list || !container) return;
+
+            try {
+                const response = await fetch(`/personal_post/shares/${noteId}`);
+                const shares = await response.json();
+
+                if (shares.length > 0) {
+                    container.style.display = 'block';
+                    list.innerHTML = shares.map(s => `
                         <div class="share-link-item">
                             <div class="share-link-url">
                                 <input type="text" value="${s.url}" readonly onclick="this.select()">
@@ -2899,243 +3008,243 @@
                             </div>
                         </div>
                     `).join('');
-                    } else {
-                        container.style.display = 'none';
-                        list.innerHTML = '';
-                    }
-                } catch (e) {
-                    console.error('Error loading shares:', e);
+                } else {
+                    container.style.display = 'none';
+                    list.innerHTML = '';
                 }
+            } catch (e) {
+                console.error('Error loading shares:', e);
             }
+        }
 
-            // Surprise theme toggle listener
-            const themeSelect = document.getElementById('surprise-theme');
-            const themeOptions = document.getElementById('surprise-options');
-            if (themeSelect && themeOptions) {
-                themeSelect.addEventListener('change', () => {
-                    themeOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
-                });
-            }
+        // Surprise theme toggle listener
+        const themeSelect = document.getElementById('surprise-theme');
+        const themeOptions = document.getElementById('surprise-options');
+        if (themeSelect && themeOptions) {
+            themeSelect.addEventListener('change', () => {
+                themeOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
+            });
+        }
 
-            const generateBtn = document.getElementById('generate-share-link');
-            if (generateBtn) {
-                generateBtn.addEventListener('click', async () => {
-                    const permissions = document.getElementById('share-permissions').value;
-                    const expires_in = document.getElementById('share-expiry').value;
-                    const access_code = document.getElementById('share-code').value;
-                    const surprise_theme = document.getElementById('surprise-theme').value;
-                    const valentine_photo = document.getElementById('share-surprise-photo').files[0];
-                    const valentine_audio = document.getElementById('share-surprise-audio').files[0];
+        const generateBtn = document.getElementById('generate-share-link');
+        if (generateBtn) {
+            generateBtn.addEventListener('click', async () => {
+                const permissions = document.getElementById('share-permissions').value;
+                const expires_in = document.getElementById('share-expiry').value;
+                const access_code = document.getElementById('share-code').value;
+                const surprise_theme = document.getElementById('surprise-theme').value;
+                const valentine_photo = document.getElementById('share-surprise-photo').files[0];
+                const valentine_audio = document.getElementById('share-surprise-audio').files[0];
 
-                    const progressArea = document.getElementById('share-upload-progress');
-                    const progressBar = document.getElementById('share-progress-bar');
-                    const progressText = document.getElementById('share-progress-text');
+                const progressArea = document.getElementById('share-upload-progress');
+                const progressBar = document.getElementById('share-progress-bar');
+                const progressText = document.getElementById('share-progress-text');
 
-                    console.log('Generating share link for:', currentShareNoteId);
+                console.log('Generating share link for:', currentShareNoteId);
 
-                    generateBtn.disabled = true;
-                    const originalText = generateBtn.textContent;
-                    generateBtn.textContent = 'Generating...';
+                generateBtn.disabled = true;
+                const originalText = generateBtn.textContent;
+                generateBtn.textContent = 'Generating...';
 
-                    try {
-                        const formData = new FormData();
-                        formData.append('permissions', permissions);
-                        formData.append('expires_in', expires_in);
-                        formData.append('access_code', access_code);
-                        formData.append('surprise_theme', surprise_theme);
-                        formData.append('use_typewriter', document.getElementById('use-typewriter').checked ? 'true' : 'false');
-                        if (valentine_photo) formData.append('valentine_photo', valentine_photo);
-                        if (valentine_audio) formData.append('valentine_audio', valentine_audio);
+                try {
+                    const formData = new FormData();
+                    formData.append('permissions', permissions);
+                    formData.append('expires_in', expires_in);
+                    formData.append('access_code', access_code);
+                    formData.append('surprise_theme', surprise_theme);
+                    formData.append('use_typewriter', document.getElementById('use-typewriter').checked ? 'true' : 'false');
+                    if (valentine_photo) formData.append('valentine_photo', valentine_photo);
+                    if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 
-                        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-                        if (progressArea) progressArea.style.display = 'block';
+                    if (progressArea) progressArea.style.display = 'block';
 
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', `/personal_post/share/${currentShareNoteId}`, true);
-                        xhr.setRequestHeader('X-CSRFToken', csrfToken);
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `/personal_post/share/${currentShareNoteId}`, true);
+                    xhr.setRequestHeader('X-CSRFToken', csrfToken);
 
-                        xhr.upload.onprogress = (e) => {
-                            if (e.lengthComputable) {
-                                const percent = Math.round((e.loaded / e.total) * 100);
-                                if (progressBar) progressBar.style.width = percent + '%';
-                                if (progressText) progressText.textContent = `Uploading: ${percent}%`;
-                            }
-                        };
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            if (progressBar) progressBar.style.width = percent + '%';
+                            if (progressText) progressText.textContent = `Uploading: ${percent}%`;
+                        }
+                    };
 
-                        xhr.onload = function () {
-                            generateBtn.disabled = false;
-                            generateBtn.textContent = originalText;
-                            if (progressArea) progressArea.style.display = 'none';
-
-                            if (xhr.status >= 200 && xhr.status < 300) {
-                                const result = JSON.parse(xhr.responseText);
-                                if (result.success) {
-                                    loadExistingShares(currentShareNoteId);
-                                    document.getElementById('share-code').value = '';
-                                    if (progressBar) progressBar.style.width = '0%';
-                                } else {
-                                    alert('Error: ' + (result.error || 'Unknown error'));
-                                }
-                            } else {
-                                alert('Server error: ' + xhr.status);
-                            }
-                        };
-
-                        xhr.onerror = function () {
-                            generateBtn.disabled = false;
-                            generateBtn.textContent = originalText;
-                            if (progressArea) progressArea.style.display = 'none';
-                            alert('Network error. Try again.');
-                        };
-
-                        xhr.send(formData);
-
-                    } catch (e) {
-                        console.error('Error during share generation:', e);
+                    xhr.onload = function () {
                         generateBtn.disabled = false;
                         generateBtn.textContent = originalText;
                         if (progressArea) progressArea.style.display = 'none';
-                        alert('An error occurred. Please try again.');
-                    }
-                });
-            }
 
-
-
-            window.copyShareUrl = function (text, btn) {
-                // Unify legacy call path
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(text).then(() => showCopyFeedback(btn));
-                } else {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    showCopyFeedback(btn);
-                }
-            };
-
-            function showCopyFeedback(btn) {
-                if (!btn) return;
-                const icon = btn.querySelector('i');
-                if (icon) {
-                    const originalClass = icon.className;
-                    icon.className = 'fas fa-check';
-                    setTimeout(() => { icon.className = originalClass; }, 1500);
-                }
-            }
-
-            // (Version history logic moved to top-level IIFE)
-        });
-    </script>
-
-    <script>
-        // ========== Offline Notes Sync System ==========
-        (function () {
-            const DB_NAME = 'echowithin_offline';
-            const STORE_NAME = 'pending_notes';
-            const DB_VERSION = 1;
-            const CSRF = '{{ csrf_token() }}';
-
-            // --- IndexedDB Helpers ---
-            function openDB() {
-                return new Promise((resolve, reject) => {
-                    const req = indexedDB.open(DB_NAME, DB_VERSION);
-                    req.onupgradeneeded = (e) => {
-                        const db = e.target.result;
-                        if (!db.objectStoreNames.contains(STORE_NAME)) {
-                            db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            const result = JSON.parse(xhr.responseText);
+                            if (result.success) {
+                                loadExistingShares(currentShareNoteId);
+                                document.getElementById('share-code').value = '';
+                                if (progressBar) progressBar.style.width = '0%';
+                            } else {
+                                alert('Error: ' + (result.error || 'Unknown error'));
+                            }
+                        } else {
+                            alert('Server error: ' + xhr.status);
                         }
                     };
+
+                    xhr.onerror = function () {
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = originalText;
+                        if (progressArea) progressArea.style.display = 'none';
+                        alert('Network error. Try again.');
+                    };
+
+                    xhr.send(formData);
+
+                } catch (e) {
+                    console.error('Error during share generation:', e);
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = originalText;
+                    if (progressArea) progressArea.style.display = 'none';
+                    alert('An error occurred. Please try again.');
+                }
+            });
+        }
+
+
+
+        window.copyShareUrl = function (text, btn) {
+            // Unify legacy call path
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => showCopyFeedback(btn));
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showCopyFeedback(btn);
+            }
+        };
+
+        function showCopyFeedback(btn) {
+            if (!btn) return;
+            const icon = btn.querySelector('i');
+            if (icon) {
+                const originalClass = icon.className;
+                icon.className = 'fas fa-check';
+                setTimeout(() => { icon.className = originalClass; }, 1500);
+            }
+        }
+
+        // (Version history logic moved to top-level IIFE)
+    });
+</script>
+
+<script>
+    // ========== Offline Notes Sync System ==========
+    (function () {
+        const DB_NAME = 'echowithin_offline';
+        const STORE_NAME = 'pending_notes';
+        const DB_VERSION = 1;
+        const CSRF = '{{ csrf_token() }}';
+
+        // --- IndexedDB Helpers ---
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        function getAllPending() {
+            return openDB().then(db => {
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readonly');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.getAll();
                     req.onsuccess = () => resolve(req.result);
                     req.onerror = () => reject(req.error);
                 });
-            }
+            });
+        }
 
-            function getAllPending() {
-                return openDB().then(db => {
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(STORE_NAME, 'readonly');
-                        const store = tx.objectStore(STORE_NAME);
-                        const req = store.getAll();
-                        req.onsuccess = () => resolve(req.result);
-                        req.onerror = () => reject(req.error);
-                    });
+        function addPending(note) {
+            return openDB().then(db => {
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.add(note);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
                 });
-            }
+            });
+        }
 
-            function addPending(note) {
-                return openDB().then(db => {
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(STORE_NAME, 'readwrite');
-                        const store = tx.objectStore(STORE_NAME);
-                        const req = store.add(note);
-                        req.onsuccess = () => resolve(req.result);
-                        req.onerror = () => reject(req.error);
-                    });
+        function deletePending(id) {
+            return openDB().then(db => {
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.delete(id);
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
                 });
-            }
+            });
+        }
 
-            function deletePending(id) {
-                return openDB().then(db => {
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(STORE_NAME, 'readwrite');
-                        const store = tx.objectStore(STORE_NAME);
-                        const req = store.delete(id);
-                        req.onsuccess = () => resolve();
-                        req.onerror = () => reject(req.error);
-                    });
+        function clearAllPending() {
+            return openDB().then(db => {
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const req = store.clear();
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(req.error);
                 });
+            });
+        }
+
+        // --- UI Helpers ---
+        const banner = document.getElementById('offline-banner');
+        const bannerText = document.getElementById('offline-banner-text');
+        const pendingContainer = document.getElementById('pending-notes-container');
+
+        function setBanner(state) {
+            banner.className = 'offline-banner';
+            if (state === 'offline') {
+                banner.classList.add('offline');
+                banner.querySelector('i').className = 'fas fa-wifi';
+                bannerText.textContent = "You're offline — notes will sync when you reconnect";
+                banner.style.display = 'flex';
+            } else if (state === 'syncing') {
+                banner.classList.add('syncing');
+                banner.querySelector('i').className = 'fas fa-sync fa-spin';
+                bannerText.textContent = 'Syncing your offline notes...';
+                banner.style.display = 'flex';
+            } else {
+                banner.style.display = 'none';
             }
+        }
 
-            function clearAllPending() {
-                return openDB().then(db => {
-                    return new Promise((resolve, reject) => {
-                        const tx = db.transaction(STORE_NAME, 'readwrite');
-                        const store = tx.objectStore(STORE_NAME);
-                        const req = store.clear();
-                        req.onsuccess = () => resolve();
-                        req.onerror = () => reject(req.error);
-                    });
-                });
+        function renderPendingNotes(notes) {
+            if (!notes.length) {
+                pendingContainer.innerHTML = '';
+                return;
             }
-
-            // --- UI Helpers ---
-            const banner = document.getElementById('offline-banner');
-            const bannerText = document.getElementById('offline-banner-text');
-            const pendingContainer = document.getElementById('pending-notes-container');
-
-            function setBanner(state) {
-                banner.className = 'offline-banner';
-                if (state === 'offline') {
-                    banner.classList.add('offline');
-                    banner.querySelector('i').className = 'fas fa-wifi';
-                    bannerText.textContent = "You're offline — notes will sync when you reconnect";
-                    banner.style.display = 'flex';
-                } else if (state === 'syncing') {
-                    banner.classList.add('syncing');
-                    banner.querySelector('i').className = 'fas fa-sync fa-spin';
-                    bannerText.textContent = 'Syncing your offline notes...';
-                    banner.style.display = 'flex';
-                } else {
-                    banner.style.display = 'none';
-                }
-            }
-
-            function renderPendingNotes(notes) {
-                if (!notes.length) {
-                    pendingContainer.innerHTML = '';
-                    return;
-                }
-                pendingContainer.innerHTML = notes.map(n => {
-                    const escaped = (n.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const preview = escaped.substring(0, 300) + (escaped.length > 300 ? '...' : '');
-                    const ts = new Date(n.created_at).toLocaleString();
-                    return `
+            pendingContainer.innerHTML = notes.map(n => {
+                const escaped = (n.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const preview = escaped.substring(0, 300) + (escaped.length > 300 ? '...' : '');
+                const ts = new Date(n.created_at).toLocaleString();
+                return `
                     <div class="note-card pending-note">
                         <div class="note-content"><pre style="white-space:pre-wrap;margin:0;font-family:inherit;">${preview}</pre></div>
                         <div class="note-footer">
@@ -3146,112 +3255,112 @@
                         </div>
                     </div>
                 `;
-                }).join('');
-            }
+            }).join('');
+        }
 
-            // --- Form Intercept ---
-            const form = document.getElementById('create-note-form');
-            if (form) {
-                form.addEventListener('submit', function (e) {
-                    if (!navigator.onLine) {
-                        e.preventDefault();
-                        const textarea = document.getElementById('note-input');
-                        const content = textarea.value.trim();
-                        if (!content) return;
+        // --- Form Intercept ---
+        const form = document.getElementById('create-note-form');
+        if (form) {
+            form.addEventListener('submit', function (e) {
+                if (!navigator.onLine) {
+                    e.preventDefault();
+                    const textarea = document.getElementById('note-input');
+                    const content = textarea.value.trim();
+                    if (!content) return;
 
-                        const note = {
-                            content: content,
-                            created_at: new Date().toISOString()
-                        };
+                    const note = {
+                        content: content,
+                        created_at: new Date().toISOString()
+                    };
 
-                        addPending(note).then(() => {
-                            textarea.value = '';
-                            document.getElementById('char-count').textContent = '0';
-                            return getAllPending();
-                        }).then(renderPendingNotes).catch(err => {
-                            console.error('Failed to save offline note:', err);
-                            alert('Failed to save note offline. Please try again.');
-                        });
-                    }
-                    // If online, let the form submit normally
-                });
-            }
+                    addPending(note).then(() => {
+                        textarea.value = '';
+                        document.getElementById('char-count').textContent = '0';
+                        return getAllPending();
+                    }).then(renderPendingNotes).catch(err => {
+                        console.error('Failed to save offline note:', err);
+                        alert('Failed to save note offline. Please try again.');
+                    });
+                }
+                // If online, let the form submit normally
+            });
+        }
 
-            // --- Sync Logic ---
-            async function syncPendingNotes() {
-                const pending = await getAllPending();
-                if (!pending.length) return;
+        // --- Sync Logic ---
+        async function syncPendingNotes() {
+            const pending = await getAllPending();
+            if (!pending.length) return;
 
-                setBanner('syncing');
-                let allSynced = true;
+            setBanner('syncing');
+            let allSynced = true;
 
-                for (const note of pending) {
-                    try {
-                        const resp = await fetch('/personal_post/create_json', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': CSRF
-                            },
-                            body: JSON.stringify({ content: note.content })
-                        });
-                        if (resp.ok) {
-                            await deletePending(note.id);
-                        } else {
-                            allSynced = false;
-                        }
-                    } catch {
+            for (const note of pending) {
+                try {
+                    const resp = await fetch('/personal_post/create_json', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': CSRF
+                        },
+                        body: JSON.stringify({ content: note.content })
+                    });
+                    if (resp.ok) {
+                        await deletePending(note.id);
+                    } else {
                         allSynced = false;
                     }
-                }
-
-                if (allSynced) {
-                    setBanner('hidden');
-                    // Reload to show the synced notes from server
-                    window.location.reload();
-                } else {
-                    setBanner('offline');
-                    bannerText.textContent = 'Some notes failed to sync. Will retry when connection improves.';
+                } catch {
+                    allSynced = false;
                 }
             }
 
-            // --- Connectivity Events ---
-            function updateOnlineStatus() {
+            if (allSynced) {
+                setBanner('hidden');
+                // Reload to show the synced notes from server
+                window.location.reload();
+            } else {
+                setBanner('offline');
+                bannerText.textContent = 'Some notes failed to sync. Will retry when connection improves.';
+            }
+        }
+
+        // --- Connectivity Events ---
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                syncPendingNotes();
+            } else {
+                getAllPending().then(notes => {
+                    if (notes.length) setBanner('offline');
+                    else setBanner('offline'); // Still show banner even if no pending notes, just to indicate offline
+                    renderPendingNotes(notes);
+                });
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // --- Init: show pending notes on load ---
+        getAllPending().then(notes => {
+            if (notes.length) {
+                renderPendingNotes(notes);
                 if (navigator.onLine) {
                     syncPendingNotes();
                 } else {
-                    getAllPending().then(notes => {
-                        if (notes.length) setBanner('offline');
-                        else setBanner('offline'); // Still show banner even if no pending notes, just to indicate offline
-                        renderPendingNotes(notes);
-                    });
+                    setBanner('offline');
                 }
+            } else if (!navigator.onLine) {
+                setBanner('offline'); // Show offline banner even if no pending notes
             }
-
-            window.addEventListener('online', updateOnlineStatus);
-            window.addEventListener('offline', updateOnlineStatus);
-
-            // --- Init: show pending notes on load ---
-            getAllPending().then(notes => {
-                if (notes.length) {
-                    renderPendingNotes(notes);
-                    if (navigator.onLine) {
-                        syncPendingNotes();
-                    } else {
-                        setBanner('offline');
-                    }
-                } else if (!navigator.onLine) {
-                    setBanner('offline'); // Show offline banner even if no pending notes
-                }
+        });
+        // Valentine toggle helper
+        const vToggle = document.getElementById('share-valentine');
+        if (vToggle) {
+            vToggle.addEventListener('change', () => {
+                const opts = document.getElementById('valentine-options');
+                if (opts) opts.style.display = vToggle.checked ? 'block' : 'none';
             });
-            // Valentine toggle helper
-            const vToggle = document.getElementById('share-valentine');
-            if (vToggle) {
-                vToggle.addEventListener('change', () => {
-                    const opts = document.getElementById('valentine-options');
-                    if (opts) opts.style.display = vToggle.checked ? 'block' : 'none';
-                });
-            }
-        })();
-    </script>
-    {% endblock %}
+        }
+    })();
+</script>
+{% endblock %}

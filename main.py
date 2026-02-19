@@ -4778,7 +4778,8 @@ def get_unread_notification_count():
         return jsonify({'count': 0})
 
 
-def _serialize_comment(doc):
+def _serialize_comment(doc, reply_counts=None):
+    if reply_counts is None: reply_counts = {}
     return {
         'id': str(doc.get('_id')),
         'post_slug': doc.get('post_slug'),
@@ -4789,6 +4790,9 @@ def _serialize_comment(doc):
         'edited_at': doc.get('edited_at').isoformat() if doc.get('edited_at') else None,
         'is_deleted': doc.get('is_deleted', False),
         'parent_id': str(doc.get('parent_id')) if doc.get('parent_id') else None,
+        'upvote_count': doc.get('upvote_count', 0),
+        'upvoted_by': [str(uid) for uid in doc.get('upvoted_by', [])],
+        'reply_count': reply_counts.get(str(doc.get('_id')), 0),
     }
 
 
@@ -4804,7 +4808,38 @@ def api_post_comments(slug):
 
             total = comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
             cursor = comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((page-1)*per_page).limit(per_page)
-            comments = [ _serialize_comment(c) for c in cursor ]
+            comments_list = list(cursor)
+            
+            # Recursive parent fetching for API to ensure consistency
+            processed_comment_ids = set(str(c['_id']) for c in comments_list)
+            while True:
+                parents_to_fetch = []
+                for c in comments_list:
+                    parent_id = c.get('parent_id')
+                    if parent_id and str(parent_id) not in processed_comment_ids:
+                        parents_to_fetch.append(parent_id)
+                if not parents_to_fetch:
+                    break
+                new_parents = list(comments_conf.find({'_id': {'$in': parents_to_fetch}}))
+                if not new_parents:
+                    break
+                for p in new_parents:
+                    p_id_str = str(p['_id'])
+                    if p_id_str not in processed_comment_ids:
+                        comments_list.append(p)
+                        processed_comment_ids.add(p_id_str)
+                comments_list.sort(key=lambda x: x.get('created_at') or datetime.datetime.min)
+
+            # Compute reply counts for the serialized set
+            all_ids = [c['_id'] for c in comments_list]
+            reply_pipeline = [
+                {'$match': {'parent_id': {'$in': all_ids}, 'is_deleted': False}},
+                {'$group': {'_id': '$parent_id', 'count': {'$sum': 1}}}
+            ]
+            reply_agg = list(comments_conf.aggregate(reply_pipeline))
+            r_counts = {str(doc['_id']): doc['count'] for doc in reply_agg}
+
+            comments = [ _serialize_comment(c, r_counts) for c in comments_list ]
             has_more = total > page * per_page
             return jsonify({'comments': comments, 'total': total, 'page': page, 'per_page': per_page, 'has_more': has_more})
         except Exception as e:

@@ -71,6 +71,8 @@
     /* Hide reply comment items by default (they will have data-parent attr) */
     .comment-item[data-parent] {
         display: none;
+        margin-left: 18px;
+        /* Support fallback indentation */
     }
 
     /* Post comment button (maroon) */
@@ -380,6 +382,24 @@
         const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
     const postSlug = '{{ post.slug }}';
 
+    // Nest comments that were rendered flat by the server
+    function nestExistingComments() {
+        const list = document.getElementById('comments-list');
+        if (!list) return;
+        // Find all comments that have a parent
+        const items = Array.from(list.querySelectorAll('.comment-item[data-parent]'));
+        items.forEach(el => {
+            const pid = el.getAttribute('data-parent');
+            const parent = list.querySelector(`[data-id="${pid}"]`);
+            if (parent) {
+                const replies = parent.querySelector('.comment-replies');
+                if (replies) {
+                    replies.appendChild(el);
+                }
+            }
+        });
+    }
+
     // Join the room for this specific post for real-time updates
     if (window.socket) {
         window.socket.emit('join', { room: `post_${postSlug}` });
@@ -412,6 +432,11 @@
             }
         });
     }
+
+    // Initialize comments on load
+    document.addEventListener('DOMContentLoaded', nestExistingComments);
+    // Also run immediately in case DOMContentLoaded already fired or for internal navigation
+    nestExistingComments();
 
 
     const form = document.getElementById('comment-form');

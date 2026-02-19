@@ -2874,22 +2874,30 @@ def blog():
 
     # --- Default Blog Page Logic (Mixed Feed Algorithm) ---
     # This algorithm creates a diverse feed that:
-    # 1. Always includes some recent posts (freshness)
-    # 2. Mixes in older posts for discovery
-    # 3. Changes on each reload for variety
+    # 1. Starts with PINNED posts (if any)
+    # 2. Includes some recent posts (freshness)
+    # 3. Mixes in older posts for discovery
+    # 4. Changes on each reload for variety
 
     import random
 
     total_posts_count = posts_conf.count_documents({})
 
+    # 0. Get Pinned Posts (Max 3 allowed by admin route)
+    pinned_posts = list(posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
+    pinned_ids = [p['_id'] for p in pinned_posts]
+
     if total_posts_count <= 10:
-        # If we have 10 or fewer posts, just show all of them randomly ordered
-        all_posts = list(posts_conf.find({}).sort('timestamp', -1))
-        random.shuffle(all_posts)
+        # If we have 10 or fewer posts, just show all of them (pinned always at top)
+        # Get non-pinned posts
+        other_posts = list(posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
+        random.shuffle(other_posts)
+        all_posts = pinned_posts + other_posts
         with app.app_context():
             latest_posts_prepared = prepare_posts(all_posts)
     else:
         # Mixed feed algorithm (Tuned 2026-01-28):
+        # - Pinned posts at top
         # - 2 most recent posts (reduced recency bias)
         # - 4 posts from the past MONTH (broadened "recent" scope)
         # - 4 random posts from older content (increased discovery)
@@ -2898,13 +2906,16 @@ def blog():
         one_month_ago = now - datetime.timedelta(days=30)
         
         # 1. Get the 2 most recent posts (The "Headlines")
-        recent_posts = list(posts_conf.find({}).sort('timestamp', -1).limit(2))
+        # Exclude pinned posts
+        recent_posts = list(posts_conf.find({
+            '_id': {'$nin': pinned_ids}
+        }).sort('timestamp', -1).limit(2))
         recent_ids = [p['_id'] for p in recent_posts]
 
         # 2. Get posts from the past MONTH (The "Recent Discussions")
-        # Exclude the top 2 we just picked.
+        # Exclude pinned and the top 2 we just picked.
         month_posts = list(posts_conf.find({
-            '_id': {'$nin': recent_ids},
+            '_id': {'$nin': pinned_ids + recent_ids},
             'timestamp': {'$gte': one_month_ago}
         }).sort('timestamp', -1).limit(20)) # Fetch enough to shuffle well
 
@@ -2915,9 +2926,9 @@ def blog():
             month_selection = month_posts
 
         month_ids = [p['_id'] for p in month_selection]
-        excluded_ids = recent_ids + month_ids
+        excluded_ids = pinned_ids + recent_ids + month_ids
 
-        # 3. Calculate how many more posts we need to reach 10
+        # 3. Calculate how many more posts we need to reach 10 mixed posts
         posts_needed = 10 - len(recent_posts) - len(month_selection)
 
         # Get random older posts for discovery (The "Archives")
@@ -2926,14 +2937,15 @@ def blog():
             {'$sample': {'size': max(posts_needed, 1)}}
         ]))
 
-        # Combine all buckets
-        combined_posts = recent_posts + month_selection + older_posts
+        # Combine mixed buckets
+        mixed_posts = recent_posts + month_selection + older_posts
+        random.shuffle(mixed_posts)
 
-        # Fully shuffle all posts so the "headlines" aren't always at the very top
-        random.shuffle(combined_posts)
+        # Final list: Pinned + Mixed (capped at 10 mixed + pinned count)
+        combined_posts = pinned_posts + mixed_posts
 
         with app.app_context():
-            latest_posts_prepared = prepare_posts(combined_posts[:10])
+            latest_posts_prepared = prepare_posts(combined_posts)
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
@@ -3132,7 +3144,7 @@ def get_all_posts_json():
     """Returns all posts as a JSON object for client-side rendering."""
     try:
         # Fetch all posts with necessary fields
-        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'share_count': 1, 'reactions': 1}))
+        all_posts = list(posts_conf.find({}, {'_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 'likes_count': 1, 'share_count': 1, 'reactions': 1, 'is_pinned': 1}))
 
         # Convert ObjectId and datetime to strings and add the post URL
         for post in all_posts:
@@ -3220,7 +3232,7 @@ def get_top_posts_json():
                 '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1,
                 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1,
                 'image_status': 1, 'video_url': 1, 'likes_count': 1,
-                'share_count': 1, 'view_count': 1, 'reactions': 1
+                'share_count': 1, 'view_count': 1, 'reactions': 1, 'is_pinned': 1
             }},
             # Stage 2: Lookup comment counts
             {'$lookup': {
@@ -5286,6 +5298,41 @@ def admin_delete_post(post_id):
     return redirect(url_for('admin_posts'))
 
 
+@app.route('/admin/posts/pin/<post_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_pin_post(post_id):
+    try:
+        # Check if we already have 3 pinned posts
+        pinned_count = posts_conf.count_documents({'is_pinned': True})
+        if pinned_count >= 3:
+             flash('Maximum of 3 posts can be pinned at once. Please unpin a post first.', 'warning')
+             return redirect(url_for('admin_posts'))
+
+        posts_conf.update_one(
+            {'_id': ObjectId(post_id)},
+            {'$set': {'is_pinned': True, 'pinned_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        flash('Post pinned successfully.', 'success')
+    except Exception as e:
+        app.logger.error(f"Error pinning post {post_id}: {e}")
+        flash('An error occurred while pinning the post.', 'danger')
+    return redirect(url_for('admin_posts'))
+
+@app.route('/admin/posts/unpin/<post_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_unpin_post(post_id):
+    try:
+        posts_conf.update_one(
+            {'_id': ObjectId(post_id)},
+            {'$set': {'is_pinned': False}, '$unset': {'pinned_at': ""}}
+        )
+        flash('Post unpinned successfully.', 'success')
+    except Exception as e:
+        app.logger.error(f"Error unpinning post {post_id}: {e}")
+        flash('An error occurred while unpinning the post.', 'danger')
+    return redirect(url_for('admin_posts'))
 
 @app.route('/admin/announcements', methods=['GET', 'POST'])
 @login_required

@@ -2293,19 +2293,25 @@ body {
 }
 
 .badge-new {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #795548 0%, #3e2217 100%);
     color: white;
     animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .badge-hot {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #8d6e63 0%, #d84315 100%);
     color: white;
 }
 
 .badge-trending {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    background: linear-gradient(135deg, #a1887f 0%, #ff6f00 100%);
     color: white;
+}
+
+.badge-pinned {
+    background: linear-gradient(135deg, #ffca28 0%, #ff6f00 100%);
+    color: #3e2217;
+    border: 1px solid #ff6f00;
 }
 
 @keyframes pulse-glow {

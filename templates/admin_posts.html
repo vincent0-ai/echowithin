@@ -37,6 +37,21 @@
           {% endif %}
         </div>
         <div class="post-actions">
+          {% if post.is_pinned %}
+          <form action="{{ url_for('admin_unpin_post', post_id=post._id) }}" method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn comment-btn"
+              style="background-color: #ffd700; color: #000; border: none;"><i class="fas fa-thumbtack"></i>
+              Unpin</button>
+          </form>
+          {% else %}
+          <form action="{{ url_for('admin_pin_post', post_id=post._id) }}" method="POST" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn comment-btn" style="border: none;"><i class="fas fa-thumbtack"></i>
+              Pin</button>
+          </form>
+          {% endif %}
+
           <form action="{{ url_for('admin_delete_post', post_id=post._id) }}" method="POST"
             data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -1608,7 +1608,7 @@
     // --- Immediate Event Handlers & Global Helpers ---
     (function () {
         // --- Socket.IO Integration ---
-        const socket = io();
+        const socket = window.socket || io(); // Use global if available, fallback to local io()
         socket.on('connect', () => console.log('Connected to real-time sync server'));
 
         // Listen for updates from other devices/collaborators

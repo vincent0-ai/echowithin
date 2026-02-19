@@ -157,6 +157,25 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        // --- Real-time Reaction Updates ---
+        if (window.socket) {
+            window.socket.on('post_reacted', function (data) {
+                console.log('Real-time reaction update:', data);
+                const postId = data.post_id;
+                const totalCount = data.total_count;
+
+                // Find all containers for this post (might be multiple if in different tabs/sections)
+                const containers = document.querySelectorAll(`.reaction-container[data-post-id="${postId}"]`);
+                containers.forEach(container => {
+                    const countEl = container.querySelector('.likes-count');
+                    if (countEl) {
+                        // Smoothly update the count
+                        countEl.textContent = totalCount;
+                    }
+                });
+            });
+        }
+
         const tabButtons = document.querySelectorAll('.tab-button');
         const tabContents = document.querySelectorAll('.tab-content');
 
@@ -272,7 +291,7 @@
                             const timeAgo = p.unlocked_at ? new Date(p.unlocked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
                             html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}
                                 <div class="post-item" style="position: relative;">
-                                    <h3><a href="${p.url}" class="activity-link surprise-activity-link"><i class="fas fa-gift" style="color: #ff4d6d;"></i> ${p.title}</a></h3>
+                                    <h3><a href="${p.url}" class="activity-link surprise-activity-link">${p.title}</a></h3>
                                     <div class="post-content-rendered">${p.content}</div>
                                     <div class="post-meta"><i class="far fa-clock"></i> ${timeAgo}</div>
                                 </div>

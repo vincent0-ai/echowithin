@@ -71,7 +71,6 @@
     /* Hide reply comment items by default (they will have data-parent attr) */
     .comment-item[data-parent] {
         display: none;
-        margin-left: 28px;
     }
 
     /* Post comment button (maroon) */
@@ -348,8 +347,8 @@
                         </div>
                         {% endif %}
 
-                        {# Show Replies Toggle (only for top-level comments with replies) #}
-                        {% if not c.parent_id and reply_count and reply_count > 0 %}
+                        {# Show Replies Toggle (for all comments with replies) #}
+                        {% if reply_count and reply_count > 0 %}
                         <a href="#" class="toggle-replies action-link" data-id="{{ c._id|string }}">Show replies ({{
                             reply_count }})</a>
                         {% endif %}
@@ -379,6 +378,40 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
         const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+    const postSlug = '{{ post.slug }}';
+
+    // Join the room for this specific post for real-time updates
+    if (window.socket) {
+        window.socket.emit('join', { room: `post_${postSlug}` });
+
+        window.socket.on('post_reacted', function (data) {
+            console.log('Real-time reaction update:', data);
+            if (data.post_id === '{{ post._id|string }}') {
+                const countEl = document.querySelector('.likes-count');
+                if (countEl) countEl.textContent = data.total_count;
+            }
+        });
+
+        window.socket.on('comment_posted', function (data) {
+            console.log('Real-time comment received:', data);
+            if (data.slug === postSlug && data.comment) {
+                // Check if comment already exists (if user who posted is also the one receiving)
+                if (!document.querySelector(`[data-id="${data.comment.id}"]`)) {
+                    appendComments([data.comment], false); // Prepend new comments
+
+                    // Increment local count display
+                    const header = document.querySelector('.comments-section h3');
+                    if (header) {
+                        const m = header.textContent.match(/\((\d+)\)/);
+                        if (m) {
+                            const n = parseInt(m[1], 10) + 1;
+                            header.textContent = `Comments (${n})`;
+                        }
+                    }
+                }
+            }
+        });
+    }
 
 
     const form = document.getElementById('comment-form');
@@ -437,8 +470,8 @@
                 actions.appendChild(voting);
             }
 
-            // Show Replies Toggle (only for top-level comments with replies)
-            if (!comment.parent_id && comment.reply_count > 0) {
+            // Show Replies Toggle (for all comments with replies)
+            if (comment.reply_count > 0) {
                 const toggleReplies = document.createElement('a');
                 toggleReplies.href = '#';
                 toggleReplies.className = 'toggle-replies action-link';

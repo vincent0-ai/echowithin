@@ -64,6 +64,8 @@
 </style>
 
 <script>
+  let postsChart, commentsChart, trafficChart;
+
   async function loadMetrics() {
     const res = await fetch('/admin/metrics');
     const data = await res.json();
@@ -72,7 +74,9 @@
     const postsLabels = data.posts_per_day.map(x => x._id);
     const postsCounts = data.posts_per_day.map(x => x.count);
     const ctx1 = document.getElementById('postsChart').getContext('2d');
-    new Chart(ctx1, {
+
+    if (postsChart) postsChart.destroy();
+    postsChart = new Chart(ctx1, {
       type: 'line',
       data: { labels: postsLabels, datasets: [{ label: 'Posts', data: postsCounts, borderColor: 'blue', fill: false }] },
       options: {
@@ -85,7 +89,9 @@
     const comLabels = data.comments_per_day.map(x => x._id);
     const comCounts = data.comments_per_day.map(x => x.count);
     const ctx2 = document.getElementById('commentsChart').getContext('2d');
-    new Chart(ctx2, {
+
+    if (commentsChart) commentsChart.destroy();
+    commentsChart = new Chart(ctx2, {
       type: 'line',
       data: {
         labels: comLabels,
@@ -107,7 +113,9 @@
       const tLabels = tData.visits_per_day.map(x => x._id);
       const tCounts = tData.visits_per_day.map(x => x.count);
       const ctx3 = document.getElementById('trafficChart').getContext('2d');
-      new Chart(ctx3, {
+
+      if (trafficChart) trafficChart.destroy();
+      trafficChart = new Chart(ctx3, {
         type: 'bar',
         data: {
           labels: tLabels,
@@ -145,6 +153,16 @@
     } catch (e) {
       console.debug('Failed to load active users', e);
     }
+  }
+
+  // --- Real-time Admin Metrics ---
+  if (window.socket) {
+    window.socket.on('metrics_updated', function (data) {
+      console.log('Real-time metrics update triggered:', data);
+      // Debounce or just refresh
+      loadMetrics();
+      loadActiveNow();
+    });
   }
 
   loadMetrics();

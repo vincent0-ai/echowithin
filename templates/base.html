@@ -19,6 +19,11 @@
     {% endblock %}
 
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script>
+        // Global Socket.IO instance
+        window.socket = io();
+        window.socket.on('connect', () => console.log('Connected to real-time server'));
+    </script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
     <script src="{{ url_for('static', filename='capacitor.js') }}"></script>
@@ -562,6 +567,19 @@
                 });
             }
 
+            // --- Push Notifications Listener (Always Register) ---
+            if (window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
+                // Handle notification clicks
+                window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
+                    const data = notification.notification.data;
+                    console.log('Push notification action performed:', notification);
+                    if (data && data.url) {
+                        // Use the robust deep link handler for consistent navigation
+                        handleDeepLink(data.url);
+                    }
+                });
+            }
+
             // Register FCM token if logged in (only once per session to avoid slowness)
             const isLoggedIn = document.body.dataset.userLoggedIn === 'true';
             const fcmRegistered = sessionStorage.getItem('fcm_token_registered');
@@ -588,14 +606,6 @@
                             sessionStorage.setItem('fcm_token_registered', 'true');
                         }
                     });
-                });
-
-                // Handle notification clicks
-                window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
-                    const data = notification.notification.data;
-                    if (data && data.url) {
-                        window.location.href = data.url;
-                    }
                 });
             }
         }
@@ -727,6 +737,7 @@
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
         const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+
 
 
 

@@ -1509,8 +1509,6 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                             icon='ic_launcher',
                             color='#6366f1',
                             channel_id='default',
-                            # Use deep link URL for click action
-                            click_action='FCM_PLUGIN_ACTIVITY',
                         ),
                     ),
                 )
@@ -1554,7 +1552,6 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                         icon='ic_launcher',
                         color='#6366f1',
                         channel_id='default',
-                        click_action='FCM_PLUGIN_ACTIVITY',
                     ),
                 ),
             ))
@@ -4481,28 +4478,34 @@ def view_post(slug):
         except Exception as e:
             app.logger.debug(f"Failed to compute reply counts for post {slug}: {e}")
 
-        # Ensure that if a visible comment refers to a deleted parent, we fetch that parent
+        # Ensure that all parent comments are present so replies can be correctly nested in the UI
         try:
-            parent_ids = [c.get('parent_id') for c in comments if c.get('parent_id')]
-            # parent_ids may be ObjectId instances; filter and fetch any missing parent docs
-            missing_parent_ids = []
-            if parent_ids:
-                for pid in parent_ids:
-                    # if parent not in our current comments list, we'll fetch it
-                    if not any((str(c.get('_id')) == str(pid)) for c in comments):
-                        missing_parent_ids.append(pid)
-            if missing_parent_ids:
-                parents = list(comments_conf.find({'_id': {'$in': missing_parent_ids}}))
-                # Append parent placeholders so replies have their parent present in DOM
-                # Avoid duplicates
-                existing_ids = set(str(c.get('_id')) for c in comments)
-                for p in parents:
-                    if str(p.get('_id')) not in existing_ids:
+            processed_comment_ids = set(str(c['_id']) for c in comments)
+            while True:
+                parents_to_fetch = []
+                for c in comments:
+                    parent_id = c.get('parent_id')
+                    if parent_id and str(parent_id) not in processed_comment_ids:
+                        parents_to_fetch.append(parent_id)
+                
+                if not parents_to_fetch:
+                    break
+                
+                # Fetch missing parents and add them to the comments list
+                new_parents = list(comments_conf.find({'_id': {'$in': parents_to_fetch}}))
+                if not new_parents:
+                    break
+                    
+                for p in new_parents:
+                    p_id_str = str(p['_id'])
+                    if p_id_str not in processed_comment_ids:
                         comments.append(p)
-                # Keep comments ordered by created_at
+                        processed_comment_ids.add(p_id_str)
+                
+                # Re-sort to maintain chronological order
                 comments.sort(key=lambda x: x.get('created_at') or datetime.datetime.min)
         except Exception as e:
-            app.logger.debug(f"Failed to fetch missing parent comments for post {slug}: {e}")
+            app.logger.debug(f"Failed to fetch recursive parent comments for post {slug}: {e}")
         has_more = comment_count > comment_page * per_page
     except Exception as e:
         app.logger.error(f"Failed to load comments for post {slug}: {e}")
@@ -4863,6 +4866,15 @@ def api_post_comments(slug):
                 executor.submit(send_push_notification_for_comment, comment_id_str, slug)
         except Exception as e:
             app.logger.error(f"Failed to enqueue push notification for comment: {e}")
+
+        # Emit WebSocket event for real-time updates
+        socketio.emit('comment_posted', {
+            'slug': slug,
+            'comment': _serialize_comment(comment)
+        }, room=f"post_{slug}")
+        
+        # Notify admin dashboard
+        socketio.emit('metrics_updated', {'type': 'comment', 'slug': slug})
 
         return jsonify(_serialize_comment(comment)), 201
     except Exception as e:
@@ -5653,6 +5665,13 @@ def toggle_reaction_post(post_id):
         total_count = updated_post.get('likes_count', 0)
 
 
+
+        # Emit WebSocket event for real-time reaction update
+        socketio.emit('post_reacted', {
+            'post_id': post_id,
+            'reaction_counts': reaction_counts,
+            'total_count': total_count
+        })
 
         return jsonify({
             'success': True,

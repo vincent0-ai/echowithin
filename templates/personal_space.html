@@ -1146,18 +1146,24 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="8000"
                     required></textarea>
-                <div class="note-metadata-inputs"
-                    style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                <div style="margin-top: 0.5rem;">
+                    <button type="button" id="toggle-metadata-create"
+                        style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
+                        <i class="fas fa-chevron-down" id="create-meta-chevron"></i> More options
+                    </button>
+                </div>
+                <div class="note-metadata-inputs" id="create-metadata-fields"
+                    style="display: none; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; padding: 0.75rem; background: #fafafa; border-radius: 8px; border: 1px solid #eee;">
                     <div class="input-group-meta" style="flex: 1; min-width: 200px;">
-                        <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Reference
-                            (e.g. John 3:16)</label>
-                        <input type="text" name="reference" id="note-reference" placeholder="Reference..."
+                        <label
+                            style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Reference</label>
+                        <input type="text" name="reference" id="note-reference" placeholder="e.g. John 3:16"
                             style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem;">
                     </div>
                     <div class="input-group-meta" style="flex: 1; min-width: 200px;">
                         <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Tags (comma
                             separated)</label>
-                        <input type="text" name="tags" id="note-tags" placeholder="Bible Study, Personal, Faith..."
+                        <input type="text" name="tags" id="note-tags" placeholder="e.g. Bible Study, Personal"
                             style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem;">
                     </div>
                 </div>
@@ -1211,7 +1217,7 @@
                     style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
                     {% if note.reference %}
                     <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">
-                        <i class="fas fa-book-open" style="color: #3e2217; margin-right: 2px;"></i> {{ note.reference }}
+                        {{ note.reference }}
                     </div>
                     {% endif %}
                     {% if note.tags %}
@@ -1219,7 +1225,7 @@
                         {% for tag in note.tags %}
                         <span class="note-tag-badge"
                             style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">
-                            <i class="fas fa-tag" style="font-size: 0.6rem;"></i> {{ tag }}
+                            {{ tag }}
                         </span>
                         {% endfor %}
                     </div>
@@ -1478,7 +1484,14 @@
         </div>
         <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000"
             placeholder="Edit your note..."></textarea>
-        <div class="edit-metadata-inputs" style="display: flex; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+        <div style="margin-top: 0.5rem; text-align: left;">
+            <button type="button" id="toggle-metadata-edit"
+                style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
+                <i class="fas fa-chevron-down" id="edit-meta-chevron"></i> More options
+            </button>
+        </div>
+        <div class="edit-metadata-inputs" id="edit-metadata-fields"
+            style="display: none; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap; padding: 0.75rem; background: #fafafa; border-radius: 8px; border: 1px solid #eee;">
             <div class="input-group-meta" style="flex: 1; min-width: 180px;">
                 <label style="display: block; font-size: 0.75rem; color: #777; margin-bottom: 2px;">Reference</label>
                 <input type="text" id="edit-note-reference"
@@ -1655,6 +1668,27 @@
                 document.removeEventListener('keydown', window.handleDeleteModalEsc);
             }
         };
+
+        // --- Metadata Toggle Logic ---
+        function setupMetaToggle(btnId, fieldsId, iconId) {
+            const btn = document.getElementById(btnId);
+            const fields = document.getElementById(fieldsId);
+            const icon = document.getElementById(iconId);
+            if (btn && fields) {
+                btn.addEventListener('click', () => {
+                    const isHidden = fields.style.display === 'none';
+                    fields.style.display = isHidden ? 'flex' : 'none';
+                    if (icon) {
+                        icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                        icon.style.transition = 'transform 0.2s ease';
+                    }
+                });
+            }
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            setupMetaToggle('toggle-metadata-create', 'create-metadata-fields', 'create-meta-chevron');
+            setupMetaToggle('toggle-metadata-edit', 'edit-metadata-fields', 'edit-meta-chevron');
+        });
 
         // Edit modal helpers
         window.handleEditModalEsc = function (e) {

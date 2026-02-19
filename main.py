@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import datetime
 
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
@@ -499,7 +502,7 @@ if MEILI_URL and MEILI_MASTER_KEY:
                 app.logger.debug('meili_index missing update_sortable_attributes; skipping')
         except Exception as e:
             app.logger.debug(f'Failed to configure sortable attributes: {e}')
-        app.logger.info('Connected to Meilisearch and configured index `posts`.')
+        app.logger.debug('Connected to Meilisearch and configured index `posts`.')
     except Exception as e:
         app.logger.error(f'Failed to initialize Meilisearch client: {e}')
 
@@ -552,7 +555,7 @@ if meili_client:
                 ])
             except Exception as e:
                 app.logger.debug(f'Failed to configure personal_notes ranking rules: {e}')
-            app.logger.info('Connected to Meilisearch and configured index `personal_notes`.')
+            app.logger.debug('Connected to Meilisearch and configured index `personal_notes`.')
     except Exception as e:
         app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
 
@@ -6113,6 +6116,8 @@ def sync_personal_post(post_id):
                 {'$set': {
                     'content': note.get('content'),
                     'encrypted': note.get('encrypted', True),
+                    'reference': note.get('reference', ''),
+                    'tags': note.get('tags', []),
                     'updated_at': now
                 }}
             )
@@ -6120,6 +6125,9 @@ def sync_personal_post(post_id):
             # Re-index original in Meilisearch
             decrypted = decrypt_note(note.get('content', ''))
             index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
+
+            # Broadcast update to participants in the share room
+            socketio.emit('note_changed', {'content': decrypted}, room=source_share_id, include_self=False)
 
             return jsonify({
                 'success': True,
@@ -6152,6 +6160,8 @@ def sync_personal_post(post_id):
                 {'$set': {
                     'content': original_note.get('content'),
                     'encrypted': original_note.get('encrypted', True),
+                    'reference': original_note.get('reference', ''),
+                    'tags': original_note.get('tags', []),
                     'updated_at': now
                 }}
             )
@@ -6159,6 +6169,14 @@ def sync_personal_post(post_id):
             # Re-index clone in Meilisearch
             decrypted = decrypt_note(original_note.get('content', ''))
             index_note_to_meili(post_id, decrypted_content=decrypted)
+
+            # Broadcast to other sessions of the SAME USER for real-time sync
+            socketio.emit('note_changed', {
+                'note_id': post_id, 
+                'content': decrypted,
+                'reference': original_note.get('reference', ''),
+                'tags': original_note.get('tags', [])
+            }, room=str(current_user.id))
 
             return jsonify({
                 'success': True,
@@ -6443,6 +6461,8 @@ def view_shared_note(share_id):
                            is_owner=is_owner,
                            already_saved=already_saved,
                            surprise_theme=surprise_theme,
+                           reference=note.get('reference', ''),
+                           tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=share.get('valentine_photo'),
                            valentine_audio=share.get('valentine_audio'),
@@ -6489,6 +6509,8 @@ def api_save_shared_note(share_id):
         'user_id': ObjectId(current_user.id),
         'content': original_note.get('content'),
         'encrypted': original_note.get('encrypted', True),
+        'reference': original_note.get('reference', ''),
+        'tags': original_note.get('tags', []),
         'created_at': datetime.datetime.now(datetime.timezone.utc),
         'source_note_id': share['note_id'],
         'source_share_id': share_id

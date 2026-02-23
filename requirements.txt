@@ -86,5 +86,5 @@ pywebpush==2.1.2
 firebase-admin==6.4.0
 flask-socketio==5.3.6
 python-socketio==5.16.1
-python-engineio==4.9.0
+python-engineio==4.13.1
 eventlet==0.40.4

@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 import datetime
 
@@ -69,7 +69,7 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.

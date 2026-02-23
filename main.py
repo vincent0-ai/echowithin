@@ -420,144 +420,119 @@ def decrypt_note(encrypted_content):
         return encrypted_content  # Return as-is for backward compatibility
 
 # --- Meilisearch setup for fast full-text search ---
-MEILI_URL = get_env_variable('MEILI_URL')
-MEILI_MASTER_KEY = get_env_variable('MEILI_MASTER_KEY')
+MEILI_URL = os.environ.get('MEILI_URL', '').strip()
+MEILI_MASTER_KEY = os.environ.get('MEILI_MASTER_KEY', '').strip()
 meili_client = None
 meili_index = None
-if MEILI_URL and MEILI_MASTER_KEY:
+meili_notes_index = None
+
+def _init_meilisearch():
+    """Initialize MeiliSearch with timeout protection so it doesn't block app startup."""
+    global meili_client, meili_index, meili_notes_index
+    if not MEILI_URL or not MEILI_MASTER_KEY:
+        app.logger.info('MeiliSearch not configured, skipping initialization')
+        return
+
     try:
         meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
-        # create or get posts index
+        # --- Posts index ---
         try:
-            # Try to get an existing Index object
             meili_index = meili_client.get_index('posts')
         except Exception:
-            # If the index does not exist, create it. Some Meili client versions
-            # return a TaskInfo dict from create_index; ensure we obtain an Index
             try:
                 meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
             except Exception as ce:
                 app.logger.debug(f'create_index returned error (continuing): {ce}')
-            # Obtain the Index object (this method returns an Index wrapper)
             try:
                 meili_index = meili_client.index('posts')
             except Exception as ie:
                 app.logger.error(f'Failed to obtain Meili index object: {ie}')
                 meili_index = None
 
-        # Configure searchable and filterable attributes (these methods return tasks; we don't chain them)
-        try:
-            if hasattr(meili_index, 'update_searchable_attributes'):
+        if meili_index:
+            try:
                 meili_index.update_searchable_attributes(['title', 'content'])
-            else:
-                app.logger.debug('meili_index missing update_searchable_attributes; skipping')
-        except Exception as e:
-            app.logger.debug(f'Failed to update searchable attributes: {e}')
-        try:
-            if hasattr(meili_index, 'update_filterable_attributes'):
-                meili_index.update_filterable_attributes(['author_username', 'tags', 'created_at'])
+            except Exception as e:
+                app.logger.debug(f'Failed to update searchable attributes: {e}')
+            try:
                 meili_index.update_filterable_attributes(['id', 'author_username', 'tags', 'created_at'])
-            else:
-                app.logger.debug('meili_index missing update_filterable_attributes; skipping')
-        except Exception as e:
-            app.logger.debug(f'Failed to update filterable attributes: {e}')
-
-        # Configure typo tolerance: allow up to 2 typos for queries
-        try:
-            if hasattr(meili_index, 'update_typo_tolerance'):
+            except Exception as e:
+                app.logger.debug(f'Failed to update filterable attributes: {e}')
+            try:
                 meili_index.update_typo_tolerance({
                     'enabled': True,
                     'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
                 })
-                app.logger.debug('Typo tolerance configured: 1 typo for words ≥5 chars, 2 typos for words ≥9 chars')
-            else:
-                app.logger.debug('meili_index missing update_typo_tolerance; skipping')
-        except Exception as e:
-            app.logger.debug(f'Failed to configure typo tolerance: {e}')
-
-        # Configure ranking rules: prioritize relevance, then recency
-        try:
-            if hasattr(meili_index, 'update_ranking_rules'):
+            except Exception as e:
+                app.logger.debug(f'Failed to configure typo tolerance: {e}')
+            try:
                 meili_index.update_ranking_rules([
-                    'sort',
-                    'words',
-                    'typo',
-                    'proximity',
-                    'attribute',
-                    'exactness',
-                    'created_at:desc'  # Most recent posts ranked higher
-                ])
-                app.logger.debug('Ranking rules configured: relevance-based with recency boost')
-            else:
-                app.logger.debug('meili_index missing update_ranking_rules; skipping')
-        except Exception as e:
-            app.logger.debug(f'Failed to configure ranking rules: {e}')
-
-        # Configure sortable attributes for user-initiated sorting
-        try:
-            if hasattr(meili_index, 'update_sortable_attributes'):
-                meili_index.update_sortable_attributes(['created_at', 'title'])
-                app.logger.debug('Sortable attributes configured: created_at, title')
-            else:
-                app.logger.debug('meili_index missing update_sortable_attributes; skipping')
-        except Exception as e:
-            app.logger.debug(f'Failed to configure sortable attributes: {e}')
-        app.logger.debug('Connected to Meilisearch and configured index `posts`.')
-    except Exception as e:
-        app.logger.error(f'Failed to initialize Meilisearch client: {e}')
-
-# --- Meilisearch index for personal notes ---
-meili_notes_index = None
-if meili_client:
-    try:
-        try:
-            meili_notes_index = meili_client.get_index('personal_notes')
-        except Exception:
-            try:
-                meili_client.create_index(uid='personal_notes', options={'primaryKey': 'id'})
-            except Exception as ce:
-                app.logger.debug(f'create_index personal_notes returned error (continuing): {ce}')
-            try:
-                meili_notes_index = meili_client.index('personal_notes')
-            except Exception as ie:
-                app.logger.error(f'Failed to obtain Meili personal_notes index object: {ie}')
-                meili_notes_index = None
-
-        if meili_notes_index:
-            try:
-                meili_notes_index.update_searchable_attributes(['content'])
-            except Exception as e:
-                app.logger.debug(f'Failed to update personal_notes searchable attributes: {e}')
-            try:
-                meili_notes_index.update_filterable_attributes(['user_id', 'created_at'])
-            except Exception as e:
-                app.logger.debug(f'Failed to update personal_notes filterable attributes: {e}')
-            try:
-                meili_notes_index.update_sortable_attributes(['created_at'])
-            except Exception as e:
-                app.logger.debug(f'Failed to update personal_notes sortable attributes: {e}')
-            try:
-                meili_notes_index.update_typo_tolerance({
-                    'enabled': True,
-                    'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
-                })
-            except Exception as e:
-                app.logger.debug(f'Failed to configure personal_notes typo tolerance: {e}')
-            try:
-                meili_notes_index.update_ranking_rules([
-                    'words',
-                    'typo',
-                    'proximity',
-                    'attribute',
-                    'sort',
-                    'exactness',
+                    'sort', 'words', 'typo', 'proximity', 'attribute', 'exactness',
                     'created_at:desc'
                 ])
             except Exception as e:
-                app.logger.debug(f'Failed to configure personal_notes ranking rules: {e}')
-            app.logger.debug('Connected to Meilisearch and configured index `personal_notes`.')
+                app.logger.debug(f'Failed to configure ranking rules: {e}')
+            try:
+                meili_index.update_sortable_attributes(['created_at', 'title'])
+            except Exception as e:
+                app.logger.debug(f'Failed to configure sortable attributes: {e}')
+            app.logger.debug('Connected to Meilisearch and configured index `posts`.')
+
+        # --- Personal notes index ---
+        try:
+            try:
+                meili_notes_index = meili_client.get_index('personal_notes')
+            except Exception:
+                try:
+                    meili_client.create_index(uid='personal_notes', options={'primaryKey': 'id'})
+                except Exception:
+                    pass
+                try:
+                    meili_notes_index = meili_client.index('personal_notes')
+                except Exception:
+                    meili_notes_index = None
+
+            if meili_notes_index:
+                try:
+                    meili_notes_index.update_searchable_attributes(['content'])
+                except Exception:
+                    pass
+                try:
+                    meili_notes_index.update_filterable_attributes(['user_id', 'created_at'])
+                except Exception:
+                    pass
+                try:
+                    meili_notes_index.update_sortable_attributes(['created_at'])
+                except Exception:
+                    pass
+                try:
+                    meili_notes_index.update_typo_tolerance({
+                        'enabled': True,
+                        'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
+                    })
+                except Exception:
+                    pass
+                try:
+                    meili_notes_index.update_ranking_rules([
+                        'words', 'typo', 'proximity', 'attribute', 'sort', 'exactness',
+                        'created_at:desc'
+                    ])
+                except Exception:
+                    pass
+                app.logger.debug('Connected to Meilisearch and configured index `personal_notes`.')
+        except Exception as e:
+            app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
+
     except Exception as e:
-        app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
+        app.logger.error(f'Failed to initialize Meilisearch client: {e}')
+
+# Run MeiliSearch init with a 5-second timeout to prevent blocking app startup
+import threading
+_meili_thread = threading.Thread(target=_init_meilisearch, daemon=True)
+_meili_thread.start()
+_meili_thread.join(timeout=5)
+if _meili_thread.is_alive():
+    app.logger.warning('MeiliSearch initialization timed out after 5s, search may be unavailable')
 
 
 def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:

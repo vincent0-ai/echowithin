@@ -122,6 +122,10 @@ def make_session_permanent():
 
 # Ensure all external URLs are generated with https
 app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+# Cache static files (favicon, logo, CSS, JS) for 2 days
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 172800
+
 load_dotenv()
 
 

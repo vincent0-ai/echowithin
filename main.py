@@ -433,8 +433,31 @@ def _init_meilisearch():
         app.logger.info('MeiliSearch not configured, skipping initialization')
         return
 
+    max_retries = 3
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
+            # Try to get or create the index to verify connection
+            try:
+                meili_index = meili_client.get_index('posts')
+            except Exception:
+                try:
+                    meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
+                except Exception as ce:
+                    pass
+            break # Success, exit retry loop
+        except Exception as e:
+            if attempt < max_retries - 1:
+                app.logger.warning(f'MeiliSearch connection attempt {attempt+1} failed: {e}. Retrying in {retry_delay}s...')
+                time.sleep(retry_delay)
+                retry_delay *= 2
+            else:
+                app.logger.error(f'Failed to initialize MeiliSearch client after {max_retries} attempts: {e}')
+                return
+
     try:
-        meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
         # --- Posts index ---
         try:
             meili_index = meili_client.get_index('posts')
@@ -524,15 +547,15 @@ def _init_meilisearch():
             app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
 
     except Exception as e:
-        app.logger.error(f'Failed to initialize Meilisearch client: {e}')
+        app.logger.error(f'Failed to configure Meilisearch indexes: {e}')
 
-# Run MeiliSearch init with a 5-second timeout to prevent blocking app startup
+# Run MeiliSearch init with background thread
 import threading
 _meili_thread = threading.Thread(target=_init_meilisearch, daemon=True)
 _meili_thread.start()
 _meili_thread.join(timeout=5)
 if _meili_thread.is_alive():
-    app.logger.warning('MeiliSearch initialization timed out after 5s, search may be unavailable')
+    app.logger.warning('MeiliSearch initialization timed out after 5s, search may be unavailable but will keep retrying in background')
 
 
 def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
@@ -1338,7 +1361,7 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                             vapid_claims=VAPID_CLAIMS
                         )
                     except WebPushException as e:
-                        if e.response and e.response.status_code in [404, 410]:
+                        if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
                             push_subscriptions_conf.delete_one({'_id': sub['_id']})
                         else:
                             app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
@@ -1418,7 +1441,7 @@ def send_push_notifications_for_new_post(post_id_str):
                     vapid_claims=VAPID_CLAIMS
                 )
             except WebPushException as e:
-                if e.response and e.response.status_code in [404, 410]:
+                if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
                     push_subscriptions_conf.delete_one({'_id': sub['_id']})
                 else:
                     app.logger.error(f"Push notification failed: {e}")

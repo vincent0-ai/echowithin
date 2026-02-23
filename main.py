@@ -2015,6 +2015,28 @@ def admin_traffic():
         return jsonify({'error': 'failed to compute traffic metrics'}), 500
 
 
+@app.route('/admin/trigger_newsletter', methods=['POST'])
+@login_required
+@admin_required
+def admin_trigger_newsletter():
+    """Manually trigger the weekly newsletter."""
+    try:
+        try:
+            job = send_weekly_newsletter.queue()
+            return jsonify({'status': 'queued', 'message': f'Newsletter job queued (id: {job.id})'})
+        except Exception:
+            from concurrent.futures import ThreadPoolExecutor
+            def run_in_context():
+                with app.app_context():
+                    send_weekly_newsletter()
+            ThreadPoolExecutor().submit(run_in_context)
+            return jsonify({'status': 'started', 'message': 'Newsletter triggered (thread fallback)'})
+    except Exception as e:
+        app.logger.error(f'Error triggering newsletter: {e}')
+        return jsonify({'error': 'Failed to trigger newsletter'}), 500
+
+
+
 @app.route('/admin/reindex_meili', methods=['POST'])
 @login_required
 @admin_required

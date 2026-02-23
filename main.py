@@ -1,5 +1,5 @@
-from gevent import monkey
-monkey.patch_all()
+import eventlet
+eventlet.monkey_patch()
 
 import datetime
 
@@ -69,7 +69,7 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.
@@ -122,10 +122,6 @@ def make_session_permanent():
 
 # Ensure all external URLs are generated with https
 app.config['PREFERRED_URL_SCHEME'] = 'https'
-
-# Cache static files (favicon, logo, CSS, JS) for 2 days
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 172800
-
 load_dotenv()
 
 
@@ -1273,15 +1269,15 @@ def send_weekly_newsletter():
             # Use a Set to avoid duplicates if someone is in both collections
             recipient_emails = set()
             
-            # Fetch unique emails from newsletter_subs using distinct (server-side)
-            recipient_emails.update(newsletter_conf.distinct('email'))
+            # Fetch from newsletter_subs
+            for sub in newsletter_conf.find({}, {'email': 1}):
+                if sub.get('email'):
+                    recipient_emails.add(sub['email'])
             
-            # Fetch unique emails from users who want weekly notifications
-            recipient_emails.update(users_conf.distinct('email', {'is_confirmed': True, 'notification_preference': 'weekly'}))
-            
-            # Remove any None/empty values
-            recipient_emails.discard(None)
-            recipient_emails.discard('')
+            # Fetch from users who want weekly notifications
+            for user in users_conf.find({'is_confirmed': True, 'notification_preference': 'weekly'}, {'email': 1}):
+                if user.get('email'):
+                    recipient_emails.add(user['email'])
 
             if not recipient_emails:
                 app.logger.info("No recipients found for weekly newsletter, skipping")
@@ -5011,7 +5007,7 @@ def api_vote_comment(comment_id):
         comment_oid = ObjectId(comment_id)
 
         # Find the comment to ensure it exists
-        comment = comments_conf.find_one({'_id': comment_oid}, {'author_id': 1})
+        comment = comments_conf.find_one({'_id': comment_oid}, {'author_id': 1, 'upvoted_by': 1})
         if not comment:
             return jsonify({'error': 'Comment not found'}), 404
 
@@ -5019,8 +5015,8 @@ def api_vote_comment(comment_id):
         if comment.get('author_id') == user_id:
             return jsonify({'error': 'You cannot vote on your own comment'}), 403
 
-        # Check if the user has already upvoted using a count query (avoids fetching the whole array)
-        is_already_voted = comments_conf.count_documents({'_id': comment_oid, 'upvoted_by': user_id}, limit=1) > 0
+        # Check if the user has already upvoted this comment
+        is_already_voted = user_id in (comment.get('upvoted_by') or [])
 
         if is_already_voted:
             # Remove the upvote (un-vote)

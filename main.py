@@ -1292,7 +1292,10 @@ def send_weekly_newsletter():
                     # Generate unsubscribe token
                     secret = app.config["SECRET_KEY"]
                     unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
-                    unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                    try:
+                        unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                    except RuntimeError:
+                        unsub_url = f"{base_url}/unsubscribe/{recipient_email}/{unsub_token}"
                     
                     msg = Message(
                         subject=subject,

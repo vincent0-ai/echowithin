@@ -25,7 +25,7 @@ Flask-wtf==1.2.2
 Flask-RQ2==18.3
 freezegun==1.5.5
 frozenlist==1.8.0
-gunicorn==25.1.0
+gunicorn==23.0.0
 honcho==2.0.0
 idna==3.11
 isort==6.1.0
@@ -87,4 +87,4 @@ firebase-admin==6.4.0
 flask-socketio==5.3.6
 python-socketio==5.16.1
 python-engineio==4.13.1
-eventlet==0.40.4
+eventlet==0.35.2

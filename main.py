@@ -199,15 +199,14 @@ if FIREBASE_AVAILABLE:
             
             # Sanitize private key: the cryptography parser fails on invalid bytes (like hex 0x14 or spaces)
             if cred_dict.get('private_key'):
-                pk = cred_dict['private_key'].replace('\\n', '\n')
-                clean_lines = []
-                for line in pk.strip().split('\n'):
-                    if line.startswith('-----BEGIN ') or line.startswith('-----END '):
-                        clean_lines.append(line)
-                    else:
-                        import re
-                        clean_lines.append(re.sub(r'[^A-Za-z0-9+/=]', '', line))
-                cred_dict['private_key'] = '\n'.join(clean_lines) + '\n'
+                import re
+                pk = cred_dict['private_key']
+                match = re.search(r'(-----BEGIN [^-]+-----)(.*?)(-----END [^-]+-----)', pk, re.DOTALL)
+                if match:
+                    begin_tag, body, end_tag = match.groups()
+                    body = re.sub(r'[^A-Za-z0-9+/=]', '', body)
+                    body_lines = [body[i:i+64] for i in range(0, len(body), 64)]
+                    cred_dict['private_key'] = f"{begin_tag}\n" + '\n'.join(body_lines) + f"\n{end_tag}\n"
                 
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)

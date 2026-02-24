@@ -461,13 +461,7 @@ def _init_meilisearch():
         try:
             meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
             # Try to get or create the index to verify connection
-            try:
-                meili_index = meili_client.get_index('posts')
-            except Exception:
-                try:
-                    meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
-                except Exception as ce:
-                    pass
+            meili_client.health()
             break # Success, exit retry loop
         except Exception as e:
             if attempt < max_retries - 1:

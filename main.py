@@ -196,6 +196,19 @@ if FIREBASE_AVAILABLE:
                     
             # Load from environment variable (JSON string)
             cred_dict = json.loads(firebase_creds_json, strict=False)
+            
+            # Sanitize private key: the cryptography parser fails on invalid bytes (like hex 0x14 or spaces)
+            if cred_dict.get('private_key'):
+                pk = cred_dict['private_key'].replace('\\n', '\n')
+                clean_lines = []
+                for line in pk.strip().split('\n'):
+                    if line.startswith('-----BEGIN ') or line.startswith('-----END '):
+                        clean_lines.append(line)
+                    else:
+                        import re
+                        clean_lines.append(re.sub(r'[^A-Za-z0-9+/=]', '', line))
+                cred_dict['private_key'] = '\n'.join(clean_lines) + '\n'
+                
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             FIREBASE_INITIALIZED = True

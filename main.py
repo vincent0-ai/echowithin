@@ -186,6 +186,14 @@ if FIREBASE_AVAILABLE:
     
     try:
         if firebase_creds_json:
+            # If the string doesn't start with '{', assume it's base64 encoded
+            if not firebase_creds_json.strip().startswith('{'):
+                import base64
+                try:
+                    firebase_creds_json = base64.b64decode(firebase_creds_json).decode('utf-8')
+                except Exception as b_err:
+                    app.logger.warning(f'Failed to base64 decode FIREBASE_CREDENTIALS: {b_err}')
+                    
             # Load from environment variable (JSON string)
             cred_dict = json.loads(firebase_creds_json)
             cred = credentials.Certificate(cred_dict)

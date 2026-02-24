@@ -204,6 +204,7 @@ if FIREBASE_AVAILABLE:
                 match = re.search(r'(-----BEGIN [^-]+-----)(.*?)(-----END [^-]+-----)', pk, re.DOTALL)
                 if match:
                     begin_tag, body, end_tag = match.groups()
+                    body = body.replace('\\n', '')
                     body = re.sub(r'[^A-Za-z0-9+/=]', '', body)
                     body_lines = [body[i:i+64] for i in range(0, len(body), 64)]
                     cred_dict['private_key'] = f"{begin_tag}\n" + '\n'.join(body_lines) + f"\n{end_tag}\n"

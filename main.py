@@ -195,7 +195,7 @@ if FIREBASE_AVAILABLE:
                     app.logger.warning(f'Failed to base64 decode FIREBASE_CREDENTIALS: {b_err}')
                     
             # Load from environment variable (JSON string)
-            cred_dict = json.loads(firebase_creds_json)
+            cred_dict = json.loads(firebase_creds_json, strict=False)
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
             FIREBASE_INITIALIZED = True

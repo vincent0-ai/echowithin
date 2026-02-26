@@ -1522,8 +1522,10 @@
 
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
-            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
-            const CSRF_TOKEN = '{{ csrf_token() }}';
+            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }
+        };
+        const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
+        const CSRF_TOKEN = '{{ csrf_token() }}';
 
         // --- Socket.IO Integration ---
         const socket = io();
@@ -1556,8 +1558,25 @@
         });
 
         socket.on('discussion_updated', (data) => {
-            console.log('New comment/reply notification');
-            // Refresh comments list
+            console.log('New comment/reply/delete notification');
+
+            if (data.type === 'delete' && data.comment_id) {
+                // Instantly remove the comment from the DOM if we find it
+                const commentEl = document.querySelector(`[data-comment-id="${data.comment_id}"]`);
+                if (commentEl) {
+                    // Try to adjust the count
+                    if (commentCountEl && commentCountEl.textContent) {
+                        const current = parseInt(commentCountEl.textContent) || 0;
+                        if (current > 0) commentCountEl.textContent = (current - 1).toString();
+                    }
+                    commentEl.remove();
+                    // Optional: reload all to fix up tree/counts accurately
+                    // if (typeof loadComments === 'function') loadComments();
+                    return; // Skip the toast
+                }
+            }
+
+            // Refresh comments list for additions
             if (typeof loadComments === 'function') loadComments();
 
             // Show a subtle toast if the user is currently looking at something else
@@ -1584,6 +1603,7 @@
             const repliesHTML = (comment.replies || []).map(r => createCommentHTML(r, depth + 1)).join('');
             const isReply = depth > 0;
             const containerClass = isReply ? 'reply-card' : 'comment-card';
+            const isAuthor = IS_AUTHENTICATED && comment.author_name === CURRENT_USER_NAME;
 
             return `
                     <div class="${containerClass}" data-comment-id="${comment._id}">
@@ -1594,6 +1614,7 @@
                         <div class="comment-body">${comment.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                         <div class="comment-footer">
                             ${IS_AUTHENTICATED ? `<button class="reply-btn" onclick="toggleReplyForm(this)"><i class="fas fa-reply"></i> Reply</button>` : ''}
+                            ${isAuthor ? `<button class="delete-btn" onclick="deleteComment('${comment._id}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
                         </div>
                         ${repliesHTML ? `<div class="replies-container">${repliesHTML}</div>` : ''}
                     </div>
@@ -1640,6 +1661,8 @@
                 if (!content) return;
 
                 postBtn.disabled = true;
+                const originalText = postBtn.innerHTML;
+                postBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
                 try {
                     const resp = await fetch(`/share/note/${SHARE_ID}/comments`, {
                         method: 'POST',
@@ -1661,6 +1684,7 @@
                     alert('Network error. Please try again.');
                 } finally {
                     postBtn.disabled = false;
+                    postBtn.innerHTML = originalText;
                 }
             });
         }
@@ -1694,6 +1718,8 @@
             if (!content) return;
 
             btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
             try {
                 const resp = await fetch(`/share/note/${SHARE_ID}/comments/${commentId}/replies`, {
                     method: 'POST',
@@ -1713,6 +1739,36 @@
                 alert('Network error. Please try again.');
             } finally {
                 btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        };
+
+        window.deleteComment = async function (commentId, btn) {
+            if (!confirm('Are you sure you want to delete this comment?')) return;
+
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+            try {
+                const resp = await fetch(`/share/note/${SHARE_ID}/comments/${commentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-CSRFToken': CSRF_TOKEN
+                    }
+                });
+                const result = await resp.json();
+                if (result.success) {
+                    await loadComments();
+                } else {
+                    alert(result.error || 'Failed to delete comment');
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            } catch (e) {
+                alert('Network error. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         };
 

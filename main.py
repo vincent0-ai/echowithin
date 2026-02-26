@@ -434,6 +434,11 @@ def decrypt_note(encrypted_content):
 
 # --- Meilisearch setup for fast full-text search ---
 MEILI_URL = os.environ.get('MEILI_URL', '').strip()
+if MEILI_URL and not MEILI_URL.startswith(('http://', 'https://')):
+    MEILI_URL = f"https://{MEILI_URL}"
+elif MEILI_URL and MEILI_URL.startswith('http://') and 'search.echowithin.xyz' in MEILI_URL:
+    MEILI_URL = MEILI_URL.replace('http://', 'https://')
+
 MEILI_MASTER_KEY = os.environ.get('MEILI_MASTER_KEY', '').strip()
 meili_client = None
 meili_index = None
@@ -6238,7 +6243,7 @@ def sync_personal_post(post_id):
             index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
-            socketio.emit('note_changed', {'content': decrypted}, room=source_share_id, include_self=False)
+            socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
 
             return jsonify({
                 'success': True,
@@ -6891,7 +6896,7 @@ def api_post_note_comment(share_id):
         'share_id': share_id,
         'author_name': comment['author_name'],
         'type': 'comment'
-    }, room=share_id, include_self=False)
+    }, room=share_id)
 
     return jsonify({
         'success': True,
@@ -6943,7 +6948,7 @@ def api_post_note_reply(share_id, comment_id):
         'share_id': share_id,
         'author_name': reply['author_name'],
         'type': 'reply'
-    }, room=share_id, include_self=False)
+    }, room=share_id)
 
     return jsonify({
         'success': True,
@@ -6952,6 +6957,45 @@ def api_post_note_reply(share_id, comment_id):
         'content': content,
         'created_at': reply['created_at'].isoformat()
     })
+
+
+@app.route('/share/note/<share_id>/comments/<comment_id>', methods=['DELETE'])
+@login_required
+def api_delete_note_comment(share_id, comment_id):
+    """Delete a comment or reply on a shared note (login required)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+
+    target_id = safe_object_id(comment_id)
+    if not target_id:
+        return jsonify({'error': 'Invalid comment ID'}), 400
+
+    comment = note_discussions_conf.find_one({'_id': target_id, 'share_id': share_id})
+    if not comment:
+        return jsonify({'error': 'Comment not found'}), 404
+
+    # Allow delete if user is the comment author
+    is_author = str(comment.get('author_id')) == current_user.id
+    if not is_author:
+        return jsonify({'error': 'Unauthorized to delete this comment'}), 403
+
+    # Delete the comment and any of its replies (if it is a parent)
+    note_discussions_conf.delete_many({
+        '$or': [
+            {'_id': target_id},
+            {'parent_id': target_id}
+        ]
+    })
+
+    # Broadcast deletion
+    socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'type': 'delete',
+        'comment_id': comment_id
+    }, room=share_id)
+
+    return jsonify({'success': True})
 
 
 @app.route('/contact', methods=['POST'])

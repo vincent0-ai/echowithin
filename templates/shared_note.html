@@ -1522,8 +1522,7 @@
 
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
-            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }
-        };
+            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
         const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
         const CSRF_TOKEN = '{{ csrf_token() }}';
 

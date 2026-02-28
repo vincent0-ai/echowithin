@@ -5408,6 +5408,8 @@ def delete_announcement(announcement_id):
 @admin_required
 def admin_users():
     query = request.args.get('query')
+    projection = {'password': 0, 'email_verification_token': 0, 'reset_password_token': 0}
+    
     if query:
         # Search for users by username or email (case-insensitive)
         # Using $regex for case-insensitivity in PyMongo
@@ -5416,9 +5418,9 @@ def admin_users():
                 {"username": {"$regex": query, "$options": "i"}},
                 {"email": {"$regex": query, "$options": "i"}}
             ]
-        }).sort('username', 1)
+        }, projection).sort('username', 1)
     else:
-        users = users_conf.find().sort('username', 1)
+        users = users_conf.find({}, projection).sort('username', 1)
 
     return render_template('admin_users.html', title="Manage Users", users=list(users), query=query)
 
@@ -5509,8 +5511,8 @@ def terms():
 @app.route('/profile/<username>')
 @login_required
 def profile(username):
-    # Find the user by username
-    user = users_conf.find_one({'username': username})
+    # Find the user by username, excluding sensitive fields
+    user = users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
     if not user:
         flash("User not found.", "danger")
         return redirect(url_for('home'))

@@ -1252,7 +1252,11 @@
             <div class="note-card" data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
-                <div class="note-content rendered-note" data-raw="{{ note.content | e }}"></div>
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
+                    <div style="text-align: center; color: #999; padding: 1rem 0;">
+                        <i class="fas fa-spinner fa-spin"></i> Rendering note...
+                    </div>
+                </div>
                 {% if note.reference or note.tags %}
                 <div class="note-metadata-display"
                     style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -1681,10 +1685,10 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
 <!-- Marked.js for markdown -->
-<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 
 <!-- DOMPurify for sanitization -->
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <script>
     // --- Immediate Event Handlers & Global Helpers ---

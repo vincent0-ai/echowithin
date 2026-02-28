@@ -2,9 +2,9 @@
 
 {% block head_meta %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 {% endblock %}
 
 {% block title %}
@@ -106,7 +106,11 @@
                 </div>
 
                 {% if permissions == 'edit' %}
-                <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"></div>
+                <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}">
+                    <div style="text-align: center; color: #999; padding: 1rem 0;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading note...
+                    </div>
+                </div>
                 {% if reference or tags %}
                 <div class="note-metadata-display"
                     style="margin-top: 1rem; padding: 0.75rem; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -140,7 +144,11 @@
                     </div>
                 </div>
                 {% else %}
-                <div class="note-content rendered-note" data-raw="{{ content | e }}"></div>
+                <div class="note-content rendered-note" data-raw="{{ content | e }}">
+                    <div style="text-align: center; color: #999; padding: 1rem 0;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading note...
+                    </div>
+                </div>
                 {% if reference or tags %}
                 <div class="note-metadata-display"
                     style="margin-top: 1rem; padding: 0.75rem; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -195,7 +203,11 @@
             </div>
 
             {% if permissions == 'edit' %}
-            <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"></div>
+            <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}">
+                <div style="text-align: center; color: #999; padding: 1rem 0;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading note...
+                </div>
+            </div>
             {% if reference or tags %}
             <div class="note-metadata-display"
                 style="margin-top: 1rem; padding: 1rem 1.5rem; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -229,7 +241,11 @@
                 </div>
             </div>
             {% else %}
-            <div class="note-content rendered-note" data-raw="{{ content | e }}"></div>
+            <div class="note-content rendered-note" data-raw="{{ content | e }}">
+                <div style="text-align: center; color: #999; padding: 1rem 0;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading note...
+                </div>
+            </div>
             {% if reference or tags %}
             <div class="note-metadata-display"
                 style="margin-top: 1rem; padding: 1rem 1.5rem; border-top: 1px solid #eee; display: flex; flex-direction: column; gap: 0.25rem;">
@@ -1522,7 +1538,8 @@
 
             // --- Discussion System ---
             const SHARE_ID = '{{ share_id }}';
-            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
+            const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }
+        };
         const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
         const CSRF_TOKEN = '{{ csrf_token() }}';
 

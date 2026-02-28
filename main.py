@@ -5434,6 +5434,16 @@ def ban_user(user_id):
         return redirect(url_for('admin_users'))
 
     users_conf.update_one({'_id': ObjectId(user_id)}, {'$set': {'is_banned': True}})
+
+    # Invalidate caches so the ban takes effect on their next request
+    if redis_cache:
+        try:
+            redis_cache.delete(f"last_active:{user_id}")
+        except Exception:
+            pass
+    if f"user:{user_id}" in user_loader_cache:
+        del user_loader_cache[f"user:{user_id}"]
+
     flash(f"User '{user_to_ban.get('username')}' has been banned.", "success")
     return redirect(url_for('admin_users'))
 
@@ -5445,6 +5455,16 @@ def unban_user(user_id):
     if not user_to_unban:
         abort(404)
     users_conf.update_one({'_id': ObjectId(user_id)}, {'$set': {'is_banned': False}})
+
+    # Invalidate caches
+    if redis_cache:
+        try:
+            redis_cache.delete(f"last_active:{user_id}")
+        except Exception:
+            pass
+    if f"user:{user_id}" in user_loader_cache:
+        del user_loader_cache[f"user:{user_id}"]
+
     flash(f"User '{user_to_unban.get('username')}' has been unbanned.", "success")
     return redirect(url_for('admin_users'))
 

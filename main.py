@@ -5651,20 +5651,47 @@ def personal_space():
     """Renders the user's personal space with saved posts and personal notes."""
     user = users_conf.find_one({'_id': ObjectId(current_user.id)})
 
+    # Pagination parameters
+    try:
+        notes_page = max(1, int(request.args.get('notes_page', 1)))
+    except ValueError:
+        notes_page = 1
+        
+    try:
+        saved_page = max(1, int(request.args.get('saved_page', 1)))
+    except ValueError:
+        saved_page = 1
+
+    per_page = 10
+
     # Fetch saved posts
     saved_post_ids = user.get('saved_posts', [])
     saved_posts = []
+    total_saved = len(saved_post_ids)
+    
     if saved_post_ids:
         # Reverse to get most recently saved first
         saved_post_ids = list(reversed(saved_post_ids))
-        # Fetch posts and preserve order
-        posts_map = {post['_id']: post for post in posts_conf.find({'_id': {'$in': saved_post_ids}})}
-        ordered_posts = [posts_map[pid] for pid in saved_post_ids if pid in posts_map]
+        
+        # Paginate the IDs first to avoid loading too many posts from MongoDB
+        skip_saved = (saved_page - 1) * per_page
+        paginated_saved_ids = saved_post_ids[skip_saved : skip_saved + per_page]
+        
+        # Fetch actual posts and preserve order
+        posts_map = {post['_id']: post for post in posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
+        ordered_posts = [posts_map[pid] for pid in paginated_saved_ids if pid in posts_map]
+        
         with app.app_context():
             saved_posts = prepare_posts(ordered_posts)
 
-    # Fetch personal posts (notes) and decrypt them
-    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1))
+    # Fetch personal posts (notes) - Paginated!
+    total_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
+    skip_notes = (notes_page - 1) * per_page
+    
+    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)})
+                                                 .sort('created_at', -1)
+                                                 .skip(skip_notes)
+                                                 .limit(per_page))
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = decrypt_note(note.get('content', ''))
@@ -5715,7 +5742,27 @@ def personal_space():
         for doc in personal_posts_conf.aggregate(clone_pipeline):
             has_clones_map[str(doc['_id'])] = doc['count']
 
-    return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_shares_map=active_shares_map, has_clones_map=has_clones_map, active_page='personal_space', title=page_title, description=page_description)
+    # Pagination metadata
+    import math
+    total_notes_pages = math.ceil(total_notes_count / per_page) if per_page else 0
+    total_saved_pages = math.ceil(total_saved / per_page) if per_page else 0
+
+    return render_template(
+        'personal_space.html', 
+        saved_posts=saved_posts, 
+        personal_posts=personal_posts, 
+        active_shares_map=active_shares_map, 
+        has_clones_map=has_clones_map, 
+        active_page='personal_space', 
+        title=page_title, 
+        description=page_description,
+        notes_page=notes_page,
+        saved_page=saved_page,
+        total_notes_pages=total_notes_pages,
+        total_saved_pages=total_saved_pages,
+        total_notes_count=total_notes_count,
+        total_saved=total_saved
+    )
 
 @app.route('/post/<post_id>/react', methods=['POST'])
 @login_required

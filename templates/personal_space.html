@@ -1119,6 +1119,47 @@
             </div>
             {% endfor %}
         </div>
+
+        <!-- Pagination for Saved Posts -->
+        {% if total_saved_pages > 1 %}
+        <nav class="pagination-nav" style="margin-top: 2rem;">
+            <ul class="pagination">
+                {% if saved_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('personal_space', saved_page=saved_page-1, notes_page=notes_page) }}">Previous</a>
+                </li>
+                {% endif %}
+
+                {% set max_visible = [8, saved_page + 1] | max %}
+                {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
+                <li class="page-item {% if p == saved_page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('personal_space', saved_page=p, notes_page=notes_page) }}">{{
+                        p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if max_visible < total_saved_pages - 1 %} <li class="page-item disabled"><span
+                        class="page-link">...</span></li>
+                    {% endif %}
+
+                    {% if max_visible < total_saved_pages %} <li
+                        class="page-item {% if total_saved_pages == saved_page %}active{% endif %}">
+                        <a class="page-link"
+                            href="{{ url_for('personal_space', saved_page=total_saved_pages, notes_page=notes_page) }}">{{
+                            total_saved_pages }}</a>
+                        </li>
+                        {% endif %}
+
+                        {% if saved_page < total_saved_pages %} <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('personal_space', saved_page=saved_page+1, notes_page=notes_page) }}">Next</a>
+                            </li>
+                            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
         {% else %}
         <div class="empty-state">
             <i class="far fa-bookmark"></i>
@@ -1324,6 +1365,47 @@
             </div>
             {% endfor %}
         </div>
+
+        <!-- Pagination for Personal Notes -->
+        {% if total_notes_pages > 1 %}
+        <nav class="pagination-nav" style="margin-top: 2rem;">
+            <ul class="pagination">
+                {% if notes_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('personal_space', notes_page=notes_page-1, saved_page=saved_page) }}">Previous</a>
+                </li>
+                {% endif %}
+
+                {% set max_visible = [8, notes_page + 1] | max %}
+                {% for p in range(1, [max_visible + 1, total_notes_pages + 1] | min) %}
+                <li class="page-item {% if p == notes_page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('personal_space', notes_page=p, saved_page=saved_page) }}">{{
+                        p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if max_visible < total_notes_pages - 1 %} <li class="page-item disabled"><span
+                        class="page-link">...</span></li>
+                    {% endif %}
+
+                    {% if max_visible < total_notes_pages %} <li
+                        class="page-item {% if total_notes_pages == notes_page %}active{% endif %}">
+                        <a class="page-link"
+                            href="{{ url_for('personal_space', notes_page=total_notes_pages, saved_page=saved_page) }}">{{
+                            total_notes_pages }}</a>
+                        </li>
+                        {% endif %}
+
+                        {% if notes_page < total_notes_pages %} <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('personal_space', notes_page=notes_page+1, saved_page=saved_page) }}">Next</a>
+                            </li>
+                            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
         {% else %}
         <div class="empty-state">
             <i class="far fa-sticky-note"></i>

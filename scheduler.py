@@ -98,15 +98,18 @@ if __name__ == '__main__':
     # Schedule weekly achievements to run every Monday at 00:01 AM server time
     schedule.every().monday.at("00:01").do(run_weekly_achievements)
 
-    # Schedule Atlas backup every 6 hours
-    schedule.every(6).hours.do(run_backup_to_atlas)
+    # Schedule Atlas backup at fixed times (every 6 hours)
+    schedule.every().day.at("00:00").do(run_backup_to_atlas)
+    schedule.every().day.at("06:00").do(run_backup_to_atlas)
+    schedule.every().day.at("12:00").do(run_backup_to_atlas)
+    schedule.every().day.at("18:00").do(run_backup_to_atlas)
     
     print("Scheduler started. Waiting for scheduled jobs...")
     print("  - Daily log email: 01:00 AM")
     print("  - Weekly newsletter: Sunday 09:00 AM")
     print("  - Weekly achievements: Monday 00:01 AM")
     print("  - Auth cleanup: Every hour")
-    print("  - Atlas backup: Every 6 hours")
+    print("  - Atlas backup: 00:00, 06:00, 12:00, 18:00")
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every 60 seconds

@@ -358,6 +358,11 @@ push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=T
 newsletter_conf.create_index('email', unique=True)
 user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 
+# Personal space performance indexes — eliminates full-collection scans
+personal_posts_conf.create_index([('user_id', 1), ('created_at', -1)])
+personal_posts_conf.create_index([('source_note_id', 1), ('user_id', 1)])
+note_shares_conf.create_index([('owner_id', 1), ('note_id', 1)])
+
 # Ensure a text index exists on the posts collection for search functionality
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
@@ -5697,35 +5702,36 @@ def personal_space():
         note['content'] = decrypt_note(note.get('content', ''))
         personal_posts.append(note)
 
-    # Fetch active share links for all user's notes
+    # Fetch active share links for the notes on this page (skip if no notes)
     now = datetime.datetime.now(datetime.timezone.utc)
     note_ids = [note['_id'] for note in personal_posts]
-    active_shares_raw = list(note_shares_conf.find({
-        'owner_id': ObjectId(current_user.id),
-        'note_id': {'$in': note_ids}
-    }).sort('created_at', -1))
-    
-    # Build a map: note_id_str -> list of active share info
     active_shares_map = {}
-    for share in active_shares_raw:
-        # Skip expired links
-        if share.get('expires_at'):
-            exp = share['expires_at']
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=datetime.timezone.utc)
-            if now > exp:
-                continue
-        nid = str(share['note_id'])
-        if nid not in active_shares_map:
-            active_shares_map[nid] = []
-        share_url = url_for('view_shared_note', share_id=share['share_id'], _external=True)
-        active_shares_map[nid].append({
-            'share_id': share['share_id'],
-            'share_url': share_url,
-            'permissions': share.get('permissions', 'view'),
-            'surprise_theme': share.get('surprise_theme', 'none'),
-            'created_at': share.get('created_at')
-        })
+    if note_ids:
+        active_shares_raw = list(note_shares_conf.find({
+            'owner_id': ObjectId(current_user.id),
+            'note_id': {'$in': note_ids}
+        }).sort('created_at', -1))
+        
+        # Build a map: note_id_str -> list of active share info
+        for share in active_shares_raw:
+            # Skip expired links
+            if share.get('expires_at'):
+                exp = share['expires_at']
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=datetime.timezone.utc)
+                if now > exp:
+                    continue
+            nid = str(share['note_id'])
+            if nid not in active_shares_map:
+                active_shares_map[nid] = []
+            share_url = url_for('view_shared_note', share_id=share['share_id'], _external=True)
+            active_shares_map[nid].append({
+                'share_id': share['share_id'],
+                'share_url': share_url,
+                'permissions': share.get('permissions', 'view'),
+                'surprise_theme': share.get('surprise_theme', 'none'),
+                'created_at': share.get('created_at')
+            })
 
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."

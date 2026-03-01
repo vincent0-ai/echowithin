@@ -528,6 +528,18 @@
                 if (post.author_achievements.includes('top_contributor')) {
                     achievementsHtml += `<span style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most likes received last week">TOP</span>`;
                 }
+                if (post.author_achievements.includes('top_writer')) {
+                    achievementsHtml += `<span style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most posts published last week">WRITER</span>`;
+                }
+                if (post.author_achievements.includes('top_noter')) {
+                    achievementsHtml += `<span style="background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most notes created last week">NOTER</span>`;
+                }
+                if (post.author_achievements.includes('top_sharer')) {
+                    achievementsHtml += `<span style="background: #fff8e1; color: #f57f17; border: 1px solid #ffecb3; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most notes shared last week">SHARER</span>`;
+                }
+                if (post.author_achievements.includes('top_reader')) {
+                    achievementsHtml += `<span style="background: #e0f7fa; color: #00838f; border: 1px solid #b2ebf2; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;" title="Most posts read last week">READER</span>`;
+                }
                 achievementsHtml += `</span>`;
             }
 

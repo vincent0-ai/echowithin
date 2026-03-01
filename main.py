@@ -309,6 +309,14 @@ def get_active_achievements(user_id):
             achievements.append('most_engager')
         if cached_winners.get('top_contributor') and str(cached_winners['top_contributor']['_id']) == user_id_str:
             achievements.append('top_contributor')
+        if cached_winners.get('top_writer') and str(cached_winners['top_writer']['_id']) == user_id_str:
+            achievements.append('top_writer')
+        if cached_winners.get('top_noter') and str(cached_winners['top_noter']['_id']) == user_id_str:
+            achievements.append('top_noter')
+        if cached_winners.get('top_sharer') and str(cached_winners['top_sharer']['_id']) == user_id_str:
+            achievements.append('top_sharer')
+        if cached_winners.get('top_reader') and str(cached_winners['top_reader']['_id']) == user_id_str:
+            achievements.append('top_reader')
             
     return achievements
 
@@ -383,6 +391,8 @@ comments_conf.create_index('author_id')
 # Compound index for engagement-based sorting (hot/top posts)
 posts_conf.create_index([('likes_count', -1), ('timestamp', -1)])
 posts_conf.create_index([('view_count', -1)])
+# Compound index for view dedup checks in logs (type + post_id + user_identifier + timestamp)
+logs_conf.create_index([('type', 1), ('post_id', 1), ('user_identifier', 1), ('timestamp', -1)])
 # Index for note versions and discussions
 note_versions_conf.create_index([('note_id', 1), ('created_at', -1)])
 note_discussions_conf.create_index([('share_id', 1), ('created_at', -1)])
@@ -4427,18 +4437,13 @@ def view_post(slug):
     if current_user.is_authenticated:
         try:
             now_utc = datetime.datetime.now(datetime.timezone.utc)
-            # 1. Update author-specific marker if they are the author
+            # Update author-specific marker if they are the author
             if str(post.get('author_id')) == current_user.id:
                 posts_conf.update_one(
                     {'_id': post['_id']},
                     {'$set': {'author_last_viewed': now_utc}}
                 )
-            # 2. Update general user post view marker (used for Activity tab unread logic)
-            user_post_views_conf.update_one(
-                {'user_id': ObjectId(current_user.id), 'post_id': post['_id']},
-                {'$set': {'last_viewed': now_utc}},
-                upsert=True
-            )
+            # Note: user_post_views is updated by api_record_post_view (called client-side)
         except Exception as e:
             app.logger.error(f"Failed to update view tracking for post {slug}: {e}")
 
@@ -5769,7 +5774,8 @@ def toggle_reaction_post(post_id):
     try:
         reaction_type = request.json.get('reaction', 'heart') or 'heart'
         # Allowed reactions
-        if reaction_type not in ['heart', 'wow', 'insightful', 'laugh', 'sad']:
+        allowed = ['heart', 'wow', 'insightful', 'laugh', 'sad']
+        if reaction_type not in allowed:
             reaction_type = 'heart'
 
         post_oid = ObjectId(post_id)
@@ -5784,64 +5790,52 @@ def toggle_reaction_post(post_id):
         if not isinstance(reactions, dict):
             reactions = {}
 
-        current_user_reactions = [] # Which types this user has on this post
-        for r_type, users in reactions.items():
-            if user_id in users:
-                current_user_reactions.append(r_type)
+        # Find which reaction types this user currently has
+        current_user_reactions = [r for r, users in reactions.items() if user_id in users]
 
         is_added = False
-        # If user already reacted with THIS type, remove it (toggle off)
         if reaction_type in current_user_reactions:
+            # Toggle OFF: user already has this exact reaction, remove it
             posts_conf.update_one(
                 {'_id': post_oid},
-                {
-                    '$pull': {f'reactions.{reaction_type}': user_id},
-                    '$inc': {'likes_count': -1} # keep likes_count as total reactions for now
-                }
+                {'$pull': {f'reactions.{reaction_type}': user_id}}
             )
             is_added = False
         else:
-            # If user has OTHER reactions, they can either have multiple or we can swap.
-            # Usually people allow only one reaction type per user. Let's enforce one.
-            for other_type in current_user_reactions:
-                posts_conf.update_one(
-                    {'_id': post_oid},
-                    {
-                        '$pull': {f'reactions.{other_type}': user_id},
-                        '$inc': {'likes_count': -1}
-                    }
-                )
-
+            # Build a single atomic update: pull from all old reactions + addToSet new one
+            update_ops = {'$addToSet': {f'reactions.{reaction_type}': user_id}}
+            if current_user_reactions:
+                # Swap: remove from old reaction types in the same operation
+                # $pull and $addToSet can't target the same field, but they're different sub-fields
+                # so we need to do the pull first, then addToSet
+                pull_ops = {f'reactions.{old}': user_id for old in current_user_reactions}
+                posts_conf.update_one({'_id': post_oid}, {'$pull': pull_ops})
             # Add new reaction
-            posts_conf.update_one(
-                {'_id': post_oid},
-                {
-                    '$addToSet': {f'reactions.{reaction_type}': user_id},
-                    '$inc': {'likes_count': 1}
-                }
-            )
+            posts_conf.update_one({'_id': post_oid}, update_ops)
             is_added = True
 
-        # Get updated counts
+        # Reconcile likes_count from actual reaction data (prevents drift)
         updated_post = posts_conf.find_one({'_id': post_oid})
         new_reactions = updated_post.get('reactions', {})
-        reaction_counts = {r: len(u) for r, u in new_reactions.items()}
-        total_count = updated_post.get('likes_count', 0)
+        actual_total = sum(len(users) for users in new_reactions.values() if isinstance(users, list))
+        reaction_counts = {r: len(u) for r, u in new_reactions.items() if isinstance(u, list)}
 
-
+        # Sync likes_count to match reality
+        if updated_post.get('likes_count') != actual_total:
+            posts_conf.update_one({'_id': post_oid}, {'$set': {'likes_count': actual_total}})
 
         # Emit WebSocket event for real-time reaction update
         socketio.emit('post_reacted', {
             'post_id': post_id,
             'reaction_counts': reaction_counts,
-            'total_count': total_count
+            'total_count': actual_total
         })
 
         return jsonify({
             'success': True,
             'reaction': reaction_type if is_added else None,
             'reaction_counts': reaction_counts,
-            'total_count': total_count
+            'total_count': actual_total
         })
 
     except Exception as e:

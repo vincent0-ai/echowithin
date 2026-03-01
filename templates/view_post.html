@@ -223,6 +223,26 @@
                     style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
                     title="Most likes received last week">TOP</span>
                 {% endif %}
+                {% if 'top_writer' in post.author_achievements %}
+                <span
+                    style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most posts published last week">WRITER</span>
+                {% endif %}
+                {% if 'top_noter' in post.author_achievements %}
+                <span
+                    style="background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most notes created last week">NOTER</span>
+                {% endif %}
+                {% if 'top_sharer' in post.author_achievements %}
+                <span
+                    style="background: #fff8e1; color: #f57f17; border: 1px solid #ffecb3; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most notes shared last week">SHARER</span>
+                {% endif %}
+                {% if 'top_reader' in post.author_achievements %}
+                <span
+                    style="background: #e0f7fa; color: #00838f; border: 1px solid #b2ebf2; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; cursor: default;"
+                    title="Most posts read last week">READER</span>
+                {% endif %}
             </span>
             {% endif %}
         </div>

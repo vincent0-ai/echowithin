@@ -40,6 +40,26 @@
                         style="background: #ede7f6; color: #512da8; border: 1px solid #d1c4e9; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
                         title="Most likes received last week">TOP CONTRIBUTOR</span>
                     {% endif %}
+                    {% if 'top_writer' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most posts published last week">TOP WRITER</span>
+                    {% endif %}
+                    {% if 'top_noter' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #fce4ec; color: #c62828; border: 1px solid #f8bbd0; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most notes created last week">TOP NOTER</span>
+                    {% endif %}
+                    {% if 'top_sharer' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #fff8e1; color: #f57f17; border: 1px solid #ffecb3; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most notes shared last week">TOP SHARER</span>
+                    {% endif %}
+                    {% if 'top_reader' in user_achievements %}
+                    <span class="achievement-badge"
+                        style="background: #e0f7fa; color: #00838f; border: 1px solid #b2ebf2; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold;"
+                        title="Most posts read last week">TOP READER</span>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

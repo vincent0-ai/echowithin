@@ -1681,14 +1681,14 @@
     }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 
 <!-- Marked.js for markdown -->
-<script defer src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
 
 <!-- DOMPurify for sanitization -->
-<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <script>
     // --- Immediate Event Handlers & Global Helpers ---
@@ -2705,28 +2705,9 @@
             });
         }
 
-        // Wait for KaTeX to load, then render
-        function waitForLibraries(callback, maxWait = 5000) {
-            const start = Date.now();
-            const check = () => {
-                if (typeof katex !== 'undefined' && typeof marked !== 'undefined') {
-                    callback();
-                } else if (Date.now() - start < maxWait) {
-                    setTimeout(check, 100);
-                } else {
-                    console.warn('Libraries not loaded, rendering plain text');
-                    document.querySelectorAll('.rendered-note').forEach(el => {
-                        const rawContent = el.dataset.raw || '';
-                        const textarea = document.createElement('textarea');
-                        textarea.innerHTML = rawContent;
-                        el.textContent = textarea.value;
-                    });
-                }
-            };
-            check();
-        }
-
-        waitForLibraries(renderAllNotes);
+        // Libraries are loaded synchronously above (before this script block),
+        // so katex, marked, and DOMPurify are already available.
+        renderAllNotes();
 
         // Tab switching
         const tabButtons = document.querySelectorAll('.tab-nav button');

@@ -2061,8 +2061,6 @@ def reindex_meili_job():
     except Exception as e:
         app.logger.error(f'Meilisearch reindex job failed: {e}', exc_info=True)
 
-    return counts_map
-
 
 @app.route('/admin/reindex_notes_meili', methods=['POST'])
 @login_required
@@ -5654,12 +5652,7 @@ def profile_settings(username):
 @login_required
 def personal_space():
     """Renders the user's personal space with saved posts and personal notes."""
-    import time as _t
-    _timings = {}
-    _t0 = _t.perf_counter()
-
     user = users_conf.find_one({'_id': ObjectId(current_user.id)})
-    _timings['1_user_lookup'] = round((_t.perf_counter() - _t0) * 1000)
 
     # Pagination parameters
     try:
@@ -5675,7 +5668,6 @@ def personal_space():
     per_page = 10
 
     # Fetch saved posts
-    _ts = _t.perf_counter()
     saved_post_ids = user.get('saved_posts', [])
     saved_posts = []
     total_saved = len(saved_post_ids)
@@ -5690,32 +5682,21 @@ def personal_space():
         
         with app.app_context():
             saved_posts = prepare_posts(ordered_posts)
-    _timings['2_saved_posts'] = round((_t.perf_counter() - _ts) * 1000)
 
     # Fetch personal posts (notes) - Paginated!
-    _ts = _t.perf_counter()
     total_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
-    _timings['3_count_notes'] = round((_t.perf_counter() - _ts) * 1000)
-
     skip_notes = (notes_page - 1) * per_page
     
-    _ts = _t.perf_counter()
     personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)})
                                                  .sort('created_at', -1)
                                                  .skip(skip_notes)
                                                  .limit(per_page))
-    _timings['4_fetch_notes'] = round((_t.perf_counter() - _ts) * 1000)
-
-    _ts = _t.perf_counter()
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = decrypt_note(note.get('content', ''))
         personal_posts.append(note)
-    _timings['5_decrypt_notes'] = round((_t.perf_counter() - _ts) * 1000)
-    _timings['5_notes_decrypted'] = len(personal_posts)
 
     # Fetch active share links for the notes on this page (skip if no notes)
-    _ts = _t.perf_counter()
     now = datetime.datetime.now(datetime.timezone.utc)
     note_ids = [note['_id'] for note in personal_posts]
     active_shares_map = {}
@@ -5745,13 +5726,11 @@ def personal_space():
                 'surprise_theme': share.get('surprise_theme', 'none'),
                 'created_at': share.get('created_at')
             })
-    _timings['6_shares_query'] = round((_t.perf_counter() - _ts) * 1000)
 
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
 
     # Build a map of note_ids that have clones saved by other users
-    _ts = _t.perf_counter()
     has_clones_map = {}
     if note_ids:
         clone_pipeline = [
@@ -5760,15 +5739,13 @@ def personal_space():
         ]
         for doc in personal_posts_conf.aggregate(clone_pipeline):
             has_clones_map[str(doc['_id'])] = doc['count']
-    _timings['7_clones_query'] = round((_t.perf_counter() - _ts) * 1000)
 
     # Pagination metadata
     import math
     total_notes_pages = math.ceil(total_notes_count / per_page) if per_page else 0
     total_saved_pages = math.ceil(total_saved / per_page) if per_page else 0
 
-    _ts = _t.perf_counter()
-    result = render_template(
+    return render_template(
         'personal_space.html', 
         saved_posts=saved_posts, 
         personal_posts=personal_posts, 
@@ -5784,11 +5761,6 @@ def personal_space():
         total_notes_count=total_notes_count,
         total_saved=total_saved
     )
-    _timings['8_template_render'] = round((_t.perf_counter() - _ts) * 1000)
-    _timings['TOTAL'] = round((_t.perf_counter() - _t0) * 1000)
-    
-    app.logger.info(f"⏱️ PERSONAL_SPACE timings (ms): {_timings}")
-    return result
 
 @app.route('/post/<post_id>/react', methods=['POST'])
 @login_required

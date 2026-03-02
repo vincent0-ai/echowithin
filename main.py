@@ -153,7 +153,8 @@ UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv'}
 ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
-MAX_VIDEO_SIZE = 10 * 1024 * 1024  # 10 MB limit for uploaded videos
+MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 MB limit for uploaded videos
+MAX_IMAGE_SIZE = 5 * 1024 * 1024   # 5 MB limit per uploaded image
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -793,6 +794,18 @@ def to_local_filter(dt):
         return dt
     except (ValueError, TypeError, AttributeError):
         return dt
+
+def optimize_cloudinary_url(url):
+    """Insert f_auto,q_auto transformations into a Cloudinary URL for optimal delivery.
+    This makes Cloudinary auto-serve WebP/AVIF and auto-compress based on the client.
+    Safe no-op for non-Cloudinary URLs."""
+    if not url or 'res.cloudinary.com' not in url:
+        return url
+    # Avoid double-applying
+    if 'f_auto' in url:
+        return url
+    return url.replace('/upload/', '/upload/f_auto,q_auto/')
+
 
 def extract_cloudinary_public_id(url):
     """
@@ -4195,19 +4208,18 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
                         im_format = im.format
                         max_size = (1600, 1600)
                         im.thumbnail(max_size, Image.Resampling.LANCZOS)
-                        # Overwrite temp file with optimized version
+                        # Overwrite temp file with optimized WebP version (~30% smaller than JPEG)
                         if im.mode in ("RGBA", "LA"):
                             # Preserve transparency for formats that support it
-                            im.save(path, format=im_format, optimize=True)
+                            im.save(path, format='WEBP', quality=80, method=6)
                         else:
-                            # Save as JPEG-like optimization when possible
                             im = im.convert('RGB')
-                            im.save(path, format='JPEG', quality=85, optimize=True)
+                            im.save(path, format='WEBP', quality=80, method=6)
                 except Exception as ie:
                     app.logger.debug(f"Image resize/optimize skipped for {path}: {ie}")
 
                 upload_result = cloudinary.uploader.upload(path, folder="echowithin_posts")
-                url = upload_result.get('secure_url')
+                url = optimize_cloudinary_url(upload_result.get('secure_url'))
                 pid = upload_result.get('public_id')
                 if url: image_urls.append(url)
                 if pid: image_public_ids.append(pid)
@@ -4217,8 +4229,14 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         # 2. Upload Video
         if temp_video_path:
             try:
-                upload_result = cloudinary.uploader.upload(temp_video_path, resource_type='video', folder='echowithin_posts')
-                video_url = upload_result.get('secure_url')
+                upload_result = cloudinary.uploader.upload(
+                    temp_video_path,
+                    resource_type='video',
+                    folder='echowithin_posts',
+                    eager=[{"quality": "auto", "fetch_format": "mp4"}],
+                    eager_async=True
+                )
+                video_url = optimize_cloudinary_url(upload_result.get('secure_url'))
                 video_public_id = upload_result.get('public_id')
             except Exception as e:
                 app.logger.error(f"Cloudinary video upload failed for {temp_video_path} in job for post {post_id_str}: {e}")
@@ -4317,6 +4335,15 @@ def post():
             # Save files temporarily for background processing
             for img_file in images_files:
                 if img_file and img_file.filename and '.' in img_file.filename and img_file.filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS:
+                    # Check image file size
+                    try:
+                        img_file.stream.seek(0, os.SEEK_END)
+                        img_size = img_file.stream.tell()
+                        img_file.stream.seek(0)
+                        if img_size > MAX_IMAGE_SIZE:
+                            continue  # Skip images exceeding 5 MB
+                    except Exception:
+                        pass  # If size check fails, allow through
                     filename = secure_filename(f"{secrets.token_hex(8)}-{img_file.filename}")
                     path = os.path.join(app.config['TEMP_UPLOAD_FOLDER'], filename)
                     img_file.save(path)
@@ -5127,8 +5154,17 @@ def update_post(post_id):
                     ext = img_file.filename.rsplit('.', 1)[1].lower()
                     if ext not in ALLOWED_IMAGE_EXTENSIONS:
                         continue
+                    # Check image file size
+                    try:
+                        img_file.stream.seek(0, os.SEEK_END)
+                        img_size = img_file.stream.tell()
+                        img_file.stream.seek(0)
+                        if img_size > MAX_IMAGE_SIZE:
+                            continue  # Skip images exceeding 5 MB
+                    except Exception:
+                        pass
                     upload_result = cloudinary.uploader.upload(img_file, folder="echowithin_posts")
-                    url = upload_result.get('secure_url')
+                    url = optimize_cloudinary_url(upload_result.get('secure_url'))
                     pid = upload_result.get('public_id')
                     if url:
                         new_urls.append(url)
@@ -5179,7 +5215,7 @@ def update_post(post_id):
                 size = None
 
             if size is not None and size > MAX_VIDEO_SIZE:
-                flash('Video exceeds maximum allowed size of 10 MB.', 'danger')
+                flash('Video exceeds maximum allowed size of 50 MB.', 'danger')
                 return redirect(url_for('view_post', slug=slug))
 
             try:
@@ -5187,8 +5223,14 @@ def update_post(post_id):
                 if video_public_id:
                     cloudinary.uploader.destroy(video_public_id, resource_type='video')
 
-                upload_result = cloudinary.uploader.upload(video_file, resource_type='video', folder='echowithin_posts')
-                video_url = upload_result.get('secure_url')
+                upload_result = cloudinary.uploader.upload(
+                    video_file,
+                    resource_type='video',
+                    folder='echowithin_posts',
+                    eager=[{"quality": "auto", "fetch_format": "mp4"}],
+                    eager_async=True
+                )
+                video_url = optimize_cloudinary_url(upload_result.get('secure_url'))
                 video_public_id = upload_result.get('public_id')
                 video_status = 'uploaded'
             except Exception as e:

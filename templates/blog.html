@@ -446,15 +446,15 @@
                 if (post.image_urls.length > 1) {
                     let gallery = '<div class="post-gallery">';
                     post.image_urls.forEach(img => {
-                        gallery += `<div class="post-gallery-item"><img src="${img}" data-full-url="${img}" class="gallery-thumb" alt=""></div>`;
+                        gallery += `<div class="post-gallery-item"><img src="${img}" data-full-url="${img}" class="gallery-thumb" alt="" loading="lazy"></div>`;
                     });
                     gallery += '</div>';
                     media = gallery;
                 } else if (post.image_urls.length === 1) {
-                    media = `<div class="post-image-container"><img src="${post.image_urls[0]}" data-full-url="${post.image_urls[0]}" alt="" class="post-image"></div>`;
+                    media = `<div class="post-image-container"><img src="${post.image_urls[0]}" data-full-url="${post.image_urls[0]}" alt="" class="post-image" loading="lazy"></div>`;
                 }
             } else if (post.image_url) {
-                media = `<div class="post-image-container"><img src="${post.image_url}" alt="" class="post-image"></div>`;
+                media = `<div class="post-image-container"><img src="${post.image_url}" alt="" class="post-image" loading="lazy"></div>`;
             }
 
             const ownerControls = isOwner ? `

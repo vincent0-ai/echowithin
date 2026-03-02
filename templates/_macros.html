@@ -59,7 +59,7 @@
         {% for img in images %}
         <div class="post-gallery-item">
             <img src="{{ img }}" data-full-url="{{ img }}" alt="Image {{ loop.index }} for {{ post.title }}"
-                class="gallery-thumb" />
+                class="gallery-thumb" loading="lazy" />
         </div>
         {% endfor %}
     </div>
@@ -67,7 +67,7 @@
     <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
         {% if post.image_status in ['safe', 'processing'] %}
         <img src="{{ images[0] }}" alt="Post image for {{ post.title }}" class="post-image"
-            data-full-url="{{ images[0] }}">
+            data-full-url="{{ images[0] }}" loading="lazy">
         {% elif post.image_status == 'removed_nsfw' %}
         <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
         {% endif %}
@@ -83,14 +83,14 @@
         <div class="post-gallery-item">
             <img src="{{ url_for('uploaded_file', filename=fname) }}"
                 data-full-url="{{ url_for('uploaded_file', filename=fname) }}"
-                alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" />
+                alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" loading="lazy" />
         </div>
         {% endfor %}
     </div>
     {% else %}
     <div class="post-image-container">
         <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
-            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}">
+            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}" loading="lazy">
     </div>
     {% endif %}
 
@@ -98,7 +98,7 @@
     <div class="post-image-container {% if post.image_status == 'processing' %}processing{% endif %}">
         {% if post.image_status in ['safe', 'processing'] %}
         <img src="{{ post.image_url }}" alt="Post image for {{ post.title }}" class="post-image"
-            data-full-url="{{ post.image_url }}">
+            data-full-url="{{ post.image_url }}" loading="lazy">
         {% elif post.image_status == 'removed_nsfw' %}
         <div class="nsfw-placeholder">Image removed due to sensitive content.</div>
         {% endif %}
@@ -107,7 +107,8 @@
     {% elif post.image_filename %}
     <div class="post-image-container">
         <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}"
-            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}">
+            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}"
+            loading="lazy">
     </div>
     {% endif %}
     {% endif %}
@@ -299,9 +300,9 @@
             } else if (post.image_urls && post.image_urls.length > 0) {
                 if (post.image_urls.length > 1) {
                     // Simplified gallery for now, can be expanded
-                    mediaHtml = post.image_urls.map(url => `<img src="${url}" alt="${altText}" class="post-image" style="max-width: 48%; margin: 1%;">`).join('');
+                    mediaHtml = post.image_urls.map(url => `<img src="${url}" alt="${altText}" class="post-image" loading="lazy" style="max-width: 48%; margin: 1%;">`).join('');
                 } else {
-                    mediaHtml = `<img src="${post.image_urls[0]}" alt="${altText}" class="post-image">`;
+                    mediaHtml = `<img src="${post.image_urls[0]}" alt="${altText}" class="post-image" loading="lazy">`;
                 }
             }
 

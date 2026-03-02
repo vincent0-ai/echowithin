@@ -23,7 +23,8 @@
             {% for user in users %}
             <div class="post-item" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="user-info">
-                    <h3 style="margin-bottom: 0.25rem;">{{ user.username }} {% if user.is_admin %}<span
+                    <h3 style="margin-bottom: 0.25rem;"><a href="{{ url_for('profile', username=user.username) }}">{{
+                            user.username }}</a> {% if user.is_admin %}<span
                             style="font-size: 0.8rem; color: #d9534f;">(Admin)</span>{% endif %}</h3>
                     <p style="font-size: 0.9rem; color: #666;">{{ user.email }}</p>
                     {% if user.is_banned %}

@@ -77,14 +77,16 @@
                         <option value="Career" {% if 'Career' in post.tags %}selected{% endif %}>Career</option>
                         <option value="Health" {% if 'Health' in post.tags %}selected{% endif %}>Health</option>
                         <option value="Finance" {% if 'Finance' in post.tags %}selected{% endif %}>Finance</option>
-                        <option value="Relationships" {% if 'Relationships' in post.tags %}selected{% endif %}>Relationships</option>
+                        <option value="Relationships" {% if 'Relationships' in post.tags %}selected{% endif %}>
+                            Relationships</option>
                         <option value="Gaming" {% if 'Gaming' in post.tags %}selected{% endif %}>Gaming</option>
                         <option value="Music" {% if 'Music' in post.tags %}selected{% endif %}>Music</option>
                         <option value="Art" {% if 'Art' in post.tags %}selected{% endif %}>Art</option>
                         <option value="Sports" {% if 'Sports' in post.tags %}selected{% endif %}>Sports</option>
                         <option value="Travel" {% if 'Travel' in post.tags %}selected{% endif %}>Travel</option>
                         <option value="Food" {% if 'Food' in post.tags %}selected{% endif %}>Food</option>
-                        <option value="Entertainment" {% if 'Entertainment' in post.tags %}selected{% endif %}>Entertainment</option>
+                        <option value="Entertainment" {% if 'Entertainment' in post.tags %}selected{% endif %}>
+                            Entertainment</option>
                     </optgroup>
                 </select>
             </div>
@@ -115,7 +117,7 @@
             </div>
 
             <div>
-                <label for="video">Upload a New Video (Optional, max 10 MB):</label>
+                <label for="video">Upload a New Video (Optional, max 50 MB):</label>
                 {% if post.video_url or post.video_filename %}
                 <p>Current video:</p>
                 {% if post.video_url %}
@@ -152,7 +154,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         const editPostForm = document.getElementById('edit-post-form');
         let xhr; // Define xhr in a scope accessible to the cancel handler
-        const MAX_VIDEO_SIZE = 10 * 1024 * 1024; // 10 MB client-side check
+        const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 MB client-side check
 
         if (editPostForm) {
             editPostForm.addEventListener('submit', function (event) {
@@ -170,7 +172,7 @@
 
                     // Client-side basic checks
                     if (videoFile.size > MAX_VIDEO_SIZE) {
-                        statusElement.textContent = 'Video exceeds maximum allowed size of 10 MB.';
+                        statusElement.textContent = 'Video exceeds maximum allowed size of 50 MB.';
                         statusElement.style.display = 'block';
                         return;
                     }

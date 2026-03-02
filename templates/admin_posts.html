@@ -33,7 +33,7 @@
           Edited on {{ post.edited_at|localtime }} by <strong><a
               href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong><br>
           {% else %}
-          Posted by <strong>{{ post.author }}</strong>
+          Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>
           {% endif %}
         </div>
         <div class="post-actions">

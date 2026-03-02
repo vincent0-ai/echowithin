@@ -1325,6 +1325,7 @@ body {
 .profile-meta-item {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
     margin-bottom: 0.5rem;
 }
@@ -1354,6 +1355,7 @@ body {
 }
 
 .profile-meta {
+    text-align: center;
     font-size: 0.9rem;
     color: #777;
 }

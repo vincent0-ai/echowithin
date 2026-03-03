@@ -673,33 +673,22 @@
         // Show reload button for installed app (PWA and native)
         const reloadBtn = document.getElementById('mobile-reload-btn');
         if (reloadBtn) reloadBtn.style.display = 'flex';
-    } else {
-        // Retry mechanism: Capacitor bridge may not be ready immediately in WebView
-        // Poll every 500ms for up to 5 seconds
-        let _reloadRetryCount = 0;
-        const _reloadRetryInterval = setInterval(function () {
-            _reloadRetryCount++;
+    } else if (window.Capacitor) {
+        // Capacitor exists but isNativePlatform may not be ready yet
+        // Light retry — only for WebView users, not regular browsers
+        let _retries = 0;
+        const _retryTimer = setInterval(function () {
+            _retries++;
             if (isAppInstalled()) {
-                clearInterval(_reloadRetryInterval);
+                clearInterval(_retryTimer);
                 hideInstallButton();
                 window.__pwaInstalled = true;
-                const btn = document.getElementById('mobile-reload-btn');
+                var btn = document.getElementById('mobile-reload-btn');
                 if (btn) btn.style.display = 'flex';
-                console.log('Reload button shown after retry #' + _reloadRetryCount);
-            } else if (_reloadRetryCount >= 10) {
-                clearInterval(_reloadRetryInterval);
+            } else if (_retries >= 6) {
+                clearInterval(_retryTimer);
             }
         }, 500);
-
-        // Also try on DOMContentLoaded as a backup
-        document.addEventListener('DOMContentLoaded', function () {
-            if (isAppInstalled()) {
-                hideInstallButton();
-                window.__pwaInstalled = true;
-                const btn = document.getElementById('mobile-reload-btn');
-                if (btn) btn.style.display = 'flex';
-            }
-        });
     }
 
     // Don't show install prompt if already installed as PWA
@@ -766,7 +755,8 @@
 
     // Push Notification Subscription Functions
     async function initPushNotifications(registration) {
-        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }};
+        const isLoggedIn = {{ 'true' if current_user.is_authenticated else 'false' }
+    };
 
 
 

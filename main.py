@@ -1284,12 +1284,45 @@ def send_weekly_newsletter():
             now = datetime.datetime.now(datetime.timezone.utc)
             week_ago = now - datetime.timedelta(days=7)
 
-            # Query posts from the last 7 days
-            posts_cursor = posts_conf.find({
+            # Count total posts from the week (for display purposes)
+            MAX_DIGEST_POSTS = 15
+            total_post_count = posts_conf.count_documents({
                 'timestamp': {'$gte': week_ago}
-            }).sort('timestamp', -1)
+            })
 
-            posts_list = list(posts_cursor)
+            # Use aggregation to rank posts by engagement score and pick the top ones
+            pipeline = [
+                {'$match': {'timestamp': {'$gte': week_ago}}},
+                # Join with comments to get comment count
+                {'$lookup': {
+                    'from': 'comments',
+                    'localField': 'slug',
+                    'foreignField': 'post_slug',
+                    'as': 'comment_data'
+                }},
+                {'$addFields': {
+                    'comment_count': {'$size': '$comment_data'},
+                    'likes_safe': {'$ifNull': ['$likes_count', 0]},
+                    'shares_safe': {'$ifNull': ['$share_count', 0]},
+                    'views_safe': {'$ifNull': ['$view_count', 0]}
+                }},
+                # Calculate weighted engagement score
+                {'$addFields': {
+                    'engagement_score': {'$add': [
+                        {'$multiply': ['$comment_count', ENGAGEMENT_WEIGHTS['comment']]},
+                        {'$multiply': ['$likes_safe', ENGAGEMENT_WEIGHTS['reaction']]},
+                        {'$multiply': ['$shares_safe', ENGAGEMENT_WEIGHTS['share']]},
+                        {'$multiply': ['$views_safe', ENGAGEMENT_WEIGHTS['view']]}
+                    ]}
+                }},
+                # Sort by engagement score (top posts first), then by recency as tiebreaker
+                {'$sort': {'engagement_score': -1, 'timestamp': -1}},
+                {'$limit': MAX_DIGEST_POSTS},
+                # Clean up temporary fields
+                {'$project': {'comment_data': 0, 'likes_safe': 0, 'shares_safe': 0, 'views_safe': 0}}
+            ]
+
+            posts_list = list(posts_conf.aggregate(pipeline))
 
             # Build URLs for each post
             base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
@@ -1343,12 +1376,15 @@ def send_weekly_newsletter():
                     msg.html = render_template(
                         'weekly_newsletter.html',
                         posts=posts_list,
+                        total_post_count=total_post_count,
                         week_start=week_start,
                         week_end=week_end,
                         unsub_url=unsub_url
                     )
                     # Add plain text summary
                     text_body = f"EchoWithin Weekly Digest ({week_start} - {week_end})\n\n"
+                    if total_post_count > len(posts_list):
+                        text_body += f"Top {len(posts_list)} of {total_post_count} posts this week:\n\n"
                     for p in posts_list[:5]:
                         text_body += f"- {p.get('title')} ({p.get('url')})\n"
                     text_body += f"\nUnsubscribe: {unsub_url}"
@@ -1366,7 +1402,7 @@ def send_weekly_newsletter():
                 except Exception as e:
                     app.logger.error(f"Failed to send weekly newsletter to {recipient_email}: {e}")
 
-            app.logger.info(f"Weekly newsletter sent to {sent_count} recipients with {len(posts_list)} posts")
+            app.logger.info(f"Weekly newsletter sent to {sent_count} recipients with top {len(posts_list)} of {total_post_count} posts")
     except Exception as e:
         app.logger.error(f"Error in send_weekly_newsletter job: {e}", exc_info=True)
 

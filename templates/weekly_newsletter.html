@@ -112,8 +112,13 @@
         </div>
 
         {% if posts and posts|length > 0 %}
+        {% if total_post_count is defined and total_post_count > posts|length %}
+        <p>There were <strong>{{ total_post_count }}</strong> posts published this week. Here are the <strong>top {{
+                posts|length }}</strong> trending posts:</p>
+        {% else %}
         <p>Here are the <strong>{{ posts|length }}</strong> post{{ 's' if posts|length > 1 else '' }} published this
             week:</p>
+        {% endif %}
 
         {% for post in posts %}
         <div class="post-card">

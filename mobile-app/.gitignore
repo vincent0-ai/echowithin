@@ -3,8 +3,6 @@ node_modules/
 npm-debug.log
 .DS_Store
 .env*
-dist/
-www/
 
 # Capacitor
 ios/App/App/public

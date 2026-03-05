@@ -943,7 +943,7 @@
             'font-size:0.92rem;display:flex;align-items:center;justify-content:space-between;gap:12px;'
         );
         banner.innerHTML =
-            '<span style="flex:1;line-height:1.4;">📲 Install EchoWithin to get push notifications — tap <b>Share</b> <span style="font-size:1.1rem;">&#x1F4E4;</span> then <b>"Add to Home Screen"</b></span>' +
+            '<span style="flex:1;line-height:1.4;">Install EchoWithin to get push notifications — tap <b>Share</b> <span style="font-size:1.1rem;">&#x1F4E4;</span> then <b>"Add to Home Screen"</b></span>' +
             '<button id="ios-install-notif-dismiss" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:8px;cursor:pointer;flex-shrink:0;">OK</button>';
 
         document.body.appendChild(banner);
@@ -967,7 +967,7 @@
             'font-size:0.95rem;display:flex;align-items:center;justify-content:space-between;gap:12px;'
         );
         banner.innerHTML =
-            '<span style="flex:1;">🔔 Enable notifications to stay updated on new posts and replies</span>' +
+            '<span style="flex:1;">Enable notifications to stay updated on new posts and replies</span>' +
             '<div style="display:flex;gap:8px;flex-shrink:0;">' +
                 '<button id="ios-notif-enable" style="background:#fff;color:#6366f1;border:none;padding:8px 18px;border-radius:8px;font-weight:600;cursor:pointer;">Enable</button>' +
                 '<button id="ios-notif-dismiss" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 14px;border-radius:8px;cursor:pointer;">Later</button>' +
@@ -980,7 +980,7 @@
                 var permission = await Notification.requestPermission();
                 if (permission === 'granted') {
                     await subscribeToPush(registration);
-                    banner.innerHTML = '<span style="padding:4px;">✅ Notifications enabled!</span>';
+                    banner.innerHTML = '<span style="padding:4px;">Notifications enabled!</span>';
                     setTimeout(function () { banner.remove(); }, 2000);
                 } else if (permission === 'denied') {
                     banner.innerHTML = '<span style="padding:4px;">Notifications blocked — go to Settings &gt; Notifications &gt; EchoWithin to enable.</span>';

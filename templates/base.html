@@ -311,6 +311,17 @@
         .mobile-fab:active {
             transform: scale(0.95);
         }
+
+        /* Show reload button instantly for installed PWA / standalone modes — no JS needed */
+        @media (display-mode: standalone) {
+            .mobile-fab { display: flex !important; }
+        }
+        @media (display-mode: fullscreen) {
+            .mobile-fab { display: flex !important; }
+        }
+        @media (display-mode: minimal-ui) {
+            .mobile-fab { display: flex !important; }
+        }
     </style>
 
     <!-- Hide install button when running as installed PWA -->
@@ -440,6 +451,19 @@
         <button id="mobile-reload-btn" class="mobile-fab" onclick="window.location.reload()" aria-label="Reload Page">
             <i class="fas fa-redo-alt"></i>
         </button>
+        <script>
+            // Show reload button immediately for Capacitor native apps
+            // (capacitor.js is loaded synchronously in <head>, so window.Capacitor is available now)
+            (function(){
+                if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+                    document.getElementById('mobile-reload-btn').style.display = 'flex';
+                }
+                // Also cover iOS standalone (navigator.standalone) which CSS media query may miss
+                if (window.navigator.standalone === true) {
+                    document.getElementById('mobile-reload-btn').style.display = 'flex';
+                }
+            })();
+        </script>
     </div>
 </body>
 
@@ -450,9 +474,6 @@
     (function () {
         // Check if running in Capacitor
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-            // Always show reload button in native app (most reliable detection point)
-            var _nativeReloadBtn = document.getElementById('mobile-reload-btn');
-            if (_nativeReloadBtn) _nativeReloadBtn.style.display = 'flex';
             // Wait for Capacitor plugins to be ready
             document.addEventListener('deviceready', function () {
                 // Hide splash screen with a nice fade
@@ -670,12 +691,9 @@
         // Also set a flag to prevent any future showing
         window.__pwaInstalled = true;
 
-        // Show reload button for installed app (PWA and native)
-        const reloadBtn = document.getElementById('mobile-reload-btn');
-        if (reloadBtn) reloadBtn.style.display = 'flex';
     } else if (window.Capacitor) {
         // Capacitor exists but isNativePlatform may not be ready yet
-        // Light retry — only for WebView users, not regular browsers
+        // Light retry — only for install-button hiding, not reload button
         let _retries = 0;
         const _retryTimer = setInterval(function () {
             _retries++;
@@ -683,8 +701,6 @@
                 clearInterval(_retryTimer);
                 hideInstallButton();
                 window.__pwaInstalled = true;
-                var btn = document.getElementById('mobile-reload-btn');
-                if (btn) btn.style.display = 'flex';
             } else if (_retries >= 6) {
                 clearInterval(_retryTimer);
             }

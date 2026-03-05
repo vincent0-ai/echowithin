@@ -2245,7 +2245,9 @@ def prepare_posts(posts):
     for post in posts:
         if 'comment_count' not in post:
             slug = post.get('slug')
-            post["comment_count"] = counts_map.get(slug, 0) if counts_map else 0
+            post["comment_count"] = counts_map.get(slug, 0) if urls_to_fetch else 0
+        elif post.get('comment_count') is None:
+            post['comment_count'] = 0
         
         # Inject author achievements
         author_id = post.get('author_id')
@@ -2253,11 +2255,6 @@ def prepare_posts(posts):
             post['author_achievements'] = get_active_achievements(author_id)
         else:
             post['author_achievements'] = []
-    else:
-        # All posts already had comment_count, ensuring it's at least 0 if somehow None
-        for post in posts:
-            if post.get('comment_count') is None:
-                post['comment_count'] = 0
 
     return posts
 
@@ -2866,10 +2863,10 @@ def home():
                         ]
                     }
                 }},
-                # 4. Calculate the hot score WITH recency boost
+                # 4. Calculate the hot score WITH recency boost and logarithmic scaling
                 {'$addFields': {
-                    # Base engagement score (Standardized weights)
-                    'engagement_score': {
+                    # Raw engagement score (Standardized weights)
+                    'raw_engagement': {
                         '$add': [
                             {'$multiply': ['$comment_count', ENGAGEMENT_WEIGHTS['comment']]},
                             {'$multiply': ['$likes_safe', ENGAGEMENT_WEIGHTS['reaction']]},
@@ -2886,6 +2883,15 @@ def home():
                             ],
                             'default': 1.0
                         }
+                    }
+                }},
+                # 4b. Apply logarithmic scaling to prevent view-count inflation
+                {'$addFields': {
+                    'engagement_score': {
+                        '$multiply': [
+                            {'$ln': {'$add': ['$raw_engagement', 1]}},  # log(1 + raw) prevents log(0)
+                            10  # Scale factor matching calculate_hot_score
+                        ]
                     }
                 }},
                 # 5. Calculate final hot score
@@ -2954,75 +2960,118 @@ def blog():
     # 1. Starts with PINNED posts (if any)
     # 2. Includes some recent posts (freshness)
     # 3. Mixes in older posts for discovery
-    # 4. Changes on each reload for variety
+    # 4. Uses engagement signals to surface quality content
+    # 5. Changes on each reload for variety
+    # Cached for 15 seconds to reduce DB load while maintaining freshness.
 
     import random
 
-    total_posts_count = posts_conf.count_documents({})
-
-    # 0. Get Pinned Posts (Max 3 allowed by admin route)
-    pinned_posts = list(posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
-    pinned_ids = [p['_id'] for p in pinned_posts]
-
-    if total_posts_count <= 10:
-        # If we have 10 or fewer posts, just show all of them (pinned always at top)
-        # Get non-pinned posts
-        other_posts = list(posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
-        random.shuffle(other_posts)
-        all_posts = pinned_posts + other_posts
-        with app.app_context():
-            latest_posts_prepared = prepare_posts(all_posts)
+    # Check blog_feed_cache first (15 second TTL)
+    cached_feed = blog_feed_cache.get('main')
+    if cached_feed:
+        latest_posts_prepared = cached_feed
     else:
-        # Mixed feed algorithm (Tuned 2026-01-28):
-        # - Pinned posts at top
-        # - 2 most recent posts (reduced recency bias)
-        # - 4 posts from the past MONTH (broadened "recent" scope)
-        # - 4 random posts from older content (increased discovery)
+        total_posts_count = posts_conf.count_documents({})
 
-        now = datetime.datetime.now(datetime.timezone.utc)
-        one_month_ago = now - datetime.timedelta(days=30)
-        
-        # 1. Get the 2 most recent posts (The "Headlines")
-        # Exclude pinned posts
-        recent_posts = list(posts_conf.find({
-            '_id': {'$nin': pinned_ids}
-        }).sort('timestamp', -1).limit(2))
-        recent_ids = [p['_id'] for p in recent_posts]
+        # 0. Get Pinned Posts (Max 3 allowed by admin route)
+        pinned_posts = list(posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
+        pinned_ids = [p['_id'] for p in pinned_posts]
 
-        # 2. Get posts from the past MONTH (The "Recent Discussions")
-        # Exclude pinned and the top 2 we just picked.
-        month_posts = list(posts_conf.find({
-            '_id': {'$nin': pinned_ids + recent_ids},
-            'timestamp': {'$gte': one_month_ago}
-        }).sort('timestamp', -1).limit(20)) # Fetch enough to shuffle well
-
-        # Randomly select 4 from this month bucket
-        if len(month_posts) > 4:
-            month_selection = random.sample(month_posts, 4)
+        if total_posts_count <= 10:
+            # If we have 10 or fewer posts, just show all of them (pinned always at top)
+            # Get non-pinned posts
+            other_posts = list(posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
+            random.shuffle(other_posts)
+            all_posts_list = pinned_posts + other_posts
+            with app.app_context():
+                latest_posts_prepared = prepare_posts(all_posts_list)
         else:
-            month_selection = month_posts
+            # Mixed feed algorithm (Tuned 2026-03-05):
+            # - Pinned posts at top
+            # - 2 most recent posts (reduced recency bias)
+            # - 4 posts from the past MONTH weighted by engagement
+            # - 4 random older posts weighted by engagement (discovery)
 
-        month_ids = [p['_id'] for p in month_selection]
-        excluded_ids = pinned_ids + recent_ids + month_ids
+            now = datetime.datetime.now(datetime.timezone.utc)
+            one_month_ago = now - datetime.timedelta(days=30)
+            
+            # 1. Get the 2 most recent posts (The "Headlines")
+            # Exclude pinned posts
+            recent_posts = list(posts_conf.find({
+                '_id': {'$nin': pinned_ids}
+            }).sort('timestamp', -1).limit(2))
+            recent_ids = [p['_id'] for p in recent_posts]
 
-        # 3. Calculate how many more posts we need to reach 10 mixed posts
-        posts_needed = 10 - len(recent_posts) - len(month_selection)
+            # 2. Get posts from the past MONTH (The "Recent Discussions")
+            # Weighted by engagement so higher-quality posts are more likely to appear
+            # Exclude pinned and the top 2 we just picked.
+            month_posts = list(posts_conf.find({
+                '_id': {'$nin': pinned_ids + recent_ids},
+                'timestamp': {'$gte': one_month_ago}
+            }).sort('timestamp', -1).limit(20)) # Fetch enough to sample well
 
-        # Get random older posts for discovery (The "Archives")
-        older_posts = list(posts_conf.aggregate([
-            {'$match': {'_id': {'$nin': excluded_ids}}},
-            {'$sample': {'size': max(posts_needed, 1)}}
-        ]))
+            # Engagement-weighted selection from month bucket
+            if len(month_posts) > 4:
+                # Calculate engagement weights for weighted random selection
+                month_weights = []
+                for mp in month_posts:
+                    eng = (mp.get('likes_count', 0) or 0) + (mp.get('comment_count', 0) or 0) * 2 + (mp.get('share_count', 0) or 0)
+                    month_weights.append(max(eng, 1))  # Floor of 1 so every post has a chance
+                month_selection = random.choices(month_posts, weights=month_weights, k=4)
+                # Deduplicate (random.choices can repeat)
+                seen_ids = set()
+                deduped = []
+                for mp in month_selection:
+                    if mp['_id'] not in seen_ids:
+                        seen_ids.add(mp['_id'])
+                        deduped.append(mp)
+                month_selection = deduped
+            else:
+                month_selection = month_posts
 
-        # Combine mixed buckets
-        mixed_posts = recent_posts + month_selection + older_posts
-        random.shuffle(mixed_posts)
+            month_ids = [p['_id'] for p in month_selection]
+            excluded_ids = pinned_ids + recent_ids + month_ids
 
-        # Final list: Pinned + Mixed (capped at 10 mixed + pinned count)
-        combined_posts = pinned_posts + mixed_posts
+            # 3. Calculate how many more posts we need to reach 10 mixed posts
+            posts_needed = 10 - len(recent_posts) - len(month_selection)
 
-        with app.app_context():
-            latest_posts_prepared = prepare_posts(combined_posts)
+            # Get random older posts for discovery (The "Archives")
+            # Use engagement-weighted sampling via aggregation
+            older_posts = list(posts_conf.aggregate([
+                {'$match': {'_id': {'$nin': excluded_ids}}},
+                {'$addFields': {
+                    '_eng_weight': {
+                        '$add': [
+                            {'$ifNull': ['$likes_count', 0]},
+                            {'$multiply': [{'$ifNull': ['$share_count', 0]}, 2]},
+                            1  # Floor so every post has a chance
+                        ]
+                    }
+                }},
+                {'$sample': {'size': max(posts_needed * 3, 3)}}
+            ]))
+            # Sort by engagement weight and take top N for a quality bias
+            older_posts.sort(key=lambda p: p.get('_eng_weight', 1), reverse=True)
+            # Take a weighted random subset: pick from the top half preferentially
+            if len(older_posts) > posts_needed:
+                top_half = older_posts[:max(len(older_posts) // 2, posts_needed)]
+                older_posts = random.sample(top_half, min(posts_needed, len(top_half)))
+            # Clean up temp field
+            for p in older_posts:
+                p.pop('_eng_weight', None)
+
+            # Combine mixed buckets
+            mixed_posts = recent_posts + month_selection + older_posts
+            random.shuffle(mixed_posts)
+
+            # Final list: Pinned + Mixed (capped at 10 mixed + pinned count)
+            combined_posts = pinned_posts + mixed_posts
+
+            with app.app_context():
+                latest_posts_prepared = prepare_posts(combined_posts)
+
+        # Cache the result for 15 seconds
+        blog_feed_cache['main'] = latest_posts_prepared
 
     page_title = "Blog - EchoWithin"
     page_description = "Explore the latest posts and discussions from the EchoWithin community."
@@ -3092,12 +3141,19 @@ def all_posts():
                 {'reactions.sad': user_id_str},
                 {'_id': {'$in': saved_ids[:50]}}  # Limit saved posts lookup
             ]}
-            interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1}).limit(100))
+            interest_posts = list(posts_conf.find(interest_query, {'tags': 1, 'author_id': 1, 'reactions': 1}).limit(100))
 
             for p in interest_posts:
-                is_liked = user_id_str in (p.get('liked_by') or [])
+                # Check if user reacted (any reaction type)
+                has_reacted = False
+                reactions_dict = p.get('reactions', {})
+                if isinstance(reactions_dict, dict):
+                    for uids in reactions_dict.values():
+                        if user_id_str in uids:
+                            has_reacted = True
+                            break
                 is_saved = p.get('_id') in saved_ids
-                weight = (WEIGHT_LIKED if is_liked else 0) + (WEIGHT_SAVED if is_saved else 0)
+                weight = (WEIGHT_LIKED if has_reacted else 0) + (WEIGHT_SAVED if is_saved else 0)
 
                 for t in p.get('tags', []):
                     tag_scores[t] = tag_scores.get(t, 0) + weight
@@ -3112,64 +3168,94 @@ def all_posts():
                 except Exception:
                     pass
 
-        # Fetch a larger pool of recent posts (e.g., top 50) for global personalization
-        # This ensures highly relevant content bubbles up even if not in the very last 10 posts
-        pool_size = 50
-        
-        # Use simple find().sort().limit() for the pool
-        pool_cursor = posts_conf.find(filter_query).sort('timestamp', -1).limit(pool_size)
-        all_pool_posts = list(pool_cursor)
-        
-        # Build set of URLs for batch comment counting
-        urls = []
-        for p in all_pool_posts:
-            # We need absolute URLs for prepare_posts logic compatibility
-            urls.append(url_for('view_post', slug=p.get('slug'), _external=True))
-            
-        # Get comment counts in one batch
-        counts_map = get_batch_comment_counts(tuple(sorted(urls)))
-        
-        # Score ALL posts in the pool
-        now = datetime.datetime.now(datetime.timezone.utc)
-        for p in all_pool_posts:
-            # Inject comment count early for scoring
-            p['comment_count'] = counts_map.get(p.get('slug'), 0)
-            
-            score = 0.0
-            # Tag matching
-            for t in p.get('tags', []):
-                if t in tag_scores:
-                    score += tag_scores[t] * 2
-            # Author matching
-            aid = str(p.get('author_id', ''))
-            if aid in author_scores:
-                score += author_scores[aid] * 3
-            # Engagement score (capped)
-            likes = p.get('likes_count', 0) or 0
-            comments = p['comment_count']
-            engagement = (comments * ENGAGEMENT_WEIGHTS['comment']) + (likes * ENGAGEMENT_WEIGHTS['reaction'])
-            score += min(engagement, 30)
-            # Recency boost
-            post_time = p.get('timestamp')
-            if post_time:
-                if post_time.tzinfo is None:
-                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
-                hours_old = (now - post_time).total_seconds() / 3600
-                recency = max(0, 1 - (hours_old / (24 * 7)))
-                score += recency * 5
-            p['_score'] = score
+        if not tag_scores and not author_scores:
+            # Cold-start: authenticated user with no interaction history
+            # Show top-by-engagement posts instead of plain timestamp sort
+            import random
+            import math as math_module
 
-        # Sort entire pool by score
-        all_pool_posts.sort(key=lambda x: x.get('_score', 0), reverse=True)
-        
-        # Select the specific page from the sorted pool
-        page_posts = all_pool_posts[skip : skip + posts_per_page]
-        
-        # If the pool is smaller than skip, we might need to fetch more or just return empty
-        # But for the first few pages, this is much better than before.
+            cold_pool = list(posts_conf.find(filter_query).sort('timestamp', -1).limit(30))
+            now_cold = datetime.datetime.now(datetime.timezone.utc)
+            for p in cold_pool:
+                likes = p.get('likes_count', 0) or 0
+                shares = p.get('share_count', 0) or 0
+                eng = (likes * 3) + (shares * 4)
+                p_time = p.get('timestamp')
+                recency_mult = 1.0
+                if p_time:
+                    if p_time.tzinfo is None:
+                        p_time = p_time.replace(tzinfo=datetime.timezone.utc)
+                    days_old = (now_cold - p_time).total_seconds() / 86400
+                    recency_mult = max(0.3, 1.0 - (math_module.log1p(days_old) / 10))
+                p['_cold_score'] = eng * recency_mult
+            cold_pool.sort(key=lambda x: x.get('_cold_score', 0), reverse=True)
+            page_posts = cold_pool[skip : skip + posts_per_page]
+            for p in page_posts:
+                p.pop('_cold_score', None)
 
-        with app.app_context():
-            posts = prepare_posts(page_posts)
+            with app.app_context():
+                posts = prepare_posts(page_posts)
+        else:
+            # Fetch a larger pool of recent posts for global personalization
+            # Dynamic pool size ensures pagination beyond page 5 works correctly
+            pool_size = max(50, skip + posts_per_page)
+            
+            # Use simple find().sort().limit() for the pool
+            pool_cursor = posts_conf.find(filter_query).sort('timestamp', -1).limit(pool_size)
+            all_pool_posts = list(pool_cursor)
+            
+            # Build set of slugs for batch comment counting (avoid unnecessary URL generation)
+            slugs_for_counts = [p.get('slug') for p in all_pool_posts if p.get('slug')]
+            counts_map = {}
+            if slugs_for_counts:
+                pipeline = [
+                    {'$match': {'post_slug': {'$in': slugs_for_counts}, 'is_deleted': False}},
+                    {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+                ]
+                for doc in comments_conf.aggregate(pipeline):
+                    counts_map[doc['_id']] = doc.get('count', 0)
+            
+            # Score ALL posts in the pool
+            now = datetime.datetime.now(datetime.timezone.utc)
+            for p in all_pool_posts:
+                # Inject comment count early for scoring
+                p['comment_count'] = counts_map.get(p.get('slug'), 0)
+                
+                score = 0.0
+                # Tag matching
+                for t in p.get('tags', []):
+                    if t in tag_scores:
+                        score += tag_scores[t] * 2
+                # Author matching
+                aid = str(p.get('author_id', ''))
+                if aid in author_scores:
+                    score += author_scores[aid] * 3
+                # Engagement score (capped)
+                likes = p.get('likes_count', 0) or 0
+                comments = p['comment_count']
+                engagement = (comments * ENGAGEMENT_WEIGHTS['comment']) + (likes * ENGAGEMENT_WEIGHTS['reaction'])
+                score += min(engagement, 30)
+                # Recency boost
+                post_time = p.get('timestamp')
+                if post_time:
+                    if post_time.tzinfo is None:
+                        post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                    hours_old = (now - post_time).total_seconds() / 3600
+                    recency = max(0, 1 - (hours_old / (24 * 7)))
+                    score += recency * 5
+                p['_score'] = score
+
+            # Sort entire pool by score
+            all_pool_posts.sort(key=lambda x: x.get('_score', 0), reverse=True)
+            
+            # Select the specific page from the sorted pool
+            page_posts = all_pool_posts[skip : skip + posts_per_page]
+            
+            # If the pool is smaller than skip, we might need to fetch more or just return empty
+            # But for the first few pages, this is much better than before.
+
+            with app.app_context():
+                posts = prepare_posts(page_posts)
     else:
         # Anonymous users: simple timestamp-sorted feed with slight randomization
         import random
@@ -3269,9 +3355,9 @@ def calculate_hot_score(post, comment_count):
     # log1p(x) = log(1 + x), handles zero values safely
     log_score = math_module.log1p(raw_score) * 10
 
-    # Exponential time decay - posts lose 50% of their score every 12 hours
-    # This creates a more aggressive decay than the gravity model
-    half_life_hours = 12
+    # Exponential time decay - posts lose 50% of their score every 24 hours
+    # Balanced decay that gives quality posts more time to surface
+    half_life_hours = 24
     decay_factor = 0.5 ** (age_in_hours / half_life_hours)
 
     # Boost for very recent posts (first 2 hours get extra visibility)
@@ -3427,6 +3513,8 @@ def get_hot_posts_json():
         # Calculate hot score for each post
         scored_posts = []
         for post in recent_posts:
+            if not post.get('slug'):
+                continue
             comment_count = comment_counts.get(post['slug'], 0)
             post['hot_score'] = calculate_hot_score(post, comment_count)
             post['comment_count'] = comment_count
@@ -3941,21 +4029,22 @@ def get_related_posts_json():
             if slug and slug not in user_last_comment_time:
                 user_last_comment_time[slug] = c.get('created_at')
 
-        # Check if posts have new comments since user's last interaction
+        # Check if posts have new comments since user's last interaction (batched)
         if user_last_comment_time:
+            or_conditions = []
             for slug, last_time in user_last_comment_time.items():
-                # Find if there are newer comments from OTHER users
-                newer_comment = comments_conf.find_one({
+                or_conditions.append({
                     'post_slug': slug,
                     'author_id': {'$ne': user_id},
                     'created_at': {'$gt': last_time},
                     'is_deleted': False
                 })
-                if newer_comment:
-                    # This post has new activity - should be re-shown
-                    post = posts_conf.find_one({'slug': slug}, {'_id': 1})
-                    if post:
-                        posts_with_new_activity.add(post['_id'])
+            if or_conditions:
+                newer_comments = comments_conf.find({'$or': or_conditions}, {'post_slug': 1})
+                slugs_with_new_activity = set(c['post_slug'] for c in newer_comments)
+                if slugs_with_new_activity:
+                    for p in posts_conf.find({'slug': {'$in': list(slugs_with_new_activity)}}, {'_id': 1}):
+                        posts_with_new_activity.add(p['_id'])
 
         # Get posts user RECENTLY commented on (last 7 days) - exclude unless new activity
         recently_commented_slugs = [c.get('post_slug') for c in user_recent_comments]
@@ -4167,6 +4256,19 @@ def get_related_posts_json():
                 used_ids.add(post['_id'])
 
         result_posts = result_posts[:15]
+
+        # Author dedup: cap at 3 posts per author to ensure diversity
+        author_count = {}
+        deduped_results = []
+        overflow = []
+        for post in result_posts:
+            aid = str(post.get('author_id', ''))
+            author_count[aid] = author_count.get(aid, 0) + 1
+            if author_count[aid] <= 3:
+                deduped_results.append(post)
+            else:
+                overflow.append(post)
+        result_posts = deduped_results
 
         # Shuffle to mix tiers together (prevents predictable ordering)
         import random

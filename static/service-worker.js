@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v7';
-const STATIC_CACHE = 'echowithin-static-v7';
-const PAGES_CACHE = 'echowithin-pages-v7';
-const POSTS_CACHE = 'echowithin-posts-v7';
+const CACHE_NAME = 'echowithin-v9';
+const STATIC_CACHE = 'echowithin-static-v9';
+const PAGES_CACHE = 'echowithin-pages-v9';
+const POSTS_CACHE = 'echowithin-posts-v9';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -17,13 +17,13 @@ const STATIC_ASSETS = [
 ];
 
 // Pages to cache for offline access
+// Note: /home, /personal_space are login-required so they can't be pre-cached.
+// They get cached on first authenticated visit via the fetch handler.
 const PAGES_TO_CACHE = [
   '/',
   '/offline',
-  '/home',
   '/blog',
-  '/about',
-  '/personal_space'
+  '/about'
 ];
 
 // Install event: cache critical assets
@@ -70,8 +70,13 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Skip non-GET requests
+  // For non-GET requests (e.g. form POSTs), try network and fall back to offline page
   if (request.method !== 'GET') {
+    if (request.mode === 'navigate') {
+      event.respondWith(
+        fetch(request).catch(() => caches.match('/offline'))
+      );
+    }
     return;
   }
 
@@ -110,6 +115,34 @@ self.addEventListener('fetch', event => {
             });
           }
           return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Key pages: Stale-while-revalidate — serve cached version instantly,
+  // then update cache in background. This makes back-navigation instant
+  // and provides offline access for authenticated pages.
+  const STALE_WHILE_REVALIDATE_PAGES = ['/blog', '/home', '/personal_space', '/'];
+  if (STALE_WHILE_REVALIDATE_PAGES.includes(url.pathname) && !url.search) {
+    event.respondWith(
+      caches.open(PAGES_CACHE).then(cache => {
+        return cache.match(request).then(cachedResponse => {
+          const networkFetch = fetch(request).then(response => {
+            if (response && response.status === 200) {
+              cache.put(request, response.clone());
+            }
+            return response;
+          });
+          // If we have a cached version, return it immediately
+          // and update cache in background
+          if (cachedResponse) {
+            event.waitUntil(networkFetch);
+            return cachedResponse;
+          }
+          // No cache yet — wait for network
+          return networkFetch.catch(() => caches.match('/offline'));
         });
       })
     );

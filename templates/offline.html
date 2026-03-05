@@ -36,15 +36,16 @@
     async function showCachedPages() {
         if ('caches' in window) {
             try {
-                const pagesCache = await caches.open('echowithin-pages-v4');
-                const postsCache = await caches.open('echowithin-posts-v4');
-
-                const [pagesKeys, postsKeys] = await Promise.all([
-                    pagesCache.keys(),
-                    postsCache.keys()
-                ]);
-
-                const allKeys = [...pagesKeys, ...postsKeys];
+                // Dynamically find all echowithin caches instead of hardcoding version
+                const allCacheNames = await caches.keys();
+                const echowithinCaches = allCacheNames.filter(n => n.startsWith('echowithin-'));
+                
+                let allKeys = [];
+                for (const cacheName of echowithinCaches) {
+                    const cache = await caches.open(cacheName);
+                    const keys = await cache.keys();
+                    allKeys = allKeys.concat(keys);
+                }
 
                 if (allKeys.length > 0) {
                     const cachedPagesDiv = document.getElementById('cached-pages');

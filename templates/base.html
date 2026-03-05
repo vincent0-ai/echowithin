@@ -288,7 +288,7 @@
             width: 48px;
             height: 48px;
             border-radius: 50%;
-            background-color: #6366f1;
+            background-color: var(--primary-color, #3e2217);
             color: white;
             border: none;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
@@ -312,16 +312,6 @@
             transform: scale(0.95);
         }
 
-        /* Show reload button instantly for installed PWA / standalone modes — no JS needed */
-        @media (display-mode: standalone) {
-            .mobile-fab { display: flex !important; }
-        }
-        @media (display-mode: fullscreen) {
-            .mobile-fab { display: flex !important; }
-        }
-        @media (display-mode: minimal-ui) {
-            .mobile-fab { display: flex !important; }
-        }
     </style>
 
     <!-- Hide install button when running as installed PWA -->
@@ -360,6 +350,33 @@
 </head>
 
 <body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">
+    <!-- Inject reload button IMMEDIATELY — runs before any page content downloads -->
+    <script>
+    (function(){
+        var show = false;
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) show = true;
+        else if (window.navigator.standalone === true) show = true;
+        else if (window.matchMedia && (
+            window.matchMedia('(display-mode: standalone)').matches ||
+            window.matchMedia('(display-mode: fullscreen)').matches ||
+            window.matchMedia('(display-mode: minimal-ui)').matches
+        )) show = true;
+        if (show) {
+            var btn = document.createElement('button');
+            btn.id = 'mobile-reload-btn';
+            btn.className = 'mobile-fab';
+            btn.setAttribute('aria-label', 'Reload Page');
+            btn.style.display = 'flex';
+            btn.onclick = function(){ window.location.reload(); };
+            btn.innerHTML = '\u21BB';
+            document.body.appendChild(btn);
+            // Upgrade to FA icon once fonts load
+            document.fonts.ready.then(function(){
+                btn.innerHTML = '<i class="fas fa-redo-alt"></i>';
+            });
+        }
+    })();
+    </script>
     <div class="page-container">
         <!-- Choices.js SCRIPT for custom dropdowns -->
         <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
@@ -447,23 +464,6 @@
             </div>
         </footer>
 
-        <!-- Mobile Reload Button -->
-        <button id="mobile-reload-btn" class="mobile-fab" onclick="window.location.reload()" aria-label="Reload Page">
-            <i class="fas fa-redo-alt"></i>
-        </button>
-        <script>
-            // Show reload button immediately for Capacitor native apps
-            // (capacitor.js is loaded synchronously in <head>, so window.Capacitor is available now)
-            (function(){
-                if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-                    document.getElementById('mobile-reload-btn').style.display = 'flex';
-                }
-                // Also cover iOS standalone (navigator.standalone) which CSS media query may miss
-                if (window.navigator.standalone === true) {
-                    document.getElementById('mobile-reload-btn').style.display = 'flex';
-                }
-            })();
-        </script>
     </div>
 </body>
 

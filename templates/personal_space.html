@@ -3009,16 +3009,7 @@
             });
         });
 
-        // Prevent double submission
-        const noteForm = document.getElementById('create-note-form');
-        const addNoteBtn = document.getElementById('add-note-btn');
-
-        if (noteForm && addNoteBtn) {
-            noteForm.addEventListener('submit', () => {
-                addNoteBtn.disabled = true;
-                addNoteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-            });
-        }
+        // Double-submit prevention is now handled in the offline sync form intercept
 
         // --- Edit Note Modal Bindings ---
         const editTextarea = document.getElementById('edit-note-content');
@@ -3367,30 +3358,69 @@
         }
 
         // --- Form Intercept ---
+        // Always intercept form submission and use fetch + offline fallback.
+        // navigator.onLine is unreliable in Capacitor WebViews, so we try
+        // the network first and save to IndexedDB if it fails.
         const form = document.getElementById('create-note-form');
         if (form) {
             form.addEventListener('submit', function (e) {
-                if (!navigator.onLine) {
-                    e.preventDefault();
-                    const textarea = document.getElementById('note-input');
-                    const content = textarea.value.trim();
-                    if (!content) return;
+                e.preventDefault();
+                const textarea = document.getElementById('note-input');
+                const content = textarea.value.trim();
+                if (!content) return;
 
+                const refInput = document.getElementById('note-reference');
+                const tagsInput = document.getElementById('note-tags');
+                const addBtn = document.getElementById('add-note-btn');
+                if (addBtn) {
+                    addBtn.disabled = true;
+                    addBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                }
+
+                // Try sending to server first
+                fetch('/personal_post/create_json', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': CSRF
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        reference: refInput ? refInput.value.trim() : '',
+                        tags: tagsInput ? tagsInput.value.trim() : ''
+                    })
+                }).then(resp => {
+                    if (resp.ok) {
+                        // Success — reload to show new note
+                        window.location.reload();
+                    } else {
+                        throw new Error('Server error');
+                    }
+                }).catch(() => {
+                    // Network failed — save offline
                     const note = {
                         content: content,
+                        reference: refInput ? refInput.value.trim() : '',
+                        tags: tagsInput ? tagsInput.value.trim() : '',
                         created_at: new Date().toISOString()
                     };
-
                     addPending(note).then(() => {
                         textarea.value = '';
+                        if (refInput) refInput.value = '';
+                        if (tagsInput) tagsInput.value = '';
                         document.getElementById('char-count').textContent = '0';
+                        setBanner('offline');
                         return getAllPending();
                     }).then(renderPendingNotes).catch(err => {
                         console.error('Failed to save offline note:', err);
                         alert('Failed to save note offline. Please try again.');
+                    }).finally(() => {
+                        if (addBtn) {
+                            addBtn.disabled = false;
+                            addBtn.innerHTML = '<i class="fas fa-plus"></i> Add Note';
+                        }
                     });
-                }
-                // If online, let the form submit normally
+                });
             });
         }
 

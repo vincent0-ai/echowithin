@@ -5,28 +5,30 @@
 (function() {
     var LIST_PAGES = ['/blog', '/all_posts', '/home', '/personal_space'];
     var path = location.pathname;
+    var key = 'ew_scroll_' + path;
 
     // On list pages: restore saved scroll position
     var isListPage = LIST_PAGES.some(function(p) { return path === p || path.startsWith(p + '?'); });
     if (isListPage) {
-        var saved = sessionStorage.getItem('ew_scroll_' + path);
+        var saved = sessionStorage.getItem(key);
         if (saved) {
-            sessionStorage.removeItem('ew_scroll_' + path);
-            // Use requestAnimationFrame to wait for layout, then scroll
-            window.addEventListener('DOMContentLoaded', function() {
-                requestAnimationFrame(function() {
-                    window.scrollTo(0, parseInt(saved, 10));
-                });
+            sessionStorage.removeItem(key);
+            var y = parseInt(saved, 10);
+            // Script runs after DOMContentLoaded (defer), so content is parsed.
+            // Wait for images/layout to settle, then scroll.
+            requestAnimationFrame(function() {
+                window.scrollTo(0, y);
+                // Second attempt after a short delay in case lazy content shifts layout
+                setTimeout(function() { window.scrollTo(0, y); }, 200);
             });
         }
     }
 
-    // On any page: capture scroll position when clicking a post link
+    // Capture scroll position when clicking a post link
     document.addEventListener('click', function(e) {
         var link = e.target.closest('a.record-view-link');
         if (!link) return;
-        var refPage = location.pathname;
-        sessionStorage.setItem('ew_scroll_' + refPage, window.scrollY);
+        sessionStorage.setItem('ew_scroll_' + location.pathname, window.scrollY);
     });
 })();
 

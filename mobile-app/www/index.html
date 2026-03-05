@@ -8,7 +8,7 @@
     <title>EchoWithin</title>
     <style>
         :root {
-            --primary: #6366f1;
+            --primary: #3e2217;
             --bg: #FFFFFF;
             --text: #1e293b;
             --text-muted: #64748b;
@@ -167,14 +167,56 @@
 
             const targetUrl = path ? LIVE_SITE + path : LIVE_SITE;
 
-            // 5. Guaranteed minimum visibility of 600ms for a smooth feel
-            // unless there is a delay, then it stays longer.
-            setTimeout(() => {
-                redirectStarted = true;
-                window.location.replace(targetUrl);
-            }, 600);
+            // 5. Check connectivity before redirecting
+            // Use a real fetch to the server as navigator.onLine is unreliable
+            async function canReachServer() {
+                try {
+                    const resp = await fetch(LIVE_SITE + '/static/manifest.json', {
+                        method: 'HEAD',
+                        cache: 'no-store',
+                        signal: AbortSignal.timeout(5000)
+                    });
+                    return resp.ok;
+                } catch (e) {
+                    return false;
+                }
+            }
 
-            // 6. Show retry button after 8 seconds of "Connecting..."
+            // 6. Try to reach server; if offline, wait for reconnection
+            function showOfflineState() {
+                document.getElementById('status-text').textContent = "You're offline";
+                document.getElementById('retry-container').querySelector('p').textContent =
+                    'Please check your internet connection and try again.';
+                document.getElementById('retry-container').style.display = 'block';
+            }
+
+            const isReachable = await canReachServer();
+
+            if (isReachable) {
+                // Server reachable — redirect after brief delay for smooth feel
+                setTimeout(() => {
+                    redirectStarted = true;
+                    window.location.replace(targetUrl);
+                }, 600);
+            } else {
+                // Offline — show offline state and auto-retry when back online
+                showOfflineState();
+                window.addEventListener('online', async () => {
+                    document.getElementById('status-text').textContent = 'Reconnecting...';
+                    document.getElementById('status-text').style.display = 'block';
+                    document.getElementById('retry-container').style.display = 'none';
+                    // Brief delay then retry
+                    const recheck = await canReachServer();
+                    if (recheck) {
+                        redirectStarted = true;
+                        window.location.replace(targetUrl);
+                    } else {
+                        showOfflineState();
+                    }
+                });
+            }
+
+            // 7. Show retry button after 8 seconds if redirect hasn't started
             setTimeout(() => {
                 if (redirectStarted) return;
                 document.getElementById('status-text').style.display = 'none';
@@ -184,9 +226,9 @@
 
         run();
 
-        // 7. Global safety fallback
+        // 8. Global safety fallback — only redirect if we're likely online
         setTimeout(() => {
-            if (!redirectStarted) {
+            if (!redirectStarted && navigator.onLine) {
                 window.location.replace(LIVE_SITE);
             }
         }, 15000);

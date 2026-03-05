@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v9';
-const STATIC_CACHE = 'echowithin-static-v9';
-const PAGES_CACHE = 'echowithin-pages-v9';
-const POSTS_CACHE = 'echowithin-posts-v9';
+const CACHE_NAME = 'echowithin-v10';
+const STATIC_CACHE = 'echowithin-static-v10';
+const PAGES_CACHE = 'echowithin-pages-v10';
+const POSTS_CACHE = 'echowithin-posts-v10';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -121,30 +121,28 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Key pages: Stale-while-revalidate — serve cached version instantly,
-  // then update cache in background. This makes back-navigation instant
-  // and provides offline access for authenticated pages.
-  const STALE_WHILE_REVALIDATE_PAGES = ['/blog', '/home', '/personal_space', '/'];
-  if (STALE_WHILE_REVALIDATE_PAGES.includes(url.pathname) && !url.search) {
+  // Key pages: Network-first with cache fallback.
+  // Always fetch fresh HTML so auth state (logged-in navbar) is correct,
+  // but cache responses for offline access.
+  const KEY_PAGES = ['/blog', '/home', '/personal_space', '/'];
+  if (KEY_PAGES.includes(url.pathname) && !url.search) {
     event.respondWith(
-      caches.open(PAGES_CACHE).then(cache => {
-        return cache.match(request).then(cachedResponse => {
-          const networkFetch = fetch(request).then(response => {
-            if (response && response.status === 200) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          });
-          // If we have a cached version, return it immediately
-          // and update cache in background
-          if (cachedResponse) {
-            event.waitUntil(networkFetch);
-            return cachedResponse;
+      fetch(request)
+        .then(response => {
+          if (response && response.status === 200) {
+            const respClone = response.clone();
+            caches.open(PAGES_CACHE).then(cache => {
+              cache.put(request, respClone);
+            });
           }
-          // No cache yet — wait for network
-          return networkFetch.catch(() => caches.match('/offline'));
-        });
-      })
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then(cachedResponse => {
+            if (cachedResponse) return cachedResponse;
+            return caches.match('/offline');
+          });
+        })
     );
     return;
   }

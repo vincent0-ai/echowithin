@@ -361,6 +361,7 @@ newsletter_conf = db['newsletter_subs']
 user_post_views_conf = db['user_post_views']
 unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
+app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -397,6 +398,10 @@ logs_conf.create_index([('type', 1), ('post_id', 1), ('user_identifier', 1), ('t
 # Index for note versions and discussions
 note_versions_conf.create_index([('note_id', 1), ('created_at', -1)])
 note_discussions_conf.create_index([('share_id', 1), ('created_at', -1)])
+# TTL index to auto-expire app tokens after 90 days
+app_tokens_conf.create_index('created_at', expireAfterSeconds=90*24*3600)
+app_tokens_conf.create_index('token', unique=True)
+app_tokens_conf.create_index('user_id')
 
 # --- Encryption utilities for personal notes ---
 # Derive a Fernet key from the app's SECRET_KEY for encrypting personal notes
@@ -2483,6 +2488,18 @@ def login():
 
             user_obj = User(user)
             login_user(user_obj, remember=remember) # Pass the remember flag to login_user
+
+            # Generate persistent token for native app session revival
+            _is_native = 'EchoWithinApp' in request.headers.get('User-Agent', '')
+            _app_token = None
+            if _is_native:
+                _app_token = secrets.token_urlsafe(48)
+                app_tokens_conf.insert_one({
+                    'token': _app_token,
+                    'user_id': user['_id'],
+                    'created_at': datetime.datetime.now(datetime.timezone.utc)
+                })
+
             if current_user.is_admin and current_user.is_authenticated:
                 flash('You have logged in as admin', 'success')
             else:
@@ -2490,7 +2507,11 @@ def login():
             next_url = request.args.get('next')
             if not next_url or not is_safe_url(next_url):
                 next_url = url_for('home')
-            return redirect(next_url)
+            resp = redirect(next_url)
+            if _app_token:
+                resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
+                                httponly=False, secure=True, samesite='Lax')
+            return resp
         else:
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login', form='login')
@@ -7374,9 +7395,21 @@ def mobile_auth():
                 # Log them in within THIS context (the app's webview)
                 user_obj = User(user)
                 login_user(user_obj, remember=True)
+
+                # Generate persistent token for native app session revival
+                _app_token = secrets.token_urlsafe(48)
+                app_tokens_conf.insert_one({
+                    'token': _app_token,
+                    'user_id': user['_id'],
+                    'created_at': datetime.datetime.now(datetime.timezone.utc)
+                })
+
                 app.logger.info(f"Successfully bridged mobile session for user {user['username']} via OTLT.")
                 flash(f"Welcome back to the app, {user['username']}!", "success")
-                return redirect(url_for('home'))
+                resp = redirect(url_for('home'))
+                resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
+                                httponly=False, secure=True, samesite='Lax')
+                return resp
             else:
                 app.logger.warning(f"Mobile auth token valid but user {user_id} not found.")
         else:
@@ -7388,11 +7421,48 @@ def mobile_auth():
     return redirect(url_for('login'))
 
 
+@app.route('/api/app_reauth', methods=['POST'])
+@csrf.exempt
+@limits(calls=10, period=60)
+def app_reauth():
+    """Re-authenticate a native app user using a persistent localStorage token.
+    This avoids re-login when Android WebView loses session cookies on app restart."""
+    data = request.get_json() or {}
+    token = data.get('token', '').strip()
+    if not token:
+        return jsonify({'error': 'No token'}), 400
+
+    doc = app_tokens_conf.find_one({'token': token})
+    if not doc:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    user = users_conf.find_one({'_id': doc['user_id']})
+    if not user:
+        app_tokens_conf.delete_one({'_id': doc['_id']})
+        return jsonify({'error': 'User not found'}), 401
+
+    if user.get('is_banned'):
+        app_tokens_conf.delete_many({'user_id': doc['user_id']})
+        return jsonify({'error': 'Account suspended'}), 403
+
+    user_obj = User(user)
+    login_user(user_obj, remember=True)
+    return jsonify({'success': True, 'username': user['username']})
+
+
 @app.route('/logout')
 def logout():
+    # Revoke app token if present (native app persistent login)
+    app_token = request.cookies.get('x_app_token')
+    if app_token:
+        app_tokens_conf.delete_one({'token': app_token})
+    if current_user.is_authenticated:
+        app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     logout_user() # Use Flask-Login to properly log the user out
     flash('You have been logged out.', 'info')
-    return redirect(url_for('dashboard'))
+    resp = redirect(url_for('dashboard'))
+    resp.delete_cookie('x_app_token')
+    return resp
 
 
 # Canonical list of predefined tags — Magic Tags will only pick from these

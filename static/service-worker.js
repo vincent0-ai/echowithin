@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v10';
-const STATIC_CACHE = 'echowithin-static-v10';
-const PAGES_CACHE = 'echowithin-pages-v10';
-const POSTS_CACHE = 'echowithin-posts-v10';
+const CACHE_NAME = 'echowithin-v11';
+const STATIC_CACHE = 'echowithin-static-v11';
+const PAGES_CACHE = 'echowithin-pages-v11';
+const POSTS_CACHE = 'echowithin-posts-v11';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -253,9 +253,32 @@ self.addEventListener('push', event => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    Promise.all([
+      self.registration.showNotification(data.title, options),
+      // Update the app icon badge count (works on iOS PWA and Android Chrome)
+      updateBadgeFromServer()
+    ])
   );
 });
+
+// Fetch unread count from server and set app badge
+async function updateBadgeFromServer() {
+  if (!('setAppBadge' in navigator)) return;
+  try {
+    const response = await fetch('/api/notifications/unread-count');
+    if (response.ok) {
+      const data = await response.json();
+      const count = data.count || 0;
+      if (count > 0) {
+        await navigator.setAppBadge(count);
+      } else {
+        await navigator.clearAppBadge();
+      }
+    }
+  } catch (err) {
+    // Non-critical - silently fail
+  }
+}
 
 // Notification click event handler
 self.addEventListener('notificationclick', event => {

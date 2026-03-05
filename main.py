@@ -1556,6 +1556,49 @@ def send_push_notifications_for_new_post(post_id_str):
 # These functions handle push notifications for the native Android/iOS apps
 # They work alongside web push - both systems coexist
 
+
+def _get_user_badge_count(user_id_str):
+    """Get the unread notification count for a user (lightweight version for FCM badge).
+    
+    Uses the global last_activity_check threshold for speed since this runs
+    in notification-sending context. Returns at least 1 when called during
+    notification delivery so the badge is never empty.
+    """
+    try:
+        user_id = ObjectId(user_id_str)
+        user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
+        threshold = user_doc.get('last_activity_check') if user_doc else None
+        if not threshold:
+            threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        if threshold.tzinfo is None:
+            threshold = threshold.replace(tzinfo=datetime.timezone.utc)
+
+        count = 0
+        # Comments on user's own posts
+        user_post_slugs = [p.get('slug') for p in posts_conf.find({'author_id': user_id}, {'slug': 1})]
+        if user_post_slugs:
+            count += comments_conf.count_documents({
+                'post_slug': {'$in': user_post_slugs},
+                'author_id': {'$ne': user_id},
+                'created_at': {'$gt': threshold},
+                'is_deleted': {'$ne': True}
+            })
+
+        # Replies to user's comments
+        my_comment_ids = [c['_id'] for c in comments_conf.find({'author_id': user_id}, {'_id': 1})]
+        if my_comment_ids:
+            count += comments_conf.count_documents({
+                'parent_id': {'$in': my_comment_ids},
+                'author_id': {'$ne': user_id},
+                'created_at': {'$gt': threshold},
+                'is_deleted': {'$ne': True}
+            })
+
+        return max(count, 1)  # At least 1 since we're sending a notification right now
+    except Exception:
+        return 1
+
+
 def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None):
     """Send FCM notification to all registered devices for a user (native app).
     
@@ -1571,6 +1614,9 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
         if not tokens:
             return 0
         
+        # Get the user's current unread count for the badge
+        badge_count = _get_user_badge_count(user_id_str)
+
         sent_count = 0
         for token_doc in tokens:
             try:
@@ -1591,6 +1637,7 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                             icon='ic_launcher',
                             color='#6366f1',
                             channel_id='default',
+                            notification_count=badge_count,
                         ),
                     ),
                 )
@@ -1617,6 +1664,10 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
     try:
         messages = []
         for token_doc in tokens_list:
+            # Get per-user badge count for targeted notifications
+            token_user_id = token_doc.get('user_id')
+            badge_count = _get_user_badge_count(str(token_user_id)) if token_user_id else 1
+
             messages.append(messaging.Message(
                 notification=messaging.Notification(
                     title=title,
@@ -1634,6 +1685,7 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                         icon='ic_launcher',
                         color='#6366f1',
                         channel_id='default',
+                        notification_count=badge_count,
                     ),
                 ),
             ))
@@ -4955,43 +5007,100 @@ def push_subscription_status():
 @app.route('/api/notifications/unread-count')
 @login_required
 def get_unread_notification_count():
-    """Get the count of unread notifications for the current user (for PWA badge)."""
+    """Get the count of unread notifications for the current user (for PWA badge).
+    
+    Uses the same logic as the activity tab: per-post view timestamps take priority
+    over the global last_activity_check, so viewing a specific post correctly reduces
+    the badge count without requiring "Mark all as read".
+    """
     try:
         user_id = ObjectId(current_user.id)
 
-        # Get the threshold from user's last_activity_check
+        # Get the global threshold from user's last_activity_check
         user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
-        threshold = user_doc.get('last_activity_check') if user_doc else None
+        global_threshold = user_doc.get('last_activity_check') if user_doc else None
         
-        if not threshold:
-            threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        if not global_threshold:
+            global_threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
         
-        if threshold.tzinfo is None:
-            threshold = threshold.replace(tzinfo=datetime.timezone.utc)
-
-        # 1. Count unread comments on user's own posts
-        user_posts = posts_conf.find({'author_id': user_id}, {'slug': 1})
-        user_post_slugs = [p.get('slug') for p in user_posts]
+        if global_threshold.tzinfo is None:
+            global_threshold = global_threshold.replace(tzinfo=datetime.timezone.utc)
 
         unread_count = 0
-        if user_post_slugs:
-            unread_count += comments_conf.count_documents({
-                'post_slug': {'$in': user_post_slugs},
-                'author_id': {'$ne': user_id},
-                'created_at': {'$gt': threshold},
-                'is_deleted': {'$ne': True}
-            })
 
-        # 2. Count unread replies to user's comments
-        my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1}))
+        # 1. Count unread comments on user's own posts (respecting per-post view times)
+        user_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1, 'author_last_viewed': 1}))
+        user_post_ids = [p['_id'] for p in user_posts]
+        user_post_slugs = [p.get('slug') for p in user_posts]
+
+        if user_post_slugs:
+            # Fetch per-post view timestamps for the user's own posts
+            post_views = list(user_post_views_conf.find({
+                'user_id': user_id,
+                'post_id': {'$in': user_post_ids}
+            }))
+            view_map = {v['post_id']: v['last_viewed'] for v in post_views}
+
+            # Build a fallback map from legacy author_last_viewed field
+            legacy_view_map = {p['_id']: p.get('author_last_viewed') for p in user_posts}
+
+            for post in user_posts:
+                post_last_viewed = view_map.get(post['_id']) or legacy_view_map.get(post['_id'])
+                if post_last_viewed and post_last_viewed.tzinfo is None:
+                    post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+
+                threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
+
+                unread_count += comments_conf.count_documents({
+                    'post_slug': post.get('slug'),
+                    'author_id': {'$ne': user_id},
+                    'created_at': {'$gt': threshold},
+                    'is_deleted': {'$ne': True}
+                })
+
+        # 2. Count unread replies to user's comments (on OTHER people's posts)
+        my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1, 'post_slug': 1}))
         my_comment_ids = [c['_id'] for c in my_comments]
         if my_comment_ids:
-            unread_count += comments_conf.count_documents({
-                'parent_id': {'$in': my_comment_ids},
-                'author_id': {'$ne': user_id},
-                'created_at': {'$gt': threshold},
-                'is_deleted': {'$ne': True}
-            })
+            # Get slugs of other people's posts where user commented
+            other_post_slugs = set(c.get('post_slug') for c in my_comments) - set(user_post_slugs)
+            if other_post_slugs:
+                # Fetch per-post view timestamps for these posts
+                other_posts = list(posts_conf.find({'slug': {'$in': list(other_post_slugs)}}, {'_id': 1, 'slug': 1}))
+                other_post_id_map = {p['slug']: p['_id'] for p in other_posts}
+                other_post_ids = [p['_id'] for p in other_posts]
+
+                other_views = list(user_post_views_conf.find({
+                    'user_id': user_id,
+                    'post_id': {'$in': other_post_ids}
+                })) if other_post_ids else []
+                other_view_map = {v['post_id']: v['last_viewed'] for v in other_views}
+
+                # Count replies per post, respecting per-post thresholds
+                for slug in other_post_slugs:
+                    post_id = other_post_id_map.get(slug)
+                    post_last_viewed = other_view_map.get(post_id) if post_id else None
+                    if post_last_viewed and post_last_viewed.tzinfo is None:
+                        post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+
+                    threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
+
+                    # Get comment IDs for this specific post
+                    post_comment_ids = [c['_id'] for c in my_comments if c.get('post_slug') == slug]
+                    if post_comment_ids:
+                        unread_count += comments_conf.count_documents({
+                            'parent_id': {'$in': post_comment_ids},
+                            'author_id': {'$ne': user_id},
+                            'created_at': {'$gt': threshold},
+                            'is_deleted': {'$ne': True}
+                        })
+
+        # 3. Count unread surprise unlock notifications
+        unread_count += unlock_notifications_conf.count_documents({
+            'owner_id': user_id,
+            'is_read': {'$ne': True},
+            'unlocked_at': {'$gt': global_threshold}
+        })
 
         return jsonify({'count': unread_count})
     except Exception as e:

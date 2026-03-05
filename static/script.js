@@ -1,5 +1,35 @@
 'use strict'
 
+// ==================== Scroll Position Restore ====================
+// Save scroll position when clicking a post link, restore when navigating back
+(function() {
+    var LIST_PAGES = ['/blog', '/all_posts', '/home', '/personal_space'];
+    var path = location.pathname;
+
+    // On list pages: restore saved scroll position
+    var isListPage = LIST_PAGES.some(function(p) { return path === p || path.startsWith(p + '?'); });
+    if (isListPage) {
+        var saved = sessionStorage.getItem('ew_scroll_' + path);
+        if (saved) {
+            sessionStorage.removeItem('ew_scroll_' + path);
+            // Use requestAnimationFrame to wait for layout, then scroll
+            window.addEventListener('DOMContentLoaded', function() {
+                requestAnimationFrame(function() {
+                    window.scrollTo(0, parseInt(saved, 10));
+                });
+            });
+        }
+    }
+
+    // On any page: capture scroll position when clicking a post link
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('a.record-view-link');
+        if (!link) return;
+        var refPage = location.pathname;
+        sessionStorage.setItem('ew_scroll_' + refPage, window.scrollY);
+    });
+})();
+
 // ==================== Local Timezone Conversion ====================
 // Convert all timestamps to user's local timezone
 function convertToLocalTime() {

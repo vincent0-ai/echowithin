@@ -331,6 +331,7 @@
     <meta name="theme-color" content="#ffffff">
 
     <!-- iOS-specific PWA meta tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="EchoWithin">
@@ -744,26 +745,29 @@
         }, 500);
     }
 
+    // Detect iOS for install-prompt handling
+    const __isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
     // Don't show install prompt if already installed as PWA
     if (!isAppInstalled() && !window.__pwaInstalled) {
-        window.addEventListener('beforeinstallprompt', (e) => {
-            console.log('PWA install prompt available');
-            // Prevent the mini-infobar from appearing on mobile
-            e.preventDefault();
-            // Store the event so it can be triggered later
-            deferredPrompt = e;
-            // Show install button
+        if (__isIOS) {
+            // iOS doesn't fire beforeinstallprompt — show install button with A2HS guidance
             showInstallPromotion();
-        });
+        } else {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                console.log('PWA install prompt available');
+                e.preventDefault();
+                deferredPrompt = e;
+                showInstallPromotion();
+            });
+        }
     }
 
     function showInstallPromotion() {
-        // Only show if not already installed
         if (isAppInstalled() || window.__pwaInstalled) {
             hideInstallButton();
             return;
         }
-        // Show the install button
         const installButton = document.getElementById('install-button');
         if (installButton) {
             installButton.style.display = 'inline-flex';
@@ -772,17 +776,52 @@
     }
 
     async function promptInstall() {
+        if (__isIOS) {
+            // iOS: show Add to Home Screen instructions
+            showIOSInstallInstructions();
+            return;
+        }
         if (!deferredPrompt) {
             console.log('No install prompt available');
             return;
         }
-        // Show the install prompt
         deferredPrompt.prompt();
-        // Wait for the user to respond to the prompt
         const { outcome } = await deferredPrompt.userChoice;
         console.log(`User response to install prompt: ${outcome}`);
-        // Clear the saved prompt
         deferredPrompt = null;
+    }
+
+    function showIOSInstallInstructions() {
+        // Remove existing overlay if any
+        var existing = document.getElementById('ios-a2hs-overlay');
+        if (existing) existing.remove();
+
+        var overlay = document.createElement('div');
+        overlay.id = 'ios-a2hs-overlay';
+        overlay.setAttribute('style',
+            'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;' +
+            'display:flex;align-items:flex-end;justify-content:center;padding:20px;'
+        );
+        overlay.innerHTML =
+            '<div style="background:#fff;border-radius:16px;padding:24px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.2);">' +
+                '<div style="font-size:1.3rem;font-weight:700;margin-bottom:12px;">Install EchoWithin</div>' +
+                '<p style="color:#555;font-size:0.95rem;line-height:1.5;margin-bottom:16px;">' +
+                    'To install this app on your iPhone or iPad:' +
+                '</p>' +
+                '<div style="text-align:left;font-size:0.95rem;color:#333;line-height:1.8;padding:0 8px;">' +
+                    '<div>1. Tap the <b>Share</b> button <span style="font-size:1.2rem;">&#x1F4E4;</span> at the bottom of Safari</div>' +
+                    '<div>2. Scroll down and tap <b>"Add to Home Screen"</b></div>' +
+                    '<div>3. Tap <b>"Add"</b> in the top right</div>' +
+                '</div>' +
+                '<p style="color:#888;font-size:0.85rem;margin-top:14px;">Once installed, you\'ll get push notifications and a full app experience.</p>' +
+                '<button id="ios-a2hs-close" style="margin-top:16px;background:#6366f1;color:#fff;border:none;padding:10px 32px;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;">Got it</button>' +
+            '</div>';
+
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay || e.target.id === 'ios-a2hs-close') overlay.remove();
+        });
     }
 
     window.addEventListener('appinstalled', () => {
@@ -816,15 +855,27 @@
 
     if (!isLoggedIn) return;
 
-    // Check if push is supported
+    // Detect platform
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    // iOS Web Push ONLY works when running as an installed Home Screen web app (standalone mode).
+    // In regular Safari browser tabs, PushManager is not available at all.
+    const isIOSStandalone = isIOS && (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches);
+    const isIOSBrowser = isIOS && !isIOSStandalone;
+
+    if (isIOSBrowser) {
+        // In Safari browser on iOS, push doesn't work — prompt user to install the app first
+        console.log('iOS Safari detected — push not available. User needs to Add to Home Screen first.');
+        showIOSInstallPromptForNotifications();
+        return;
+    }
+
+    // Check if push is supported (this also catches iOS standalone without PushManager on very old iOS)
     if (!('PushManager' in window)) {
         console.log('Push notifications not supported');
         return;
     }
-
-    // Detect platform
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     try {
         // Check current subscription status
@@ -838,9 +889,9 @@
         if (Notification.permission === 'granted') {
             await subscribeToPush(registration);
         } else if (Notification.permission === 'default') {
-            if (isIOS) {
-                // iOS requires a user gesture to request notification permission.
-                // Show an in-app banner that the user taps to trigger the native prompt.
+            if (isIOSStandalone) {
+                // iOS standalone PWA: must use a user gesture to request permission.
+                // Show a banner the user taps to trigger the native permission prompt.
                 showIOSNotificationBanner(registration);
             } else if (isMobile) {
                 // On Android mobile, request permission once per session
@@ -879,14 +930,36 @@
     }
     }
 
-    // iOS in-app notification prompt banner
-    // iOS Safari (PWA) requires Notification.requestPermission() to be called
-    // inside a user-gesture handler (tap/click). This banner provides that tap target.
+    // Show a one-time subtle prompt for iOS Safari users to install the app
+    // so they can receive push notifications (push only works in standalone mode)
+    function showIOSInstallPromptForNotifications() {
+        if (localStorage.getItem('iosInstallPromptDismissed') || sessionStorage.getItem('iosInstallPromptDismissed')) return;
+
+        var banner = document.createElement('div');
+        banner.id = 'ios-install-notif-banner';
+        banner.setAttribute('style',
+            'position:fixed;bottom:0;left:0;right:0;background:#1e293b;color:#fff;' +
+            'padding:16px 20px;z-index:10000;box-shadow:0 -2px 12px rgba(0,0,0,.2);' +
+            'font-size:0.92rem;display:flex;align-items:center;justify-content:space-between;gap:12px;'
+        );
+        banner.innerHTML =
+            '<span style="flex:1;line-height:1.4;">📲 Install EchoWithin to get push notifications — tap <b>Share</b> <span style="font-size:1.1rem;">&#x1F4E4;</span> then <b>"Add to Home Screen"</b></span>' +
+            '<button id="ios-install-notif-dismiss" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:8px;cursor:pointer;flex-shrink:0;">OK</button>';
+
+        document.body.appendChild(banner);
+
+        document.getElementById('ios-install-notif-dismiss').addEventListener('click', function () {
+            banner.remove();
+            sessionStorage.setItem('iosInstallPromptDismissed', 'true');
+        });
+    }
+
+    // iOS standalone PWA notification permission banner
+    // Notification.requestPermission() must be called inside a user gesture handler on iOS.
     function showIOSNotificationBanner(registration) {
-        // Don't show if user already dismissed it permanently or for this session
         if (localStorage.getItem('iosNotifBannerDismissed') || sessionStorage.getItem('iosNotifBannerDismissed')) return;
 
-        const banner = document.createElement('div');
+        var banner = document.createElement('div');
         banner.id = 'ios-notif-banner';
         banner.setAttribute('style',
             'position:fixed;bottom:0;left:0;right:0;background:#6366f1;color:#fff;' +
@@ -904,14 +977,14 @@
 
         document.getElementById('ios-notif-enable').addEventListener('click', async function () {
             try {
-                const permission = await Notification.requestPermission();
+                var permission = await Notification.requestPermission();
                 if (permission === 'granted') {
                     await subscribeToPush(registration);
                     banner.innerHTML = '<span style="padding:4px;">✅ Notifications enabled!</span>';
                     setTimeout(function () { banner.remove(); }, 2000);
                 } else if (permission === 'denied') {
-                    banner.innerHTML = '<span style="padding:4px;">Notifications blocked. You can enable them in Settings&nbsp;&gt;&nbsp;Safari&nbsp;&gt;&nbsp;Notifications.</span>';
-                    setTimeout(function () { banner.remove(); }, 4000);
+                    banner.innerHTML = '<span style="padding:4px;">Notifications blocked — go to Settings &gt; Notifications &gt; EchoWithin to enable.</span>';
+                    setTimeout(function () { banner.remove(); }, 5000);
                 } else {
                     banner.remove();
                 }
@@ -924,7 +997,6 @@
 
         document.getElementById('ios-notif-dismiss').addEventListener('click', function () {
             banner.remove();
-            // Use sessionStorage so it shows again next app launch, giving users another chance
             sessionStorage.setItem('iosNotifBannerDismissed', 'true');
         });
     }

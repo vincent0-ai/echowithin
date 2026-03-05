@@ -92,6 +92,16 @@
         <p id="push-not-supported" style="font-size: 0.9rem; color: #dc3545; display: none;">
           Push notifications are not supported in this browser.
         </p>
+        <div id="push-ios-install-hint" style="font-size: 0.9rem; color: #555; display: none; line-height: 1.6;">
+          <p style="margin-bottom: 0.5rem;"><strong>Push notifications require the app to be installed.</strong></p>
+          <p>To install EchoWithin on your iPhone or iPad:</p>
+          <ol style="margin: 0.5rem 0; padding-left: 1.4rem;">
+            <li>Tap the <strong>Share</strong> button &#x1F4E4; at the bottom of Safari</li>
+            <li>Tap <strong>"Add to Home Screen"</strong></li>
+            <li>Open EchoWithin from your Home Screen</li>
+            <li>Come back here to enable notifications</li>
+          </ol>
+        </div>
       </div>
 
       <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
@@ -156,7 +166,14 @@
     // Check if push is supported
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       statusText.style.display = 'none';
-      notSupported.style.display = 'block';
+      // Show iOS-specific install hint if on iOS in-browser
+      var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      var isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      if (isIOS && !isStandalone) {
+        document.getElementById('push-ios-install-hint').style.display = 'block';
+      } else {
+        notSupported.style.display = 'block';
+      }
       return;
     }
 

@@ -1359,7 +1359,7 @@
                             data-has-shares="{{ 'true' if active_shares_map.get(nid_str) else 'false' }}"
                             data-has-clones="{{ 'true' if has_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="delete-btn" title="Delete note">
+                            <button type="button" class="delete-btn" title="Delete note">
                                 <i class="far fa-trash-alt"></i>
                             </button>
                         </form>
@@ -2057,12 +2057,10 @@
             }
         });
 
-        // 2. Delete Button Click Handler (more reliable than submit event)
+        // 2. Delete Button Click Handler
         document.addEventListener('click', (e) => {
             const deleteBtn = e.target.closest('.delete-note-form .delete-btn');
             if (!deleteBtn) return;
-            e.preventDefault();
-            e.stopPropagation();
             const form = deleteBtn.closest('.delete-note-form');
             if (!form) return;
             window.pendingDeleteForm = form;

@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v11';
-const STATIC_CACHE = 'echowithin-static-v11';
-const PAGES_CACHE = 'echowithin-pages-v11';
-const POSTS_CACHE = 'echowithin-posts-v11';
+const CACHE_NAME = 'echowithin-v12';
+const STATIC_CACHE = 'echowithin-static-v12';
+const PAGES_CACHE = 'echowithin-pages-v12';
+const POSTS_CACHE = 'echowithin-posts-v12';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -204,13 +204,17 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Default: Network with cache fallback
+  // Default: Network only — don't serve cached assets as pages
+  // If offline and none of the above handlers matched, show the offline page for navigations
   event.respondWith(
     fetch(request)
       .then(response => {
         return response;
       })
       .catch(() => {
+        if (request.mode === 'navigate' || request.headers.get('accept').includes('text/html')) {
+          return caches.match('/offline');
+        }
         return caches.match(request);
       })
   );

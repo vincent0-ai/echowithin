@@ -69,7 +69,9 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
+# Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
+_ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://blog.echowithin.xyz').split(',')
+socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.
@@ -102,10 +104,10 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'T
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Protection against CSRF
 
 # Configure permanent session lifetime for "Remember Me"
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=30)
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(days=14)
 
 # Flask-Login "Remember Me" cookie settings - CRITICAL for PWA persistence
-app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=30)
+app.config['REMEMBER_COOKIE_DURATION'] = datetime.timedelta(days=14)
 app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']  # Only send over HTTPS
 app.config['REMEMBER_COOKIE_HTTPONLY'] = True  # Prevent JS access
 app.config['REMEMBER_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
@@ -263,10 +265,13 @@ mail = Mail(app)
 
 TIME = int(get_env_variable('TIME'))
 
-# Rate limit bypass for load testing (set BYPASS_RATE_LIMIT=1 in env to disable rate limits)
-BYPASS_RATE_LIMIT = os.environ.get('BYPASS_RATE_LIMIT', '').lower() in ('1', 'true', 'yes')
+# Rate limit bypass for LOCAL testing only (never enable in production)
+_bypass_env = os.environ.get('BYPASS_RATE_LIMIT', '').lower()
+BYPASS_RATE_LIMIT = _bypass_env in ('1', 'true', 'yes') and os.environ.get('FLASK_ENV') == 'development'
 if BYPASS_RATE_LIMIT:
-    app.logger.warning('Rate limiting is BYPASSED - for testing only!')
+    app.logger.warning('Rate limiting is BYPASSED — development mode only!')
+elif _bypass_env in ('1', 'true', 'yes'):
+    app.logger.error('BYPASS_RATE_LIMIT ignored because FLASK_ENV != development')
 
 # --- Performance caching (in-memory with TTL) ---
 # Profile stats cache: stores post/comment counts per user (30 second TTL)
@@ -404,54 +409,90 @@ app_tokens_conf.create_index('token', unique=True)
 app_tokens_conf.create_index('user_id')
 
 # --- Encryption utilities for personal notes ---
-# Derive a Fernet key from the app's SECRET_KEY for encrypting personal notes
-def _get_notes_encryption_key():
-    """Derives a Fernet-compatible key from the app's SECRET_KEY."""
-    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
-    # Use a fixed salt for consistent key derivation (notes would be unreadable if salt changes)
-    salt = b'echowithin_notes_salt_v1'
+# v2: Per-user key derivation with increased iterations (OWASP 2024 recommendation).
+# Backward-compatible: falls back to v1 global key for notes encrypted before the upgrade.
+_NOTES_KDF_ITERATIONS = 480000  # OWASP minimum for PBKDF2-HMAC-SHA256
+_NOTES_V1_SALT = b'echowithin_notes_salt_v1'  # legacy global salt
+
+def _derive_fernet_key(secret_bytes: bytes, salt: bytes, iterations: int = _NOTES_KDF_ITERATIONS):
+    """Derives a Fernet-compatible key from arbitrary secret material."""
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
-        iterations=100000,
+        iterations=iterations,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(secret))
-    return key
+    return base64.urlsafe_b64encode(kdf.derive(secret_bytes))
 
-_notes_fernet = None
+# -- v1 global key (kept for decryption of legacy notes) --
+def _get_notes_encryption_key():
+    """Legacy v1 key: global key derived from SECRET_KEY with fixed salt."""
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    return _derive_fernet_key(secret, _NOTES_V1_SALT, iterations=100000)
+
+_notes_fernet = None  # v1 singleton
 
 def get_notes_fernet():
-    """Returns a Fernet instance for encrypting/decrypting notes."""
+    """Returns v1 Fernet instance (for legacy decrypt only)."""
     global _notes_fernet
     if _notes_fernet is None:
         _notes_fernet = Fernet(_get_notes_encryption_key())
     return _notes_fernet
 
-def encrypt_note(content):
-    """Encrypts note content and returns base64-encoded ciphertext."""
+# -- v2 per-user key derivation & caching --
+_user_fernet_cache = TTLCache(maxsize=512, ttl=300)  # 5-min cache
+
+def _get_user_fernet(user_id: str) -> Fernet:
+    """Per-user Fernet instance. Derives key from SECRET_KEY + user_id salt."""
+    cached = _user_fernet_cache.get(user_id)
+    if cached:
+        return cached
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    # Per-user salt: combines fixed namespace + user_id for uniqueness
+    salt = f'echowithin_notes_v2_{user_id}'.encode()
+    key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    _user_fernet_cache[user_id] = f
+    return f
+
+def encrypt_note(content, user_id=None):
+    """Encrypts note content. Uses per-user key (v2) when user_id is provided."""
     if not content:
         return content
     try:
-        f = get_notes_fernet()
+        if user_id:
+            f = _get_user_fernet(str(user_id))
+        else:
+            f = get_notes_fernet()
         encrypted = f.encrypt(content.encode('utf-8'))
         return encrypted.decode('utf-8')
     except Exception as e:
         app.logger.error(f"Error encrypting note: {e}")
-        return content  # Fallback to plaintext if encryption fails
+        raise  # Never silently fall back to plaintext
 
-def decrypt_note(encrypted_content):
-    """Decrypts base64-encoded ciphertext and returns plaintext."""
+def decrypt_note(encrypted_content, user_id=None):
+    """Decrypts note content. Tries per-user v2 key first, then v1 global key."""
     if not encrypted_content:
         return encrypted_content
+    # Try v2 per-user key first
+    if user_id:
+        try:
+            f = _get_user_fernet(str(user_id))
+            return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            pass  # Fall through to v1
+    # Try v1 global key (backward compatibility)
     try:
         f = get_notes_fernet()
-        decrypted = f.decrypt(encrypted_content.encode('utf-8'))
-        return decrypted.decode('utf-8')
+        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
     except Exception as e:
-        # If decryption fails, it might be an old unencrypted note
-        app.logger.debug(f"Note decryption failed (may be legacy unencrypted): {e}")
-        return encrypted_content  # Return as-is for backward compatibility
+        # Last resort: might be a legacy unencrypted note (pre-encryption era).
+        # Only return raw content if it looks like valid UTF-8 text, not ciphertext.
+        if encrypted_content and not encrypted_content.startswith('gAAAAA'):
+            app.logger.debug(f"Returning legacy unencrypted note content")
+            return encrypted_content
+        app.logger.warning(f"Note decryption failed for all key versions")
+        return '[Content unavailable — decryption error]'
 
 # --- Meilisearch setup for fast full-text search ---
 MEILI_URL = os.environ.get('MEILI_URL', '').strip()
@@ -592,11 +633,15 @@ if _meili_thread.is_alive():
 
 
 def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
-    """Convert a MongoDB personal note document to Meilisearch document shape."""
-    content = decrypted_content if decrypted_content is not None else decrypt_note(note_doc.get('content', ''))
+    """Convert a MongoDB personal note document to Meilisearch document shape.
+    Content is sanitised before indexing to prevent stored-XSS via search highlights."""
+    user_id = str(note_doc.get('user_id', ''))
+    content = decrypted_content if decrypted_content is not None else decrypt_note(note_doc.get('content', ''), user_id=user_id)
+    # Strip any HTML before indexing — search index should contain only plain text
+    content = bleach.clean(content or '', tags=[], strip=True)
     return {
         'id': str(note_doc.get('_id')),
-        'user_id': str(note_doc.get('user_id')),
+        'user_id': user_id,
         'content': content,
         'reference': note_doc.get('reference', ''),
         'tags': note_doc.get('tags', []),
@@ -988,9 +1033,21 @@ def add_security_headers(response):
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     # Permissions policy (restrict features)
     response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
-    # HSTS - enforce HTTPS (1 year)
+    # HSTS - enforce HTTPS (1 year) with preload
     if request.is_secure:
-        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
+    # Content-Security-Policy — mitigates XSS, data injection, and click-jacking
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net https://js.stripe.com https://www.googletagmanager.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "img-src 'self' https: data:; "
+        "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://blog.echowithin.xyz; "
+        "frame-ancestors 'self'; "
+        "base-uri 'self'; "
+        "form-action 'self' https://accounts.google.com;"
+    )
     return response
 
 
@@ -1010,6 +1067,11 @@ def admin_required(f):
         if not current_user.is_authenticated or not current_user.is_admin:
             flash("You do not have permission to access this page.", "danger")
             return redirect(url_for('dashboard'))
+        # Audit log every admin action
+        app.logger.info(
+            'ADMIN_ACTION',
+            extra={'admin_user_id': current_user.id, 'endpoint': request.endpoint, 'method': request.method}
+        )
         return f(*args, **kwargs)
     return decorated_function
 
@@ -1273,9 +1335,9 @@ def send_new_post_notifications(post_id_str):
                         }
                         
                         conn.send(msg)
-                        app.logger.info(f"Sent new-post notification to {recipient_email} for post {post_id_str}")
+                        app.logger.info(f"Sent new-post notification for post {post_id_str}")
                     except Exception as e:
-                        app.logger.error(f"Failed to send new-post email to {u.get('email')}: {e}")
+                        app.logger.error(f"Failed to send new-post email for user {u.get('_id')}: {e}")
     except Exception as e:
         app.logger.error(f"Error in send_new_post_notifications job for {post_id_str}: {e}", exc_info=True)
 
@@ -1403,9 +1465,9 @@ def send_weekly_newsletter():
 
                     mail.send(msg)
                     sent_count += 1
-                    app.logger.debug(f"Sent weekly newsletter to {recipient_email}")
+                    app.logger.debug(f"Sent weekly newsletter (count: {sent_count})")
                 except Exception as e:
-                    app.logger.error(f"Failed to send weekly newsletter to {recipient_email}: {e}")
+                    app.logger.error(f"Failed to send weekly newsletter: {e}")
 
             app.logger.info(f"Weekly newsletter sent to {sent_count} recipients with top {len(posts_list)} of {total_post_count} posts")
     except Exception as e:
@@ -1881,7 +1943,10 @@ def search():
                 if tag_clauses:
                     filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
             if author_filter: # Only add filter if author is not an empty string
-                filter_clauses.append(f'author_username = "{author_filter}"')
+                # Sanitise to prevent Meilisearch filter injection
+                import re as _re
+                _safe_author = _re.sub(r'[^a-zA-Z0-9_\-]', '', author_filter)
+                filter_clauses.append(f'author_username = "{_safe_author}"')
             if date_from:
                 try:
                     # Convert YYYY-MM-DD to start-of-day timestamp
@@ -2562,13 +2627,14 @@ def login():
             resp = redirect(next_url)
             if _app_token:
                 resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
-                                httponly=False, secure=True, samesite='Lax')
+                                httponly=True, secure=True, samesite='Lax')
             return resp
         else:
             flash("Wrong details provided", "danger")
     return render_template("auth.html", active_page='login', form='login')
 
 @app.route('/google_login')
+@limits(calls=10, period=TIME)
 def google_login():
     # Define the scopes required to access user's email and profile information
     scope = ['openid', 'email', 'profile']
@@ -6008,7 +6074,7 @@ def personal_space():
                                                  .limit(per_page))
     personal_posts = []
     for note in personal_posts_raw:
-        note['content'] = decrypt_note(note.get('content', ''))
+        note['content'] = decrypt_note(note.get('content', ''), user_id=current_user.id)
         personal_posts.append(note)
 
     # Fetch active share links for the notes on this page (skip if no notes)
@@ -6283,7 +6349,7 @@ def create_personal_post():
         # Limit note length to 8000 characters
         content = content.strip()[:8000]
         # Encrypt the note content before storing
-        encrypted_content = encrypt_note(content)
+        encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
             'content': encrypted_content,
@@ -6311,7 +6377,7 @@ def create_personal_post_json():
         return jsonify({'error': 'Content cannot be empty'}), 400
 
     content = content[:8000]
-    encrypted_content = encrypt_note(content)
+    encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
         'content': encrypted_content,
@@ -6345,7 +6411,7 @@ def search_personal_notes():
             q_lower = query.lower()
             results = []
             for note in notes_raw:
-                content = decrypt_note(note.get('content', ''))
+                content = decrypt_note(note.get('content', ''), user_id=current_user.id)
                 if q_lower in content.lower():
                     # Simple highlight: wrap matches in <mark>
                     import re as re_mod
@@ -6484,7 +6550,7 @@ def edit_personal_post(post_id):
                 for old_ver in oldest:
                     note_versions_conf.delete_one({'_id': old_ver['_id']})
 
-        encrypted_content = encrypt_note(content)
+        encrypted_content = encrypt_note(content, user_id=current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
         personal_posts_conf.update_one(
             {'_id': obj_id},
@@ -6570,7 +6636,7 @@ def sync_personal_post(post_id):
 
         # Check if content is actually different
         if note.get('content') == original_note.get('content'):
-            decrypted = decrypt_note(note.get('content', ''))
+            decrypted = decrypt_note(note.get('content', ''), user_id=current_user.id)
             return jsonify({
                 'success': True,
                 'content': decrypted,
@@ -6610,7 +6676,7 @@ def sync_personal_post(post_id):
             )
 
             # Re-index original in Meilisearch
-            decrypted = decrypt_note(note.get('content', ''))
+            decrypted = decrypt_note(note.get('content', ''), user_id=current_user.id)
             index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
@@ -6654,7 +6720,7 @@ def sync_personal_post(post_id):
             )
 
             # Re-index clone in Meilisearch
-            decrypted = decrypt_note(original_note.get('content', ''))
+            decrypted = decrypt_note(original_note.get('content', ''), user_id=current_user.id)
             index_note_to_meili(post_id, decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER for real-time sync
@@ -6880,8 +6946,9 @@ def view_shared_note(share_id):
     if not note:
         abort(404)
 
-    # Decrypt note content
-    content = decrypt_note(note.get('content', ''))
+    # Decrypt note content (note belongs to the share owner)
+    note_owner_id = str(share.get('owner_id', note.get('user_id', '')))
+    content = decrypt_note(note.get('content', ''), user_id=note_owner_id)
     
     # Determine surprise theme (with compatibility for old is_valentine flag)
     surprise_theme = share.get('surprise_theme')
@@ -6992,10 +7059,14 @@ def api_save_shared_note(share_id):
 
     # Clone the note for the current user
     # Note: We track source_note_id to allow original owners to "Delete for Everyone"
+    # Re-encrypt with the cloning user's per-user key for data sovereignty
+    original_owner_id = str(share.get('owner_id', original_note.get('user_id', '')))
+    plaintext = decrypt_note(original_note.get('content', ''), user_id=original_owner_id)
+    cloned_encrypted = encrypt_note(plaintext, user_id=current_user.id)
     personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
-        'content': original_note.get('content'),
-        'encrypted': original_note.get('encrypted', True),
+        'content': cloned_encrypted,
+        'encrypted': True,
         'reference': original_note.get('reference', ''),
         'tags': original_note.get('tags', []),
         'created_at': datetime.datetime.now(datetime.timezone.utc),
@@ -7037,7 +7108,6 @@ def handle_discussion_new_comment(data):
         emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
-@csrf.exempt
 @limits(calls=10, period=60)
 def api_edit_shared_note(share_id):
     """Allows editing a shared note if permission granted."""
@@ -7063,7 +7133,9 @@ def api_edit_shared_note(share_id):
         return jsonify({'error': 'Content cannot be empty'}), 400
 
     content = content.strip()[:8000]
-    encrypted_content = encrypt_note(content)
+    # Encrypt using the note owner's key
+    note_owner_id = str(share.get('owner_id', ''))
+    encrypted_content = encrypt_note(content, user_id=note_owner_id if note_owner_id else None)
 
     # --- Version Control: snapshot previous content before overwriting ---
     note = personal_posts_conf.find_one({'_id': share['note_id']})
@@ -7178,7 +7250,7 @@ def api_get_note_versions(post_id):
     result = []
     for v in versions:
         # Decrypt the content for the owner to view
-        decrypted = decrypt_note(v['content']) if v.get('encrypted', True) else v.get('content', '')
+        decrypted = decrypt_note(v['content'], user_id=current_user.id) if v.get('encrypted', True) else v.get('content', '')
         result.append({
             '_id': str(v['_id']),
             'editor_name': v.get('editor_name', 'Unknown'),
@@ -7517,7 +7589,7 @@ def mobile_auth():
                 flash(f"Welcome back to the app, {user['username']}!", "success")
                 resp = redirect(url_for('home'))
                 resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
-                                httponly=False, secure=True, samesite='Lax')
+                                httponly=True, secure=True, samesite='Lax')
                 return resp
             else:
                 app.logger.warning(f"Mobile auth token valid but user {user_id} not found.")
@@ -7534,10 +7606,13 @@ def mobile_auth():
 @csrf.exempt
 @limits(calls=10, period=60)
 def app_reauth():
-    """Re-authenticate a native app user using a persistent localStorage token.
-    This avoids re-login when Android WebView loses session cookies on app restart."""
-    data = request.get_json() or {}
+    """Re-authenticate a native app user using a persistent token.
+    Accepts token from JSON body (legacy) or from httpOnly cookie."""
+    data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
+    # Fallback: read from httpOnly cookie (preferred, no JS access needed)
+    if not token:
+        token = request.cookies.get('x_app_token', '').strip()
     if not token:
         return jsonify({'error': 'No token'}), 400
 

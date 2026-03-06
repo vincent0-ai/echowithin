@@ -1614,22 +1614,30 @@
             return d.toLocaleDateString();
         }
 
+        function escapeHTML(str) {
+            var div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
         function createCommentHTML(comment, depth = 0) {
             const repliesHTML = (comment.replies || []).map(r => createCommentHTML(r, depth + 1)).join('');
             const isReply = depth > 0;
             const containerClass = isReply ? 'reply-card' : 'comment-card';
             const isAuthor = IS_AUTHENTICATED && comment.author_name === CURRENT_USER_NAME;
+            const safeAuthor = escapeHTML(comment.author_name || 'Unknown');
+            const safeId = escapeHTML(comment._id || '');
 
             return `
-                    <div class="${containerClass}" data-comment-id="${comment._id}">
+                    <div class="${containerClass}" data-comment-id="${safeId}">
                         <div class="comment-header">
-                            <span class="comment-author"><i class="fas fa-user-circle"></i> ${comment.author_name}</span>
+                            <span class="comment-author"><i class="fas fa-user-circle"></i> ${safeAuthor}</span>
                             <span class="comment-time">${timeAgo(comment.created_at)}</span>
                         </div>
                         <div class="comment-body">${comment.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
                         <div class="comment-footer">
                             ${IS_AUTHENTICATED ? `<button class="reply-btn" onclick="toggleReplyForm(this)"><i class="fas fa-reply"></i> Reply</button>` : ''}
-                            ${isAuthor ? `<button class="delete-btn" onclick="deleteComment('${comment._id}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
+                            ${isAuthor ? `<button class="delete-btn" onclick="deleteComment('${safeId}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
                         </div>
                         ${repliesHTML ? `<div class="replies-container">${repliesHTML}</div>` : ''}
                     </div>

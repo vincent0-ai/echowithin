@@ -2,17 +2,17 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v14';
-const STATIC_CACHE = 'echowithin-static-v14';
-const PAGES_CACHE = 'echowithin-pages-v14';
-const POSTS_CACHE = 'echowithin-posts-v14';
+const CACHE_NAME = 'echowithin-v15';
+const STATIC_CACHE = 'echowithin-static-v15';
+const PAGES_CACHE = 'echowithin-pages-v15';
+const POSTS_CACHE = 'echowithin-posts-v15';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
   '/static/style.css',
   '/static/custom_styles.css',
   '/static/script.js',
-  '/static/logo.png',
+  '/static/logo-192.png',
   '/static/manifest.json'
 ];
 
@@ -251,8 +251,8 @@ self.addEventListener('push', event => {
     body: 'You have a new notification',
     url: '/',
     tag: 'echowithin',
-    icon: '/static/logo.png',
-    badge: '/static/logo.png'
+    icon: '/static/logo-192.png',
+    badge: '/static/logo-96.png'
   };
 
   if (event.data) {
@@ -266,8 +266,8 @@ self.addEventListener('push', event => {
 
   const options = {
     body: data.body,
-    icon: data.icon || '/static/logo.png',
-    badge: data.badge || '/static/logo.png',
+    icon: data.icon || '/static/logo-192.png',
+    badge: data.badge || '/static/logo-96.png',
     tag: data.tag || 'echowithin',
     data: { url: data.url || '/' },
     vibrate: [100, 50, 100],
@@ -291,7 +291,7 @@ self.addEventListener('push', event => {
 async function updateBadgeFromServer() {
   if (!('setAppBadge' in navigator)) return;
   try {
-    const response = await fetch('/api/notifications/unread-count');
+    const response = await fetch('/api/notifications/unread-count', { credentials: 'same-origin' });
     if (response.ok) {
       const data = await response.json();
       const count = data.count || 0;

@@ -94,6 +94,21 @@
         <p id="status-text">Connecting to server...</p>
     </div>
 
+    <div class="container error-state" id="offline-container">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: 16px;">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+            <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+        </svg>
+        <h2>You're Offline</h2>
+        <p>Please check your internet connection and try again.</p>
+        <button id="retry-btn">Retry</button>
+    </div>
+
     <script src="capacitor.js"></script>
     <script>
         const LIVE_SITE = 'https://blog.echowithin.xyz';
@@ -191,22 +206,51 @@
                 return;
             }
 
-            // All retries failed — redirect anyway and let the service worker
-            // serve cached content. The SW has offline fallback pages cached.
-            // Only show offline UI if navigator says we're truly offline.
-            if (navigator.onLine) {
-                // Likely a transient issue — redirect and let SW handle it
-                document.getElementById('status-text').textContent = 'Loading...';
-                redirectStarted = true;
-                window.location.replace(targetUrl);
-                return;
-            }
-
-            // Truly offline — still redirect so SW can serve cached pages
-            document.getElementById('status-text').textContent = 'Loading offline content...';
+            // Server not reachable — but try anyway to let the service worker
+            // serve cached content if available. The SW on blog.echowithin.xyz
+            // caches pages after user's first visit.
+            document.getElementById('status-text').textContent = 'Loading cached content...';
+            
+            // Set a timeout — if page doesn't load within 8s, show offline UI
+            // (This handles the case where SW doesn't have cached content)
+            const offlineTimeout = setTimeout(() => {
+                if (!document.hidden) {
+                    showOfflineUI();
+                }
+            }, 8000);
+            
+            // Store timeout ID so we can cancel it if navigation succeeds
+            window._offlineTimeout = offlineTimeout;
+            
             redirectStarted = true;
             window.location.replace(targetUrl);
         }
+
+        function showOfflineUI() {
+            document.getElementById('loader-container').style.display = 'none';
+            const offlineContainer = document.getElementById('offline-container');
+            offlineContainer.style.display = 'flex';
+        }
+
+        function hideOfflineUI() {
+            document.getElementById('offline-container').style.display = 'none';
+            document.getElementById('loader-container').style.display = 'flex';
+            document.getElementById('status-text').textContent = 'Connecting to server...';
+        }
+
+        // Retry button handler
+        document.getElementById('retry-btn').addEventListener('click', function() {
+            hideOfflineUI();
+            run();
+        });
+
+        // Auto-retry when connection is restored
+        window.addEventListener('online', function() {
+            if (!redirectStarted) {
+                hideOfflineUI();
+                run();
+            }
+        });
 
         run();
     </script>

@@ -1703,6 +1703,14 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                             notification_count=badge_count,
                         ),
                     ),
+                    apns=messaging.APNSConfig(
+                        payload=messaging.APNSPayload(
+                            aps=messaging.Aps(
+                                badge=badge_count,
+                                sound='default',
+                            ),
+                        ),
+                    ),
                 )
                 messaging.send(message)
                 sent_count += 1
@@ -1749,6 +1757,14 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                         color='#6366f1',
                         channel_id='default',
                         notification_count=badge_count,
+                    ),
+                ),
+                apns=messaging.APNSConfig(
+                    payload=messaging.APNSPayload(
+                        aps=messaging.Aps(
+                            badge=badge_count,
+                            sound='default',
+                        ),
                     ),
                 ),
             ))

@@ -271,7 +271,7 @@
         {% endif %}
 
         <!-- Discussion Section -->
-        <div class="discussion-section">
+        <div class="discussion-section{% if surprise_theme != 'none' %} surprise-discussion-hidden{% endif %}">
             <h3 class="discussion-title">
                 Discussion
                 <span id="comment-count" class="comment-count"></span>
@@ -1071,6 +1071,10 @@
             backface-visibility: hidden;
         }
 
+        .surprise-discussion-hidden {
+            display: none;
+        }
+
         /* Animation container - fixed overlay to prevent layout reflow */
         .animation-container {
             position: fixed;
@@ -1825,6 +1829,12 @@
                     }).catch(e => console.error('Playback failed:', e));
                 }
                 startSurpriseAnimation(surpriseTheme);
+
+                // Show the discussion section after reveal
+                const discussionSection = document.querySelector('.surprise-discussion-hidden');
+                if (discussionSection) {
+                    discussionSection.classList.remove('surprise-discussion-hidden');
+                }
 
                 // Typewriter effect
                 if (useTypewriter) {

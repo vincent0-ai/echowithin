@@ -6,9 +6,9 @@
 {% endblock %}
 
 {% block head_meta %}
-<link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
-<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
 {% endblock %}
 
@@ -210,7 +210,7 @@
                 // 3. UX: Disable button and show loading state
                 if (submitButton) {
                     submitButton.disabled = true;
-                    submitButton.textContent = 'Submitting...';
+                    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
                 }
 
                 // The form will now proceed to submit normally

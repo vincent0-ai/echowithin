@@ -2271,6 +2271,8 @@ def admin_system_health():
             atlas_client.close()
             if meta and meta.get('timestamp'):
                 ts = meta['timestamp']
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=datetime.timezone.utc)
                 age_min = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
                 health['backup'] = {
                     'status': 'healthy' if age_min < 420 else 'stale',

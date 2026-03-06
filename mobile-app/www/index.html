@@ -92,11 +92,6 @@
         <div class="spinner"></div>
         <h2>EchoWithin</h2>
         <p id="status-text">Connecting to server...</p>
-
-        <div id="retry-container" class="error-state">
-            <p>Connection is taking longer than usual.</p>
-            <button onclick="window.location.reload()">Try Again</button>
-        </div>
     </div>
 
     <script src="capacitor.js"></script>
@@ -125,23 +120,19 @@
         async function run() {
             console.log("Bridge: Starting...");
 
-            // 1. Give the DOM a tiny moment to render the message
             await new Promise(r => setTimeout(r, 100));
 
             const { SplashScreen, App, Browser } = (window.Capacitor && window.Capacitor.Plugins) || {};
 
-            // 2. Hide splash screen AFTER we are sure the bridge UI is visible
             if (SplashScreen) {
                 try {
-                    console.log("Bridge: Hiding Splash...");
                     await SplashScreen.hide();
                 } catch (e) { console.error(e); }
             }
 
-            // 3. Set up deep link listeners
+            // Set up deep link listeners
             if (App) {
                 App.addListener('appUrlOpen', function (event) {
-                    console.log("Bridge: appUrlOpen received:", event.url);
                     const targetUrl = parseDeepLink(event.url);
                     if (targetUrl) {
                         if (Browser) Browser.close().catch(() => { });
@@ -150,7 +141,7 @@
                 });
             }
 
-            // 4. Detect cold-start deep link
+            // Detect cold-start deep link
             let path = '';
             if (App) {
                 try {
@@ -167,8 +158,8 @@
 
             const targetUrl = path ? LIVE_SITE + path : LIVE_SITE;
 
-            // 5. Check connectivity before redirecting
-            // Use a real fetch to the server as navigator.onLine is unreliable
+            // Connectivity check with retry — the WebView network stack
+            // may not be ready on cold start, so retry a few times
             async function canReachServer() {
                 try {
                     const resp = await fetch(LIVE_SITE + '/static/manifest.json', {
@@ -182,56 +173,42 @@
                 }
             }
 
-            // 6. Try to reach server; if offline, wait for reconnection
-            function showOfflineState() {
-                document.getElementById('status-text').textContent = "You're offline";
-                document.getElementById('retry-container').querySelector('p').textContent =
-                    'Please check your internet connection and try again.';
-                document.getElementById('retry-container').style.display = 'block';
+            // Retry connectivity up to 3 times with short delays
+            let reachable = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                reachable = await canReachServer();
+                if (reachable) break;
+                // Wait before next attempt (network stack may still be initializing)
+                await new Promise(r => setTimeout(r, 1000));
+                document.getElementById('status-text').textContent =
+                    attempt < 3 ? 'Still connecting...' : 'Checking connection...';
             }
 
-            const isReachable = await canReachServer();
-
-            if (isReachable) {
-                // Server reachable — redirect after brief delay for smooth feel
-                setTimeout(() => {
-                    redirectStarted = true;
-                    window.location.replace(targetUrl);
-                }, 600);
-            } else {
-                // Offline — show offline state and auto-retry when back online
-                showOfflineState();
-                window.addEventListener('online', async () => {
-                    document.getElementById('status-text').textContent = 'Reconnecting...';
-                    document.getElementById('status-text').style.display = 'block';
-                    document.getElementById('retry-container').style.display = 'none';
-                    // Brief delay then retry
-                    const recheck = await canReachServer();
-                    if (recheck) {
-                        redirectStarted = true;
-                        window.location.replace(targetUrl);
-                    } else {
-                        showOfflineState();
-                    }
-                });
+            if (reachable) {
+                // Server reachable — redirect immediately
+                redirectStarted = true;
+                window.location.replace(targetUrl);
+                return;
             }
 
-            // 7. Show retry button after 8 seconds if redirect hasn't started
-            setTimeout(() => {
-                if (redirectStarted) return;
-                document.getElementById('status-text').style.display = 'none';
-                document.getElementById('retry-container').style.display = 'block';
-            }, 8000);
+            // All retries failed — redirect anyway and let the service worker
+            // serve cached content. The SW has offline fallback pages cached.
+            // Only show offline UI if navigator says we're truly offline.
+            if (navigator.onLine) {
+                // Likely a transient issue — redirect and let SW handle it
+                document.getElementById('status-text').textContent = 'Loading...';
+                redirectStarted = true;
+                window.location.replace(targetUrl);
+                return;
+            }
+
+            // Truly offline — still redirect so SW can serve cached pages
+            document.getElementById('status-text').textContent = 'Loading offline content...';
+            redirectStarted = true;
+            window.location.replace(targetUrl);
         }
 
         run();
-
-        // 8. Global safety fallback — only redirect if we're likely online
-        setTimeout(() => {
-            if (!redirectStarted && navigator.onLine) {
-                window.location.replace(LIVE_SITE);
-            }
-        }, 15000);
     </script>
 </body>
 

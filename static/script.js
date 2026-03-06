@@ -1,6 +1,6 @@
-'use strict'
+'use strict';
 
-// ==================== Scroll Position Restore ====================
+// ==================== Scroll Position Restore ==
 // Save scroll position when clicking a post link, restore when navigating back
 (function() {
     var LIST_PAGES = ['/blog', '/all_posts', '/home', '/personal_space'];

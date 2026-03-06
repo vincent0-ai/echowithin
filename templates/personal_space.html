@@ -1690,6 +1690,34 @@
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <script>
+    // --- Flash Message Helper ---
+    window.showFlashMessage = function (message, category) {
+        const container = document.querySelector('.flash-messages');
+        if (!container) return;
+        const cls = (category === 'error' || category === 'danger' || category === 'warning') ? 'alert-danger' : 'alert-success';
+        const div = document.createElement('div');
+        div.className = 'alert ' + cls;
+        div.textContent = message;
+        container.appendChild(div);
+        setTimeout(() => {
+            div.style.transition = 'opacity 0.5s ease-out';
+            div.style.opacity = '0';
+            setTimeout(() => div.remove(), 500);
+        }, 5000);
+    };
+
+    // Show flash from previous page action (survives reload)
+    (function () {
+        const pendingFlash = sessionStorage.getItem('ew_pending_flash');
+        if (pendingFlash) {
+            sessionStorage.removeItem('ew_pending_flash');
+            try {
+                const f = JSON.parse(pendingFlash);
+                if (f.message) window.showFlashMessage(f.message, f.category || 'success');
+            } catch (e) {}
+        }
+    })();
+
     // --- Immediate Event Handlers & Global Helpers ---
     (function () {
         // --- Socket.IO Integration ---
@@ -2029,16 +2057,18 @@
             }
         });
 
-        // 2. Delete Form Handler
-        document.addEventListener('submit', (e) => {
-            const form = e.target;
-            if (form && form.classList.contains('delete-note-form')) {
-                e.preventDefault();
-                window.pendingDeleteForm = form;
-                const hasShares = form.dataset.hasShares === 'true';
-                const hasClones = form.dataset.hasClones === 'true';
-                if (typeof window.openDeleteModal === 'function') window.openDeleteModal(hasShares, hasClones);
-            }
+        // 2. Delete Button Click Handler (more reliable than submit event)
+        document.addEventListener('click', (e) => {
+            const deleteBtn = e.target.closest('.delete-note-form .delete-btn');
+            if (!deleteBtn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const form = deleteBtn.closest('.delete-note-form');
+            if (!form) return;
+            window.pendingDeleteForm = form;
+            const hasShares = form.dataset.hasShares === 'true';
+            const hasClones = form.dataset.hasClones === 'true';
+            if (typeof window.openDeleteModal === 'function') window.openDeleteModal(hasShares, hasClones);
         });
 
         // Save Edit Handler
@@ -3391,7 +3421,11 @@
                     })
                 }).then(resp => {
                     if (resp.ok) {
-                        // Success — reload to show new note
+                        // Success — set flash and reload to show new note
+                        sessionStorage.setItem('ew_pending_flash', JSON.stringify({
+                            message: 'Personal note added securely.',
+                            category: 'success'
+                        }));
                         window.location.reload();
                     } else {
                         throw new Error('Server error');

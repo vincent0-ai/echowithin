@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v12';
-const STATIC_CACHE = 'echowithin-static-v12';
-const PAGES_CACHE = 'echowithin-pages-v12';
-const POSTS_CACHE = 'echowithin-posts-v12';
+const CACHE_NAME = 'echowithin-v13';
+const STATIC_CACHE = 'echowithin-static-v13';
+const PAGES_CACHE = 'echowithin-pages-v13';
+const POSTS_CACHE = 'echowithin-posts-v13';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -26,21 +26,22 @@ const PAGES_TO_CACHE = [
   '/about'
 ];
 
+// Minimal offline HTML served when /offline isn't cached
+const FALLBACK_OFFLINE_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline - EchoWithin</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f8f9fa;color:#1e293b;text-align:center}button{margin-top:1rem;padding:.75rem 1.5rem;background:#667eea;color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer}</style></head><body><div><h1>You're Offline</h1><p>Please check your connection and try again.</p><button onclick="location.reload()">Try Again</button></div><script>window.addEventListener('online',()=>location.reload());if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()&&window.Capacitor.Plugins&&window.Capacitor.Plugins.SplashScreen){window.Capacitor.Plugins.SplashScreen.hide();}</script></body></html>`;
+
 // Install event: cache critical assets
 self.addEventListener('install', event => {
   event.waitUntil(
     Promise.all([
-      // Cache static assets
+      // Cache static assets (non-critical — swallow failures)
       caches.open(STATIC_CACHE).then(cache => {
         return cache.addAll(STATIC_ASSETS).catch(err => {
           console.warn('Static cache addAll failed:', err);
         });
       }),
-      // Cache main pages
+      // Cache main pages — this MUST succeed (especially /offline)
       caches.open(PAGES_CACHE).then(cache => {
-        return cache.addAll(PAGES_TO_CACHE).catch(err => {
-          console.warn('Pages cache addAll failed:', err);
-        });
+        return cache.addAll(PAGES_TO_CACHE);
       })
     ])
   );
@@ -74,7 +75,11 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET') {
     if (request.mode === 'navigate') {
       event.respondWith(
-        fetch(request).catch(() => caches.match('/offline'))
+        fetch(request).catch(() => caches.match('/offline').then(offlinePage => {
+          return offlinePage || new Response(FALLBACK_OFFLINE_HTML, {
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }))
       );
     }
     return;
@@ -140,7 +145,11 @@ self.addEventListener('fetch', event => {
         .catch(() => {
           return caches.match(request).then(cachedResponse => {
             if (cachedResponse) return cachedResponse;
-            return caches.match('/offline');
+            return caches.match('/offline').then(offlinePage => {
+              return offlinePage || new Response(FALLBACK_OFFLINE_HTML, {
+                headers: { 'Content-Type': 'text/html' }
+              });
+            });
           });
         })
     );
@@ -166,7 +175,11 @@ self.addEventListener('fetch', event => {
               return cachedResponse;
             }
             // Return offline page if post not cached
-            return caches.match('/offline');
+            return caches.match('/offline').then(offlinePage => {
+              return offlinePage || new Response(FALLBACK_OFFLINE_HTML, {
+                headers: { 'Content-Type': 'text/html' }
+              });
+            });
           });
         })
     );
@@ -196,7 +209,12 @@ self.addEventListener('fetch', event => {
               if (pathMatch) {
                 return pathMatch;
               }
-              return caches.match('/offline');
+              return caches.match('/offline').then(offlinePage => {
+                // Always return a valid Response — never undefined
+                return offlinePage || new Response(FALLBACK_OFFLINE_HTML, {
+                  headers: { 'Content-Type': 'text/html' }
+                });
+              });
             });
           });
         })
@@ -204,16 +222,20 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Default: Network only — don't serve cached assets as pages
-  // If offline and none of the above handlers matched, show the offline page for navigations
+  // Default: Network only for remaining requests
   event.respondWith(
     fetch(request)
       .then(response => {
         return response;
       })
       .catch(() => {
-        if (request.mode === 'navigate' || request.headers.get('accept').includes('text/html')) {
-          return caches.match('/offline');
+        const acceptHeader = request.headers.get('accept') || '';
+        if (request.mode === 'navigate' || acceptHeader.includes('text/html')) {
+          return caches.match('/offline').then(offlinePage => {
+            return offlinePage || new Response(FALLBACK_OFFLINE_HTML, {
+              headers: { 'Content-Type': 'text/html' }
+            });
+          });
         }
         return caches.match(request);
       })

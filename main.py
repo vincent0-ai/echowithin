@@ -2211,6 +2211,79 @@ def admin_traffic():
         return jsonify({'error': 'failed to compute traffic metrics'}), 500
 
 
+@app.route('/admin/system_health')
+@login_required
+@admin_required
+def admin_system_health():
+    """Return system component health: Meilisearch, Redis, RQ queue, last backup."""
+    health = {}
+
+    # --- Meilisearch ---
+    try:
+        if meili_client:
+            meili_client.health()
+            posts_stats = meili_index.get_stats() if meili_index else {}
+            notes_stats = meili_notes_index.get_stats() if meili_notes_index else {}
+            health['meilisearch'] = {
+                'status': 'healthy',
+                'posts_docs': posts_stats.get('numberOfDocuments', 0) if isinstance(posts_stats, dict) else getattr(posts_stats, 'number_of_documents', 0),
+                'notes_docs': notes_stats.get('numberOfDocuments', 0) if isinstance(notes_stats, dict) else getattr(notes_stats, 'number_of_documents', 0),
+            }
+        else:
+            health['meilisearch'] = {'status': 'not_configured'}
+    except Exception as e:
+        health['meilisearch'] = {'status': 'error', 'detail': str(e)}
+
+    # --- Redis ---
+    try:
+        redis_cache.ping()
+        info = redis_cache.info(section='memory')
+        health['redis'] = {
+            'status': 'healthy',
+            'used_memory_human': info.get('used_memory_human', '?'),
+            'connected_clients': redis_cache.info(section='clients').get('connected_clients', '?'),
+        }
+    except Exception as e:
+        health['redis'] = {'status': 'error', 'detail': str(e)}
+
+    # --- RQ Queue ---
+    try:
+        from rq import Queue as RQQueue
+        redis_conn = redis.from_url(app.config.get('RQ_REDIS_URL', ''))
+        q = RQQueue(connection=redis_conn)
+        failed_q = RQQueue('failed', connection=redis_conn)
+        health['rq'] = {
+            'status': 'healthy',
+            'queued_jobs': len(q),
+            'failed_jobs': len(failed_q),
+        }
+    except Exception as e:
+        health['rq'] = {'status': 'error', 'detail': str(e)}
+
+    # --- Last Atlas Backup ---
+    try:
+        atlas_uri = os.environ.get('ATLAS_MONGODB_CONNECTION', '').strip()
+        if atlas_uri:
+            from pymongo import MongoClient as _MC
+            atlas_client = _MC(atlas_uri, serverSelectionTimeoutMS=5000)
+            meta = atlas_client['echowithin_db']['_backup_meta'].find_one({'_id': 'last_backup'})
+            atlas_client.close()
+            if meta and meta.get('timestamp'):
+                ts = meta['timestamp']
+                age_min = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
+                health['backup'] = {
+                    'status': 'healthy' if age_min < 420 else 'stale',
+                    'last_backup': ts.isoformat(),
+                    'minutes_ago': round(age_min),
+                }
+            else:
+                health['backup'] = {'status': 'no_backup_found'}
+        else:
+            health['backup'] = {'status': 'not_configured'}
+    except Exception as e:
+        health['backup'] = {'status': 'error', 'detail': str(e)}
+
+    return jsonify(health)
 
 
 @app.route('/admin/reindex_meili', methods=['POST'])
@@ -6028,6 +6101,169 @@ def profile_settings(username):
 
     # For GET, render settings page
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
+
+
+@app.route('/profile/<username>/export_data', methods=['POST'])
+@login_required
+@limits(calls=3, period=TIME)
+def export_data(username):
+    """Export all user data as a downloadable JSON file."""
+    if username != current_user.username:
+        abort(403)
+
+    user = users_conf.find_one({'username': username})
+    if not user:
+        abort(404)
+
+    user_id = user['_id']
+
+    # Build export payload
+    export = {
+        'account': {
+            'username': user.get('username'),
+            'email': user.get('email'),
+            'bio': user.get('bio', ''),
+            'join_date': str(user.get('join_date', '')),
+            'notification_preference': user.get('notification_preference', 'weekly'),
+            'profile_image_url': user.get('profile_image_url'),
+        },
+        'posts': [],
+        'comments': [],
+        'personal_notes': [],
+        'saved_post_ids': [str(pid) for pid in user.get('saved_posts', [])],
+    }
+
+    # Posts authored by user
+    for post in posts_conf.find({'author': user.get('username')}):
+        export['posts'].append({
+            'id': str(post['_id']),
+            'title': post.get('title', ''),
+            'content': post.get('content', ''),
+            'created_at': str(post.get('created_at', '')),
+            'tags': post.get('tags', []),
+        })
+
+    # Comments authored by user
+    for comment in comments_conf.find({'author': user.get('username')}):
+        export['comments'].append({
+            'id': str(comment['_id']),
+            'post_id': str(comment.get('post_id', '')),
+            'content': comment.get('content', ''),
+            'created_at': str(comment.get('created_at', '')),
+        })
+
+    # Personal notes (decrypted)
+    for note in personal_posts_conf.find({'user_id': user_id}):
+        export['personal_notes'].append({
+            'id': str(note['_id']),
+            'title': note.get('title', ''),
+            'content': decrypt_note(note.get('content', ''), user_id=str(user_id)),
+            'created_at': str(note.get('created_at', '')),
+            'updated_at': str(note.get('updated_at', '')),
+        })
+
+    data = json.dumps(export, indent=2, ensure_ascii=False)
+    response = make_response(data)
+    response.headers['Content-Type'] = 'application/json; charset=utf-8'
+    response.headers['Content-Disposition'] = f'attachment; filename=echowithin_data_{username}.json'
+    return response
+
+
+@app.route('/profile/<username>/delete_account', methods=['POST'])
+@login_required
+@limits(calls=5, period=TIME)
+def delete_account(username):
+    """Permanently delete a user account and all associated data."""
+    if username != current_user.username:
+        abort(403)
+
+    user = users_conf.find_one({'username': username})
+    if not user:
+        abort(404)
+
+    # Verify password (or confirm for Google-only accounts)
+    is_google_only = user.get('google_signup') and not user.get('password')
+    if not is_google_only:
+        password = request.form.get('password', '')
+        if not password or not check_password_hash(user['password'], password):
+            flash('Incorrect password. Account deletion cancelled.', 'danger')
+            return redirect(url_for('profile_settings', username=username))
+    else:
+        # Google-only users must confirm via a hidden field
+        confirm = request.form.get('confirm_delete', '')
+        if confirm != 'DELETE':
+            flash('Please confirm deletion. Account deletion cancelled.', 'danger')
+            return redirect(url_for('profile_settings', username=username))
+
+    user_id = user['_id']
+    user_username = user['username']
+
+    try:
+        # Delete Cloudinary profile image
+        if user.get('profile_image_public_id'):
+            try:
+                cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
+            except Exception as e:
+                app.logger.error(f"Cloudinary avatar deletion failed during account delete for {user_username}: {e}")
+
+        # Delete post images from Cloudinary
+        user_posts = list(posts_conf.find({'author': user_username}))
+        for post in user_posts:
+            if post.get('image_public_id'):
+                try:
+                    cloudinary.uploader.destroy(post['image_public_id'], resource_type="image")
+                except Exception:
+                    pass
+
+        # Remove personal notes from Meilisearch
+        note_ids = [n['_id'] for n in personal_posts_conf.find({'user_id': user_id}, {'_id': 1})]
+        if note_ids:
+            remove_notes_from_meili(note_ids)
+
+        # Remove posts from Meilisearch
+        post_ids = [p['_id'] for p in user_posts]
+        if post_ids and meili_index:
+            try:
+                meili_index.delete_documents(ids=[str(pid) for pid in post_ids])
+            except Exception as e:
+                app.logger.error(f"Failed to remove posts from Meili for {user_username}: {e}")
+
+        # Cascade delete from all collections
+        posts_conf.delete_many({'author': user_username})
+        comments_conf.delete_many({'author': user_username})
+        personal_posts_conf.delete_many({'user_id': user_id})
+        note_shares_conf.delete_many({'owner_id': user_id})
+        note_versions_conf.delete_many({'user_id': user_id})
+        note_discussions_conf.delete_many({'user_id': user_id})
+        push_subscriptions_conf.delete_many({'user_id': str(user_id)})
+        fcm_tokens_conf.delete_many({'user_id': str(user_id)})
+        user_post_views_conf.delete_many({'user_id': user_id})
+        unlock_notifications_conf.delete_many({'user_id': user_id})
+        app_tokens_conf.delete_many({'user_id': str(user_id)})
+        newsletter_conf.delete_many({'email': user.get('email')})
+
+        # Remove this user's ID from others' saved_posts arrays
+        users_conf.update_many(
+            {'saved_posts': {'$in': post_ids}},
+            {'$pullAll': {'saved_posts': post_ids}}
+        )
+
+        # Finally, delete the user document
+        users_conf.delete_one({'_id': user_id})
+
+        app.logger.info(f"Account deleted: {user_username} (id={user_id})")
+
+        # Log out and redirect
+        logout_user()
+        session.clear()
+        flash('Your account and all associated data have been permanently deleted.', 'success')
+        return redirect(url_for('home'))
+
+    except Exception as e:
+        app.logger.error(f"Account deletion failed for {user_username}: {e}", exc_info=True)
+        flash('An error occurred while deleting your account. Please try again or contact support.', 'danger')
+        return redirect(url_for('profile_settings', username=username))
+
 
 @app.route('/personal_space')
 @login_required

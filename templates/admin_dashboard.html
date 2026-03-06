@@ -50,6 +50,10 @@
   <ul id="active-now-list"></ul>
 
   <div class="chart-container"><canvas id="trafficChart"></canvas></div>
+
+  <!-- System Health Panel -->
+  <h3>System Health</h3>
+  <div id="health-panel" class="d-flex flex-wrap gap-3 mb-4" style="margin-top: 0.75rem;"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -58,9 +62,42 @@
     position: relative;
     margin-bottom: 2rem;
     height: 300px;
-    /* Default height for charts */
     width: 100%;
   }
+  .health-card {
+    flex: 1 1 200px;
+    max-width: 280px;
+    padding: 1rem 1.25rem;
+    border-radius: 10px;
+    background: #f9f9f9;
+    border-left: 4px solid #ccc;
+  }
+  .health-card.healthy  { border-left-color: #22c55e; }
+  .health-card.stale    { border-left-color: #f59e0b; }
+  .health-card.error    { border-left-color: #ef4444; }
+  .health-card.unknown  { border-left-color: #94a3b8; }
+  .health-card h4 {
+    margin: 0 0 0.4rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .health-card p {
+    margin: 0.15rem 0;
+    font-size: 0.82rem;
+    color: #555;
+  }
+  .health-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+  }
+  .health-card.healthy .health-dot  { background: #22c55e; }
+  .health-card.stale   .health-dot  { background: #f59e0b; }
+  .health-card.error   .health-dot  { background: #ef4444; }
 </style>
 
 <script>
@@ -227,6 +264,85 @@
     btn.disabled = false;
     btn.textContent = 'Reindex Posts';
   });
+
+  // --- System Health Panel ---
+  async function loadHealth() {
+    const panel = document.getElementById('health-panel');
+    panel.innerHTML = '<p style="color:#999;font-size:0.9rem;">Loading health data...</p>';
+    try {
+      const res = await fetch('/admin/system_health');
+      const h = await res.json();
+      let html = '';
+
+      // Meilisearch
+      const m = h.meilisearch || {};
+      const mCls = m.status === 'healthy' ? 'healthy' : (m.status === 'not_configured' ? 'unknown' : 'error');
+      html += `<div class="health-card ${mCls}">`;
+      html += `<h4><span class="health-dot"></span> Meilisearch</h4>`;
+      if (m.status === 'healthy') {
+        html += `<p>Posts indexed: <strong>${m.posts_docs}</strong></p>`;
+        html += `<p>Notes indexed: <strong>${m.notes_docs}</strong></p>`;
+      } else if (m.status === 'not_configured') {
+        html += `<p>Not configured</p>`;
+      } else {
+        html += `<p>${m.detail || 'Unreachable'}</p>`;
+      }
+      html += '</div>';
+
+      // Redis
+      const r = h.redis || {};
+      const rCls = r.status === 'healthy' ? 'healthy' : 'error';
+      html += `<div class="health-card ${rCls}">`;
+      html += `<h4><span class="health-dot"></span> Redis</h4>`;
+      if (r.status === 'healthy') {
+        html += `<p>Memory: <strong>${r.used_memory_human}</strong></p>`;
+        html += `<p>Clients: <strong>${r.connected_clients}</strong></p>`;
+      } else {
+        html += `<p>${r.detail || 'Unreachable'}</p>`;
+      }
+      html += '</div>';
+
+      // RQ Queue
+      const q = h.rq || {};
+      const qCls = q.status === 'healthy' ? (q.failed_jobs > 0 ? 'stale' : 'healthy') : 'error';
+      html += `<div class="health-card ${qCls}">`;
+      html += `<h4><span class="health-dot"></span> Job Queue (RQ)</h4>`;
+      if (q.status === 'healthy') {
+        html += `<p>Queued: <strong>${q.queued_jobs}</strong></p>`;
+        html += `<p>Failed: <strong>${q.failed_jobs}</strong></p>`;
+      } else {
+        html += `<p>${q.detail || 'Unreachable'}</p>`;
+      }
+      html += '</div>';
+
+      // Backup
+      const b = h.backup || {};
+      const bCls = b.status === 'healthy' ? 'healthy' : (b.status === 'stale' ? 'stale' : (b.status === 'not_configured' ? 'unknown' : 'error'));
+      html += `<div class="health-card ${bCls}">`;
+      html += `<h4><span class="health-dot"></span> Atlas Backup</h4>`;
+      if (b.status === 'healthy' || b.status === 'stale') {
+        const ago = b.minutes_ago;
+        const agoText = ago < 60 ? `${ago}m ago` : `${Math.floor(ago/60)}h ${ago%60}m ago`;
+        html += `<p>Last: <strong>${agoText}</strong></p>`;
+        if (b.status === 'stale') html += `<p style="color:#f59e0b;">Overdue (>7h)</p>`;
+      } else if (b.status === 'not_configured') {
+        html += `<p>Atlas not configured</p>`;
+      } else if (b.status === 'no_backup_found') {
+        html += `<p>No backup recorded</p>`;
+      } else {
+        html += `<p>${b.detail || 'Error'}</p>`;
+      }
+      html += '</div>';
+
+      panel.innerHTML = html;
+    } catch (e) {
+      panel.innerHTML = '<p style="color:#ef4444;font-size:0.9rem;">Failed to load health data.</p>';
+      console.debug('Health check failed', e);
+    }
+  }
+
+  loadHealth();
+  setInterval(loadHealth, 60000); // Refresh every 60 seconds
 
   document.getElementById('reindex-notes-btn').addEventListener('click', async () => {
     const btn = document.getElementById('reindex-notes-btn');

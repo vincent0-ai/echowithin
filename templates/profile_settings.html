@@ -115,13 +115,13 @@
 
     <!-- Backup Your Data -->
     <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #e0e0e0;">
-      <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem;"><i class="fas fa-download"></i> Backup Your Data</h2>
+      <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem;"> Backup Your Data</h2>
       <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Download a copy of all your data including your
         profile, posts, comments, and personal notes.</p>
       <form method="POST" action="{{ url_for('export_data', username=user.username) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn" style="background-color: #17a2b8; color: white; padding: 0.5rem 1.5rem;">
-          <i class="fas fa-file-export"></i> Download My Data
+           Download My Data
         </button>
       </form>
     </div>
@@ -152,7 +152,7 @@
         {% endif %}
         <button type="button" id="delete-account-btn" class="btn"
           style="background-color: #dc3545; color: white; padding: 0.5rem 1.5rem;">
-          <i class="fas fa-trash-alt"></i> Delete My Account
+           Delete My Account
         </button>
       </form>
     </div>

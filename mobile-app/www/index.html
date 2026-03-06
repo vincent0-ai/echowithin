@@ -132,6 +132,57 @@
             return null;
         }
 
+        // Request push notification permissions before redirecting
+        async function setupPushNotifications() {
+            const { PushNotifications } = (window.Capacitor && window.Capacitor.Plugins) || {};
+            
+            if (!PushNotifications) {
+                console.log('PushNotifications plugin not available');
+                return;
+            }
+
+            try {
+                // Check current permission status
+                const permStatus = await PushNotifications.checkPermissions();
+                console.log('Push permission status:', permStatus.receive);
+
+                if (permStatus.receive === 'prompt' || permStatus.receive === 'prompt-with-rationale') {
+                    // Request permission - this will show the system dialog
+                    document.getElementById('status-text').textContent = 'Setting up notifications...';
+                    const result = await PushNotifications.requestPermissions();
+                    console.log('Permission request result:', result.receive);
+
+                    if (result.receive === 'granted') {
+                        // Register for push notifications
+                        await PushNotifications.register();
+                        console.log('Registered for push notifications');
+                    }
+                } else if (permStatus.receive === 'granted') {
+                    // Already granted, just register
+                    await PushNotifications.register();
+                    console.log('Already have permission, registered for push');
+                }
+
+                // Listen for registration success to get the token
+                PushNotifications.addListener('registration', function(token) {
+                    console.log('FCM Token:', token.value);
+                    // Store the token - it will be sent to the server when user logs in
+                    try {
+                        localStorage.setItem('fcm_token', token.value);
+                    } catch (e) {
+                        console.error('Failed to store FCM token:', e);
+                    }
+                });
+
+                PushNotifications.addListener('registrationError', function(error) {
+                    console.error('Push registration error:', error);
+                });
+
+            } catch (e) {
+                console.error('Push notification setup error:', e);
+            }
+        }
+
         async function run() {
             console.log("Bridge: Starting...");
 
@@ -144,6 +195,10 @@
                     await SplashScreen.hide();
                 } catch (e) { console.error(e); }
             }
+
+            // Request push notification permissions early
+            // This must happen on the bridge page where Capacitor plugins are available
+            await setupPushNotifications();
 
             // Set up deep link listeners
             if (App) {

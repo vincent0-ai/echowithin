@@ -1697,8 +1697,8 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                     android=messaging.AndroidConfig(
                         priority='high',
                         notification=messaging.AndroidNotification(
-                            icon='ic_launcher',
-                            color='#6366f1',
+                            icon='ic_stat_notification',
+                            color='#3e2217',
                             channel_id='default',
                             notification_count=badge_count,
                         ),
@@ -1753,8 +1753,8 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                 android=messaging.AndroidConfig(
                     priority='high',
                     notification=messaging.AndroidNotification(
-                        icon='ic_launcher',
-                        color='#6366f1',
+                        icon='ic_stat_notification',
+                        color='#3e2217',
                         channel_id='default',
                         notification_count=badge_count,
                     ),

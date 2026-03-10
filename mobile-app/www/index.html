@@ -261,24 +261,13 @@
                 return;
             }
 
-            // Server not reachable — but try anyway to let the service worker
-            // serve cached content if available. The SW on blog.echowithin.xyz
-            // caches pages after user's first visit.
-            document.getElementById('status-text').textContent = 'Loading cached content...';
-            
-            // Set a timeout — if page doesn't load within 8s, show offline UI
-            // (This handles the case where SW doesn't have cached content)
-            const offlineTimeout = setTimeout(() => {
-                if (!document.hidden) {
-                    showOfflineUI();
-                }
-            }, 8000);
-            
-            // Store timeout ID so we can cancel it if navigation succeeds
-            window._offlineTimeout = offlineTimeout;
-            
-            redirectStarted = true;
-            window.location.replace(targetUrl);
+            // Server not reachable — DO NOT navigate to external URL when offline.
+            // The service worker on blog.echowithin.xyz cannot intercept navigation
+            // from this local bridge page. If we navigate while offline, the WebView
+            // will show "The webpage cannot be displayed" before any SW can help.
+            // Instead, show our offline UI immediately and let the user retry.
+            console.log('Bridge: Server unreachable, showing offline UI');
+            showOfflineUI();
         }
 
         function showOfflineUI() {

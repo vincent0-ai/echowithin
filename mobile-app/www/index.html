@@ -95,7 +95,9 @@
     </div>
 
     <div class="container error-state" id="offline-container">
-        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted); margin-bottom: 16px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+            style="color: var(--text-muted); margin-bottom: 16px;">
             <line x1="1" y1="1" x2="23" y2="23"></line>
             <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
             <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
@@ -135,7 +137,7 @@
         // Request push notification permissions before redirecting
         async function setupPushNotifications() {
             const { PushNotifications } = (window.Capacitor && window.Capacitor.Plugins) || {};
-            
+
             if (!PushNotifications) {
                 console.log('PushNotifications plugin not available');
                 return;
@@ -164,7 +166,7 @@
                 }
 
                 // Listen for registration success to get the token
-                PushNotifications.addListener('registration', function(token) {
+                PushNotifications.addListener('registration', function (token) {
                     console.log('FCM Token:', token.value);
                     // Store the token - it will be sent to the server when user logs in
                     try {
@@ -174,7 +176,7 @@
                     }
                 });
 
-                PushNotifications.addListener('registrationError', function(error) {
+                PushNotifications.addListener('registrationError', function (error) {
                     console.error('Push registration error:', error);
                 });
 
@@ -228,6 +230,12 @@
 
             const targetUrl = path ? LIVE_SITE + path : LIVE_SITE;
 
+            // Optional fail-safe: explicitly block redirection if offline so WebView doesn't throw ERR_INTERNET_DISCONNECTED
+            if (!navigator.onLine) {
+                showOfflineUI();
+                return;
+            }
+
             // Simple approach: just navigate to the live site
             // - If online: site loads normally
             // - If offline + cached: service worker serves cached content
@@ -251,13 +259,13 @@
         }
 
         // Retry button handler
-        document.getElementById('retry-btn').addEventListener('click', function() {
+        document.getElementById('retry-btn').addEventListener('click', function () {
             hideOfflineUI();
             run();
         });
 
         // Auto-retry when connection is restored
-        window.addEventListener('online', function() {
+        window.addEventListener('online', function () {
             if (!redirectStarted) {
                 hideOfflineUI();
                 run();

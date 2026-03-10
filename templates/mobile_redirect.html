@@ -13,7 +13,7 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background: linear-gradient(135deg, #8B0000 0%, #5C0000 100%);
+            background: linear-gradient(135deg, #3e2217 0%, #2a160f 100%);
             color: white;
             text-align: center;
             padding: 20px;
@@ -48,7 +48,7 @@
         .btn {
             display: inline-block;
             background: white;
-            color: #8B0000;
+            color: #3e2217;
             padding: 12px 30px;
             border-radius: 25px;
             text-decoration: none;
@@ -74,7 +74,7 @@
         
         <div id="manual-action" style="display: none;">
             <p>If the app doesn't open automatically:</p>
-            <a href="{{ deep_link_url | default(https_deep_link) | default(fallback_url) }}" class="btn" id="open-app-btn">Open EchoWithin App</a>
+            <a href="{{ https_deep_link | default(fallback_url) }}" class="btn" id="open-app-btn">Open EchoWithin App</a>
         </div>
         
         <div class="fallback">
@@ -83,47 +83,23 @@
     </div>
 
     <script>
-        const customSchemeUrl = "{{ deep_link_url | default('') }}";
-        const httpsDeepLink = "{{ https_deep_link | default('') }}";
-        const fallbackUrl = "{{ fallback_url }}";
-        
-        console.log('Mobile redirect page loaded');
-        console.log('Custom scheme URL:', customSchemeUrl);
-        console.log('HTTPS deep link:', httpsDeepLink);
-        console.log('Fallback URL:', fallbackUrl);
-        
-        // Build Android Intent URL from custom scheme - Chrome's official way to open apps
-        // Format: intent://host?query#Intent;scheme=X;package=Y;S.browser_fallback_url=Z;end
-        function buildIntentUrl(schemeUrl) {
-            if (!schemeUrl || !schemeUrl.startsWith('echowithin://')) return null;
-            var path = schemeUrl.substring('echowithin://'.length);
-            return 'intent://' + path + '#Intent;scheme=echowithin;package=xyz.echowithin.app;S.browser_fallback_url=' + encodeURIComponent(fallbackUrl) + ';end';
-        }
+        var httpsDeepLink = "{{ https_deep_link | default('') }}";
+        var fallbackUrl = "{{ fallback_url }}";
         
         function openApp() {
-            var intentUrl = buildIntentUrl(customSchemeUrl);
-            
-            if (intentUrl) {
-                // Intent URL is the most reliable way to open apps from Chrome on Android
-                console.log('Using Intent URL:', intentUrl);
-                window.location.href = intentUrl;
-            } else if (customSchemeUrl) {
-                // Fallback for non-Chrome browsers
-                console.log('Using custom scheme:', customSchemeUrl);
-                window.location.href = customSchemeUrl;
-            } else if (httpsDeepLink) {
-                console.log('Using HTTPS deep link:', httpsDeepLink);
+            // Use HTTPS deep link — Android's verified intent filter for blog.echowithin.xyz
+            // intercepts this and opens it in the app's WebView
+            if (httpsDeepLink) {
+                console.log('Redirecting via HTTPS deep link:', httpsDeepLink);
                 window.location.href = httpsDeepLink;
             } else {
+                console.log('No deep link, using fallback:', fallbackUrl);
                 window.location.href = fallbackUrl;
             }
             
-            // Show manual button after 3 seconds if redirect didn't work
+            // Show manual button after 3 seconds if auto-redirect didn't work
             setTimeout(function() {
                 document.getElementById('manual-action').style.display = 'block';
-                // Update manual button to use intent URL too
-                var btn = document.getElementById('open-app-btn');
-                if (btn && intentUrl) btn.href = intentUrl;
             }, 3000);
         }
         

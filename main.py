@@ -2864,6 +2864,12 @@ def google_callback():
         # Check if we need to redirect back to the mobile app
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
+            # If callback is running inside the app's WebView (intent filter intercepted the URL),
+            # the user is already logged in within the WebView context — just redirect to home
+            if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+                app.logger.info(f"Mobile login completed for {user['username']} (direct WebView callback)")
+                return redirect(url_for('home'))
+            
             app.logger.info(f"Mobile login completed for {user['username']}")
             
             # Generate a one-time login token to bridge the session to the app's webview
@@ -2938,6 +2944,12 @@ def google_callback():
         # Check if we need to redirect back to the mobile app
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
+            # If callback is running inside the app's WebView (intent filter intercepted the URL),
+            # the user is already logged in within the WebView context — just redirect to home
+            if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+                app.logger.info(f"Mobile signup completed for {username} (direct WebView callback)")
+                return redirect(url_for('home'))
+            
             app.logger.info(f"Mobile signup completed for {username}")
             
             # Generate OTLT for signup as well

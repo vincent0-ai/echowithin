@@ -5,11 +5,9 @@ const config: CapacitorConfig = {
     appName: 'EchoWithin',
     webDir: 'www',
     server: {
-        url: 'https://blog.echowithin.xyz',
         androidScheme: 'https',
         allowNavigation: ['blog.echowithin.xyz'],
-        errorPath: 'offline.html',
-        cleartext: true
+        errorPath: 'offline.html'
     },
     android: {
         backgroundColor: '#FFFFFF',

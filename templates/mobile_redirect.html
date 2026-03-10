@@ -92,31 +92,39 @@
         console.log('HTTPS deep link:', httpsDeepLink);
         console.log('Fallback URL:', fallbackUrl);
         
+        // Build Android Intent URL from custom scheme - Chrome's official way to open apps
+        // Format: intent://host?query#Intent;scheme=X;package=Y;S.browser_fallback_url=Z;end
+        function buildIntentUrl(schemeUrl) {
+            if (!schemeUrl || !schemeUrl.startsWith('echowithin://')) return null;
+            var path = schemeUrl.substring('echowithin://'.length);
+            return 'intent://' + path + '#Intent;scheme=echowithin;package=xyz.echowithin.app;S.browser_fallback_url=' + encodeURIComponent(fallbackUrl) + ';end';
+        }
+        
         function openApp() {
-            // Try custom scheme first (echowithin://) - always works with intent filter,
-            // no domain verification (assetlinks.json) needed unlike HTTPS App Links
-            if (customSchemeUrl) {
-                console.log('Attempting custom scheme redirect:', customSchemeUrl);
+            var intentUrl = buildIntentUrl(customSchemeUrl);
+            
+            if (intentUrl) {
+                // Intent URL is the most reliable way to open apps from Chrome on Android
+                console.log('Using Intent URL:', intentUrl);
+                window.location.href = intentUrl;
+            } else if (customSchemeUrl) {
+                // Fallback for non-Chrome browsers
+                console.log('Using custom scheme:', customSchemeUrl);
                 window.location.href = customSchemeUrl;
-                
-                // If custom scheme didn't trigger app open, try HTTPS link after delay
-                setTimeout(function() {
-                    if (httpsDeepLink) {
-                        console.log('Custom scheme may have failed, trying HTTPS:', httpsDeepLink);
-                        window.location.href = httpsDeepLink;
-                    }
-                    document.getElementById('manual-action').style.display = 'block';
-                }, 2000);
             } else if (httpsDeepLink) {
-                console.log('No custom scheme, trying HTTPS deep link:', httpsDeepLink);
+                console.log('Using HTTPS deep link:', httpsDeepLink);
                 window.location.href = httpsDeepLink;
-                setTimeout(function() {
-                    document.getElementById('manual-action').style.display = 'block';
-                }, 2000);
             } else {
-                console.log('No deep links available, using fallback');
                 window.location.href = fallbackUrl;
             }
+            
+            // Show manual button after 3 seconds if redirect didn't work
+            setTimeout(function() {
+                document.getElementById('manual-action').style.display = 'block';
+                // Update manual button to use intent URL too
+                var btn = document.getElementById('open-app-btn');
+                if (btn && intentUrl) btn.href = intentUrl;
+            }, 3000);
         }
         
         // Start redirect immediately

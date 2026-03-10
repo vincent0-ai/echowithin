@@ -256,18 +256,21 @@
 
             if (reachable) {
                 // Server reachable — redirect immediately
+                console.log('Bridge: Server reachable, navigating to:', targetUrl);
                 redirectStarted = true;
                 window.location.replace(targetUrl);
                 return;
             }
 
-            // Server not reachable — DO NOT navigate to external URL when offline.
-            // The service worker on blog.echowithin.xyz cannot intercept navigation
-            // from this local bridge page. If we navigate while offline, the WebView
-            // will show "The webpage cannot be displayed" before any SW can help.
-            // Instead, show our offline UI immediately and let the user retry.
-            console.log('Bridge: Server unreachable, showing offline UI');
-            showOfflineUI();
+            // Server not reachable — but still try to navigate!
+            // The service worker on blog.echowithin.xyz may have cached content.
+            // If SW can serve cached content → page loads successfully.
+            // If SW has no cache → Android WebViewClient catches the error and
+            // shows a nice offline page (see MainActivity.java).
+            console.log('Bridge: Server unreachable, attempting navigation for cached content...');
+            document.getElementById('status-text').textContent = 'Loading offline content...';
+            redirectStarted = true;
+            window.location.replace(targetUrl);
         }
 
         function showOfflineUI() {

@@ -119,10 +119,11 @@
         const switchLinks = document.querySelectorAll('.switch-tab');
         const forms = document.querySelectorAll('.auth-form');
 
-        // Detect if running in mobile app context
-        const isMobileApp = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        // Detect if running in mobile app context via user agent
+        // (Capacitor JS bridge is not available on the live site, only on the local bridge page)
+        const isMobileApp = navigator.userAgent.includes('EchoWithinApp');
         if (isMobileApp) {
-            console.log('Mobile app detected, setting up Google login for system browser...');
+            console.log('Mobile app detected via user agent, adding platform=mobile to Google login links');
             const googleLinks = document.querySelectorAll('.google-button');
             googleLinks.forEach(link => {
                 // Append platform param so server knows to use mobile redirect flow
@@ -134,22 +135,9 @@
                     if (link.href.includes('?')) link.href += '&platform=mobile';
                     else link.href += '?platform=mobile';
                 }
-
-                // Open in system browser (required by Google OAuth policy)
-                link.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    console.log('Opening Google Login in System Browser:', link.href);
-                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                        try {
-                            await window.Capacitor.Plugins.Browser.open({ url: link.href });
-                        } catch (err) {
-                            console.error('Failed to open browser:', err);
-                            window.open(link.href, '_system');
-                        }
-                    } else {
-                        window.open(link.href, '_system');
-                    }
-                });
+                // No need to intercept click - the link navigates normally to /google_login?platform=mobile
+                // Flask then redirects to accounts.google.com, which the Android WebView opens
+                // in the system browser (since Google is not in allowNavigation)
             });
         }
 

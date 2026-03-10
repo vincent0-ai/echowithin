@@ -5,10 +5,6 @@ const config: CapacitorConfig = {
     appName: 'EchoWithin',
     webDir: 'www',
     server: {
-        // Don't set 'url' here — the local bridge page (www/index.html)
-        // handles connectivity checks and offline state before redirecting
-        // to the live site. Setting url bypasses the bridge and causes
-        // "Web page not available" + stuck splash screen when offline.
         androidScheme: 'https',
         allowNavigation: ['blog.echowithin.xyz']
     },
@@ -22,10 +18,13 @@ const config: CapacitorConfig = {
     plugins: {
         SplashScreen: {
             launchShowDuration: 3000,
-            launchAutoHide: false,
+            launchAutoHide: true,
             backgroundColor: '#FFFFFF',
             showSpinner: true,
             androidScaleType: 'CENTER_CROP'
+        },
+        CapacitorCookies: {
+            enabled: true
         },
         StatusBar: {
             style: 'DARK',

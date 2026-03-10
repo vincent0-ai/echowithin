@@ -2746,7 +2746,10 @@ def google_login():
             app.logger.warning(f"Failed to backup OAuth state in Redis: {e}")
 
     # Support for mobile app redirection
+    # Detect mobile app via query param or user agent (EchoWithinApp appended by Capacitor config)
     platform = request.args.get('platform', 'desktop')
+    if platform != 'mobile' and 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+        platform = 'mobile'
     if platform == 'mobile':
         session['oauth_platform'] = 'mobile'
         # Also backup platform choice if Redis is available

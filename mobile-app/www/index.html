@@ -228,47 +228,12 @@
 
             const targetUrl = path ? LIVE_SITE + path : LIVE_SITE;
 
-            // Connectivity check with retry — the WebView network stack
-            // may not be ready on cold start, so retry a few times
-            async function canReachServer() {
-                try {
-                    const resp = await fetch(LIVE_SITE + '/static/manifest.json', {
-                        method: 'HEAD',
-                        cache: 'no-store',
-                        signal: AbortSignal.timeout(5000)
-                    });
-                    return resp.ok;
-                } catch (e) {
-                    return false;
-                }
-            }
-
-            // Retry connectivity up to 3 times with short delays
-            let reachable = false;
-            for (let attempt = 1; attempt <= 3; attempt++) {
-                reachable = await canReachServer();
-                if (reachable) break;
-                // Wait before next attempt (network stack may still be initializing)
-                await new Promise(r => setTimeout(r, 1000));
-                document.getElementById('status-text').textContent =
-                    attempt < 3 ? 'Still connecting...' : 'Checking connection...';
-            }
-
-            if (reachable) {
-                // Server reachable — redirect immediately
-                console.log('Bridge: Server reachable, navigating to:', targetUrl);
-                redirectStarted = true;
-                window.location.replace(targetUrl);
-                return;
-            }
-
-            // Server not reachable — but still try to navigate!
-            // The service worker on blog.echowithin.xyz may have cached content.
-            // If SW can serve cached content → page loads successfully.
-            // If SW has no cache → Android WebViewClient catches the error and
-            // shows a nice offline page (see MainActivity.java).
-            console.log('Bridge: Server unreachable, attempting navigation for cached content...');
-            document.getElementById('status-text').textContent = 'Loading offline content...';
+            // Simple approach: just navigate to the live site
+            // - If online: site loads normally
+            // - If offline + cached: service worker serves cached content
+            // - If offline + no cache: Android WebViewClient shows offline UI
+            console.log('Bridge: Navigating to:', targetUrl);
+            document.getElementById('status-text').textContent = 'Loading...';
             redirectStarted = true;
             window.location.replace(targetUrl);
         }

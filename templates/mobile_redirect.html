@@ -74,7 +74,7 @@
         
         <div id="manual-action" style="display: none;">
             <p>If the app doesn't open automatically:</p>
-            <a href="{{ https_deep_link | default(fallback_url) }}" class="btn" id="open-app-btn">Open EchoWithin App</a>
+            <a href="{{ deep_link_url | default(https_deep_link) | default(fallback_url) }}" class="btn" id="open-app-btn">Open EchoWithin App</a>
         </div>
         
         <div class="fallback">
@@ -83,30 +83,40 @@
     </div>
 
     <script>
+        const customSchemeUrl = "{{ deep_link_url | default('') }}";
         const httpsDeepLink = "{{ https_deep_link | default('') }}";
         const fallbackUrl = "{{ fallback_url }}";
         
         console.log('Mobile redirect page loaded');
+        console.log('Custom scheme URL:', customSchemeUrl);
         console.log('HTTPS deep link:', httpsDeepLink);
         console.log('Fallback URL:', fallbackUrl);
         
         function openApp() {
-            console.log('Attempting to open app via HTTPS App Link...');
-            
-            // HTTPS App Links work great because Android has verified the domain
-            // and will intercept the URL to open in the app
-            if (httpsDeepLink) {
-                console.log('Redirecting to:', httpsDeepLink);
+            // Try custom scheme first (echowithin://) - always works with intent filter,
+            // no domain verification (assetlinks.json) needed unlike HTTPS App Links
+            if (customSchemeUrl) {
+                console.log('Attempting custom scheme redirect:', customSchemeUrl);
+                window.location.href = customSchemeUrl;
+                
+                // If custom scheme didn't trigger app open, try HTTPS link after delay
+                setTimeout(function() {
+                    if (httpsDeepLink) {
+                        console.log('Custom scheme may have failed, trying HTTPS:', httpsDeepLink);
+                        window.location.href = httpsDeepLink;
+                    }
+                    document.getElementById('manual-action').style.display = 'block';
+                }, 2000);
+            } else if (httpsDeepLink) {
+                console.log('No custom scheme, trying HTTPS deep link:', httpsDeepLink);
                 window.location.href = httpsDeepLink;
+                setTimeout(function() {
+                    document.getElementById('manual-action').style.display = 'block';
+                }, 2000);
             } else {
-                console.log('No HTTPS deep link, using fallback');
+                console.log('No deep links available, using fallback');
                 window.location.href = fallbackUrl;
             }
-            
-            // Show manual button after delay (in case redirect doesn't work)
-            setTimeout(function() {
-                document.getElementById('manual-action').style.display = 'block';
-            }, 2000);
         }
         
         // Start redirect immediately

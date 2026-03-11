@@ -190,7 +190,7 @@
 
             await new Promise(r => setTimeout(r, 100));
 
-            const { SplashScreen, App, Browser } = (window.Capacitor && window.Capacitor.Plugins) || {};
+            const { SplashScreen, App, Browser, PushNotifications } = (window.Capacitor && window.Capacitor.Plugins) || {};
 
             if (SplashScreen) {
                 try {
@@ -201,6 +201,35 @@
             // Request push notification permissions early
             // This must happen on the bridge page where Capacitor plugins are available
             await setupPushNotifications();
+
+            // Check for pending notification tap that launched the app (cold start).
+            // Must be done here because the event is consumed on first listener registration
+            // and won't survive the page redirect to the live site.
+            let notificationUrl = null;
+            if (PushNotifications) {
+                try {
+                    notificationUrl = await Promise.race([
+                        new Promise(function (resolve) {
+                            PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
+                                console.log('Bridge: Notification tap detected:', notification);
+                                var data = notification.notification.data;
+                                if (data && data.url) {
+                                    resolve(data.url);
+                                } else {
+                                    resolve(null);
+                                }
+                            });
+                        }),
+                        // Give native bridge up to 400ms to deliver the pending event
+                        new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 400); })
+                    ]);
+                    if (notificationUrl) {
+                        console.log('Bridge: Will redirect to notification URL:', notificationUrl);
+                    }
+                } catch (e) {
+                    console.error('Bridge: Error checking notification action:', e);
+                }
+            }
 
             // Set up deep link listeners
             if (App) {
@@ -228,7 +257,16 @@
                 } catch (e) { console.error(e); }
             }
 
-            const targetUrl = path ? LIVE_SITE + path : LIVE_SITE;
+            // Build redirect target: notification tap URL > deep link > default
+            let targetUrl;
+            if (notificationUrl) {
+                // App was launched by tapping a notification — go directly to that content
+                targetUrl = notificationUrl.startsWith('http') ? notificationUrl : LIVE_SITE + notificationUrl;
+            } else if (path) {
+                targetUrl = LIVE_SITE + path;
+            } else {
+                targetUrl = LIVE_SITE;
+            }
 
             // Optional fail-safe: explicitly block redirection if offline so WebView doesn't throw ERR_INTERNET_DISCONNECTED
             if (!navigator.onLine) {

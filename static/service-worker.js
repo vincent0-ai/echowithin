@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v15';
-const STATIC_CACHE = 'echowithin-static-v15';
-const PAGES_CACHE = 'echowithin-pages-v15';
-const POSTS_CACHE = 'echowithin-posts-v15';
+const CACHE_NAME = 'echowithin-v16';
+const STATIC_CACHE = 'echowithin-static-v16';
+const PAGES_CACHE = 'echowithin-pages-v16';
+const POSTS_CACHE = 'echowithin-posts-v16';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -325,7 +325,15 @@ self.addEventListener('notificationclick', event => {
           return client.focus();
         }
       }
-      // If no matching window, open a new one
+      // Navigate an existing window to the URL instead of opening a new one.
+      // This is critical for iOS PWA where openWindow opens Safari instead of
+      // navigating the standalone PWA window.
+      for (let client of windowClients) {
+        if ('navigate' in client) {
+          return client.navigate(urlToOpen).then(c => c ? c.focus() : null);
+        }
+      }
+      // Fallback: open a new window (desktop browsers)
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }
@@ -347,6 +355,7 @@ self.addEventListener('pushsubscriptionchange', event => {
       return fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify(subscription.toJSON())
       });
     }).catch(err => {

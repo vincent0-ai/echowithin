@@ -1502,7 +1502,8 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                             subscription_info=subscription_info,
                             data=payload,
                             vapid_private_key=VAPID_PRIVATE_KEY,
-                            vapid_claims=VAPID_CLAIMS
+                            vapid_claims=VAPID_CLAIMS,
+                            ttl=86400
                         )
                     except WebPushException as e:
                         if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
@@ -1538,10 +1539,6 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
 @rq.job
 def send_push_notifications_for_new_post(post_id_str):
     """Send push notifications to all subscribed users about a new post."""
-    if not VAPID_PRIVATE_KEY or not VAPID_PUBLIC_KEY:
-        app.logger.debug("VAPID keys not configured, skipping push notifications for new post")
-        return
-
     try:
         post = posts_conf.find_one({'_id': ObjectId(post_id_str)})
         if not post:
@@ -1558,41 +1555,48 @@ def send_push_notifications_for_new_post(post_id_str):
                 base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
-        # Get all unique user subscriptions (exclude the post author)
         author_id = post.get('author_id')
-        query = {'user_id': {'$ne': author_id}} if author_id else {}
-        subscriptions = list(push_subscriptions_conf.find(query))
 
-        payload = json.dumps({
-            'title': title,
-            'body': body,
-            'url': post_url,
-            'tag': f'new-post-{post_id_str}',
-            'icon': '/static/logo.png',
-            'badge': '/static/logo.png'
-        })
+        # 1. Send Web Push (PWA) if VAPID keys are configured
+        if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
+            query = {'user_id': {'$ne': author_id}} if author_id else {}
+            subscriptions = list(push_subscriptions_conf.find(query))
 
-        for sub in subscriptions:
-            try:
-                subscription_info = {
-                    'endpoint': sub['endpoint'],
-                    'keys': sub['keys']
-                }
-                webpush(
-                    subscription_info=subscription_info,
-                    data=payload,
-                    vapid_private_key=VAPID_PRIVATE_KEY,
-                    vapid_claims=VAPID_CLAIMS
-                )
-            except WebPushException as e:
-                if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
-                    push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                else:
-                    app.logger.error(f"Push notification failed: {e}")
-            except Exception as e:
-                app.logger.error(f"Unexpected push error: {e}")
+            payload = json.dumps({
+                'title': title,
+                'body': body,
+                'url': post_url,
+                'tag': f'new-post-{post_id_str}',
+                'icon': '/static/logo.png',
+                'badge': '/static/logo.png'
+            })
 
-        # Also send FCM notifications to native app users
+            for sub in subscriptions:
+                try:
+                    subscription_info = {
+                        'endpoint': sub['endpoint'],
+                        'keys': sub['keys']
+                    }
+                    webpush(
+                        subscription_info=subscription_info,
+                        data=payload,
+                        vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims=VAPID_CLAIMS,
+                        ttl=86400
+                    )
+                except WebPushException as e:
+                    if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
+                        push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                    else:
+                        app.logger.error(f"Push notification failed: {e}")
+                except Exception as e:
+                    app.logger.error(f"Unexpected push error: {e}")
+
+            app.logger.info(f"Sent web push for new post {post_id_str} to {len(subscriptions)} subscriptions")
+        else:
+            app.logger.debug("VAPID keys not configured, skipping web push for new post")
+
+        # 2. Send FCM notifications to native app users (independent of VAPID config)
         if FIREBASE_INITIALIZED:
             try:
                 # Get all native app users (exclude author)
@@ -1609,8 +1613,6 @@ def send_push_notifications_for_new_post(post_id_str):
                     app.logger.info(f"Sent FCM notifications for new post {post_id_str} to {num_fcm_sent} devices")
             except Exception as e:
                 app.logger.error(f"FCM batch sending failed for new post {post_id_str}: {e}")
-
-        app.logger.info(f"Sent push notifications for new post {post_id_str} to {len(subscriptions)} web subscriptions")
     except Exception as e:
         app.logger.error(f"Error in send_push_notifications_for_new_post: {e}", exc_info=True)
 

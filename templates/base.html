@@ -618,13 +618,23 @@
 
             // --- Push Notifications Listener (Always Register) ---
             if (window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
-                // Handle notification clicks
+                // Handle notification clicks (warm start — app was in background)
                 window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
                     const data = notification.notification.data;
                     console.log('Push notification action performed:', notification);
                     if (data && data.url) {
-                        // Use the robust deep link handler for consistent navigation
-                        handleDeepLink(data.url);
+                        // Navigate directly using the full URL from the notification.
+                        // Avoids relative-path issues if the WebView origin is unexpected.
+                        if (data.url.startsWith('http')) {
+                            try {
+                                var urlObj = new URL(data.url);
+                                window.location.replace(urlObj.pathname + urlObj.search);
+                            } catch (e) {
+                                window.location.replace(data.url);
+                            }
+                        } else {
+                            window.location.replace(data.url);
+                        }
                     }
                 });
             }

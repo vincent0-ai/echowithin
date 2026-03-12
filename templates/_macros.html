@@ -120,7 +120,7 @@
         <div class="post-content-full">{{ post.content|markdown|safe }}</div>
         <a href="#" class="read-more-link read-more-toggle" data-post-id="{{ post._id|string }}">Read More</a>
         {% else %}
-        <div class="post-content-rendered">{{ post.content|markdown|safe }}</div>
+        <div class="post-content-rendered auto-view-post" data-post-id="{{ post._id|string }}">{{ post.content|markdown|safe }}</div>
         {% endif %}
     </div>
 

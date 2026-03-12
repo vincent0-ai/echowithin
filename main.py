@@ -784,6 +784,12 @@ def linkify_filter(text):
     """A Jinja2 filter to turn URLs in text into clickable links."""
     return bleach.linkify(text)
 
+def _linkify_target_blank(attrs, new=False):
+    """Bleach linkify callback to add target=_blank and rel=noopener to links."""
+    attrs[(None, 'target')] = '_blank'
+    attrs[(None, 'rel')] = 'noopener noreferrer'
+    return attrs
+
 @app.template_filter('markdown')
 def markdown_filter(text):
     """A Jinja2 filter to convert markdown text to HTML, sanitized to prevent XSS."""
@@ -791,6 +797,8 @@ def markdown_filter(text):
         return ''
     # Convert markdown to HTML
     html = markdown.markdown(text, extensions=['fenced_code', 'nl2br'])
+    # Linkify bare URLs into clickable links before sanitizing
+    html = bleach.linkify(html, callbacks=[_linkify_target_blank], parse_email=True)
     # Sanitize HTML to prevent XSS - allow safe tags only
     allowed_tags = [
         'p', 'br', 'strong', 'em', 'b', 'i', 'u', 's', 'strike',
@@ -4563,13 +4571,26 @@ def get_post_status(post_id):
         app.logger.error(f"Error fetching status for post {post_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@app.route('/share-target', methods=['GET'])
+@login_required
+def share_target():
+    """Handle incoming share intents from PWA Web Share Target API.
+    Redirects to create_post with shared content pre-filled."""
+    shared_title = request.args.get('title', '')
+    shared_text = request.args.get('text', '')
+    shared_url = request.args.get('url', '')
+    return redirect(url_for('create_post', shared_title=shared_title, shared_text=shared_text, shared_url=shared_url))
+
 @app.route('/create_post', methods=['GET'])
 @login_required
 def create_post():
     """Renders the page for creating a new post."""
     page_title = "Create a New Post - EchoWithin"
     page_description = "Share your ideas, experiences, and perspectives with the EchoWithin community."
-    return render_template("create_post.html", active_page='blog', title=page_title, description=page_description)
+    shared_title = request.args.get('shared_title', '')
+    shared_text = request.args.get('shared_text', '')
+    shared_url = request.args.get('shared_url', '')
+    return render_template("create_post.html", active_page='blog', title=page_title, description=page_description, shared_title=shared_title, shared_text=shared_text, shared_url=shared_url)
 
 @rq.job
 def process_post_media(post_id_str, temp_image_paths, temp_video_path):
@@ -4695,7 +4716,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
 def post():
     if request.method=="POST":
         title=request.form.get("title")
-        content=request.form.get("content")
+        content=request.form.get("content", '') or ''
         tags = request.form.getlist("tags") # Use getlist for multi-select
         # Support multiple image uploads from the form input named 'images'
         images_files = request.files.getlist('images') if request.files else []
@@ -4706,7 +4727,8 @@ def post():
         temp_image_paths = []
         temp_video_path = None
 
-        if title and content:
+        has_media = any(f and f.filename for f in images_files) or (video_file and video_file.filename)
+        if title and (content or has_media):
             # Create a unique slug for SEO-friendly URLs
             base_slug = slugify(title)
             # Handle emoji-only or non-ASCII titles that result in empty slugs
@@ -4831,7 +4853,7 @@ def post():
 
             flash("Post created successfully!", "success")
         else:
-            flash("Title and content cannot be empty.", "danger")
+            flash("Title is required. Content is also required unless you attach media.", "danger")
     return redirect(url_for("blog"))
 
 @app.route('/uploads/<filename>')
@@ -4863,7 +4885,10 @@ def view_post(slug):
     # Convert post content from Markdown to HTML
     # The 'fenced_code' extension is crucial for handling code blocks (```)
     # The 'nl2br' extension converts newlines to <br> tags, preserving line breaks.
-    post['content'] = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
+    post_html = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
+    # Linkify bare URLs in post content
+    post_html = bleach.linkify(post_html, callbacks=[_linkify_target_blank], parse_email=True)
+    post['content'] = post_html
 
     # --- Fetch Related Posts using Meilisearch (with caching) ---
     related_posts = []
@@ -5029,33 +5054,22 @@ def view_post(slug):
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
 def api_record_post_view(post_id):
-    """Increment the view count for a post once per user per day.
+    """Increment the view count for a post once per account (or IP for guests).
 
-    This endpoint is intended to be called by client-side JS when a user first
-    visits the view_post page. It ensures that each user only increments the
-    view count once per day, regardless of how they arrive at the post (clicking title,
-    comment button, or direct access).
+    Each user/guest only contributes one view per post, ever.
     """
     try:
-        # If user is not authenticated, use a guest identifier
         user_identifier = str(current_user.id) if current_user.is_authenticated else request.remote_addr
 
-        # Get today's date at midnight (start of day)
-        now = datetime.datetime.now(datetime.timezone.utc)
-        today_start = datetime.datetime(now.year, now.month, now.day)
-        today_end = today_start + datetime.timedelta(days=1)
-
-        # Check if this user has already viewed this post today
+        # Check if this user has already viewed this post
         view_record = logs_conf.find_one({
             'type': 'post_view',
             'post_id': ObjectId(post_id),
             'user_identifier': user_identifier,
-            'timestamp': {'$gte': today_start, '$lt': today_end}
         })
 
-        # Only increment if they haven't viewed it today
+        # Only increment if they haven't viewed it before
         if not view_record:
-            # Record the view in logs
             logs_conf.insert_one({
                 'type': 'post_view',
                 'post_id': ObjectId(post_id),
@@ -5063,8 +5077,7 @@ def api_record_post_view(post_id):
                 'timestamp': datetime.datetime.now(datetime.timezone.utc)
             })
 
-            # Atomically increment the view count on the post
-            res = posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+            posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
 
         # CRITICAL: Also update the per-user view marker so activity is marked as read
         if current_user.is_authenticated:

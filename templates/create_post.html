@@ -25,13 +25,16 @@
 
             <div class="form-group">
                 <label for="title">Title</label>
-                <input type="text" id="title" name="title" class="form-input" required minlength="3">
+                <input type="text" id="title" name="title" class="form-input" required minlength="3"
+                    value="{{ shared_title|default('', true)|e }}">
             </div>
 
             <div class="form-group">
                 <label for="content">Content</label>
                 {# FIX: Removed 'required' attribute to prevent browser validation error on hidden element #}
-                <textarea id="content" name="content" class="form-input" rows="10"></textarea>
+                <textarea id="content" name="content" class="form-input" rows="10">{% if shared_text or shared_url %}{{ shared_text|default('', true) }}{% if shared_text and shared_url %}
+
+{% endif %}{{ shared_url|default('', true) }}{% endif %}</textarea>
                 <div id="content-error" style="color: red; display: none; margin-top: 5px;">Content is required.</div>
             </div>
 
@@ -104,6 +107,15 @@
 
             <div class="form-group" style="text-align: right;">
                 <button type="submit" id="submit-post-btn" class="btn comment-btn">Create Post</button>
+            </div>
+
+            <!-- Upload Progress Bar -->
+            <div id="upload-progress-container" style="display: none; margin-top: 1rem;">
+                <label style="font-size: 0.9rem; color: #666;">Uploading media...</label>
+                <div style="background: #e0e0e0; border-radius: 8px; overflow: hidden; height: 8px; margin-top: 4px;">
+                    <div id="upload-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #3e2217, #6b3a2a); border-radius: 8px; transition: width 0.3s ease;"></div>
+                </div>
+                <span id="upload-progress-text" style="font-size: 0.8rem; color: #888; margin-top: 2px; display: inline-block;">0%</span>
             </div>
         </form>
     </div>
@@ -197,23 +209,92 @@
                     easyMDE.codemirror.save();
                 }
 
-                // 2. Manual Validation for Content
-                // We removed 'required' from HTML, so we check it here
-                if (!contentElement.value.trim()) {
+                // 2. Manual Validation for Content (optional if media is attached)
+                const imagesInput = document.getElementById('images');
+                const videoInput = document.getElementById('video');
+                const hasMedia = (imagesInput && imagesInput.files.length > 0) || (videoInput && videoInput.files.length > 0);
+
+                if (!contentElement.value.trim() && !hasMedia) {
                     e.preventDefault(); // Stop submission
-                    contentError.style.display = 'block'; // Show error message
+                    contentError.textContent = 'Content is required unless you attach an image or video.';
+                    contentError.style.display = 'block';
                     return;
                 } else {
                     contentError.style.display = 'none';
                 }
 
-                // 3. UX: Disable button and show loading state
-                if (submitButton) {
-                    submitButton.disabled = true;
-                    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+                // 3. Check if media files are present for progress tracking
+
+                if (hasMedia) {
+                    // Use XHR to track upload progress
+                    e.preventDefault();
+                    const formData = new FormData(postForm);
+                    const xhr = new XMLHttpRequest();
+
+                    const progressContainer = document.getElementById('upload-progress-container');
+                    const progressBar = document.getElementById('upload-progress-bar');
+                    const progressText = document.getElementById('upload-progress-text');
+
+                    // Show progress bar and disable button
+                    progressContainer.style.display = 'block';
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                    }
+
+                    xhr.upload.addEventListener('progress', function (evt) {
+                        if (evt.lengthComputable) {
+                            const pct = Math.round((evt.loaded / evt.total) * 100);
+                            progressBar.style.width = pct + '%';
+                            progressText.textContent = pct + '%';
+                            if (pct >= 100) {
+                                progressText.textContent = 'Processing...';
+                            }
+                        }
+                    });
+
+                    xhr.addEventListener('load', function () {
+                        // Follow the redirect from the server response
+                        if (xhr.status >= 200 && xhr.status < 400) {
+                            window.location.href = xhr.responseURL || '{{ url_for("blog") }}';
+                        } else {
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.innerHTML = 'Create Post';
+                            }
+                            progressContainer.style.display = 'none';
+                            if (window.showCustomAlert) {
+                                showCustomAlert('Failed to create post. Please try again.', 'error');
+                            } else {
+                                alert('Failed to create post. Please try again.');
+                            }
+                        }
+                    });
+
+                    xhr.addEventListener('error', function () {
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = 'Create Post';
+                        }
+                        progressContainer.style.display = 'none';
+                        if (window.showCustomAlert) {
+                            showCustomAlert('Upload failed. Please check your connection and try again.', 'error');
+                        } else {
+                            alert('Upload failed. Please try again.');
+                        }
+                    });
+
+                    xhr.open('POST', postForm.action);
+                    xhr.send(formData);
+                } else {
+                    // No media — submit normally with loading state
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+                    }
                 }
 
-                // The form will now proceed to submit normally
+                // The form will now proceed to submit normally (for non-media posts)
             });
         }
     });

@@ -1353,6 +1353,26 @@
         }
         window.recordPostView = recordPostView;
 
+        // --- Auto-record views for short posts visible in viewport ---
+        if ('IntersectionObserver' in window) {
+            const autoViewObserver = new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (entry.isIntersecting) {
+                        const el = entry.target;
+                        const postId = el.dataset.postId;
+                        if (postId) {
+                            recordPostView(postId);
+                        }
+                        autoViewObserver.unobserve(el);
+                    }
+                });
+            }, { threshold: 0.5 });
+
+            document.querySelectorAll('.auto-view-post').forEach(function (el) {
+                autoViewObserver.observe(el);
+            });
+        }
+
         // --- Custom Confirmation Modal Logic ---
         const confirmOverlay = document.getElementById('custom-confirm-overlay');
         const confirmMsg = document.getElementById('custom-confirm-msg');

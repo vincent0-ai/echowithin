@@ -6103,6 +6103,22 @@ def profile_settings(username):
     if request.method == 'POST':
         update_data = {}
 
+        # Update username if changed
+        new_username = request.form.get('username', '').strip()
+        if new_username and new_username != username:
+            # Validate username: 3-30 chars, alphanumeric + underscores only
+            import re
+            if not re.match(r'^[a-zA-Z0-9_]{3,30}$', new_username):
+                flash("Username must be 3-30 characters and contain only letters, numbers, and underscores.", "danger")
+                return redirect(url_for('profile_settings', username=username))
+            # Check uniqueness
+            if users_conf.find_one({'username': new_username}):
+                flash("That username is already taken. Please choose a different one.", "danger")
+                return redirect(url_for('profile_settings', username=username))
+            update_data['username'] = new_username
+            # Also update author name on all their posts
+            posts_conf.update_many({'author_id': user['_id']}, {'$set': {'author': new_username}})
+
         # Update bio
         update_data['bio'] = request.form.get('bio', '').strip()
 
@@ -6151,8 +6167,9 @@ def profile_settings(username):
                 app.logger.error(f"Failed to update settings for {username}: {e}")
                 flash('Failed to update settings. Please try again later.', 'danger')
 
-        # Redirect back to the settings page to see the changes
-        return redirect(url_for('profile_settings', username=username))
+        # Redirect back to the settings page (use new username if it was changed)
+        redirect_username = update_data.get('username', username)
+        return redirect(url_for('profile_settings', username=redirect_username))
 
     # For GET, render settings page
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")

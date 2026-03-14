@@ -2584,7 +2584,7 @@ def register():
                     flash("This email is already registered but not confirmed. We've sent you a new confirmation code.", "info")
                     gen_code = str(secrets.randbelow(10**6)).zfill(6)
                     hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-                    code_expiry = datetime.datetime.now() + datetime.timedelta(hours=24)
+                    code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
                     auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
                     send_code(email, gen_code)
                     return redirect(url_for("confirm", email=email))
@@ -2597,14 +2597,14 @@ def register():
                 'password': hashed_password,
                 'is_confirmed': False, # Set to False to require email confirmation
                 'is_admin': False,
-                'join_date': datetime.datetime.now(),
+                'join_date': datetime.datetime.now(datetime.timezone.utc),
                 'notification_preference': 'weekly'
             })
 
             # --- Send email confirmation ---
             gen_code = str(secrets.randbelow(10**6)).zfill(6)
             hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-            code_expiry = datetime.datetime.now() + datetime.timedelta(hours=24)
+            code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
             auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
             send_code(email, gen_code)
 
@@ -2646,8 +2646,11 @@ def confirm(email):
                 flash("No confirmation code found for this email.", "danger")
                 return redirect(url_for("confirm", email=email))
 
-            # Check for expiry
-            if 'code_expiry' in hashed_obj and hashed_obj['code_expiry'] < datetime.datetime.now():
+            # Check for expiry (use UTC-aware comparison)
+            code_exp = hashed_obj.get('code_expiry')
+            if code_exp and code_exp.tzinfo is None:
+                code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
+            if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
                 flash("This confirmation code has expired. Please register again to get a new code.", "danger")
                 return redirect(url_for("register"))
 
@@ -2818,10 +2821,13 @@ def google_callback():
         state=oauth_state,
         redirect_uri=url_for('google_callback', _external=True, _scheme='https'))
     try:
+        # Ensure authorization_response uses HTTPS to match the redirect_uri
+        # (behind reverse proxies, request.url may still show http://)
+        auth_response_url = request.url.replace('http://', 'https://', 1) if request.url.startswith('http://') else request.url
         token = google.fetch_token(
             'https://oauth2.googleapis.com/token',
             client_secret=GOOGLE_CLIENT_SECRET,
-            authorization_response=request.url
+            authorization_response=auth_response_url
         )
     except Exception as e:
         app.logger.error(f"Failed to fetch Google OAuth OAuth2Session: {e}", exc_info=True)
@@ -2929,7 +2935,7 @@ def google_callback():
             'password': None,  # No password - user signed up via Google
             'is_confirmed': True,
             'is_admin': False,
-            'join_date': datetime.datetime.now(),
+            'join_date': datetime.datetime.now(datetime.timezone.utc),
             'notification_preference': 'weekly',
             'google_signup': True  # Flag to indicate Google signup
         })
@@ -7756,7 +7762,7 @@ def contact_developer():
     return redirect(url_for('about'))
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
-@limits(calls=5, period=TIME)
+@limits(calls=10, period=TIME)
 def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -7783,11 +7789,17 @@ def forgot_password():
     return render_template('forgot_password.html', active_page='forgot_password')
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
-@limits(calls=10, period=TIME)
 def reset_password(token):
     hashed_token = hashlib.sha256(token.encode()).hexdigest()
     auth_record = auth_conf.find_one({'reset_token': hashed_token})
-    if not auth_record or auth_record.get('reset_expiry') < datetime.datetime.now():
+
+    # Use timezone-aware UTC comparison to avoid mismatch with stored UTC expiry
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    reset_expiry = auth_record.get('reset_expiry') if auth_record else None
+    if reset_expiry and reset_expiry.tzinfo is None:
+        reset_expiry = reset_expiry.replace(tzinfo=datetime.timezone.utc)
+
+    if not auth_record or not reset_expiry or reset_expiry < now_utc:
         flash("Invalid or expired reset token.", "danger")
         return redirect(url_for('forgot_password'))
 
@@ -7928,6 +7940,9 @@ def logout():
     if current_user.is_authenticated:
         app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     logout_user() # Use Flask-Login to properly log the user out
+    # Clear OAuth state to prevent stale state on immediate re-login
+    session.pop('oauth_state', None)
+    session.pop('oauth_platform', None)
     flash('You have been logged out.', 'info')
     resp = redirect(url_for('dashboard'))
     resp.delete_cookie('x_app_token')

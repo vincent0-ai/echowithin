@@ -268,38 +268,39 @@
                 targetUrl = LIVE_SITE;
             }
 
-            if (navigator.onLine) {
-                // ONLINE: Verify connection first, then navigate
-                console.log('Bridge: Online — verifying connection to:', targetUrl);
-                document.getElementById('status-text').textContent = 'Loading...';
+            // When offline, show the local offline UI — the Service Worker for blog.echowithin.xyz
+            // can't intercept cross-origin navigations from the bridge page (different origin).
+            // The online listener will auto-retry when connectivity returns.
+            if (!navigator.onLine) {
+                showOfflineUI();
+                return;
+            }
 
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 8000);
+            console.log('Bridge: Network appears online, verifying connection to:', targetUrl);
+            document.getElementById('status-text').textContent = 'Loading...';
 
-                    await fetch(targetUrl, {
-                        method: 'GET',
-                        mode: 'no-cors',
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
+            try {
+                // Use a short timeout to prevent hanging forever on very slow networks
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-                    console.log('Bridge: Connection verified. Redirecting...');
-                    redirectStarted = true;
-                    window.location.replace(targetUrl);
-                } catch (err) {
-                    console.error('Bridge: Connection verification failed:', err);
-                    showOfflineUI();
-                }
-            } else {
-                // OFFLINE: Navigate directly — the Service Worker on blog.echowithin.xyz
-                // will intercept the navigation and serve cached content if available.
-                // If the SW can't serve (no cache / first install), the native WebView
-                // error handler in MainActivity catches it and shows the local offline page.
-                console.log('Bridge: Offline — navigating directly (trusting SW cache)...');
-                document.getElementById('status-text').textContent = 'Loading cached content...';
+                // Fetch the root URL to verify it's accessible
+                await fetch(targetUrl, {
+                    method: 'GET',
+                    mode: 'no-cors',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                // Fetch succeeded — server is reachable
+                console.log('Bridge: Connection verified. Redirecting...');
                 redirectStarted = true;
                 window.location.replace(targetUrl);
+
+            } catch (err) {
+                // Fetch failed (network error, timeout)
+                console.error('Bridge: Connection verification failed:', err);
+                showOfflineUI();
             }
         }
 

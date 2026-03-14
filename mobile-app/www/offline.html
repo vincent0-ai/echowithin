@@ -48,12 +48,26 @@
         </svg>
         <h2>You're Offline</h2>
         <p>Please check your internet connection and try again.</p>
-        <button onclick="window.location.href='https://blog.echowithin.xyz'">Retry</button>
+        <button onclick="retryConnection()">Retry</button>
     </div>
     <script>
+        function retryConnection() {
+            // Navigate back to the Capacitor bridge page which has proper
+            // connection verification — never navigate directly to the remote URL
+            window.location.href = '/';
+        }
+
+        // Auto-retry when connectivity is restored
         window.addEventListener('online', function() {
-            window.location.href = 'https://blog.echowithin.xyz';
+            retryConnection();
         });
+
+        // Hide splash screen if it's still showing
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+            && window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
+            window.Capacitor.Plugins.SplashScreen.hide();
+        }
     </script>
 </body>
 </html>
+

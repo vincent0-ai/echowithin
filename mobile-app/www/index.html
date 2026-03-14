@@ -268,37 +268,38 @@
                 targetUrl = LIVE_SITE;
             }
 
-            // Optional fail-safe: explicitly block redirection if offline so WebView doesn't throw ERR_INTERNET_DISCONNECTED
-            if (!navigator.onLine) {
-                showOfflineUI();
-                return;
-            }
+            if (navigator.onLine) {
+                // ONLINE: Verify connection first, then navigate
+                console.log('Bridge: Online — verifying connection to:', targetUrl);
+                document.getElementById('status-text').textContent = 'Loading...';
 
-            console.log('Bridge: Network appears online, verifying connection to:', targetUrl);
-            document.getElementById('status-text').textContent = 'Loading...';
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-            try {
-                // Use a short timeout to prevent hanging forever on very slow networks
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                    await fetch(targetUrl, {
+                        method: 'GET',
+                        mode: 'no-cors',
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
 
-                // Fetch the root URL to verify it's accessible (via network or SW cache)
-                await fetch(targetUrl, {
-                    method: 'GET',
-                    mode: 'no-cors',
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                // Fetch succeeded (we reached the server OR the Service Worker returned a cached response)
-                console.log('Bridge: Connection verified. Redirecting...');
+                    console.log('Bridge: Connection verified. Redirecting...');
+                    redirectStarted = true;
+                    window.location.replace(targetUrl);
+                } catch (err) {
+                    console.error('Bridge: Connection verification failed:', err);
+                    showOfflineUI();
+                }
+            } else {
+                // OFFLINE: Navigate directly — the Service Worker on blog.echowithin.xyz
+                // will intercept the navigation and serve cached content if available.
+                // If the SW can't serve (no cache / first install), the native WebView
+                // error handler in MainActivity catches it and shows the local offline page.
+                console.log('Bridge: Offline — navigating directly (trusting SW cache)...');
+                document.getElementById('status-text').textContent = 'Loading cached content...';
                 redirectStarted = true;
                 window.location.replace(targetUrl);
-
-            } catch (err) {
-                // Fetch failed (network error, timeout, or ERR_INTERNET_DISCONNECTED caught silently)
-                console.error('Bridge: Connection verification failed:', err);
-                showOfflineUI();
             }
         }
 

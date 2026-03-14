@@ -6162,6 +6162,16 @@ def profile_settings(username):
         if update_data:
             try:
                 users_conf.update_one({'_id': user['_id']}, {'$set': update_data})
+
+                # If username was changed, refresh the Flask-Login session
+                if 'username' in update_data:
+                    # Invalidate the user loader cache so load_user fetches fresh data
+                    user_loader_cache.pop(f"user:{current_user.id}", None)
+                    # Re-login with the updated user data so current_user.username is correct
+                    fresh_user = users_conf.find_one({'_id': user['_id']})
+                    if fresh_user:
+                        login_user(User(fresh_user), remember=True)
+
                 flash('Settings updated successfully!', 'success')
             except Exception as e:
                 app.logger.error(f"Failed to update settings for {username}: {e}")

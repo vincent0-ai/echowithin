@@ -121,52 +121,71 @@
 
     </form>
 
-    <!-- Backup Your Data -->
-    <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #e0e0e0;">
-      <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem;"> Backup Your Data</h2>
-      <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Download a copy of all your data including your
-        profile, posts, comments, and personal notes.</p>
-      <form method="POST" action="{{ url_for('export_data', username=user.username) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn" style="background-color: #17a2b8; color: white; padding: 0.5rem 1.5rem;">
-           Download My Data
-        </button>
-      </form>
-    </div>
+    <!-- Advanced Section (collapsible) -->
+    <details style="margin-top: 2.5rem; border-top: 1px solid #e0e0e0; padding-top: 1.5rem;">
+      <summary
+        style="font-size: 1.2rem; font-weight: 600; cursor: pointer; user-select: none; padding: 0.5rem 0; list-style: none; display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fas fa-chevron-right" style="font-size: 0.8rem; transition: transform 0.2s;"></i>
+        Advanced
+      </summary>
 
-    <!-- Delete Account -->
-    <div style="margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #e0e0e0;">
-      <h2 style="font-size: 1.2rem; margin-bottom: 0.5rem; color: #dc3545;"><i class="fas fa-exclamation-triangle"></i>
-        Delete Account</h2>
-      <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Permanently delete your account and all
-        associated data. This action <strong>cannot be undone</strong>.</p>
-      <form id="delete-account-form" method="POST"
-        action="{{ url_for('delete_account', username=user.username) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {% if not user.get('google_signup') or user.get('password') %}
-        <div class="form-group">
-          <label for="delete-password">Enter your password to confirm:</label>
-          <input type="password" id="delete-password" name="password" class="form-input"
-            placeholder="Your current password" autocomplete="current-password" required>
-        </div>
-        {% else %}
-        <input type="hidden" name="confirm_delete" id="confirm-delete-field" value="">
-        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Since you signed up with Google, type
-          <strong>DELETE</strong> below to confirm:</p>
-        <div class="form-group">
-          <input type="text" id="delete-confirm-text" class="form-input" placeholder="Type DELETE to confirm"
-            autocomplete="off" required>
-        </div>
-        {% endif %}
-        <button type="button" id="delete-account-btn" class="btn"
-          style="background-color: #dc3545; color: white; padding: 0.5rem 1.5rem;">
-           Delete My Account
-        </button>
-      </form>
-    </div>
+      <!-- Backup Your Data -->
+      <div style="margin-top: 1.5rem;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;"> Backup Your Data</h2>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Download a copy of all your data including your
+          profile, posts, comments, and personal notes.</p>
+        <form method="POST" action="{{ url_for('export_data', username=user.username) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn" style="background-color: #17a2b8; color: white; padding: 0.5rem 1.5rem;">
+             Download My Data
+          </button>
+        </form>
+      </div>
+
+      <!-- Delete Account -->
+      <div style="margin-top: 2rem;">
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: #dc3545;"><i
+            class="fas fa-exclamation-triangle"></i>
+          Delete Account</h2>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Permanently delete your account and all
+          associated data. This action <strong>cannot be undone</strong>.</p>
+        <form id="delete-account-form" method="POST"
+          action="{{ url_for('delete_account', username=user.username) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if not user.get('google_signup') or user.get('password') %}
+          <div class="form-group">
+            <label for="delete-password">Enter your password to confirm:</label>
+            <input type="password" id="delete-password" name="password" class="form-input"
+              placeholder="Your current password" autocomplete="current-password" required>
+          </div>
+          {% else %}
+          <input type="hidden" name="confirm_delete" id="confirm-delete-field" value="">
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Since you signed up with Google, type
+            <strong>DELETE</strong> below to confirm:</p>
+          <div class="form-group">
+            <input type="text" id="delete-confirm-text" class="form-input" placeholder="Type DELETE to confirm"
+              autocomplete="off" required>
+          </div>
+          {% endif %}
+          <button type="button" id="delete-account-btn" class="btn"
+            style="background-color: #dc3545; color: white; padding: 0.5rem 1.5rem;">
+             Delete My Account
+          </button>
+        </form>
+      </div>
+    </details>
 
   </div>
 </div>
+
+<style>
+  details[open] > summary .fa-chevron-right {
+    transform: rotate(90deg);
+  }
+  details summary::-webkit-details-marker {
+    display: none;
+  }
+</style>
 
 <script>
   // Delete account confirmation

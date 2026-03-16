@@ -1506,18 +1506,26 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                             'endpoint': sub['endpoint'],
                             'keys': sub['keys']
                         }
-                        webpush(
+                        response = webpush(
                             subscription_info=subscription_info,
                             data=payload,
                             vapid_private_key=VAPID_PRIVATE_KEY,
                             vapid_claims=VAPID_CLAIMS,
                             ttl=86400
                         )
+                        status = response.status_code if response else 'unknown'
+                        is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                        platform = 'iOS' if is_ios else 'non-iOS'
+                        app.logger.info(f"Web push delivered ({platform}): status={status}, user={user_id_str}")
                     except WebPushException as e:
-                        if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
+                        status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                        resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
+                        is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                        platform = 'iOS' if is_ios else 'non-iOS'
+                        app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id_str}, body={resp_body}")
+                        if status_code in [403, 404, 410]:
                             push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                        else:
-                            app.logger.error(f"Push notification failed for user {user_id_str}: {e}")
+                            app.logger.info(f"Removed stale {platform} push subscription for user {user_id_str}")
                     except Exception as e:
                         app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
         else:
@@ -1585,18 +1593,28 @@ def send_push_notifications_for_new_post(post_id_str):
                         'endpoint': sub['endpoint'],
                         'keys': sub['keys']
                     }
-                    webpush(
+                    response = webpush(
                         subscription_info=subscription_info,
                         data=payload,
                         vapid_private_key=VAPID_PRIVATE_KEY,
                         vapid_claims=VAPID_CLAIMS,
                         ttl=86400
                     )
+                    status = response.status_code if response else 'unknown'
+                    is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                    platform = 'iOS' if is_ios else 'non-iOS'
+                    user_id = sub.get('user_id', 'unknown')
+                    app.logger.info(f"Web push delivered ({platform}): status={status}, user={user_id}, post={post_id_str}")
                 except WebPushException as e:
-                    if hasattr(e, 'response') and getattr(e.response, 'status_code', None) in [403, 404, 410]:
+                    status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                    resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
+                    is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                    platform = 'iOS' if is_ios else 'non-iOS'
+                    user_id = sub.get('user_id', 'unknown')
+                    app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id}, post={post_id_str}, body={resp_body}")
+                    if status_code in [403, 404, 410]:
                         push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                    else:
-                        app.logger.error(f"Push notification failed: {e}")
+                        app.logger.info(f"Removed stale {platform} push subscription for user {user_id}")
                 except Exception as e:
                     app.logger.error(f"Unexpected push error: {e}")
 
@@ -5140,18 +5158,24 @@ def subscribe_push():
         if delete_result.deleted_count > 0:
             app.logger.info(f"Cleaned up {delete_result.deleted_count} old push subscription(s) for user {current_user.username}")
 
-        subscription_doc = {
-            'user_id': user_id,
-            'endpoint': new_endpoint,
-            'keys': data['keys'],
-            'created_at': datetime.datetime.now(datetime.timezone.utc),
-            'user_agent': request.headers.get('User-Agent', '')[:200]
-        }
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         # Upsert - update if exists, insert if not
+        # Use $setOnInsert for created_at to preserve original subscription date
         push_subscriptions_conf.update_one(
             {'user_id': user_id, 'endpoint': new_endpoint},
-            {'$set': subscription_doc},
+            {
+                '$set': {
+                    'user_id': user_id,
+                    'endpoint': new_endpoint,
+                    'keys': data['keys'],
+                    'updated_at': now,
+                    'user_agent': request.headers.get('User-Agent', '')[:200]
+                },
+                '$setOnInsert': {
+                    'created_at': now
+                }
+            },
             upsert=True
         )
 

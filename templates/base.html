@@ -878,7 +878,29 @@
         // Check current subscription status
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-            console.log('Already subscribed to push notifications');
+            // Re-send subscription to server every 5 days to keep endpoint fresh
+            // This is critical for iOS PWA where push endpoints can silently expire
+            const lastRefresh = localStorage.getItem('pushSubRefreshedAt');
+            const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
+            if (!lastRefresh || (Date.now() - parseInt(lastRefresh)) > fiveDaysMs) {
+                console.log('Refreshing push subscription with server...');
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    const resp = await fetch('/api/push/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                        body: JSON.stringify(subscription.toJSON())
+                    });
+                    if (resp.ok) {
+                        localStorage.setItem('pushSubRefreshedAt', Date.now().toString());
+                        console.log('Push subscription refreshed with server');
+                    }
+                } catch (err) {
+                    console.warn('Failed to refresh push subscription:', err);
+                }
+            } else {
+                console.log('Push subscription still fresh, skipping refresh');
+            }
             return;
         }
 
@@ -1032,6 +1054,7 @@
 
             if (subResponse.ok) {
                 console.log('Successfully subscribed to push notifications');
+                localStorage.setItem('pushSubRefreshedAt', Date.now().toString());
             } else {
                 console.warn('Failed to save subscription on server');
             }

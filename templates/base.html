@@ -18,6 +18,30 @@
     <link rel="canonical" href="{{ canonical_url or request.base_url }}" />
     {% endblock %}
 
+    <!-- SEO: Default meta tags (overridable by child templates) -->
+    {% block meta_description %}
+    <meta name="description" content="{{ description|default('EchoWithin – A community platform for authentic human perspective. Share ideas, engage in meaningful debates, and let your voice echo within.') }}">
+    {% endblock %}
+    <meta name="robots" content="index, follow">
+
+    <!-- Open Graph defaults (overridable via head_meta block) -->
+    {% block og_tags %}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="EchoWithin" />
+    <meta property="og:title" content="{{ title|default('EchoWithin') }}" />
+    <meta property="og:description" content="{{ description|default('A community platform for authentic human perspective. Share ideas, engage in meaningful debates.') }}" />
+    <meta property="og:url" content="{{ canonical_url or request.url }}" />
+    <meta property="og:image" content="{{ meta_image|default(url_for('static', filename='logo.png', _external=True)) }}" />
+    {% endblock %}
+
+    <!-- Twitter Card defaults -->
+    {% block twitter_tags %}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="{{ title|default('EchoWithin') }}" />
+    <meta name="twitter:description" content="{{ description|default('A community platform for authentic human perspective.') }}" />
+    <meta name="twitter:image" content="{{ meta_image|default(url_for('static', filename='logo.png', _external=True)) }}" />
+    {% endblock %}
+
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
         // Global Socket.IO instance
@@ -346,7 +370,7 @@
     <!-- iOS splash screens (optional, for better user experience) -->
     <meta name="mobile-web-app-capable" content="yes">
 
-    {% block title %}<title>Auth</title>{% endblock %}
+    {% block title %}<title>EchoWithin</title>{% endblock %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 

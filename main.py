@@ -3058,11 +3058,18 @@ def service_worker():
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
-    page_title = "Welcome to EchoWithin"
-    page_description = "EchoWithin is a modern platform for sharing and discussing ideas. Join the conversation today."
+    page_title = "EchoWithin - Social Networking & Idea Sharing"
+    page_description = "EchoWithin is a modern, privacy-focused platform for sharing and discussing ideas. Join our community of creative thinkers and innovators today."
+    # Generate absolute URL for social sharing preview image
+    meta_image = url_for('static', filename='og-image.png', _external=True) 
+    
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-    return render_template("dashboard.html", active_page='dashboard', title=page_title, description=page_description)
+    return render_template("dashboard.html", 
+                           active_page='dashboard', 
+                           title=page_title, 
+                           description=page_description,
+                           meta_image=meta_image)
 
 @app.route('/home')
 @login_required
@@ -3212,6 +3219,7 @@ def home():
             app.logger.error(f"Failed to calculate hot posts: {e}")
     return render_template("home.html", username=current_user.username, active_page='home',
                            title=page_title, description=page_description,
+                           meta_image=url_for('static', filename='og-image.png', _external=True),
                            total_members=total_members, total_posts=total_posts,
                            most_active_member=most_active_member, hot_posts=hot_posts)
 
@@ -8181,7 +8189,6 @@ def api_newsletter_subscribe():
 # =====================================================
 # SEO: Sitemap and Robots.txt
 # =====================================================
-
 @app.route('/sitemap.xml')
 def sitemap():
     """
@@ -8194,20 +8201,27 @@ def sitemap():
         try:
             cached = redis_cache.get(cache_key)
             if cached:
+                # Redis returns bytes, encode/decode handles it
+                if isinstance(cached, bytes):
+                    cached = cached.decode('utf-8')
                 response = make_response(cached)
-                response.headers['Content-Type'] = 'application/xml'
+                response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+                response.headers['Cache-Control'] = 'public, max-age=3600'
+                response.headers['X-Robots-Tag'] = 'noindex'
                 return response
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.warning(f"Sitemap cache hit error: {e}")
 
     # Build sitemap XML
     base_url = request.url_root.rstrip('/')
-    # Ensure base_url is HTTPS in production/if preferred
-    if app.config.get('PREFERRED_URL_SCHEME') == 'https':
+    # Strictly prefer HTTPS for sitemap URLs
+    if app.config.get('PREFERRED_URL_SCHEME') == 'https' or not app.debug:
         base_url = base_url.replace('http://', 'https://')
 
-    # Import locally to avoid top-level clutter (or could be at top)
     from html import escape
+    
+    # Today's date for static pages lastmod
+    today = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
 
     # Start XML
     xml_parts = [
@@ -8215,7 +8229,7 @@ def sitemap():
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
     ]
 
-    # Static pages with priority
+    # Static pages with priority and lastmod
     static_pages = [
         ('/', 1.0, 'daily'),
         ('/blog', 0.9, 'hourly'),
@@ -8226,14 +8240,17 @@ def sitemap():
     for path, priority, changefreq in static_pages:
         xml_parts.append(f'''  <url>
     <loc>{escape(base_url + path)}</loc>
+    <lastmod>{today}</lastmod>
     <changefreq>{changefreq}</changefreq>
     <priority>{priority}</priority>
   </url>''')
 
-    # All blog posts
+    # All blog posts (published only)
     try:
+        # Optimization: Only select needed fields
+        posts_query = {'status': 'published'} if 'status' in posts_conf.find_one({}).keys() else {}
         posts = posts_conf.find(
-            {},
+            posts_query,
             {'slug': 1, 'timestamp': 1, 'edited_at': 1}
         ).sort('timestamp', -1).limit(5000)
 
@@ -8242,16 +8259,12 @@ def sitemap():
             if not slug:
                 continue
 
-            # Use edited_at if available, otherwise timestamp
             lastmod = post.get('edited_at') or post.get('timestamp')
             lastmod_str = ''
-            if lastmod:
-                if hasattr(lastmod, 'strftime'):
-                    lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
+            if lastmod and hasattr(lastmod, 'strftime'):
+                lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
 
-            # Escape the full URL
             full_url = f"{base_url}/post/{slug}"
-
             xml_parts.append(f'''  <url>
     <loc>{escape(full_url)}</loc>{lastmod_str}
     <changefreq>weekly</changefreq>
@@ -8260,12 +8273,12 @@ def sitemap():
     except Exception as e:
         app.logger.error(f"Error generating sitemap posts: {e}")
 
-    # User profiles (top 100 active authors)
+    # User profiles
     try:
         active_authors = posts_conf.aggregate([
             {'$group': {'_id': '$author', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}},
-            {'$limit': 100}
+            {'$limit': 50}
         ])
         for author in active_authors:
             username = author.get('_id')
@@ -8273,8 +8286,9 @@ def sitemap():
                 profile_url = f"{base_url}/profile/{username}"
                 xml_parts.append(f'''  <url>
     <loc>{escape(profile_url)}</loc>
+    <lastmod>{today}</lastmod>
     <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
+    <priority>0.4</priority>
   </url>''')
     except Exception as e:
         app.logger.error(f"Error generating sitemap authors: {e}")
@@ -8286,11 +8300,13 @@ def sitemap():
     if redis_cache:
         try:
             redis_cache.setex(cache_key, 3600, sitemap_xml)
-        except Exception:
-            pass
+        except Exception as e:
+            app.logger.warning(f"Sitemap cache set error: {e}")
 
     response = make_response(sitemap_xml)
-    response.headers['Content-Type'] = 'application/xml'
+    response.headers['Content-Type'] = 'application/xml; charset=utf-8'
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    response.headers['X-Robots-Tag'] = 'noindex'
     return response
 
 

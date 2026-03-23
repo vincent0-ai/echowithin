@@ -2,7 +2,43 @@
 
 {% block title %}
     <title>{{ title }}</title>
-    <meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block og_tags %}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="EchoWithin" />
+<meta property="og:title" content="{{ title }}" />
+<meta property="og:description" content="{{ description }}" />
+<meta property="og:url" content="{{ request.url }}" />
+<meta property="og:image" content="{{ url_for('static', filename='logo.png', _external=True) }}" />
+{% endblock %}
+
+{% block twitter_tags %}
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="{{ title }}" />
+<meta name="twitter:description" content="{{ description }}" />
+<meta name="twitter:image" content="{{ url_for('static', filename='logo.png', _external=True) }}" />
+{% endblock %}
+
+{% block head_meta %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "EchoWithin",
+    "url": "https://blog.echowithin.xyz/",
+    "description": "{{ description }}",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://blog.echowithin.xyz/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+    }
+}
+</script>
 {% endblock %}
 
 {% block content %}

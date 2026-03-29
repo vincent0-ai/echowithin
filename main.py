@@ -373,6 +373,15 @@ app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app sess
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
 direct_messages_conf.create_index([('recipient_id', 1), ('is_read', 1)])
 
+# --- DM Permissions (Message Request System) ---
+dm_permissions_conf = db['dm_permissions']
+dm_permissions_conf.create_index([('requester_id', 1), ('target_id', 1)], unique=True)
+dm_permissions_conf.create_index([('target_id', 1), ('status', 1)])
+
+# In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
+# Used to suppress push notifications when recipient is already in the chat
+active_chat_views = {}
+
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
 newsletter_conf.create_index('email', unique=True)
@@ -6254,6 +6263,24 @@ def profile(username):
     page_title = f"Profile: {user['username']}"
     page_description = f"View the profile and posts by {user['username']} on EchoWithin."
 
+    # Determine DM permission status for the message button
+    dm_status = 'self'
+    if current_user.is_authenticated and str(current_user.id) != str(user_id):
+        if can_dm(str(current_user.id), str(user_id)):
+            dm_status = 'accepted'
+        else:
+            pending = dm_permissions_conf.find_one({
+                'requester_id': ObjectId(current_user.id),
+                'target_id': user_id,
+                'status': 'pending'
+            })
+            if pending:
+                dm_status = 'pending'
+            elif user.get('dm_privacy') == 'nobody':
+                dm_status = 'disabled'
+            else:
+                dm_status = 'none'
+
     return render_template('profile.html',
                            user=user,
                            user_posts=user_posts,
@@ -6264,7 +6291,8 @@ def profile(username):
                            total_pages=total_pages,
                            total_posts=total_posts,
                            total_comments=total_comments,
-                           user_achievements=get_active_achievements(user_id))
+                           user_achievements=get_active_achievements(user_id),
+                           dm_status=dm_status)
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
@@ -6338,6 +6366,11 @@ def profile_settings(username):
         notification_pref = request.form.get('notification_preference')
         if notification_pref in ('immediate', 'weekly', 'none'):
             update_data['notification_preference'] = notification_pref
+
+        # DM Privacy setting
+        dm_privacy = request.form.get('dm_privacy')
+        if dm_privacy in ('everyone', 'nobody'):
+            update_data['dm_privacy'] = dm_privacy
 
         if update_data:
             try:
@@ -7782,6 +7815,64 @@ def handle_join_inbox():
     join_room(user_room)
     app.logger.info(f"User {current_user.username} joined private inbox room: {user_room}")
 
+
+def can_dm(user_a_id, user_b_id):
+    """Check if two users are allowed to exchange DMs.
+    Returns True if:
+      - An accepted dm_permission exists between them (either direction), OR
+      - They have prior message history (grandfathered conversations)
+    """
+    a_oid = ObjectId(user_a_id)
+    b_oid = ObjectId(user_b_id)
+    
+    # Check for accepted permission in either direction
+    perm = dm_permissions_conf.find_one({
+        '$or': [
+            {'requester_id': a_oid, 'target_id': b_oid, 'status': 'accepted'},
+            {'requester_id': b_oid, 'target_id': a_oid, 'status': 'accepted'}
+        ]
+    })
+    if perm:
+        return True
+    
+    # Grandfathering: check if any messages exist between them
+    existing = direct_messages_conf.find_one({
+        '$or': [
+            {'sender_id': a_oid, 'recipient_id': b_oid},
+            {'sender_id': b_oid, 'recipient_id': a_oid}
+        ]
+    })
+    return existing is not None
+
+
+@socketio.on('viewing_chat')
+@login_required
+def handle_viewing_chat(data):
+    """Track that the user is actively viewing a specific chat for notification suppression."""
+    partner_id = data.get('partner_id')
+    if partner_id:
+        user_id = str(current_user.id)
+        if user_id not in active_chat_views:
+            active_chat_views[user_id] = set()
+        active_chat_views[user_id].add(partner_id)
+
+@socketio.on('leave_chat')
+@login_required
+def handle_leave_chat(data):
+    """User left a specific chat view."""
+    partner_id = data.get('partner_id')
+    if partner_id:
+        user_id = str(current_user.id)
+        if user_id in active_chat_views:
+            active_chat_views[user_id].discard(partner_id)
+
+@socketio.on('disconnect')
+def handle_dm_disconnect():
+    """Clean up active chat tracking on disconnect."""
+    if current_user.is_authenticated:
+        active_chat_views.pop(str(current_user.id), None)
+
+
 @socketio.on('send_dm')
 @login_required
 def handle_send_dm(data):
@@ -7797,13 +7888,27 @@ def handle_send_dm(data):
     
     try:
         recipient_id = ObjectId(recipient_id_str)
+        sender_id_str = str(current_user.id)
+
+        # Check DM permission
+        if not can_dm(sender_id_str, recipient_id_str):
+            emit('dm_error', {
+                'error': 'You need to send a message request first. This user has not accepted your request yet.'
+            }, room=f"user_{sender_id_str}")
+            return
+
+        # Check if recipient has DMs disabled
         recipient = users_conf.find_one({'_id': recipient_id})
-        
         if not recipient:
+            return
+        if recipient.get('dm_privacy') == 'nobody':
+            emit('dm_error', {
+                'error': 'This user has disabled direct messages.'
+            }, room=f"user_{sender_id_str}")
             return
 
         # Encrypt DM content before saving
-        encrypted_content = encrypt_dm(content, str(current_user.id), recipient_id_str)
+        encrypted_content = encrypt_dm(content, sender_id_str, recipient_id_str)
 
         message_doc = {
             'sender_id': ObjectId(current_user.id),
@@ -7821,7 +7926,7 @@ def handle_send_dm(data):
         recipient_room = f"user_{recipient_id_str}"
         emit('new_dm', {
             'id': str(message_doc['_id']),
-            'sender_id': str(current_user.id),
+            'sender_id': sender_id_str,
             'sender_username': current_user.username,
             'content': content,
             'timestamp': message_doc['timestamp'].isoformat(),
@@ -7831,19 +7936,20 @@ def handle_send_dm(data):
         # Confirm to sender with ID
         emit('message_confirmed', {
             'id': str(message_doc['_id']),
-            'temp_id': data.get('temp_id'),  # To match up with the local pending bubble
+            'temp_id': data.get('temp_id'),
             'timestamp': message_doc['timestamp'].isoformat()
-        }, room=f"user_{current_user.id}")
+        }, room=f"user_{sender_id_str}")
         
-        # Send push notification as fallback/background alert
-        # Logic to skip if user is currently active in the chat can be added later
-        send_push_notification_to_user(
-            recipient_id_str,
-            f"New message from {current_user.username}",
-            content[:100] + ('...' if len(content) > 100 else ''),
-            url=url_for('messages_page', _external=True),
-            tag=f'dm-{current_user.id}'
-        )
+        # Send push notification only if recipient is NOT actively viewing this chat
+        recipient_viewing = active_chat_views.get(recipient_id_str, set())
+        if sender_id_str not in recipient_viewing:
+            send_push_notification_to_user(
+                recipient_id_str,
+                f"New message from {current_user.username}",
+                content[:100] + ('...' if len(content) > 100 else ''),
+                url=url_for('messages_page', _external=True),
+                tag=f'dm-{current_user.id}'
+            )
         
     except Exception as e:
         app.logger.error(f"Error sending DM via socket: {e}")
@@ -7946,10 +8052,17 @@ def messages_page():
     if target_user_id:
         active_chat = users_conf.find_one({'_id': ObjectId(target_user_id)}, {'username': 1, 'last_active': 1})
 
+    # Count pending message requests for sidebar badge
+    pending_request_count = dm_permissions_conf.count_documents({
+        'target_id': ObjectId(current_user.id),
+        'status': 'pending'
+    })
+
     return render_template('messages.html', 
                           active_page='messages', 
                           contacts=contacts,
-                          active_chat=active_chat)
+                          active_chat=active_chat,
+                          pending_request_count=pending_request_count)
 
 @app.route('/api/messages/history/<other_user_id>')
 @login_required
@@ -8098,6 +8211,213 @@ def api_unread_dm_count():
     })
     return jsonify({'count': count})
 
+
+# --- DM Request System Endpoints ---
+
+@app.route('/api/messages/request/<target_user_id>', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_send_dm_request(target_user_id):
+    """Send a message request to another user."""
+    try:
+        target_id = ObjectId(target_user_id)
+        sender_id = ObjectId(current_user.id)
+        
+        if str(sender_id) == target_user_id:
+            return jsonify({'error': 'Cannot send request to yourself'}), 400
+        
+        target_user = users_conf.find_one({'_id': target_id}, {'username': 1, 'dm_privacy': 1})
+        if not target_user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        # Check if target has DMs disabled
+        if target_user.get('dm_privacy') == 'nobody':
+            return jsonify({'error': 'This user has disabled direct messages.'}), 403
+
+        # Check if already permitted (accepted or have existing messages)
+        if can_dm(str(sender_id), target_user_id):
+            return jsonify({'status': 'already_accepted', 'redirect': url_for('messages_page', user_id=target_user_id)})
+        
+        # Check for existing request in either direction
+        existing = dm_permissions_conf.find_one({
+            '$or': [
+                {'requester_id': sender_id, 'target_id': target_id},
+                {'requester_id': target_id, 'target_id': sender_id}
+            ]
+        })
+        
+        if existing:
+            if existing['status'] == 'pending':
+                if str(existing['requester_id']) == str(sender_id):
+                    return jsonify({'status': 'pending', 'message': 'Request already sent'})
+                else:
+                    # They sent us a request — auto-accept it
+                    dm_permissions_conf.update_one(
+                        {'_id': existing['_id']},
+                        {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+                    )
+                    return jsonify({'status': 'accepted', 'redirect': url_for('messages_page', user_id=target_user_id)})
+            elif existing['status'] == 'accepted':
+                return jsonify({'status': 'already_accepted', 'redirect': url_for('messages_page', user_id=target_user_id)})
+            elif existing['status'] == 'rejected':
+                # Allow re-requesting after rejection
+                dm_permissions_conf.update_one(
+                    {'_id': existing['_id']},
+                    {'$set': {'status': 'pending', 'requester_id': sender_id, 'target_id': target_id, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+                )
+                # Notify target via socket
+                socketio.emit('dm_request', {
+                    'request_id': str(existing['_id']),
+                    'from_user_id': str(sender_id),
+                    'from_username': current_user.username,
+                    'from_avatar': getattr(current_user, 'profile_image_url', None)
+                }, room=f"user_{target_user_id}")
+                return jsonify({'status': 'pending', 'message': 'Message request sent!'})
+        
+        # Create new request
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = dm_permissions_conf.insert_one({
+            'requester_id': sender_id,
+            'target_id': target_id,
+            'status': 'pending',
+            'created_at': now,
+            'updated_at': now
+        })
+        
+        # Real-time notification to target
+        socketio.emit('dm_request', {
+            'request_id': str(result.inserted_id),
+            'from_user_id': str(sender_id),
+            'from_username': current_user.username,
+            'from_avatar': getattr(current_user, 'profile_image_url', None)
+        }, room=f"user_{target_user_id}")
+        
+        # Push notification
+        send_push_notification_to_user(
+            target_user_id,
+            f"{current_user.username} wants to message you",
+            "Tap to view message request",
+            url=url_for('messages_page', _external=True),
+            tag=f'dm-request-{current_user.id}'
+        )
+        
+        return jsonify({'status': 'pending', 'message': 'Message request sent!'})
+    except Exception as e:
+        app.logger.error(f"Error sending DM request: {e}")
+        return jsonify({'error': 'Failed to send request'}), 400
+
+
+@app.route('/api/messages/request/<request_id>/accept', methods=['POST'])
+@login_required
+def api_accept_dm_request(request_id):
+    """Accept a pending message request."""
+    try:
+        req = dm_permissions_conf.find_one({'_id': ObjectId(request_id), 'target_id': ObjectId(current_user.id), 'status': 'pending'})
+        if not req:
+            return jsonify({'error': 'Request not found'}), 404
+        
+        dm_permissions_conf.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        
+        requester_id = str(req['requester_id'])
+        requester = users_conf.find_one({'_id': req['requester_id']}, {'username': 1})
+        
+        # Notify requester that their request was accepted
+        socketio.emit('dm_request_accepted', {
+            'by_user_id': str(current_user.id),
+            'by_username': current_user.username
+        }, room=f"user_{requester_id}")
+        
+        return jsonify({
+            'success': True,
+            'user_id': requester_id, 
+            'username': requester['username'] if requester else 'Unknown',
+            'redirect': url_for('messages_page', user_id=requester_id)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/request/<request_id>/reject', methods=['POST'])
+@login_required
+def api_reject_dm_request(request_id):
+    """Reject a pending message request."""
+    try:
+        req = dm_permissions_conf.find_one({'_id': ObjectId(request_id), 'target_id': ObjectId(current_user.id), 'status': 'pending'})
+        if not req:
+            return jsonify({'error': 'Request not found'}), 404
+        
+        dm_permissions_conf.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': 'rejected', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/requests')
+@login_required
+def api_list_dm_requests():
+    """List pending message requests for the current user."""
+    try:
+        requests = list(dm_permissions_conf.find({
+            'target_id': ObjectId(current_user.id),
+            'status': 'pending'
+        }).sort('created_at', -1))
+        
+        result = []
+        for req in requests:
+            user = users_conf.find_one({'_id': req['requester_id']}, {'username': 1, 'profile_image_url': 1})
+            if user:
+                result.append({
+                    'request_id': str(req['_id']),
+                    'from_user_id': str(req['requester_id']),
+                    'from_username': user['username'],
+                    'from_avatar': user.get('profile_image_url'),
+                    'created_at': req['created_at'].isoformat() + 'Z' if req.get('created_at') else None
+                })
+        
+        return jsonify({'requests': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/dm_status/<target_user_id>')
+@login_required
+def api_dm_status(target_user_id):
+    """Check the DM permission status between current user and target."""
+    try:
+        if str(current_user.id) == target_user_id:
+            return jsonify({'status': 'self'})
+        
+        target_id = ObjectId(target_user_id)
+        sender_id = ObjectId(current_user.id)
+        
+        # Check if already permitted (accepted or grandfathered)
+        if can_dm(str(sender_id), target_user_id):
+            return jsonify({'status': 'accepted'})
+        
+        # Check for pending request
+        pending = dm_permissions_conf.find_one({
+            'requester_id': sender_id,
+            'target_id': target_id,
+            'status': 'pending'
+        })
+        if pending:
+            return jsonify({'status': 'pending'})
+        
+        # Check if target has DMs disabled
+        target_user = users_conf.find_one({'_id': target_id}, {'dm_privacy': 1})
+        if target_user and target_user.get('dm_privacy') == 'nobody':
+            return jsonify({'status': 'disabled'})
+        
+        return jsonify({'status': 'none'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
 @limits(calls=10, period=60)

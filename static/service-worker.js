@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v16';
-const STATIC_CACHE = 'echowithin-static-v16';
-const PAGES_CACHE = 'echowithin-pages-v16';
-const POSTS_CACHE = 'echowithin-posts-v16';
+const CACHE_NAME = 'echowithin-v17';
+const STATIC_CACHE = 'echowithin-static-v17';
+const PAGES_CACHE = 'echowithin-pages-v17';
+const POSTS_CACHE = 'echowithin-posts-v17';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -264,27 +264,64 @@ self.addEventListener('push', event => {
     }
   }
 
-  const options = {
-    body: data.body,
-    icon: data.icon || '/static/logo-192.png',
-    badge: data.badge || '/static/logo-96.png',
-    tag: data.tag || 'echowithin',
-    renotify: !!data.tag, // Re-alert for grouped notifications
-    data: { url: data.url || '/' },
-    vibrate: [100, 50, 100],
-    requireInteraction: false,
-    actions: [
-      { action: 'open', title: 'Open' },
-      { action: 'close', title: 'Dismiss' }
-    ]
-  };
+  const tag = data.tag || 'echowithin';
+  const isDM = tag.startsWith('dm-');
 
   event.waitUntil(
-    Promise.all([
-      self.registration.showNotification(data.title, options),
-      // Update the app icon badge count (works on iOS PWA and Android Chrome)
-      updateBadgeFromServer()
-    ])
+    (isDM
+      ? // For DM notifications: check existing ones with same tag and collapse
+        self.registration.getNotifications({ tag }).then(existing => {
+          // Count how many we've already shown from this sender
+          const prevCount = existing.length > 0 && existing[0].data?.messageCount
+            ? existing[0].data.messageCount
+            : (existing.length > 0 ? 1 : 0);
+          const newCount = prevCount + 1;
+
+          // Extract sender name from title like "New message from Username"
+          const senderMatch = data.title.match(/from (.+)$/);
+          const senderName = senderMatch ? senderMatch[1] : 'someone';
+
+          const title = newCount > 1
+            ? `${newCount} new messages from ${senderName}`
+            : data.title;
+          const body = newCount > 1
+            ? `Tap to open conversation`
+            : data.body;
+
+          // Close old ones first
+          existing.forEach(n => n.close());
+
+          return self.registration.showNotification(title, {
+            body,
+            icon: data.icon || '/static/logo-192.png',
+            badge: data.badge || '/static/logo-96.png',
+            tag,
+            renotify: true,
+            data: { url: data.url || '/', messageCount: newCount },
+            vibrate: [100, 50, 100],
+            requireInteraction: false,
+            actions: [
+              { action: 'open', title: 'Open' },
+              { action: 'close', title: 'Dismiss' }
+            ]
+          });
+        })
+      : // For non-DM notifications: keep default behavior
+        self.registration.showNotification(data.title, {
+          body: data.body,
+          icon: data.icon || '/static/logo-192.png',
+          badge: data.badge || '/static/logo-96.png',
+          tag,
+          renotify: !!data.tag,
+          data: { url: data.url || '/' },
+          vibrate: [100, 50, 100],
+          requireInteraction: false,
+          actions: [
+            { action: 'open', title: 'Open' },
+            { action: 'close', title: 'Dismiss' }
+          ]
+        })
+    ).then(() => updateBadgeFromServer())
   );
 });
 

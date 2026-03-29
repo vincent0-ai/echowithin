@@ -22,6 +22,22 @@
                 </div>
             </div>
 
+            <!-- Message Requests Section -->
+            <div id="requests-section" style="border-bottom: 1px solid #f5ebe7; {{ 'display: none;' if not pending_request_count else '' }}">
+                <div onclick="toggleRequests()" style="padding: 0.8rem 1.5rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; background: #fdf4ee; transition: background 0.2s;"
+                     onmouseover="this.style.background='#f5ebe7'" onmouseout="this.style.background='#fdf4ee'">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-user-plus" style="color: #3e2217; font-size: 0.85rem;"></i>
+                        <span style="font-weight: 600; color: #3e2217; font-size: 0.9rem;">Message Requests</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span id="request-badge" class="unread-badge" style="background: #e74c3c; color: #fff; font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 10px;">{{ pending_request_count or 0 }}</span>
+                        <i class="fas fa-chevron-down" id="requests-chevron" style="font-size: 0.7rem; color: #999; transition: transform 0.2s;"></i>
+                    </div>
+                </div>
+                <div id="requests-list" style="display: none; max-height: 240px; overflow-y: auto;"></div>
+            </div>
+
             <div class="contact-list" id="contact-list" style="flex: 1; overflow-y: auto;">
                 {% for contact in contacts %}
                 <div class="contact-item {{ 'active' if active_chat and active_chat.username == contact.username else '' }}"
@@ -312,6 +328,28 @@
             }
         });
 
+        // DM error (e.g. permission denied)
+        socket.on('dm_error', (data) => {
+            showToast(data.error || 'Failed to send message', 'error');
+        });
+
+        // Real-time incoming message request
+        socket.on('dm_request', (data) => {
+            const section = document.getElementById('requests-section');
+            if (section) section.style.display = '';
+            const badge = document.getElementById('request-badge');
+            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+            // Refresh requests list if open
+            const list = document.getElementById('requests-list');
+            if (list && list.style.display !== 'none') loadRequestsList();
+            showToast(`${data.from_username} wants to message you`);
+        });
+
+        // Request accepted notification
+        socket.on('dm_request_accepted', (data) => {
+            showToast(`${data.by_username} accepted your message request!`);
+        });
+
         socket.on('messages_read', (data) => {
             if (data.sender_id === currentUserId) {
                 document.querySelectorAll('.message-sent .read-status i').forEach(i => {
@@ -427,6 +465,9 @@
             chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
             loadChatHistory(userId);
             if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
+
+            // Track active chat for notification suppression
+            socket.emit('viewing_chat', { partner_id: userId });
         };
 
         function loadChatHistory(userId) {
@@ -598,9 +639,121 @@
             return date.toLocaleDateString();
         }
 
-        window.backToList = () => document.querySelector('.messages-wrapper').classList.remove('chat-view-active');
+        window.backToList = () => {
+            // Leave chat tracking when going back to list
+            if (activeRecipientId) socket.emit('leave_chat', { partner_id: activeRecipientId });
+            document.querySelector('.messages-wrapper').classList.remove('chat-view-active');
+        };
 
         function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
+
+        // Clean up on page leave
+        window.addEventListener('beforeunload', () => {
+            if (activeRecipientId) socket.emit('leave_chat', { partner_id: activeRecipientId });
+        });
+
+        // --- Message Requests Functions ---
+        window.toggleRequests = function () {
+            const list = document.getElementById('requests-list');
+            const chevron = document.getElementById('requests-chevron');
+            if (list.style.display === 'none') {
+                list.style.display = 'block';
+                chevron.style.transform = 'rotate(180deg)';
+                loadRequestsList();
+            } else {
+                list.style.display = 'none';
+                chevron.style.transform = '';
+            }
+        };
+
+        function loadRequestsList() {
+            const list = document.getElementById('requests-list');
+            list.innerHTML = '<div style="padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+            fetch('/api/messages/requests').then(r => r.json()).then(data => {
+                const requests = data.requests || [];
+                if (requests.length === 0) {
+                    list.innerHTML = '<div style="padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;">No pending requests</div>';
+                    document.getElementById('requests-section').style.display = 'none';
+                    return;
+                }
+                list.innerHTML = '';
+                requests.forEach(req => {
+                    const avatar = req.from_avatar
+                        ? `<img src="${req.from_avatar}" style="width:100%;height:100%;object-fit:cover;">`
+                        : '<i class="fas fa-user" style="color:#3e2217;font-size:1rem;"></i>';
+                    list.insertAdjacentHTML('beforeend', `
+                        <div class="request-item" data-request-id="${req.request_id}" style="padding: 0.8rem 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid #f1f1f1;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#e8dcd5;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+                                ${avatar}
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;color:#3e2217;font-size:0.9rem;">${req.from_username}</div>
+                                <div style="font-size:0.75rem;color:#999;">wants to message you</div>
+                            </div>
+                            <div style="display:flex;gap:6px;flex-shrink:0;">
+                                <button onclick="acceptRequest('${req.request_id}')" style="background:#3e2217;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:0.75rem;cursor:pointer;font-weight:600;">Accept</button>
+                                <button onclick="rejectRequest('${req.request_id}')" style="background:#f1f1f1;color:#666;border:none;border-radius:6px;padding:5px 10px;font-size:0.75rem;cursor:pointer;">Decline</button>
+                            </div>
+                        </div>
+                    `);
+                });
+            });
+        }
+
+        window.acceptRequest = function (requestId) {
+            fetch(`/api/messages/request/${requestId}/accept`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    const item = document.querySelector(`.request-item[data-request-id="${requestId}"]`);
+                    if (item) item.remove();
+                    updateRequestBadge(-1);
+                    // Open the chat with the accepted user
+                    loadChat(d.user_id, d.username, null);
+                    showToast(`Accepted! You can now chat with ${d.username}`);
+                }
+            });
+        };
+
+        window.rejectRequest = function (requestId) {
+            fetch(`/api/messages/request/${requestId}/reject`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    const item = document.querySelector(`.request-item[data-request-id="${requestId}"]`);
+                    if (item) item.remove();
+                    updateRequestBadge(-1);
+                }
+            });
+        };
+
+        function updateRequestBadge(delta) {
+            const badge = document.getElementById('request-badge');
+            if (badge) {
+                const newCount = Math.max(0, parseInt(badge.textContent || '0') + delta);
+                badge.textContent = newCount;
+                if (newCount === 0) {
+                    document.getElementById('requests-section').style.display = 'none';
+                }
+            }
+        }
+
+        // Simple toast notification
+        function showToast(message) {
+            const existing = document.querySelector('.dm-toast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.className = 'dm-toast';
+            toast.textContent = message;
+            toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#3e2217;color:#fff;padding:10px 20px;border-radius:20px;font-size:0.85rem;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:toastIn 0.3s ease;';
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
     });
 </script>
+<style>
+    @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+</style>
 {% endblock %}

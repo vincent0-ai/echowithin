@@ -80,10 +80,56 @@
                 Personal Space
             </a>
             {% elif current_user %}
+            {% if dm_status == 'accepted' %}
             <a href="{{ url_for('messages_page', user_id=user._id) }}" class="btn"
                 style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
-                Send Message
+                <i class="fas fa-paper-plane"></i> Send Message
             </a>
+            {% elif dm_status == 'pending' %}
+            <button class="btn" disabled
+                style="width: 100%; margin-top: 1rem; background-color: #999; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;"
+                id="dm-request-btn">
+                <i class="fas fa-clock"></i> Request Pending
+            </button>
+            {% elif dm_status == 'disabled' %}
+            <button class="btn" disabled
+                style="width: 100%; margin-top: 1rem; background-color: #ccc; color: #888; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed;">
+                <i class="fas fa-lock"></i> Messages Disabled
+            </button>
+            {% elif dm_status == 'none' %}
+            <button class="btn" onclick="sendMessageRequest('{{ user._id }}')" id="dm-request-btn"
+                style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
+                <i class="fas fa-envelope"></i> Send Message Request
+            </button>
+            <script>
+            function sendMessageRequest(userId) {
+                const btn = document.getElementById('dm-request-btn');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                fetch('/api/messages/request/' + userId, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                }).then(r => r.json()).then(d => {
+                    if (d.status === 'accepted' || d.status === 'already_accepted') {
+                        window.location.href = d.redirect;
+                    } else if (d.status === 'pending') {
+                        btn.innerHTML = '<i class="fas fa-clock"></i> Request Pending';
+                        btn.style.backgroundColor = '#999';
+                        btn.style.cursor = 'not-allowed';
+                        if (window.showCustomAlert) window.showCustomAlert(d.message || 'Message request sent!', 'success');
+                    } else if (d.error) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-envelope"></i> Send Message Request';
+                        if (window.showCustomAlert) window.showCustomAlert(d.error, 'danger');
+                    }
+                }).catch(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-envelope"></i> Send Message Request';
+                });
+            }
+            </script>
+            {% endif %}
             {% endif %}
         </div>
 

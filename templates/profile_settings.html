@@ -79,6 +79,32 @@
         </div>
       </div>
 
+      <!-- DM Privacy Section -->
+      <div class="form-group">
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Direct Messages</label>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Control who can send you message requests.</p>
+
+        <div class="notification-pref-options" style="display: flex; flex-direction: column; gap: 0.8rem;">
+          <label class="radio-label" style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="dm_privacy" value="everyone" {% if
+              user.get('dm_privacy', 'everyone')=='everyone' %}checked{% endif %} style="margin-top: 0.3rem;">
+            <div>
+              <span style="font-weight: 500;">Everyone</span>
+              <p style="font-size: 0.85rem; color: #666; margin: 0;">Anyone can send you a message request.</p>
+            </div>
+          </label>
+
+          <label class="radio-label" style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;">
+            <input type="radio" name="dm_privacy" value="nobody" {% if
+              user.get('dm_privacy')=='nobody' %}checked{% endif %} style="margin-top: 0.3rem;">
+            <div>
+              <span style="font-weight: 500;">Nobody</span>
+              <p style="font-size: 0.85rem; color: #666; margin: 0;">Block all new message requests. Existing conversations will continue to work.</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
       <!-- Push Notifications Section -->
       <div class="form-group" id="push-notification-settings">
         <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Push Notifications</label>

@@ -1108,6 +1108,102 @@
 
         }
 
+        /* --- Share Feature Promo Card --- */
+        .share-promo-card {
+            background: linear-gradient(135deg, #fdf2f8, #fef3e7);
+            border: 1px solid #f5d0e0;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            position: relative;
+            animation: promoSlideIn 0.5s ease-out;
+        }
+
+        @keyframes promoSlideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .share-promo-icon {
+            font-size: 2rem;
+            flex-shrink: 0;
+        }
+
+        .share-promo-body h4 {
+            margin: 0 0 0.25rem;
+            font-size: 0.95rem;
+            color: #3e2217;
+        }
+
+        .share-promo-body p {
+            margin: 0;
+            font-size: 0.82rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .share-promo-body a {
+            color: #c2185b;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .share-promo-body a:hover { text-decoration: underline; }
+
+        .share-promo-dismiss {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #999;
+            font-size: 1.1rem;
+            padding: 4px;
+            line-height: 1;
+        }
+
+        .share-promo-dismiss:hover { color: #333; }
+
+        /* --- Share Button Onboarding Tooltip --- */
+        .share-note-btn {
+            position: relative;
+        }
+
+        .share-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #3e2217;
+            color: #fff;
+            font-size: 0.7rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            white-space: nowrap;
+            pointer-events: none;
+            animation: tooltipPulse 2s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        .share-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #3e2217;
+        }
+
+        @keyframes tooltipPulse {
+            0%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            50% { opacity: 0.7; transform: translateX(-50%) translateY(-3px); }
+        }
+
         /* --- Sharing UI Styles --- */
         .btn-icon {
             background: none;
@@ -1396,6 +1492,23 @@
             <span id="offline-banner-text">You're offline — notes will sync when you reconnect</span>
         </div>
         <div id="pending-notes-container"></div>
+
+        <!-- Share Feature Promo Card -->
+        {% if not active_shares_map %}
+        <div class="share-promo-card" id="share-promo-card">
+            <div class="share-promo-icon">🎁</div>
+            <div class="share-promo-body">
+                <h4>Surprise someone special!</h4>
+                <p>Write a note, pick a Valentine/Birthday theme with music & photos, then share a magic link.
+                    <a href="javascript:void(0)" onclick="document.getElementById('share-promo-card').style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1'); document.querySelector('.share-note-btn')?.click();">Try it now →</a>
+                </p>
+            </div>
+            <button class="share-promo-dismiss" onclick="this.parentElement.style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1');" aria-label="Dismiss">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        {% endif %}
+
         <div class="create-note-card">
             <div
                 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; color: #666; font-size: 0.85rem;">
@@ -1566,6 +1679,7 @@
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
+                            <span class="share-tooltip share-onboard-tip" style="display:none;">Send a surprise! 🎁</span>
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
                             <i class="fas fa-lock"></i>
@@ -4162,6 +4276,39 @@
                 const opts = document.getElementById('valentine-options');
                 if (opts) opts.style.display = vToggle.checked ? 'block' : 'none';
             });
+        }
+    })();
+
+    // --- Share Feature Promo & Onboarding Logic ---
+    (function initSharePromo() {
+        // 1. Dismiss promo card if already dismissed
+        const promoCard = document.getElementById('share-promo-card');
+        if (promoCard && localStorage.getItem('ew_share_promo_dismissed') === '1') {
+            promoCard.style.display = 'none';
+        }
+
+        // 2. Show tooltip on the FIRST note's share button (once per user)
+        if (!localStorage.getItem('ew_share_tooltip_seen')) {
+            const firstTip = document.querySelector('.share-onboard-tip');
+            if (firstTip) {
+                firstTip.style.display = 'block';
+
+                // Dismiss tooltip on any share button click
+                document.querySelectorAll('.share-note-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.share-onboard-tip').forEach(t => t.style.display = 'none');
+                        localStorage.setItem('ew_share_tooltip_seen', '1');
+                    }, { once: true });
+                });
+
+                // Auto-dismiss after 8 seconds
+                setTimeout(() => {
+                    if (firstTip.style.display !== 'none') {
+                        firstTip.style.display = 'none';
+                        localStorage.setItem('ew_share_tooltip_seen', '1');
+                    }
+                }, 8000);
+            }
         }
     })();
 </script>

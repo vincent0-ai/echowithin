@@ -1484,6 +1484,16 @@ body {
         padding: 0.35rem 0.3rem;
     }
 
+    /* Hide Logout from nav-links on mobile — it moves to top row */
+    .nav-logout-desktop {
+        display: none !important;
+    }
+
+    /* Show the mobile Logout in the brand row */
+    .nav-logout-mobile {
+        display: inline-block !important;
+    }
+
     /* Keep social icons next to brand */
     .nav-socials {
         margin-left: 0.5rem;

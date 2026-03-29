@@ -1,7 +1,5 @@
 {% extends "base.html" %}
 
-{% block title %}Messages{% endblock %}
-
 {% block content %}
 <div class="messages-container"
     style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); display: flex; flex-direction: column;">
@@ -89,8 +87,8 @@
                 <div class="chat-header"
                     style="padding: 1rem 1.5rem; border-bottom: 1px solid #f5ebe7; display: flex; align-items: center; gap: 1rem;">
                     <!-- Back Button (Mobile Only) -->
-                    <button id="mobile-back-btn" onclick="backToList()" 
-                            style="display: none; background: none; border: none; font-size: 1.25rem; color: #3e2217; padding: 0.5rem; cursor: pointer; margin-left: -0.5rem;">
+                    <button id="mobile-back-btn" onclick="backToList()"
+                        style="display: none; background: none; border: none; font-size: 1.25rem; color: #3e2217; padding: 0.5rem; cursor: pointer; margin-left: -0.5rem;">
                         <i class="fas fa-arrow-left"></i>
                     </button>
                     <div id="active-chat-avatar"
@@ -182,10 +180,14 @@
     @media (max-width: 768px) {
         .messages-container {
             padding: 0 !important;
-            height: calc(100vh - 60px) !important;
+            height: calc(100vh - 64px) !important;
             margin: 0 !important;
+            position: fixed;
+            top: 64px;
+            left: 0;
+            width: 100%;
         }
-        
+
         .messages-wrapper {
             border-radius: 0 !important;
             border: none !important;
@@ -199,10 +201,10 @@
         .chat-main {
             display: none !important;
             position: fixed;
-            top: 60px; /* Adjust based on navbar height */
+            top: 64px;
             left: 0;
             width: 100%;
-            height: calc(100vh - 60px);
+            height: calc(100vh - 64px);
             z-index: 100;
         }
 
@@ -219,8 +221,19 @@
             display: block !important;
         }
 
-        #chat-interface {
-            height: 100%;
+        /* Prevent reload button from overlapping send button */
+        #mobile-reload-btn {
+            bottom: 90px !important;
+            right: 20px !important;
+        }
+
+        .chat-input-area {
+            padding: 0.75rem 1rem !important;
+            padding-bottom: env(safe-area-inset-bottom, 0.75rem) !important;
+        }
+
+        #chat-history {
+            padding: 1rem !important;
         }
     }
 
@@ -323,7 +336,7 @@
             };
         }
 
-        window.backToList = function() {
+        window.backToList = function () {
             const wrapper = document.querySelector('.messages-wrapper');
             wrapper.classList.remove('chat-view-active');
         };

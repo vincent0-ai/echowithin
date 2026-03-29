@@ -1080,9 +1080,10 @@
             }
 
             .tab-nav button {
-                padding: 0.6rem 1rem;
-                font-size: 0.9rem;
+                padding: 0.6rem 0.8rem;
+                font-size: 0.85rem;
                 white-space: nowrap;
+                letter-spacing: -0.2px;
             }
 
             .saved-post-card {
@@ -1286,7 +1287,7 @@
             <span class="badge">{{ total_notes_count }}</span>
         </button>
         <button data-tab="locked" role="tab" aria-selected="false" id="locked-tab-btn">
-            <i class="fas fa-lock" style="font-size: 0.85rem;"></i> Locked
+            Locked
             <span class="badge">{{ locked_notes_count }}</span>
         </button>
     </div>
@@ -2191,7 +2192,9 @@
                 });
 
                 setTimeout(() => {
-                    window.location.reload(); // Reload to fetch locked notes
+                    // Force the hash to 'locked' before reloading so we come back to this tab
+                    window.location.hash = 'locked';
+                    window.location.reload();
                 }, 500);
             } else {
                 // Error - shake and clear
@@ -3332,6 +3335,13 @@
         const tabPanels = document.querySelectorAll('.tab-panel');
         let currentActiveTab = 'notes'; // Default active tab
 
+        // Helper to get tab from Hash
+        function getTabFromHash() {
+            const hash = window.location.hash.replace('#', '');
+            if (['saved', 'notes', 'locked'].includes(hash)) return hash;
+            return null;
+        }
+
         window.relockSession = async function (silent = false) {
             try {
                 const resp = await fetch('/api/app_lock/relock', {
@@ -3370,9 +3380,18 @@
 
         tabButtons.forEach(button => {
             button.addEventListener('click', () => {
-                switchToTab(button.dataset.tab);
+                const tabId = button.dataset.tab;
+                // Update hash without triggering hashchange reload
+                history.replaceState(null, null, '#' + tabId);
+                switchToTab(tabId);
             });
         });
+
+        // Initialize from Hash
+        const initialTab = getTabFromHash();
+        if (initialTab) {
+            switchToTab(initialTab);
+        }
 
         // Quick create note button
         const quickCreateBtn = document.getElementById('quick-create-note');

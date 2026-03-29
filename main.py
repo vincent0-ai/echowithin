@@ -461,6 +461,46 @@ def _get_user_fernet(user_id: str) -> Fernet:
     _user_fernet_cache[user_id] = f
     return f
 
+# -- v3 per-conversation DM key derivation & caching --
+_dm_fernet_cache = TTLCache(maxsize=1024, ttl=300) # 5-min cache for conversation keys
+
+def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
+    """Derives a unique Fernet key for a conversation between two users."""
+    # Deterministic order ensures both users derive the same key
+    uids = sorted([str(user1_id), str(user2_id)])
+    conv_id = f"{uids[0]}_{uids[1]}"
+    
+    cached = _dm_fernet_cache.get(conv_id)
+    if cached:
+        return cached
+        
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    # Salt combines fixed namespace + the unique pair IDs
+    salt = f'echowithin_dm_v1_{conv_id}'.encode()
+    key = _derive_fernet_key(secret, salt, iterations=_NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    _dm_fernet_cache[conv_id] = f
+    return f
+
+def encrypt_dm(content, user1_id, user2_id):
+    if not content: return content
+    try:
+        f = _get_dm_fernet(user1_id, user2_id)
+        return f.encrypt(content.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        app.logger.error(f"DM Encryption error: {e}")
+        return content # Fallback (should be avoided in production if strict)
+
+def decrypt_dm(encrypted_content, user1_id, user2_id):
+    if not encrypted_content: return encrypted_content
+    # Try DM specific key
+    try:
+        f = _get_dm_fernet(user1_id, user2_id)
+        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+    except Exception:
+        # Fallback to plaintext for legacy messages
+        return encrypted_content
+
 def encrypt_note(content, user_id=None):
     """Encrypts note content. Uses per-user key (v2) when user_id is provided."""
     if not content:
@@ -7761,10 +7801,14 @@ def handle_send_dm(data):
         if not recipient:
             return
 
+        # Encrypt DM content before saving
+        encrypted_content = encrypt_dm(content, str(current_user.id), recipient_id_str)
+
         message_doc = {
             'sender_id': ObjectId(current_user.id),
             'recipient_id': recipient_id,
-            'content': content,
+            'content': encrypted_content,
+            'encrypted': True,
             'timestamp': datetime.datetime.now(datetime.timezone.utc),
             'is_read': False
         }
@@ -7911,10 +7955,15 @@ def api_message_history(other_user_id):
         
         formatted_messages = []
         for m in messages:
+            content = m['content']
+            # Try to decrypt if it looks like ciphertext or if flag is set
+            if m.get('encrypted') or (content and content.startswith('gAAAAA')):
+                content = decrypt_dm(content, str(current_user.id), str(other_id))
+
             formatted_messages.append({
                 'id': str(m['_id']),
                 'sender_id': str(m['sender_id']),
-                'content': m['content'],
+                'content': content,
                 'timestamp': m['timestamp'].isoformat()
             })
             

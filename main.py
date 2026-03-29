@@ -7827,6 +7827,13 @@ def handle_send_dm(data):
             'timestamp': message_doc['timestamp'].isoformat(),
             'is_read': False
         }, room=recipient_room)
+
+        # Confirm to sender with ID
+        emit('message_confirmed', {
+            'id': str(message_doc['_id']),
+            'temp_id': data.get('temp_id'),  # To match up with the local pending bubble
+            'timestamp': message_doc['timestamp'].isoformat()
+        }, room=f"user_{current_user.id}")
         
         # Send push notification as fallback/background alert
         # Logic to skip if user is currently active in the chat can be added later
@@ -8021,10 +8028,10 @@ def api_edit_message(message_id):
             {'$set': {'content': encrypted_content, 'edited': True}}
         )
         
-        # Broadcast edit real-time
-        socketio.emit('message_edited', 
-                    {'id': message_id, 'content': new_content}, 
-                    room=f"user_{recipient_id_str}")
+        # Broadcast edit real-time to BOTH parties (all sessions)
+        update_payload = {'id': message_id, 'content': new_content}
+        socketio.emit('message_edited', update_payload, room=f"user_{recipient_id_str}")
+        socketio.emit('message_edited', update_payload, room=f"user_{current_user.id}")
                     
         return jsonify({'success': True})
     except Exception as e:
@@ -8045,10 +8052,9 @@ def api_delete_message(message_id):
         recipient_id_str = str(msg['recipient_id'])
         direct_messages_conf.delete_one({'_id': ObjectId(message_id)})
         
-        # Broadcast deletion real-time
-        socketio.emit('message_deleted', 
-                    {'id': message_id}, 
-                    room=f"user_{recipient_id_str}")
+        # Broadcast deletion real-time to BOTH parties (all sessions)
+        socketio.emit('message_deleted', {'id': message_id}, room=f"user_{recipient_id_str}")
+        socketio.emit('message_deleted', {'id': message_id}, room=f"user_{current_user.id}")
                     
         return jsonify({'success': True})
     except Exception as e:
@@ -8070,10 +8076,9 @@ def api_delete_chat(other_user_id):
             ]
         })
         
-        # Notify other user that chat is wiped (if needed)
-        socketio.emit('chat_deleted', 
-                    {'by_id': str(current_user.id)}, 
-                    room=f"user_{other_user_id}")
+        # Notify both users that chat is wiped
+        socketio.emit('chat_deleted', {'by_id': str(current_user.id)}, room=f"user_{other_user_id}")
+        socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
                     
         return jsonify({'success': True})
     except Exception as e:

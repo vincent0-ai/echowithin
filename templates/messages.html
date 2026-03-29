@@ -3,7 +3,7 @@
 {% block content %}
 <div class="messages-container"
     style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); display: flex; flex-direction: column;">
-    <div class="messages-wrapper"
+    <div class="messages-wrapper {{ 'chat-view-active' if active_chat else '' }}"
         style="display: flex; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); flex: 1; overflow: hidden; border: 1px solid #f5ebe7;">
 
         <!-- Sidebar: Contact List -->
@@ -213,6 +213,19 @@
         font-size: 0.62rem;
         opacity: 0.6;
     }
+    /* Typing Indicator Dots */
+    @keyframes typing-bounce {
+        0%, 100% { transform: translateY(0); opacity: 0.6; }
+        50% { transform: translateY(-3px); opacity: 1; }
+    }
+    .typing-dot {
+        display: inline-block;
+        animation: typing-bounce 1s infinite ease-in-out;
+        margin: 0 1px;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
     .message-time {
         display: inline-block;
         font-size: 0.62rem;
@@ -292,10 +305,33 @@
             if (data.sender_id === activeRecipientId) {
                 appendMessage(data.content, 'received', data.timestamp, false, data.id, data.is_read);
                 scrollToBottom();
-                fetch(`/api/messages/history/${activeRecipientId}`);
             } else {
                 updateSidebar(data);
                 showToast(`New message from ${data.sender_username}`);
+            }
+        });
+
+        socket.on('message_confirmed', (data) => {
+            const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
+            if (bubble) {
+                bubble.dataset.id = data.id;
+                bubble.removeAttribute('data-temp');
+                addMessageActions(bubble, data.id);
+            }
+        });
+
+        socket.on('user_typing', function (data) {
+            if (data.sender_id === activeRecipientId) {
+                typingIndicator.style.display = 'block';
+                typingIndicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> ${data.username || ''} typing`;
+                document.getElementById('chat-status').style.display = 'none';
+            }
+        });
+
+        socket.on('user_stop_typing', function (data) {
+            if (data.sender_id === activeRecipientId) {
+                typingIndicator.style.display = 'none';
+                document.getElementById('chat-status').style.display = 'block';
             }
         });
 
@@ -340,8 +376,10 @@
                 e.preventDefault();
                 const content = messageInput.value.trim();
                 if (!content || !activeRecipientId) return;
-                socket.emit('send_dm', { recipient_id: activeRecipientId, content: content });
-                appendMessage(content, 'sent', new Date().toISOString(), false);
+                
+                const tempId = Date.now().toString();
+                socket.emit('send_dm', { recipient_id: activeRecipientId, content: content, temp_id: tempId });
+                appendMessage(content, 'sent', new Date().toISOString(), false, null, false, tempId);
                 messageInput.value = '';
                 scrollToBottom();
             };
@@ -357,17 +395,18 @@
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('chat-header-actions').style.display = 'flex';
             document.getElementById('active-chat-username').textContent = username;
-            chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
+            chatHistory.innerHTML = '<div id="typing-indicator" style="display: none; padding: 0.5rem; font-size: 0.75rem; color: #64748b; font-style: italic;"></div><div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
             loadChatHistory(userId);
             if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
         };
 
         function loadChatHistory(userId) {
+            lastMessageDate = null;
             fetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
-                chatHistory.innerHTML = '';
+                chatHistory.innerHTML = ''; // Clean start
                 const messages = data.messages || [];
                 if (messages.length === 0) {
-                    chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">No messages yet. Say hello!</div>';
+                    chatHistory.insertAdjacentHTML('beforeend', '<div style="text-align: center; color: #999; padding: 3rem; font-size: 0.85rem;">No messages yet. Say hello!</div>');
                 }
                 let lastSender = null;
                 messages.forEach(m => {
@@ -375,13 +414,29 @@
                     lastSender = m.sender_id;
                 });
                 scrollToBottom();
-                if (data.other_user_status) updateUserStatus(data.other_user_status.last_active, new Date(data.server_now));
+                if (data.other_user_status) {
+                    const serverNow = data.server_now ? new Date(data.server_now) : new Date();
+                    updateUserStatus(data.other_user_status.last_active, serverNow);
+                }
             });
         }
 
-        function appendMessage(content, type, timestamp, isGrouped, msgId, isRead) {
-            const date = new Date(timestamp);
-            const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        function appendMessage(content, type, timestamp, isGrouped = false, msgId = null, isRead = false, tempId = null) {
+            const messageDate = new Date(timestamp);
+            const dateString = messageDate.toDateString();
+
+            if (dateString !== lastMessageDate) {
+                const displayDate = messageDate.toLocaleDateString();
+                chatHistory.insertAdjacentHTML('beforeend', `
+                <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
+                    <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
+                    <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
+                </div>
+            `);
+                lastMessageDate = dateString;
+            }
+
+            const time = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
             let readIcon = '';
             if (type === 'sent') {
@@ -389,24 +444,30 @@
                 readIcon = `<span class="read-status"><i class="fas ${iconClass}"></i></span>`;
             }
 
-            let actions = '';
-            if (type === 'sent' && msgId) {
-                actions = `<div class="message-actions">
-                    <button class="action-btn" onclick="editMessage('${msgId}')"><i class="fas fa-pencil-alt"></i></button>
-                    <button class="action-btn delete" onclick="deleteMessage('${msgId}')"><i class="fas fa-trash-alt"></i></button>
-                </div>`;
-            }
-
             const html = `
-                <div class="message-bubble message-${type} ${isGrouped ? 'message-grouped' : ''}" data-id="${msgId || ''}">
-                    ${actions}
+                <div class="message-bubble message-${type} ${isGrouped ? 'message-grouped' : ''}" 
+                     data-id="${msgId || ''}" data-temp="${tempId || ''}">
                     <div class="message-content">${content}</div>
                     <div class="message-meta">
                         <span class="message-time">${time}</span>
                         ${readIcon}
                     </div>
                 </div>`;
+            
             chatHistory.insertAdjacentHTML('beforeend', html);
+            
+            if (type === 'sent' && msgId) {
+                addMessageActions(chatHistory.lastElementChild, msgId);
+            }
+        }
+
+        function addMessageActions(bubble, msgId) {
+            if (bubble.querySelector('.message-actions')) return;
+            const actions = `<div class="message-actions">
+                <button class="action-btn" onclick="editMessage('${msgId}')"><i class="fas fa-pencil-alt"></i></button>
+                <button class="action-btn delete" onclick="deleteMessage('${msgId}')"><i class="fas fa-trash-alt"></i></button>
+            </div>`;
+            bubble.insertAdjacentHTML('afterbegin', actions);
         }
 
         window.editMessage = function(msgId) {
@@ -464,9 +525,35 @@
         function updateUserStatus(lastActiveStr, serverNow) {
             const el = document.getElementById('chat-status');
             if (!lastActiveStr) { el.textContent = 'Offline'; return; }
-            const diffMin = Math.floor((serverNow - new Date(lastActiveStr)) / 60000);
-            el.textContent = diffMin < 5 ? 'Active now' : 'Last seen ' + diffMin + 'm ago';
+            
+            const lastActive = new Date(lastActiveStr);
+            const now = serverNow || new Date();
+            const diffMs = now - lastActive;
+            const diffMin = Math.floor(diffMs / 60000);
+            
+            if (diffMin < 5) {
+                el.textContent = 'Active now';
+                el.style.color = '#27ae60';
+            } else {
+                el.textContent = 'Last seen ' + getRelativeTime(lastActive, now);
+                el.style.color = '#777';
+            }
             el.style.display = 'block';
+        }
+
+        function getRelativeTime(date, now) {
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHrs = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHrs / 24);
+
+            if (diffSecs < 60) return 'just now';
+            if (diffMins < 60) return diffMins + 'm ago';
+            if (diffHrs < 24) return diffHrs + 'h ago';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return diffDays + 'd ago';
+            return date.toLocaleDateString();
         }
 
         window.backToList = () => document.querySelector('.messages-wrapper').classList.remove('chat-view-active');

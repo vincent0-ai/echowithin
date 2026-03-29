@@ -1001,10 +1001,10 @@ def update_last_active():
                 {'_id': ObjectId(user_id)},
                 {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
             )
-            # Set cache key with 5 minute expiry to debounce updates
+            # Set cache key with 1 minute expiry to debounce updates (reduced from 5 to improve dashboard accuracy)
             if redis_cache:
                 try:
-                    redis_cache.setex(cache_key, 300, '1')  # 300 seconds = 5 minutes
+                    redis_cache.setex(cache_key, 60, '1')  # 60 seconds = 1 minute
                 except Exception:
                     pass
 
@@ -7794,6 +7794,24 @@ def handle_send_dm(data):
     except Exception as e:
         app.logger.error(f"Error sending DM via socket: {e}")
 
+@socketio.on('typing')
+@login_required
+def handle_typing(data):
+    """Broadcasts that the current user is typing to the recipient."""
+    recipient_id = data.get('recipient_id')
+    if recipient_id:
+        recipient_room = f"user_{recipient_id}"
+        emit('user_typing', {'sender_id': str(current_user.id)}, room=recipient_room)
+
+@socketio.on('stop_typing')
+@login_required
+def handle_stop_typing(data):
+    """Broadcasts that the user has stopped typing."""
+    recipient_id = data.get('recipient_id')
+    if recipient_id:
+        recipient_room = f"user_{recipient_id}"
+        emit('user_stop_typing', {'sender_id': str(current_user.id)}, room=recipient_room)
+
 @app.route('/messages')
 @login_required
 def messages_page():
@@ -7843,7 +7861,7 @@ def messages_page():
     contacts_raw = list(direct_messages_conf.aggregate(pipeline))
     contacts = []
     for c in contacts_raw:
-        user_info = users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1})
+        user_info = users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
         if user_info:
             contacts.append({
                 'user_id': str(user_info['_id']),
@@ -7851,14 +7869,15 @@ def messages_page():
                 'profile_image': user_info.get('profile_image_url'),
                 'last_message': c['last_message'],
                 'timestamp': c['timestamp'],
-                'unread_count': c['unread_count']
+                'unread_count': c['unread_count'],
+                'last_active': user_info.get('last_active').isoformat() if user_info.get('last_active') else None
             })
             
     # If a specific user is requested in the URL, ensure they are in/at top of contacts
     target_user_id = request.args.get('user_id')
     active_chat = None
     if target_user_id:
-        active_chat = users_conf.find_one({'_id': ObjectId(target_user_id)}, {'username': 1})
+        active_chat = users_conf.find_one({'_id': ObjectId(target_user_id)}, {'username': 1, 'last_active': 1})
 
     return render_template('messages.html', 
                           active_page='messages', 
@@ -7871,6 +7890,12 @@ def api_message_history(other_user_id):
     """Fetch chat history with a specific user."""
     try:
         other_id = ObjectId(other_user_id)
+        
+        # Get other user's status
+        other_user = users_conf.find_one({'_id': other_id}, {'username': 1, 'last_active': 1})
+        if not other_user:
+            return jsonify({'error': 'User not found'}), 404
+
         messages = list(direct_messages_conf.find({
             '$or': [
                 {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
@@ -7893,7 +7918,13 @@ def api_message_history(other_user_id):
                 'timestamp': m['timestamp'].isoformat()
             })
             
-        return jsonify(formatted_messages)
+        return jsonify({
+            'messages': formatted_messages,
+            'other_user_status': {
+                'username': other_user['username'],
+                'last_active': other_user.get('last_active').isoformat() if other_user.get('last_active') else None
+            }
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

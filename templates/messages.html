@@ -178,33 +178,42 @@
 
     /* Mobile Responsive Logic */
     @media (max-width: 768px) {
+        /* Lock page scroll — only internal panels scroll */
+        body, .page-container {
+            overflow: hidden !important;
+            height: 100vh !important;
+        }
+
+        .container {
+            padding: 0 !important;
+            overflow: hidden !important;
+            flex: none !important;
+            height: calc(100vh - 64px) !important;
+        }
+
         .messages-container {
             padding: 0 !important;
-            height: calc(100vh - 64px) !important;
+            height: 100% !important;
             margin: 0 !important;
-            position: fixed;
-            top: 64px;
-            left: 0;
-            width: 100%;
+            max-width: 100% !important;
         }
 
         .messages-wrapper {
             border-radius: 0 !important;
             border: none !important;
+            height: 100% !important;
         }
 
         .messages-sidebar {
             width: 100% !important;
             border-right: none !important;
+            height: 100% !important;
         }
 
         .chat-main {
             display: none !important;
-            position: fixed;
-            top: 64px;
-            left: 0;
             width: 100%;
-            height: calc(100vh - 64px);
+            height: 100%;
             z-index: 100;
         }
 
@@ -236,6 +245,7 @@
             padding: 1rem !important;
         }
     }
+
 
     #chat-history::-webkit-scrollbar {
         width: 6px;

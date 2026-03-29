@@ -1455,10 +1455,9 @@ body {
 
     .navbar {
         flex-direction: column;
-        padding: 1rem;
+        padding: 0.6rem 0.5rem;
         align-items: stretch;
-        /* Allow children to control their own alignment */
-        gap: 0.75rem;
+        gap: 0.4rem;
     }
 
     /* Keep nav-left left-aligned on mobile */
@@ -1471,33 +1470,18 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        gap: 1rem;
+        gap: 0.15rem;
         justify-content: center;
-        /* Center the nav links */
         width: 100%;
-
         white-space: nowrap;
-        /* Prevent wrapping */
         flex-wrap: nowrap;
-        /* Force all items to stay on one line */
-        overflow-x: auto;
-        /* Allow horizontal scroll if links exceed screen width */
-        scrollbar-width: none;
-        /* Hide scrollbar (Firefox) */
-        -webkit-overflow-scrolling: touch;
-        /* Smooth scrolling on iOS */
-    }
-
-    .nav-links::-webkit-scrollbar {
-        display: none;
-        /* Hide scrollbar (Chrome) */
     }
 
     .nav-links a {
         white-space: nowrap;
-        /* Prevent individual link text from wrapping */
         flex-shrink: 0;
-        /* Don't shrink nav items */
+        font-size: 0.8rem;
+        padding: 0.35rem 0.3rem;
     }
 
     /* Keep social icons next to brand */
@@ -1690,47 +1674,26 @@ body {
     }
 
     .navbar {
-        padding: 0.5rem;
+        padding: 0.4rem 0.3rem;
         flex-direction: column;
         align-items: stretch;
-        /* Allow children to control their own alignment */
-        gap: 0.5rem;
+        gap: 0.3rem;
     }
 
     .nav-links {
         display: flex;
         flex-direction: row;
         flex-wrap: nowrap;
-        /* Prevent wrapping on small screens */
-        gap: 0.4rem;
-        /* Reduced gap for small screens */
+        gap: 0;
         width: 100%;
         justify-content: center;
-        /* Center the nav links */
-        overflow-x: auto;
-        /* Allow horizontal scroll if needed */
-        scrollbar-width: none;
-        /* Hide scrollbar (Firefox) */
-        -webkit-overflow-scrolling: touch;
-        /* Smooth scrolling on iOS */
-        padding-bottom: 0.25rem;
-        /* Small padding for scroll area */
-    }
-
-    .nav-links::-webkit-scrollbar {
-        display: none;
-        /* Hide scrollbar (Chrome/Safari) */
     }
 
     .nav-links a {
-        font-size: 0.85rem;
-        /* Smaller font for small screens */
-        padding: 0.35rem 0.4rem;
-        /* Reduced padding */
+        font-size: 0.75rem;
+        padding: 0.3rem 0.25rem;
         white-space: nowrap;
-        /* Prevent text wrapping */
         flex-shrink: 0;
-        /* Don't shrink nav items */
     }
 
     /* Tab responsiveness on very small screens */

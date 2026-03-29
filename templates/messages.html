@@ -394,6 +394,19 @@
             };
         }
 
+        // --- Typing indicator: emit events on input ---
+        let typingTimeout = null;
+        if (messageInput) {
+            messageInput.addEventListener('input', function () {
+                if (!activeRecipientId) return;
+                socket.emit('typing', { recipient_id: activeRecipientId });
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                }, 2000);
+            });
+        }
+
         window.loadChat = function (userId, username, element) {
             document.querySelector('.messages-wrapper').classList.add('chat-view-active');
             document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
@@ -486,6 +499,8 @@
             bubble.insertAdjacentHTML('afterbegin', actions);
         }
 
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
         window.editMessage = function(msgId) {
             const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
             const oldVal = bubble.querySelector('.message-content').textContent;
@@ -493,7 +508,7 @@
             if (newVal && newVal !== oldVal) {
                 fetch(`/api/messages/edit/${msgId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                     body: JSON.stringify({ content: newVal })
                 }).then(r => r.json()).then(d => {
                     if (d.success) {
@@ -506,7 +521,10 @@
 
         window.deleteMessage = function(msgId) {
             if (confirm("Delete this message?")) {
-                fetch(`/api/messages/delete/${msgId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+                fetch(`/api/messages/delete/${msgId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                }).then(r => r.json()).then(d => {
                     if (d.success) document.querySelector(`.message-bubble[data-id="${msgId}"]`).remove();
                     else showToast(d.error);
                 });
@@ -515,7 +533,10 @@
 
         window.deleteChat = function() {
             if (confirm("Permanently delete ALL messages in this chat?")) {
-                fetch(`/api/messages/chat/delete/${activeRecipientId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+                fetch(`/api/messages/chat/delete/${activeRecipientId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                }).then(r => r.json()).then(d => {
                     if (d.success) location.reload();
                     else showToast(d.error);
                 });

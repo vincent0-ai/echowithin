@@ -7937,7 +7937,7 @@ def messages_page():
                 'last_message': last_msg,
                 'timestamp': c['timestamp'],
                 'unread_count': c['unread_count'],
-                'last_active': user_info.get('last_active').isoformat().replace('+00:00', 'Z') if user_info.get('last_active') else None
+                'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None
             })
             
     # If a specific user is requested in the URL, ensure they are in/at top of contacts
@@ -8001,7 +8001,7 @@ def api_message_history(other_user_id):
             'server_now': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
             'other_user_status': {
                 'username': other_user['username'],
-                'last_active': other_user.get('last_active').isoformat().replace('+00:00', 'Z') if other_user.get('last_active') else None
+                'last_active': (other_user.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if other_user.get('last_active') else None
             }
         })
     except Exception as e:

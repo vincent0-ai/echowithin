@@ -7920,6 +7920,7 @@ def api_message_history(other_user_id):
             
         return jsonify({
             'messages': formatted_messages,
+            'server_now': datetime.datetime.now(datetime.timezone.utc).isoformat(),
             'other_user_status': {
                 'username': other_user['username'],
                 'last_active': other_user.get('last_active').isoformat() if other_user.get('last_active') else None

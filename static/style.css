@@ -307,7 +307,7 @@ body {
     justify-content: space-between;
     align-items: center;
     background-color: var(--primary-color);
-    padding: 1rem 2rem;
+    padding: 0.8rem 1rem;
     color: var(--text-light-color);
     position: relative;
 }
@@ -315,7 +315,7 @@ body {
 .navbar a {
     color: white;
     text-decoration: none;
-    padding: 0.5rem;
+    padding: 0.5rem 0.4rem;
 }
 
 .nav-brand {
@@ -335,7 +335,7 @@ body {
 .nav-left {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .nav-socials {
@@ -356,7 +356,7 @@ body {
 /* Default desktop navigation styles */
 .nav-links {
     display: flex;
-    gap: 1rem;
+    gap: 0.4rem;
 }
 
 .nav-links a:hover {

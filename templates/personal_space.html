@@ -1322,13 +1322,13 @@
                     </div>
                     <div class="saved-post-actions">
                         <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn-icon btn-view">
-                            <i class="fas fa-arrow-right"></i> Read
+                            Read
                         </a>
                         <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST"
                             style="display:inline;" class="unsave-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-icon btn-remove">
-                                <i class="fas fa-bookmark"></i> Unsave
+                                Unsave
                             </button>
                         </form>
                     </div>
@@ -1664,11 +1664,14 @@
         </div>
         {% elif locked_notes %}
         <!-- Unlocked: show locked notes -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
             <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
                 <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Session Unlocked
             </div>
-            <button type="button" class="btn" style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;" onclick="relockSession()">
+            <button type="button" class="btn"
+                style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;"
+                onclick="relockSession()">
                 <i class="fas fa-lock"></i> Lock Now
             </button>
         </div>
@@ -3329,7 +3332,7 @@
         const tabPanels = document.querySelectorAll('.tab-panel');
         let currentActiveTab = 'notes'; // Default active tab
 
-        window.relockSession = async function(silent = false) {
+        window.relockSession = async function (silent = false) {
             try {
                 const resp = await fetch('/api/app_lock/relock', {
                     method: 'POST',
@@ -3343,7 +3346,7 @@
             }
         }
 
-        window.switchToTab = function(tabId) {
+        window.switchToTab = function (tabId) {
             // Relock if leaving 'locked' tab - MUST reload to clear sensitive DOM content
             if (currentActiveTab === 'locked' && tabId !== 'locked') {
                 relockSession(false); // Non-silent: reload to be safe

@@ -7852,10 +7852,13 @@ def handle_send_dm(data):
 @login_required
 def handle_typing(data):
     """Broadcasts that the current user is typing to the recipient."""
-    recipient_id = data.get('recipient_id')
+    recipient_id = str(data.get('recipient_id'))
     if recipient_id:
         recipient_room = f"user_{recipient_id}"
-        emit('user_typing', {'sender_id': str(current_user.id)}, room=recipient_room)
+        emit('user_typing', {
+            'sender_id': str(current_user.id),
+            'username': current_user.username
+        }, room=recipient_room)
 
 @socketio.on('stop_typing')
 @login_required
@@ -7864,7 +7867,9 @@ def handle_stop_typing(data):
     recipient_id = data.get('recipient_id')
     if recipient_id:
         recipient_room = f"user_{recipient_id}"
-        emit('user_stop_typing', {'sender_id': str(current_user.id)}, room=recipient_room)
+        emit('user_stop_typing', {
+            'sender_id': str(current_user.id)
+        }, room=recipient_room)
 
 @app.route('/messages')
 @login_required

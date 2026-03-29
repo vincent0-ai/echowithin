@@ -302,36 +302,13 @@
 
         // --- Socket Listeners ---
         socket.on('new_dm', (data) => {
+            console.log("Sync: Received new_dm", data);
             if (data.sender_id === activeRecipientId) {
                 appendMessage(data.content, 'received', data.timestamp, false, data.id, data.is_read);
                 scrollToBottom();
             } else {
                 updateSidebar(data);
                 showToast(`New message from ${data.sender_username}`);
-            }
-        });
-
-        socket.on('message_confirmed', (data) => {
-            const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
-            if (bubble) {
-                bubble.dataset.id = data.id;
-                bubble.removeAttribute('data-temp');
-                addMessageActions(bubble, data.id);
-            }
-        });
-
-        socket.on('user_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                typingIndicator.style.display = 'block';
-                typingIndicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> ${data.username || ''} typing`;
-                document.getElementById('chat-status').style.display = 'none';
-            }
-        });
-
-        socket.on('user_stop_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                typingIndicator.style.display = 'none';
-                document.getElementById('chat-status').style.display = 'block';
             }
         });
 
@@ -343,22 +320,23 @@
                 });
             }
         });
-
         socket.on('message_edited', (data) => {
+            console.log("Sync: Received message_edited", data);
             const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
             if (bubble) {
                 bubble.querySelector('.message-content').textContent = data.content;
                 if (!bubble.querySelector('.edited-flag')) {
-                    bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; margin-right: 4px;">edited</span>');
+                    bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; opacity: 0.6; margin-right: 4px;">edited</span>');
                 }
             }
         });
 
         socket.on('message_deleted', (data) => {
+            console.log("Sync: Received message_deleted", data);
             const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
             if (bubble) {
                 bubble.style.opacity = '0';
-                bubble.style.transform = 'scale(0.9)';
+                bubble.style.transform = 'scale(0.95)';
                 setTimeout(() => bubble.remove(), 200);
             }
         });
@@ -367,6 +345,37 @@
             if (data.by_id === activeRecipientId) {
                 chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">This conversation was deleted.</div>';
                 location.reload();
+            }
+        });
+
+        socket.on('message_confirmed', (data) => {
+            console.log("Sync: Message confirmed ID", data.id);
+            const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
+            if (bubble) {
+                bubble.setAttribute('data-id', data.id);
+                bubble.removeAttribute('data-temp');
+                addMessageActions(bubble, data.id);
+            }
+        });
+
+        socket.on('user_typing', function (data) {
+            if (data.sender_id === activeRecipientId) {
+                const indicator = document.getElementById('typing-indicator');
+                if (indicator) {
+                    indicator.style.display = 'block';
+                    indicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> ${data.username || ''} typing`;
+                }
+                const status = document.getElementById('chat-status');
+                if (status) status.style.display = 'none';
+            }
+        });
+
+        socket.on('user_stop_typing', function (data) {
+            if (data.sender_id === activeRecipientId) {
+                const indicator = document.getElementById('typing-indicator');
+                if (indicator) indicator.style.display = 'none';
+                const status = document.getElementById('chat-status');
+                if (status) status.style.display = 'block';
             }
         });
 
@@ -395,7 +404,14 @@
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('chat-header-actions').style.display = 'flex';
             document.getElementById('active-chat-username').textContent = username;
-            chatHistory.innerHTML = '<div id="typing-indicator" style="display: none; padding: 0.5rem; font-size: 0.75rem; color: #64748b; font-style: italic;"></div><div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
+            
+            // Clean up header state
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.style.display = 'none';
+            const status = document.getElementById('chat-status');
+            if (status) status.style.display = 'block';
+
+            chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
             loadChatHistory(userId);
             if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
         };
@@ -524,25 +540,30 @@
 
         function updateUserStatus(lastActiveStr, serverNow) {
             const el = document.getElementById('chat-status');
+            if (!el) return;
             if (!lastActiveStr) { el.textContent = 'Offline'; return; }
             
-            const lastActive = new Date(lastActiveStr);
-            const now = serverNow || new Date();
-            const diffMs = now - lastActive;
+            // ServerNow is UTC from Python isoformat()
+            // lastActiveStr is UTC from Python isoformat()
+            const now = serverNow ? new Date(serverNow) : new Date();
+            const active = new Date(lastActiveStr);
+            
+            // Get UTC millisecond values
+            const diffMs = Math.max(0, now.getTime() - active.getTime());
             const diffMin = Math.floor(diffMs / 60000);
             
             if (diffMin < 5) {
                 el.textContent = 'Active now';
                 el.style.color = '#27ae60';
             } else {
-                el.textContent = 'Last seen ' + getRelativeTime(lastActive, now);
+                el.textContent = 'Last seen ' + getRelativeTime(active, now);
                 el.style.color = '#777';
             }
             el.style.display = 'block';
         }
 
         function getRelativeTime(date, now) {
-            const diffMs = now - date;
+            const diffMs = Math.max(0, now.getTime() - date.getTime());
             const diffSecs = Math.floor(diffMs / 1000);
             const diffMins = Math.floor(diffSecs / 60);
             const diffHrs = Math.floor(diffMins / 60);

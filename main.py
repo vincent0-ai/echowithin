@@ -362,11 +362,16 @@ note_versions_conf = db['note_versions']
 note_discussions_conf = db['note_discussions']
 push_subscriptions_conf = db['push_subscriptions']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
+direct_messages_conf = db['direct_messages']
 newsletter_conf = db['newsletter_subs']
 user_post_views_conf = db['user_post_views']
 unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
+
+# --- Direct Messaging Performance Indexes ---
+direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
+direct_messages_conf.create_index([('recipient_id', 1), ('is_read', 1)])
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -1607,25 +1612,22 @@ def send_admin_broadcast_push(title, body, url=None):
             
             if all_tokens:
                 app.logger.info(f"Broadcasting to {len(all_tokens)} FCM tokens")
-                try:
-                    for i in range(0, len(all_tokens), 500):
-                        batch = all_tokens[i:i + 500]
-                        message = messaging.MulticastMessage(
+                for token in all_tokens:
+                    try:
+                        message = messaging.Message(
                             notification=messaging.Notification(title=title, body=body),
                             data={'url': url or '/', 'tag': 'admin-announcement'},
-                            tokens=batch
+                            token=token
                         )
-                        response = messaging.send_multicast(message)
-                        fcm_success += response.success_count
-                        fcm_failed += response.failure_count
-                        
-                        # Cleanup invalid tokens
-                        if response.failure_count > 0:
-                            for idx, res in enumerate(response.responses):
-                                if not res.success:
-                                    fcm_tokens_conf.delete_one({'token': batch[idx]})
-                except Exception as e:
-                    app.logger.error(f"FCM broadcast failed: {e}")
+                        messaging.send(message)
+                        fcm_success += 1
+                    except messaging.UnregisteredError:
+                        # Token is no longer valid, delete it
+                        fcm_tokens_conf.delete_one({'token': token})
+                        fcm_failed += 1
+                    except Exception as e:
+                        app.logger.debug(f"FCM send failed for token {token[:10]}...: {e}")
+                        fcm_failed += 1
         
         app.logger.info(f"Broadcast complete. Web: {web_success} ok, {web_failed} failed. FCM: {fcm_success} ok, {fcm_failed} failed.")
         
@@ -7377,6 +7379,14 @@ def app_lock_remove():
     return jsonify({'success': True, 'message': 'App lock removed. All locked notes have been unlocked.'})
 
 
+@app.route('/api/app_lock/relock', methods=['POST'])
+@login_required
+def app_lock_relock():
+    """Clear the app lock session state to relock the locked notes tab."""
+    session.pop('app_lock_unlocked', None)
+    return jsonify({'success': True})
+
+
 @app.route('/personal_post/toggle_lock/<post_id>', methods=['POST'])
 @login_required
 @limits(calls=20, period=60)
@@ -7719,6 +7729,183 @@ def handle_discussion_new_comment(data):
     comment_data = data.get('comment')
     if share_id and comment_data:
         emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
+
+
+# --- Direct Messaging (DM) Functionality ---
+
+@socketio.on('join_inbox')
+@login_required
+def handle_join_inbox():
+    """Each user joins their own private room for real-time DM delivery."""
+    user_room = f"user_{current_user.id}"
+    join_room(user_room)
+    app.logger.info(f"User {current_user.username} joined private inbox room: {user_room}")
+
+@socketio.on('send_dm')
+@login_required
+def handle_send_dm(data):
+    """
+    Handles sending a direct message via Socket.IO.
+    Data expected: { 'recipient_id': '...', 'content': '...' }
+    """
+    recipient_id_str = data.get('recipient_id')
+    content = data.get('content')
+    
+    if not recipient_id_str or not content:
+        return
+    
+    try:
+        recipient_id = ObjectId(recipient_id_str)
+        recipient = users_conf.find_one({'_id': recipient_id})
+        
+        if not recipient:
+            return
+
+        message_doc = {
+            'sender_id': ObjectId(current_user.id),
+            'recipient_id': recipient_id,
+            'content': content,
+            'timestamp': datetime.datetime.now(datetime.timezone.utc),
+            'is_read': False
+        }
+        
+        # Save to DB
+        direct_messages_conf.insert_one(message_doc)
+        
+        # Broadcast to recipient's private room
+        recipient_room = f"user_{recipient_id_str}"
+        emit('new_dm', {
+            'sender_id': str(current_user.id),
+            'sender_username': current_user.username,
+            'content': content,
+            'timestamp': message_doc['timestamp'].isoformat()
+        }, room=recipient_room)
+        
+        # Send push notification as fallback/background alert
+        # Logic to skip if user is currently active in the chat can be added later
+        send_push_notification_to_user(
+            recipient_id_str,
+            f"New message from {current_user.username}",
+            content[:100] + ('...' if len(content) > 100 else ''),
+            url=url_for('messages_page', _external=True),
+            tag='dm'
+        )
+        
+    except Exception as e:
+        app.logger.error(f"Error sending DM via socket: {e}")
+
+@app.route('/messages')
+@login_required
+def messages_page():
+    """Render the Main Inbox UI."""
+    # Get list of recent contacts
+    # This identifies everyone the user has messaged OR received messages from
+    pipeline = [
+        {
+            '$match': {
+                '$or': [
+                    {'sender_id': ObjectId(current_user.id)},
+                    {'recipient_id': ObjectId(current_user.id)}
+                ]
+            }
+        },
+        {'$sort': {'timestamp': -1}},
+        {
+            '$group': {
+                '_id': {
+                    '$cond': [
+                        {'$eq': ['$sender_id', ObjectId(current_user.id)]},
+                        '$recipient_id',
+                        '$sender_id'
+                    ]
+                },
+                'last_message': {'$first': '$content'},
+                'timestamp': {'$first': '$timestamp'},
+                'unread_count': {
+                    '$sum': {
+                        '$cond': [
+                            {
+                                '$and': [
+                                    {'$eq': ['$recipient_id', ObjectId(current_user.id)]},
+                                    {'$eq': ['$is_read', False]}
+                                ]
+                            },
+                            1,
+                            0
+                        ]
+                    }
+                }
+            }
+        },
+        {'$sort': {'timestamp': -1}}
+    ]
+    
+    contacts_raw = list(direct_messages_conf.aggregate(pipeline))
+    contacts = []
+    for c in contacts_raw:
+        user_info = users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1})
+        if user_info:
+            contacts.append({
+                'user_id': str(user_info['_id']),
+                'username': user_info['username'],
+                'profile_image': user_info.get('profile_image_url'),
+                'last_message': c['last_message'],
+                'timestamp': c['timestamp'],
+                'unread_count': c['unread_count']
+            })
+            
+    # If a specific user is requested in the URL, ensure they are in/at top of contacts
+    target_user_id = request.args.get('user_id')
+    active_chat = None
+    if target_user_id:
+        active_chat = users_conf.find_one({'_id': ObjectId(target_user_id)}, {'username': 1})
+
+    return render_template('messages.html', 
+                          active_page='messages', 
+                          contacts=contacts,
+                          active_chat=active_chat)
+
+@app.route('/api/messages/history/<other_user_id>')
+@login_required
+def api_message_history(other_user_id):
+    """Fetch chat history with a specific user."""
+    try:
+        other_id = ObjectId(other_user_id)
+        messages = list(direct_messages_conf.find({
+            '$or': [
+                {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
+                {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}
+            ]
+        }).sort('timestamp', 1).limit(50))
+        
+        # Mark as read
+        direct_messages_conf.update_many(
+            {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id), 'is_read': False},
+            {'$set': {'is_read': True}}
+        )
+        
+        formatted_messages = []
+        for m in messages:
+            formatted_messages.append({
+                'id': str(m['_id']),
+                'sender_id': str(m['sender_id']),
+                'content': m['content'],
+                'timestamp': m['timestamp'].isoformat()
+            })
+            
+        return jsonify(formatted_messages)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/unread_count')
+@login_required
+def api_unread_dm_count():
+    count = direct_messages_conf.count_documents({
+        'recipient_id': ObjectId(current_user.id),
+        'is_read': False
+    })
+    return jsonify({'count': count})
+
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
 @limits(calls=10, period=60)

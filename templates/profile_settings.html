@@ -132,8 +132,8 @@
       </p>
 
       <div id="app-lock-status-ui" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;" 
-           data-has-pin="{{ 'true' if user.get('app_lock_pin') else 'false' }}">
-        {% if user.get('app_lock_pin') %}
+           data-has-pin="{{ 'true' if user.get('app_lock_pin_hash') else 'false' }}">
+        {% if user.get('app_lock_pin_hash') %}
           <div style="display: flex; align-items: center; gap: 0.5rem; color: #2e7d32; font-weight: 500;">
             <i class="fas fa-check-circle"></i> Enabled
           </div>

@@ -456,6 +456,10 @@
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
                     Notes</a>
+                <a href="{{ url_for('messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
+                    Messages
+                    <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
+                </a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}
@@ -1715,13 +1719,34 @@
         {% if current_user.is_authenticated %}
         async function checkUnreadCount() {
             try {
-                const response = await fetch('/api/notifications/unread-count');
-                if (response.ok) {
-                    const data = await response.json();
-                    updateAppBadge(data.count || 0);
+                // Check general notifications
+                const notifResp = await fetch('/api/notifications/unread-count');
+                let notifCount = 0;
+                if (notifResp.ok) {
+                    const data = await notifResp.json();
+                    notifCount = data.count || 0;
                 }
+
+                // Check direct messages
+                const msgResp = await fetch('/api/messages/unread_count');
+                let msgCount = 0;
+                if (msgResp.ok) {
+                    const data = await msgResp.json();
+                    msgCount = data.count || 0;
+                    const badge = document.getElementById('global-unread-count');
+                    if (badge) {
+                        if (msgCount > 0) {
+                            badge.textContent = msgCount;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                }
+
+                updateAppBadge(notifCount + msgCount);
             } catch (err) {
-                // Silently fail - not critical
+                // Silently fail
             }
         }
 
@@ -1731,10 +1756,22 @@
             setInterval(checkUnreadCount, 60000);
         });
 
-        // Also refresh badge when app returns to foreground (handles Android PWA + iOS)
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible') {
-                checkUnreadCount();
+        // Socket.IO for real-time notification updates
+        document.addEventListener('DOMContentLoaded', function () {
+            // Check if socket is already initialized elsewhere (to avoid duplicate connections)
+            if (typeof socket === 'undefined') {
+                const socket = io();
+                socket.on('connect', () => {
+                    socket.emit('join_inbox');
+                });
+                socket.on('new_dm', (data) => {
+                    if (window.location.pathname !== '/messages') {
+                        checkUnreadCount();
+                        if (typeof showToast !== 'undefined') {
+                            showToast(`New message from ${data.sender_username}`);
+                        }
+                    }
+                });
             }
         });
         {% endif %}

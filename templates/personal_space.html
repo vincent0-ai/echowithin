@@ -554,11 +554,27 @@
         }
 
         @keyframes pinShake {
-            0%, 100% { transform: translateX(0); }
-            20% { transform: translateX(-8px); }
-            40% { transform: translateX(8px); }
-            60% { transform: translateX(-6px); }
-            80% { transform: translateX(6px); }
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-8px);
+            }
+
+            40% {
+                transform: translateX(8px);
+            }
+
+            60% {
+                transform: translateX(-6px);
+            }
+
+            80% {
+                transform: translateX(6px);
+            }
         }
 
         .pin-keypad {
@@ -1550,8 +1566,7 @@
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
                         </button>
-                        <button type="button" class="btn-icon lock-note-btn" title="Lock note"
-                            data-id="{{ note._id }}">
+                        <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
                             <i class="fas fa-lock"></i>
                         </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
@@ -1633,7 +1648,8 @@
             <p>Create a 4-digit PIN to lock sensitive notes away from prying eyes.</p>
             <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
             <div class="setup-hint">
-                You can also set this up in <a href="{{ url_for('profile_settings', username=current_user.username) }}">Profile Settings</a>
+                You can also set this up in <a
+                    href="{{ url_for('profile_settings', username=current_user.username) }}">Profile Settings</a>
             </div>
         </div>
         {% elif not is_unlocked %}
@@ -1641,26 +1657,41 @@
         <div class="locked-gate">
             <i class="fas fa-lock gate-icon"></i>
             <h3>Locked Notes</h3>
-            <p>Enter your PIN to view {{ locked_notes_count }} locked note{{ 's' if locked_notes_count != 1 else '' }}.</p>
-            <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter PIN</button>
+            <p>Enter your PIN to view {{ locked_notes_count }} locked note{{ 's' if locked_notes_count != 1 else '' }}.
+            </p>
+            <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter
+                PIN</button>
         </div>
         {% elif locked_notes %}
         <!-- Unlocked: show locked notes -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
+            <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
+                <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Session Unlocked
+            </div>
+            <button type="button" class="btn" style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;" onclick="relockSession()">
+                <i class="fas fa-lock"></i> Lock Now
+            </button>
+        </div>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}
             <div class="locked-note-card note-card" data-note-id="{{ note._id }}">
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
-                    <pre class="raw-note-preview" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;background:none;border:none;padding:0;font-size:inherit;line-height:1.6;color:inherit;">{{ note.content }}</pre>
+                    <pre class="raw-note-preview"
+                        style="white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;background:none;border:none;padding:0;font-size:inherit;line-height:1.6;color:inherit;">{{ note.content }}</pre>
                 </div>
                 {% if note.reference or note.tags %}
-                <div class="note-metadata-display" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                <div class="note-metadata-display"
+                    style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
                     {% if note.reference %}
-                    <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">{{ note.reference }}</div>
+                    <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">{{
+                        note.reference }}</div>
                     {% endif %}
                     {% if note.tags %}
                     <div class="note-tags-display" style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
                         {% for tag in note.tags %}
-                        <span class="note-tag-badge" style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">{{ tag }}</span>
+                        <span class="note-tag-badge"
+                            style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">{{
+                            tag }}</span>
                         {% endfor %}
                     </div>
                     {% endif %}
@@ -1670,17 +1701,20 @@
                     <span class="note-date">
                         <i class="far fa-clock"></i>
                         {{ note.created_at|localtime }}
-                        <span style="display: inline-flex; align-items: center; gap: 0.2rem; background: #f5ebe7; color: #5a3328; border-radius: 20px; padding: 0.1rem 0.4rem; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem;">
+                        <span
+                            style="display: inline-flex; align-items: center; gap: 0.2rem; background: #f5ebe7; color: #5a3328; border-radius: 20px; padding: 0.1rem 0.4rem; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem;">
                             <i class="fas fa-lock" style="font-size: 0.55rem;"></i> Locked
                         </span>
                     </span>
                     {% set note_id_str = note._id|string %}
                     {% if locked_shares_map.get(note_id_str) %}
-                    <div class="active-links-badge" style="position: relative; display: inline-flex; align-items: center;">
+                    <div class="active-links-badge"
+                        style="position: relative; display: inline-flex; align-items: center;">
                         <button type="button" class="active-link-toggle"
                             style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
                             title="This note has active share links">
-                            <i class="fas fa-link"></i> {{ locked_shares_map[note_id_str]|length }} Link{{ 's' if locked_shares_map[note_id_str]|length > 1 }}
+                            <i class="fas fa-link"></i> {{ locked_shares_map[note_id_str]|length }} Link{{ 's' if
+                            locked_shares_map[note_id_str]|length > 1 }}
                         </button>
                     </div>
                     {% endif %}
@@ -1693,10 +1727,12 @@
                             data-tags='{{ (note.tags or []) | tojson | safe }}'>
                             <i class="fas fa-pen"></i>
                         </button>
-                        <button type="button" class="btn-icon share-note-btn" title="Share note" data-id="{{ note._id }}">
+                        <button type="button" class="btn-icon share-note-btn" title="Share note"
+                            data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
                         </button>
-                        <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note" data-id="{{ note._id }}">
+                        <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note"
+                            data-id="{{ note._id }}">
                             <i class="fas fa-lock-open"></i>
                         </button>
                         {% set nid_str = note._id|string %}
@@ -1769,7 +1805,7 @@
             <div style="margin-bottom: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
                 <label
                     style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d;">
-                    <i class="fas fa-gift"></i> Surprise Theme (Optional)
+                    Surprise Theme (Optional)
                 </label>
                 <select id="surprise-theme"
                     style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff;">
@@ -1914,16 +1950,16 @@
         <div class="pin-modal-content">
             <h2 id="pin-modal-title">Enter PIN</h2>
             <p id="pin-modal-desc">Enter your 4-digit PIN to unlock</p>
-            
+
             <div id="pin-error" class="pin-error-msg"></div>
-            
+
             <div class="pin-dots" id="pin-dots">
                 <div class="pin-dot"></div>
                 <div class="pin-dot"></div>
                 <div class="pin-dot"></div>
                 <div class="pin-dot"></div>
             </div>
-            
+
             <div class="pin-keypad">
                 <button class="pin-key" onclick="handlePinKey('1')">1</button>
                 <button class="pin-key" onclick="handlePinKey('2')">2</button>
@@ -1940,8 +1976,9 @@
                     <i class="fas fa-backspace"></i>
                 </button>
             </div>
-            
-            <button onclick="closePinModal()" class="btn edit-btn" style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+
+            <button onclick="closePinModal()" class="btn edit-btn"
+                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
         </div>
     </div>
 </div>
@@ -2039,20 +2076,20 @@
     let currentPin = '';
     let pinAction = 'verify'; // 'verify', 'setup', 'remove'
     let setupPinFirst = ''; // for 'setup' two-step
-    
-    window.openPinModal = function(action) {
+
+    window.openPinModal = function (action) {
         currentPin = '';
         pinAction = action;
         setupPinFirst = '';
         updatePinDots();
-        
+
         const modal = document.getElementById('pin-modal');
         const title = document.getElementById('pin-modal-title');
         const desc = document.getElementById('pin-modal-desc');
         const error = document.getElementById('pin-error');
-        
+
         if (error) error.textContent = '';
-        
+
         if (action === 'verify') {
             title.textContent = 'Enter PIN';
             desc.textContent = 'Enter your 4-digit PIN to unlock';
@@ -2063,15 +2100,15 @@
             title.textContent = 'Remove PIN';
             desc.textContent = 'Enter your current PIN to disable app lock';
         }
-        
+
         if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             document.addEventListener('keydown', handlePinModalKey);
         }
     };
-    
-    window.closePinModal = function() {
+
+    window.closePinModal = function () {
         const modal = document.getElementById('pin-modal');
         if (modal) {
             modal.style.display = 'none';
@@ -2079,7 +2116,7 @@
             document.removeEventListener('keydown', handlePinModalKey);
         }
     };
-    
+
     function handlePinModalKey(e) {
         if (e.key >= '0' && e.key <= '9') {
             handlePinKey(e.key);
@@ -2089,25 +2126,25 @@
             closePinModal();
         }
     }
-    
-    window.handlePinKey = function(key) {
+
+    window.handlePinKey = function (key) {
         const error = document.getElementById('pin-error');
         if (error) error.textContent = '';
-        
+
         if (key === 'backspace') {
             currentPin = currentPin.slice(0, -1);
             updatePinDots();
         } else if (currentPin.length < 4) {
             currentPin += key;
             updatePinDots();
-            
+
             if (currentPin.length === 4) {
                 // Short delay for visual feedback, then process
                 setTimeout(processPin, 200);
             }
         }
     };
-    
+
     function updatePinDots() {
         const dots = document.querySelectorAll('#pin-dots .pin-dot');
         dots.forEach((dot, index) => {
@@ -2118,7 +2155,7 @@
             }
         });
     }
-    
+
     async function processPin() {
         if (pinAction === 'verify') {
             verifyPin(currentPin);
@@ -2128,7 +2165,7 @@
             verifyPin(currentPin);
         }
     }
-    
+
     async function verifyPin(pin) {
         try {
             const resp = await fetch('/api/app_lock/verify', {
@@ -2139,9 +2176,9 @@
                 },
                 body: JSON.stringify({ pin: pin })
             });
-            
+
             const data = await resp.json();
-            
+
             if (resp.ok) {
                 // Success! Give visual feedback
                 const dots = document.querySelectorAll('#pin-dots .pin-dot');
@@ -2149,7 +2186,7 @@
                     d.classList.add('success');
                     d.classList.remove('filled');
                 });
-                
+
                 setTimeout(() => {
                     window.location.reload(); // Reload to fetch locked notes
                 }, 500);
@@ -2160,10 +2197,10 @@
                     d.classList.add('error');
                     d.classList.remove('filled');
                 });
-                
+
                 const error = document.getElementById('pin-error');
                 if (error) error.textContent = data.error || 'Incorrect PIN';
-                
+
                 setTimeout(() => {
                     currentPin = '';
                     dots.forEach(d => d.classList.remove('error'));
@@ -2175,9 +2212,9 @@
             alert('Security error. Please try again.');
         }
     }
-    
+
     // Toggle Note Lock
-    window.toggleNoteLock = async function(noteId) {
+    window.toggleNoteLock = async function (noteId) {
         try {
             const resp = await fetch(`/personal_post/toggle_lock/${noteId}`, {
                 method: 'POST',
@@ -2186,7 +2223,7 @@
                     'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
                 }
             });
-            
+
             const data = await resp.json();
             if (data.success) {
                 // Move the note card between containers or update badge
@@ -2195,14 +2232,14 @@
                     noteCard.style.transition = 'opacity 0.3s, transform 0.3s';
                     noteCard.style.opacity = '0';
                     noteCard.style.transform = 'scale(0.95)';
-                    
+
                     setTimeout(() => {
                         window.location.reload(); // Simpler for now to ensure consistency
                     }, 300);
                 } else {
-                   window.location.reload();
+                    window.location.reload();
                 }
-                
+
                 if (window.showFlashMessage) {
                     window.showFlashMessage(data.message, 'success');
                 }
@@ -2223,7 +2260,7 @@
         }
     };
 
-    window.openPinSetupFromGate = function() {
+    window.openPinSetupFromGate = function () {
         if (typeof window.showCustomConfirm === 'function') {
             window.showCustomConfirm('App Lock protects sensitive notes. You need to set a 4-digit PIN in Settings. Go there now?', confirmed => {
                 if (confirmed) {
@@ -2257,7 +2294,7 @@
             try {
                 const f = JSON.parse(pendingFlash);
                 if (f.message) window.showFlashMessage(f.message, f.category || 'success');
-            } catch (e) {}
+            } catch (e) { }
         }
     })();
 
@@ -3290,8 +3327,30 @@
         // Tab switching
         const tabButtons = document.querySelectorAll('.tab-nav button');
         const tabPanels = document.querySelectorAll('.tab-panel');
+        let currentActiveTab = 'notes'; // Default active tab
 
-        function switchToTab(tabId) {
+        window.relockSession = async function(silent = false) {
+            try {
+                const resp = await fetch('/api/app_lock/relock', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value }
+                });
+                if (resp.ok && !silent) {
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error('Relock error:', err);
+            }
+        }
+
+        window.switchToTab = function(tabId) {
+            // Relock if leaving 'locked' tab - MUST reload to clear sensitive DOM content
+            if (currentActiveTab === 'locked' && tabId !== 'locked') {
+                relockSession(false); // Non-silent: reload to be safe
+                return; // relockSession will reload the page
+            }
+            currentActiveTab = tabId;
+
             const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);
             if (button) {
                 tabButtons.forEach(b => {
@@ -3301,7 +3360,8 @@
                 tabPanels.forEach(p => p.classList.remove('active'));
                 button.classList.add('active');
                 button.setAttribute('aria-selected', 'true');
-                document.getElementById('tab-' + tabId).classList.add('active');
+                const panel = document.getElementById('tab-' + tabId);
+                if (panel) panel.classList.add('active');
             }
         }
 

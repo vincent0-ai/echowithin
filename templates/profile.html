@@ -79,9 +79,12 @@
                 style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">
                 Personal Space
             </a>
+            {% elif current_user %}
+            <a href="{{ url_for('messages_page', user_id=user._id) }}" class="btn"
+                style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
+                Send Message
+            </a>
             {% endif %}
-
-
         </div>
 
         <div class="profile-main-content">

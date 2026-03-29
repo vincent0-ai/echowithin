@@ -25,6 +25,7 @@
             <div class="contact-list" id="contact-list" style="flex: 1; overflow-y: auto;">
                 {% for contact in contacts %}
                 <div class="contact-item {{ 'active' if active_chat and active_chat.username == contact.username else '' }}"
+                    data-user-id="{{ contact.user_id }}"
                     onclick="loadChat('{{ contact.user_id }}', '{{ contact.username }}', this)"
                     style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 1px solid #f1f1f1; position: relative;">
                     <div class="contact-avatar"
@@ -40,10 +41,10 @@
                         <div style="display: flex; justify-content: space-between; align-items: baseline;">
                             <span style="font-weight: 600; color: #3e2217; font-size: 0.95rem;">{{ contact.username
                                 }}</span>
-                            <span style="font-size: 0.7rem; color: #999;">{{ contact.timestamp|localtime('%H:%M')
+                            <span class="contact-time" style="font-size: 0.7rem; color: #999;">{{ contact.timestamp|localtime('%H:%M')
                                 }}</span>
                         </div>
-                        <div
+                        <div class="contact-last-msg"
                             style="font-size: 0.85rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
                             {{ contact.last_message }}
                         </div>
@@ -68,7 +69,7 @@
         <div class="chat-main" id="chat-main-container"
             style="flex: 1; display: flex; flex-direction: column; background: #fff;">
 
-            <!-- Selection Splash Screen (Shown when no chat is selected) -->
+            <!-- Selection Splash Screen -->
             <div id="selection-splash"
                 style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 2rem; background: #fafafa; {{ 'display: none;' if active_chat else '' }}">
                 <div
@@ -80,36 +81,38 @@
                     start a new conversation from a user's profile.</p>
             </div>
 
-            <!-- Chat Interface (Hidden until chat is selected) -->
+            <!-- Chat Interface -->
             <div id="chat-interface"
                 style="flex: 1; flex-direction: column; height: 100%; {{ 'display: flex;' if active_chat else 'display: none;' }}">
                 <!-- Chat Header -->
-                <div class="chat-header"
-                    style="padding: 1rem 1.5rem; border-bottom: 1px solid #f5ebe7; display: flex; align-items: center; gap: 1rem;">
-                    <!-- Back Button (Mobile Only) -->
-                    <button id="mobile-back-btn" onclick="backToList()"
-                        style="display: none; background: none; border: none; font-size: 1.25rem; color: #3e2217; padding: 0.5rem; cursor: pointer; margin-left: -0.5rem;">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <div id="active-chat-avatar"
-                        style="width: 40px; height: 40px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                        <i class="fas fa-user" style="color: #3e2217;"></i>
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <button class="action-btn back-btn" onclick="backToList()" id="mobile-back-btn">
+                            <i class="fas fa-arrow-left"></i>
+                        </button>
+                        <div class="active-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <i class="fas fa-user" style="color: #3e2217;"></i>
+                        </div>
+                        <div>
+                            <div id="active-chat-username" style="font-weight: 600; color: #3e2217;">{{ active_chat.username if active_chat else 'Select a contact' }}</div>
+                            <div id="chat-status" style="font-size: 0.75rem; color: #64748b; display: none;">Online</div>
+                            <div id="typing-indicator" style="font-size: 0.75rem; color: #3e2217; font-style: italic; display: none;">Typing...</div>
+                        </div>
                     </div>
-                    <div>
-                        <h3 id="active-chat-username" style="margin: 0; font-size: 1.1rem; color: #3e2217;">{{
-                            active_chat.username if active_chat else '' }}</h3>
-                        <div id="chat-status" style="font-size: 0.75rem; color: #777;"></div>
-                        <div id="typing-indicator"
-                            style="font-size: 0.75rem; color: #999; font-style: italic; display: none;"> typing...</div>
+                    <div class="chat-header-actions {{ 'hidden' if not active_chat else '' }}" id="chat-header-actions" 
+                         style="gap: 8px;">
+                        <button class="header-action-btn" onclick="deleteChat()" title="Delete Conversation">
+                            <i class="fas fa-trash-alt"></i>
+                            <span class="desktop-only" style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
+                        </button>
                     </div>
                 </div>
 
                 <!-- Messages List -->
                 <div id="chat-history"
-                    style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; background: #fafafa;">
+                    style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa;">
                     {% if not active_chat %}
-                    <div style="text-align: center; color: #999; font-size: 0.9rem; padding: 2rem;">Loading chat
-                        history...</div>
+                    <div style="text-align: center; color: #999; font-size: 0.85rem; padding: 2rem;">Loading chat history...</div>
                     {% endif %}
                 </div>
 
@@ -120,7 +123,7 @@
                         <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
                         <div style="flex: 1; position: relative;">
                             <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off"
-                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #eee; background: #fdfaf9; font-size: 0.9rem; outline: none; border: 1px solid #e8dcd5;">
+                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none;">
                         </div>
                         <button type="submit" class="btn"
                             style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s;">
@@ -134,142 +137,139 @@
 </div>
 
 <style>
-    .contact-item:hover {
-        background: #fdfaf9;
-    }
+    :root { --primary-color: #3e2217; }
+    
+    /* Contact Items */
+    .contact-item:hover { background: #fdfaf9; }
+    .contact-item.active { background: #f5ebe7 !important; border-left: 4px solid #3e2217; }
 
-    .contact-item.active {
-        background: #f5ebe7 !important;
-        border-left: 4px solid #3e2217;
+    /* Chat Header Actions */
+    .chat-header {
+        padding: 0.75rem 1.5rem;
+        background: white;
+        border-bottom: 1px solid #f5ebe7;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
+    .chat-header-actions { display: flex; gap: 8px; }
+    .chat-header-actions.hidden { display: none; }
 
+    .header-action-btn {
+        background: transparent;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 8px;
+        color: #64748b;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .header-action-btn:hover { background: #f1f5f9; color: #ef4444; }
+
+    /* Message Bubble Refinements */
     .message-bubble {
-        max-width: 70%;
-        padding: 0.6rem 0.8rem;
-        border-radius: 14px;
-        font-size: 0.9rem;
-        line-height: 1.4;
+        max-width: 82%;
+        padding: 0.4rem 0.7rem;
+        border-radius: 18px;
+        font-size: 0.85rem;
+        line-height: 1.35;
         position: relative;
-        word-break: break-word;
+        word-wrap: break-word;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        margin-bottom: 1px;
     }
 
     .message-sent {
+        background: var(--primary-color);
+        color: white;
         align-self: flex-end;
-        background: #3e2217;
-        color: #fff;
         border-bottom-right-radius: 4px;
+        box-shadow: 0 1px 3px rgba(62, 34, 23, 0.15);
     }
 
     .message-received {
+        background: #f1f5f9;
+        color: #1e293b;
         align-self: flex-start;
-        background: #fff;
-        color: #3e2217;
         border-bottom-left-radius: 4px;
-        border: 1px solid #e8dcd5;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+        border: none;
+        box-shadow: none;
     }
 
+    .message-bubble:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* Message Meta & Actions */
+    .message-meta {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 3px;
+        margin-top: 2px;
+        font-size: 0.62rem;
+        opacity: 0.6;
+    }
     .message-time {
-        display: block;
-        font-size: 0.7rem;
-        margin-top: 0.25rem;
-        opacity: 0.7;
-        text-align: right;
+        display: inline-block;
+        font-size: 0.62rem;
+        opacity: 0.9;
+        font-weight: 500;
     }
 
-    /* Message Grouping Styles */
-    .message-bubble.message-grouped {
-        margin-top: 2px !important;
-        border-top-left-radius: 8px !important;
-        border-top-right-radius: 8px !important;
-    }
-    
-    .message-sent.message-grouped {
-        border-top-right-radius: 4px !important;
-    }
-    
-    .message-received.message-grouped {
-        border-top-left-radius: 4px !important;
+    .message-actions {
+        position: absolute;
+        top: 0;
+        right: 100%;
+        display: flex;
+        gap: 4px;
+        padding-right: 8px;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
     }
 
-    /* Mobile Responsive Logic */
+    .message-bubble:hover .message-actions { opacity: 1; pointer-events: auto; }
+
+    .action-btn {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #eee;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #64748b;
+        font-size: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .action-btn:hover { color: var(--primary-color); background: #fff; }
+    .action-btn.delete:hover { color: #ef4444; }
+
+    /* Read Status Colors */
+    .read-status i.fa-check-double { color: #5dade2; }
+    .message-sent .read-status i.fa-check { color: rgba(255,255,255,0.6); }
+
+    /* Grouping */
+    .message-grouped { margin-top: 2px !important; }
+
+    /* Scrollbar */
+    #chat-history::-webkit-scrollbar { width: 6px; }
+    #chat-history::-webkit-scrollbar-thumb { background: #e8dcd5; border-radius: 10px; }
+
     @media (max-width: 768px) {
-        /* Lock page scroll — only internal panels scroll */
-        body, .page-container {
-            overflow: hidden !important;
-            height: 100vh !important;
-        }
-
-        .container {
-            padding: 0 !important;
-            overflow: hidden !important;
-            flex: none !important;
-            height: calc(100vh - 95px) !important;
-        }
-
-        .messages-container {
-            padding: 0 !important;
-            height: 100% !important;
-            margin: 0 !important;
-            max-width: 100% !important;
-        }
-
-        .messages-wrapper {
-            border-radius: 0 !important;
-            border: none !important;
-            height: 100% !important;
-        }
-
-        .messages-sidebar {
-            width: 100% !important;
-            border-right: none !important;
-            height: 100% !important;
-        }
-
-        .chat-main {
-            display: none !important;
-            width: 100%;
-            height: 100%;
-            z-index: 100;
-        }
-
-        /* When a chat is active on mobile */
-        .messages-wrapper.chat-view-active .messages-sidebar {
-            display: none !important;
-        }
-
-        .messages-wrapper.chat-view-active .chat-main {
-            display: flex !important;
-        }
-
-        #mobile-back-btn {
-            display: block !important;
-        }
-
-        /* Prevent reload button from overlapping send button */
-        #mobile-reload-btn {
-            bottom: 90px !important;
-            right: 20px !important;
-        }
-
-        .chat-input-area {
-            padding: 0.75rem 1rem !important;
-            padding-bottom: env(safe-area-inset-bottom, 0.75rem) !important;
-        }
-
-        #chat-history {
-            padding: 1rem !important;
-        }
-    }
-
-
-    #chat-history::-webkit-scrollbar {
-        width: 6px;
-    }
-
-    #chat-history::-webkit-scrollbar-thumb {
-        background: #e8dcd5;
-        border-radius: 10px;
+        .messages-sidebar { width: 100% !important; }
+        .chat-main { display: none !important; }
+        .messages-wrapper.chat-view-active .messages-sidebar { display: none !important; }
+        .messages-wrapper.chat-view-active .chat-main { display: flex !important; }
+        #mobile-back-btn { display: block !important; background: none; border: none; font-size: 1.1rem; color: var(--primary-color); padding: 5px; cursor: pointer; }
+        .desktop-only { display: none; }
     }
 </style>
 
@@ -279,271 +279,199 @@
         const chatHistory = document.getElementById('chat-history');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
-        const contactList = document.getElementById('contact-list');
         const currentUserId = "{{ current_user.id }}";
-
         let activeRecipientId = "{{ active_chat._id if active_chat else '' }}";
-
-        // Typing indicator logic
-        let typingTimeout;
-        const typingIndicator = document.getElementById('typing-indicator');
-
-        if (messageInput) {
-            messageInput.addEventListener('input', () => {
-                if (activeRecipientId) {
-                    socket.emit('typing', { recipient_id: activeRecipientId });
-
-                    clearTimeout(typingTimeout);
-                    typingTimeout = setTimeout(() => {
-                        socket.emit('stop_typing', { recipient_id: activeRecipientId });
-                    }, 3000);
-                }
-            });
-
-            messageInput.addEventListener('blur', () => {
-                if (activeRecipientId) {
-                    socket.emit('stop_typing', { recipient_id: activeRecipientId });
-                }
-            });
-        }
-
-        socket.on('user_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                typingIndicator.style.display = 'block';
-                document.getElementById('chat-status').style.display = 'none';
-            }
-        });
-
-        socket.on('user_stop_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                typingIndicator.style.display = 'none';
-                document.getElementById('chat-status').style.display = 'block';
-            }
-        });
 
         // Join private inbox room
         socket.emit('join_inbox');
 
-        // Load initial chat history if active
-        if (activeRecipientId) {
-            loadChatHistory(activeRecipientId);
-        }
+        if (activeRecipientId) loadChatHistory(activeRecipientId);
 
-        // Handle incoming DMs
-        socket.on('new_dm', function (data) {
+        // --- Socket Listeners ---
+        socket.on('new_dm', (data) => {
             if (data.sender_id === activeRecipientId) {
-                appendMessage(data.content, 'received', data.timestamp, false);
+                appendMessage(data.content, 'received', data.timestamp, false, data.id, data.is_read);
                 scrollToBottom();
-                // Mark as read in backend
                 fetch(`/api/messages/history/${activeRecipientId}`);
             } else {
-                // Signal a new message from someone else (update sidebar)
                 updateSidebar(data);
                 showToast(`New message from ${data.sender_username}`);
             }
         });
 
+        socket.on('messages_read', (data) => {
+            if (data.sender_id === currentUserId) {
+                document.querySelectorAll('.message-sent .read-status i').forEach(i => {
+                    i.className = 'fas fa-check-double';
+                    i.style.color = '#5dade2';
+                });
+            }
+        });
+
+        socket.on('message_edited', (data) => {
+            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+            if (bubble) {
+                bubble.querySelector('.message-content').textContent = data.content;
+                if (!bubble.querySelector('.edited-flag')) {
+                    bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; margin-right: 4px;">edited</span>');
+                }
+            }
+        });
+
+        socket.on('message_deleted', (data) => {
+            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+            if (bubble) {
+                bubble.style.opacity = '0';
+                bubble.style.transform = 'scale(0.9)';
+                setTimeout(() => bubble.remove(), 200);
+            }
+        });
+
+        socket.on('chat_deleted', (data) => {
+            if (data.by_id === activeRecipientId) {
+                chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">This conversation was deleted.</div>';
+                location.reload();
+            }
+        });
+
+        // --- Message Actions ---
         if (chatForm) {
-            chatForm.onsubmit = function (e) {
+            chatForm.onsubmit = (e) => {
                 e.preventDefault();
                 const content = messageInput.value.trim();
                 if (!content || !activeRecipientId) return;
-
-                // Emit via socket
-                socket.emit('send_dm', {
-                    recipient_id: activeRecipientId,
-                    content: content
-                });
-
-                // Append locally
+                socket.emit('send_dm', { recipient_id: activeRecipientId, content: content });
                 appendMessage(content, 'sent', new Date().toISOString(), false);
                 messageInput.value = '';
                 scrollToBottom();
             };
         }
 
-        window.backToList = function () {
-            const wrapper = document.querySelector('.messages-wrapper');
-            wrapper.classList.remove('chat-view-active');
-        };
-
         window.loadChat = function (userId, username, element) {
-            // Toggle view for mobile
-            const wrapper = document.querySelector('.messages-wrapper');
-            wrapper.classList.add('chat-view-active');
-
-            // Update active class in sidebar
-            document.querySelectorAll('.contact-item').forEach(item => item.classList.remove('active'));
+            document.querySelector('.messages-wrapper').classList.add('chat-view-active');
+            document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
             if (element) element.classList.add('active');
-
             activeRecipientId = userId;
             document.getElementById('recipient-id').value = userId;
-
-            // Toggle visibility
             document.getElementById('selection-splash').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
-
+            document.getElementById('chat-header-actions').style.display = 'flex';
             document.getElementById('active-chat-username').textContent = username;
-            chatHistory.innerHTML = '<div style="text-align: center; color: #999; font-size: 0.9rem; padding: 2rem;">Loading chat history...</div>';
-
+            chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
             loadChatHistory(userId);
-
-            // Clear unread badge locally
-            if (element) {
-                const badge = element.querySelector('.unread-badge');
-                if (badge) badge.remove();
-            }
+            if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
         };
 
         function loadChatHistory(userId) {
-            fetch(`/api/messages/history/${userId}`)
-                .then(r => r.json())
-                .then(data => {
-                    chatHistory.innerHTML = '';
-                    const messages = data.messages || [];
-                    const serverNow = data.server_now ? new Date(data.server_now) : new Date();
-
-                    // Update active status
-                    if (data.other_user_status) {
-                        updateUserStatus(data.other_user_status.last_active, serverNow);
-                    }
-
-                    if (messages.length === 0) {
-                        chatHistory.innerHTML = '<div style="text-align: center; color: #999; font-size: 0.9rem; padding: 3rem;">No messages yet. Say hello!</div>';
-                        return;
-                    }
-                    
-                    let lastSenderId = null;
-                    messages.forEach(m => {
-                        const type = m.sender_id === currentUserId ? 'sent' : 'received';
-                        const isGrouped = m.sender_id === lastSenderId;
-                        appendMessage(m.content, type, m.timestamp, isGrouped);
-                        lastSenderId = m.sender_id;
-                    });
-                    scrollToBottom();
+            fetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
+                chatHistory.innerHTML = '';
+                const messages = data.messages || [];
+                if (messages.length === 0) {
+                    chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">No messages yet. Say hello!</div>';
+                }
+                let lastSender = null;
+                messages.forEach(m => {
+                    appendMessage(m.content, m.sender_id === currentUserId ? 'sent' : 'received', m.timestamp, m.sender_id === lastSender, m.id, m.is_read);
+                    lastSender = m.sender_id;
                 });
+                scrollToBottom();
+                if (data.other_user_status) updateUserStatus(data.other_user_status.last_active, new Date(data.server_now));
+            });
+        }
+
+        function appendMessage(content, type, timestamp, isGrouped, msgId, isRead) {
+            const date = new Date(timestamp);
+            const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            let readIcon = '';
+            if (type === 'sent') {
+                const iconClass = isRead ? 'fa-check-double' : 'fa-check';
+                readIcon = `<span class="read-status"><i class="fas ${iconClass}"></i></span>`;
+            }
+
+            let actions = '';
+            if (type === 'sent' && msgId) {
+                actions = `<div class="message-actions">
+                    <button class="action-btn" onclick="editMessage('${msgId}')"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="action-btn delete" onclick="deleteMessage('${msgId}')"><i class="fas fa-trash-alt"></i></button>
+                </div>`;
+            }
+
+            const html = `
+                <div class="message-bubble message-${type} ${isGrouped ? 'message-grouped' : ''}" data-id="${msgId || ''}">
+                    ${actions}
+                    <div class="message-content">${content}</div>
+                    <div class="message-meta">
+                        <span class="message-time">${time}</span>
+                        ${readIcon}
+                    </div>
+                </div>`;
+            chatHistory.insertAdjacentHTML('beforeend', html);
+        }
+
+        window.editMessage = function(msgId) {
+            const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
+            const oldVal = bubble.querySelector('.message-content').textContent;
+            const newVal = prompt("Edit message:", oldVal);
+            if (newVal && newVal !== oldVal) {
+                fetch(`/api/messages/edit/${msgId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: newVal })
+                }).then(r => r.json()).then(d => {
+                    if (d.success) {
+                        bubble.querySelector('.message-content').textContent = newVal;
+                        if (!bubble.querySelector('.edited-flag')) bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; margin-right: 4px;">edited</span>');
+                    } else showToast(d.error);
+                });
+            }
+        };
+
+        window.deleteMessage = function(msgId) {
+            if (confirm("Delete this message?")) {
+                fetch(`/api/messages/delete/${msgId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+                    if (d.success) document.querySelector(`.message-bubble[data-id="${msgId}"]`).remove();
+                    else showToast(d.error);
+                });
+            }
+        };
+
+        window.deleteChat = function() {
+            if (confirm("Permanently delete ALL messages in this chat?")) {
+                fetch(`/api/messages/chat/delete/${activeRecipientId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+                    if (d.success) location.reload();
+                    else showToast(d.error);
+                });
+            }
+        };
+
+        function updateSidebar(data) {
+            const item = document.querySelector(`.contact-item[data-user-id="${data.sender_id}"]`);
+            if (item) {
+                item.querySelector('.contact-last-msg').textContent = data.content;
+                let badge = item.querySelector('.unread-badge');
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.className = 'unread-badge';
+                    badge.style = 'background: #3e2217; color: #fff; font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 10px; margin-left: 5px;';
+                    badge.textContent = '1';
+                    item.appendChild(badge);
+                } else badge.textContent = parseInt(badge.textContent) + 1;
+                document.getElementById('contact-list').prepend(item);
+            }
         }
 
         function updateUserStatus(lastActiveStr, serverNow) {
-            const statusEl = document.getElementById('chat-status');
-            if (!lastActiveStr) {
-                statusEl.textContent = 'Offline';
-                statusEl.style.color = '#777';
-                return;
-            }
-
-            const lastActive = new Date(lastActiveStr);
-            const diffMs = serverNow - lastActive;
-            const diffMin = Math.floor(diffMs / 60000);
-
-            if (diffMin < 5) {
-                statusEl.textContent = 'Active now';
-                statusEl.style.color = '#27ae60'; // Green
-            } else {
-                statusEl.textContent = 'Last seen ' + getTimeAgo(lastActive, serverNow);
-                statusEl.style.color = '#777';
-            }
+            const el = document.getElementById('chat-status');
+            if (!lastActiveStr) { el.textContent = 'Offline'; return; }
+            const diffMin = Math.floor((serverNow - new Date(lastActiveStr)) / 60000);
+            el.textContent = diffMin < 5 ? 'Active now' : 'Last seen ' + diffMin + 'm ago';
+            el.style.display = 'block';
         }
 
-        function getTimeAgo(date, serverNow) {
-            const now = serverNow || new Date();
-            const diffMs = now - date;
-            
-            // Handle clock skew where server time is slightly behind client activity
-            if (diffMs < 0) return 'Just now';
-            
-            const diffMin = Math.floor(diffMs / 60000);
-            const diffHrs = Math.floor(diffMin / 60);
-            const diffDays = Math.floor(diffHrs / 24);
+        window.backToList = () => document.querySelector('.messages-wrapper').classList.remove('chat-view-active');
 
-            if (diffMin < 1) return 'Just now';
-            if (diffMin < 60) return diffMin + 'm ago';
-            if (diffHrs < 24) return diffHrs + 'h ago';
-            if (diffDays < 7) return diffDays + 'd ago';
-            return date.toLocaleDateString();
-        }
-
-        let lastMessageDate = null;
-
-        function appendMessage(content, type, timestamp, isGrouped = false) {
-            const messageDate = new Date(timestamp);
-            const dateString = messageDate.toDateString();
-
-            // Add date divider if new day
-            if (dateString !== lastMessageDate) {
-                const displayDate = getDisplayDate(messageDate);
-                chatHistory.insertAdjacentHTML('beforeend', `
-                <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
-                    <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
-                    <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
-                </div>
-            `);
-                lastMessageDate = dateString;
-            }
-
-            const time = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const groupedClass = isGrouped ? 'message-grouped' : '';
-            
-            const msgHtml = `
-            <div class="message-bubble message-${type} ${groupedClass}">
-                ${content}
-                <span class="message-time" ${isGrouped ? 'style="display:none;"' : ''}>${time}</span>
-            </div>
-            `;
-            chatHistory.insertAdjacentHTML('beforeend', msgHtml);
-        }
-
-        function getDisplayDate(date) {
-            const today = new Date();
-            const yesterday = new Date();
-            yesterday.setDate(today.getDate() - 1);
-
-            if (date.toDateString() === today.toDateString()) return 'Today';
-            if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-
-            return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
-        }
-
-        function scrollToBottom() {
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        function updateSidebar(data) {
-            // Find the contact item for the sender
-            const contactItem = document.querySelector(`.contact-item[data-user-id="${data.sender_id}"]`);
-            if (contactItem) {
-                // Update message snippet
-                const snippet = contactItem.querySelector('.contact-last-msg');
-                if (snippet) {
-                    snippet.textContent = data.content;
-                }
-                
-                // Add/Update unread badge
-                let info = contactItem.querySelector('.contact-info');
-                let badge = contactItem.querySelector('.unread-badge');
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'badge unread-badge';
-                    badge.style.background = '#c62828';
-                    badge.style.color = 'white';
-                    badge.style.marginLeft = 'auto';
-                    badge.textContent = '1';
-                    contactItem.querySelector('.contact-header').appendChild(badge);
-                } else {
-                    badge.textContent = parseInt(badge.textContent) + 1;
-                }
-                
-                // Move to top
-                const list = document.getElementById('contacts-list');
-                if (list) {
-                    list.prepend(contactItem);
-                }
-            } else {
-                // If contact not in list, might want to reload page or fetch new list
-                // For now, reload is safest to ensure all metadata is correct
-                // location.reload();
-            }
-        }
+        function scrollToBottom() { chatHistory.scrollTop = chatHistory.scrollHeight; }
     });
 </script>
 {% endblock %}

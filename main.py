@@ -7820,10 +7820,12 @@ def handle_send_dm(data):
         # Broadcast to recipient's private room
         recipient_room = f"user_{recipient_id_str}"
         emit('new_dm', {
+            'id': str(message_doc['_id']),
             'sender_id': str(current_user.id),
             'sender_username': current_user.username,
             'content': content,
-            'timestamp': message_doc['timestamp'].isoformat()
+            'timestamp': message_doc['timestamp'].isoformat(),
+            'is_read': False
         }, room=recipient_room)
         
         # Send push notification as fallback/background alert
@@ -7973,8 +7975,14 @@ def api_message_history(other_user_id):
                 'id': str(m['_id']),
                 'sender_id': str(m['sender_id']),
                 'content': content,
-                'timestamp': m['timestamp'].isoformat()
+                'timestamp': m['timestamp'].isoformat().replace('+00:00', 'Z'),
+                'is_read': m.get('is_read', False)
             })
+            
+        # Socket alert for real-time double checkmarks
+        socketio.emit('messages_read', 
+                    {'reader_id': str(current_user.id), 'sender_id': other_user_id}, 
+                    room=f"user_{other_user_id}")
             
         return jsonify({
             'messages': formatted_messages,
@@ -7984,6 +7992,90 @@ def api_message_history(other_user_id):
                 'last_active': other_user.get('last_active').isoformat().replace('+00:00', 'Z') if other_user.get('last_active') else None
             }
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/edit/<message_id>', methods=['POST'])
+@login_required
+def api_edit_message(message_id):
+    """Allows sender to edit their own message."""
+    try:
+        data = request.get_json() or {}
+        new_content = data.get('content')
+        if not new_content:
+            return jsonify({'error': 'No content provided'}), 400
+            
+        msg = direct_messages_conf.find_one({'_id': ObjectId(message_id)})
+        if not msg:
+            return jsonify({'error': 'Message not found'}), 404
+            
+        if str(msg['sender_id']) != str(current_user.id):
+            return jsonify({'error': 'Unauthorized'}), 403
+            
+        # Re-encrypt for recipient
+        recipient_id_str = str(msg['recipient_id'])
+        encrypted_content = encrypt_dm(new_content, str(current_user.id), recipient_id_str)
+        
+        direct_messages_conf.update_one(
+            {'_id': ObjectId(message_id)},
+            {'$set': {'content': encrypted_content, 'edited': True}}
+        )
+        
+        # Broadcast edit real-time
+        socketio.emit('message_edited', 
+                    {'id': message_id, 'content': new_content}, 
+                    room=f"user_{recipient_id_str}")
+                    
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/delete/<message_id>', methods=['POST'])
+@login_required
+def api_delete_message(message_id):
+    """Allows sender to delete their own message."""
+    try:
+        msg = direct_messages_conf.find_one({'_id': ObjectId(message_id)})
+        if not msg:
+            return jsonify({'error': 'Message not found'}), 404
+            
+        if str(msg['sender_id']) != str(current_user.id):
+            return jsonify({'error': 'Unauthorized'}), 403
+            
+        recipient_id_str = str(msg['recipient_id'])
+        direct_messages_conf.delete_one({'_id': ObjectId(message_id)})
+        
+        # Broadcast deletion real-time
+        socketio.emit('message_deleted', 
+                    {'id': message_id}, 
+                    room=f"user_{recipient_id_str}")
+                    
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/chat/delete/<other_user_id>', methods=['POST'])
+@login_required
+def api_delete_chat(other_user_id):
+    """Deletes all messages in a conversation for the current user."""
+    try:
+        other_id = ObjectId(other_user_id)
+        # We delete all messages between these two users
+        # Note: In a production app, we would ideally just hide them for the current user
+        # so they remain for the other user. But here we'll wipe them for simplicity.
+        direct_messages_conf.delete_many({
+            '$or': [
+                {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
+                {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}
+            ]
+        })
+        
+        # Notify other user that chat is wiped (if needed)
+        socketio.emit('chat_deleted', 
+                    {'by_id': str(current_user.id)}, 
+                    room=f"user_{other_user_id}")
+                    
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 

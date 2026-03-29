@@ -170,10 +170,26 @@
     }
 
     .message-time {
-        font-size: 0.6rem;
-        color: #999;
-        margin-top: 3px;
         display: block;
+        font-size: 0.7rem;
+        margin-top: 0.25rem;
+        opacity: 0.7;
+        text-align: right;
+    }
+
+    /* Message Grouping Styles */
+    .message-bubble.message-grouped {
+        margin-top: 2px !important;
+        border-top-left-radius: 8px !important;
+        border-top-right-radius: 8px !important;
+    }
+    
+    .message-sent.message-grouped {
+        border-top-right-radius: 4px !important;
+    }
+    
+    .message-received.message-grouped {
+        border-top-left-radius: 4px !important;
     }
 
     /* Mobile Responsive Logic */
@@ -316,7 +332,7 @@
         // Handle incoming DMs
         socket.on('new_dm', function (data) {
             if (data.sender_id === activeRecipientId) {
-                appendMessage(data.content, 'received', data.timestamp);
+                appendMessage(data.content, 'received', data.timestamp, false);
                 scrollToBottom();
                 // Mark as read in backend
                 fetch(`/api/messages/history/${activeRecipientId}`);
@@ -340,7 +356,7 @@
                 });
 
                 // Append locally
-                appendMessage(content, 'sent', new Date().toISOString());
+                appendMessage(content, 'sent', new Date().toISOString(), false);
                 messageInput.value = '';
                 scrollToBottom();
             };
@@ -396,9 +412,13 @@
                         chatHistory.innerHTML = '<div style="text-align: center; color: #999; font-size: 0.9rem; padding: 3rem;">No messages yet. Say hello!</div>';
                         return;
                     }
+                    
+                    let lastSenderId = null;
                     messages.forEach(m => {
                         const type = m.sender_id === currentUserId ? 'sent' : 'received';
-                        appendMessage(m.content, type, m.timestamp);
+                        const isGrouped = m.sender_id === lastSenderId;
+                        appendMessage(m.content, type, m.timestamp, isGrouped);
+                        lastSenderId = m.sender_id;
                     });
                     scrollToBottom();
                 });
@@ -428,6 +448,10 @@
         function getTimeAgo(date, serverNow) {
             const now = serverNow || new Date();
             const diffMs = now - date;
+            
+            // Handle clock skew where server time is slightly behind client activity
+            if (diffMs < 0) return 'Just now';
+            
             const diffMin = Math.floor(diffMs / 60000);
             const diffHrs = Math.floor(diffMin / 60);
             const diffDays = Math.floor(diffHrs / 24);
@@ -441,7 +465,7 @@
 
         let lastMessageDate = null;
 
-        function appendMessage(content, type, timestamp) {
+        function appendMessage(content, type, timestamp, isGrouped = false) {
             const messageDate = new Date(timestamp);
             const dateString = messageDate.toDateString();
 
@@ -449,7 +473,7 @@
             if (dateString !== lastMessageDate) {
                 const displayDate = getDisplayDate(messageDate);
                 chatHistory.insertAdjacentHTML('beforeend', `
-                <div style="text-align: center; margin: 1.5rem 0; position: relative;">
+                <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
                     <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
                     <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
                 </div>
@@ -458,12 +482,14 @@
             }
 
             const time = messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const groupedClass = isGrouped ? 'message-grouped' : '';
+            
             const msgHtml = `
-            <div class="message-bubble message-${type}">
+            <div class="message-bubble message-${type} ${groupedClass}">
                 ${content}
-                <span class="message-time">${time}</span>
+                <span class="message-time" ${isGrouped ? 'style="display:none;"' : ''}>${time}</span>
             </div>
-        `;
+            `;
             chatHistory.insertAdjacentHTML('beforeend', msgHtml);
         }
 
@@ -483,8 +509,40 @@
         }
 
         function updateSidebar(data) {
-            // Logic to update the contact list item with last message
-            // For now, simpler to just reload or let user refresh if not in active view
+            // Find the contact item for the sender
+            const contactItem = document.querySelector(`.contact-item[data-user-id="${data.sender_id}"]`);
+            if (contactItem) {
+                // Update message snippet
+                const snippet = contactItem.querySelector('.contact-last-msg');
+                if (snippet) {
+                    snippet.textContent = data.content;
+                }
+                
+                // Add/Update unread badge
+                let info = contactItem.querySelector('.contact-info');
+                let badge = contactItem.querySelector('.unread-badge');
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'badge unread-badge';
+                    badge.style.background = '#c62828';
+                    badge.style.color = 'white';
+                    badge.style.marginLeft = 'auto';
+                    badge.textContent = '1';
+                    contactItem.querySelector('.contact-header').appendChild(badge);
+                } else {
+                    badge.textContent = parseInt(badge.textContent) + 1;
+                }
+                
+                // Move to top
+                const list = document.getElementById('contacts-list');
+                if (list) {
+                    list.prepend(contactItem);
+                }
+            } else {
+                // If contact not in list, might want to reload page or fetch new list
+                // For now, reload is safest to ensure all metadata is correct
+                // location.reload();
+            }
         }
     });
 </script>

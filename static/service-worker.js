@@ -269,6 +269,7 @@ self.addEventListener('push', event => {
     icon: data.icon || '/static/logo-192.png',
     badge: data.badge || '/static/logo-96.png',
     tag: data.tag || 'echowithin',
+    renotify: !!data.tag, // Re-alert for grouped notifications
     data: { url: data.url || '/' },
     vibrate: [100, 50, 100],
     requireInteraction: false,

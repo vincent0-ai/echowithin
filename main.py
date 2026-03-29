@@ -1542,8 +1542,9 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                     'body': body,
                     'url': url or '/',
                     'tag': tag or 'echowithin',
-                    'icon': '/static/logo.png',
-                    'badge': '/static/logo.png'
+                    'renotify': True,
+                    'icon': '/static/logo-192.png',
+                    'badge': '/static/logo-96.png'
                 })
 
                 for sub in subscriptions:
@@ -7832,7 +7833,7 @@ def handle_send_dm(data):
             f"New message from {current_user.username}",
             content[:100] + ('...' if len(content) > 100 else ''),
             url=url_for('messages_page', _external=True),
-            tag='dm'
+            tag=f'dm-{current_user.id}'
         )
         
     except Exception as e:
@@ -7907,14 +7908,22 @@ def messages_page():
     for c in contacts_raw:
         user_info = users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
         if user_info:
+            last_msg = c.get('last_message', '')
+            # Decrypt last message if it's encrypted
+            if last_msg and last_msg.startswith('gAAAAA'):
+                try:
+                    last_msg = decrypt_dm(last_msg, str(current_user.id), str(user_info['_id']))
+                except Exception:
+                    pass  # Keep as is if decryption fails
+
             contacts.append({
                 'user_id': str(user_info['_id']),
                 'username': user_info['username'],
                 'profile_image': user_info.get('profile_image_url'),
-                'last_message': c['last_message'],
+                'last_message': last_msg,
                 'timestamp': c['timestamp'],
                 'unread_count': c['unread_count'],
-                'last_active': user_info.get('last_active').isoformat() if user_info.get('last_active') else None
+                'last_active': user_info.get('last_active').isoformat().replace('+00:00', 'Z') if user_info.get('last_active') else None
             })
             
     # If a specific user is requested in the URL, ensure they are in/at top of contacts
@@ -7969,10 +7978,10 @@ def api_message_history(other_user_id):
             
         return jsonify({
             'messages': formatted_messages,
-            'server_now': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'server_now': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
             'other_user_status': {
                 'username': other_user['username'],
-                'last_active': other_user.get('last_active').isoformat() if other_user.get('last_active') else None
+                'last_active': other_user.get('last_active').isoformat().replace('+00:00', 'Z') if other_user.get('last_active') else None
             }
         })
     except Exception as e:

@@ -457,6 +457,18 @@ body {
     margin-top: 0.5rem;
 }
 
+.post-meta a {
+    text-decoration: underline;
+    text-decoration-color: rgba(62, 34, 23, 0.3);
+    text-underline-offset: 2px;
+    color: var(--primary-color);
+    transition: text-decoration-color 0.2s;
+}
+
+.post-meta a:hover {
+    text-decoration-color: var(--primary-color);
+}
+
 .post-actions {
     display: flex;
     gap: 0.5rem;

@@ -467,6 +467,203 @@
             opacity: 0.6;
         }
 
+        /* Lock Note Button */
+        .note-actions .lock-note-btn {
+            color: #9e9e9e;
+        }
+
+        .note-actions .lock-note-btn:hover {
+            background: #f5ebe7;
+            color: #5a3328;
+        }
+
+        .note-actions .lock-note-btn.is-locked {
+            color: #5a3328;
+        }
+
+        /* Locked Notes Tab */
+        .tab-nav button[data-tab="locked"] .badge {
+            background: #f5ebe7;
+            color: #5a3328;
+        }
+
+        .tab-nav button[data-tab="locked"].active .badge {
+            background: #5a3328;
+            color: white;
+        }
+
+        .locked-note-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            border-left: 4px solid #5a3328;
+            position: relative;
+        }
+
+        /* PIN Modal */
+        .pin-modal-content {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .pin-modal-content h2 {
+            color: #3e2217;
+            margin: 0 0 0.5rem 0;
+            font-size: 1.3rem;
+        }
+
+        .pin-modal-content p {
+            color: #888;
+            margin: 0 0 1.5rem 0;
+            font-size: 0.9rem;
+        }
+
+        .pin-dots {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 1.5rem;
+        }
+
+        .pin-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid #ccc;
+            background: transparent;
+            transition: all 0.2s ease;
+        }
+
+        .pin-dot.filled {
+            background: #3e2217;
+            border-color: #3e2217;
+            transform: scale(1.1);
+        }
+
+        .pin-dot.error {
+            border-color: #d32f2f;
+            background: #d32f2f;
+            animation: pinShake 0.4s ease-in-out;
+        }
+
+        .pin-dot.success {
+            border-color: #2e7d32;
+            background: #2e7d32;
+        }
+
+        @keyframes pinShake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+
+        .pin-keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 260px;
+            margin: 0 auto 1rem auto;
+        }
+
+        .pin-key {
+            width: 100%;
+            aspect-ratio: 1.4;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            background: #fafafa;
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pin-key:hover {
+            background: #f0f0f0;
+            border-color: #bbb;
+        }
+
+        .pin-key:active {
+            background: #e0e0e0;
+            transform: scale(0.96);
+        }
+
+        .pin-key.empty {
+            visibility: hidden;
+        }
+
+        .pin-key.backspace {
+            font-size: 1.1rem;
+            color: #888;
+        }
+
+        .pin-error-msg {
+            color: #d32f2f;
+            font-size: 0.85rem;
+            min-height: 1.2rem;
+            margin-bottom: 0.5rem;
+            transition: opacity 0.2s;
+        }
+
+        /* Locked gate overlay for the locked tab */
+        .locked-gate {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #888;
+        }
+
+        .locked-gate i.gate-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #5a3328;
+            opacity: 0.6;
+        }
+
+        .locked-gate h3 {
+            color: #555;
+            margin-bottom: 0.5rem;
+        }
+
+        .locked-gate p {
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .locked-gate .unlock-btn {
+            background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+            color: white;
+            border: none;
+            padding: 0.7rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .locked-gate .unlock-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(62, 34, 23, 0.3);
+        }
+
+        .locked-gate .setup-hint {
+            margin-top: 1rem;
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+
+        .locked-gate .setup-hint a {
+            color: #3e2217;
+            text-decoration: underline;
+        }
+
         /* Source badge for saved/cloned notes */
         .source-badge {
             display: inline-flex;
@@ -1070,7 +1267,11 @@
         </button>
         <button class="active" data-tab="notes" role="tab" aria-selected="true">
             Notes
-            <span class="badge">{{ personal_posts|length }}</span>
+            <span class="badge">{{ total_notes_count }}</span>
+        </button>
+        <button data-tab="locked" role="tab" aria-selected="false" id="locked-tab-btn">
+            <i class="fas fa-lock" style="font-size: 0.85rem;"></i> Locked
+            <span class="badge">{{ locked_notes_count }}</span>
         </button>
     </div>
 
@@ -1349,6 +1550,10 @@
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
                         </button>
+                        <button type="button" class="btn-icon lock-note-btn" title="Lock note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-lock"></i>
+                        </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
                             data-id="{{ note._id }}">
                             <i class="fas fa-clock-rotate-left"></i>
@@ -1414,6 +1619,106 @@
             <i class="far fa-sticky-note"></i>
             <h3>No notes yet</h3>
             <p>Write private notes that only you can see.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Locked Notes Tab -->
+    <div id="tab-locked" class="tab-panel" role="tabpanel">
+        {% if not has_app_lock %}
+        <!-- No PIN set up yet -->
+        <div class="locked-gate">
+            <i class="fas fa-shield-alt gate-icon"></i>
+            <h3>Set Up App Lock</h3>
+            <p>Create a 4-digit PIN to lock sensitive notes away from prying eyes.</p>
+            <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
+            <div class="setup-hint">
+                You can also set this up in <a href="{{ url_for('profile_settings', username=current_user.username) }}">Profile Settings</a>
+            </div>
+        </div>
+        {% elif not is_unlocked %}
+        <!-- PIN is set but tab is locked -->
+        <div class="locked-gate">
+            <i class="fas fa-lock gate-icon"></i>
+            <h3>Locked Notes</h3>
+            <p>Enter your PIN to view {{ locked_notes_count }} locked note{{ 's' if locked_notes_count != 1 else '' }}.</p>
+            <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter PIN</button>
+        </div>
+        {% elif locked_notes %}
+        <!-- Unlocked: show locked notes -->
+        <div class="personal-notes-list" id="locked-notes-container">
+            {% for note in locked_notes %}
+            <div class="locked-note-card note-card" data-note-id="{{ note._id }}">
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
+                    <pre class="raw-note-preview" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;background:none;border:none;padding:0;font-size:inherit;line-height:1.6;color:inherit;">{{ note.content }}</pre>
+                </div>
+                {% if note.reference or note.tags %}
+                <div class="note-metadata-display" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem;">
+                    {% if note.reference %}
+                    <div class="note-ref-display" style="font-size: 0.75rem; color: #555; font-weight: 600;">{{ note.reference }}</div>
+                    {% endif %}
+                    {% if note.tags %}
+                    <div class="note-tags-display" style="display: flex; gap: 0.3rem; flex-wrap: wrap;">
+                        {% for tag in note.tags %}
+                        <span class="note-tag-badge" style="background: #f0f0f0; color: #666; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; border: 1px solid #ddd;">{{ tag }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div class="note-footer">
+                    <span class="note-date">
+                        <i class="far fa-clock"></i>
+                        {{ note.created_at|localtime }}
+                        <span style="display: inline-flex; align-items: center; gap: 0.2rem; background: #f5ebe7; color: #5a3328; border-radius: 20px; padding: 0.1rem 0.4rem; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem;">
+                            <i class="fas fa-lock" style="font-size: 0.55rem;"></i> Locked
+                        </span>
+                    </span>
+                    {% set note_id_str = note._id|string %}
+                    {% if locked_shares_map.get(note_id_str) %}
+                    <div class="active-links-badge" style="position: relative; display: inline-flex; align-items: center;">
+                        <button type="button" class="active-link-toggle"
+                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
+                            title="This note has active share links">
+                            <i class="fas fa-link"></i> {{ locked_shares_map[note_id_str]|length }} Link{{ 's' if locked_shares_map[note_id_str]|length > 1 }}
+                        </button>
+                    </div>
+                    {% endif %}
+                    <div class="note-actions">
+                        <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
+                            <i class="far fa-copy"></i>
+                        </button>
+                        <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
+                            data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'>
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button type="button" class="btn-icon share-note-btn" title="Share note" data-id="{{ note._id }}">
+                            <i class="fas fa-share-alt"></i>
+                        </button>
+                        <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note" data-id="{{ note._id }}">
+                            <i class="fas fa-lock-open"></i>
+                        </button>
+                        {% set nid_str = note._id|string %}
+                        <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
+                            style="display:inline;" class="delete-note-form"
+                            data-has-shares="{{ 'true' if locked_shares_map.get(nid_str) else 'false' }}"
+                            data-has-clones="{{ 'true' if locked_clones_map.get(nid_str) else 'false' }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="button" class="delete-btn" title="Delete note">
+                                <i class="far fa-trash-alt"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-lock" style="opacity: 0.4;"></i>
+            <h3>No locked notes</h3>
+            <p>Lock notes from the Notes tab using the <i class="fas fa-lock" style="font-size: 0.9em;"></i> button.</p>
         </div>
         {% endif %}
     </div>
@@ -1602,6 +1907,45 @@
 
 <!-- KaTeX for math rendering -->
 
+
+<!-- PIN Entry Modal -->
+<div id="pin-modal" class="custom-modal-overlay" onclick="if(event.target === this) closePinModal()">
+    <div class="custom-modal" style="max-width: 320px;">
+        <div class="pin-modal-content">
+            <h2 id="pin-modal-title">Enter PIN</h2>
+            <p id="pin-modal-desc">Enter your 4-digit PIN to unlock</p>
+            
+            <div id="pin-error" class="pin-error-msg"></div>
+            
+            <div class="pin-dots" id="pin-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            
+            <div class="pin-keypad">
+                <button class="pin-key" onclick="handlePinKey('1')">1</button>
+                <button class="pin-key" onclick="handlePinKey('2')">2</button>
+                <button class="pin-key" onclick="handlePinKey('3')">3</button>
+                <button class="pin-key" onclick="handlePinKey('4')">4</button>
+                <button class="pin-key" onclick="handlePinKey('5')">5</button>
+                <button class="pin-key" onclick="handlePinKey('6')">6</button>
+                <button class="pin-key" onclick="handlePinKey('7')">7</button>
+                <button class="pin-key" onclick="handlePinKey('8')">8</button>
+                <button class="pin-key" onclick="handlePinKey('9')">9</button>
+                <div class="pin-key empty"></div>
+                <button class="pin-key" onclick="handlePinKey('0')">0</button>
+                <button class="pin-key backspace" onclick="handlePinKey('backspace')">
+                    <i class="fas fa-backspace"></i>
+                </button>
+            </div>
+            
+            <button onclick="closePinModal()" class="btn edit-btn" style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- Version History Modal -->
 <div id="version-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeVersionModal()">
     <div class="custom-modal" style="max-width: 600px; text-align: left; max-height: 80vh; overflow-y: auto;">
@@ -1690,6 +2034,205 @@
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
 <script>
+
+    // --- App Lock & Note Locking Logic ---
+    let currentPin = '';
+    let pinAction = 'verify'; // 'verify', 'setup', 'remove'
+    let setupPinFirst = ''; // for 'setup' two-step
+    
+    window.openPinModal = function(action) {
+        currentPin = '';
+        pinAction = action;
+        setupPinFirst = '';
+        updatePinDots();
+        
+        const modal = document.getElementById('pin-modal');
+        const title = document.getElementById('pin-modal-title');
+        const desc = document.getElementById('pin-modal-desc');
+        const error = document.getElementById('pin-error');
+        
+        if (error) error.textContent = '';
+        
+        if (action === 'verify') {
+            title.textContent = 'Enter PIN';
+            desc.textContent = 'Enter your 4-digit PIN to unlock';
+        } else if (action === 'setup') {
+            title.textContent = 'Set New PIN';
+            desc.textContent = 'Create a 4-digit PIN for security';
+        } else if (action === 'remove') {
+            title.textContent = 'Remove PIN';
+            desc.textContent = 'Enter your current PIN to disable app lock';
+        }
+        
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            document.addEventListener('keydown', handlePinModalKey);
+        }
+    };
+    
+    window.closePinModal = function() {
+        const modal = document.getElementById('pin-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+            document.removeEventListener('keydown', handlePinModalKey);
+        }
+    };
+    
+    function handlePinModalKey(e) {
+        if (e.key >= '0' && e.key <= '9') {
+            handlePinKey(e.key);
+        } else if (e.key === 'Backspace') {
+            handlePinKey('backspace');
+        } else if (e.key === 'Escape') {
+            closePinModal();
+        }
+    }
+    
+    window.handlePinKey = function(key) {
+        const error = document.getElementById('pin-error');
+        if (error) error.textContent = '';
+        
+        if (key === 'backspace') {
+            currentPin = currentPin.slice(0, -1);
+            updatePinDots();
+        } else if (currentPin.length < 4) {
+            currentPin += key;
+            updatePinDots();
+            
+            if (currentPin.length === 4) {
+                // Short delay for visual feedback, then process
+                setTimeout(processPin, 200);
+            }
+        }
+    };
+    
+    function updatePinDots() {
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach((dot, index) => {
+            if (index < currentPin.length) {
+                dot.classList.add('filled');
+            } else {
+                dot.classList.remove('filled');
+            }
+        });
+    }
+    
+    async function processPin() {
+        if (pinAction === 'verify') {
+            verifyPin(currentPin);
+        } else {
+            // Setup/Remove handled in profile_settings, but let's add basic verify logic here if needed
+            // On personal_space, only 'verify' should be common.
+            verifyPin(currentPin);
+        }
+    }
+    
+    async function verifyPin(pin) {
+        try {
+            const resp = await fetch('/api/app_lock/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({ pin: pin })
+            });
+            
+            const data = await resp.json();
+            
+            if (resp.ok) {
+                // Success! Give visual feedback
+                const dots = document.querySelectorAll('#pin-dots .pin-dot');
+                dots.forEach(d => {
+                    d.classList.add('success');
+                    d.classList.remove('filled');
+                });
+                
+                setTimeout(() => {
+                    window.location.reload(); // Reload to fetch locked notes
+                }, 500);
+            } else {
+                // Error - shake and clear
+                const dots = document.querySelectorAll('#pin-dots .pin-dot');
+                dots.forEach(d => {
+                    d.classList.add('error');
+                    d.classList.remove('filled');
+                });
+                
+                const error = document.getElementById('pin-error');
+                if (error) error.textContent = data.error || 'Incorrect PIN';
+                
+                setTimeout(() => {
+                    currentPin = '';
+                    dots.forEach(d => d.classList.remove('error'));
+                    updatePinDots();
+                }, 600);
+            }
+        } catch (err) {
+            console.error('PIN error:', err);
+            alert('Security error. Please try again.');
+        }
+    }
+    
+    // Toggle Note Lock
+    window.toggleNoteLock = async function(noteId) {
+        try {
+            const resp = await fetch(`/personal_post/toggle_lock/${noteId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            
+            const data = await resp.json();
+            if (data.success) {
+                // Move the note card between containers or update badge
+                const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                if (noteCard) {
+                    noteCard.style.transition = 'opacity 0.3s, transform 0.3s';
+                    noteCard.style.opacity = '0';
+                    noteCard.style.transform = 'scale(0.95)';
+                    
+                    setTimeout(() => {
+                        window.location.reload(); // Simpler for now to ensure consistency
+                    }, 300);
+                } else {
+                   window.location.reload();
+                }
+                
+                if (window.showFlashMessage) {
+                    window.showFlashMessage(data.message, 'success');
+                }
+            } else {
+                if (window.showFlashMessage) {
+                    window.showFlashMessage(data.error, 'danger');
+                } else {
+                    alert(data.error);
+                }
+                // If it's the "No PIN" error, maybe redirect to settings?
+                if (data.error.includes('PIN first')) {
+                    // Handled by alert/flash
+                }
+            }
+        } catch (err) {
+            console.error('Lock error:', err);
+            alert('Failed to lock note. Try again.');
+        }
+    };
+
+    window.openPinSetupFromGate = function() {
+        if (typeof window.showCustomConfirm === 'function') {
+            window.showCustomConfirm('App Lock protects sensitive notes. You need to set a 4-digit PIN in Settings. Go there now?', confirmed => {
+                if (confirmed) {
+                    window.location.href = "{{ url_for('profile_settings', username=current_user.username) }}";
+                }
+            });
+        }
+    }
+
     // --- Flash Message Helper ---
     window.showFlashMessage = function (message, category) {
         const container = document.querySelector('.flash-messages');
@@ -3066,6 +3609,13 @@
                 console.log('Opening share modal for note:', currentShareNoteId);
                 openShareModal();
                 loadExistingShares(currentShareNoteId);
+            });
+        });
+
+        document.querySelectorAll('.lock-note-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const noteId = btn.dataset.id;
+                toggleNoteLock(noteId);
             });
         });
 

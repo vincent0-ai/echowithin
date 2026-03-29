@@ -121,8 +121,41 @@
 
     </form>
 
+
+    <!-- App Lock / Security Section -->
+    <div class="form-group" style="margin-top: 2rem; border-top: 1px solid #e0e0e0; padding-top: 1.5rem;">
+      <h2 style="font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fas fa-shield-alt" style="color: #3e2217;"></i> App Lock
+      </h2>
+      <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+        Protect your sensitive personal notes with a 4-digit PIN. Locked notes will only be visible after unlocking with your PIN.
+      </p>
+
+      <div id="app-lock-status-ui" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;" 
+           data-has-pin="{{ 'true' if user.get('app_lock_pin') else 'false' }}">
+        {% if user.get('app_lock_pin') %}
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: #2e7d32; font-weight: 500;">
+            <i class="fas fa-check-circle"></i> Enabled
+          </div>
+          <button type="button" class="btn" style="background: #3e2217; color: white; border: none; padding: 0.5rem 1.2rem; font-size: 0.85rem;" onclick="openPinModal('setup')">
+            <i class="fas fa-key"></i> Change PIN
+          </button>
+          <button type="button" class="btn" style="background: #f5ebe7; color: #5a3328; border: 1px solid #ddd; padding: 0.5rem 1.2rem; font-size: 0.85rem;" onclick="openPinModal('remove')">
+            <i class="fas fa-trash-alt"></i> Disable App Lock
+          </button>
+        {% else %}
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: #666;">
+            <i class="fas fa-lock-open"></i> Not configured
+          </div>
+          <button type="button" class="btn" style="background: #3e2217; color: white; border: none; padding: 0.5rem 1.2rem; font-size: 0.85rem;" onclick="openPinModal('setup')">
+            Set Up PIN
+          </button>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Advanced Section (collapsible) -->
-    <details style="margin-top: 2.5rem; border-top: 1px solid #e0e0e0; padding-top: 1.5rem;">
+    <details style="margin-top: 1.5rem; border-top: 1px solid #e0e0e0; padding-top: 1.5rem;">
       <summary
         style="font-size: 1.2rem; font-weight: 600; cursor: pointer; user-select: none; padding: 0.5rem 0; list-style: none; display: flex; align-items: center; gap: 0.5rem;">
         <i class="fas fa-chevron-right" style="font-size: 0.8rem; transition: transform 0.2s;"></i>
@@ -179,6 +212,83 @@
 </div>
 
 <style>
+</style>
+
+<!-- PIN Entry Modal -->
+<div id="pin-modal" class="custom-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:2000; align-items:center; justify-content:center;" onclick="if(event.target === this) closePinModal()">
+    <div class="custom-modal" style="background:white; padding:1.5rem; border-radius:15px; max-width: 320px; width:90%; position:relative;">
+        <div class="pin-modal-content" style="text-align:center;">
+            <h2 id="pin-modal-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Enter PIN</h2>
+            <p id="pin-modal-desc" style="margin: 0 0 1.5rem 0; color: #888; font-size: 0.9rem;">Enter your 4-digit PIN</p>
+            
+            <div id="pin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            
+            <div class="pin-dots" style="display: flex; justify-content: center; gap: 14px; margin-bottom: 1.5rem;">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            
+            <div class="pin-keypad" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 260px; margin: 0 auto 1rem auto;">
+                <button class="pin-key" onclick="handlePinKey('1')">1</button>
+                <button class="pin-key" onclick="handlePinKey('2')">2</button>
+                <button class="pin-key" onclick="handlePinKey('3')">3</button>
+                <button class="pin-key" onclick="handlePinKey('4')">4</button>
+                <button class="pin-key" onclick="handlePinKey('5')">5</button>
+                <button class="pin-key" onclick="handlePinKey('6')">6</button>
+                <button class="pin-key" onclick="handlePinKey('7')">7</button>
+                <button class="pin-key" onclick="handlePinKey('8')">8</button>
+                <button class="pin-key" onclick="handlePinKey('9')">9</button>
+                <div class="pin-key" style="visibility:hidden;"></div>
+                <button class="pin-key" onclick="handlePinKey('0')">0</button>
+                <button class="pin-key" onclick="handlePinKey('backspace')"><i class="fas fa-backspace"></i></button>
+            </div>
+            
+            <button onclick="closePinModal()" class="btn" style="width: 100%; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+  .pin-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    background: transparent;
+    transition: all 0.2s ease;
+  }
+  .pin-dot.filled {
+    background: #3e2217;
+    border-color: #3e2217;
+    transform: scale(1.1);
+  }
+  .pin-dot.error { border-color: #d32f2f; background: #d32f2f; animation: pinShake 0.4s ease-in-out; }
+  .pin-dot.success { border-color: #2e7d32; background: #2e7d32; }
+  @keyframes pinShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-6px); }
+    80% { transform: translateX(6px); }
+  }
+  .pin-key {
+    width: 100%;
+    aspect-ratio: 1.4;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    background: #fafafa;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pin-key:hover { background: #f0f0f0; }
+  .pin-key:active { transform: scale(0.96); }
+  
   details[open] > summary .fa-chevron-right {
     transform: rotate(90deg);
   }
@@ -186,6 +296,7 @@
     display: none;
   }
 </style>
+
 
 <script>
   // Delete account confirmation
@@ -214,7 +325,222 @@
       }
     );
   });
+
+  // --- App Lock Management Logic ---
+  let currentPin = '';
+  let pinAction = 'setup'; // 'setup', 'remove'
+  let step = 1; // 1: enter new/current, 2: confirm new
+  let pendingPin = '';
+  let currentPinForUpdate = '';
+  
+  // Use data attribute from the UI to check if PIN exists
+  function getHasExistingPin() {
+      const ui = document.getElementById('app-lock-status-ui');
+      return ui ? ui.dataset.hasPin === 'true' : false;
+  }
+
+  window.openPinModal = function(action) {
+      currentPin = '';
+      pinAction = action;
+      step = 1;
+      pendingPin = '';
+      currentPinForUpdate = '';
+      updatePinDots();
+      
+      const modal = document.getElementById('pin-modal');
+      const title = document.getElementById('pin-modal-title');
+      const desc = document.getElementById('pin-modal-desc');
+      const error = document.getElementById('pin-error');
+      const hasExistingPin = getHasExistingPin();
+      
+      if (error) error.textContent = '';
+      
+      if (action === 'setup') {
+          if (hasExistingPin) {
+              title.textContent = 'Verify Current PIN';
+              desc.textContent = 'Enter your current PIN to change it';
+          } else {
+              title.textContent = 'Set New PIN';
+              desc.textContent = 'Choose a 4-digit PIN for App Lock';
+          }
+      } else if (action === 'remove') {
+          title.textContent = 'Remove PIN';
+          desc.textContent = 'Enter your current PIN to disable App Lock';
+      }
+      
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', handlePinKeydown);
+  };
+
+  window.closePinModal = function() {
+      const modal = document.getElementById('pin-modal');
+      modal.style.display = 'none';
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handlePinKeydown);
+  };
+
+  function handlePinKeydown(e) {
+      if (e.key >= '0' && e.key <= '9') {
+          handlePinKey(e.key);
+      } else if (e.key === 'Backspace') {
+          handlePinKey('backspace');
+      } else if (e.key === 'Escape') {
+          closePinModal();
+      }
+  }
+
+  window.handlePinKey = function(key) {
+      const error = document.getElementById('pin-error');
+      if (error) error.textContent = '';
+      
+      if (key === 'backspace') {
+          currentPin = currentPin.slice(0, -1);
+          updatePinDots();
+      } else if (currentPin.length < 4) {
+          currentPin += key;
+          updatePinDots();
+          if (currentPin.length === 4) {
+              setTimeout(processPinStep, 200);
+          }
+      }
+  };
+
+  function updatePinDots() {
+      const dots = document.querySelectorAll('#pin-modal .pin-dot');
+      dots.forEach((dot, index) => {
+          dot.classList.toggle('filled', index < currentPin.length);
+          dot.classList.remove('error', 'success');
+      });
+  }
+
+  async function processPinStep() {
+      const title = document.getElementById('pin-modal-title');
+      const desc = document.getElementById('pin-modal-desc');
+      const errorEl = document.getElementById('pin-error');
+      const hasExistingPin = getHasExistingPin();
+
+      if (pinAction === 'setup') {
+          if (hasExistingPin && !currentPinForUpdate) {
+              // Verifying current PIN before update
+              const verified = await verifyCurrentPin(currentPin);
+              if (verified) {
+                  currentPinForUpdate = currentPin;
+                  currentPin = '';
+                  step = 1;
+                  title.textContent = 'New PIN';
+                  desc.textContent = 'Enter your new 4-digit PIN';
+                  updatePinDots();
+                  showDotsFeedback('success');
+              } else {
+                  showDotsFeedback('error');
+                  errorEl.textContent = 'Incorrect current PIN';
+                  currentPin = '';
+                  updatePinDots();
+              }
+          } else if (step === 1) {
+              // Entering new PIN
+              pendingPin = currentPin;
+              currentPin = '';
+              step = 2;
+              title.textContent = 'Confirm PIN';
+              desc.textContent = 'Enter the new PIN again to confirm';
+              updatePinDots();
+          } else {
+              // Confirming new PIN
+              if (currentPin === pendingPin) {
+                  savePin(currentPin, currentPinForUpdate);
+              } else {
+                  showDotsFeedback('error');
+                  errorEl.textContent = 'PINs do not match. Try again.';
+                  currentPin = '';
+                  pendingPin = '';
+                  step = 1;
+                  title.textContent = 'New PIN';
+                  updatePinDots();
+              }
+          }
+      } else if (pinAction === 'remove') {
+          removePin(currentPin);
+      }
+  }
+
+  function showDotsFeedback(cls) {
+      const dots = document.querySelectorAll('#pin-modal .pin-dot');
+      dots.forEach(d => {
+          d.classList.add(cls);
+          d.classList.remove('filled');
+      });
+  }
+
+  function getCsrfToken() {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      if (meta) return meta.getAttribute('content');
+      const input = document.querySelector('input[name="csrf_token"]');
+      return input ? input.value : '';
+  }
+
+  async function verifyCurrentPin(pin) {
+      try {
+          const resp = await fetch('/api/app_lock/verify', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrfToken()
+              },
+              body: JSON.stringify({ pin: pin })
+          });
+          return resp.ok;
+      } catch (e) { return false; }
+  }
+
+  async function savePin(pin, oldPin) {
+      try {
+          const resp = await fetch('/api/app_lock/setup', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrfToken()
+              },
+              body: JSON.stringify({ pin: pin, current_pin: oldPin })
+          });
+          const data = await resp.json();
+          if (resp.ok) {
+              showDotsFeedback('success');
+              setTimeout(() => window.location.reload(), 500);
+          } else {
+              showDotsFeedback('error');
+              document.getElementById('pin-error').textContent = data.error || 'Failed to save PIN';
+              currentPin = '';
+              updatePinDots();
+          }
+      } catch (e) { alert('Request failed'); }
+  }
+
+  async function removePin(pin) {
+      try {
+          const resp = await fetch('/api/app_lock/remove', {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRFToken': getCsrfToken()
+              },
+              body: JSON.stringify({ pin: pin })
+          });
+          const data = await resp.json();
+          if (resp.ok) {
+              showDotsFeedback('success');
+              setTimeout(() => window.location.reload(), 500);
+          } else {
+              showDotsFeedback('error');
+              document.getElementById('pin-error').textContent = data.error || 'Incorrect PIN';
+              currentPin = '';
+              updatePinDots();
+          }
+      } catch (e) { alert('Request failed'); }
+  }
 </script>
+
 
 <script>
   // Push notification settings management

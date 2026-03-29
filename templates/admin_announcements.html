@@ -20,6 +20,29 @@
         </form>
     </div>
 
+    <div class="create-post-section" style="border-top: 1px solid #eee; padding-top: 2rem; margin-top: 2rem;">
+        <h2>Broadcast Push Notification</h2>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+            Send a real-time notification to all <strong>Native</strong> and <strong>PWA</strong> users.
+        </p>
+        <form action="{{ url_for('admin_send_push') }}" method="POST" class="post-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem; font-weight: bold;">Title</label>
+                <input type="text" name="title" placeholder="e.g. New Update Available" class="form-input" required>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem; font-weight: bold;">Message</label>
+                <textarea name="body" placeholder="Enter the notification message..." rows="2" class="form-input" required></textarea>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem; font-weight: bold;">Action URL (Optional)</label>
+                <input type="url" name="url" placeholder="https://echowithin.com/..." class="form-input">
+            </div>
+            <button type="submit" class="form-button" style="background-color: #3e2217;" onclick="return confirm('Broadcast this push notification to ALL users?');">Send Push Notification</button>
+        </form>
+    </div>
+
     <div class="posts-section">
         <h2>Existing Announcements</h2>
         <div class="posts-list">

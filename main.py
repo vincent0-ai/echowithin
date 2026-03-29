@@ -376,6 +376,7 @@ user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 # Personal space performance indexes — eliminates full-collection scans
 personal_posts_conf.create_index([('user_id', 1), ('created_at', -1)])
 personal_posts_conf.create_index([('source_note_id', 1), ('user_id', 1)])
+personal_posts_conf.create_index([('user_id', 1), ('is_locked', 1), ('created_at', -1)])
 note_shares_conf.create_index([('owner_id', 1), ('note_id', 1)])
 
 # Ensure a text index exists on the posts collection for search functionality
@@ -1550,6 +1551,86 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
 
     except Exception as e:
         app.logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
+
+
+@rq.job
+def send_admin_broadcast_push(title, body, url=None):
+    """
+    Send a site-wide push notification to ALL subscribed devices (Web Push and Native FCM).
+    Processed in the background via RQ.
+    """
+    try:
+        app.logger.info(f"Starting admin broadcast push: '{title}'")
+        
+        # 1. PWA Users (Web Push)
+        web_success = 0
+        web_failed = 0
+        if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
+            subscriptions = list(push_subscriptions_conf.find({}))
+            app.logger.info(f"Broadcasting to {len(subscriptions)} Web Push subscriptions")
+            
+            payload = json.dumps({
+                'title': title,
+                'body': body,
+                'url': url or '/',
+                'tag': 'admin-announcement',
+                'icon': '/static/logo.png',
+                'badge': '/static/logo.png'
+            })
+            
+            for sub in subscriptions:
+                try:
+                    subscription_info = {'endpoint': sub['endpoint'], 'keys': sub['keys']}
+                    webpush(
+                        subscription_info=subscription_info,
+                        data=payload,
+                        vapid_private_key=VAPID_PRIVATE_KEY,
+                        vapid_claims=VAPID_CLAIMS,
+                        ttl=86400
+                    )
+                    web_success += 1
+                except WebPushException as e:
+                    status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                    if status_code in [403, 404, 410]:
+                        push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                        web_failed += 1
+                except Exception:
+                    web_failed += 1
+        
+        # 2. Native Users (FCM)
+        fcm_success = 0
+        fcm_failed = 0
+        if FIREBASE_INITIALIZED:
+            from firebase_admin import messaging
+            tokens_cursor = fcm_tokens_conf.find({})
+            all_tokens = [doc['token'] for doc in tokens_cursor]
+            
+            if all_tokens:
+                app.logger.info(f"Broadcasting to {len(all_tokens)} FCM tokens")
+                try:
+                    for i in range(0, len(all_tokens), 500):
+                        batch = all_tokens[i:i + 500]
+                        message = messaging.MulticastMessage(
+                            notification=messaging.Notification(title=title, body=body),
+                            data={'url': url or '/', 'tag': 'admin-announcement'},
+                            tokens=batch
+                        )
+                        response = messaging.send_multicast(message)
+                        fcm_success += response.success_count
+                        fcm_failed += response.failure_count
+                        
+                        # Cleanup invalid tokens
+                        if response.failure_count > 0:
+                            for idx, res in enumerate(response.responses):
+                                if not res.success:
+                                    fcm_tokens_conf.delete_one({'token': batch[idx]})
+                except Exception as e:
+                    app.logger.error(f"FCM broadcast failed: {e}")
+        
+        app.logger.info(f"Broadcast complete. Web: {web_success} ok, {web_failed} failed. FCM: {fcm_success} ok, {fcm_failed} failed.")
+        
+    except Exception as e:
+        app.logger.error(f"Error in send_admin_broadcast_push: {e}", exc_info=True)
 
 
 @rq.job
@@ -5915,6 +5996,30 @@ def admin_announcements():
     announcements = announcements_conf.find().sort('created_at', -1)
     return render_template('admin_announcements.html', announcements=announcements, active_page='admin_announcements')
 
+
+@app.route('/admin/push/send', methods=['POST'])
+@admin_required
+def admin_send_push():
+    """Enqueue a site-wide push notification broadcast."""
+    title = request.form.get('title', '').strip()
+    body = request.form.get('body', '').strip()
+    url = request.form.get('url', '').strip()
+
+    if not title or not body:
+        flash("Title and Message are required for push notifications.", "danger")
+        return redirect(url_for('admin_announcements'))
+
+    try:
+        # Enqueue the background job
+        send_admin_broadcast_push.queue(title, body, url=url or None)
+        flash(f"Push notification '{title}' has been queued for broadcast.", "success")
+        app.logger.info(f"Admin {current_user.username} queued a site-wide push notification.")
+    except Exception as e:
+        app.logger.error(f"Failed to enqueue push broadcast: {e}")
+        flash("Failed to queue push notification. Check server logs.", "danger")
+    
+    return redirect(url_for('admin_announcements'))
+
 @app.route('/admin/announcements/pin/<announcement_id>', methods=['POST'])
 @login_required
 @admin_required
@@ -6414,11 +6519,11 @@ def personal_space():
         with app.app_context():
             saved_posts = prepare_posts(ordered_posts)
 
-    # Fetch personal posts (notes) - Paginated!
-    total_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
+    # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.
+    total_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
     skip_notes = (notes_page - 1) * per_page
     
-    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id)})
+    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
                                                  .sort('created_at', -1)
                                                  .skip(skip_notes)
                                                  .limit(per_page))
@@ -6426,6 +6531,48 @@ def personal_space():
     for note in personal_posts_raw:
         note['content'] = decrypt_note(note.get('content', ''), user_id=current_user.id)
         personal_posts.append(note)
+
+    # --- Locked Notes ---
+    has_app_lock = bool(user.get('app_lock_pin_hash'))
+    is_unlocked = session.get('app_lock_unlocked', False)
+    locked_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': True})
+    locked_notes = []
+    locked_shares_map = {}
+    locked_clones_map = {}
+    if is_unlocked and locked_notes_count > 0:
+        locked_notes_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': True})
+                                                    .sort('created_at', -1)
+                                                    .limit(50))
+        for note in locked_notes_raw:
+            note['content'] = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            locked_notes.append(note)
+        # Fetch shares for locked notes
+        locked_note_ids = [n['_id'] for n in locked_notes]
+        if locked_note_ids:
+            now_l = datetime.datetime.now(datetime.timezone.utc)
+            for share in note_shares_conf.find({'owner_id': ObjectId(current_user.id), 'note_id': {'$in': locked_note_ids}}).sort('created_at', -1):
+                if share.get('expires_at'):
+                    exp = share['expires_at']
+                    if exp.tzinfo is None:
+                        exp = exp.replace(tzinfo=datetime.timezone.utc)
+                    if now_l > exp:
+                        continue
+                nid = str(share['note_id'])
+                if nid not in locked_shares_map:
+                    locked_shares_map[nid] = []
+                locked_shares_map[nid].append({
+                    'share_id': share['share_id'],
+                    'share_url': url_for('view_shared_note', share_id=share['share_id'], _external=True),
+                    'permissions': share.get('permissions', 'view'),
+                    'surprise_theme': share.get('surprise_theme', 'none'),
+                    'created_at': share.get('created_at')
+                })
+            # Clones for locked notes
+            for doc in personal_posts_conf.aggregate([
+                {'$match': {'source_note_id': {'$in': locked_note_ids}, 'user_id': {'$ne': ObjectId(current_user.id)}}},
+                {'$group': {'_id': '$source_note_id', 'count': {'$sum': 1}}}
+            ]):
+                locked_clones_map[str(doc['_id'])] = doc['count']
 
     # Fetch active share links for the notes on this page (skip if no notes)
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -6490,7 +6637,13 @@ def personal_space():
         total_notes_pages=total_notes_pages,
         total_saved_pages=total_saved_pages,
         total_notes_count=total_notes_count,
-        total_saved=total_saved
+        total_saved=total_saved,
+        has_app_lock=has_app_lock,
+        is_unlocked=is_unlocked,
+        locked_notes=locked_notes,
+        locked_notes_count=locked_notes_count,
+        locked_shares_map=locked_shares_map,
+        locked_clones_map=locked_clones_map
     )
 
 @app.route('/post/<post_id>/react', methods=['POST'])
@@ -7144,6 +7297,116 @@ def delete_personal_post(post_id):
         app.logger.error(f"Error deleting personal post {post_id} (Mode: {mode}): {e}")
         flash('Could not delete note.', 'danger')
     return redirect(url_for('personal_space'))
+
+
+# ----------------- App Lock & Note Locking -----------------
+
+@app.route('/api/app_lock/setup', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def app_lock_setup():
+    """Set or update the user's 4-digit app lock PIN."""
+    data = request.get_json() or {}
+    pin = data.get('pin', '').strip()
+    current_pin = data.get('current_pin', '').strip()
+
+    if not pin or len(pin) != 4 or not pin.isdigit():
+        return jsonify({'error': 'PIN must be exactly 4 digits'}), 400
+
+    user = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    # If user already has a PIN, require the current one to change it
+    if user.get('app_lock_pin_hash'):
+        if not current_pin:
+            return jsonify({'error': 'Current PIN is required to change your PIN'}), 400
+        if not check_password_hash(user['app_lock_pin_hash'], current_pin):
+            return jsonify({'error': 'Current PIN is incorrect'}), 403
+
+    pin_hash = generate_password_hash(pin)
+    users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$set': {'app_lock_pin_hash': pin_hash}})
+    session['app_lock_unlocked'] = True
+    return jsonify({'success': True, 'message': 'App lock PIN set successfully'})
+
+
+@app.route('/api/app_lock/verify', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def app_lock_verify():
+    """Verify the user's PIN and unlock the locked notes tab for this session."""
+    data = request.get_json() or {}
+    pin = data.get('pin', '').strip()
+
+    if not pin:
+        return jsonify({'error': 'PIN is required'}), 400
+
+    user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
+    if not user or not user.get('app_lock_pin_hash'):
+        return jsonify({'error': 'No app lock PIN is set'}), 400
+
+    if check_password_hash(user['app_lock_pin_hash'], pin):
+        session['app_lock_unlocked'] = True
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Incorrect PIN'}), 403
+
+
+@app.route('/api/app_lock/remove', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def app_lock_remove():
+    """Remove the user's app lock PIN (requires current PIN)."""
+    data = request.get_json() or {}
+    pin = data.get('pin', '').strip()
+
+    if not pin:
+        return jsonify({'error': 'Current PIN is required'}), 400
+
+    user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
+    if not user or not user.get('app_lock_pin_hash'):
+        return jsonify({'error': 'No app lock PIN is set'}), 400
+
+    if not check_password_hash(user['app_lock_pin_hash'], pin):
+        return jsonify({'error': 'Incorrect PIN'}), 403
+
+    users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$unset': {'app_lock_pin_hash': ''}})
+    # Unlock any locked notes back to regular notes when PIN is removed
+    personal_posts_conf.update_many(
+        {'user_id': ObjectId(current_user.id), 'is_locked': True},
+        {'$set': {'is_locked': False}}
+    )
+    session.pop('app_lock_unlocked', None)
+    return jsonify({'success': True, 'message': 'App lock removed. All locked notes have been unlocked.'})
+
+
+@app.route('/personal_post/toggle_lock/<post_id>', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def toggle_note_lock(post_id):
+    """Toggle the is_locked flag on a personal note."""
+    try:
+        obj_id = safe_object_id(post_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid note ID'}), 400
+
+        # Verify the user has a PIN set up
+        user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
+        if not user or not user.get('app_lock_pin_hash'):
+            return jsonify({'error': 'You need to set up an App Lock PIN first. Go to Profile Settings → App Lock.'}), 400
+
+        note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        new_locked = not note.get('is_locked', False)
+        personal_posts_conf.update_one({'_id': obj_id}, {'$set': {'is_locked': new_locked}})
+
+        return jsonify({
+            'success': True,
+            'is_locked': new_locked,
+            'message': 'Note locked' if new_locked else 'Note unlocked'
+        })
+    except Exception as e:
+        app.logger.error(f"Error toggling lock for note {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 
 # ----------------- Note Sharing Endpoints -----------------

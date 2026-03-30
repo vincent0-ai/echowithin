@@ -1689,6 +1689,13 @@
                             data-tags='{{ (note.tags or []) | tojson | safe }}'>
                             <i class="fas fa-pen"></i>
                         </button>
+                        {% if note.surprise_theme and note.surprise_theme != 'none' %}
+                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
+                            title="View your saved surprise" target="_blank"
+                            style="color: #ff4d6d; text-decoration: none;">
+                            <i class="fas fa-gift"></i>
+                        </a>
+                        {% endif %}
                         {% if note.source_note_id and note.source_share_id %}
                         <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note &amp; discussion" target="_blank"
@@ -1910,6 +1917,13 @@
                             data-tags='{{ (note.tags or []) | tojson | safe }}'>
                             <i class="fas fa-pen"></i>
                         </button>
+                        {% if note.surprise_theme and note.surprise_theme != 'none' %}
+                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
+                            title="View your saved surprise" target="_blank"
+                            style="color: #ff4d6d; text-decoration: none;">
+                            <i class="fas fa-gift"></i>
+                        </a>
+                        {% endif %}
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>

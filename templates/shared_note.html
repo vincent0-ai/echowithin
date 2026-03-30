@@ -271,6 +271,7 @@
         {% endif %}
 
         <!-- Discussion Section -->
+        {% if share_id != 'local' %}
         <div class="discussion-section{% if surprise_theme != 'none' %} surprise-discussion-hidden{% endif %}">
             <h3 class="discussion-title">
                 Discussion
@@ -298,6 +299,7 @@
                 <!-- Comments loaded dynamically -->
             </div>
         </div>
+        {% endif %}
 
         <!-- History Modal -->
         {% if is_owner %}
@@ -1546,12 +1548,13 @@
         const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
         const CSRF_TOKEN = '{{ csrf_token() }}';
 
-        // --- Socket.IO Integration ---
-        const socket = io();
-        socket.on('connect', () => {
-            console.log('Connected to collaboration server');
-            socket.emit('join_note', { share_id: SHARE_ID });
-        });
+        if (SHARE_ID !== 'local') {
+            // --- Socket.IO Integration ---
+            const socket = io();
+            socket.on('connect', () => {
+                console.log('Connected to collaboration server');
+                socket.emit('join_note', { share_id: SHARE_ID });
+            });
 
         socket.on('note_changed', (data) => {
             console.log('Note updated via WebSocket');
@@ -1801,6 +1804,8 @@
 
         // Load comments on page load
         loadComments();
+
+        } // End if (SHARE_ID !== 'local')
 
         // Surprise logic
         const surpriseTheme = '{{ surprise_theme }}';

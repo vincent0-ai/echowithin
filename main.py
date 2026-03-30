@@ -968,8 +968,12 @@ def cleanup_share_media(share):
                 '_id': {'$ne': share['_id']}
             })
             
-            if not other_usage:
-                # No other share uses this file. Safe to delete from Cloudinary.
+            other_post = personal_posts_conf.find_one({
+                field: url
+            })
+            
+            if not other_usage and not other_post:
+                # No other share or post uses this file. Safe to delete from Cloudinary.
                 public_id = extract_cloudinary_public_id(url)
                 if public_id:
                     # Cloudinary destroy: audio/video are resource_type="video"
@@ -978,6 +982,40 @@ def cleanup_share_media(share):
                     app.logger.info(f"Deleted orphaned Cloudinary media: {public_id} (Type: {res_type})")
         except Exception as e:
             app.logger.error(f"Failed to cleanup media {url}: {e}")
+
+def cleanup_post_media(post):
+    """
+    Checks if media files in a personal post are used elsewhere. 
+    If not, deletes them from Cloudinary to save storage.
+    """
+    media_fields = ['valentine_photo', 'valentine_audio']
+    for field in media_fields:
+        url = post.get(field)
+        if not url:
+            continue
+            
+        # Check if any OTHER post or active share uses this exact URL
+        try:
+            other_post = personal_posts_conf.find_one({
+                field: url,
+                '_id': {'$ne': post['_id']}
+            })
+            
+            other_share = note_shares_conf.find_one({
+                field: url
+            })
+            
+            if not other_post and not other_share:
+                # No other post or share uses this file. Safe to delete from Cloudinary.
+                public_id = extract_cloudinary_public_id(url)
+                if public_id:
+                    # Cloudinary destroy: audio/video are resource_type="video"
+                    res_type = "video" if field == 'valentine_audio' else "image"
+                    cloudinary.uploader.destroy(public_id, resource_type=res_type)
+                    app.logger.info(f"Deleted orphaned Cloudinary media from post: {public_id} (Type: {res_type})")
+        except Exception as e:
+            app.logger.error(f"Failed to cleanup post media {url}: {e}")
+
 
 from markupsafe import Markup
 
@@ -7376,6 +7414,11 @@ def delete_personal_post(post_id):
             cleanup_share_media(share)
             note_shares_conf.delete_one({'_id': share['_id']})
 
+        # 1.5. Cleanup media from the posts themselves before deleting
+        target_posts = personal_posts_conf.find({'_id': {'$in': target_ids}})
+        for post in target_posts:
+            cleanup_post_media(post)
+
         # 2. Cleanup all versions for target notes
         note_versions_conf.delete_many({'note_id': {'$in': target_ids}})
 
@@ -7801,10 +7844,48 @@ def api_save_shared_note(share_id):
         'tags': original_note.get('tags', []),
         'created_at': datetime.datetime.now(datetime.timezone.utc),
         'source_note_id': share['note_id'],
-        'source_share_id': share_id
+        'source_share_id': share_id,
+        'surprise_theme': share.get('surprise_theme', 'none'),
+        'valentine_photo': share.get('valentine_photo'),
+        'valentine_audio': share.get('valentine_audio'),
+        'use_typewriter': share.get('use_typewriter', False),
+        'permissions': share.get('permissions', 'view')
     })
 
     return jsonify({'success': True, 'message': 'Note saved to your personal space!'})
+
+
+@app.route('/saved_note/view/<note_id>', methods=['GET'])
+@login_required
+@limits(calls=30, period=60)
+def view_saved_note(note_id):
+    """View a cloned note with its thematic metadata (read-only surprise view)."""
+    obj_id = safe_object_id(note_id)
+    if not obj_id:
+        abort(404)
+        
+    note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        abort(404)
+
+    content = decrypt_note(note.get('content', ''), user_id=str(current_user.id))
+    surprise_theme = note.get('surprise_theme', 'none')
+    
+    # We render this as a read-only instance of shared_note.html
+    return render_template('shared_note.html', 
+                           share_id='local', 
+                           content=content, 
+                           permissions='view', # Cloned surprises are always view-only
+                           note_id=str(note['_id']),
+                           is_owner=False,
+                           already_saved=True,
+                           surprise_theme=surprise_theme,
+                           reference=note.get('reference', ''),
+                           tags=note.get('tags', []),
+                           is_valentine=(surprise_theme != 'none'),
+                           valentine_photo=note.get('valentine_photo'),
+                           valentine_audio=note.get('valentine_audio'),
+                           use_typewriter=note.get('use_typewriter', False))
 
 
 # --- WebSocket Real-time collaboration ---

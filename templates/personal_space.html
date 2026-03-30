@@ -1123,8 +1123,15 @@
         }
 
         @keyframes promoSlideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .share-promo-icon {
@@ -1151,7 +1158,9 @@
             text-decoration: none;
         }
 
-        .share-promo-body a:hover { text-decoration: underline; }
+        .share-promo-body a:hover {
+            text-decoration: underline;
+        }
 
         .share-promo-dismiss {
             position: absolute;
@@ -1166,7 +1175,9 @@
             line-height: 1;
         }
 
-        .share-promo-dismiss:hover { color: #333; }
+        .share-promo-dismiss:hover {
+            color: #333;
+        }
 
         /* --- Share Button Onboarding Tooltip --- */
         .share-note-btn {
@@ -1200,8 +1211,17 @@
         }
 
         @keyframes tooltipPulse {
-            0%, 100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-            50% { opacity: 0.7; transform: translateX(-50%) translateY(-3px); }
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+
+            50% {
+                opacity: 0.7;
+                transform: translateX(-50%) translateY(-3px);
+            }
         }
 
         /* --- Sharing UI Styles --- */
@@ -1500,10 +1520,14 @@
             <div class="share-promo-body">
                 <h4>Surprise someone special!</h4>
                 <p>Write a note, pick a Valentine/Birthday theme with music & photos, then share a magic link.
-                    <a href="javascript:void(0)" onclick="document.getElementById('share-promo-card').style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1'); document.querySelector('.share-note-btn')?.click();">Try it now →</a>
+                    <a href="javascript:void(0)"
+                        onclick="document.getElementById('share-promo-card').style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1'); document.querySelector('.share-note-btn')?.click();">Try
+                        it now →</a>
                 </p>
             </div>
-            <button class="share-promo-dismiss" onclick="this.parentElement.style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1');" aria-label="Dismiss">
+            <button class="share-promo-dismiss"
+                onclick="this.parentElement.style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1');"
+                aria-label="Dismiss">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -1679,7 +1703,8 @@
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>
-                            <span class="share-tooltip share-onboard-tip" style="display:none;">Send a surprise! 🎁</span>
+                            <span class="share-tooltip share-onboard-tip" style="display:none;">Send a surprise!
+                                🎁</span>
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
                             <i class="fas fa-lock"></i>
@@ -1764,7 +1789,7 @@
             <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
             <div class="setup-hint">
                 You can also set this up in <a
-                    href="{{ url_for('profile_settings', username=current_user.username) }}">Profile Settings</a>
+                    href="{{ url_for('profile_settings', username=current_user.username) }}">Account Settings</a>
             </div>
         </div>
         {% elif not is_unlocked %}
@@ -1783,7 +1808,8 @@
             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
             <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
                 <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Unlocked
-                <span id="relock-timer" style="font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 6px;"></span>
+                <span id="relock-timer"
+                    style="font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 6px;"></span>
             </div>
             <button type="button" class="btn"
                 style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;"
@@ -1792,42 +1818,42 @@
             </button>
         </div>
         <script>
-        (function() {
-            const UNLOCK_DURATION = 300; // 5 minutes in seconds
-            const timerEl = document.getElementById('relock-timer');
-            let remaining = UNLOCK_DURATION;
+            (function () {
+                const UNLOCK_DURATION = 300; // 5 minutes in seconds
+                const timerEl = document.getElementById('relock-timer');
+                let remaining = UNLOCK_DURATION;
 
-            function formatTime(secs) {
-                const m = Math.floor(secs / 60);
-                const s = secs % 60;
-                return m + ':' + (s < 10 ? '0' : '') + s;
-            }
-
-            const interval = setInterval(() => {
-                remaining--;
-                if (timerEl) timerEl.textContent = '(' + formatTime(Math.max(0, remaining)) + ')';
-                if (remaining <= 0) {
-                    clearInterval(interval);
-                    // Auto-relock
-                    if (typeof relockSession === 'function') relockSession(false);
+                function formatTime(secs) {
+                    const m = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    return m + ':' + (s < 10 ? '0' : '') + s;
                 }
-            }, 1000);
-            if (timerEl) timerEl.textContent = '(' + formatTime(remaining) + ')';
 
-            // Also relock when page comes back from being hidden (app switch, screen lock)
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') {
-                    // Re-check with server whether session is still valid
-                    fetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
-                        if (!d.unlocked) {
-                            clearInterval(interval);
-                            window.location.hash = 'locked';
-                            window.location.reload();
-                        }
-                    }).catch(() => {});
-                }
-            });
-        })();
+                const interval = setInterval(() => {
+                    remaining--;
+                    if (timerEl) timerEl.textContent = '(' + formatTime(Math.max(0, remaining)) + ')';
+                    if (remaining <= 0) {
+                        clearInterval(interval);
+                        // Auto-relock
+                        if (typeof relockSession === 'function') relockSession(false);
+                    }
+                }, 1000);
+                if (timerEl) timerEl.textContent = '(' + formatTime(remaining) + ')';
+
+                // Also relock when page comes back from being hidden (app switch, screen lock)
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        // Re-check with server whether session is still valid
+                        fetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
+                            if (!d.unlocked) {
+                                clearInterval(interval);
+                                window.location.hash = 'locked';
+                                window.location.reload();
+                            }
+                        }).catch(() => { });
+                    }
+                });
+            })();
         </script>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}

@@ -73,7 +73,7 @@
             {% if current_user and current_user.username == user.username %}
             <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn"
                 style="width: 100%; margin-top: 1rem;">
-                <i class="fas fa-cog"></i> Edit Profile
+                <i class="fas fa-cog"></i> Account Settings
             </a>
             <a href="{{ url_for('personal_space') }}" class="btn"
                 style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">

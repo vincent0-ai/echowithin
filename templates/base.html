@@ -344,6 +344,9 @@
             #install-button {
                 display: none !important;
             }
+            .nav-logout-mobile {
+                display: inline-flex !important;
+            }
         }
     </style>
 
@@ -448,7 +451,8 @@
                     Install
                 </button>
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('logout') }}" class="nav-logout-mobile" style="display: none; margin-left: auto; font-size: 0.8rem; opacity: 0.85;">Logout</a>
+                <a href="{{ url_for('logout') }}" class="nav-logout-mobile" id="nav-logout-mobile"
+                    style="margin-left: auto; font-size: 0.8rem; opacity: 0.85; text-decoration: none; color: inherit; padding: 4px 10px; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; white-space: nowrap;">Logout</a>
                 {% endif %}
             </div>
             <nav class="nav-links" id="nav-links">
@@ -747,6 +751,11 @@
         if (installButton) {
             installButton.style.display = 'none';
             installButton.remove(); // Also remove from DOM to be sure
+        }
+        // Show the mobile logout link in the install button's place
+        const logoutLink = document.getElementById('nav-logout-mobile');
+        if (logoutLink) {
+            logoutLink.style.display = 'inline-flex';
         }
     }
 

@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v17';
-const STATIC_CACHE = 'echowithin-static-v17';
-const PAGES_CACHE = 'echowithin-pages-v17';
-const POSTS_CACHE = 'echowithin-posts-v17';
+const CACHE_NAME = 'echowithin-v18';
+const STATIC_CACHE = 'echowithin-static-v18';
+const PAGES_CACHE = 'echowithin-pages-v18';
+const POSTS_CACHE = 'echowithin-posts-v18';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -267,6 +267,15 @@ self.addEventListener('push', event => {
   const tag = data.tag || 'echowithin';
   const isDM = tag.startsWith('dm-');
 
+  // Resolve relative paths to absolute URLs (fixes PWA notification icons)
+  function toAbsoluteUrl(path) {
+    if (!path) return path;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    return self.location.origin + path;
+  }
+  const icon = toAbsoluteUrl(data.icon || '/static/logo-192.png');
+  const badge = toAbsoluteUrl(data.badge || '/static/logo-96.png');
+
   event.waitUntil(
     (isDM
       ? // For DM notifications: check existing ones with same tag and collapse
@@ -293,8 +302,8 @@ self.addEventListener('push', event => {
 
           return self.registration.showNotification(title, {
             body,
-            icon: data.icon || '/static/logo-192.png',
-            badge: data.badge || '/static/logo-96.png',
+            icon,
+            badge,
             tag,
             renotify: true,
             data: { url: data.url || '/', messageCount: newCount },
@@ -309,8 +318,8 @@ self.addEventListener('push', event => {
       : // For non-DM notifications: keep default behavior
         self.registration.showNotification(data.title, {
           body: data.body,
-          icon: data.icon || '/static/logo-192.png',
-          badge: data.badge || '/static/logo-96.png',
+          icon,
+          badge,
           tag,
           renotify: !!data.tag,
           data: { url: data.url || '/' },

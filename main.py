@@ -8011,13 +8011,16 @@ def handle_send_dm(data):
         # Encrypt DM content before saving
         encrypted_content = encrypt_dm(content, sender_id_str, recipient_id_str) if content else ''
 
+        recipient_viewing = active_chat_views.get(recipient_id_str, set())
+        is_actively_reading = sender_id_str in recipient_viewing
+
         message_doc = {
             'sender_id': ObjectId(current_user.id),
             'recipient_id': recipient_id,
             'content': encrypted_content,
             'encrypted': True,
             'timestamp': datetime.datetime.now(datetime.timezone.utc),
-            'is_read': False,
+            'is_read': is_actively_reading,
             'message_type': message_type
         }
         
@@ -8038,7 +8041,7 @@ def handle_send_dm(data):
             'sender_username': current_user.username,
             'content': content,
             'timestamp': message_doc['timestamp'].isoformat(),
-            'is_read': False,
+            'is_read': is_actively_reading,
             'message_type': message_type
         }
         if image_url: payload['image_url'] = image_url
@@ -8056,9 +8059,13 @@ def handle_send_dm(data):
         payload['temp_id'] = data.get('temp_id')
         emit('message_confirmed', payload, room=f"user_{sender_id_str}")
         
-        # Send push notification only if recipient is NOT actively viewing this chat
-        recipient_viewing = active_chat_views.get(recipient_id_str, set())
-        if sender_id_str not in recipient_viewing:
+        if is_actively_reading:
+            # Alert sender that the message was read instantly
+            emit('messages_read', 
+                 {'reader_id': recipient_id_str, 'sender_id': sender_id_str}, 
+                 room=f"user_{sender_id_str}")
+        else:
+            # Send push notification only if recipient is NOT actively viewing this chat
             push_body = "📸 Photo" if message_type == 'image' else content[:100] + ('...' if len(content) > 100 else '')
             send_push_notification_to_user(
                 recipient_id_str,

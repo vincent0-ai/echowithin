@@ -9442,7 +9442,6 @@ def sitemap():
                 response = make_response(cached)
                 response.headers['Content-Type'] = 'application/xml; charset=utf-8'
                 response.headers['Cache-Control'] = 'public, max-age=3600'
-                response.headers['X-Robots-Tag'] = 'noindex'
                 return response
         except Exception as e:
             app.logger.warning(f"Sitemap cache hit error: {e}")

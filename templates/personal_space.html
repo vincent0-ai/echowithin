@@ -1778,11 +1778,12 @@
                 PIN</button>
         </div>
         {% elif locked_notes %}
-        <!-- Unlocked: show locked notes -->
+        <!-- Unlocked: show locked notes with auto-relock timer -->
         <div
             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
             <div style="font-size: 0.9rem; color: #5a3328; font-weight: 600;">
-                <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Session Unlocked
+                <i class="fas fa-lock-open" style="margin-right: 4px;"></i> Unlocked
+                <span id="relock-timer" style="font-weight: 400; font-size: 0.8rem; color: #999; margin-left: 6px;"></span>
             </div>
             <button type="button" class="btn"
                 style="background: #3e2217; color: white; border: none; padding: 0.4rem 0.8rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer;"
@@ -1790,6 +1791,44 @@
                 <i class="fas fa-lock"></i> Lock Now
             </button>
         </div>
+        <script>
+        (function() {
+            const UNLOCK_DURATION = 300; // 5 minutes in seconds
+            const timerEl = document.getElementById('relock-timer');
+            let remaining = UNLOCK_DURATION;
+
+            function formatTime(secs) {
+                const m = Math.floor(secs / 60);
+                const s = secs % 60;
+                return m + ':' + (s < 10 ? '0' : '') + s;
+            }
+
+            const interval = setInterval(() => {
+                remaining--;
+                if (timerEl) timerEl.textContent = '(' + formatTime(Math.max(0, remaining)) + ')';
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    // Auto-relock
+                    if (typeof relockSession === 'function') relockSession(false);
+                }
+            }, 1000);
+            if (timerEl) timerEl.textContent = '(' + formatTime(remaining) + ')';
+
+            // Also relock when page comes back from being hidden (app switch, screen lock)
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    // Re-check with server whether session is still valid
+                    fetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
+                        if (!d.unlocked) {
+                            clearInterval(interval);
+                            window.location.hash = 'locked';
+                            window.location.reload();
+                        }
+                    }).catch(() => {});
+                }
+            });
+        })();
+        </script>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}
             <div class="locked-note-card note-card" data-note-id="{{ note._id }}">

@@ -2862,6 +2862,9 @@ def login():
             user_obj = User(user)
             login_user(user_obj, remember=remember) # Pass the remember flag to login_user
 
+            # Always clear app lock state on fresh login for security
+            session.pop('app_lock_unlocked_at', None)
+
             # Generate persistent token for native app session revival
             _is_native = 'EchoWithinApp' in request.headers.get('User-Agent', '')
             _app_token = None
@@ -6610,7 +6613,16 @@ def personal_space():
 
     # --- Locked Notes ---
     has_app_lock = bool(user.get('app_lock_pin_hash'))
-    is_unlocked = session.get('app_lock_unlocked', False)
+    # Check if unlocked AND not expired (5-minute window)
+    unlock_ts = session.get('app_lock_unlocked_at')
+    is_unlocked = False
+    if unlock_ts and has_app_lock:
+        elapsed = (datetime.datetime.now(datetime.timezone.utc) - unlock_ts).total_seconds()
+        if elapsed < 300:  # 5-minute unlock window
+            is_unlocked = True
+        else:
+            # Auto-expire: clear stale unlock
+            session.pop('app_lock_unlocked_at', None)
     locked_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': True})
     locked_notes = []
     locked_shares_map = {}
@@ -7399,7 +7411,7 @@ def app_lock_setup():
 
     pin_hash = generate_password_hash(pin)
     users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$set': {'app_lock_pin_hash': pin_hash}})
-    session['app_lock_unlocked'] = True
+    session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
     return jsonify({'success': True, 'message': 'App lock PIN set successfully'})
 
 
@@ -7419,7 +7431,7 @@ def app_lock_verify():
         return jsonify({'error': 'No app lock PIN is set'}), 400
 
     if check_password_hash(user['app_lock_pin_hash'], pin):
-        session['app_lock_unlocked'] = True
+        session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
         return jsonify({'success': True})
     else:
         return jsonify({'error': 'Incorrect PIN'}), 403
@@ -7449,7 +7461,7 @@ def app_lock_remove():
         {'user_id': ObjectId(current_user.id), 'is_locked': True},
         {'$set': {'is_locked': False}}
     )
-    session.pop('app_lock_unlocked', None)
+    session.pop('app_lock_unlocked_at', None)
     return jsonify({'success': True, 'message': 'App lock removed. All locked notes have been unlocked.'})
 
 
@@ -7457,9 +7469,22 @@ def app_lock_remove():
 @login_required
 def app_lock_relock():
     """Clear the app lock session state to relock the locked notes tab."""
-    session.pop('app_lock_unlocked', None)
+    session.pop('app_lock_unlocked_at', None)
     return jsonify({'success': True})
 
+
+@app.route('/api/app_lock/check_status')
+@login_required
+def app_lock_check_status():
+    """Check if the app lock session is still valid (for visibility change re-checks)."""
+    unlock_ts = session.get('app_lock_unlocked_at')
+    if not unlock_ts:
+        return jsonify({'unlocked': False})
+    elapsed = (datetime.datetime.now(datetime.timezone.utc) - unlock_ts).total_seconds()
+    if elapsed >= 300:
+        session.pop('app_lock_unlocked_at', None)
+        return jsonify({'unlocked': False})
+    return jsonify({'unlocked': True, 'remaining': int(300 - elapsed)})
 
 @app.route('/personal_post/toggle_lock/<post_id>', methods=['POST'])
 @login_required

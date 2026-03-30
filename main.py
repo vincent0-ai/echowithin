@@ -8153,6 +8153,14 @@ def messages_page():
                 except Exception:
                     pass  # Keep as is if decryption fails
 
+            five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+            is_online = False
+            last_active = user_info.get('last_active')
+            if last_active and isinstance(last_active, datetime.datetime):
+                if last_active.tzinfo is None:
+                    last_active = last_active.replace(tzinfo=datetime.timezone.utc)
+                is_online = last_active >= five_minutes_ago
+
             contacts.append({
                 'user_id': str(user_info['_id']),
                 'username': user_info['username'],
@@ -8160,7 +8168,8 @@ def messages_page():
                 'last_message': last_msg,
                 'timestamp': c['timestamp'],
                 'unread_count': c['unread_count'],
-                'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None
+                'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None,
+                'is_online': is_online
             })
             
     # If a specific user is requested in the URL, ensure they are in/at top of contacts

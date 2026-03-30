@@ -1114,6 +1114,12 @@ def add_security_headers(response):
         "base-uri 'self'; "
         "form-action 'self' https://accounts.google.com;"
     )
+
+    # Prevent indexing of private/auth routes without triggering GSC blocked warnings
+    noindex_paths = ('/admin', '/api', '/logout', '/login', '/register', '/dashboard', '/messages', '/personal_space')
+    if getattr(request, 'path', '').startswith(noindex_paths):
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+
     return response
 
 
@@ -9551,13 +9557,6 @@ Sitemap: {base_url}/sitemap.xml
 
 # Crawl-delay for politeness
 Crawl-delay: 1
-
-# Disallow admin/private areas
-Disallow: /admin/
-Disallow: /api/
-Disallow: /logout
-Disallow: /login
-Disallow: /register
 """
     response = make_response(robots_txt)
     response.headers['Content-Type'] = 'text/plain'

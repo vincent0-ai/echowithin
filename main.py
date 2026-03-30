@@ -35,6 +35,8 @@ import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
 import markdown
+import re
+import html
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -7841,6 +7843,40 @@ def handle_join_inbox():
     app.logger.info(f"User {current_user.username} joined private inbox room: {user_room}")
 
 
+def fetch_link_preview(url):
+    """Fetches OpenGraph metadata from a URL for a link preview card."""
+    try:
+        response = requests.get(url, timeout=3, stream=True)
+        # Read only a small chunk to prevent memory issues with large files
+        chunk = next(response.iter_content(chunk_size=50000))
+        html_content = chunk.decode('utf-8', errors='ignore')
+        
+        # Simple regex parsing (avoids pulling in bs4 just for this)
+        title_match = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
+        
+        def get_meta(property_name):
+            m = re.search(rf'<meta[^>]*property="{property_name}"[^>]*content="([^"]+)"[^>]*>', html_content, re.IGNORECASE)
+            if not m:
+                m = re.search(rf'<meta[^>]*content="([^"]+)"[^>]*property="{property_name}"[^>]*>', html_content, re.IGNORECASE)
+            return m.group(1) if m else ""
+
+        og_title = get_meta("og:title")
+        og_desc = get_meta("og:description")
+        og_image = get_meta("og:image")
+        
+        title = og_title or (title_match.group(1).strip() if title_match else url)
+        title = html.unescape(title)
+        
+        return {
+            'url': url,
+            'title': title[:100],
+            'description': html.unescape(og_desc)[:150],
+            'image': og_image
+        }
+    except Exception as e:
+        app.logger.warning(f"Failed to fetch link preview for {url}: {e}")
+        return None
+
 def can_dm(user_a_id, user_b_id):
     """Check if two users are allowed to exchange DMs.
     Returns True if:
@@ -7903,12 +7939,15 @@ def handle_dm_disconnect():
 def handle_send_dm(data):
     """
     Handles sending a direct message via Socket.IO.
-    Data expected: { 'recipient_id': '...', 'content': '...' }
+    Data expected: { 'recipient_id': '...', 'content': '...', 'reply_to_id': '...', 'image_url': '...', 'message_type': 'text|image' }
     """
     recipient_id_str = data.get('recipient_id')
-    content = data.get('content')
+    content = data.get('content', '')
+    reply_to_id = data.get('reply_to_id')
+    image_url = data.get('image_url')
+    message_type = data.get('message_type', 'text')
     
-    if not recipient_id_str or not content:
+    if not recipient_id_str or (not content and not image_url):
         return
     
     try:
@@ -7932,8 +7971,45 @@ def handle_send_dm(data):
             }, room=f"user_{sender_id_str}")
             return
 
+        # Handle Reply Previews
+        reply_to_preview = None
+        reply_to_sender = None
+        if reply_to_id:
+            try:
+                parent_msg = direct_messages_conf.find_one({'_id': ObjectId(reply_to_id)})
+                if parent_msg:
+                    parent_sender_id = str(parent_msg['sender_id'])
+                    is_me = parent_sender_id == sender_id_str
+                    parent_sender = current_user.username if is_me else recipient.get('username', 'User')
+                    
+                    raw_content = parent_msg.get('content', '')
+                    if parent_msg.get('encrypted') or raw_content.startswith('gAAAAA'):
+                        try:
+                            # Decrypt it to cache the preview
+                            user1 = str(parent_msg['sender_id'])
+                            user2 = str(parent_msg['recipient_id'])
+                            raw_content = decrypt_dm(raw_content, user1, user2)
+                        except Exception:
+                            raw_content = "Encrypted message"
+                            
+                    reply_to_sender = parent_sender
+                    
+                    if parent_msg.get('message_type') == 'image':
+                        reply_to_preview = "📸 Photo"
+                    else:
+                        reply_to_preview = raw_content[:80] + ('...' if len(raw_content) > 80 else '')
+            except Exception as e:
+                app.logger.warning(f"Error fetching reply parent message: {e}")
+
+        # Handle Link Previews
+        link_preview = None
+        if message_type == 'text' and content:
+            url_match = re.search(r'(https?://[^\s]+)', content)
+            if url_match:
+                link_preview = fetch_link_preview(url_match.group(1))
+
         # Encrypt DM content before saving
-        encrypted_content = encrypt_dm(content, sender_id_str, recipient_id_str)
+        encrypted_content = encrypt_dm(content, sender_id_str, recipient_id_str) if content else ''
 
         message_doc = {
             'sender_id': ObjectId(current_user.id),
@@ -7941,37 +8017,53 @@ def handle_send_dm(data):
             'content': encrypted_content,
             'encrypted': True,
             'timestamp': datetime.datetime.now(datetime.timezone.utc),
-            'is_read': False
+            'is_read': False,
+            'message_type': message_type
         }
+        
+        if image_url: message_doc['image_url'] = image_url
+        if reply_to_id:
+            message_doc['reply_to_id'] = ObjectId(reply_to_id)
+            message_doc['reply_to_preview'] = reply_to_preview
+            message_doc['reply_to_sender'] = reply_to_sender
+        if link_preview: message_doc['link_preview'] = link_preview
         
         # Save to DB
         direct_messages_conf.insert_one(message_doc)
         
-        # Broadcast to recipient's private room
-        recipient_room = f"user_{recipient_id_str}"
-        emit('new_dm', {
+        # Broadcast payload
+        payload = {
             'id': str(message_doc['_id']),
             'sender_id': sender_id_str,
             'sender_username': current_user.username,
             'content': content,
             'timestamp': message_doc['timestamp'].isoformat(),
-            'is_read': False
-        }, room=recipient_room)
+            'is_read': False,
+            'message_type': message_type
+        }
+        if image_url: payload['image_url'] = image_url
+        if reply_to_id:
+            payload['reply_to_id'] = str(reply_to_id)
+            payload['reply_to_preview'] = reply_to_preview
+            payload['reply_to_sender'] = reply_to_sender
+        if link_preview: payload['link_preview'] = link_preview
+
+        # Broadcast to recipient's private room
+        recipient_room = f"user_{recipient_id_str}"
+        emit('new_dm', payload, room=recipient_room)
 
         # Confirm to sender with ID
-        emit('message_confirmed', {
-            'id': str(message_doc['_id']),
-            'temp_id': data.get('temp_id'),
-            'timestamp': message_doc['timestamp'].isoformat()
-        }, room=f"user_{sender_id_str}")
+        payload['temp_id'] = data.get('temp_id')
+        emit('message_confirmed', payload, room=f"user_{sender_id_str}")
         
         # Send push notification only if recipient is NOT actively viewing this chat
         recipient_viewing = active_chat_views.get(recipient_id_str, set())
         if sender_id_str not in recipient_viewing:
+            push_body = "📸 Photo" if message_type == 'image' else content[:100] + ('...' if len(content) > 100 else '')
             send_push_notification_to_user(
                 recipient_id_str,
                 f"New message from {current_user.username}",
-                content[:100] + ('...' if len(content) > 100 else ''),
+                push_body,
                 url=url_for('messages_page', _external=True),
                 tag=f'dm-{current_user.id}'
             )
@@ -8116,18 +8208,32 @@ def api_message_history(other_user_id):
         
         formatted_messages = []
         for m in messages:
-            content = m['content']
+            content = m.get('content', '')
             # Try to decrypt if it looks like ciphertext or if flag is set
             if m.get('encrypted') or (content and content.startswith('gAAAAA')):
-                content = decrypt_dm(content, str(current_user.id), str(other_id))
+                try:
+                    content = decrypt_dm(content, str(current_user.id), str(other_id))
+                except Exception:
+                    pass
 
-            formatted_messages.append({
+            msg_data = {
                 'id': str(m['_id']),
                 'sender_id': str(m['sender_id']),
                 'content': content,
                 'timestamp': m['timestamp'].isoformat().replace('+00:00', 'Z'),
-                'is_read': m.get('is_read', False)
-            })
+                'is_read': m.get('is_read', False),
+                'message_type': m.get('message_type', 'text')
+            }
+            
+            if 'image_url' in m: msg_data['image_url'] = m['image_url']
+            if 'reply_to_id' in m:
+                msg_data['reply_to_id'] = str(m['reply_to_id'])
+                msg_data['reply_to_preview'] = m.get('reply_to_preview')
+                msg_data['reply_to_sender'] = m.get('reply_to_sender')
+            if 'link_preview' in m: msg_data['link_preview'] = m['link_preview']
+            if 'reactions' in m: msg_data['reactions'] = m['reactions']
+
+            formatted_messages.append(msg_data)
             
         # Socket alert for real-time double checkmarks
         socketio.emit('messages_read', 
@@ -8143,6 +8249,126 @@ def api_message_history(other_user_id):
             }
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/upload_image', methods=['POST'])
+@login_required
+def api_upload_dm_image():
+    """Endpoint for uploading images in DMs."""
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image provided'}), 400
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'No empty filename'}), 400
+        
+    try:
+        # Check file size (buffer seek)
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        
+        # 5MB limit
+        if size > app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024):
+            return jsonify({'error': 'Image exceeds 5MB limit'}), 400
+            
+        # Upload to Cloudinary directly in a dedicated dm folder
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder="dm_images",
+            transformation=[
+                {'width': 1200, 'height': 1200, 'crop': 'limit'},
+                {'quality': 'auto', 'fetch_format': 'auto'}
+            ]
+        )
+        return jsonify({
+            'success': True,
+            'url': upload_result.get('secure_url')
+        })
+    except Exception as e:
+        app.logger.error(f"Image upload failed for DM: {e}")
+        return jsonify({'error': 'Failed to upload image'}), 500
+
+@app.route('/api/messages/react/<message_id>', methods=['POST'])
+@login_required
+def api_react_message(message_id):
+    """Adds or toggles a reaction emoji on a message."""
+    try:
+        data = request.get_json() or {}
+        emoji = data.get('emoji')
+        if not emoji:
+            return jsonify({'error': 'No emoji provided'}), 400
+            
+        msg = direct_messages_conf.find_one({'_id': ObjectId(message_id)})
+        if not msg:
+            return jsonify({'error': 'Message not found'}), 404
+            
+        user_id_str = str(current_user.id)
+        # Verify user is sender or recipient
+        if str(msg['sender_id']) != user_id_str and str(msg['recipient_id']) != user_id_str:
+            return jsonify({'error': 'Unauthorized'}), 403
+            
+        reactions = msg.get('reactions', {})
+        users_for_emoji = reactions.get(emoji, [])
+        
+        # Toggle logic
+        if user_id_str in users_for_emoji:
+            users_for_emoji.remove(user_id_str)
+            if not users_for_emoji:
+                reactions.pop(emoji, None)
+            else:
+                reactions[emoji] = users_for_emoji
+        else:
+            if emoji not in reactions:
+                reactions[emoji] = []
+            reactions[emoji].append(user_id_str)
+            
+        direct_messages_conf.update_one({'_id': ObjectId(message_id)}, {'$set': {'reactions': reactions}})
+        
+        payload = {'id': message_id, 'reactions': reactions}
+        # Push to both users
+        socketio.emit('message_reacted', payload, room=f"user_{msg['sender_id']}")
+        socketio.emit('message_reacted', payload, room=f"user_{msg['recipient_id']}")
+        
+        return jsonify({'success': True, 'reactions': reactions})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/messages/search/<other_user_id>', methods=['GET'])
+@login_required
+def api_search_messages(other_user_id):
+    """Searches through decrypted direct messages."""
+    query = request.args.get('q', '').lower()
+    if not query:
+        return jsonify({'messages': []})
+        
+    try:
+        other_id = ObjectId(other_user_id)
+        # Fetch all correspondence
+        messages = list(direct_messages_conf.find({
+            '$or': [
+                {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
+                {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}
+            ]
+        }).sort('timestamp', 1))
+        
+        results = []
+        for m in messages:
+            content = m.get('content', '')
+            if m.get('encrypted') or content.startswith('gAAAAA'):
+                try:
+                    content = decrypt_dm(content, str(m['sender_id']), str(m['recipient_id']))
+                except Exception:
+                    pass
+                    
+            if query in content.lower() or (m.get('link_preview') and query in m['link_preview'].get('title', '').lower()):
+                results.append(str(m['_id']))
+                
+            if len(results) >= 50: # Limit matches
+                break
+                
+        return jsonify({'success': True, 'match_ids': results})
+    except Exception as e:
+        app.logger.error(f"Search API error: {e}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/messages/edit/<message_id>', methods=['POST'])

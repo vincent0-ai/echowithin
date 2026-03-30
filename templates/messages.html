@@ -117,11 +117,22 @@
                     </div>
                     <div class="chat-header-actions {{ 'hidden' if not active_chat else '' }}" id="chat-header-actions" 
                          style="gap: 8px;">
+                        <button class="header-action-btn" onclick="toggleChatSearch()" title="Search Chat">
+                            <i class="fas fa-search"></i>
+                        </button>
                         <button class="header-action-btn" onclick="deleteChat()" title="Delete Conversation">
                             <i class="fas fa-trash-alt"></i>
                             <span class="desktop-only" style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
                         </button>
                     </div>
+                </div>
+                
+                <!-- Chat Search Bar -->
+                <div id="chat-search-bar" style="display: none; padding: 0.8rem 1.5rem; background: #fafafa; border-bottom: 1px solid #f5ebe7; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-search" style="color: #999; font-size: 0.9rem;"></i>
+                    <input type="text" id="chat-search-input" placeholder="Search in conversation..." autocomplete="off"
+                        style="flex: 1; border: none; background: transparent; font-size: 0.9rem; outline: none; padding: 0.2rem;">
+                    <button onclick="toggleChatSearch()" style="background: none; border: none; color: #999; cursor: pointer;"><i class="fas fa-times"></i></button>
                 </div>
 
                 <!-- Messages List -->
@@ -132,16 +143,46 @@
                     {% endif %}
                 </div>
 
+                <!-- Interactive Banners for Reply / Image Upload Preview -->
+                <div id="reply-preview-banner" style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #666; border-left: 4px solid var(--primary-color);">
+                    <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; padding-right: 1rem;">
+                        <span style="font-weight: 600; color: var(--primary-color); margin-bottom: 2px;">Replying to <span id="reply-to-user">User</span></span>
+                        <span id="reply-to-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">...</span>
+                    </div>
+                    <button onclick="cancelReply()" style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div id="image-upload-banner" style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.8rem;">
+                        <img id="image-upload-preview" src="" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover; border: 1px solid #eee;">
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: #333;">Attached Image</span>
+                            <span id="image-upload-status" style="font-size: 0.75rem; color: #999;">Ready to send</span>
+                        </div>
+                    </div>
+                    <button onclick="cancelImageUpload()" style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i class="fas fa-times"></i></button>
+                </div>
+
                 <!-- Message Input -->
                 <div class="chat-input-area"
                     style="padding: 1rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff;">
-                    <form id="chat-form" style="display: flex; gap: 1rem; align-items: center;">
+                    <form id="chat-form" style="display: flex; gap: 0.8rem; align-items: center;">
                         <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
+                        <input type="hidden" id="reply-parent-id" value="">
+                        <input type="hidden" id="pending-image-url" value="">
+                        
+                        <!-- Image Upload Button -->
+                        <button type="button" class="action-btn" onclick="document.getElementById('dm-image-upload').click()" 
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217;">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <input type="file" id="dm-image-upload" accept="image/*" style="display: none;" onchange="handleImageSelection(event)">
+
                         <div style="flex: 1; position: relative;">
                             <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off"
                                 style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none;">
                         </div>
-                        <button type="submit" class="btn"
+                        <button type="submit" class="btn" id="send-btn"
                             style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s;">
                             <i class="fas fa-paper-plane"></i>
                         </button>
@@ -281,6 +322,132 @@
     .action-btn:hover { color: var(--primary-color); background: #fff; }
     .action-btn.delete:hover { color: #ef4444; }
 
+    /* Reactions UI */
+    .reaction-bar {
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #fff;
+        border-radius: 30px;
+        padding: 4px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        display: flex;
+        gap: 4px;
+        opacity: 0;
+        pointer-events: none;
+        transition: all 0.2s;
+        z-index: 10;
+        margin-bottom: 5px;
+    }
+    .message-bubble:hover .reaction-bar { opacity: 1; pointer-events: auto; }
+    
+    .react-btn {
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 4px;
+        transition: transform 0.2s;
+        border-radius: 50%;
+    }
+    .react-btn:hover { transform: scale(1.3); background: #f5ebe7; }
+    
+    .reaction-badges {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+        flex-wrap: wrap;
+    }
+    .reaction-badge {
+        background: #fdfaf9;
+        border: 1px solid #f5ebe7;
+        border-radius: 12px;
+        padding: 2px 6px;
+        font-size: 0.7rem;
+        color: #555;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        user-select: none;
+    }
+    .reaction-badge.user-reacted { background: #f5ebe7; border-color: #3e2217; }
+    .message-sent .reaction-badges { justify-content: flex-end; }
+
+    /* Replied Message Preview in Bubble */
+    .bubble-reply-preview {
+        background: rgba(0,0,0,0.05);
+        border-left: 3px solid var(--primary-color);
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        margin-bottom: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: inherit;
+        opacity: 0.9;
+    }
+    .message-sent .bubble-reply-preview {
+        background: rgba(255,255,255,0.15);
+        border-left-color: rgba(255,255,255,0.8);
+    }
+
+    /* Link Preview Cards */
+    .link-preview-card {
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 6px;
+        background: rgba(255,255,255,0.7);
+        text-decoration: none;
+        color: inherit;
+        display: flex;
+        flex-direction: column;
+        transition: background 0.2s;
+        max-width: 250px;
+    }
+    .link-preview-card:hover { background: rgba(255,255,255,0.9); text-decoration: none; }
+    .message-sent .link-preview-card { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
+    .message-sent .link-preview-card:hover { background: rgba(255,255,255,0.25); }
+    
+    .lp-img { width: 100%; height: 100px; object-fit: cover; border-bottom: 1px solid rgba(0,0,0,0.1); }
+    .message-sent .lp-img { border-bottom-color: rgba(255,255,255,0.2); }
+    .lp-content { padding: 8px; }
+    .lp-title { font-weight: 600; font-size: 0.8rem; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+    .lp-desc { font-size: 0.7rem; opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+    /* Image Messages */
+    .chat-image {
+        max-width: 100%;
+        max-height: 250px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: block;
+        margin-bottom: 4px;
+        object-fit: contain;
+    }
+
+    /* Highlight class for search */
+    @keyframes highlightMessage {
+        0% { background-color: #fef08a; }
+        100% { background-color: transparent; }
+    }
+    .search-highlight { animation: highlightMessage 2s ease-out; }
+
+    /* Lightbox */
+    #lightbox {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85);
+        z-index: 10000; display: none; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.3s;
+    }
+    #lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    #lightbox.show { display: flex; opacity: 1; }
+    #lightbox.show img { transform: scale(1); }
+    #lightbox-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; }
+
     /* Read Status Colors */
     .read-status i.fa-check-double { color: #5dade2; }
     .message-sent .read-status i.fa-check { color: rgba(255,255,255,0.6); }
@@ -302,6 +469,12 @@
     }
 </style>
 
+<!-- Fullscreen Image Lightbox -->
+<div id="lightbox" onclick="closeLightbox(event)">
+    <button id="lightbox-close" onclick="closeLightbox(event)">&times;</button>
+    <img id="lightbox-img" src="" alt="Zoomed image">
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const socket = io();
@@ -320,7 +493,7 @@
         socket.on('new_dm', (data) => {
             console.log("Sync: Received new_dm", data);
             if (data.sender_id === activeRecipientId) {
-                appendMessage(data.content, 'received', data.timestamp, false, data.id, data.is_read);
+                appendMessage(data, 'received', false, data.id, data.is_read);
                 scrollToBottom();
             } else {
                 updateSidebar(data);
@@ -348,6 +521,14 @@
         // Request accepted notification
         socket.on('dm_request_accepted', (data) => {
             showToast(`${data.by_username} accepted your message request!`);
+        });
+
+        socket.on('message_reacted', (data) => {
+            console.log("Sync: message_reacted", data);
+            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+            if (bubble) {
+                updateReactions(bubble, data.reactions);
+            }
         });
 
         socket.on('messages_read', (data) => {
@@ -422,12 +603,47 @@
             chatForm.onsubmit = (e) => {
                 e.preventDefault();
                 const content = messageInput.value.trim();
-                if (!content || !activeRecipientId) return;
+                const pendingUrl = document.getElementById('pending-image-url').value;
+                const replyParentId = document.getElementById('reply-parent-id').value;
+                
+                if (!content && !pendingUrl) return;
+                if (!activeRecipientId) return;
                 
                 const tempId = Date.now().toString();
-                socket.emit('send_dm', { recipient_id: activeRecipientId, content: content, temp_id: tempId });
-                appendMessage(content, 'sent', new Date().toISOString(), false, null, false, tempId);
+                const msgType = pendingUrl ? 'image' : 'text';
+                
+                const msgData = {
+                    content: content,
+                    temp_id: tempId,
+                    timestamp: new Date().toISOString(),
+                    message_type: msgType
+                };
+                
+                const payload = { recipient_id: activeRecipientId, content: content, temp_id: tempId, message_type: msgType };
+                
+                if (pendingUrl) {
+                    payload.image_url = pendingUrl;
+                    msgData.image_url = pendingUrl;
+                }
+                
+                if (replyParentId) {
+                    payload.reply_to_id = replyParentId;
+                    msgData.reply_to_id = replyParentId;
+                    msgData.reply_to_preview = document.getElementById('reply-to-text').textContent;
+                    msgData.reply_to_sender = document.getElementById('reply-to-user').textContent;
+                }
+                
+                socket.emit('send_dm', payload);
+                
+                // Show optimistically
+                appendMessage(msgData, 'sent', false, null, false, tempId);
+                
+                // Reset form
                 messageInput.value = '';
+                cancelReply();
+                cancelImageUpload();
+                document.getElementById('send-btn').style.opacity = '1';
+                
                 scrollToBottom();
             };
         }
@@ -480,7 +696,7 @@
                 }
                 let lastSender = null;
                 messages.forEach(m => {
-                    appendMessage(m.content, m.sender_id === currentUserId ? 'sent' : 'received', m.timestamp, m.sender_id === lastSender, m.id, m.is_read);
+                    appendMessage(m, m.sender_id === currentUserId ? 'sent' : 'received', m.sender_id === lastSender, m.id, m.is_read);
                     lastSender = m.sender_id;
                 });
                 scrollToBottom();
@@ -491,7 +707,8 @@
             });
         }
 
-        function appendMessage(content, type, timestamp, isGrouped = false, msgId = null, isRead = false, tempId = null) {
+        function appendMessage(msgData, type, isGrouped = false, msgId = null, isRead = false, tempId = null) {
+            const timestamp = msgData.timestamp || new Date().toISOString();
             const messageDate = new Date(timestamp);
             const dateString = messageDate.toDateString();
 
@@ -514,10 +731,57 @@
                 readIcon = `<span class="read-status"><i class="fas ${iconClass}"></i></span>`;
             }
 
+            // Build Reply block
+            let replyHTML = '';
+            if (msgData.reply_to_id && msgData.reply_to_preview) {
+                replyHTML = `
+                <div class="bubble-reply-preview" onclick="document.querySelector('.message-bubble[data-id=\\'${msgData.reply_to_id}\\']')?.scrollIntoView({behavior:'smooth',block:'center'})">
+                    <div style="font-weight: 600; font-size: 0.75rem; margin-bottom: 2px;">${msgData.reply_to_sender || 'User'}</div>
+                    <div style="opacity: 0.8;">${msgData.reply_to_preview}</div>
+                </div>`;
+            }
+
+            // Build Content block (Text or Image)
+            let contentHTML = '';
+            if (msgData.message_type === 'image' && msgData.image_url) {
+                contentHTML = `<img src="${msgData.image_url}" class="chat-image" onclick="openLightbox('${msgData.image_url}')">`;
+                if (msgData.content) {
+                    contentHTML += `<div>${msgData.content}</div>`;
+                }
+            } else {
+                contentHTML = `<div class="message-content">${msgData.content || ''}</div>`;
+            }
+
+            // Build Link Preview block
+            let linkPreviewHTML = '';
+            if (msgData.link_preview && msgData.link_preview.title) {
+                // Ensure URL is absolute for a href
+                let absoluteUrl = msgData.link_preview.url;
+                if (!absoluteUrl.startsWith('http')) absoluteUrl = 'http://' + absoluteUrl;
+                
+                linkPreviewHTML = `
+                <a href="${absoluteUrl}" target="_blank" class="link-preview-card">
+                    ${msgData.link_preview.image ? `<img src="${msgData.link_preview.image}" class="lp-img" onerror="this.style.display='none'">` : ''}
+                    <div class="lp-content">
+                        <div class="lp-title">${msgData.link_preview.title}</div>
+                        <div class="lp-desc">${msgData.link_preview.description || absoluteUrl}</div>
+                    </div>
+                </a>`;
+            }
+
+            // Build Reaction bar
+            const reactionOptions = ['❤️', '😂', '😮', '😢', '👍', '👎'];
+            let reactionButtons = reactionOptions.map(e => `<button class="react-btn" onclick="reactToMessage('${msgId}', '${e}')">${e}</button>`).join('');
+            const reactionBarHTML = type === 'received' && msgId ? `<div class="reaction-bar">${reactionButtons}</div>` : '';
+
             const html = `
                 <div class="message-bubble message-${type} ${isGrouped ? 'message-grouped' : ''}" 
                      data-id="${msgId || ''}" data-temp="${tempId || ''}">
-                    <div class="message-content">${content}</div>
+                     ${reactionBarHTML}
+                    ${replyHTML}
+                    ${contentHTML}
+                    ${linkPreviewHTML}
+                    <div class="reaction-badges"></div>
                     <div class="message-meta">
                         <span class="message-time">${time}</span>
                         ${readIcon}
@@ -525,18 +789,54 @@
                 </div>`;
             
             chatHistory.insertAdjacentHTML('beforeend', html);
+            const newBubble = chatHistory.lastElementChild;
             
-            if (type === 'sent' && msgId) {
-                addMessageActions(chatHistory.lastElementChild, msgId);
+            if (msgData.reactions) updateReactions(newBubble, msgData.reactions);
+            
+            if (msgId) {
+                addMessageActions(newBubble, msgId, type);
             }
         }
 
-        function addMessageActions(bubble, msgId) {
+        function updateReactions(bubble, reactions) {
+            const container = bubble.querySelector('.reaction-badges');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            let total = 0;
+            for (const [emoji, users] of Object.entries(reactions)) {
+                if (!users || users.length === 0) continue;
+                total += users.length;
+                const iReacted = users.includes(currentUserId);
+                
+                const badge = document.createElement('div');
+                badge.className = `reaction-badge ${iReacted ? 'user-reacted' : ''}`;
+                badge.innerHTML = `${emoji} ${users.length > 1 ? `<span style="opacity:0.8;font-size:0.6rem;">${users.length}</span>` : ''}`;
+                
+                const msgId = bubble.getAttribute('data-id');
+                badge.onclick = () => reactToMessage(msgId, emoji);
+                container.appendChild(badge);
+            }
+            if (total === 0) container.innerHTML = '';
+        }
+
+        function addMessageActions(bubble, msgId, type) {
             if (bubble.querySelector('.message-actions')) return;
-            const actions = `<div class="message-actions">
+            
+            const contentNode = bubble.querySelector('.message-content') || bubble.querySelector('.chat-image');
+            const previewText = contentNode ? (contentNode.tagName === 'IMG' ? '📸 Photo' : contentNode.textContent.substring(0, 50)) : '';
+            
+            let actions = `<div class="message-actions">`;
+            // Add reply button to all messages
+            actions += `<button class="action-btn" onclick="replyToMessage('${msgId}', '${previewText.replace(/'/g, "\\'")}')" title="Reply"><i class="fas fa-reply"></i></button>`;
+            
+            // Edit/delete only for sent
+            if (type === 'sent') {
+                actions += `
                 <button class="action-btn" onclick="editMessage('${msgId}')"><i class="fas fa-pencil-alt"></i></button>
-                <button class="action-btn delete" onclick="deleteMessage('${msgId}')"><i class="fas fa-trash-alt"></i></button>
-            </div>`;
+                <button class="action-btn delete" onclick="deleteMessage('${msgId}')"><i class="fas fa-trash-alt"></i></button>`;
+            }
+            actions += `</div>`;
             bubble.insertAdjacentHTML('afterbegin', actions);
         }
 
@@ -651,6 +951,122 @@
         window.addEventListener('beforeunload', () => {
             if (activeRecipientId) socket.emit('leave_chat', { partner_id: activeRecipientId });
         });
+
+        // --- Feature Helper Functions ---
+        
+        window.replyToMessage = function(msgId, previewText) {
+            document.getElementById('reply-parent-id').value = msgId;
+            document.getElementById('reply-to-text').textContent = previewText;
+            document.getElementById('reply-preview-banner').style.display = 'flex';
+            document.getElementById('message-input').focus();
+        };
+        
+        window.cancelReply = function() {
+            document.getElementById('reply-parent-id').value = '';
+            document.getElementById('reply-preview-banner').style.display = 'none';
+        };
+        
+        window.handleImageSelection = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 5 * 1024 * 1024) {
+                showToast("Image too large. Maximum 5MB.");
+                return;
+            }
+            
+            const btn = document.getElementById('send-btn');
+            btn.style.opacity = '0.5';
+            btn.disabled = true;
+            
+            const fd = new FormData();
+            fd.append('image', file);
+            
+            fetch('/api/messages/upload_image', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: fd
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    document.getElementById('pending-image-url').value = d.url;
+                    document.getElementById('image-upload-preview').src = URL.createObjectURL(file);
+                    document.getElementById('image-upload-banner').style.display = 'flex';
+                } else {
+                    showToast(d.error || "Upload failed");
+                }
+            }).catch(() => showToast("Network error uploading image."))
+            .finally(() => {
+                btn.style.opacity = '1';
+                btn.disabled = false;
+                document.getElementById('dm-image-upload').value = '';
+            });
+        };
+        
+        window.cancelImageUpload = function() {
+            document.getElementById('pending-image-url').value = '';
+            document.getElementById('image-upload-banner').style.display = 'none';
+        };
+        
+        let searchDebounceId;
+        window.toggleChatSearch = function() {
+            const bar = document.getElementById('chat-search-bar');
+            if (bar.style.display === 'none') {
+                bar.style.display = 'flex';
+                document.getElementById('chat-search-input').focus();
+            } else {
+                bar.style.display = 'none';
+                document.getElementById('chat-search-input').value = '';
+                document.querySelectorAll('.search-highlight').forEach(el => el.classList.remove('search-highlight'));
+            }
+        };
+        
+        document.getElementById('chat-search-input')?.addEventListener('input', function(e) {
+            clearTimeout(searchDebounceId);
+            const query = e.target.value.trim();
+            document.querySelectorAll('.search-highlight').forEach(el => el.classList.remove('search-highlight'));
+            
+            if (!query || query.length < 2) return;
+            
+            searchDebounceId = setTimeout(() => {
+                fetch(`/api/messages/search/${activeRecipientId}?q=${encodeURIComponent(query)}`)
+                .then(r => r.json()).then(d => {
+                    if (d.success && d.match_ids.length > 0) {
+                        d.match_ids.forEach(id => {
+                            const b = document.querySelector(`.message-bubble[data-id="${id}"]`);
+                            if (b) b.classList.add('search-highlight');
+                        });
+                        // Scroll to first
+                        const first = document.querySelector('.search-highlight');
+                        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+                    }
+                });
+            }, 600);
+        });
+        
+        window.reactToMessage = function(msgId, emoji) {
+            fetch(`/api/messages/react/${msgId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ emoji: emoji })
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
+                    if (bubble) updateReactions(bubble, d.reactions);
+                } else {
+                    showToast(d.error);
+                }
+            });
+        };
+
+        window.openLightbox = function(url) {
+            document.getElementById('lightbox-img').src = url;
+            document.getElementById('lightbox').classList.add('show');
+        };
+        window.closeLightbox = function(e) {
+            if (e.target.tagName !== 'IMG') {
+                document.getElementById('lightbox').classList.remove('show');
+            }
+        };
 
         // --- Message Requests Functions ---
         window.toggleRequests = function () {

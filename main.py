@@ -9541,7 +9541,6 @@ def sitemap():
     response = make_response(sitemap_xml)
     response.headers['Content-Type'] = 'application/xml; charset=utf-8'
     response.headers['Cache-Control'] = 'public, max-age=3600'
-    response.headers['X-Robots-Tag'] = 'noindex'
     return response
 
 

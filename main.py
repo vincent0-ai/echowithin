@@ -1613,7 +1613,8 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                             data=payload,
                             vapid_private_key=VAPID_PRIVATE_KEY,
                             vapid_claims=VAPID_CLAIMS,
-                            ttl=86400
+                            ttl=86400,
+                            headers={"Urgency": "high"}
                         )
                         status = response.status_code if response else 'unknown'
                         is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
@@ -1911,10 +1912,16 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                         ),
                     ),
                     apns=messaging.APNSConfig(
+                        headers={'apns-priority': '10'},
                         payload=messaging.APNSPayload(
                             aps=messaging.Aps(
+                                alert=messaging.ApsAlert(
+                                    title=title,
+                                    body=body
+                                ),
                                 badge=badge_count,
                                 sound='default',
+                                mutable_content=True,
                             ),
                         ),
                     ),
@@ -1967,10 +1974,16 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
                     ),
                 ),
                 apns=messaging.APNSConfig(
+                    headers={'apns-priority': '10'},
                     payload=messaging.APNSPayload(
                         aps=messaging.Aps(
+                            alert=messaging.ApsAlert(
+                                title=title,
+                                body=body
+                            ),
                             badge=badge_count,
                             sound='default',
+                            mutable_content=True,
                         ),
                     ),
                 ),

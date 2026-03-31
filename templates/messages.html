@@ -533,8 +533,9 @@
         }
     }
 
-    /* Push up PWA native refresh button so it doesn't overlap chat input */
+    /* Hide PWA native refresh button when chatting to prevent blocking the send button */
     .mobile-fab { bottom: 85px !important; }
+    body.mobile-chat-open .mobile-fab { display: none !important; }
 </style>
 
 

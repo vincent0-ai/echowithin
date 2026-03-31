@@ -7077,7 +7077,7 @@ def search_personal_notes():
                         'id': str(note['_id']),
                         'content_highlighted': highlighted,
                         'snippet': snippet_hl,
-                        'created_at': note.get('created_at').isoformat() if note.get('created_at') else None
+                        'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None
                     })
             total = len(results)
             paginated = results[(page - 1) * per_page: page * per_page]
@@ -8323,7 +8323,7 @@ def api_message_history(other_user_id):
                 'id': str(m['_id']),
                 'sender_id': str(m['sender_id']),
                 'content': content,
-                'timestamp': m['timestamp'].isoformat().replace('+00:00', 'Z'),
+                'timestamp': (m['timestamp'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if m['timestamp'].tzinfo is None else m['timestamp'].isoformat().replace('+00:00', 'Z')),
                 'is_read': m.get('is_read', False),
                 'message_type': m.get('message_type', 'text')
             }
@@ -8892,7 +8892,7 @@ def api_get_share_history(share_id):
         result.append({
             '_id': str(h['_id']),
             'unlocked_by_name': h.get('unlocked_by_name', 'Anonymous visitor'),
-            'unlocked_at': h['unlocked_at'].isoformat() if h.get('unlocked_at') else None,
+            'unlocked_at': h['unlocked_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if h.get('unlocked_at') else None,
             'surprise_theme': h.get('surprise_theme', 'none')
         })
     return jsonify(result)
@@ -8921,7 +8921,7 @@ def api_get_note_versions(post_id):
             '_id': str(v['_id']),
             'editor_name': v.get('editor_name', 'Unknown'),
             'content': decrypted,
-            'created_at': v['created_at'].isoformat() if v.get('created_at') else None
+            'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None
         })
     return jsonify(result)
 

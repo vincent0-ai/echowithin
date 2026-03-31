@@ -1350,11 +1350,11 @@
         <p>Your private area for saved posts and personal notes</p>
         <div class="personal-space-stats">
             <div class="stat-item">
-                <div class="stat-number">{{ saved_posts|length }}</div>
+                <div class="stat-number">{{ total_saved }}</div>
                 <div class="stat-label">Saved Posts</div>
             </div>
             <div class="stat-item">
-                <div class="stat-number">{{ personal_posts|length }}</div>
+                <div class="stat-number">{{ total_notes_count + locked_notes_count }}</div>
                 <div class="stat-label">Notes</div>
             </div>
         </div>
@@ -1396,7 +1396,7 @@
     <div class="tab-nav" role="tablist">
         <button data-tab="saved" role="tab" aria-selected="false">
             Saved Posts
-            <span class="badge">{{ saved_posts|length }}</span>
+            <span class="badge">{{ total_saved }}</span>
         </button>
         <button class="active" data-tab="notes" role="tab" aria-selected="true">
             Notes

@@ -15,13 +15,13 @@
         <div style="display:flex; align-items:flex-start; gap:0.65rem;">
             <div style="font-size:1.5rem; line-height:1;">🎁</div>
             <div style="color:#555; font-size:0.88rem; line-height:1.4;">
-                <strong style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a surprise note today</strong>
+                <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a surprise note today</strong>
                 {% if current_user.is_authenticated %}
-                Pick one private note and turn it into a magic link.
-                <a href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
+                <span id="home-share-promo-copy">Pick one private note and turn it into a magic link.</span>
+                <a id="home-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
                 {% else %}
-                Sign in to create and share private notes.
-                <a href="{{ url_for('login') }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
+                <span id="home-share-promo-copy">Sign in to create and share private notes.</span>
+                <a id="home-share-promo-link" href="{{ url_for('login') }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
                 {% endif %}
             </div>
         </div>
@@ -60,6 +60,9 @@
             (function initTemporarySharePromo() {
                 const promo = document.getElementById('home-share-promo');
                 const dismissBtn = document.getElementById('home-share-promo-dismiss');
+                const titleEl = document.getElementById('home-share-promo-title');
+                const copyEl = document.getElementById('home-share-promo-copy');
+                const linkEl = document.getElementById('home-share-promo-link');
                 if (!promo) return;
 
                 const key = 'ew_share_promo_snooze_until';
@@ -73,6 +76,50 @@
                         localStorage.setItem(key, String(Date.now() + (12 * 60 * 60 * 1000)));
                         promo.style.display = 'none';
                     });
+                }
+
+                if (titleEl && copyEl && linkEl) {
+                    {% if current_user.is_authenticated %}
+                    const variants = [
+                        {
+                            title: 'Share a surprise note today',
+                            copy: 'Pick one private note and turn it into a magic link.',
+                            cta: 'Open note picker ->'
+                        },
+                        {
+                            title: 'Need standard note cooperation?',
+                            copy: 'Use a standard note for collaboration, edit workflows, and version tracking.',
+                            cta: 'Start collaboration ->'
+                        }
+                    ];
+                    {% else %}
+                    const variants = [
+                        {
+                            title: 'Share a surprise note today',
+                            copy: 'Sign in to create and share private notes.',
+                            cta: 'Log in ->'
+                        },
+                        {
+                            title: 'Need standard note cooperation?',
+                            copy: 'Sign in to collaborate with edit permissions and tracked versions.',
+                            cta: 'Log in ->'
+                        }
+                    ];
+                    {% endif %}
+
+                    let variantIndex = 0;
+                    const applyVariant = (index) => {
+                        const item = variants[index];
+                        titleEl.textContent = item.title;
+                        copyEl.textContent = item.copy;
+                        linkEl.textContent = item.cta;
+                    };
+
+                    applyVariant(variantIndex);
+                    setInterval(() => {
+                        variantIndex = (variantIndex + 1) % variants.length;
+                        applyVariant(variantIndex);
+                    }, 9000);
                 }
             })();
 

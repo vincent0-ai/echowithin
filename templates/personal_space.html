@@ -1517,10 +1517,10 @@
         <div class="share-promo-card" id="share-promo-card" data-promo-mode="permanent">
             <div class="share-promo-icon">🎁</div>
             <div class="share-promo-body">
-                <h4>Surprise someone special!</h4>
-                <p>Write a note, pick a Celebration/Birthday theme with music & photos, then share a magic link.
-                    <a href="javascript:void(0)" id="share-promo-cta">Try
-                        it now →</a>
+                <h4 id="share-promo-title">Surprise someone special!</h4>
+                <p>
+                    <span id="share-promo-copy">Write a note, pick a Celebration/Birthday theme with music &amp; photos, then share a magic link.</span>
+                    <a href="javascript:void(0)" id="share-promo-cta">Try it now →</a>
                 </p>
             </div>
             <button class="share-promo-dismiss" id="share-promo-dismiss" aria-label="Dismiss">
@@ -4518,6 +4518,39 @@
         const promoCard = document.getElementById('share-promo-card');
         if (promoCard && promoCard.dataset.promoMode === 'temporary' && localStorage.getItem('ew_share_promo_dismissed') === '1') {
             promoCard.style.display = 'none';
+        }
+
+        // Alternate promotion between surprise links and standard collaboration notes.
+        const promoTitle = document.getElementById('share-promo-title');
+        const promoCopy = document.getElementById('share-promo-copy');
+        const promoCta = document.getElementById('share-promo-cta');
+        if (promoTitle && promoCopy && promoCta) {
+            const variants = [
+                {
+                    title: 'Surprise someone special!',
+                    copy: 'Write a note, pick a Celebration/Birthday theme with music & photos, then share a magic link.',
+                    cta: 'Try it now ->'
+                },
+                {
+                    title: 'Need a standard collaboration note?',
+                    copy: 'Share a normal note for teamwork: comments, co-editing, and version history in one place.',
+                    cta: 'Start collaborating ->'
+                }
+            ];
+
+            let variantIndex = 0;
+            const applyVariant = (index) => {
+                const item = variants[index];
+                promoTitle.textContent = item.title;
+                promoCopy.textContent = item.copy;
+                promoCta.textContent = item.cta;
+            };
+
+            applyVariant(variantIndex);
+            setInterval(() => {
+                variantIndex = (variantIndex + 1) % variants.length;
+                applyVariant(variantIndex);
+            }, 9000);
         }
 
         // 2. Show tooltip on the FIRST note's share button (once per user)

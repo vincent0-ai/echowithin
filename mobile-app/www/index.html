@@ -84,6 +84,25 @@
         button:active {
             transform: translateY(1px);
         }
+
+        .secondary-btn {
+            margin-top: 10px;
+            background: #f8fafc;
+            color: #334155;
+            border: 1px solid #dbe4ee;
+            box-shadow: none;
+        }
+
+        .secondary-btn:hover {
+            background: #f1f5f9;
+        }
+
+        .offline-hint {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            max-width: 280px;
+        }
     </style>
 </head>
 
@@ -109,12 +128,52 @@
         <h2>You're Offline</h2>
         <p>Please check your internet connection and try again.</p>
         <button id="retry-btn">Retry</button>
+        <button id="open-cached-btn" class="secondary-btn" type="button" style="display: none;">Open Cached Content</button>
+        <p id="offline-hint" class="offline-hint" style="display: none;">If you opened pages before, this can load them from cache while offline.</p>
     </div>
 
     <script src="capacitor.js"></script>
     <script>
         const LIVE_SITE = 'https://blog.echowithin.xyz';
+        const LAST_ONLINE_URL_KEY = 'ew_last_online_url';
         let redirectStarted = false;
+        let lastTargetUrl = LIVE_SITE;
+
+        async function hasInternetConnection() {
+            const { Network } = (window.Capacitor && window.Capacitor.Plugins) || {};
+            if (Network && typeof Network.getStatus === 'function') {
+                try {
+                    const status = await Network.getStatus();
+                    if (typeof status.connected === 'boolean') {
+                        return status.connected;
+                    }
+                } catch (e) {
+                    console.warn('Bridge: Network status check failed, falling back to navigator.onLine', e);
+                }
+            }
+            return navigator.onLine;
+        }
+
+        async function canReachLiveSite() {
+            const probeUrl = LIVE_SITE + '/offline?bridge_probe=1&ts=' + Date.now();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(function () { controller.abort(); }, 6000);
+
+            try {
+                await fetch(probeUrl, {
+                    method: 'GET',
+                    mode: 'no-cors',
+                    cache: 'no-store',
+                    signal: controller.signal
+                });
+                return true;
+            } catch (err) {
+                console.error('Bridge: Reachability probe failed:', err);
+                return false;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
 
         function parseDeepLink(deepLinkUrl) {
             if (!deepLinkUrl) return null;
@@ -267,11 +326,13 @@
             } else {
                 targetUrl = LIVE_SITE;
             }
+            lastTargetUrl = targetUrl;
 
             // When offline, show the local offline UI — the Service Worker for blog.echowithin.xyz
             // can't intercept cross-origin navigations from the bridge page (different origin).
             // The online listener will auto-retry when connectivity returns.
-            if (!navigator.onLine) {
+            const isConnected = await hasInternetConnection();
+            if (!isConnected) {
                 showOfflineUI();
                 return;
             }
@@ -280,20 +341,19 @@
             document.getElementById('status-text').textContent = 'Loading...';
 
             try {
-                // Use a short timeout to prevent hanging forever on very slow networks
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-                // Fetch the root URL to verify it's accessible
-                await fetch(targetUrl, {
-                    method: 'GET',
-                    mode: 'no-cors',
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
+                const reachable = await canReachLiveSite();
+                if (!reachable) {
+                    showOfflineUI();
+                    return;
+                }
 
                 // Fetch succeeded — server is reachable
                 console.log('Bridge: Connection verified. Redirecting...');
+                try {
+                    localStorage.setItem(LAST_ONLINE_URL_KEY, targetUrl);
+                } catch (e) {
+                    console.warn('Bridge: Failed to store last online URL', e);
+                }
                 redirectStarted = true;
                 window.location.replace(targetUrl);
 
@@ -308,6 +368,19 @@
             document.getElementById('loader-container').style.display = 'none';
             const offlineContainer = document.getElementById('offline-container');
             offlineContainer.style.display = 'flex';
+
+            const cachedBtn = document.getElementById('open-cached-btn');
+            const offlineHint = document.getElementById('offline-hint');
+            const lastOnlineUrl = localStorage.getItem(LAST_ONLINE_URL_KEY);
+            if (cachedBtn && offlineHint) {
+                if (lastOnlineUrl) {
+                    cachedBtn.style.display = 'inline-block';
+                    offlineHint.style.display = 'block';
+                } else {
+                    cachedBtn.style.display = 'none';
+                    offlineHint.style.display = 'none';
+                }
+            }
         }
 
         function hideOfflineUI() {
@@ -320,6 +393,15 @@
         document.getElementById('retry-btn').addEventListener('click', function () {
             hideOfflineUI();
             run();
+        });
+
+        document.getElementById('open-cached-btn').addEventListener('click', function () {
+            const cachedUrl = localStorage.getItem(LAST_ONLINE_URL_KEY) || lastTargetUrl || LIVE_SITE;
+            if (!cachedUrl) {
+                return;
+            }
+            // Intentionally bypass connectivity checks so the remote Service Worker can serve cached pages.
+            window.location.replace(cachedUrl);
         });
 
         // Auto-retry when connection is restored

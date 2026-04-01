@@ -1514,24 +1514,19 @@
         <div id="pending-notes-container"></div>
 
         <!-- Share Feature Promo Card -->
-        {% if not active_shares_map %}
-        <div class="share-promo-card" id="share-promo-card">
+        <div class="share-promo-card" id="share-promo-card" data-promo-mode="permanent">
             <div class="share-promo-icon">🎁</div>
             <div class="share-promo-body">
                 <h4>Surprise someone special!</h4>
                 <p>Write a note, pick a Valentine/Birthday theme with music & photos, then share a magic link.
-                    <a href="javascript:void(0)"
-                        onclick="document.getElementById('share-promo-card').style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1'); document.querySelector('.share-note-btn')?.click();">Try
+                    <a href="javascript:void(0)" id="share-promo-cta">Try
                         it now →</a>
                 </p>
             </div>
-            <button class="share-promo-dismiss"
-                onclick="this.parentElement.style.display='none'; localStorage.setItem('ew_share_promo_dismissed','1');"
-                aria-label="Dismiss">
+            <button class="share-promo-dismiss" id="share-promo-dismiss" aria-label="Dismiss">
                 <i class="fas fa-times"></i>
             </button>
         </div>
-        {% endif %}
 
         <div class="create-note-card">
             <div
@@ -2070,6 +2065,22 @@
     </div>
 </div>
 
+<!-- Share Note Picker Modal (Promo CTA) -->
+<div id="share-note-picker-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeShareNotePicker()">
+    <div class="custom-modal" style="max-width: 560px; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h2 style="margin: 0; color: #3e2217; font-size: 1.2rem;">
+                <i class="fas fa-list-check"></i> Choose a note to share
+            </h2>
+            <button class="btn-icon" onclick="closeShareNotePicker()"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="share-note-picker-empty" style="display: none; color: #777; font-size: 0.9rem; line-height: 1.5;">
+            You do not have any notes to share yet. Create one first, then come back.
+        </div>
+        <div id="share-note-picker-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 52vh; overflow-y: auto;"></div>
+    </div>
+</div>
+
 <!-- Note Deletion Mode Modal -->
 <div id="delete-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeDeleteModal()">
     <div class="custom-modal" style="max-width: 450px; text-align: left;">
@@ -2197,6 +2208,51 @@
 </div>
 
 <style>
+    .share-picker-item {
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 0.7rem 0.8rem;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .share-picker-item:hover {
+        border-color: #e8a87c;
+        background: #fffaf6;
+    }
+
+    .share-picker-preview {
+        flex: 1;
+        min-width: 0;
+        color: #555;
+        font-size: 0.86rem;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        word-break: break-word;
+    }
+
+    .share-picker-btn {
+        border: none;
+        border-radius: 8px;
+        padding: 0.45rem 0.7rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        background: #3e2217;
+        color: #fff;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .share-picker-btn:hover {
+        background: #5a3328;
+    }
+
     .version-card {
         background: #faf7f4;
         border-radius: 10px;
@@ -3586,6 +3642,17 @@
             switchToTab(initialTab);
         }
 
+        // Deep-link support from other pages: open picker immediately.
+        const openSharePickerRequested = new URLSearchParams(window.location.search).get('open_share_picker') === '1';
+        if (openSharePickerRequested) {
+            switchToTab('notes');
+            setTimeout(() => {
+                if (typeof window.openShareNotePicker === 'function') {
+                    window.openShareNotePicker();
+                }
+            }, 120);
+        }
+
         // Quick create note button
         const quickCreateBtn = document.getElementById('quick-create-note');
         if (quickCreateBtn) {
@@ -3878,14 +3945,100 @@
         let currentShareNoteId = null;
         let lastShareNoteId = null;
 
+        function openShareModalForNote(noteId) {
+            if (!noteId) return;
+            currentShareNoteId = noteId;
+            console.log('Opening share modal for note:', currentShareNoteId);
+            openShareModal();
+            loadExistingShares(currentShareNoteId);
+        }
+
         document.querySelectorAll('.share-note-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                currentShareNoteId = btn.dataset.id;
-                console.log('Opening share modal for note:', currentShareNoteId);
-                openShareModal();
-                loadExistingShares(currentShareNoteId);
+                openShareModalForNote(btn.dataset.id);
             });
         });
+
+        // Promo CTA: let user choose which note to share first.
+        const pickerModal = document.getElementById('share-note-picker-modal');
+        const pickerList = document.getElementById('share-note-picker-list');
+        const pickerEmpty = document.getElementById('share-note-picker-empty');
+
+        window.openShareNotePicker = function () {
+            if (!pickerModal || !pickerList || !pickerEmpty) return;
+
+            const noteCards = Array.from(document.querySelectorAll('.note-card[data-note-id]'));
+            pickerList.innerHTML = '';
+
+            if (!noteCards.length) {
+                pickerEmpty.style.display = 'block';
+                pickerList.style.display = 'none';
+            } else {
+                pickerEmpty.style.display = 'none';
+                pickerList.style.display = 'flex';
+
+                noteCards.forEach(card => {
+                    const noteId = card.dataset.noteId;
+                    const contentEl = card.querySelector('.note-content.rendered-note');
+                    const raw = contentEl ? (contentEl.dataset.raw || contentEl.textContent || '') : '';
+                    const decoded = document.createElement('textarea');
+                    decoded.innerHTML = raw;
+                    const plain = (decoded.value || '').replace(/\s+/g, ' ').trim();
+                    const preview = plain || 'Untitled note';
+
+                    const row = document.createElement('div');
+                    row.className = 'share-picker-item';
+                    const previewEl = document.createElement('div');
+                    previewEl.className = 'share-picker-preview';
+                    previewEl.textContent = preview;
+
+                    const buttonEl = document.createElement('button');
+                    buttonEl.type = 'button';
+                    buttonEl.className = 'share-picker-btn';
+                    buttonEl.dataset.noteId = noteId;
+                    buttonEl.textContent = 'Share';
+
+                    row.appendChild(previewEl);
+                    row.appendChild(buttonEl);
+                    pickerList.appendChild(row);
+                });
+            }
+
+            pickerModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeShareNotePicker = function () {
+            if (!pickerModal) return;
+            pickerModal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        if (pickerList) {
+            pickerList.addEventListener('click', (e) => {
+                const btn = e.target.closest('.share-picker-btn');
+                if (!btn) return;
+                const noteId = btn.dataset.noteId;
+                window.closeShareNotePicker();
+                openShareModalForNote(noteId);
+            });
+        }
+
+        const promoCta = document.getElementById('share-promo-cta');
+        if (promoCta) {
+            promoCta.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.openShareNotePicker();
+            });
+        }
+
+        const promoDismiss = document.getElementById('share-promo-dismiss');
+        if (promoDismiss) {
+            promoDismiss.addEventListener('click', () => {
+                const promoCard = document.getElementById('share-promo-card');
+                if (promoCard) promoCard.style.display = 'none';
+            });
+        }
 
         document.querySelectorAll('.lock-note-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -4360,9 +4513,10 @@
 
     // --- Share Feature Promo & Onboarding Logic ---
     (function initSharePromo() {
-        // 1. Dismiss promo card if already dismissed
+        // 1. For temporary promos (other pages), honor persisted dismissal.
+        // Personal Space uses data-promo-mode="permanent" and always shows on reload.
         const promoCard = document.getElementById('share-promo-card');
-        if (promoCard && localStorage.getItem('ew_share_promo_dismissed') === '1') {
+        if (promoCard && promoCard.dataset.promoMode === 'temporary' && localStorage.getItem('ew_share_promo_dismissed') === '1') {
             promoCard.style.display = 'none';
         }
 

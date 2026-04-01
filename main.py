@@ -37,6 +37,7 @@ from logging.handlers import RotatingFileHandler
 import markdown
 import re
 import html
+import difflib
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -143,6 +144,45 @@ def is_safe_url(target):
     test_url = urlparse(urljoin(request.host_url, target))
     return test_url.scheme in ('http', 'https') and \
            ref_url.netloc == test_url.netloc
+
+
+def parse_iso_utc(value):
+    """Parse an ISO datetime string into an aware UTC datetime."""
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        normalized = value.replace('Z', '+00:00')
+        dt = datetime.datetime.fromisoformat(normalized)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(datetime.timezone.utc)
+    except Exception:
+        return None
+
+
+def build_unified_diff_text(original_text, updated_text, context=3, max_lines=500):
+    """Build a compact unified diff string for previewing note changes."""
+    old_lines = (original_text or '').splitlines()
+    new_lines = (updated_text or '').splitlines()
+    diff_lines = list(difflib.unified_diff(old_lines, new_lines, fromfile='current', tofile='incoming', lineterm='', n=context))
+    if len(diff_lines) > max_lines:
+        diff_lines = diff_lines[:max_lines] + ['... (diff truncated)']
+    return '\n'.join(diff_lines)
+
+
+def build_merge_preview_text(current_text, incoming_text):
+    """Provide a starter merge text with conflict markers when two edits diverge."""
+    current_text = current_text or ''
+    incoming_text = incoming_text or ''
+    if current_text == incoming_text:
+        return current_text
+    return (
+        '<<<<<<< CURRENT\n'
+        f'{current_text}\n'
+        '=======\n'
+        f'{incoming_text}\n'
+        '>>>>>>> INCOMING'
+    )
 
 # Google OAuth configuration
 GOOGLE_CLIENT_ID = get_env_variable('GOOGLE_CLIENT_ID')
@@ -7169,6 +7209,9 @@ def edit_personal_post(post_id):
     try:
         data = request.get_json() or {}
         content = data.get('content', '').strip()
+        edit_summary = (data.get('edit_summary') or '').strip()[:180]
+        force_overwrite = bool(data.get('force_overwrite', False))
+        base_updated_at = parse_iso_utc(data.get('base_updated_at'))
         if not content:
             return jsonify({'error': 'Content cannot be empty'}), 400
 
@@ -7181,6 +7224,23 @@ def edit_personal_post(post_id):
         if not note:
             return jsonify({'error': 'Note not found or unauthorized'}), 404
 
+        note_updated_at = note.get('updated_at') or note.get('created_at')
+        if isinstance(note_updated_at, datetime.datetime) and note_updated_at.tzinfo is None:
+            note_updated_at = note_updated_at.replace(tzinfo=datetime.timezone.utc)
+
+        # Conflict-aware editing: warn and return merge preview instead of silently overwriting.
+        if base_updated_at and note_updated_at and (note_updated_at > base_updated_at) and not force_overwrite:
+            current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            return jsonify({
+                'error': 'conflict',
+                'message': 'This note was updated by someone else after you opened the editor.',
+                'current_content': current_plain,
+                'incoming_content': content,
+                'merge_preview': build_merge_preview_text(current_plain, content),
+                'diff_text': build_unified_diff_text(current_plain, content),
+                'current_updated_at': note_updated_at.isoformat() if isinstance(note_updated_at, datetime.datetime) else None
+            }), 409
+
         # Version control: snapshot previous content before overwriting
         if note.get('content'):
             editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
@@ -7191,6 +7251,9 @@ def edit_personal_post(post_id):
                 'editor_id': ObjectId(current_user.id),
                 'content': note['content'],
                 'encrypted': note.get('encrypted', True),
+                'event_type': 'snapshot',
+                'status': 'applied',
+                'edit_summary': edit_summary or 'Edited note',
                 'created_at': datetime.datetime.now(datetime.timezone.utc)
             })
             # Cap at 50 versions per note
@@ -7221,10 +7284,11 @@ def edit_personal_post(post_id):
             'note_id': post_id, 
             'content': content,
             'reference': data.get('reference', ''),
-            'tags': data.get('tags', [])
+            'tags': data.get('tags', []),
+            'updated_at': now.isoformat()
         }, room=str(current_user.id))
 
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'updated_at': now.isoformat()})
     except Exception as e:
         app.logger.error(f"Error editing personal post {post_id}: {e}")
         return jsonify({'error': 'Internal error'}), 500
@@ -7798,6 +7862,8 @@ def view_shared_note(share_id):
                            content=content, 
                            permissions=share['permissions'],
                            note_id=str(note['_id']),
+                           updated_at=note.get('updated_at'),
+                           created_at=note.get('created_at'),
                            is_owner=is_owner,
                            already_saved=already_saved,
                            surprise_theme=surprise_theme,
@@ -7890,6 +7956,8 @@ def view_saved_note(note_id):
                            content=content, 
                            permissions='view', # Cloned surprises are always view-only
                            note_id=str(note['_id']),
+                           updated_at=note.get('updated_at'),
+                           created_at=note.get('created_at'),
                            is_owner=False,
                            already_saved=True,
                            surprise_theme=surprise_theme,
@@ -8789,7 +8857,7 @@ def api_dm_status(target_user_id):
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
 @limits(calls=10, period=60)
 def api_edit_shared_note(share_id):
-    """Allows editing a shared note if permission granted."""
+    """Handles shared-note edits with owner review for contributor changes."""
     share = note_shares_conf.find_one({'share_id': share_id})
     if not share or share['permissions'] != 'edit':
         return jsonify({'error': 'Unauthorized or invalid share'}), 403
@@ -8808,18 +8876,30 @@ def api_edit_shared_note(share_id):
 
     data = request.get_json() or {}
     content = data.get('content')
+    edit_summary = (data.get('edit_summary') or '').strip()[:180]
+    base_updated_at = parse_iso_utc(data.get('base_updated_at'))
+    force_apply = bool(data.get('force_apply', False))
     if not content or not content.strip():
         return jsonify({'error': 'Content cannot be empty'}), 400
 
     content = content.strip()[:8000]
-    # Encrypt using the note owner's key
-    note_owner_id = str(share.get('owner_id', ''))
-    encrypted_content = encrypt_note(content, user_id=note_owner_id if note_owner_id else None)
 
-    # --- Version Control: snapshot previous content before overwriting ---
+    # Load current note state once for conflict checks/proposals.
     note = personal_posts_conf.find_one({'_id': share['note_id']})
-    if note and note.get('content'):
-        # Get editor identity
+    if not note:
+        return jsonify({'error': 'Note not found'}), 404
+
+    owner_id_str = str(share.get('owner_id', ''))
+    is_owner = current_user.is_authenticated and str(current_user.id) == owner_id_str
+    note_updated_at = note.get('updated_at') or note.get('created_at')
+    if isinstance(note_updated_at, datetime.datetime) and note_updated_at.tzinfo is None:
+        note_updated_at = note_updated_at.replace(tzinfo=datetime.timezone.utc)
+
+    # Encrypt using the note owner's key
+    encrypted_content = encrypt_note(content, user_id=owner_id_str if owner_id_str else None)
+
+    # Contributor flow: create a pending proposal for owner approval.
+    if not is_owner:
         editor_name = 'Anonymous'
         editor_id = None
         if current_user.is_authenticated:
@@ -8831,8 +8911,61 @@ def api_edit_shared_note(share_id):
             'share_id': share_id,
             'editor_name': editor_name,
             'editor_id': editor_id,
+            'content': note.get('content', ''),
+            'base_content': note.get('content', ''),
+            'proposed_content': encrypted_content,
+            'encrypted': True,
+            'event_type': 'proposal',
+            'status': 'pending',
+            'edit_summary': edit_summary or 'Proposed changes',
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+
+        # Soft notify owner sessions.
+        try:
+            socketio.emit('note_proposal_created', {
+                'share_id': share_id,
+                'note_id': str(share['note_id']),
+                'editor_name': editor_name,
+                'summary': edit_summary or 'Proposed changes'
+            }, room=owner_id_str)
+        except Exception:
+            pass
+
+        return jsonify({
+            'success': True,
+            'pending_approval': True,
+            'message': 'Changes submitted. The note owner will review and accept/reject them.'
+        })
+
+    # Owner flow: conflict-aware apply.
+    if base_updated_at and note_updated_at and (note_updated_at > base_updated_at) and not force_apply:
+        current_plain = decrypt_note(note.get('content', ''), user_id=owner_id_str)
+        return jsonify({
+            'error': 'conflict',
+            'message': 'This note changed since you opened it. Review and merge before saving.',
+            'current_content': current_plain,
+            'incoming_content': content,
+            'merge_preview': build_merge_preview_text(current_plain, content),
+            'diff_text': build_unified_diff_text(current_plain, content),
+            'current_updated_at': note_updated_at.isoformat() if isinstance(note_updated_at, datetime.datetime) else None
+        }), 409
+
+    # --- Version Control: snapshot previous content before overwriting ---
+    if note and note.get('content'):
+        editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+        editor_id = ObjectId(current_user.id)
+
+        note_versions_conf.insert_one({
+            'note_id': share['note_id'],
+            'share_id': share_id,
+            'editor_name': editor_name,
+            'editor_id': editor_id,
             'content': note['content'],  # previous encrypted content
             'encrypted': note.get('encrypted', True),
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': edit_summary or 'Edited via share link',
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
 
@@ -8843,12 +8976,18 @@ def api_edit_shared_note(share_id):
             for old_ver in oldest:
                 note_versions_conf.delete_one({'_id': old_ver['_id']})
 
+    now = datetime.datetime.now(datetime.timezone.utc)
     personal_posts_conf.update_one(
         {'_id': share['note_id']},
-        {'$set': {'content': encrypted_content, 'encrypted': True}}
+        {'$set': {'content': encrypted_content, 'encrypted': True, 'updated_at': now}}
     )
-    
-    return jsonify({'success': True})
+
+    try:
+        socketio.emit('note_changed', {'content': content, 'updated_at': now.isoformat()}, room=share_id)
+    except Exception:
+        pass
+
+    return jsonify({'success': True, 'pending_approval': False, 'updated_at': now.isoformat()})
 
 
 @app.route('/personal_post/revoke_share/<share_id>', methods=['POST'])
@@ -8915,7 +9054,7 @@ def api_get_share_history(share_id):
 @login_required
 @limits(calls=20, period=60)
 def api_get_note_versions(post_id):
-    """Returns version history for a note (owner only)."""
+    """Returns rich version history for a note (owner only)."""
     obj_id = safe_object_id(post_id)
     if not obj_id:
         return jsonify([]), 400
@@ -8925,18 +9064,201 @@ def api_get_note_versions(post_id):
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
+    current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
     versions = list(note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
     result = []
     for v in versions:
-        # Decrypt the content for the owner to view
-        decrypted = decrypt_note(v['content'], user_id=current_user.id) if v.get('encrypted', True) else v.get('content', '')
-        result.append({
+        event_type = v.get('event_type', 'snapshot')
+        status = v.get('status', 'applied')
+
+        row = {
             '_id': str(v['_id']),
             'editor_name': v.get('editor_name', 'Unknown'),
-            'content': decrypted,
+            'event_type': event_type,
+            'status': status,
+            'edit_summary': v.get('edit_summary', ''),
             'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None
-        })
+        }
+
+        if event_type == 'proposal':
+            base_encrypted = v.get('base_content') or v.get('content', '')
+            proposed_encrypted = v.get('proposed_content', '')
+            base_plain = decrypt_note(base_encrypted, user_id=current_user.id) if base_encrypted else ''
+            proposed_plain = decrypt_note(proposed_encrypted, user_id=current_user.id) if proposed_encrypted else ''
+            row.update({
+                'base_content': base_plain,
+                'proposed_content': proposed_plain,
+                'current_content': current_plain,
+                'diff_text': build_unified_diff_text(base_plain, proposed_plain),
+                'can_review': status == 'pending'
+            })
+        else:
+            decrypted = decrypt_note(v.get('content', ''), user_id=current_user.id) if v.get('encrypted', True) else v.get('content', '')
+            row.update({
+                'content': decrypted,
+                'can_restore': True
+            })
+
+        result.append(row)
     return jsonify(result)
+
+
+@app.route('/personal_post/version/restore/<post_id>/<version_id>', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_restore_note_version(post_id, version_id):
+    """Restore a previous snapshot version for an owned note."""
+    obj_id = safe_object_id(post_id)
+    ver_id = safe_object_id(version_id)
+    if not obj_id or not ver_id:
+        return jsonify({'error': 'Invalid ID'}), 400
+
+    note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    version = note_versions_conf.find_one({'_id': ver_id, 'note_id': obj_id})
+    if not version:
+        return jsonify({'error': 'Version not found'}), 404
+
+    if version.get('event_type', 'snapshot') != 'snapshot':
+        return jsonify({'error': 'Only snapshot versions can be restored'}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Snapshot current state before restore.
+    if note.get('content'):
+        note_versions_conf.insert_one({
+            'note_id': obj_id,
+            'share_id': None,
+            'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
+            'editor_id': ObjectId(current_user.id),
+            'content': note.get('content', ''),
+            'encrypted': True,
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': 'Backup before restore',
+            'created_at': now
+        })
+
+    personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {
+            'content': version.get('content', ''),
+            'encrypted': True,
+            'updated_at': now
+        }}
+    )
+
+    plain = decrypt_note(version.get('content', ''), user_id=current_user.id)
+    index_note_to_meili(post_id, decrypted_content=plain)
+
+    return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat()})
+
+
+@app.route('/personal_post/proposal/<version_id>/decision', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_decide_note_proposal(version_id):
+    """Owner accepts/rejects contributor proposals for shared notes."""
+    ver_id = safe_object_id(version_id)
+    if not ver_id:
+        return jsonify({'error': 'Invalid proposal ID'}), 400
+
+    proposal = note_versions_conf.find_one({'_id': ver_id})
+    if not proposal or proposal.get('event_type') != 'proposal':
+        return jsonify({'error': 'Proposal not found'}), 404
+
+    note_id = proposal.get('note_id')
+    note = personal_posts_conf.find_one({'_id': note_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json() or {}
+    action = (data.get('action') or '').strip().lower()
+    decision_summary = (data.get('edit_summary') or '').strip()[:180]
+
+    if proposal.get('status') != 'pending':
+        return jsonify({'error': 'Proposal already reviewed'}), 400
+
+    if action == 'reject':
+        note_versions_conf.update_one(
+            {'_id': ver_id},
+            {'$set': {
+                'status': 'rejected',
+                'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+                'reviewed_by': ObjectId(current_user.id),
+                'decision_summary': decision_summary or 'Rejected by owner'
+            }}
+        )
+        return jsonify({'success': True, 'status': 'rejected'})
+
+    if action != 'accept':
+        return jsonify({'error': 'Invalid action'}), 400
+
+    current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
+    base_plain = decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
+    proposed_plain = decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
+
+    merged_content = (data.get('merged_content') or '').strip()
+
+    # If note changed since proposal base, require merge content from owner.
+    if current_plain != base_plain and not merged_content:
+        return jsonify({
+            'error': 'conflict',
+            'message': 'The note changed after this proposal was created. Review merge preview.',
+            'current_content': current_plain,
+            'incoming_content': proposed_plain,
+            'merge_preview': build_merge_preview_text(current_plain, proposed_plain),
+            'diff_text': build_unified_diff_text(current_plain, proposed_plain)
+        }), 409
+
+    final_plain = (merged_content or proposed_plain).strip()[:8000]
+    final_encrypted = encrypt_note(final_plain, user_id=current_user.id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Snapshot current note before applying accepted proposal.
+    note_versions_conf.insert_one({
+        'note_id': note_id,
+        'share_id': proposal.get('share_id'),
+        'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
+        'editor_id': ObjectId(current_user.id),
+        'content': note.get('content', ''),
+        'encrypted': True,
+        'event_type': 'snapshot',
+        'status': 'applied',
+        'edit_summary': 'Backup before accepting proposal',
+        'created_at': now
+    })
+
+    personal_posts_conf.update_one(
+        {'_id': note_id},
+        {'$set': {
+            'content': final_encrypted,
+            'encrypted': True,
+            'updated_at': now
+        }}
+    )
+
+    note_versions_conf.update_one(
+        {'_id': ver_id},
+        {'$set': {
+            'status': 'accepted',
+            'reviewed_at': now,
+            'reviewed_by': ObjectId(current_user.id),
+            'decision_summary': decision_summary or 'Accepted by owner',
+            'accepted_content': final_encrypted
+        }}
+    )
+
+    index_note_to_meili(str(note_id), decrypted_content=final_plain)
+
+    # Notify owner sessions and collaborators in the share room.
+    socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))
+    if proposal.get('share_id'):
+        socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat()}, room=proposal.get('share_id'))
+
+    return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat()})
 
 
 # --- Note Discussion Routes (Login Required) ---

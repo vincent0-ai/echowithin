@@ -116,9 +116,15 @@
                     </button>
                     {% endif %}
                 </div>
+                {% if permissions == 'edit' and not is_owner %}
+                <div style="padding: 0.55rem 1.25rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
+                    Your edits are submitted as proposals. The original note owner reviews and accepts/rejects them.
+                </div>
+                {% endif %}
 
                 {% if permissions == 'edit' %}
-                <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}">
+                <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
+                    data-updated-at="{{ (updated_at or created_at).isoformat() if (updated_at or created_at) else '' }}">
                     <div style="text-align: center; color: #999; padding: 1rem 0;">
                         <i class="fas fa-spinner fa-spin"></i> Loading note...
                     </div>
@@ -145,6 +151,9 @@
                 {% endif %}
                 <div class="edit-interface" id="edit-interface" style="display: none;">
                     <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                    <input type="text" id="edit-summary" maxlength="180"
+                        placeholder="Edit summary (optional, helps owner review)"
+                        style="width:100%; margin-bottom:0.75rem; border:1px solid #ddd; border-radius:8px; padding:0.55rem; font-size:0.85rem;">
                     <div class="edit-actions">
                         <span id="save-status"></span>
                         <button id="cancel-edit-btn" class="btn btn-cancel" type="button">
@@ -213,9 +222,15 @@
                 </button>
                 {% endif %}
             </div>
+            {% if permissions == 'edit' and not is_owner %}
+            <div style="padding: 0.55rem 1.5rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
+                Your edits are submitted as proposals. The original note owner reviews and accepts/rejects them.
+            </div>
+            {% endif %}
 
             {% if permissions == 'edit' %}
-            <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}">
+            <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
+                data-updated-at="{{ (updated_at or created_at).isoformat() if (updated_at or created_at) else '' }}">
                 <div style="text-align: center; color: #999; padding: 1rem 0;">
                     <i class="fas fa-spinner fa-spin"></i> Loading note...
                 </div>
@@ -242,6 +257,9 @@
             {% endif %}
             <div class="edit-interface" id="edit-interface" style="display: none;">
                 <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                <input type="text" id="edit-summary" maxlength="180"
+                    placeholder="Edit summary (optional, helps owner review)"
+                    style="width:100%; margin-bottom:0.75rem; border:1px solid #ddd; border-radius:8px; padding:0.55rem; font-size:0.85rem;">
                 <div class="edit-actions">
                     <span id="save-status"></span>
                     <button id="cancel-edit-btn" class="btn btn-cancel" type="button">
@@ -1472,6 +1490,10 @@
                 saveSharedBtn.addEventListener('click', async function () {
                     const content = editContent.value;
                     const status = document.getElementById('save-status');
+                    const summaryInput = document.getElementById('edit-summary');
+                    const noteViewEl = document.getElementById('note-view');
+                    const baseUpdatedAt = noteViewEl ? (noteViewEl.getAttribute('data-updated-at') || '') : '';
+                    const editSummary = summaryInput ? summaryInput.value.trim() : '';
 
                     saveSharedBtn.disabled = true;
                     status.textContent = 'Saving...';
@@ -1483,18 +1505,29 @@
                                 'Content-Type': 'application/json',
                                 'X-CSRFToken': '{{ csrf_token() }}'
                             },
-                            body: JSON.stringify({ content: content })
+                            body: JSON.stringify({
+                                content: content,
+                                edit_summary: editSummary,
+                                base_updated_at: baseUpdatedAt,
+                                force_apply: false
+                            })
                         });
 
                         const result = await response.json();
                         if (result.success) {
-                            status.textContent = 'Saved!';
-                            status.style.color = 'green';
+                            if (result.pending_approval) {
+                                status.textContent = 'Submitted for owner approval.';
+                                status.style.color = '#1565c0';
+                            } else {
+                                status.textContent = 'Saved!';
+                                status.style.color = 'green';
 
-                            // Re-render the note view with updated content
-                            if (noteView) {
-                                noteView.innerHTML = renderMarkdownWithMath(content);
-                                noteView.setAttribute('data-raw', content);
+                                // Re-render the note view with updated content
+                                if (noteView) {
+                                    noteView.innerHTML = renderMarkdownWithMath(content);
+                                    noteView.setAttribute('data-raw', content);
+                                    if (result.updated_at) noteView.setAttribute('data-updated-at', result.updated_at);
+                                }
                             }
 
                             // Switch back to view mode after a short delay
@@ -1503,7 +1536,50 @@
                                 noteView.style.display = 'block';
                                 if (toggleBtn) toggleBtn.style.display = 'flex';
                                 status.textContent = '';
-                            }, 800);
+                            }, 900);
+                        } else if (response.status === 409 && result.error === 'conflict') {
+                            const merged = window.prompt(
+                                'Conflict detected. Review and merge your changes below before retrying:',
+                                result.merge_preview || content
+                            );
+                            if (merged !== null) {
+                                const mergeResp = await fetch(`/share/note/{{ share_id }}/edit`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': '{{ csrf_token() }}'
+                                    },
+                                    body: JSON.stringify({
+                                        content: merged,
+                                        edit_summary: editSummary || 'Merged after conflict',
+                                        base_updated_at: result.current_updated_at || baseUpdatedAt,
+                                        force_apply: true
+                                    })
+                                });
+                                const mergeResult = await mergeResp.json();
+                                if (mergeResult.success) {
+                                    editContent.value = merged;
+                                    if (noteView) {
+                                        noteView.innerHTML = renderMarkdownWithMath(merged);
+                                        noteView.setAttribute('data-raw', merged);
+                                        if (mergeResult.updated_at) noteView.setAttribute('data-updated-at', mergeResult.updated_at);
+                                    }
+                                    status.textContent = 'Merged and saved.';
+                                    status.style.color = 'green';
+                                    setTimeout(() => {
+                                        editInterface.style.display = 'none';
+                                        noteView.style.display = 'block';
+                                        if (toggleBtn) toggleBtn.style.display = 'flex';
+                                        status.textContent = '';
+                                    }, 900);
+                                } else {
+                                    status.textContent = mergeResult.error || 'Merge failed.';
+                                    status.style.color = 'red';
+                                }
+                            } else {
+                                status.textContent = 'Merge canceled.';
+                                status.style.color = '#888';
+                            }
                         } else {
                             status.textContent = 'Error: ' + (result.error || 'Unknown error');
                             status.style.color = 'red';
@@ -1573,6 +1649,7 @@
             const noteContentEl = document.querySelector('.rendered-note');
             if (noteContentEl) {
                 noteContentEl.setAttribute('data-raw', data.content);
+                if (data.updated_at) noteContentEl.setAttribute('data-updated-at', data.updated_at);
                 if (typeof renderMarkdownWithMath === 'function') {
                     noteContentEl.innerHTML = renderMarkdownWithMath(data.content);
                 } else {

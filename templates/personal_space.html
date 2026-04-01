@@ -1681,7 +1681,8 @@
                         </button>
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
-                            data-tags='{{ (note.tags or []) | tojson | safe }}'>
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'
+                            data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
                             <i class="fas fa-pen"></i>
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
@@ -1909,7 +1910,8 @@
                         </button>
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
-                            data-tags='{{ (note.tags or []) | tojson | safe }}'>
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'
+                            data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
                             <i class="fas fa-pen"></i>
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
@@ -2118,6 +2120,11 @@
         </div>
         <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000"
             placeholder="Edit your note..."></textarea>
+        <div style="margin-top: 0.6rem;">
+            <input type="text" id="edit-note-summary" maxlength="180"
+                placeholder="Edit summary (optional, e.g. clarified section 2)"
+                style="width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.82rem;">
+        </div>
         <div style="margin-top: 0.5rem; text-align: left;">
             <button type="button" id="toggle-metadata-edit"
                 style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
@@ -2145,6 +2152,40 @@
                 style="padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600;">
                 <i class="fas fa-save"></i> Save Changes
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- Conflict Merge Modal -->
+<div id="merge-conflict-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeMergeConflictModal()">
+    <div class="custom-modal" style="max-width: 920px; text-align: left; max-height: 85vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <h2 style="margin: 0; color: #3e2217; font-size: 1.15rem;">
+                <i class="fas fa-code-compare"></i> Merge Required
+            </h2>
+            <button class="btn-icon" onclick="closeMergeConflictModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <p style="font-size: 0.86rem; color: #666; margin: 0 0 0.75rem 0;">Someone else updated this note while you were editing. Review both versions and save a merged result.</p>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+                <label style="font-size:0.78rem; color:#777; font-weight:600;">Current version</label>
+                <textarea id="merge-current-content" readonly
+                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fafafa;"></textarea>
+            </div>
+            <div>
+                <label style="font-size:0.78rem; color:#777; font-weight:600;">Your version</label>
+                <textarea id="merge-incoming-content" readonly
+                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fff8f8;"></textarea>
+            </div>
+        </div>
+        <div style="margin-top:0.7rem;">
+            <label style="font-size:0.78rem; color:#777; font-weight:600;">Suggested merge</label>
+            <textarea id="merge-preview-content"
+                style="width:100%; min-height:180px; border:1px solid #ccc; border-radius:8px; padding:0.6rem; font-size:0.83rem;"></textarea>
+        </div>
+        <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
+            <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>
+            <button type="button" id="save-merge-btn" class="btn comment-btn"><i class="fas fa-code-merge"></i> Save Merged Note</button>
         </div>
     </div>
 </div>
@@ -2580,6 +2621,7 @@
                     editBtnEl.dataset.raw = tmp.innerHTML;
                     if (data.reference !== undefined) editBtnEl.dataset.reference = data.reference;
                     if (data.tags !== undefined) editBtnEl.dataset.tags = JSON.stringify(data.tags);
+                    if (data.updated_at !== undefined) editBtnEl.dataset.updatedAt = data.updated_at;
                 }
             }
         });
@@ -2644,18 +2686,22 @@
         };
 
         window.currentEditNoteId = null;
+        window.currentEditBaseUpdatedAt = null;
 
-        window.openEditModal = function (noteId, content, reference = '', tags = []) {
+        window.openEditModal = function (noteId, content, reference = '', tags = [], updatedAt = '') {
             const modal = document.getElementById('edit-note-modal');
             const textarea = document.getElementById('edit-note-content');
             const refInput = document.getElementById('edit-note-reference');
             const tagsInput = document.getElementById('edit-note-tags');
+            const summaryInput = document.getElementById('edit-note-summary');
             const charCount = document.getElementById('edit-char-count');
             if (modal && textarea) {
                 window.currentEditNoteId = noteId;
+                window.currentEditBaseUpdatedAt = updatedAt || null;
                 textarea.value = content;
                 if (refInput) refInput.value = reference || '';
                 if (tagsInput) tagsInput.value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
+                if (summaryInput) summaryInput.value = '';
                 if (charCount) charCount.textContent = content.length;
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
@@ -2670,13 +2716,36 @@
                 modal.style.display = 'none';
                 document.body.style.overflow = '';
                 window.currentEditNoteId = null;
+                window.currentEditBaseUpdatedAt = null;
                 document.removeEventListener('keydown', window.handleEditModalEsc);
             }
+        };
+
+        window.openMergeConflictModal = function (payload) {
+            const modal = document.getElementById('merge-conflict-modal');
+            const currentEl = document.getElementById('merge-current-content');
+            const incomingEl = document.getElementById('merge-incoming-content');
+            const previewEl = document.getElementById('merge-preview-content');
+            if (!modal || !currentEl || !incomingEl || !previewEl) return;
+
+            currentEl.value = payload.current_content || '';
+            incomingEl.value = payload.incoming_content || '';
+            previewEl.value = payload.merge_preview || payload.incoming_content || '';
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeMergeConflictModal = function () {
+            const modal = document.getElementById('merge-conflict-modal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
         };
 
         window.openVersionModal = function (noteId) {
             const modal = document.getElementById('version-modal');
             if (modal) {
+                window.currentVersionNoteId = noteId;
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 if (window.loadVersionHistory) window.loadVersionHistory(noteId);
@@ -2714,23 +2783,56 @@
 
                 list.innerHTML = versions.map((v, i) => {
                     const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
-                    const preview = (v.content || '').substring(0, 200);
-                    const hasMore = (v.content || '').length > 200;
+                    const isProposal = v.event_type === 'proposal';
+                    const isPending = v.status === 'pending';
+                    const previewSource = isProposal ? (v.proposed_content || '') : (v.content || '');
+                    const preview = previewSource.substring(0, 200);
+                    const hasMore = previewSource.length > 200;
+                    const summary = v.edit_summary ? `<div style="font-size:0.75rem;color:#777;margin-top:0.2rem;">${(v.edit_summary || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : '';
+                    const badge = isProposal
+                        ? `<span style="font-size:0.68rem; padding:0.12rem 0.45rem; border-radius:999px; background:${isPending ? '#fff3cd' : (v.status === 'accepted' ? '#e8f5e9' : '#f5f5f5')}; color:${isPending ? '#8a6d3b' : (v.status === 'accepted' ? '#2e7d32' : '#777')}; border:1px solid ${isPending ? '#f0d98a' : (v.status === 'accepted' ? '#c8e6c9' : '#ddd')};">${isPending ? 'Pending proposal' : ('Proposal ' + (v.status || 'reviewed'))}</span>`
+                        : '<span style="font-size:0.68rem; padding:0.12rem 0.45rem; border-radius:999px; background:#f0f0f0; color:#666; border:1px solid #ddd;">Snapshot</span>';
+
+                    let actions = '';
+                    if (isProposal) {
+                        actions += `<button class="version-toggle" onclick="window.toggleVersionPreview('${i}')">${hasMore ? 'Show content' : 'View content'}</button>`;
+                        actions += `<button class="version-toggle" onclick="window.showVersionDiff('${i}')">Side-by-side diff</button>`;
+                        if (isPending) {
+                            actions += `<button class="version-toggle" onclick="window.reviewProposal('${v._id}', 'accept', '${i}')">Accept</button>`;
+                            actions += `<button class="version-toggle" style="color:#c62828;" onclick="window.reviewProposal('${v._id}', 'reject', '${i}')">Reject</button>`;
+                        }
+                    } else {
+                        if (hasMore) {
+                            actions += `<button class="version-toggle" onclick="window.toggleVersionPreview('${i}')">Show full content</button>`;
+                        }
+                        actions += `<button class="version-toggle" onclick="window.showVersionDiff('${i}')">Side-by-side diff</button>`;
+                        if (v.can_restore) {
+                            actions += `<button class="version-toggle" onclick="window.restoreVersion('${v._id}')">Restore this version</button>`;
+                        }
+                    }
+
                     return `
                         <div class="version-card">
                             <div class="version-header">
-                                <span class="version-editor"><i class="fas fa-user-edit"></i> ${v.editor_name}</span>
+                                <span class="version-editor"><i class="fas fa-user-edit"></i> ${v.editor_name} ${badge}</span>
                                 <span class="version-time">${ts}</span>
                             </div>
+                            ${summary}
                             <div class="version-preview" id="vp-${i}">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}${hasMore ? '...' : ''}</div>
-                            ${hasMore ? `<button class="version-toggle" onclick="window.toggleVersionPreview('${i}')">Show full content</button>` : ''}
+                            <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.35rem;">${actions}</div>
                         </div>
                     `;
                 }).join('');
 
                 window._versionContents = {};
+                window._versionRows = {};
                 versions.forEach((v, i) => {
-                    window._versionContents[i] = v.content || '';
+                    window._versionRows[i] = v;
+                    window._versionContents[i] = (v.event_type === 'proposal') ? (v.proposed_content || '') : (v.content || '');
+                    if (v.event_type !== 'proposal') {
+                        const older = versions[i + 1];
+                        v.compare_base = older && older.content ? older.content : '';
+                    }
                 });
             } catch (e) {
                 list.innerHTML = '<div class="version-empty" style="color: #d32f2f;">Failed to load version history.</div>';
@@ -2753,6 +2855,125 @@
                 el.textContent = window._versionContents[index] || '';
                 btn.textContent = 'Show less';
             }
+        };
+
+        window.showVersionDiff = function (index) {
+            const row = window._versionRows && window._versionRows[index];
+            if (!row) return;
+            const left = row.event_type === 'proposal' ? (row.current_content || '') : (row.compare_base || '');
+            const right = row.event_type === 'proposal' ? (row.proposed_content || '') : (row.content || '');
+            window.openMergeConflictModal({
+                current_content: left,
+                incoming_content: right,
+                merge_preview: row.merge_preview || right
+            });
+        };
+
+        window.restoreVersion = async function (versionId) {
+            if (!window.currentVersionNoteId) return;
+            if (typeof window.showCustomConfirm === 'function') {
+                window.showCustomConfirm('Restore this version? Current note content will be replaced.', async confirmed => {
+                    if (confirmed) {
+                        await window.performRestoreVersion(versionId);
+                    }
+                });
+                return;
+            }
+            await window.performRestoreVersion(versionId);
+        };
+
+        window.performRestoreVersion = async function (versionId) {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            const response = await fetch(`/personal_post/version/restore/${window.currentVersionNoteId}/${versionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                alert(result.error || 'Failed to restore version.');
+                return;
+            }
+            const noteCard = document.querySelector(`.note-card[data-note-id="${window.currentVersionNoteId}"]`);
+            if (noteCard) {
+                const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                if (contentEl) {
+                    contentEl.setAttribute('data-raw', result.content || '');
+                    contentEl.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(result.content || '') : (result.content || '');
+                }
+            }
+            if (typeof window.showFlashMessage === 'function') window.showFlashMessage('Version restored successfully.', 'success');
+            window.loadVersionHistory(window.currentVersionNoteId);
+        };
+
+        window.reviewProposal = async function (proposalId, action, index) {
+            const row = window._versionRows && window._versionRows[index];
+            if (!row) return;
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            let mergedContent = undefined;
+            if (action === 'accept') {
+                const useMerge = confirm('Accept proposal. Click OK to review merge text first, or Cancel to accept as-is.');
+                if (useMerge) {
+                    window.openMergeConflictModal({
+                        current_content: row.current_content || '',
+                        incoming_content: row.proposed_content || '',
+                        merge_preview: row.proposed_content || ''
+                    });
+                    const saveMergeBtn = document.getElementById('save-merge-btn');
+                    if (saveMergeBtn) {
+                        saveMergeBtn.onclick = async () => {
+                            const previewEl = document.getElementById('merge-preview-content');
+                            mergedContent = previewEl ? previewEl.value : '';
+                            await window.performProposalDecision(proposalId, action, csrfToken, mergedContent);
+                            window.closeMergeConflictModal();
+                        };
+                    }
+                    return;
+                }
+            }
+            await window.performProposalDecision(proposalId, action, csrfToken, mergedContent);
+        };
+
+        window.performProposalDecision = async function (proposalId, action, csrfToken, mergedContent) {
+            const payload = { action: action, edit_summary: action === 'accept' ? 'Accepted contributor proposal' : 'Rejected contributor proposal' };
+            if (mergedContent && mergedContent.trim()) payload.merged_content = mergedContent;
+
+            const response = await fetch(`/personal_post/proposal/${proposalId}/decision`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                if (result.error === 'conflict') {
+                    window.openMergeConflictModal(result);
+                } else {
+                    alert(result.error || 'Could not review proposal.');
+                }
+                return;
+            }
+
+            if (result.status === 'accepted' && window.currentVersionNoteId) {
+                const noteCard = document.querySelector(`.note-card[data-note-id="${window.currentVersionNoteId}"]`);
+                if (noteCard && result.content) {
+                    const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                    if (contentEl) {
+                        contentEl.setAttribute('data-raw', result.content);
+                        contentEl.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(result.content) : result.content;
+                    }
+                }
+            }
+            if (typeof window.showFlashMessage === 'function') {
+                window.showFlashMessage(result.status === 'accepted' ? 'Proposal accepted and applied.' : 'Proposal rejected.', 'success');
+            }
+            if (window.currentVersionNoteId) window.loadVersionHistory(window.currentVersionNoteId);
         };
 
         window.handleRevoke = async function (revokeBtn) {
@@ -2811,13 +3032,14 @@
                 const rawContent = editBtn.dataset.raw;
                 const reference = editBtn.dataset.reference || '';
                 const tagsStr = editBtn.dataset.tags || '[]';
+                const updatedAt = editBtn.dataset.updatedAt || '';
                 let tags = [];
                 try { tags = JSON.parse(tagsStr); } catch (e) { }
 
                 // Decode HTML entities
                 const tmp = document.createElement('textarea');
                 tmp.innerHTML = rawContent;
-                window.openEditModal(noteId, tmp.value, reference, tags);
+                window.openEditModal(noteId, tmp.value, reference, tags, updatedAt);
                 return;
             }
 
@@ -2909,6 +3131,7 @@
             const noteId = window.currentEditNoteId;
             const textarea = document.getElementById('edit-note-content');
             const saveBtn = document.getElementById('save-edit-btn');
+            const summaryInput = document.getElementById('edit-note-summary');
             if (!noteId || !textarea) return;
 
             const content = textarea.value.trim();
@@ -2921,6 +3144,7 @@
             const tagsInput = document.getElementById('edit-note-tags');
             const reference = refInput ? refInput.value.trim() : '';
             const tags = tagsInput ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+            const editSummary = summaryInput ? summaryInput.value.trim() : '';
 
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
@@ -2938,7 +3162,10 @@
                     body: JSON.stringify({
                         content: content,
                         reference: reference,
-                        tags: tags
+                        tags: tags,
+                        edit_summary: editSummary,
+                        base_updated_at: window.currentEditBaseUpdatedAt,
+                        force_overwrite: false
                     })
                 });
                 const result = await response.json();
@@ -2961,12 +3188,63 @@
                             const tmp = document.createElement('textarea');
                             tmp.textContent = content;
                             editBtnEl.dataset.raw = tmp.innerHTML;
+                            if (result.updated_at) {
+                                editBtnEl.dataset.updatedAt = result.updated_at;
+                            }
                         }
                         // Update copy button
                         const copyBtnEl = noteCard.querySelector('.copy-btn');
                         if (copyBtnEl) copyBtnEl.dataset.copyText = content;
                     }
                     window.closeEditModal();
+                } else if (response.status === 409 && result.error === 'conflict') {
+                    window.openMergeConflictModal(result);
+                    const saveMergeBtn = document.getElementById('save-merge-btn');
+                    if (saveMergeBtn) {
+                        saveMergeBtn.onclick = async () => {
+                            const mergedText = (document.getElementById('merge-preview-content') || {}).value || '';
+                            const mergeResponse = await fetch(`/personal_post/edit/${noteId}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': csrfToken
+                                },
+                                body: JSON.stringify({
+                                    content: mergedText,
+                                    reference: reference,
+                                    tags: tags,
+                                    edit_summary: editSummary || 'Merged after conflict',
+                                    base_updated_at: result.current_updated_at || window.currentEditBaseUpdatedAt,
+                                    force_overwrite: true
+                                })
+                            });
+                            const mergeResult = await mergeResponse.json();
+                            if (mergeResult.success) {
+                                window.closeMergeConflictModal();
+                                const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                                if (noteCard) {
+                                    const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                                    if (contentEl) {
+                                        contentEl.setAttribute('data-raw', mergedText);
+                                        contentEl.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(mergedText) : mergedText;
+                                    }
+                                    const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                                    if (editBtnEl) {
+                                        const tmp = document.createElement('textarea');
+                                        tmp.textContent = mergedText;
+                                        editBtnEl.dataset.raw = tmp.innerHTML;
+                                        if (mergeResult.updated_at) editBtnEl.dataset.updatedAt = mergeResult.updated_at;
+                                    }
+                                    const copyBtnEl = noteCard.querySelector('.copy-btn');
+                                    if (copyBtnEl) copyBtnEl.dataset.copyText = mergedText;
+                                }
+                                window.currentEditBaseUpdatedAt = mergeResult.updated_at || window.currentEditBaseUpdatedAt;
+                                window.closeEditModal();
+                            } else {
+                                alert(mergeResult.error || 'Merge save failed.');
+                            }
+                        };
+                    }
                 } else {
                     alert(result.error || 'Failed to save changes.');
                 }

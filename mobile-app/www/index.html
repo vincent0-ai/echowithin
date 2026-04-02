@@ -135,9 +135,27 @@
     <script src="capacitor.js"></script>
     <script>
         const LIVE_SITE = 'https://blog.echowithin.xyz';
+        const LIVE_HOST = 'blog.echowithin.xyz';
         const LAST_ONLINE_URL_KEY = 'ew_last_online_url';
         let redirectStarted = false;
         let lastTargetUrl = LIVE_SITE;
+
+        function normalizePathToLiveSite(pathOrUrl) {
+            if (!pathOrUrl) return null;
+            const raw = String(pathOrUrl).trim();
+            if (!raw) return null;
+
+            try {
+                const parsed = new URL(raw);
+                if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname === LIVE_HOST) {
+                    return `${parsed.origin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+                }
+                return null;
+            } catch (_) {
+                const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
+                return LIVE_SITE + normalizedPath;
+            }
+        }
 
         async function hasInternetConnection() {
             const { Network } = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -185,10 +203,14 @@
                     params.delete('path');
                     const search = params.toString();
                     if (search) path += '?' + search;
-                    return LIVE_SITE + path;
+                    return normalizePathToLiveSite(path);
+                }
+
+                if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname === LIVE_HOST) {
+                    return `${url.origin}${url.pathname}${url.search}${url.hash}`;
                 }
             } catch (e) {
-                console.error('Error parsing deep link:', e);
+                return normalizePathToLiveSite(deepLinkUrl);
             }
             return null;
         }
@@ -272,15 +294,17 @@
                             PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
                                 console.log('Bridge: Notification tap detected:', notification);
                                 var data = notification.notification.data;
-                                if (data && data.url) {
-                                    resolve(data.url);
+                                if (data) {
+                                    var targetCandidate = data.url || data.path || data.deepLink || data.deeplink;
+                                    var resolved = parseDeepLink(targetCandidate);
+                                    resolve(resolved || null);
                                 } else {
                                     resolve(null);
                                 }
                             });
                         }),
-                        // Give native bridge up to 400ms to deliver the pending event
-                        new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 400); })
+                        // Give native bridge time to deliver pending cold-start action event
+                        new Promise(function (resolve) { setTimeout(function () { resolve(null); }, 1500); })
                     ]);
                     if (notificationUrl) {
                         console.log('Bridge: Will redirect to notification URL:', notificationUrl);
@@ -320,7 +344,7 @@
             let targetUrl;
             if (notificationUrl) {
                 // App was launched by tapping a notification — go directly to that content
-                targetUrl = notificationUrl.startsWith('http') ? notificationUrl : LIVE_SITE + notificationUrl;
+                targetUrl = notificationUrl;
             } else if (path) {
                 targetUrl = LIVE_SITE + path;
             } else {
@@ -396,12 +420,8 @@
         });
 
         document.getElementById('open-cached-btn').addEventListener('click', function () {
-            const cachedUrl = localStorage.getItem(LAST_ONLINE_URL_KEY) || lastTargetUrl || LIVE_SITE;
-            if (!cachedUrl) {
-                return;
-            }
-            // Intentionally bypass connectivity checks so the remote Service Worker can serve cached pages.
-            window.location.replace(cachedUrl);
+            // Open the app's offline route, which can list and link available cached pages.
+            window.location.replace(`${LIVE_SITE}/offline?from_native=1`);
         });
 
         // Auto-retry when connection is restored

@@ -2,7 +2,7 @@
   "name": "EchoWithin",
   "short_name": "EchoWithin",
   "description": "A platform to share your ideas, experiences, and perspectives with the community.",
-  "start_url": "/",
+  "start_url": "/offline",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

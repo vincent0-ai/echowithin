@@ -254,6 +254,24 @@ self.addEventListener('fetch', event => {
 self.addEventListener('push', event => {
   console.log('Push notification received:', event);
 
+  function normalizeNotificationTarget(payload) {
+    const rawTarget = payload.url || payload.path || payload.deepLink || payload.deeplink || '/';
+    if (!rawTarget) return '/';
+    if (typeof rawTarget !== 'string') return '/';
+    if (rawTarget.startsWith('http://') || rawTarget.startsWith('https://')) {
+      try {
+        const targetUrl = new URL(rawTarget);
+        if (targetUrl.origin === self.location.origin) {
+          return targetUrl.pathname + targetUrl.search + targetUrl.hash;
+        }
+      } catch (_) {
+        return '/';
+      }
+      return '/';
+    }
+    return rawTarget.startsWith('/') ? rawTarget : `/${rawTarget}`;
+  }
+
   let data = {
     title: 'EchoWithin',
     body: 'You have a new notification',
@@ -271,6 +289,8 @@ self.addEventListener('push', event => {
       data.body = event.data.text();
     }
   }
+
+  const targetUrl = normalizeNotificationTarget(data);
 
   const tag = data.tag || 'echowithin';
   const isDM = tag.startsWith('dm-');
@@ -314,7 +334,7 @@ self.addEventListener('push', event => {
             badge,
             tag,
             renotify: true,
-            data: { url: data.url || '/', messageCount: newCount },
+            data: { url: targetUrl, messageCount: newCount },
             vibrate: [100, 50, 100],
             requireInteraction: false,
             actions: [
@@ -330,7 +350,7 @@ self.addEventListener('push', event => {
           badge,
           tag,
           renotify: !!data.tag,
-          data: { url: data.url || '/' },
+          data: { url: targetUrl },
           vibrate: [100, 50, 100],
           requireInteraction: false,
           actions: [

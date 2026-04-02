@@ -23,6 +23,11 @@
 </div>
 
 <script>
+    // If app is launched while online, quickly continue to the main entry.
+    if (navigator.onLine) {
+        location.replace('/');
+    }
+
     // Auto-retry when connection is restored
     window.addEventListener('online', () => {
         location.reload();

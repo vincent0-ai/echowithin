@@ -146,6 +146,28 @@ def is_safe_url(target):
            ref_url.netloc == test_url.netloc
 
 
+def is_same_origin_request():
+    """Validate mutating API calls come from this same origin.
+
+    This protects CSRF-exempt JSON endpoints used by service workers.
+    """
+    origin = request.headers.get('Origin', '').strip()
+    referer = request.headers.get('Referer', '').strip()
+    host = request.host
+
+    if origin:
+        origin_host = urlparse(origin).netloc
+        if origin_host and origin_host != host:
+            return False
+
+    if referer:
+        referer_host = urlparse(referer).netloc
+        if referer_host and referer_host != host:
+            return False
+
+    return True
+
+
 def parse_iso_utc(value):
     """Parse an ISO datetime string into an aware UTC datetime."""
     if not value or not isinstance(value, str):
@@ -5424,11 +5446,16 @@ def get_vapid_public_key():
 
 
 @app.route('/api/push/subscribe', methods=['POST'])
+@csrf.exempt
 @login_required
 def subscribe_push():
     """Subscribe a user's device to push notifications."""
     if not VAPID_PUBLIC_KEY or not VAPID_PRIVATE_KEY:
         return jsonify({'error': 'Push notifications not configured'}), 503
+
+    if not is_same_origin_request():
+        app.logger.warning(f"Blocked cross-origin push subscribe attempt for user {current_user.username}")
+        return jsonify({'error': 'Forbidden'}), 403
 
     data = request.get_json()
     if not data or not data.get('endpoint') or not data.get('keys'):
@@ -5477,9 +5504,14 @@ def subscribe_push():
 
 
 @app.route('/api/push/unsubscribe', methods=['POST'])
+@csrf.exempt
 @login_required
 def unsubscribe_push():
     """Unsubscribe a user's device from push notifications."""
+    if not is_same_origin_request():
+        app.logger.warning(f"Blocked cross-origin push unsubscribe attempt for user {current_user.username}")
+        return jsonify({'error': 'Forbidden'}), 403
+
     data = request.get_json()
     if not data or not data.get('endpoint'):
         return jsonify({'error': 'Invalid request'}), 400

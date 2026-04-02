@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v18';
-const STATIC_CACHE = 'echowithin-static-v18';
-const PAGES_CACHE = 'echowithin-pages-v18';
-const POSTS_CACHE = 'echowithin-posts-v18';
+const CACHE_NAME = 'echowithin-v19';
+const STATIC_CACHE = 'echowithin-static-v19';
+const PAGES_CACHE = 'echowithin-pages-v19';
+const POSTS_CACHE = 'echowithin-posts-v19';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -13,7 +13,10 @@ const STATIC_ASSETS = [
   '/static/custom_styles.css',
   '/static/script.js',
   '/static/logo-192.png',
-  '/static/manifest.json'
+  '/static/manifest.json',
+  // MathJax for math/LaTeX rendering
+  'https://polyfill.io/v3/polyfill.min.js?features=es6',
+  'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
 ];
 
 // Pages to cache for offline access

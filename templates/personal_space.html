@@ -381,6 +381,53 @@
         .note-content td .katex,
         .note-content th .katex {
             font-size: 1em;
+
+        /* === CRITICAL: Reset styles for MathJax internal elements === */
+        /* MathJax uses <mjx-*> elements internally for rendering math */
+        /* Without these resets, math renders with data-table borders/backgrounds */
+        .note-content .mjx-container table,
+        .note-content .MathJax table,
+        .note-content [role="presentation"] table {
+            border-collapse: initial;
+            display: inline-table;
+            margin: 0;
+            border: none;
+            overflow: visible;
+            font-size: inherit;
+            width: auto;
+        }
+
+        .note-content .mjx-container td,
+        .note-content .mjx-container th,
+        .note-content .MathJax td,
+        .note-content .MathJax th,
+        .note-content [role="presentation"] td,
+        .note-content [role="presentation"] th {
+            border: none;
+            padding: 0;
+            background: none !important;
+            white-space: nowrap;
+        }
+
+        .note-content .mjx-container tr,
+        .note-content .MathJax tr,
+        .note-content [role="presentation"] tr {
+            background: none !important;
+        }
+
+        .note-content .mjx-container tr:hover,
+        .note-content .MathJax tr:hover,
+        .note-content [role="presentation"] tr:hover {
+            background: none !important;
+        }
+
+        /* MathJax inside data tables */
+        .note-content td .mjx-container,
+        .note-content th .mjx-container,
+        .note-content td .MathJax,
+        .note-content th .MathJax {
+            font-size: 1em;
+        }
         }
 
         .note-content hr {
@@ -1603,8 +1650,7 @@
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
-                    <pre class="raw-note-preview"
-                        style="white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;background:none;border:none;padding:0;font-size:inherit;line-height:1.6;color:inherit;">{{ note.content }}</pre>
+                    {{ note.content | markdown | safe }}
                 </div>
                 {% if note.reference or note.tags %}
                 <div class="note-metadata-display"
@@ -1862,8 +1908,7 @@
             {% for note in locked_notes %}
             <div class="locked-note-card note-card" data-note-id="{{ note._id }}">
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
-                    <pre class="raw-note-preview"
-                        style="white-space:pre-wrap;word-break:break-word;font-family:inherit;margin:0;background:none;border:none;padding:0;font-size:inherit;line-height:1.6;color:inherit;">{{ note.content }}</pre>
+                    {{ note.content | markdown | safe }}
                 </div>
                 {% if note.reference or note.tags %}
                 <div class="note-metadata-display"

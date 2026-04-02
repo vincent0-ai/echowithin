@@ -42,7 +42,7 @@
                 {% for contact in contacts %}
                 <div class="contact-item {{ 'active' if active_chat and active_chat.username == contact.username else '' }}"
                     data-user-id="{{ contact.user_id }}"
-                    onclick="loadChat('{{ contact.user_id }}', '{{ contact.username }}', this)"
+                    onclick="window.loadChat('{{ contact.user_id }}', '{{ contact.username }}', this)"
                     style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 1px solid #f1f1f1; position: relative;">
                     <div style="position: relative;">
                         <div class="contact-avatar"
@@ -546,6 +546,10 @@
 </div>
 
 <script>
+    window.loadChat = window.loadChat || function () {
+        window.__pendingLoadChatArgs = arguments;
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         const socket = io();
         const chatHistory = document.getElementById('chat-history');
@@ -756,6 +760,12 @@
             // Track active chat for notification suppression
             socket.emit('viewing_chat', { partner_id: userId });
         };
+
+        if (window.__pendingLoadChatArgs) {
+            const pendingArgs = window.__pendingLoadChatArgs;
+            window.__pendingLoadChatArgs = null;
+            window.loadChat.apply(window, pendingArgs);
+        }
 
         function loadChatHistory(userId) {
             lastMessageDate = null;
@@ -1198,7 +1208,7 @@
                     if (item) item.remove();
                     updateRequestBadge(-1);
                     // Open the chat with the accepted user
-                    loadChat(d.user_id, d.username, null);
+                    window.loadChat(d.user_id, d.username, null);
                     showToast(`Accepted! You can now chat with ${d.username}`);
                 }
             });

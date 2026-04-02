@@ -1462,6 +1462,51 @@
             const editInterface = document.getElementById('edit-interface');
             const cancelBtn = document.getElementById('cancel-edit-btn');
             const editContent = document.getElementById('edit-content');
+            const sharedDraftStorageKey = 'echowithin_shared_note_draft_{{ share_id }}';
+
+            function persistSharedDraft(content, summary, updatedAt) {
+                try {
+                    localStorage.setItem(sharedDraftStorageKey, JSON.stringify({
+                        content: content,
+                        summary: summary || '',
+                        updatedAt: updatedAt || new Date().toISOString()
+                    }));
+                } catch (e) {
+                    console.warn('Unable to persist shared note draft:', e);
+                }
+            }
+
+            function clearSharedDraft() {
+                try {
+                    localStorage.removeItem(sharedDraftStorageKey);
+                } catch (e) {
+                    console.warn('Unable to clear shared note draft:', e);
+                }
+            }
+
+            function restoreSharedDraft() {
+                if (!noteView || !editContent) return;
+                try {
+                    const raw = localStorage.getItem(sharedDraftStorageKey);
+                    if (!raw) return;
+                    const saved = JSON.parse(raw);
+                    if (!saved || typeof saved.content !== 'string' || !saved.content.trim()) return;
+                    editContent.value = saved.content;
+                    noteView.innerHTML = renderMarkdownWithMath(saved.content);
+                    noteView.setAttribute('data-raw', saved.content);
+                    if (saved.updatedAt) {
+                        noteView.setAttribute('data-updated-at', saved.updatedAt);
+                    }
+                    const summaryInput = document.getElementById('edit-summary');
+                    if (summaryInput && saved.summary) {
+                        summaryInput.value = saved.summary;
+                    }
+                } catch (e) {
+                    console.warn('Unable to restore shared note draft:', e);
+                }
+            }
+
+            restoreSharedDraft();
 
             if (toggleBtn && noteView && editInterface) {
                 toggleBtn.addEventListener('click', function () {
@@ -1515,9 +1560,16 @@
 
                         const result = await response.json();
                         if (result.success) {
+                            const submittedAt = result.updated_at || new Date().toISOString();
                             if (result.pending_approval) {
                                 status.textContent = 'Submitted for owner approval.';
                                 status.style.color = '#1565c0';
+                                if (noteView) {
+                                    noteView.innerHTML = renderMarkdownWithMath(content);
+                                    noteView.setAttribute('data-raw', content);
+                                    noteView.setAttribute('data-updated-at', submittedAt);
+                                }
+                                persistSharedDraft(content, editSummary, submittedAt);
                             } else {
                                 status.textContent = 'Saved!';
                                 status.style.color = 'green';
@@ -1526,8 +1578,9 @@
                                 if (noteView) {
                                     noteView.innerHTML = renderMarkdownWithMath(content);
                                     noteView.setAttribute('data-raw', content);
-                                    if (result.updated_at) noteView.setAttribute('data-updated-at', result.updated_at);
+                                    noteView.setAttribute('data-updated-at', submittedAt);
                                 }
+                                clearSharedDraft();
                             }
 
                             // Switch back to view mode after a short delay
@@ -1564,6 +1617,7 @@
                                         noteView.setAttribute('data-raw', merged);
                                         if (mergeResult.updated_at) noteView.setAttribute('data-updated-at', mergeResult.updated_at);
                                     }
+                                    clearSharedDraft();
                                     status.textContent = 'Merged and saved.';
                                     status.style.color = 'green';
                                     setTimeout(() => {

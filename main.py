@@ -605,7 +605,7 @@ def encrypt_note(content, user_id=None):
 
 def decrypt_note(encrypted_content, user_id=None):
     """Decrypts note content. Tries per-user v2 key first, then v1 global key."""
-    if not encrypted_content:
+    if not encrypted_content or encrypted_content == '[Content unavailable — decryption error]':
         return encrypted_content
     # Try v2 per-user key first
     if user_id:
@@ -626,6 +626,85 @@ def decrypt_note(encrypted_content, user_id=None):
             return encrypted_content
         app.logger.warning(f"Note decryption failed for all key versions")
         return '[Content unavailable — decryption error]'
+
+
+def _candidate_user_ids(*values):
+    candidates = []
+    seen = set()
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, ObjectId):
+            value = str(value)
+        value = str(value).strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        candidates.append(value)
+    return candidates
+
+
+def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
+    if not encrypted_content:
+        return encrypted_content
+    for candidate_user_id in candidate_user_ids:
+        try:
+            f = _get_user_fernet(str(candidate_user_id))
+            return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            continue
+    try:
+        return get_notes_fernet().decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+    except Exception:
+        if encrypted_content and not encrypted_content.startswith('gAAAAA'):
+            return encrypted_content
+        return None
+
+
+def _note_decryption_candidates(note, share=None):
+    candidates = []
+    seen = set()
+
+    def add_value(value):
+        if value is None:
+            return
+        if isinstance(value, ObjectId):
+            value = str(value)
+        value = str(value).strip()
+        if value and value not in seen:
+            seen.add(value)
+            candidates.append(value)
+
+    current = note
+    depth = 0
+    while current and depth < 4:
+        add_value(current.get('content_owner_id'))
+        add_value(current.get('user_id'))
+        add_value(current.get('owner_id'))
+        add_value(current.get('source_owner_id'))
+        add_value(current.get('saved_from_owner_id'))
+        source_note_id = current.get('source_note_id')
+        if not source_note_id:
+            break
+        current = personal_posts_conf.find_one(
+            {'_id': source_note_id},
+            {'content_owner_id': 1, 'user_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
+        )
+        depth += 1
+
+    if share:
+        add_value(share.get('owner_id'))
+        add_value(share.get('source_owner_id'))
+
+    return candidates
+
+
+def _decrypt_note_record(note, share=None):
+    candidates = _note_decryption_candidates(note, share)
+    decrypted = _decrypt_with_candidate_ids(note.get('content', ''), candidates) or decrypt_note(note.get('content', ''), user_id=candidates[0] if candidates else None)
+    if decrypted is not None:
+        return decrypted
+    return decrypt_note(note.get('content', ''), user_id=candidates[0] if candidates else None)
 
 # --- Meilisearch setup for fast full-text search ---
 MEILI_URL = os.environ.get('MEILI_URL', '').strip()
@@ -6654,7 +6733,7 @@ def export_data(username):
         export['personal_notes'].append({
             'id': str(note['_id']),
             'title': note.get('title', ''),
-            'content': decrypt_note(note.get('content', ''), user_id=str(user_id)),
+            'content': _decrypt_note_record(note),
             'created_at': str(note.get('created_at', '')),
             'updated_at': str(note.get('updated_at', '')),
         })
@@ -6807,7 +6886,7 @@ def personal_space():
                                                  .limit(per_page))
     personal_posts = []
     for note in personal_posts_raw:
-        note['content'] = decrypt_note(note.get('content', ''), user_id=current_user.id)
+        note['content'] = _decrypt_note_record(note)
         personal_posts.append(note)
 
     # --- Locked Notes ---
@@ -6831,7 +6910,7 @@ def personal_space():
                                                     .sort('created_at', -1)
                                                     .limit(50))
         for note in locked_notes_raw:
-            note['content'] = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            note['content'] = _decrypt_note_record(note)
             locked_notes.append(note)
         # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]
@@ -7142,6 +7221,7 @@ def create_personal_post():
         encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
+            'content_owner_id': ObjectId(current_user.id),
             'content': encrypted_content,
             'encrypted': True,
             'reference': request.form.get('reference', '').strip()[:200],
@@ -7170,6 +7250,7 @@ def create_personal_post_json():
     encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
+        'content_owner_id': ObjectId(current_user.id),
         'content': encrypted_content,
         'encrypted': True,
         'reference': data.get('reference', '').strip()[:200],
@@ -7202,7 +7283,7 @@ def search_personal_notes():
             q_lower = query.lower()
             results = []
             for note in notes_raw:
-                content = decrypt_note(note.get('content', ''), user_id=current_user.id)
+                content = _decrypt_note_record(note)
                 if q_lower in content.lower():
                     # Simple highlight: wrap matches in <mark>
                     import re as re_mod
@@ -7352,7 +7433,7 @@ def edit_personal_post(post_id):
 
         # Conflict-aware editing: warn and return merge preview instead of silently overwriting.
         if base_updated_at and note_updated_at and (note_updated_at > base_updated_at) and not force_overwrite:
-            current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            current_plain = _decrypt_note_record(note)
             return jsonify({
                 'error': 'conflict',
                 'message': 'This note was updated by someone else after you opened the editor.',
@@ -7372,6 +7453,7 @@ def edit_personal_post(post_id):
                 'editor_name': editor_name,
                 'editor_id': ObjectId(current_user.id),
                 'content': note['content'],
+                'content_owner_id': note.get('content_owner_id', note.get('user_id')),
                 'encrypted': note.get('encrypted', True),
                 'event_type': 'snapshot',
                 'status': 'applied',
@@ -7392,6 +7474,7 @@ def edit_personal_post(post_id):
             {'$set': {
                 'content': encrypted_content, 
                 'encrypted': True, 
+                'content_owner_id': ObjectId(current_user.id),
                 'reference': data.get('reference', '').strip()[:200],
                 'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
                 'updated_at': now
@@ -7472,7 +7555,7 @@ def sync_personal_post(post_id):
 
         # Check if content is actually different
         if note.get('content') == original_note.get('content'):
-            decrypted = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            decrypted = _decrypt_note_record(note)
             return jsonify({
                 'success': True,
                 'content': decrypted,
@@ -7490,6 +7573,8 @@ def sync_personal_post(post_id):
                     'editor_name': editor_name + ' (sync push)',
                     'editor_id': ObjectId(current_user.id),
                     'content': original_note['content'],
+                    'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
+                    'content_plain': _decrypt_note_record(original_note),
                     'encrypted': original_note.get('encrypted', True),
                     'created_at': now
                 })
@@ -7505,6 +7590,7 @@ def sync_personal_post(post_id):
                 {'$set': {
                     'content': note.get('content'),
                     'encrypted': note.get('encrypted', True),
+                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
                     'reference': note.get('reference', ''),
                     'tags': note.get('tags', []),
                     'updated_at': now
@@ -7512,7 +7598,7 @@ def sync_personal_post(post_id):
             )
 
             # Re-index original in Meilisearch
-            decrypted = decrypt_note(note.get('content', ''), user_id=current_user.id)
+            decrypted = _decrypt_note_record(note)
             index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
@@ -7534,6 +7620,8 @@ def sync_personal_post(post_id):
                     'editor_name': editor_name + ' (sync pull)',
                     'editor_id': ObjectId(current_user.id),
                     'content': note['content'],
+                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+                    'content_plain': _decrypt_note_record(note),
                     'encrypted': note.get('encrypted', True),
                     'created_at': now
                 })
@@ -7549,6 +7637,7 @@ def sync_personal_post(post_id):
                 {'$set': {
                     'content': original_note.get('content'),
                     'encrypted': original_note.get('encrypted', True),
+                    'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
                     'reference': original_note.get('reference', ''),
                     'tags': original_note.get('tags', []),
                     'updated_at': now
@@ -7556,7 +7645,7 @@ def sync_personal_post(post_id):
             )
 
             # Re-index clone in Meilisearch
-            decrypted = decrypt_note(original_note.get('content', ''), user_id=current_user.id)
+            decrypted = _decrypt_note_record(original_note)
             index_note_to_meili(post_id, decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER for real-time sync
@@ -7598,10 +7687,21 @@ def delete_personal_post(post_id):
 
         # --- Cascading Deletion Logic ---
         if mode == 'everyone':
-            # Purge original + all clones
-            clone_ids = [c['_id'] for c in personal_posts_conf.find({'source_note_id': obj_id}, {'_id': 1})]
-            target_ids = [obj_id] + clone_ids
-            msg_suffix = f"and {len(clone_ids)} copy/copies deleted for everyone."
+            # Purge original + all descendants recursively.
+            target_ids = []
+            frontier = [obj_id]
+            visited = set()
+            while frontier:
+                next_frontier = []
+                for note_id in frontier:
+                    if note_id in visited:
+                        continue
+                    visited.add(note_id)
+                    target_ids.append(note_id)
+                    child_ids = [c['_id'] for c in personal_posts_conf.find({'source_note_id': note_id}, {'_id': 1})]
+                    next_frontier.extend(child_ids)
+                frontier = next_frontier
+            msg_suffix = f"and {max(0, len(target_ids) - 1)} copy/copies deleted for everyone."
         else:
             # Delete only this specific note (clones remain if they exists)
             target_ids = [obj_id]
@@ -7920,7 +8020,7 @@ def view_shared_note(share_id):
 
     # Decrypt note content (note belongs to the share owner)
     note_owner_id = str(share.get('owner_id', note.get('user_id', '')))
-    content = decrypt_note(note.get('content', ''), user_id=note_owner_id)
+    content = _decrypt_note_record(note, share)
     
     # Determine surprise theme (with compatibility for old is_valentine flag)
     surprise_theme = share.get('surprise_theme')
@@ -8035,10 +8135,11 @@ def api_save_shared_note(share_id):
     # Note: We track source_note_id to allow original owners to "Delete for Everyone"
     # Re-encrypt with the cloning user's per-user key for data sovereignty
     original_owner_id = str(share.get('owner_id', original_note.get('user_id', '')))
-    plaintext = decrypt_note(original_note.get('content', ''), user_id=original_owner_id)
+    plaintext = _decrypt_note_record(original_note, share)
     cloned_encrypted = encrypt_note(plaintext, user_id=current_user.id)
     personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
+        'content_owner_id': ObjectId(current_user.id),
         'content': cloned_encrypted,
         'encrypted': True,
         'reference': original_note.get('reference', ''),
@@ -8069,7 +8170,7 @@ def view_saved_note(note_id):
     if not note:
         abort(404)
 
-    content = decrypt_note(note.get('content', ''), user_id=str(current_user.id))
+    content = _decrypt_note_record(note)
     surprise_theme = note.get('surprise_theme', 'none')
     
     # We render this as a read-only instance of shared_note.html
@@ -9035,7 +9136,11 @@ def api_edit_shared_note(share_id):
             'editor_id': editor_id,
             'content': note.get('content', ''),
             'base_content': note.get('content', ''),
+            'content_owner_id': note.get('content_owner_id', share.get('owner_id')),
+            'content_plain': _decrypt_note_record(note, share),
+            'base_content_plain': _decrypt_note_record(note, share),
             'proposed_content': encrypted_content,
+            'proposed_content_plain': content,
             'encrypted': True,
             'event_type': 'proposal',
             'status': 'pending',
@@ -9062,7 +9167,7 @@ def api_edit_shared_note(share_id):
 
     # Owner flow: conflict-aware apply.
     if base_updated_at and note_updated_at and (note_updated_at > base_updated_at) and not force_apply:
-        current_plain = decrypt_note(note.get('content', ''), user_id=owner_id_str)
+        current_plain = _decrypt_note_record(note, share)
         return jsonify({
             'error': 'conflict',
             'message': 'This note changed since you opened it. Review and merge before saving.',
@@ -9084,6 +9189,8 @@ def api_edit_shared_note(share_id):
             'editor_name': editor_name,
             'editor_id': editor_id,
             'content': note['content'],  # previous encrypted content
+            'content_owner_id': note.get('content_owner_id', share.get('owner_id')),
+            'content_plain': _decrypt_note_record(note, share),
             'encrypted': note.get('encrypted', True),
             'event_type': 'snapshot',
             'status': 'applied',
@@ -9186,7 +9293,7 @@ def api_get_note_versions(post_id):
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
-    current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
+    current_plain = _decrypt_note_record(note)
     versions = list(note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
     result = []
     for v in versions:
@@ -9203,10 +9310,14 @@ def api_get_note_versions(post_id):
         }
 
         if event_type == 'proposal':
-            base_encrypted = v.get('base_content') or v.get('content', '')
-            proposed_encrypted = v.get('proposed_content', '')
-            base_plain = decrypt_note(base_encrypted, user_id=current_user.id) if base_encrypted else ''
-            proposed_plain = decrypt_note(proposed_encrypted, user_id=current_user.id) if proposed_encrypted else ''
+            base_plain = v.get('base_content_plain')
+            if base_plain is None:
+                base_encrypted = v.get('base_content') or v.get('content', '')
+                base_plain = decrypt_note(base_encrypted, user_id=current_user.id) if base_encrypted else ''
+            proposed_plain = v.get('proposed_content_plain')
+            if proposed_plain is None:
+                proposed_encrypted = v.get('proposed_content', '')
+                proposed_plain = decrypt_note(proposed_encrypted, user_id=current_user.id) if proposed_encrypted else ''
             row.update({
                 'base_content': base_plain,
                 'proposed_content': proposed_plain,
@@ -9215,7 +9326,7 @@ def api_get_note_versions(post_id):
                 'can_review': status == 'pending'
             })
         else:
-            decrypted = decrypt_note(v.get('content', ''), user_id=current_user.id) if v.get('encrypted', True) else v.get('content', '')
+            decrypted = v.get('content_plain') or (decrypt_note(v.get('content', ''), user_id=str(v.get('content_owner_id') or current_user.id)) if v.get('encrypted', True) else v.get('content', ''))
             row.update({
                 'content': decrypted,
                 'can_restore': True
@@ -9256,6 +9367,8 @@ def api_restore_note_version(post_id, version_id):
             'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
             'editor_id': ObjectId(current_user.id),
             'content': note.get('content', ''),
+            'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+            'content_plain': _decrypt_note_record(note),
             'encrypted': True,
             'event_type': 'snapshot',
             'status': 'applied',
@@ -9268,11 +9381,12 @@ def api_restore_note_version(post_id, version_id):
         {'$set': {
             'content': version.get('content', ''),
             'encrypted': True,
+            'content_owner_id': ObjectId(current_user.id),
             'updated_at': now
         }}
     )
 
-    plain = decrypt_note(version.get('content', ''), user_id=current_user.id)
+    plain = version.get('content_plain') or decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
     index_note_to_meili(post_id, decrypted_content=plain)
 
     return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat()})
@@ -9318,9 +9432,9 @@ def api_decide_note_proposal(version_id):
     if action != 'accept':
         return jsonify({'error': 'Invalid action'}), 400
 
-    current_plain = decrypt_note(note.get('content', ''), user_id=current_user.id)
-    base_plain = decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
-    proposed_plain = decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
+    current_plain = _decrypt_note_record(note, share)
+    base_plain = proposal.get('base_content_plain') or decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
+    proposed_plain = proposal.get('proposed_content_plain') or decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
 
     merged_content = (data.get('merged_content') or '').strip()
 
@@ -9346,6 +9460,8 @@ def api_decide_note_proposal(version_id):
         'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
         'editor_id': ObjectId(current_user.id),
         'content': note.get('content', ''),
+        'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+        'content_plain': current_plain,
         'encrypted': True,
         'event_type': 'snapshot',
         'status': 'applied',
@@ -9358,6 +9474,7 @@ def api_decide_note_proposal(version_id):
         {'$set': {
             'content': final_encrypted,
             'encrypted': True,
+            'content_owner_id': ObjectId(current_user.id),
             'updated_at': now
         }}
     )

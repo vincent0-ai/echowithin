@@ -2747,6 +2747,7 @@
 
         window.currentEditNoteId = null;
         window.currentEditBaseUpdatedAt = null;
+        window.currentEditDraftKey = null;
 
         window.openEditModal = function (noteId, content, reference = '', tags = [], updatedAt = '') {
             const modal = document.getElementById('edit-note-modal');
@@ -2755,14 +2756,32 @@
             const tagsInput = document.getElementById('edit-note-tags');
             const summaryInput = document.getElementById('edit-note-summary');
             const charCount = document.getElementById('edit-char-count');
+            const draftKey = `echowithin_note_edit_draft_${noteId}`;
             if (modal && textarea) {
                 window.currentEditNoteId = noteId;
                 window.currentEditBaseUpdatedAt = updatedAt || null;
+                window.currentEditDraftKey = draftKey;
                 textarea.value = content;
                 if (refInput) refInput.value = reference || '';
                 if (tagsInput) tagsInput.value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
                 if (summaryInput) summaryInput.value = '';
                 if (charCount) charCount.textContent = content.length;
+                try {
+                    const stored = localStorage.getItem(draftKey);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (parsed && typeof parsed.content === 'string' && parsed.content.trim()) {
+                            textarea.value = parsed.content;
+                            if (refInput && typeof parsed.reference === 'string') refInput.value = parsed.reference;
+                            if (tagsInput && Array.isArray(parsed.tags)) tagsInput.value = parsed.tags.join(', ');
+                            if (summaryInput && typeof parsed.editSummary === 'string') summaryInput.value = parsed.editSummary;
+                            if (parsed.updatedAt) window.currentEditBaseUpdatedAt = parsed.updatedAt;
+                            if (charCount) charCount.textContent = parsed.content.length;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Unable to restore note draft:', e);
+                }
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
                 textarea.focus();
@@ -2777,9 +2796,34 @@
                 document.body.style.overflow = '';
                 window.currentEditNoteId = null;
                 window.currentEditBaseUpdatedAt = null;
+                window.currentEditDraftKey = null;
                 document.removeEventListener('keydown', window.handleEditModalEsc);
             }
         };
+
+        function persistCurrentEditDraft(content, reference, tags, editSummary, updatedAt) {
+            if (!window.currentEditDraftKey) return;
+            try {
+                localStorage.setItem(window.currentEditDraftKey, JSON.stringify({
+                    content: content,
+                    reference: reference || '',
+                    tags: tags || [],
+                    editSummary: editSummary || '',
+                    updatedAt: updatedAt || new Date().toISOString()
+                }));
+            } catch (e) {
+                console.warn('Unable to persist note draft:', e);
+            }
+        }
+
+        function clearCurrentEditDraft() {
+            if (!window.currentEditDraftKey) return;
+            try {
+                localStorage.removeItem(window.currentEditDraftKey);
+            } catch (e) {
+                console.warn('Unable to clear note draft:', e);
+            }
+        }
 
         window.openMergeConflictModal = function (payload) {
             const modal = document.getElementById('merge-conflict-modal');
@@ -3205,6 +3249,7 @@
             const reference = refInput ? refInput.value.trim() : '';
             const tags = tagsInput ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
             const editSummary = summaryInput ? summaryInput.value.trim() : '';
+            persistCurrentEditDraft(content, reference, tags, editSummary, window.currentEditBaseUpdatedAt || '');
 
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
@@ -3256,6 +3301,7 @@
                         const copyBtnEl = noteCard.querySelector('.copy-btn');
                         if (copyBtnEl) copyBtnEl.dataset.copyText = content;
                     }
+                    clearCurrentEditDraft();
                     window.closeEditModal();
                 } else if (response.status === 409 && result.error === 'conflict') {
                     window.openMergeConflictModal(result);
@@ -3281,6 +3327,7 @@
                             const mergeResult = await mergeResponse.json();
                             if (mergeResult.success) {
                                 window.closeMergeConflictModal();
+                                clearCurrentEditDraft();
                                 const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
                                 if (noteCard) {
                                     const contentEl = noteCard.querySelector('.note-content.rendered-note');

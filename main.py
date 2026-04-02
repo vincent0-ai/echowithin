@@ -783,6 +783,20 @@ def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
     }
 
 
+def _is_ios_web_push_subscription(subscription_doc: dict) -> bool:
+    endpoint = (subscription_doc or {}).get('endpoint', '') or ''
+    endpoint_lower = endpoint.lower()
+    return 'web.push.apple' in endpoint_lower or 'apple' in endpoint_lower
+
+
+def _remove_stale_push_subscription(subscription_doc: dict, platform: str, user_label: str, reason: str):
+    try:
+        push_subscriptions_conf.delete_one({'_id': subscription_doc['_id']})
+        app.logger.info(f"Removed stale {platform} push subscription for {user_label} ({reason})")
+    except Exception as exc:
+        app.logger.error(f"Failed to remove stale {platform} push subscription for {user_label}: {exc}")
+
+
 def index_note_to_meili(note_id: str, decrypted_content=None):
     """Index a single personal note into Meilisearch. Safe no-op if not configured."""
     if not meili_notes_index:
@@ -1696,26 +1710,26 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                             headers={"Urgency": "high"}
                         )
                         status = response.status_code if response else 'unknown'
-                        is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                        is_ios = _is_ios_web_push_subscription(sub)
                         platform = 'iOS' if is_ios else 'non-iOS'
                         web_sent += 1
                         app.logger.info(f"Web push delivered ({platform}): status={status}, user={user_id_str}")
                     except WebPushException as e:
                         status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
                         resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
-                        is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                        is_ios = _is_ios_web_push_subscription(sub)
                         platform = 'iOS' if is_ios else 'non-iOS'
                         web_failed += 1
                         app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id_str}, body={resp_body}")
-                        # 404/410 mean subscription is gone. 403 is often auth/config mismatch,
-                        # so keep the subscription and avoid silently unsubscribing users.
+                        # 404/410 mean subscription is gone. iOS 403s usually mean the APNs-backed
+                        # subscription is stale or no longer valid with the current VAPID config.
                         if status_code in [404, 410]:
-                            push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                            app.logger.info(f"Removed stale {platform} push subscription for user {user_id_str}")
+                            _remove_stale_push_subscription(sub, platform, user_id_str, f"status={status_code}")
+                        elif status_code == 403 and is_ios:
+                            _remove_stale_push_subscription(sub, platform, user_id_str, 'status=403')
                         elif status_code == 403:
                             app.logger.warning(
-                                f"Web push unauthorized ({platform}) for user {user_id_str}; "
-                                "kept subscription for retry after key/subscription refresh"
+                                f"Web push unauthorized ({platform}) for user {user_id_str}; kept subscription for retry"
                             )
                     except Exception as e:
                         web_failed += 1
@@ -1783,8 +1797,12 @@ def send_admin_broadcast_push(title, body, url=None):
                     web_success += 1
                 except WebPushException as e:
                     status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
+                    is_ios = _is_ios_web_push_subscription(sub)
                     if status_code in [404, 410]:
-                        push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                        _remove_stale_push_subscription(sub, 'iOS' if is_ios else 'non-iOS', str(sub.get('user_id', 'unknown')), f"status={status_code}")
+                        web_failed += 1
+                    elif status_code == 403 and is_ios:
+                        _remove_stale_push_subscription(sub, 'iOS', str(sub.get('user_id', 'unknown')), 'status=403')
                         web_failed += 1
                     elif status_code == 403:
                         web_failed += 1
@@ -1880,7 +1898,7 @@ def send_push_notifications_for_new_post(post_id_str):
                         ttl=86400
                     )
                     status = response.status_code if response else 'unknown'
-                    is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                    is_ios = _is_ios_web_push_subscription(sub)
                     platform = 'iOS' if is_ios else 'non-iOS'
                     user_id = sub.get('user_id', 'unknown')
                     sent_count += 1
@@ -1888,19 +1906,20 @@ def send_push_notifications_for_new_post(post_id_str):
                 except WebPushException as e:
                     status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
                     resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
-                    is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
+                    is_ios = _is_ios_web_push_subscription(sub)
                     platform = 'iOS' if is_ios else 'non-iOS'
                     user_id = sub.get('user_id', 'unknown')
                     failed_count += 1
                     app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id}, post={post_id_str}, body={resp_body}")
-                    # 404/410 mean the subscription is stale; 403 may be transient/auth related.
+                    # 404/410 mean the subscription is stale. iOS 403s usually indicate an APNs-backed
+                    # subscription that should be recreated with the current VAPID key pair.
                     if status_code in [404, 410]:
-                        push_subscriptions_conf.delete_one({'_id': sub['_id']})
-                        app.logger.info(f"Removed stale {platform} push subscription for user {user_id}")
+                        _remove_stale_push_subscription(sub, platform, str(user_id), f"status={status_code}")
+                    elif status_code == 403 and is_ios:
+                        _remove_stale_push_subscription(sub, platform, str(user_id), 'status=403')
                     elif status_code == 403:
                         app.logger.warning(
-                            f"Web push unauthorized ({platform}) for user {user_id}; "
-                            "kept subscription for retry after key/subscription refresh"
+                            f"Web push unauthorized ({platform}) for user {user_id}; kept subscription for retry"
                         )
                 except Exception as e:
                     failed_count += 1

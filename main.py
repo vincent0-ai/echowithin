@@ -7456,7 +7456,7 @@ def sync_personal_post(post_id):
         # Fetch the original note
         original_note = personal_posts_conf.find_one({'_id': source_note_id})
         if not original_note:
-            return jsonify({'error': 'Original note no longer exists'}), 404
+            return jsonify({'error': 'Original note no longer exists', 'code': 'original_missing'}), 410
 
         now = datetime.datetime.now(datetime.timezone.utc)
         editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)

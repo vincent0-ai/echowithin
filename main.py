@@ -728,7 +728,7 @@ def _init_meilisearch():
                 except Exception:
                     pass
                 try:
-                    meili_notes_index.update_filterable_attributes(['user_id', 'created_at'])
+                    meili_notes_index.update_filterable_attributes(['user_id', 'is_locked', 'created_at'])
                 except Exception:
                     pass
                 try:
@@ -775,6 +775,7 @@ def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
     return {
         'id': str(note_doc.get('_id')),
         'user_id': user_id,
+        'is_locked': bool(note_doc.get('is_locked', False)),
         'content': content,
         'reference': note_doc.get('reference', ''),
         'tags': note_doc.get('tags', []),
@@ -7176,7 +7177,8 @@ def search_personal_notes():
         # Fallback: simple MongoDB text search on decrypted notes
         try:
             notes_raw = list(personal_posts_conf.find({
-                'user_id': ObjectId(current_user.id)
+                'user_id': ObjectId(current_user.id),
+                'is_locked': {'$ne': True}
             }).sort('created_at', -1))
             q_lower = query.lower()
             results = []
@@ -7236,10 +7238,30 @@ def search_personal_notes():
         }
 
         search_result = meili_notes_index.search(query, search_params)
-        total = search_result.get('estimatedTotalHits', search_result.get('nbHits', 0))
         hits = search_result.get('hits', [])
+
+        # Enforce lock gate at the source-of-truth DB layer so locked notes can never leak
+        # through stale or partially indexed search documents.
+        candidate_ids = []
+        for h in hits:
+            hid = h.get('id')
+            if isinstance(hid, str) and ObjectId.is_valid(hid):
+                candidate_ids.append(ObjectId(hid))
+
+        allowed_note_ids = set()
+        if candidate_ids:
+            allowed_docs = personal_posts_conf.find({
+                '_id': {'$in': candidate_ids},
+                'user_id': ObjectId(current_user.id),
+                'is_locked': {'$ne': True}
+            }, {'_id': 1})
+            allowed_note_ids = {str(doc['_id']) for doc in allowed_docs}
+
         results = []
         for h in hits:
+            hit_id = h.get('id')
+            if hit_id not in allowed_note_ids:
+                continue
             formatted = h.get('_formatted', {})
             content_highlighted = formatted.get('content') or h.get('content', '')
             snippet = formatted.get('content') or h.get('content', '')[:300]
@@ -7254,6 +7276,7 @@ def search_personal_notes():
                 ).isoformat() if h.get('created_at') else None,
                 'matches_position': matches_position
             })
+        total = len(results)
         return jsonify({
             'results': results,
             'total': total,

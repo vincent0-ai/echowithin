@@ -4,6 +4,9 @@ This script enqueues the log email job to the RQ worker queue.
 It is intended to be run by a scheduler like cron.
 """
 
+from gevent import monkey
+monkey.patch_all()
+
 import os
 import sys
 import redis

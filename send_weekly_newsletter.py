@@ -4,6 +4,9 @@ This script enqueues the weekly newsletter job to the RQ worker queue.
 It is intended to be run by a scheduler like cron or the scheduler.py script.
 """
 
+from gevent import monkey
+monkey.patch_all()
+
 import os
 import sys
 import redis

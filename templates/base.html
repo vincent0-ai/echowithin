@@ -922,11 +922,13 @@
         // Check current subscription status
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-            // Re-send subscription to server every 5 days to keep endpoint fresh
-            // This is critical for iOS PWA where push endpoints can silently expire
+            // Re-send subscription to server periodically to keep endpoint fresh.
+            // iOS endpoints can rotate more often, so use a shorter refresh window.
             const lastRefresh = localStorage.getItem('pushSubRefreshedAt');
-            const fiveDaysMs = 5 * 24 * 60 * 60 * 1000;
-            if (!lastRefresh || (Date.now() - parseInt(lastRefresh)) > fiveDaysMs) {
+            const refreshWindowMs = isIOSStandalone
+                ? 12 * 60 * 60 * 1000  // 12h for iOS PWA
+                : 5 * 24 * 60 * 60 * 1000; // 5 days elsewhere
+            if (!lastRefresh || (Date.now() - parseInt(lastRefresh)) > refreshWindowMs) {
                 console.log('Refreshing push subscription with server...');
                 try {
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');

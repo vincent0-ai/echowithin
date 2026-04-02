@@ -216,7 +216,20 @@ cloudinary.config(cloud_name = get_env_variable('CLOUDINARY_CLOUD_NAME'), api_ke
 # Store the private key securely and share the public key with clients
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '').strip()
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '').strip()
-VAPID_CLAIMS = {"sub": "mailto:" + os.environ.get('MAIL_USERNAME', 'admin@echowithin.com')}
+_vapid_sub_raw = os.environ.get('VAPID_SUBJECT', '').strip()
+if _vapid_sub_raw and (_vapid_sub_raw.startswith('mailto:') or _vapid_sub_raw.startswith('https://')):
+    _vapid_sub = _vapid_sub_raw
+else:
+    mail_sender = os.environ.get('MAIL_USERNAME', 'admin@echowithin.com').strip()
+    if '@' in mail_sender:
+        _vapid_sub = f"mailto:{mail_sender}"
+    else:
+        _vapid_sub = 'mailto:admin@echowithin.com'
+        if _vapid_sub_raw:
+            app.logger.warning(
+                "Invalid VAPID_SUBJECT format. Use mailto:you@example.com or https://yourdomain"
+            )
+VAPID_CLAIMS = {"sub": _vapid_sub}
 
 # --- Firebase Admin SDK Configuration for FCM (Native App Push) ---
 # This is separate from web push - it's for the native Android/iOS apps
@@ -1632,6 +1645,8 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
         if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
             subscriptions = list(push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
             if subscriptions:
+                web_sent = 0
+                web_failed = 0
                 payload = json.dumps({
                     'title': title,
                     'body': body,
@@ -1659,18 +1674,29 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                         status = response.status_code if response else 'unknown'
                         is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
                         platform = 'iOS' if is_ios else 'non-iOS'
+                        web_sent += 1
                         app.logger.info(f"Web push delivered ({platform}): status={status}, user={user_id_str}")
                     except WebPushException as e:
                         status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
                         resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
                         is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
                         platform = 'iOS' if is_ios else 'non-iOS'
+                        web_failed += 1
                         app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id_str}, body={resp_body}")
-                        if status_code in [403, 404, 410]:
+                        # 404/410 mean subscription is gone. 403 is often auth/config mismatch,
+                        # so keep the subscription and avoid silently unsubscribing users.
+                        if status_code in [404, 410]:
                             push_subscriptions_conf.delete_one({'_id': sub['_id']})
                             app.logger.info(f"Removed stale {platform} push subscription for user {user_id_str}")
+                        elif status_code == 403:
+                            app.logger.warning(
+                                f"Web push unauthorized ({platform}) for user {user_id_str}; "
+                                "kept subscription for retry after key/subscription refresh"
+                            )
                     except Exception as e:
+                        web_failed += 1
                         app.logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
+                app.logger.info(f"Web push summary for user {user_id_str}: sent={web_sent}, failed={web_failed}")
         else:
             app.logger.debug("VAPID keys not configured, skipping web push")
 
@@ -1733,8 +1759,15 @@ def send_admin_broadcast_push(title, body, url=None):
                     web_success += 1
                 except WebPushException as e:
                     status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
-                    if status_code in [403, 404, 410]:
+                    if status_code in [404, 410]:
                         push_subscriptions_conf.delete_one({'_id': sub['_id']})
+                        web_failed += 1
+                    elif status_code == 403:
+                        web_failed += 1
+                        app.logger.warning(
+                            "Broadcast web push unauthorized (status=403); kept subscription for future retry"
+                        )
+                    else:
                         web_failed += 1
                 except Exception:
                     web_failed += 1
@@ -1797,6 +1830,8 @@ def send_push_notifications_for_new_post(post_id_str):
         if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
             query = {'user_id': {'$ne': author_id}} if author_id else {}
             subscriptions = list(push_subscriptions_conf.find(query))
+            sent_count = 0
+            failed_count = 0
 
             payload = json.dumps({
                 'title': title,
@@ -1824,6 +1859,7 @@ def send_push_notifications_for_new_post(post_id_str):
                     is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
                     platform = 'iOS' if is_ios else 'non-iOS'
                     user_id = sub.get('user_id', 'unknown')
+                    sent_count += 1
                     app.logger.info(f"Web push delivered ({platform}): status={status}, user={user_id}, post={post_id_str}")
                 except WebPushException as e:
                     status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
@@ -1831,14 +1867,25 @@ def send_push_notifications_for_new_post(post_id_str):
                     is_ios = 'web.push.apple' in sub.get('endpoint', '') or 'apple' in sub.get('endpoint', '').lower()
                     platform = 'iOS' if is_ios else 'non-iOS'
                     user_id = sub.get('user_id', 'unknown')
+                    failed_count += 1
                     app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id}, post={post_id_str}, body={resp_body}")
-                    if status_code in [403, 404, 410]:
+                    # 404/410 mean the subscription is stale; 403 may be transient/auth related.
+                    if status_code in [404, 410]:
                         push_subscriptions_conf.delete_one({'_id': sub['_id']})
                         app.logger.info(f"Removed stale {platform} push subscription for user {user_id}")
+                    elif status_code == 403:
+                        app.logger.warning(
+                            f"Web push unauthorized ({platform}) for user {user_id}; "
+                            "kept subscription for retry after key/subscription refresh"
+                        )
                 except Exception as e:
+                    failed_count += 1
                     app.logger.error(f"Unexpected push error: {e}")
 
-            app.logger.info(f"Sent web push for new post {post_id_str} to {len(subscriptions)} subscriptions")
+            app.logger.info(
+                f"Web push summary for new post {post_id_str}: "
+                f"targets={len(subscriptions)}, sent={sent_count}, failed={failed_count}"
+            )
         else:
             app.logger.debug("VAPID keys not configured, skipping web push for new post")
 

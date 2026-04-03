@@ -1084,13 +1084,42 @@
             // Convert the public key to Uint8Array
             const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
-            // Subscribe to push
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: applicationServerKey
-            });
+            // Subscribe to push (reuse existing sub if present, retry once on AbortError)
+            let subscription = await registration.pushManager.getSubscription();
+            if (!subscription) {
+                try {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                } catch (subErr) {
+                    if (subErr && subErr.name === 'AbortError') {
+                        // Some browsers keep a stale subscription state; clear and retry once.
+                        const staleSub = await registration.pushManager.getSubscription();
+                        if (staleSub) {
+                            try {
+                                await staleSub.unsubscribe();
+                            } catch (unsubErr) {
+                                console.warn('Failed to clear stale push subscription:', unsubErr);
+                            }
+                        }
+                        subscription = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        });
+                    } else {
+                        throw subErr;
+                    }
+                }
+            }
 
-            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            if (!subscription) {
+                console.warn('Push subscription unavailable after subscribe attempt');
+                return;
+            }
+
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
             // Send subscription to server
             const subResponse = await fetch('/api/push/subscribe', {
                 method: 'POST',

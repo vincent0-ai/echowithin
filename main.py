@@ -8002,7 +8002,9 @@ def view_shared_note(share_id):
     """Public route to view or edit a shared note."""
     share = note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        abort(404)
+        # Revoked/deleted shares are removed from DB; show dedicated link-unavailable state
+        # instead of the generic site-wide 404 page.
+        return render_template('shared_note.html', expired=True), 410
 
     # Check expiration
     if share.get('expires_at'):
@@ -8033,7 +8035,8 @@ def view_shared_note(share_id):
     # Fetch the note
     note = personal_posts_conf.find_one({'_id': share['note_id']})
     if not note:
-        abort(404)
+        # Original note may have been deleted after sharing; treat link as unavailable.
+        return render_template('shared_note.html', expired=True), 410
 
     # Decrypt note content (note belongs to the share owner)
     note_owner_id = str(share.get('owner_id', note.get('user_id', '')))
@@ -9414,107 +9417,111 @@ def api_restore_note_version(post_id, version_id):
 @limits(calls=15, period=60)
 def api_decide_note_proposal(version_id):
     """Owner accepts/rejects contributor proposals for shared notes."""
-    ver_id = safe_object_id(version_id)
-    if not ver_id:
-        return jsonify({'error': 'Invalid proposal ID'}), 400
+    try:
+        ver_id = safe_object_id(version_id)
+        if not ver_id:
+            return jsonify({'error': 'Invalid proposal ID'}), 400
 
-    proposal = note_versions_conf.find_one({'_id': ver_id})
-    if not proposal or proposal.get('event_type') != 'proposal':
-        return jsonify({'error': 'Proposal not found'}), 404
+        proposal = note_versions_conf.find_one({'_id': ver_id})
+        if not proposal or proposal.get('event_type') != 'proposal':
+            return jsonify({'error': 'Proposal not found'}), 404
 
-    note_id = proposal.get('note_id')
-    note = personal_posts_conf.find_one({'_id': note_id, 'user_id': ObjectId(current_user.id)})
-    if not note:
-        return jsonify({'error': 'Unauthorized'}), 403
+        note_id = proposal.get('note_id')
+        note = personal_posts_conf.find_one({'_id': note_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Unauthorized'}), 403
 
-    data = request.get_json() or {}
-    action = (data.get('action') or '').strip().lower()
-    decision_summary = (data.get('edit_summary') or '').strip()[:180]
+        data = request.get_json() or {}
+        action = (data.get('action') or '').strip().lower()
+        decision_summary = (data.get('edit_summary') or '').strip()[:180]
 
-    if proposal.get('status') != 'pending':
-        return jsonify({'error': 'Proposal already reviewed'}), 400
+        if proposal.get('status') != 'pending':
+            return jsonify({'error': 'Proposal already reviewed'}), 400
 
-    if action == 'reject':
+        if action == 'reject':
+            note_versions_conf.update_one(
+                {'_id': ver_id},
+                {'$set': {
+                    'status': 'rejected',
+                    'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+                    'reviewed_by': ObjectId(current_user.id),
+                    'decision_summary': decision_summary or 'Rejected by owner'
+                }}
+            )
+            return jsonify({'success': True, 'status': 'rejected'})
+
+        if action != 'accept':
+            return jsonify({'error': 'Invalid action'}), 400
+
+        current_plain = _decrypt_note_record(note)
+        base_plain = proposal.get('base_content_plain') or decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
+        proposed_plain = proposal.get('proposed_content_plain') or decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
+
+        merged_content = (data.get('merged_content') or '').strip()
+
+        # If note changed since proposal base, require merge content from owner.
+        if current_plain != base_plain and not merged_content:
+            return jsonify({
+                'error': 'conflict',
+                'message': 'The note changed after this proposal was created. Review merge preview.',
+                'current_content': current_plain,
+                'incoming_content': proposed_plain,
+                'merge_preview': build_merge_preview_text(current_plain, proposed_plain),
+                'diff_text': build_unified_diff_text(current_plain, proposed_plain)
+            }), 409
+
+        final_plain = (merged_content or proposed_plain).strip()[:8000]
+        final_encrypted = encrypt_note(final_plain, user_id=current_user.id)
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Snapshot current note before applying accepted proposal.
+        note_versions_conf.insert_one({
+            'note_id': note_id,
+            'share_id': proposal.get('share_id'),
+            'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
+            'editor_id': ObjectId(current_user.id),
+            'content': note.get('content', ''),
+            'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+            'content_plain': current_plain,
+            'encrypted': True,
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': 'Backup before accepting proposal',
+            'created_at': now
+        })
+
+        personal_posts_conf.update_one(
+            {'_id': note_id},
+            {'$set': {
+                'content': final_encrypted,
+                'encrypted': True,
+                'content_owner_id': ObjectId(current_user.id),
+                'updated_at': now
+            }}
+        )
+
         note_versions_conf.update_one(
             {'_id': ver_id},
             {'$set': {
-                'status': 'rejected',
-                'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+                'status': 'accepted',
+                'reviewed_at': now,
                 'reviewed_by': ObjectId(current_user.id),
-                'decision_summary': decision_summary or 'Rejected by owner'
+                'decision_summary': decision_summary or 'Accepted by owner',
+                'accepted_content': final_encrypted
             }}
         )
-        return jsonify({'success': True, 'status': 'rejected'})
 
-    if action != 'accept':
-        return jsonify({'error': 'Invalid action'}), 400
+        index_note_to_meili(str(note_id), decrypted_content=final_plain)
 
-    current_plain = _decrypt_note_record(note, share)
-    base_plain = proposal.get('base_content_plain') or decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
-    proposed_plain = proposal.get('proposed_content_plain') or decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
+        # Notify owner sessions and collaborators in the share room.
+        socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))
+        if proposal.get('share_id'):
+            socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat()}, room=proposal.get('share_id'))
 
-    merged_content = (data.get('merged_content') or '').strip()
-
-    # If note changed since proposal base, require merge content from owner.
-    if current_plain != base_plain and not merged_content:
-        return jsonify({
-            'error': 'conflict',
-            'message': 'The note changed after this proposal was created. Review merge preview.',
-            'current_content': current_plain,
-            'incoming_content': proposed_plain,
-            'merge_preview': build_merge_preview_text(current_plain, proposed_plain),
-            'diff_text': build_unified_diff_text(current_plain, proposed_plain)
-        }), 409
-
-    final_plain = (merged_content or proposed_plain).strip()[:8000]
-    final_encrypted = encrypt_note(final_plain, user_id=current_user.id)
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    # Snapshot current note before applying accepted proposal.
-    note_versions_conf.insert_one({
-        'note_id': note_id,
-        'share_id': proposal.get('share_id'),
-        'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
-        'editor_id': ObjectId(current_user.id),
-        'content': note.get('content', ''),
-        'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-        'content_plain': current_plain,
-        'encrypted': True,
-        'event_type': 'snapshot',
-        'status': 'applied',
-        'edit_summary': 'Backup before accepting proposal',
-        'created_at': now
-    })
-
-    personal_posts_conf.update_one(
-        {'_id': note_id},
-        {'$set': {
-            'content': final_encrypted,
-            'encrypted': True,
-            'content_owner_id': ObjectId(current_user.id),
-            'updated_at': now
-        }}
-    )
-
-    note_versions_conf.update_one(
-        {'_id': ver_id},
-        {'$set': {
-            'status': 'accepted',
-            'reviewed_at': now,
-            'reviewed_by': ObjectId(current_user.id),
-            'decision_summary': decision_summary or 'Accepted by owner',
-            'accepted_content': final_encrypted
-        }}
-    )
-
-    index_note_to_meili(str(note_id), decrypted_content=final_plain)
-
-    # Notify owner sessions and collaborators in the share room.
-    socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))
-    if proposal.get('share_id'):
-        socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat()}, room=proposal.get('share_id'))
-
-    return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat()})
+        return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat()})
+    except Exception as e:
+        app.logger.error(f"Failed to process proposal decision {version_id}: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error while reviewing proposal'}), 500
 
 
 # --- Note Discussion Routes (Login Required) ---

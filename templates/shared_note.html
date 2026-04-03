@@ -26,8 +26,8 @@
         {% if expired %}
         <div class="error-state">
             <i class="fas fa-hourglass-end"></i>
-            <h2>Link Expired</h2>
-            <p>This sharing link has expired or been revoked by the owner.</p>
+            <h2>Link Unavailable</h2>
+            <p>This sharing link has expired, been revoked, or was deleted by the owner.</p>
             <a href="{{ url_for('home') }}" class="btn comment-btn">Go Home</a>
         </div>
         {% elif requires_code %}
@@ -111,8 +111,14 @@
                     </button>
                     {% endif %}
                     {% if is_owner %}
+                    <button id="view-version-control-btn" class="btn btn-history" type="button">
+                        <i class="fas fa-clock-rotate-left"></i> Version Control
+                    </button>
+                    <button id="view-owner-links-btn" class="btn btn-history" type="button">
+                        <i class="fas fa-link"></i> My Share Links
+                    </button>
                     <button id="view-history-btn" class="btn btn-history" type="button">
-                        Access History
+                        <i class="fas fa-chart-line"></i> Access History
                     </button>
                     {% endif %}
                 </div>
@@ -160,7 +166,7 @@
                             <i class="fas fa-times"></i> Cancel
                         </button>
                         <button id="save-shared-btn" class="btn comment-btn">
-                            <i class="fas fa-save"></i> Save Changes
+                             Save Changes
                         </button>
                     </div>
                 </div>
@@ -221,6 +227,17 @@
                     <i class="fas fa-pen"></i> Edit
                 </button>
                 {% endif %}
+                {% if is_owner %}
+                <button id="view-version-control-btn" class="btn btn-history" type="button">
+                    <i class="fas fa-clock-rotate-left"></i> Version Control
+                </button>
+                <button id="view-owner-links-btn" class="btn btn-history" type="button">
+                    <i class="fas fa-link"></i> My Share Links
+                </button>
+                <button id="view-history-btn" class="btn btn-history" type="button">
+                    <i class="fas fa-chart-line"></i> Access History
+                </button>
+                {% endif %}
             </div>
             {% if permissions == 'edit' and not is_owner %}
             <div style="padding: 0.55rem 1.5rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
@@ -266,7 +283,7 @@
                         <i class="fas fa-times"></i> Cancel
                     </button>
                     <button id="save-shared-btn" class="btn comment-btn">
-                        <i class="fas fa-save"></i> Save Changes
+                         Save Changes
                     </button>
                 </div>
             </div>
@@ -341,6 +358,58 @@
                 </div>
                 <div id="history-list" class="history-list">
                     <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading context...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="owner-links-modal" class="history-modal">
+            <div class="history-modal-content" style="max-width: 640px;">
+                <div class="history-modal-header">
+                    <h3>My Active Share Links</h3>
+                    <button id="close-owner-links-btn" class="close-btn">&times;</button>
+                </div>
+                <div id="owner-links-list" class="history-list">
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading links...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="version-control-modal" class="history-modal">
+            <div class="history-modal-content" style="max-width: 820px;">
+                <div class="history-modal-header">
+                    <h3>Version Control</h3>
+                    <button id="close-version-control-btn" class="close-btn">&times;</button>
+                </div>
+                <div id="version-control-list" class="history-list">
+                    <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading versions...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="merge-conflict-modal" class="history-modal" onclick="if(event.target === this) closeMergeConflictModal()">
+            <div class="history-modal-content" style="max-width: 920px; text-align: left; max-height: 85vh; overflow-y: auto;">
+                <div class="history-modal-header">
+                    <h3><i class="fas fa-code-compare"></i> Merge Required</h3>
+                    <button id="close-merge-conflict-btn" class="close-btn">&times;</button>
+                </div>
+                <p style="font-size: 0.86rem; color: #666; margin: 0 0 0.75rem 0;">The note changed after this proposal was created. Review both versions and save a merged result.</p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div>
+                        <label style="font-size:0.78rem; color:#777; font-weight:600;">Current version</label>
+                        <textarea id="merge-current-content" readonly style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fafafa;"></textarea>
+                    </div>
+                    <div>
+                        <label style="font-size:0.78rem; color:#777; font-weight:600;">Proposed version</label>
+                        <textarea id="merge-incoming-content" readonly style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fff8f8;"></textarea>
+                    </div>
+                </div>
+                <div style="margin-top:0.7rem;">
+                    <label style="font-size:0.78rem; color:#777; font-weight:600;">Suggested merge</label>
+                    <textarea id="merge-preview-content" style="width:100%; min-height:180px; border:1px solid #ccc; border-radius:8px; padding:0.6rem; font-size:0.83rem;"></textarea>
+                </div>
+                <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
+                    <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>
+                    <button type="button" id="save-merge-btn" class="btn comment-btn">Save Merged Note</button>
                 </div>
             </div>
         </div>
@@ -713,6 +782,81 @@
             padding: 0.1rem 0.4rem;
             border-radius: 4px;
             margin-left: 0.5rem;
+        }
+
+        .owner-link-item,
+        .version-row {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 0.75rem;
+            margin-bottom: 0.65rem;
+            background: #fff;
+        }
+
+        .owner-link-url {
+            font-size: 0.78rem;
+            color: #555;
+            word-break: break-all;
+            margin-bottom: 0.55rem;
+        }
+
+        .owner-link-actions,
+        .version-actions {
+            display: flex;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+        }
+
+        .tiny-btn {
+            border: 1px solid #ddd;
+            background: #f7f7f7;
+            color: #444;
+            border-radius: 7px;
+            padding: 0.28rem 0.55rem;
+            font-size: 0.74rem;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .tiny-btn:hover {
+            background: #efefef;
+        }
+
+        .tiny-btn.accept {
+            border-color: #b9ddc1;
+            background: #e8f5e9;
+            color: #1b5e20;
+        }
+
+        .tiny-btn.reject {
+            border-color: #f5c8c8;
+            background: #ffebee;
+            color: #b71c1c;
+        }
+
+        .tiny-btn.warn {
+            border-color: #f5c8c8;
+            background: #fff5f5;
+            color: #b71c1c;
+        }
+
+        .version-meta {
+            font-size: 0.74rem;
+            color: #777;
+            margin-bottom: 0.4rem;
+        }
+
+        .version-preview {
+            font-size: 0.8rem;
+            color: #444;
+            white-space: pre-wrap;
+            max-height: 90px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .version-preview.expanded {
+            max-height: none;
         }
 
         /* Cancel Button */
@@ -2130,10 +2274,335 @@
 
         // --- History Modal Logic ---
         {% if is_owner %}
+        const SHARED_NOTE_ID = '{{ note_id }}';
+        window.currentSharedNoteId = SHARED_NOTE_ID;
         const historyBtn = document.getElementById('view-history-btn');
         const historyModal = document.getElementById('history-modal');
         const historyList = document.getElementById('history-list');
         const closeHistoryBtn = document.getElementById('close-history-btn');
+        const ownerLinksBtn = document.getElementById('view-owner-links-btn');
+        const ownerLinksModal = document.getElementById('owner-links-modal');
+        const ownerLinksList = document.getElementById('owner-links-list');
+        const closeOwnerLinksBtn = document.getElementById('close-owner-links-btn');
+        const versionBtn = document.getElementById('view-version-control-btn');
+        const versionModal = document.getElementById('version-control-modal');
+        const versionList = document.getElementById('version-control-list');
+        const closeVersionBtn = document.getElementById('close-version-control-btn');
+        const mergeModal = document.getElementById('merge-conflict-modal');
+        const closeMergeBtn = document.getElementById('close-merge-conflict-btn');
+
+        window.closeMergeConflictModal = function () {
+            if (!mergeModal) return;
+            mergeModal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        window.openMergeConflictModal = function (payload) {
+            const currentEl = document.getElementById('merge-current-content');
+            const incomingEl = document.getElementById('merge-incoming-content');
+            const previewEl = document.getElementById('merge-preview-content');
+            if (!mergeModal || !currentEl || !incomingEl || !previewEl) return;
+
+            currentEl.value = payload.current_content || '';
+            incomingEl.value = payload.incoming_content || '';
+            previewEl.value = payload.merge_preview || payload.incoming_content || '';
+            mergeModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeVersionModal = function () {
+            if (!versionModal) return;
+            versionModal.style.display = 'none';
+            document.body.style.overflow = '';
+        };
+
+        window.openVersionModal = function () {
+            if (!versionModal) return;
+            versionModal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            window.loadVersionHistory(SHARED_NOTE_ID);
+        };
+
+        window.loadVersionHistory = async function (noteId) {
+            if (!versionList) return;
+            versionList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading versions...</div>';
+
+            try {
+                const response = await fetch(`/personal_post/versions/${noteId}`);
+                const versions = await response.json();
+
+                if (!response.ok) {
+                    versionList.innerHTML = `<p style="color:red; text-align:center;">${versions.error || 'Failed to load versions.'}</p>`;
+                    return;
+                }
+
+                if (!Array.isArray(versions) || versions.length === 0) {
+                    versionList.innerHTML = '<div class="version-empty"><i class="fas fa-clock-rotate-left" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.4;"></i>No edit history yet.<br><small style="color: #bbb;">Versions are recorded when someone edits via a shared link.</small></div>';
+                    return;
+                }
+
+                versionList.innerHTML = versions.map((v, i) => {
+                    const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
+                    const isProposal = v.event_type === 'proposal';
+                    const isPending = v.status === 'pending';
+                    const previewSource = isProposal ? (v.proposed_content || '') : (v.content || '');
+                    const preview = previewSource.substring(0, 200);
+                    const hasMore = previewSource.length > 200;
+                    const summary = v.edit_summary ? `<div style="font-size:0.75rem;color:#777;margin-top:0.2rem;">${(v.edit_summary || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : '';
+                    const badge = isProposal
+                        ? `<span style="font-size:0.68rem; padding:0.12rem 0.45rem; border-radius:999px; background:${isPending ? '#fff3cd' : (v.status === 'accepted' ? '#e8f5e9' : '#f5f5f5')}; color:${isPending ? '#8a6d3b' : (v.status === 'accepted' ? '#2e7d32' : '#777')}; border:1px solid ${isPending ? '#f0d98a' : (v.status === 'accepted' ? '#c8e6c9' : '#ddd')};">${isPending ? 'Pending proposal' : ('Proposal ' + (v.status || 'reviewed'))}</span>`
+                        : '<span style="font-size:0.68rem; padding:0.12rem 0.45rem; border-radius:999px; background:#f0f0f0; color:#666; border:1px solid #ddd;">Snapshot</span>';
+
+                    let actions = '';
+                    if (isProposal) {
+                        actions += `<button class="tiny-btn" onclick="window.toggleVersionPreview('${i}')">${hasMore ? 'Show content' : 'View content'}</button>`;
+                        actions += `<button class="tiny-btn" onclick="window.showVersionDiff('${i}')">Side-by-side diff</button>`;
+                        if (isPending) {
+                            actions += `<button class="tiny-btn accept" onclick="window.reviewProposal('${v._id}', 'accept', '${i}')">Accept</button>`;
+                            actions += `<button class="tiny-btn reject" onclick="window.reviewProposal('${v._id}', 'reject', '${i}')">Reject</button>`;
+                        }
+                    } else {
+                        if (hasMore) {
+                            actions += `<button class="tiny-btn" onclick="window.toggleVersionPreview('${i}')">Show full content</button>`;
+                        }
+                        actions += `<button class="tiny-btn" onclick="window.showVersionDiff('${i}')">Side-by-side diff</button>`;
+                        if (v.can_restore) {
+                            actions += `<button class="tiny-btn warn" onclick="window.restoreVersion('${v._id}')">Restore</button>`;
+                        }
+                    }
+
+                    return `
+                        <div class="version-row">
+                            <div class="version-meta"><strong>${v.editor_name}</strong> ${badge} <span style="float:right;">${ts}</span></div>
+                            ${summary}
+                            <div class="version-preview" id="vp-${i}">${preview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}${hasMore ? '...' : ''}</div>
+                            <div class="version-actions">${actions}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                window._sharedVersionRows = {};
+                window._sharedVersionContents = {};
+                versions.forEach((v, i) => {
+                    window._sharedVersionRows[i] = v;
+                    window._sharedVersionContents[i] = (v.event_type === 'proposal') ? (v.proposed_content || '') : (v.content || '');
+                    if (v.event_type !== 'proposal') {
+                        const older = versions[i + 1];
+                        v.compare_base = older && older.content ? older.content : '';
+                    }
+                });
+            } catch (e) {
+                versionList.innerHTML = '<div class="version-empty" style="color:#d32f2f;">Failed to load version history.</div>';
+                console.error('Error loading shared versions:', e);
+            }
+        };
+
+        window.toggleVersionPreview = function (index) {
+            const el = document.getElementById(`vp-${index}`);
+            if (!el) return;
+            const btn = el.parentElement.querySelector('.tiny-btn');
+            if (!btn) return;
+
+            if (el.classList.contains('expanded')) {
+                el.classList.remove('expanded');
+                const preview = (window._sharedVersionContents[index] || '').substring(0, 200);
+                el.textContent = preview + '...';
+                btn.textContent = 'Show full content';
+            } else {
+                el.classList.add('expanded');
+                el.textContent = window._sharedVersionContents[index] || '';
+                btn.textContent = 'Show less';
+            }
+        };
+
+        window.showVersionDiff = function (index) {
+            const row = window._sharedVersionRows && window._sharedVersionRows[index];
+            if (!row) return;
+            const left = row.event_type === 'proposal' ? (row.current_content || '') : (row.compare_base || '');
+            const right = row.event_type === 'proposal' ? (row.proposed_content || '') : (row.content || '');
+            window.closeVersionModal();
+            window.openMergeConflictModal({
+                current_content: left,
+                incoming_content: right,
+                merge_preview: row.merge_preview || right
+            });
+        };
+
+        window.performProposalDecision = async function (proposalId, action, csrfToken, mergedContent) {
+            const payload = { action: action, edit_summary: action === 'accept' ? 'Accepted contributor proposal' : 'Rejected contributor proposal' };
+            if (mergedContent && mergedContent.trim()) payload.merged_content = mergedContent;
+
+            const response = await fetch(`/personal_post/proposal/${proposalId}/decision`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const raw = await response.text();
+            let result = {};
+            try {
+                result = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                result = { error: response.ok ? 'Unexpected server response' : 'Server error. Please try again.' };
+            }
+
+            if (!response.ok || !result.success) {
+                if (result.error === 'conflict') {
+                    window.closeVersionModal();
+                    window.openMergeConflictModal(result);
+                    const saveMergeBtn = document.getElementById('save-merge-btn');
+                    if (saveMergeBtn) {
+                        saveMergeBtn.onclick = async () => {
+                            const previewEl = document.getElementById('merge-preview-content');
+                            const merged = previewEl ? previewEl.value : '';
+                            await window.performProposalDecision(proposalId, action, csrfToken, merged);
+                            window.closeMergeConflictModal();
+                        };
+                    }
+                } else {
+                    alert(result.error || 'Could not review proposal.');
+                }
+                return;
+            }
+
+            if (result.status === 'accepted' && window.currentSharedNoteId) {
+                const noteCard = document.querySelector('.note-content.rendered-note');
+                if (noteCard && result.content) {
+                    noteCard.setAttribute('data-raw', result.content);
+                    noteCard.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(result.content) : result.content;
+                }
+            }
+
+            window.closeMergeConflictModal();
+            window.closeVersionModal();
+
+            if (typeof window.showFlashMessage === 'function') {
+                window.showFlashMessage(result.status === 'accepted' ? 'Proposal accepted and applied.' : 'Proposal rejected.', 'success');
+            }
+            window.loadVersionHistory(SHARED_NOTE_ID);
+        };
+
+        window.reviewProposal = async function (proposalId, action, index) {
+            const row = window._sharedVersionRows && window._sharedVersionRows[index];
+            if (!row) return;
+            const csrfToken = '{{ csrf_token() }}';
+            let mergedContent = undefined;
+            if (action === 'accept') {
+                const useMerge = confirm('Accept this proposal? Click OK to review merge text first, or Cancel to accept as-is.');
+                if (useMerge) {
+                    window.closeVersionModal();
+                    window.openMergeConflictModal({
+                        current_content: row.current_content || '',
+                        incoming_content: row.proposed_content || '',
+                        merge_preview: row.proposed_content || ''
+                    });
+                    const saveMergeBtn = document.getElementById('save-merge-btn');
+                    if (saveMergeBtn) {
+                        saveMergeBtn.onclick = async () => {
+                            const previewEl = document.getElementById('merge-preview-content');
+                            mergedContent = previewEl ? previewEl.value : '';
+                            await window.performProposalDecision(proposalId, action, csrfToken, mergedContent);
+                            window.closeMergeConflictModal();
+                        };
+                    }
+                    return;
+                }
+            }
+            await window.performProposalDecision(proposalId, action, csrfToken, mergedContent);
+        };
+
+        window.restoreVersion = async function (versionId) {
+            if (!SHARED_NOTE_ID) return;
+            if (typeof window.showCustomConfirm === 'function') {
+                window.showCustomConfirm('Restore this version? Current note content will be replaced.', async confirmed => {
+                    if (confirmed) {
+                        await window.performRestoreVersion(versionId);
+                    }
+                });
+                return;
+            }
+            await window.performRestoreVersion(versionId);
+        };
+
+        window.performRestoreVersion = async function (versionId) {
+            const csrfToken = '{{ csrf_token() }}';
+            const response = await fetch(`/personal_post/version/restore/${SHARED_NOTE_ID}/${versionId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) {
+                alert(result.error || 'Failed to restore version.');
+                return;
+            }
+            const noteCard = document.querySelector('.note-content.rendered-note');
+            if (noteCard) {
+                noteCard.setAttribute('data-raw', result.content || '');
+                noteCard.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(result.content || '') : (result.content || '');
+            }
+            if (typeof window.showFlashMessage === 'function') window.showFlashMessage('Version restored successfully.', 'success');
+            window.loadVersionHistory(SHARED_NOTE_ID);
+        };
+
+        window.loadOwnerLinks = async function () {
+            if (!ownerLinksList) return;
+            ownerLinksList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading links...</div>';
+            try {
+                const response = await fetch(`/personal_post/shares/${SHARED_NOTE_ID}`);
+                const shares = await response.json();
+                if (!response.ok) {
+                    ownerLinksList.innerHTML = `<p style="color:red; text-align:center;">${shares.error || 'Failed to load share links.'}</p>`;
+                    return;
+                }
+                if (!Array.isArray(shares) || shares.length === 0) {
+                    ownerLinksList.innerHTML = '<p style="text-align:center; color:#888; padding:1rem;">No active share links found.</p>';
+                    return;
+                }
+
+                ownerLinksList.innerHTML = shares.map(share => `
+                    <div class="owner-link-item">
+                        <div class="owner-link-url"><strong>${share.permissions || 'view'}</strong> access · ${share.share_url}</div>
+                        <div class="owner-link-actions">
+                            <button type="button" class="tiny-btn" onclick="window.open('${share.share_url}', '_blank', 'noopener')">Open</button>
+                            <button type="button" class="tiny-btn" data-copy-text="${share.share_url}" onclick="window.copyShareUrl('${share.share_url}', this)">Copy</button>
+                            <button type="button" class="tiny-btn warn" data-share-id="${share.share_id}" onclick="window.revokeSharedLink(this)">Revoke</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                ownerLinksList.innerHTML = '<p style="color:red; text-align:center;">Failed to load links.</p>';
+            }
+        };
+
+        window.revokeSharedLink = async function (btn) {
+            const shareId = btn.getAttribute('data-share-id');
+            if (!shareId) return;
+            if (!confirm('Revoke this link? It will stop working immediately.')) return;
+
+            btn.disabled = true;
+            try {
+                const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                });
+                const result = await response.json();
+                if (result.success) {
+                    await window.loadOwnerLinks();
+                } else {
+                    alert(result.error || 'Failed to revoke link');
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                alert('Network error. Please try again.');
+                btn.disabled = false;
+            }
+        };
 
         if (historyBtn && historyModal) {
             historyBtn.addEventListener('click', async () => {
@@ -2174,6 +2643,52 @@
 
             window.addEventListener('click', (e) => {
                 if (e.target === historyModal) historyModal.style.display = 'none';
+            });
+        }
+
+        if (ownerLinksBtn && ownerLinksModal) {
+            ownerLinksBtn.addEventListener('click', async () => {
+                ownerLinksModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+                await window.loadOwnerLinks();
+            });
+            if (closeOwnerLinksBtn) {
+                closeOwnerLinksBtn.addEventListener('click', () => {
+                    ownerLinksModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                });
+            }
+            window.addEventListener('click', (e) => {
+                if (e.target === ownerLinksModal) {
+                    ownerLinksModal.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+
+        if (versionBtn && versionModal) {
+            versionBtn.addEventListener('click', async () => {
+                window.openVersionModal();
+            });
+            if (closeVersionBtn) {
+                closeVersionBtn.addEventListener('click', () => {
+                    window.closeVersionModal();
+                });
+            }
+            if (closeMergeBtn) {
+                closeMergeBtn.addEventListener('click', () => {
+                    window.closeMergeConflictModal();
+                });
+            }
+            window.addEventListener('click', (e) => {
+                if (e.target === versionModal) window.closeVersionModal();
+                if (mergeModal && e.target === mergeModal) window.closeMergeConflictModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    window.closeVersionModal();
+                    window.closeMergeConflictModal();
+                }
             });
         }
         {% endif %}

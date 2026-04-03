@@ -2245,7 +2245,7 @@
         </div>
         <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
             <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>
-            <button type="button" id="save-merge-btn" class="btn comment-btn"><i class="fas fa-code-merge"></i> Save Merged Note</button>
+            <button type="button" id="save-merge-btn" class="btn comment-btn"> Save Merged Note</button>
         </div>
     </div>
 </div>
@@ -2966,6 +2966,7 @@
             if (!row) return;
             const left = row.event_type === 'proposal' ? (row.current_content || '') : (row.compare_base || '');
             const right = row.event_type === 'proposal' ? (row.proposed_content || '') : (row.content || '');
+            window.closeVersionModal();
             window.openMergeConflictModal({
                 current_content: left,
                 incoming_content: right,
@@ -3022,6 +3023,7 @@
             if (action === 'accept') {
                 const useMerge = confirm('Accept proposal. Click OK to review merge text first, or Cancel to accept as-is.');
                 if (useMerge) {
+                    window.closeVersionModal();
                     window.openMergeConflictModal({
                         current_content: row.current_content || '',
                         incoming_content: row.proposed_content || '',
@@ -3054,7 +3056,15 @@
                 },
                 body: JSON.stringify(payload)
             });
-            const result = await response.json();
+            const raw = await response.text();
+            let result = {};
+            try {
+                result = raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                result = {
+                    error: response.ok ? 'Unexpected server response' : 'Server error. Please try again.'
+                };
+            }
             if (!response.ok || !result.success) {
                 if (result.error === 'conflict') {
                     window.openMergeConflictModal(result);

@@ -3503,7 +3503,7 @@ def home():
     # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
     hot_posts = []
 
-    # Check cache first (1 minute TTL for freshness)
+    # Check cache first (1 minute TTL for the hot-ranking base)
     cache_key = 'home_hot_posts'
     if redis_cache:
         try:
@@ -3618,7 +3618,7 @@ def home():
                 with app.app_context():
                     hot_posts = prepare_posts(list(latest_posts_cursor))
 
-            # Cache for 1 minute
+            # Cache the hot-ranking base for 1 minute
             if redis_cache and hot_posts:
                 try:
                     redis_cache.setex(cache_key, 60, json.dumps(hot_posts, default=str))
@@ -3627,6 +3627,65 @@ def home():
 
         except Exception as e:
             app.logger.error(f"Failed to calculate hot posts: {e}")
+
+    def _mix_home_posts(hot_posts_list, fresh_posts_list, max_posts=5, max_posts_per_author=2):
+        mixed_posts = []
+        seen_post_ids = set()
+        author_counts = {}
+
+        def try_add_post(post_doc):
+            post_id = str(post_doc.get('_id') or post_doc.get('id') or '')
+            if not post_id or post_id in seen_post_ids:
+                return
+
+            author_id = str(post_doc.get('author_id') or '')
+            if author_id and author_counts.get(author_id, 0) >= max_posts_per_author:
+                return
+
+            mixed_posts.append(post_doc)
+            seen_post_ids.add(post_id)
+            if author_id:
+                author_counts[author_id] = author_counts.get(author_id, 0) + 1
+
+        hot_index = 0
+        fresh_index = 0
+        while len(mixed_posts) < max_posts and (hot_index < len(hot_posts_list) or fresh_index < len(fresh_posts_list)):
+            if hot_index < len(hot_posts_list):
+                try_add_post(hot_posts_list[hot_index])
+                hot_index += 1
+                if len(mixed_posts) >= max_posts:
+                    break
+
+            if fresh_index < len(fresh_posts_list):
+                try_add_post(fresh_posts_list[fresh_index])
+                fresh_index += 1
+                if len(mixed_posts) >= max_posts:
+                    break
+
+        for post_doc in hot_posts_list[hot_index:]:
+            if len(mixed_posts) >= max_posts:
+                break
+            try_add_post(post_doc)
+
+        for post_doc in fresh_posts_list[fresh_index:]:
+            if len(mixed_posts) >= max_posts:
+                break
+            try_add_post(post_doc)
+
+        return mixed_posts[:max_posts]
+
+    # Blend in fresh posts on every request so new content can surface immediately.
+    fresh_posts = []
+    try:
+        recent_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
+        recent_posts_cursor = posts_conf.find({'timestamp': {'$gte': recent_cutoff}}).sort('timestamp', -1).limit(10)
+        with app.app_context():
+            fresh_posts = prepare_posts(list(recent_posts_cursor))
+    except Exception as e:
+        app.logger.debug(f"Failed to load fresh homepage posts: {e}")
+
+    hot_posts = _mix_home_posts(hot_posts, fresh_posts)
+
     return render_template("home.html", username=current_user.username, active_page='home',
                            title=page_title, description=page_description,
                            meta_image=url_for('static', filename='og-image.png', _external=True),

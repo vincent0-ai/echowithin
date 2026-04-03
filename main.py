@@ -1800,12 +1800,10 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                         platform = 'iOS' if is_ios else 'non-iOS'
                         web_failed += 1
                         app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id_str}, body={resp_body}")
-                        # 404/410 mean subscription is gone. iOS 403s usually mean the APNs-backed
-                        # subscription is stale or no longer valid with the current VAPID config.
+                        # 404/410 are the only safe stale signals. 403 can be transient or
+                        # configuration-related, so keep the subscription and retry later.
                         if status_code in [404, 410]:
                             _remove_stale_push_subscription(sub, platform, user_id_str, f"status={status_code}")
-                        elif status_code == 403 and is_ios:
-                            _remove_stale_push_subscription(sub, platform, user_id_str, 'status=403')
                         elif status_code == 403:
                             app.logger.warning(
                                 f"Web push unauthorized ({platform}) for user {user_id_str}; kept subscription for retry"
@@ -1879,9 +1877,6 @@ def send_admin_broadcast_push(title, body, url=None):
                     is_ios = _is_ios_web_push_subscription(sub)
                     if status_code in [404, 410]:
                         _remove_stale_push_subscription(sub, 'iOS' if is_ios else 'non-iOS', str(sub.get('user_id', 'unknown')), f"status={status_code}")
-                        web_failed += 1
-                    elif status_code == 403 and is_ios:
-                        _remove_stale_push_subscription(sub, 'iOS', str(sub.get('user_id', 'unknown')), 'status=403')
                         web_failed += 1
                     elif status_code == 403:
                         web_failed += 1
@@ -1990,12 +1985,10 @@ def send_push_notifications_for_new_post(post_id_str):
                     user_id = sub.get('user_id', 'unknown')
                     failed_count += 1
                     app.logger.warning(f"Web push failed ({platform}): status={status_code}, user={user_id}, post={post_id_str}, body={resp_body}")
-                    # 404/410 mean the subscription is stale. iOS 403s usually indicate an APNs-backed
-                    # subscription that should be recreated with the current VAPID key pair.
+                    # 404/410 are the only safe stale signals. 403 can be transient or
+                    # configuration-related, so keep the subscription and retry later.
                     if status_code in [404, 410]:
                         _remove_stale_push_subscription(sub, platform, str(user_id), f"status={status_code}")
-                    elif status_code == 403 and is_ios:
-                        _remove_stale_push_subscription(sub, platform, str(user_id), 'status=403')
                     elif status_code == 403:
                         app.logger.warning(
                             f"Web push unauthorized ({platform}) for user {user_id}; kept subscription for retry"

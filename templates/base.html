@@ -925,31 +925,18 @@
         // Check current subscription status
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-            // Re-send subscription to server periodically to keep endpoint fresh.
-            // iOS endpoints can rotate more often, so use a shorter refresh window.
+            // Always upsert the current subscription on app load so the server can recover
+            // immediately after stale endpoints are removed. iOS renews more aggressively,
+            // so force a fresh subscription after the renewal window.
             const lastRefresh = localStorage.getItem('pushSubRefreshedAt');
             const refreshWindowMs = isIOSStandalone
                 ? 12 * 60 * 60 * 1000  // 12h for iOS PWA
                 : 5 * 24 * 60 * 60 * 1000; // 5 days elsewhere
-            if (!lastRefresh || (Date.now() - parseInt(lastRefresh)) > refreshWindowMs) {
-                console.log('Refreshing push subscription with server...');
-                try {
-                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    const resp = await fetch('/api/push/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                        body: JSON.stringify(subscription.toJSON())
-                    });
-                    if (resp.ok) {
-                        localStorage.setItem('pushSubRefreshedAt', Date.now().toString());
-                        console.log('Push subscription refreshed with server');
-                    }
-                } catch (err) {
-                    console.warn('Failed to refresh push subscription:', err);
-                }
-            } else {
-                console.log('Push subscription still fresh, skipping refresh');
-            }
+            const shouldForceRenew = !lastRefresh || (Date.now() - parseInt(lastRefresh, 10)) > refreshWindowMs;
+            await subscribeToPush(registration, {
+                existingSubscription: subscription,
+                forceRenew: shouldForceRenew
+            });
             return;
         }
 
@@ -1069,7 +1056,10 @@
         });
     }
 
-    async function subscribeToPush(registration) {
+    async function subscribeToPush(registration, options = {}) {
+        const forceRenew = options.forceRenew === true;
+        let subscription = options.existingSubscription || null;
+
         try {
             // Get the VAPID public key from the server
             const response = await fetch('/api/push/vapid-public-key');
@@ -1084,8 +1074,20 @@
             // Convert the public key to Uint8Array
             const applicationServerKey = urlBase64ToUint8Array(publicKey);
 
-            // Subscribe to push (reuse existing sub if present, retry once on AbortError)
-            let subscription = await registration.pushManager.getSubscription();
+            // Subscribe to push (reuse existing sub if present, or renew it when needed)
+            if (!subscription) {
+                subscription = await registration.pushManager.getSubscription();
+            }
+
+            if (forceRenew && subscription) {
+                try {
+                    await subscription.unsubscribe();
+                } catch (unsubErr) {
+                    console.warn('Failed to clear stale push subscription:', unsubErr);
+                }
+                subscription = null;
+            }
+
             if (!subscription) {
                 try {
                     subscription = await registration.pushManager.subscribe({

@@ -3597,11 +3597,24 @@ def home():
                         ]
                     }
                 }},
-                # 6. Sort by score and limit to the top 5
+                # 6. Sort by score and limit to 20 candidates for author dedup
                 {'$sort': {'hot_score': -1}},
-                {'$limit': 5}
+                {'$limit': 20}
             ]
-            hot_posts = list(posts_conf.aggregate(hot_posts_pipeline))
+            hot_posts_candidates = list(posts_conf.aggregate(hot_posts_pipeline))
+            
+            # Apply author diversity: cap 2 posts per author in top 5 for small communities
+            author_count = {}
+            hot_posts = []
+            for post in hot_posts_candidates:
+                author_id = str(post.get('author_id', ''))
+                author_count[author_id] = author_count.get(author_id, 0) + 1
+                # Allow up to 2 posts per author before moving to next
+                if author_count[author_id] <= 2:
+                    hot_posts.append(post)
+                    if len(hot_posts) >= 5:
+                        break
+            
             with app.app_context():
                 hot_posts = prepare_posts(hot_posts)
 

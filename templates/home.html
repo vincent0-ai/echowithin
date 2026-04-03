@@ -178,8 +178,6 @@
                 {% for post in hot_posts %}
                 <li>
                     <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                    <span class="stat-subtext">({{ post.comment_count if post.comment_count is defined else 0 }}
-                        comments)</span>
                 </li>
                 {% endfor %}
             </ul>

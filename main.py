@@ -5490,12 +5490,16 @@ def view_post(slug):
 
 @app.route('/api/posts/<post_id>/view', methods=['POST'])
 def api_record_post_view(post_id):
-    """Increment the view count for a post once per account (or IP for guests).
+    """Increment the view count for a post once per account (or browser visitor for guests).
 
     Each user/guest only contributes one view per post, ever.
     """
     try:
-        user_identifier = str(current_user.id) if current_user.is_authenticated else request.remote_addr
+        if current_user.is_authenticated:
+            user_identifier = str(current_user.id)
+        else:
+            visitor_id = request.headers.get('X-Visitor-ID') or request.cookies.get('echowithin_visitor_id')
+            user_identifier = f"visitor:{visitor_id}" if visitor_id else f"ip:{request.remote_addr}"
 
         # Check if this user has already viewed this post
         view_record = logs_conf.find_one({

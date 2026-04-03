@@ -1405,15 +1405,53 @@
         });
 
         // --- Post View Counter Logic ---
+        const VISITOR_COOKIE_NAME = 'echowithin_visitor_id';
+
+        function getOrCreateVisitorId() {
+            try {
+                const cookieMatch = document.cookie.match(new RegExp('(?:^|; )' + VISITOR_COOKIE_NAME + '=([^;]*)'));
+                if (cookieMatch && cookieMatch[1]) {
+                    return decodeURIComponent(cookieMatch[1]);
+                }
+
+                let visitorId = null;
+                try {
+                    visitorId = window.localStorage.getItem(VISITOR_COOKIE_NAME);
+                } catch (storageError) {
+                    visitorId = null;
+                }
+
+                if (!visitorId) {
+                    visitorId = (window.crypto && window.crypto.randomUUID)
+                        ? window.crypto.randomUUID()
+                        : `visitor-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+                    try {
+                        window.localStorage.setItem(VISITOR_COOKIE_NAME, visitorId);
+                    } catch (storageError) {
+                        // Ignore storage failures and rely on the cookie below.
+                    }
+                }
+
+                document.cookie = `${VISITOR_COOKIE_NAME}=${encodeURIComponent(visitorId)}; Max-Age=${60 * 60 * 24 * 365}; Path=/; SameSite=Lax`;
+                return visitorId;
+            } catch (err) {
+                return '';
+            }
+        }
+
         function recordPostView(postId) {
             if (!postId) return;
 
             const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const visitorId = getOrCreateVisitorId();
             // Track views per user per day in the database
             // Send a request to the server to increment the view count
             fetch(`/api/posts/${postId}/view`, {
                 method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken }
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Visitor-ID': visitorId
+                }
             })
                 .then(response => response.json())
                 .then(data => {

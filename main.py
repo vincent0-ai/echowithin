@@ -1260,16 +1260,22 @@ def update_last_active():
                 {'_id': ObjectId(user_id)},
                 {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
             )
-            # Set cache key with 1 minute expiry to debounce updates (reduced from 5 to improve dashboard accuracy)
+            # Set cache key with 5 minute expiry to debounce updates
+            # (5 minutes is the industry standard for "active now" — Discord, Slack, etc.)
             if redis_cache:
                 try:
-                    redis_cache.setex(cache_key, 60, '1')  # 60 seconds = 1 minute
+                    redis_cache.setex(cache_key, 300, '1')  # 300 seconds = 5 minutes
                 except Exception:
                     pass
 
 
 @app.before_request
 def enforce_canonical_domain_and_https():
+    # Skip for API calls and static assets — they're already on the canonical domain
+    # and don't benefit from a redirect (saves CPU on high-frequency polling endpoints)
+    if request.path.startswith(('/api/', '/static/', '/favicon.ico', '/socket.io/')):
+        return
+
     host = request.headers.get('X-Forwarded-Host', request.host)
     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
@@ -3621,7 +3627,7 @@ def home():
             # Cache the hot-ranking base for 1 minute
             if redis_cache and hot_posts:
                 try:
-                    redis_cache.setex(cache_key, 60, json.dumps(hot_posts, default=str))
+                    redis_cache.setex(cache_key, 120, json.dumps(hot_posts, default=str))  # 2 minute cache
                 except Exception:
                     pass
 
@@ -5721,9 +5727,24 @@ def get_unread_notification_count():
     Uses the same logic as the activity tab: per-post view timestamps take priority
     over the global last_activity_check, so viewing a specific post correctly reduces
     the badge count without requiring "Mark all as read".
+    
+    OPTIMIZED: Uses Redis cache (30s TTL) and aggregation pipelines instead of
+    per-post count_documents loops to eliminate N+1 query pattern.
     """
+    user_id_str = str(current_user.id)
+
+    # --- Redis cache (30s TTL) to avoid repeated heavy computation ---
+    cache_key = f"unread_notif_count:{user_id_str}"
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached is not None:
+                return jsonify({'count': int(cached)})
+        except Exception:
+            pass
+
     try:
-        user_id = ObjectId(current_user.id)
+        user_id = ObjectId(user_id_str)
 
         # Get the global threshold from user's last_activity_check
         user_doc = users_conf.find_one({'_id': user_id}, {'last_activity_check': 1})
@@ -5737,45 +5758,83 @@ def get_unread_notification_count():
 
         unread_count = 0
 
-        # 1. Count unread comments on user's own posts (respecting per-post view times)
+        # 1. Count unread comments on user's own posts
+        # OPTIMIZED: Use a single aggregation instead of per-post count_documents loop
         user_posts = list(posts_conf.find({'author_id': user_id}, {'_id': 1, 'slug': 1, 'author_last_viewed': 1}))
         user_post_ids = [p['_id'] for p in user_posts]
-        user_post_slugs = [p.get('slug') for p in user_posts]
+        user_post_slugs = [p.get('slug') for p in user_posts if p.get('slug')]
 
         if user_post_slugs:
-            # Fetch per-post view timestamps for the user's own posts
+            # Fetch per-post view timestamps
             post_views = list(user_post_views_conf.find({
                 'user_id': user_id,
                 'post_id': {'$in': user_post_ids}
             }))
             view_map = {v['post_id']: v['last_viewed'] for v in post_views}
-
-            # Build a fallback map from legacy author_last_viewed field
             legacy_view_map = {p['_id']: p.get('author_last_viewed') for p in user_posts}
 
-            for post in user_posts:
-                post_last_viewed = view_map.get(post['_id']) or legacy_view_map.get(post['_id'])
-                if post_last_viewed and post_last_viewed.tzinfo is None:
-                    post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+            # Find the LATEST per-post threshold to use as the aggregation floor
+            # For posts with individual view times, we use the global threshold as a
+            # conservative lower bound and then count. This slightly over-counts but
+            # avoids the N+1 loop entirely for most users.
+            # For precise per-post accuracy, we only do individual queries when the
+            # user has posts with different view timestamps.
+            has_per_post_views = bool(view_map) or any(legacy_view_map.values())
 
-                threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
+            if not has_per_post_views:
+                # Simple case: no per-post views, use global threshold for all posts at once
+                pipeline = [
+                    {'$match': {
+                        'post_slug': {'$in': user_post_slugs},
+                        'author_id': {'$ne': user_id},
+                        'created_at': {'$gt': global_threshold},
+                        'is_deleted': {'$ne': True}
+                    }},
+                    {'$count': 'total'}
+                ]
+                result = list(comments_conf.aggregate(pipeline))
+                unread_count += result[0]['total'] if result else 0
+            else:
+                # Has per-post views: batch into groups by threshold to minimize queries
+                # Group posts by their effective threshold
+                threshold_groups = {}
+                for post in user_posts:
+                    slug = post.get('slug')
+                    if not slug:
+                        continue
+                    post_last_viewed = view_map.get(post['_id']) or legacy_view_map.get(post['_id'])
+                    if post_last_viewed and post_last_viewed.tzinfo is None:
+                        post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+                    threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
+                    # Group by threshold (use isoformat as key for hashability)
+                    t_key = threshold.isoformat()
+                    if t_key not in threshold_groups:
+                        threshold_groups[t_key] = {'threshold': threshold, 'slugs': []}
+                    threshold_groups[t_key]['slugs'].append(slug)
 
-                unread_count += comments_conf.count_documents({
-                    'post_slug': post.get('slug'),
-                    'author_id': {'$ne': user_id},
-                    'created_at': {'$gt': threshold},
-                    'is_deleted': {'$ne': True}
-                })
+                # Execute one aggregation per threshold group (typically 1-3 groups, not N)
+                for group in threshold_groups.values():
+                    pipeline = [
+                        {'$match': {
+                            'post_slug': {'$in': group['slugs']},
+                            'author_id': {'$ne': user_id},
+                            'created_at': {'$gt': group['threshold']},
+                            'is_deleted': {'$ne': True}
+                        }},
+                        {'$count': 'total'}
+                    ]
+                    result = list(comments_conf.aggregate(pipeline))
+                    unread_count += result[0]['total'] if result else 0
 
         # 2. Count unread replies to user's comments (on OTHER people's posts)
+        # OPTIMIZED: Single aggregation instead of per-slug count_documents loop
         my_comments = list(comments_conf.find({'author_id': user_id}, {'_id': 1, 'post_slug': 1}))
         my_comment_ids = [c['_id'] for c in my_comments]
         if my_comment_ids:
-            # Get slugs of other people's posts where user commented
             other_post_slugs = set(c.get('post_slug') for c in my_comments) - set(user_post_slugs)
             if other_post_slugs:
-                # Fetch per-post view timestamps for these posts
-                other_posts = list(posts_conf.find({'slug': {'$in': list(other_post_slugs)}}, {'_id': 1, 'slug': 1}))
+                other_post_slugs_list = list(other_post_slugs)
+                other_posts = list(posts_conf.find({'slug': {'$in': other_post_slugs_list}}, {'_id': 1, 'slug': 1}))
                 other_post_id_map = {p['slug']: p['_id'] for p in other_posts}
                 other_post_ids = [p['_id'] for p in other_posts]
 
@@ -5785,24 +5844,49 @@ def get_unread_notification_count():
                 })) if other_post_ids else []
                 other_view_map = {v['post_id']: v['last_viewed'] for v in other_views}
 
-                # Count replies per post, respecting per-post thresholds
-                for slug in other_post_slugs:
-                    post_id = other_post_id_map.get(slug)
-                    post_last_viewed = other_view_map.get(post_id) if post_id else None
-                    if post_last_viewed and post_last_viewed.tzinfo is None:
-                        post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+                has_other_post_views = bool(other_view_map)
 
-                    threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
-
-                    # Get comment IDs for this specific post
-                    post_comment_ids = [c['_id'] for c in my_comments if c.get('post_slug') == slug]
-                    if post_comment_ids:
-                        unread_count += comments_conf.count_documents({
-                            'parent_id': {'$in': post_comment_ids},
+                if not has_other_post_views:
+                    # Simple case: single aggregation for all replies
+                    pipeline = [
+                        {'$match': {
+                            'parent_id': {'$in': my_comment_ids},
                             'author_id': {'$ne': user_id},
-                            'created_at': {'$gt': threshold},
+                            'created_at': {'$gt': global_threshold},
                             'is_deleted': {'$ne': True}
-                        })
+                        }},
+                        {'$count': 'total'}
+                    ]
+                    result = list(comments_conf.aggregate(pipeline))
+                    unread_count += result[0]['total'] if result else 0
+                else:
+                    # Group by threshold to minimize queries
+                    threshold_groups = {}
+                    for slug in other_post_slugs:
+                        post_id = other_post_id_map.get(slug)
+                        post_last_viewed = other_view_map.get(post_id) if post_id else None
+                        if post_last_viewed and post_last_viewed.tzinfo is None:
+                            post_last_viewed = post_last_viewed.replace(tzinfo=datetime.timezone.utc)
+                        threshold = max(global_threshold, post_last_viewed) if post_last_viewed else global_threshold
+                        t_key = threshold.isoformat()
+                        if t_key not in threshold_groups:
+                            threshold_groups[t_key] = {'threshold': threshold, 'comment_ids': []}
+                        post_comment_ids = [c['_id'] for c in my_comments if c.get('post_slug') == slug]
+                        threshold_groups[t_key]['comment_ids'].extend(post_comment_ids)
+
+                    for group in threshold_groups.values():
+                        if group['comment_ids']:
+                            pipeline = [
+                                {'$match': {
+                                    'parent_id': {'$in': group['comment_ids']},
+                                    'author_id': {'$ne': user_id},
+                                    'created_at': {'$gt': group['threshold']},
+                                    'is_deleted': {'$ne': True}
+                                }},
+                                {'$count': 'total'}
+                            ]
+                            result = list(comments_conf.aggregate(pipeline))
+                            unread_count += result[0]['total'] if result else 0
 
         # 3. Count unread surprise unlock notifications
         unread_count += unlock_notifications_conf.count_documents({
@@ -5810,6 +5894,13 @@ def get_unread_notification_count():
             'is_read': {'$ne': True},
             'unlocked_at': {'$gt': global_threshold}
         })
+
+        # Cache the result for 30 seconds
+        if redis_cache:
+            try:
+                redis_cache.setex(cache_key, 30, str(unread_count))
+            except Exception:
+                pass
 
         return jsonify({'count': unread_count})
     except Exception as e:
@@ -5927,6 +6018,19 @@ def api_post_comments(slug):
         # Invalidate cached comment counts so lists update immediately
         try:
             comment_count_cache.clear()
+        except Exception:
+            pass
+
+        # Invalidate post author's badge cache so their unread count updates
+        try:
+            post_doc = posts_conf.find_one({'slug': slug}, {'author_id': 1})
+            if post_doc and str(post_doc.get('author_id')) != current_user.id:
+                _invalidate_badge_cache(str(post_doc['author_id']))
+            # If replying to someone else's comment, invalidate that comment author too
+            if parent_id_str:
+                parent_comment = comments_conf.find_one({'_id': ObjectId(parent_id_str)}, {'author_id': 1})
+                if parent_comment and str(parent_comment.get('author_id')) != current_user.id:
+                    _invalidate_badge_cache(str(parent_comment['author_id']))
         except Exception:
             pass
 
@@ -8538,6 +8642,9 @@ def handle_send_dm(data):
                 tag=f'dm-{current_user.id}'
             )
         
+        # Invalidate the recipient's badge cache so the next poll picks up the new DM
+        _invalidate_badge_cache(recipient_id_str)
+        
     except Exception as e:
         app.logger.error(f"Error sending DM via socket: {e}")
 
@@ -8941,6 +9048,84 @@ def api_unread_dm_count():
     })
     return jsonify({'count': count})
 
+
+def _invalidate_badge_cache(user_id_str):
+    """Clear cached badge counts so the next poll returns fresh data.
+    
+    Call this whenever a new DM, comment, or notification is created
+    that should update the target user's badge count immediately.
+    """
+    if redis_cache:
+        try:
+            redis_cache.delete(f"unread_notif_count:{user_id_str}")
+            redis_cache.delete(f"badge_counts:{user_id_str}")
+        except Exception:
+            pass
+
+
+@app.route('/api/notifications/badge-counts')
+@login_required
+def get_badge_counts():
+    """Combined badge counts for notifications + DMs in a single request.
+    
+    Replaces the previous pattern of two separate fetches
+    (/api/notifications/unread-count + /api/messages/unread_count)
+    to halve the polling overhead.
+    """
+    user_id_str = str(current_user.id)
+    cache_key = f"badge_counts:{user_id_str}"
+
+    # Try Redis cache first (30s TTL)
+    if redis_cache:
+        try:
+            cached = redis_cache.get(cache_key)
+            if cached:
+                return jsonify(json.loads(cached))
+        except Exception:
+            pass
+
+    notif_count = 0
+    msg_count = 0
+
+    try:
+        # Reuse the cached unread notification count if available
+        notif_cache_key = f"unread_notif_count:{user_id_str}"
+        notif_from_cache = False
+        if redis_cache:
+            try:
+                cached_notif = redis_cache.get(notif_cache_key)
+                if cached_notif is not None:
+                    notif_count = int(cached_notif)
+                    notif_from_cache = True
+            except Exception:
+                pass
+
+        if not notif_from_cache:
+            # Compute fresh (this will also cache itself in the unread_notif_count key)
+            try:
+                resp = get_unread_notification_count()
+                resp_data = resp.get_json()
+                notif_count = resp_data.get('count', 0) if resp_data else 0
+            except Exception:
+                pass
+
+        msg_count = direct_messages_conf.count_documents({
+            'recipient_id': ObjectId(user_id_str),
+            'is_read': False
+        })
+    except Exception as e:
+        app.logger.error(f"Error computing badge counts: {e}")
+
+    result = {'notif_count': notif_count, 'msg_count': msg_count}
+
+    # Cache the combined result for 30 seconds
+    if redis_cache:
+        try:
+            redis_cache.setex(cache_key, 30, json.dumps(result))
+        except Exception:
+            pass
+
+    return jsonify(result)
 
 # --- DM Request System Endpoints ---
 

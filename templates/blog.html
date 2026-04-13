@@ -502,8 +502,8 @@
 
         (function initActivityPolling() {
             loadUnreadBadge();
-            // Poll every 60 seconds
-            setInterval(loadUnreadBadge, 60000);
+            // Poll every 2 minutes (SocketIO events handle real-time updates)
+            setInterval(loadUnreadBadge, 120000);
         })();
         {% endif %}
 

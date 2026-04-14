@@ -3458,6 +3458,17 @@ def service_worker():
     return response
 
 
+@app.route('/offline')
+def offline_page():
+    """Offline fallback page for the PWA service worker.
+    
+    This page is precached by the service worker during installation so it's
+    available when the user is offline. It displays links to all cached pages
+    the user can still access without a network connection.
+    """
+    return render_template('offline.html', active_page='offline', title='Offline')
+
+
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():

@@ -79,7 +79,7 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activate event: clean up old caches
+// Activate event: clean up old caches and claim clients
 self.addEventListener('activate', event => {
   const currentCaches = [STATIC_CACHE, PAGES_CACHE, POSTS_CACHE];
   event.waitUntil(
@@ -92,15 +92,25 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      // Claim clients AFTER old caches are cleaned up, inside waitUntil
+      // so the SW controls pages immediately and the first fetch is intercepted.
+      return self.clients.claim();
     })
   );
-  self.clients.claim();
 });
 
 // Fetch event: Network-first for pages, Cache-first for static assets
 self.addEventListener('fetch', event => {
   const { request } = event;
-  const url = new URL(request.url);
+
+  // Safety: parse URL — if it somehow fails, let the browser handle it
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch (_) {
+    return;
+  }
 
   // For non-GET requests (e.g. form POSTs), try network and fall back to offline page
   if (request.method !== 'GET') {
@@ -112,17 +122,37 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Skip external requests
-  if (url.origin !== location.origin) {
-    return;
-  }
-
   // Skip API requests - they should always go to network
-  if (url.pathname.startsWith('/api/')) {
+  if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
     return;
   }
 
-  // Static assets: Cache-first strategy
+  // External requests: serve from cache if precached, otherwise pass through
+  // This ensures polyfill.io, MathJax etc. are served from cache when offline
+  if (url.origin !== location.origin) {
+    event.respondWith(
+      caches.match(request).then(cachedResponse => {
+        if (cachedResponse) {
+          // Serve from cache, update in background
+          event.waitUntil(
+            fetch(request).then(response => {
+              if (response && (response.ok || response.type === 'opaque')) {
+                caches.open(STATIC_CACHE).then(cache => cache.put(request, response));
+              }
+            }).catch(() => { })
+          );
+          return cachedResponse;
+        }
+        return fetch(request);
+      }).catch(() => {
+        // External request failed and not cached — nothing we can do
+        return new Response('', { status: 408, statusText: 'Offline' });
+      })
+    );
+    return;
+  }
+
+  // Static assets: Cache-first strategy with offline resilience
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(
       caches.match(request).then(cachedResponse => {
@@ -148,6 +178,10 @@ self.addEventListener('fetch', event => {
           }
           return response;
         });
+      }).catch(() => {
+        // Static asset not cached and network failed — return empty response
+        // to prevent the entire page from breaking
+        return new Response('', { status: 408, statusText: 'Offline' });
       })
     );
     return;
@@ -248,7 +282,9 @@ self.addEventListener('fetch', event => {
         if (request.mode === 'navigate' || acceptHeader.includes('text/html')) {
           return offlineFallbackResponse();
         }
-        return caches.match(request);
+        return caches.match(request).then(cached => {
+          return cached || new Response('', { status: 408, statusText: 'Offline' });
+        });
       })
   );
 });

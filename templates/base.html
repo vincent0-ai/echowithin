@@ -925,13 +925,26 @@
         // Check current subscription status
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-            // Always upsert the current subscription on app load so the server can recover
-            // immediately after stale endpoints are removed. iOS renews more aggressively,
-            // so force a fresh subscription after the renewal window.
+            // Debounce: skip the server sync if we recently confirmed
+            // the subscription. This avoids hammering /api/push/subscribe
+            // on every single page load (which also triggers iOS empty-body
+            // errors when the PWA is suspended mid-fetch).
+            const lastSync = parseInt(localStorage.getItem('pushSubSyncedAt') || '0', 10);
+            const syncIntervalMs = isIOSStandalone
+                ? 1 * 60 * 60 * 1000    // 1 hour for iOS PWA
+                : 6 * 60 * 60 * 1000;   // 6 hours elsewhere
+
+            if ((Date.now() - lastSync) < syncIntervalMs) {
+                // Recent sync — subscription is current, nothing to do
+                return;
+            }
+
+            // Check if we need a full re-subscribe (new endpoint) to
+            // recover from silently-invalidated iOS subscriptions.
             const lastRefresh = localStorage.getItem('pushSubRefreshedAt');
             const refreshWindowMs = isIOSStandalone
-                ? 12 * 60 * 60 * 1000  // 12h for iOS PWA
-                : 5 * 24 * 60 * 60 * 1000; // 5 days elsewhere
+                ? 3 * 24 * 60 * 60 * 1000   // 3 days for iOS PWA
+                : 7 * 24 * 60 * 60 * 1000;  // 7 days elsewhere
             const shouldForceRenew = !lastRefresh || (Date.now() - parseInt(lastRefresh, 10)) > refreshWindowMs;
             await subscribeToPush(registration, {
                 existingSubscription: subscription,
@@ -1129,12 +1142,15 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify(subscription.toJSON())
+                body: JSON.stringify(subscription.toJSON()),
+                keepalive: true  // Ensures iOS completes the request even if the PWA is suspended
             });
 
             if (subResponse.ok) {
                 console.log('Successfully subscribed to push notifications');
-                localStorage.setItem('pushSubRefreshedAt', Date.now().toString());
+                const nowStr = Date.now().toString();
+                localStorage.setItem('pushSubRefreshedAt', nowStr);
+                localStorage.setItem('pushSubSyncedAt', nowStr);
             } else {
                 console.warn('Failed to save subscription on server');
             }

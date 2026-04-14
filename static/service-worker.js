@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v19';
-const STATIC_CACHE = 'echowithin-static-v19';
-const PAGES_CACHE = 'echowithin-pages-v19';
-const POSTS_CACHE = 'echowithin-posts-v19';
+const CACHE_NAME = 'echowithin-v20';
+const STATIC_CACHE = 'echowithin-static-v20';
+const PAGES_CACHE = 'echowithin-pages-v20';
+const POSTS_CACHE = 'echowithin-posts-v20';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -434,7 +434,8 @@ self.addEventListener('pushsubscriptionchange', event => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify(subscription.toJSON())
+        body: JSON.stringify(subscription.toJSON()),
+        keepalive: true
       });
     }).catch(err => {
       console.error('Failed to re-subscribe:', err);

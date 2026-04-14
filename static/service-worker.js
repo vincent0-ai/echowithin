@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v20';
-const STATIC_CACHE = 'echowithin-static-v20';
-const PAGES_CACHE = 'echowithin-pages-v20';
-const POSTS_CACHE = 'echowithin-posts-v20';
+const CACHE_NAME = 'echowithin-v21';
+const STATIC_CACHE = 'echowithin-static-v21';
+const PAGES_CACHE = 'echowithin-pages-v21';
+const POSTS_CACHE = 'echowithin-posts-v21';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -127,28 +127,11 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // External requests: serve from cache if precached, otherwise pass through
-  // This ensures polyfill.io, MathJax etc. are served from cache when offline
+  // Skip external requests — let the browser handle them natively.
+  // The browser uses style-src/img-src/font-src CSP directives for these,
+  // but the SW's fetch() is governed by connect-src which doesn't include
+  // these origins (Font Awesome, Google Fonts, Cloudinary, etc.).
   if (url.origin !== location.origin) {
-    event.respondWith(
-      caches.match(request).then(cachedResponse => {
-        if (cachedResponse) {
-          // Serve from cache, update in background
-          event.waitUntil(
-            fetch(request).then(response => {
-              if (response && (response.ok || response.type === 'opaque')) {
-                caches.open(STATIC_CACHE).then(cache => cache.put(request, response));
-              }
-            }).catch(() => { })
-          );
-          return cachedResponse;
-        }
-        return fetch(request);
-      }).catch(() => {
-        // External request failed and not cached — nothing we can do
-        return new Response('', { status: 408, statusText: 'Offline' });
-      })
-    );
     return;
   }
 

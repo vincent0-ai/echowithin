@@ -5632,7 +5632,11 @@ def subscribe_push():
         app.logger.warning(f"Blocked cross-origin push subscribe attempt for user {current_user.username}")
         return jsonify({'error': 'Forbidden'}), 403
 
-    data = request.get_json()
+    try:
+        data = request.get_json(silent=True)
+    except (OSError, Exception) as e:
+        app.logger.warning(f"Failed to read push subscribe request body for user {current_user.username}: {e}")
+        return jsonify({'error': 'Invalid request body'}), 400
     if not data or not data.get('endpoint') or not data.get('keys'):
         return jsonify({'error': 'Invalid subscription data'}), 400
 
@@ -5687,7 +5691,11 @@ def unsubscribe_push():
         app.logger.warning(f"Blocked cross-origin push unsubscribe attempt for user {current_user.username}")
         return jsonify({'error': 'Forbidden'}), 403
 
-    data = request.get_json()
+    try:
+        data = request.get_json(silent=True)
+    except (OSError, Exception) as e:
+        app.logger.warning(f"Failed to read push unsubscribe request body for user {current_user.username}: {e}")
+        return jsonify({'error': 'Invalid request body'}), 400
     if not data or not data.get('endpoint'):
         return jsonify({'error': 'Invalid request'}), 400
 

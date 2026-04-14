@@ -475,6 +475,8 @@ note_shares_conf.create_index([('owner_id', 1), ('note_id', 1)])
 posts_conf.create_index([('title', 'text'), ('content', 'text')])
 
 # --- Performance indexes for faster queries ---
+# Index for slug lookups (ensures efficiency for unique slug generation)
+posts_conf.create_index('slug')
 # Index for reactions lookups (personalized feed)
 posts_conf.create_index([('reactions.heart', 1)])
 posts_conf.create_index([('reactions.wow', 1)])
@@ -5241,9 +5243,14 @@ def post():
             # Handle emoji-only or non-ASCII titles that result in empty slugs
             if not base_slug:
                 base_slug = f"post-{secrets.token_hex(6)}"
+            # Optimized unique slug generation using regex to reduce DB queries
+            regex_pattern = f"^{re.escape(base_slug)}(-[0-9]+)?$"
+            existing_slugs = list(posts_conf.find({'slug': {'$regex': regex_pattern}}, {'slug': 1}))
+            slug_set = {s['slug'] for s in existing_slugs}
+
             slug = base_slug
             counter = 1
-            while posts_conf.find_one({'slug': slug}):
+            while slug in slug_set:
                 slug = f"{base_slug}-{counter}"
                 counter += 1
 
@@ -6323,10 +6330,18 @@ def update_post(post_id):
             # Handle emoji-only or non-ASCII titles that result in empty slugs
             if not base_slug:
                 base_slug = f"post-{secrets.token_hex(6)}"
+            # Optimized unique slug generation using regex to reduce DB queries
+            regex_pattern = f"^{re.escape(base_slug)}(-[0-9]+)?$"
+            existing_slugs = list(posts_conf.find(
+                {'slug': {'$regex': regex_pattern}, '_id': {'$ne': post['_id']}},
+                {'slug': 1}
+            ))
+            slug_set = {s['slug'] for s in existing_slugs}
+
             new_slug = base_slug
             counter = 1
             # Ensure the new slug is unique
-            while posts_conf.find_one({'slug': new_slug, '_id': {'$ne': post['_id']}}):
+            while new_slug in slug_set:
                 new_slug = f"{base_slug}-{counter}"
                 counter += 1
             slug = new_slug

@@ -551,22 +551,69 @@
     };
 
     document.addEventListener('DOMContentLoaded', function () {
-        const socket = io();
+        const socket = io({
+            reconnection: true,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 4000,
+            timeout: 10000,
+            transports: ['websocket', 'polling']
+        });
         const chatHistory = document.getElementById('chat-history');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
         const currentUserId = "{{ current_user.id }}";
         let activeRecipientId = "{{ active_chat._id if active_chat else '' }}";
+        let lastMessageDate = null;
+        let typingTimeout = null;
+        let remoteTypingClearTimer = null;
+        let chatSyncIntervalId = null;
+        const renderedMessageIds = new Set();
 
-        // Join private inbox room
-        socket.emit('join_inbox');
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.style.display = 'none';
+            const status = document.getElementById('chat-status');
+            if (status) status.style.display = 'block';
+            if (remoteTypingClearTimer) {
+                clearTimeout(remoteTypingClearTimer);
+                remoteTypingClearTimer = null;
+            }
+        }
 
-        if (activeRecipientId) loadChatHistory(activeRecipientId);
+        function startChatSync() {
+            if (chatSyncIntervalId) clearInterval(chatSyncIntervalId);
+            if (!activeRecipientId) return;
+            chatSyncIntervalId = setInterval(() => {
+                syncActiveChatHistory();
+            }, 6000);
+        }
+
+        function stopChatSync() {
+            if (chatSyncIntervalId) {
+                clearInterval(chatSyncIntervalId);
+                chatSyncIntervalId = null;
+            }
+        }
+
+        // Rejoin server-side rooms after reconnects so realtime delivery stays reliable.
+        socket.on('connect', () => {
+            socket.emit('join_inbox');
+            if (activeRecipientId) {
+                socket.emit('viewing_chat', { partner_id: activeRecipientId });
+                loadChatHistory(activeRecipientId);
+                startChatSync();
+            }
+        });
+
+        if (activeRecipientId) {
+            startChatSync();
+        }
 
         // --- Socket Listeners ---
         socket.on('new_dm', (data) => {
             console.log("Sync: Received new_dm", data);
             if (data.sender_id === activeRecipientId) {
+                hideTypingIndicator();
                 appendMessage(data, 'received', false, data.id, data.is_read);
                 scrollToBottom();
             } else {
@@ -594,7 +641,15 @@
 
         // Request accepted notification
         socket.on('dm_request_accepted', (data) => {
-            showToast(`${data.by_username} accepted your message request!`);
+            const acceptedText = `${data.by_username} accepted your message request`;
+            upsertContactItem(data.by_user_id, data.by_username, acceptedText, data.accepted_at);
+
+            if (data.by_user_id === activeRecipientId) {
+                appendSystemMessage(acceptedText, data.accepted_at);
+                scrollToBottom();
+            }
+
+            showToast(`${acceptedText}!`);
         });
 
         socket.on('message_reacted', (data) => {
@@ -647,6 +702,7 @@
             if (bubble) {
                 bubble.setAttribute('data-id', data.id);
                 bubble.removeAttribute('data-temp');
+                renderedMessageIds.add(data.id);
                 addMessageActions(bubble, data.id);
             }
         });
@@ -660,15 +716,18 @@
                 }
                 const status = document.getElementById('chat-status');
                 if (status) status.style.display = 'none';
+
+                // If stop_typing is dropped by the network, auto-clear stale typing state.
+                if (remoteTypingClearTimer) clearTimeout(remoteTypingClearTimer);
+                remoteTypingClearTimer = setTimeout(() => {
+                    hideTypingIndicator();
+                }, 4500);
             }
         });
 
         socket.on('user_stop_typing', function (data) {
             if (data.sender_id === activeRecipientId) {
-                const indicator = document.getElementById('typing-indicator');
-                if (indicator) indicator.style.display = 'none';
-                const status = document.getElementById('chat-status');
-                if (status) status.style.display = 'block';
+                hideTypingIndicator();
             }
         });
 
@@ -682,6 +741,8 @@
                 
                 if (!content && !pendingUrl) return;
                 if (!activeRecipientId) return;
+                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                if (typingTimeout) clearTimeout(typingTimeout);
                 
                 const tempId = Date.now().toString();
                 const msgType = pendingUrl ? 'image' : 'text';
@@ -723,7 +784,6 @@
         }
 
         // --- Typing indicator: emit events on input ---
-        let typingTimeout = null;
         if (messageInput) {
             messageInput.addEventListener('input', function () {
                 if (!activeRecipientId) return;
@@ -736,6 +796,10 @@
         }
 
         window.loadChat = function (userId, username, element) {
+            if (activeRecipientId && activeRecipientId !== userId) {
+                socket.emit('leave_chat', { partner_id: activeRecipientId });
+                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+            }
             document.querySelector('.messages-wrapper').classList.add('chat-view-active');
             if (window.innerWidth <= 768) { document.body.classList.add('mobile-chat-open'); }
             document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
@@ -759,6 +823,7 @@
 
             // Track active chat for notification suppression
             socket.emit('viewing_chat', { partner_id: userId });
+            startChatSync();
         };
 
         if (window.__pendingLoadChatArgs) {
@@ -769,6 +834,7 @@
 
         function loadChatHistory(userId) {
             lastMessageDate = null;
+            renderedMessageIds.clear();
             fetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
                 chatHistory.innerHTML = ''; // Clean start
                 const messages = data.messages || [];
@@ -788,7 +854,38 @@
             });
         }
 
+        function syncActiveChatHistory() {
+            if (!activeRecipientId) return;
+            fetch(`/api/messages/history/${activeRecipientId}`).then(r => r.json()).then(data => {
+                const messages = data.messages || [];
+                let appendedAny = false;
+                let lastSender = null;
+
+                messages.forEach(m => {
+                    if (!m.id || renderedMessageIds.has(m.id)) {
+                        lastSender = m.sender_id;
+                        return;
+                    }
+                    appendMessage(m, m.sender_id === currentUserId ? 'sent' : 'received', m.sender_id === lastSender, m.id, m.is_read);
+                    lastSender = m.sender_id;
+                    appendedAny = true;
+                });
+
+                if (appendedAny) {
+                    hideTypingIndicator();
+                    scrollToBottom();
+                }
+            }).catch(() => {
+                // Ignore sync failures; websocket delivery remains primary.
+            });
+        }
+
         function appendMessage(msgData, type, isGrouped = false, msgId = null, isRead = false, tempId = null) {
+            const resolvedId = msgId || msgData.id || null;
+            if (resolvedId && renderedMessageIds.has(resolvedId)) {
+                return;
+            }
+
             const timestamp = msgData.timestamp || new Date().toISOString();
             const messageDate = new Date(timestamp);
             const dateString = messageDate.toDateString();
@@ -871,6 +968,7 @@
             
             chatHistory.insertAdjacentHTML('beforeend', html);
             const newBubble = chatHistory.lastElementChild;
+            if (resolvedId) renderedMessageIds.add(resolvedId);
             
             if (msgData.reactions) updateReactions(newBubble, msgData.reactions);
             
@@ -966,9 +1064,8 @@
         };
 
         function updateSidebar(data) {
-            const item = document.querySelector(`.contact-item[data-user-id="${data.sender_id}"]`);
+            const item = upsertContactItem(data.sender_id, data.sender_username, data.content, data.timestamp);
             if (item) {
-                item.querySelector('.contact-last-msg').textContent = data.content;
                 let badge = item.querySelector('.unread-badge');
                 if (!badge) {
                     badge = document.createElement('div');
@@ -979,6 +1076,58 @@
                 } else badge.textContent = parseInt(badge.textContent) + 1;
                 document.getElementById('contact-list').prepend(item);
             }
+        }
+
+        function upsertContactItem(userId, username, previewText, timestampIso) {
+            if (!userId || !username) return null;
+
+            let item = document.querySelector(`.contact-item[data-user-id="${userId}"]`);
+            const timeLabel = timestampIso
+                ? new Date(timestampIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            if (!item) {
+                item = document.createElement('div');
+                item.className = 'contact-item';
+                item.setAttribute('data-user-id', userId);
+                item.setAttribute('onclick', `window.loadChat('${userId}', '${username}', this)`);
+                item.style.cssText = 'padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 1px solid #f1f1f1; position: relative;';
+                item.innerHTML = `
+                    <div style="position: relative;">
+                        <div class="contact-avatar" style="width: 48px; height: 48px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                            <i class="fas fa-user" style="color: #3e2217; font-size: 1.2rem;"></i>
+                        </div>
+                    </div>
+                    <div class="contact-info" style="flex: 1; min-width: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <span style="font-weight: 600; color: #3e2217; font-size: 0.95rem;" class="contact-username"></span>
+                            <span class="contact-time" style="font-size: 0.7rem; color: #999;"></span>
+                        </div>
+                        <div class="contact-last-msg" style="font-size: 0.85rem; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;"></div>
+                    </div>`;
+            }
+
+            const usernameNode = item.querySelector('.contact-username');
+            if (usernameNode) usernameNode.textContent = username;
+
+            const messageNode = item.querySelector('.contact-last-msg');
+            if (messageNode) messageNode.textContent = previewText || '';
+
+            const timeNode = item.querySelector('.contact-time');
+            if (timeNode) timeNode.textContent = timeLabel;
+
+            document.getElementById('contact-list').prepend(item);
+            return item;
+        }
+
+        function appendSystemMessage(text, timestampIso) {
+            const date = timestampIso ? new Date(timestampIso) : new Date();
+            const timestamp = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            chatHistory.insertAdjacentHTML('beforeend', `
+                <div style="align-self:center; background:#f5ebe7; color:#3e2217; padding:0.45rem 0.8rem; border-radius:999px; font-size:0.78rem; margin:0.4rem 0; max-width:90%; text-align:center;">
+                    ${text} <span style="opacity:0.75;">${timestamp}</span>
+                </div>
+            `);
         }
 
         function updateUserStatus(lastActiveStr, serverNow) {
@@ -1022,7 +1171,11 @@
 
         window.backToList = () => {
             // Leave chat tracking when going back to list
-            if (activeRecipientId) socket.emit('leave_chat', { partner_id: activeRecipientId });
+            if (activeRecipientId) {
+                socket.emit('leave_chat', { partner_id: activeRecipientId });
+                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+            }
+            stopChatSync();
             document.querySelector('.messages-wrapper').classList.remove('chat-view-active');
             document.body.classList.remove('mobile-chat-open');
         };
@@ -1031,7 +1184,24 @@
 
         // Clean up on page leave
         window.addEventListener('beforeunload', () => {
-            if (activeRecipientId) socket.emit('leave_chat', { partner_id: activeRecipientId });
+            if (activeRecipientId) {
+                socket.emit('leave_chat', { partner_id: activeRecipientId });
+                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+            }
+            stopChatSync();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!activeRecipientId) return;
+            if (document.visibilityState === 'hidden') {
+                socket.emit('leave_chat', { partner_id: activeRecipientId });
+                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                stopChatSync();
+            } else {
+                socket.emit('viewing_chat', { partner_id: activeRecipientId });
+                loadChatHistory(activeRecipientId);
+                startChatSync();
+            }
         });
 
         // --- Feature Helper Functions ---
@@ -1207,6 +1377,7 @@
                     const item = document.querySelector(`.request-item[data-request-id="${requestId}"]`);
                     if (item) item.remove();
                     updateRequestBadge(-1);
+                    upsertContactItem(d.user_id, d.username, `You accepted ${d.username}'s message request`, new Date().toISOString());
                     // Open the chat with the accepted user
                     window.loadChat(d.user_id, d.username, null);
                     showToast(`Accepted! You can now chat with ${d.username}`);

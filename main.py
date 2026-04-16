@@ -8683,14 +8683,15 @@ def handle_stop_typing(data):
 @login_required
 def messages_page():
     """Render the Main Inbox UI."""
+    current_user_oid = ObjectId(current_user.id)
     # Get list of recent contacts
     # This identifies everyone the user has messaged OR received messages from
     pipeline = [
         {
             '$match': {
                 '$or': [
-                    {'sender_id': ObjectId(current_user.id)},
-                    {'recipient_id': ObjectId(current_user.id)}
+                    {'sender_id': current_user_oid},
+                    {'recipient_id': current_user_oid}
                 ]
             }
         },
@@ -8699,7 +8700,7 @@ def messages_page():
             '$group': {
                 '_id': {
                     '$cond': [
-                        {'$eq': ['$sender_id', ObjectId(current_user.id)]},
+                        {'$eq': ['$sender_id', current_user_oid]},
                         '$recipient_id',
                         '$sender_id'
                     ]
@@ -8711,7 +8712,7 @@ def messages_page():
                         '$cond': [
                             {
                                 '$and': [
-                                    {'$eq': ['$recipient_id', ObjectId(current_user.id)]},
+                                    {'$eq': ['$recipient_id', current_user_oid]},
                                     {'$eq': ['$is_read', False]}
                                 ]
                             },
@@ -8727,6 +8728,29 @@ def messages_page():
     
     contacts_raw = list(direct_messages_conf.aggregate(pipeline))
     contacts = []
+    contact_user_ids = set()
+
+    five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+
+    def build_contact_entry(user_info, last_msg, timestamp, unread_count=0):
+        is_online = False
+        last_active = user_info.get('last_active')
+        if last_active and isinstance(last_active, datetime.datetime):
+            if last_active.tzinfo is None:
+                last_active = last_active.replace(tzinfo=datetime.timezone.utc)
+            is_online = last_active >= five_minutes_ago
+
+        return {
+            'user_id': str(user_info['_id']),
+            'username': user_info['username'],
+            'profile_image': user_info.get('profile_image_url'),
+            'last_message': last_msg,
+            'timestamp': timestamp,
+            'unread_count': unread_count,
+            'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None,
+            'is_online': is_online
+        }
+
     for c in contacts_raw:
         user_info = users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
         if user_info:
@@ -8738,24 +8762,46 @@ def messages_page():
                 except Exception:
                     pass  # Keep as is if decryption fails
 
-            five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
-            is_online = False
-            last_active = user_info.get('last_active')
-            if last_active and isinstance(last_active, datetime.datetime):
-                if last_active.tzinfo is None:
-                    last_active = last_active.replace(tzinfo=datetime.timezone.utc)
-                is_online = last_active >= five_minutes_ago
+            contacts.append(build_contact_entry(user_info, last_msg, c['timestamp'], c['unread_count']))
+            contact_user_ids.add(str(user_info['_id']))
 
-            contacts.append({
-                'user_id': str(user_info['_id']),
-                'username': user_info['username'],
-                'profile_image': user_info.get('profile_image_url'),
-                'last_message': last_msg,
-                'timestamp': c['timestamp'],
-                'unread_count': c['unread_count'],
-                'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None,
-                'is_online': is_online
-            })
+    # Add accepted message-request contacts even when no DM history exists yet.
+    accepted_permissions = list(dm_permissions_conf.find({
+        'status': 'accepted',
+        '$or': [
+            {'requester_id': current_user_oid},
+            {'target_id': current_user_oid}
+        ]
+    }).sort('updated_at', -1))
+
+    for perm in accepted_permissions:
+        requester_id_str = str(perm.get('requester_id'))
+        target_id_str = str(perm.get('target_id'))
+        is_requester = requester_id_str == str(current_user.id)
+        other_user_id_str = target_id_str if is_requester else requester_id_str
+
+        if other_user_id_str in contact_user_ids:
+            continue
+
+        try:
+            other_user_oid = ObjectId(other_user_id_str)
+        except Exception:
+            continue
+
+        user_info = users_conf.find_one({'_id': other_user_oid}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
+        if not user_info:
+            continue
+
+        if is_requester:
+            system_preview = f"{user_info['username']} accepted your message request"
+        else:
+            system_preview = f"You accepted {user_info['username']}'s message request"
+
+        event_time = perm.get('updated_at') or perm.get('created_at') or datetime.datetime.now(datetime.timezone.utc)
+        contacts.append(build_contact_entry(user_info, system_preview, event_time, 0))
+        contact_user_ids.add(other_user_id_str)
+
+    contacts.sort(key=lambda c: c.get('timestamp') or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc), reverse=True)
             
     # If a specific user is requested in the URL, ensure they are in/at top of contacts
     target_user_id = request.args.get('user_id')
@@ -9250,7 +9296,8 @@ def api_accept_dm_request(request_id):
         # Notify requester that their request was accepted
         socketio.emit('dm_request_accepted', {
             'by_user_id': str(current_user.id),
-            'by_username': current_user.username
+            'by_username': current_user.username,
+            'accepted_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
         }, room=f"user_{requester_id}")
         
         return jsonify({

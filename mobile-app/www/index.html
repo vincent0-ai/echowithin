@@ -134,8 +134,8 @@
 
     <script src="capacitor.js"></script>
     <script>
-        const LIVE_SITE = 'https://blog.echowithin.xyz';
-        const LIVE_HOST = 'blog.echowithin.xyz';
+        const LIVE_SITE = 'https://echowithin.xyz';
+        const LIVE_HOST = 'echowithin.xyz';
         const LAST_ONLINE_URL_KEY = 'ew_last_online_url';
         let redirectStarted = false;
         let lastTargetUrl = LIVE_SITE;
@@ -352,7 +352,7 @@
             }
             lastTargetUrl = targetUrl;
 
-            // When offline, show the local offline UI — the Service Worker for blog.echowithin.xyz
+            // When offline, show the local offline UI — the Service Worker for echowithin.xyz
             // can't intercept cross-origin navigations from the bridge page (different origin).
             // The online listener will auto-retry when connectivity returns.
             const isConnected = await hasInternetConnection();

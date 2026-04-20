@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>EchoWithin - Recent posts</title>
-    <link>{{ url_for('home', _external=True) }}</link>
+    <link>{{ url_for('blog', _external=True) }}</link>
     <description>Latest posts from EchoWithin</description>
     <language>en-us</language>
+    <atom:link href="{{ url_for('feed', _external=True) }}" rel="self" type="application/rss+xml" />
     {% for item in items %}
     <item>
       <title>{{ item.title|e }}</title>

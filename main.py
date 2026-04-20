@@ -3,6 +3,7 @@ from gevent import monkey
 monkey.patch_all()
 
 import datetime
+import re
 
 from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
 import logging
@@ -74,7 +75,7 @@ executor = ThreadPoolExecutor(max_workers=10)
 app = Flask(__name__)
 csrf = CSRFProtect(app)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
-_ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://blog.echowithin.xyz').split(',')
+_ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz').split(',')
 socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
@@ -1279,7 +1280,7 @@ def enforce_canonical_domain_and_https():
     host = request.headers.get('X-Forwarded-Host', request.host)
     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-    canonical_host = "blog.echowithin.xyz"
+    canonical_host = "echowithin.xyz"
     canonical_scheme = "https"
 
     needs_redirect = False
@@ -1323,7 +1324,7 @@ def add_security_headers(response):
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "media-src 'self' https://res.cloudinary.com; "
-        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://blog.echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net; "
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz wss://blog.echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://accounts.google.com;"
@@ -1580,7 +1581,7 @@ def send_new_post_notifications(post_id_str):
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
             subject = f"New post on EchoWithin: {post.get('title')}"
@@ -1678,7 +1679,7 @@ def send_weekly_newsletter():
             posts_list = list(posts_conf.aggregate(pipeline))
 
             # Build URLs for each post
-            base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+            base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
             for post in posts_list:
                 try:
                     post['url'] = url_for('view_post', slug=post.get('slug'), _external=True)
@@ -1943,7 +1944,7 @@ def send_push_notifications_for_new_post(post_id_str):
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
         author_id = post.get('author_id')
@@ -2288,7 +2289,7 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
             try:
                 post_url = url_for('view_post', slug=post_slug, _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'https://blog.echowithin.xyz')
+                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post_slug}"
 
         notified_user_ids = set()
@@ -3316,7 +3317,7 @@ def google_callback():
                     # Store user_id mapping to token for 5 minutes
                     redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
                     # Use HTTPS app link - more reliable than custom scheme on Android
-                    # The app has android:autoVerify for blog.echowithin.xyz
+                    # The app has android:autoVerify for echowithin.xyz
                     https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
                     # Also provide custom scheme as fallback
                     custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
@@ -3424,7 +3425,7 @@ def android_assetlinks():
     """Serve Android App Links verification file for automatic deep link handling.
     
     This allows the Android app to be verified as the official handler for
-    blog.echowithin.xyz URLs, enabling automatic redirect from browser to app
+    echowithin.xyz URLs, enabling automatic redirect from browser to app
     after Google authentication completes.
     
     IMPORTANT: Update the sha256_cert_fingerprints with your actual signing key:
@@ -5496,7 +5497,13 @@ def view_post(slug):
         has_more = False
 
     page_title = post.get('title', 'View Post')
-    page_description = (post.get('content', '')[:155] + '...') if len(post.get('content', '')) > 155 else post.get('content', '')
+    # Use raw markdown content for description (before HTML conversion) to avoid HTML tags in meta
+    raw_content = posts_conf.find_one({'slug': slug}, {'content': 1})
+    raw_text = raw_content.get('content', '') if raw_content else ''
+    # Strip any residual markdown formatting for a clean description
+    clean_text = re.sub(r'[#*_`\[\]()>~]', '', raw_text).strip()
+    clean_text = re.sub(r'\s+', ' ', clean_text)
+    page_description = (clean_text[:155] + '...') if len(clean_text) > 155 else clean_text
 
     is_saved = False
     if current_user.is_authenticated:
@@ -10439,7 +10446,7 @@ def sitemap():
         ('/', 1.0, 'daily'),
         ('/blog', 0.9, 'hourly'),
         ('/about', 0.5, 'monthly'),
-        ('/search', 0.6, 'weekly'),
+        ('/terms', 0.3, 'yearly'),
     ]
 
     for path, priority, changefreq in static_pages:
@@ -10479,24 +10486,8 @@ def sitemap():
         app.logger.error(f"Error generating sitemap posts: {e}")
 
     # User profiles
-    try:
-        active_authors = posts_conf.aggregate([
-            {'$group': {'_id': '$author', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}},
-            {'$limit': 50}
-        ])
-        for author in active_authors:
-            username = author.get('_id')
-            if username:
-                profile_url = f"{base_url}/profile/{username}"
-                xml_parts.append(f'''  <url>
-    <loc>{escape(profile_url)}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.4</priority>
-  </url>''')
-    except Exception as e:
-        app.logger.error(f"Error generating sitemap authors: {e}")
+    # Note: Profile pages are login-required, so we exclude them from the sitemap
+    # to avoid serving redirect responses to crawlers.
 
     xml_parts.append('</urlset>')
     sitemap_xml = '\n'.join(xml_parts)

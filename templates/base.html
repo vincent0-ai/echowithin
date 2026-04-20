@@ -18,6 +18,9 @@
     <link rel="canonical" href="{{ canonical_url or request.base_url }}" />
     {% endblock %}
 
+    <!-- RSS Feed Discovery -->
+    <link rel="alternate" type="application/rss+xml" title="EchoWithin - Recent Posts" href="{{ url_for('feed', _external=True) }}" />
+
     <!-- SEO: Default meta tags (overridable by child templates) -->
     {% block meta_description %}
     <meta name="description" content="{{ description|default('EchoWithin – A community platform for authentic human perspective. Share ideas, engage in meaningful debates, and let your voice echo within.') }}">
@@ -594,7 +597,7 @@
                         // Use replace to prevent back button from returning to this intermediate state
                         window.location.replace(finalUrl);
                         return true;
-                    } else if (url.protocol === 'https:' && url.host === 'blog.echowithin.xyz' && url.pathname && url.pathname !== '/') {
+                    } else if (url.protocol === 'https:' && (url.host === 'echowithin.xyz' || url.host === 'blog.echowithin.xyz') && url.pathname && url.pathname !== '/') {
                         // Handle https deep links to our domain
                         console.log('HTTPS deep link to:', url.pathname);
 

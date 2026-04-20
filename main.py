@@ -3543,12 +3543,13 @@ def home():
 
     if not hot_posts:
         try:
-            seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-
+            # Extend window to 30 days for communities with slower, deeper engagement
+            thirty_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+            
             # This pipeline calculates hot score with recency boost for new posts
             hot_posts_pipeline = [
-                # 1. Find recent posts
-                {'$match': {'timestamp': {'$gte': seven_days_ago}}},
+                # 1. Find recent posts (30 day window)
+                {'$match': {'timestamp': {'$gte': thirty_days_ago}}},
                 # 2. Join with comments collection to get comment count (efficiently)
                 {'$lookup': {
                     'from': 'comments',
@@ -3613,7 +3614,7 @@ def home():
                             '$recency_boost',
                             {'$divide': [
                                 {'$add': ['$engagement_score', 1]},  # +1 to avoid division issues
-                                {'$pow': [{'$add': ['$age_in_hours', 2]}, 1.5]}  # Time decay factor
+                                {'$pow': [{'$add': ['$age_in_hours', 8]}, 1.2]}  # Softened time decay
                             ]}
                         ]
                     }
@@ -4140,14 +4141,14 @@ def calculate_hot_score(post, comment_count):
     # log1p(x) = log(1 + x), handles zero values safely
     log_score = math_module.log1p(raw_score) * 10
 
-    # Exponential time decay - posts lose 50% of their score every 24 hours
-    # Balanced decay that gives quality posts more time to surface
-    half_life_hours = 24
+    # Exponential time decay - softened half-life
+    # Quality posts now stay "warm" much longer (72 hour half-life vs 24 hour)
+    half_life_hours = 72
     decay_factor = 0.5 ** (age_in_hours / half_life_hours)
 
-    # Boost for very recent posts (first 2 hours get extra visibility)
-    if age_in_hours < 2:
-        recency_boost = 1.5 - (age_in_hours * 0.25)  # 1.5x to 1.0x
+    # Boost for very recent posts (first 4 hours get extra visibility)
+    if age_in_hours < 4:
+        recency_boost = 1.3 - (age_in_hours * 0.075)  # 1.3x to 1.0x
     else:
         recency_boost = 1.0
 

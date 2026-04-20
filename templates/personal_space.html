@@ -1509,6 +1509,14 @@
             Notes
             <span class="badge">{{ total_notes_count }}</span>
         </button>
+        <button data-tab="activity" role="tab" aria-selected="false" id="activity-tab-btn" style="position: relative;">
+            Activity
+            {% if activity_notifications|length > 0 %}
+            <span class="badge activity-badge" style="background: var(--primary-color); color: white;">{{ activity_notifications|length }}</span>
+            {% else %}
+            <span class="badge activity-badge">0</span>
+            {% endif %}
+        </button>
         <button data-tab="locked" role="tab" aria-selected="false" id="locked-tab-btn">
             Locked
             <span class="badge">{{ locked_notes_count }}</span>
@@ -1892,6 +1900,99 @@
         {% endif %}
     </div>
 
+    <!-- Activity Tab -->
+    <div id="tab-activity" class="tab-panel" role="tabpanel">
+        <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+                <h3 style="font-size: 1.25rem; color: #3e2217; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fas fa-bell"></i> Collaboration Activity
+                </h3>
+                <p style="color: #666; font-size: 0.85rem;">Review changes proposed or applied by collaborators.</p>
+            </div>
+            {% if activity_notifications|length > 0 %}
+            <button onclick="markAllActivityRead()" class="btn" style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
+                Clear notifications
+            </button>
+            {% endif %}
+        </div>
+
+        {% if pending_proposals or auto_approved_activity %}
+            {% if pending_proposals %}
+            <div style="margin-bottom: 2rem;">
+                <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
+                    Pending Decisions
+                </h4>
+                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                    {% for proposal in pending_proposals %}
+                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <div>
+                                <div style="font-weight: 600; font-size: 1.1rem; color: #333; margin-bottom: 0.3rem;">
+                                    {{ proposal.editor_name }} proposed changes
+                                </div>
+                                <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
+                                    <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
+                                    <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
+                                </div>
+                            </div>
+                            <span style="background: #fff3e0; color: #e65100; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase;">Awaiting Review</span>
+                        </div>
+
+                        <div style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 1rem; border-radius: 0 8px 8px 0; margin-bottom: 1rem; font-size: 0.9rem; color: #555;">
+                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">New proposed content:</div>
+                            <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; max-height: 150px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
+                        </div>
+
+                        <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                            <button class="btn" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                                onclick="reviewProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
+                                <i class="fas fa-check"></i> Accept Changes
+                            </button>
+                            <button class="btn" style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                                onclick="reviewProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
+                                <i class="fas fa-times"></i> Reject
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if auto_approved_activity %}
+            <div>
+                <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
+                    Recent Auto-Approved Edits
+                </h4>
+                <div class="activity-notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    {% for activity in auto_approved_activity %}
+                    <div class="activity-card" style="background: #f8fbff; border: 1px solid #e1efff; border-radius: 10px; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="width: 40px; height: 40px; background: #c2e0ff; color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; font-size: 0.95rem; color: #333;">{{ activity.editor_name }} updated your note</div>
+                                <div style="font-size: 0.78rem; color: #666;">{{ activity.edit_summary or 'Collaborator contribution' }} • {{ activity.created_at|localtime }}</div>
+                            </div>
+                        </div>
+                        <button onclick="window.openVersionModal('{{ activity.note_id }}')" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; border: none; background: white; color: #007bff; border: 1px solid #c2e0ff; border-radius: 6px; cursor: pointer;">
+                            View Versions
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: #4caf50;"></i>
+            <h3>All caught up!</h3>
+            <p>You have no new collaboration activity to review.</p>
+        </div>
+        {% endif %}
+    </div>
+
     <!-- Locked Notes Tab -->
     <div id="tab-locked" class="tab-panel" role="tabpanel">
         {% if not has_app_lock %}
@@ -2176,6 +2277,16 @@
                     <option value="1d">1 Day</option>
                     <option value="7d">7 Days</option>
                 </select>
+            </div>
+
+            <div id="auto-approve-container" style="margin-bottom: 1rem; display: none;">
+                <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; background: #f0f7ff; padding: 0.75rem; border-radius: 10px; border: 1px solid #c2e0ff;">
+                    <input type="checkbox" id="share-auto-approve" style="margin-top: 0.2rem; width: 16px; height: 16px; accent-color: #007bff;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.85rem; color: #0056b3;">Auto-approve trusted collaborators</div>
+                        <div style="font-size: 0.75rem; color: #555;">Bypass proposals and apply edits instantly to your original note.</div>
+                    </div>
+                </label>
             </div>
 
             <div style="margin-bottom: 1rem;">
@@ -4155,7 +4266,7 @@
         // Helper to get tab from Hash
         function getTabFromHash() {
             const hash = window.location.hash.replace('#', '');
-            if (['saved', 'notes', 'locked'].includes(hash)) return hash;
+            if (['saved', 'notes', 'activity', 'locked'].includes(hash)) return hash;
             return null;
         }
 
@@ -4180,6 +4291,11 @@
                 return; // relockSession will reload the page
             }
             currentActiveTab = tabId;
+            
+            // Notification clearing logic
+            if (tabId === 'activity') {
+                markAllActivityRead();
+            }
 
             const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);
             if (button) {
@@ -4630,7 +4746,9 @@
                     document.getElementById('share-surprise-photo').value = '';
                     document.getElementById('share-surprise-audio').value = '';
                     document.getElementById('use-typewriter').checked = false;
+                    document.getElementById('share-auto-approve').checked = false;
                     document.getElementById('surprise-options').style.display = 'none';
+                    document.getElementById('auto-approve-container').style.display = 'none';
                     lastShareNoteId = currentShareNoteId;
                 }
 
@@ -4693,9 +4811,18 @@
         // Surprise theme toggle listener
         const themeSelect = document.getElementById('surprise-theme');
         const themeOptions = document.getElementById('surprise-options');
+        const permissionsSelect = document.getElementById('share-permissions');
+        const autoApproveContainer = document.getElementById('auto-approve-container');
+
         if (themeSelect && themeOptions) {
             themeSelect.addEventListener('change', () => {
                 themeOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
+            });
+        }
+
+        if (permissionsSelect && autoApproveContainer) {
+            permissionsSelect.addEventListener('change', () => {
+                autoApproveContainer.style.display = permissionsSelect.value === 'edit' ? 'block' : 'none';
             });
         }
 
@@ -4726,6 +4853,7 @@
                     formData.append('access_code', access_code);
                     formData.append('surprise_theme', surprise_theme);
                     formData.append('use_typewriter', document.getElementById('use-typewriter').checked ? 'true' : 'false');
+                    formData.append('auto_approve', document.getElementById('share-auto-approve').checked ? 'true' : 'false');
                     if (valentine_photo) formData.append('valentine_photo', valentine_photo);
                     if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 
@@ -5234,6 +5362,34 @@
             observer.observe(shareModal, { attributes: true, attributeFilter: ['style'] });
         }
     })();
+        window.reviewProposal = async function(versionId, action, noteId) {
+            if (!confirm(`Are you sure you want to ${action} these proposed changes?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/personal_post/proposal/${versionId}/decision`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                    },
+                    body: JSON.stringify({ action: action })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showToast(`Proposal ${action}ed successfully.`, 'success');
+                    // Reload to update the tab count and list
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    showToast(data.error || `Failed to ${action} proposal.`, 'error');
+                }
+            } catch (err) {
+                console.error('Error reviewing proposal:', err);
+                showToast('An error occurred.', 'error');
+            }
+        };
 
     // --- Step-by-Step Onboarding Tooltip for New Users ---
     (function initOnboardingTour() {
@@ -5333,6 +5489,25 @@
 
         // Start tour after a brief delay to let the page settle
         setTimeout(() => showStep(0), 1500);
+
+        window.markAllActivityRead = async function() {
+            try {
+                const response = await fetch('/api/activity/mark_read', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    }
+                });
+                if (response.ok) {
+                    // Update badges in UI
+                    document.querySelectorAll('.activity-badge').forEach(b => {
+                        b.textContent = '0';
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to mark activity as read:', err);
+            }
+        };
     })();
 </script>
 {% endblock %}

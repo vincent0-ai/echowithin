@@ -69,6 +69,18 @@ ENGAGEMENT_WEIGHTS = {
     'view': 0.1
 }
 
+def clean_xml_text(text):
+    """
+    Removes characters that are illegal in XML 1.0 (control characters).
+    XML 1.0 allows: #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+    """
+    if not text:
+        return ""
+    # Strip ASCII control characters 0x00-0x1F excluding tab(0x09), newline(0x0A), carriage return(0x0D)
+    import re
+    illegal_xml_chars_re = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+    return illegal_xml_chars_re.sub('', str(text))
+
 # Shared thread pool for background tasks (avoids overhead of creating new pools)
 executor = ThreadPoolExecutor(max_workers=10)
 
@@ -460,6 +472,15 @@ dm_permissions_conf.create_index([('target_id', 1), ('status', 1)])
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
+
+# In-memory tracker for shared note viewers (share_id -> {user_id: {name, avatar, id}})
+# Used for real-time "Studying Now" presence avatars
+active_note_viewers = {}
+
+# In-memory edit locks for shared notes (share_id -> {user_id, user_name, timestamp})
+# Prevents concurrent editing conflicts during Bible study sessions
+note_locks = {}
+
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -5498,11 +5519,20 @@ def view_post(slug):
 
     page_title = post.get('title', 'View Post')
     # Use raw markdown content for description (before HTML conversion) to avoid HTML tags in meta
-    raw_content = posts_conf.find_one({'slug': slug}, {'content': 1})
-    raw_text = raw_content.get('content', '') if raw_content else ''
-    # Strip any residual markdown formatting for a clean description
-    clean_text = re.sub(r'[#*_`\[\]()>~]', '', raw_text).strip()
-    clean_text = re.sub(r'\s+', ' ', clean_text)
+    # We fetch a fresh copy to ensure we have the raw content if 'post' object was modified
+    raw_content_doc = posts_conf.find_one({'slug': slug}, {'content': 1})
+    raw_text = raw_content_doc.get('content', '') if raw_content_doc else ''
+    
+    # Robust multi-step cleaning for meta description
+    # 1. Strip markdown characters
+    clean_text = re.sub(r'[#*_`\[\]()>~]', '', raw_text)
+    # 2. Convert newlines to spaces
+    clean_text = clean_text.replace('\n', ' ').replace('\r', ' ')
+    # 3. Collapse multiple spaces
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    # 4. Final safety strip of illegal XML/HTML control characters
+    clean_text = clean_xml_text(clean_text)
+    
     page_description = (clean_text[:155] + '...') if len(clean_text) > 155 else clean_text
 
     is_saved = False
@@ -7180,6 +7210,22 @@ def personal_space():
     # New users (fewer than 5 notes) see text labels beside action icons
     show_icon_labels = (total_notes_count + locked_notes_count) < 5
 
+    # --- Fetch Activity for the User's Notes ---
+    activity_raw = list(note_versions_conf.find(
+        {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False}
+    ).sort('created_at', -1))
+    
+    activity_notifications = []
+    for item in activity_raw:
+        # Decrypt necessary fields for the preview if it's a proposal
+        if item.get('event_type') == 'proposal':
+            item['proposed_content_plain'] = item.get('proposed_content_plain') or decrypt_note(item.get('proposed_content', ''), user_id=current_user.id)
+        
+        # Fetch original note basic info
+        note_info = personal_posts_conf.find_one({'_id': item['note_id']}, {'created_at': 1})
+        item['original_note_date'] = note_info.get('created_at') if note_info else None
+        activity_notifications.append(item)
+
     return render_template(
         'personal_space.html', 
         saved_posts=saved_posts, 
@@ -7201,8 +7247,25 @@ def personal_space():
         locked_notes_count=locked_notes_count,
         locked_shares_map=locked_shares_map,
         locked_clones_map=locked_clones_map,
-        show_icon_labels=show_icon_labels
+        show_icon_labels=show_icon_labels,
+        activity_notifications=activity_notifications,
+        pending_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal'],
+        auto_approved_activity=[a for a in activity_notifications if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')]
     )
+
+@app.route('/api/activity/mark_read', methods=['POST'])
+@login_required
+def api_mark_activity_read():
+    """Marks all unread note activity as read for the current user."""
+    try:
+        note_versions_conf.update_many(
+            {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False},
+            {'$set': {'is_read_by_owner': True}}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"Error marking activity as read: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 @app.route('/post/<post_id>/react', methods=['POST'])
 @login_required
@@ -7407,8 +7470,8 @@ def create_personal_post():
     """Creates a new personal note/post with encryption."""
     content = request.form.get('content')
     if content and content.strip():
-        # Limit note length to 20000 characters
-        content = content.strip()[:20000]
+        # Limit note length to 100000 characters
+        content = content.strip()[:100000]
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
@@ -7438,7 +7501,7 @@ def create_personal_post_json():
     if not content:
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content[:20000]
+    content = content[:100000]
     encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
@@ -7757,6 +7820,52 @@ def sync_personal_post(post_id):
 
         if clone_modified > original_modified:
             # --- PUSH: Clone is newer → push clone's content to the original ---
+            
+            # SECURITY CHECK: If user is not the owner of the source note and hasn't been auto-approved, create a proposal.
+            original_owner_id = str(original_note.get('user_id', ''))
+            is_owner_of_original = str(current_user.id) == original_owner_id
+
+            if not is_owner_of_original and not share.get('auto_approve', False):
+                # Contributor flow: create a pending proposal instead of overwriting.
+                editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+                note_versions_conf.insert_one({
+                    'note_id': source_note_id,
+                    'share_id': source_share_id,
+                    'editor_name': editor_name + ' (Sync)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': original_note.get('content', ''),
+                    'base_content': original_note.get('content', ''),
+                    'content_owner_id': ObjectId(original_owner_id),
+                    'content_plain': _decrypt_note_record(original_note),
+                    'base_content_plain': _decrypt_note_record(original_note),
+                    'proposed_content': note.get('content'),
+                    'proposed_content_plain': _decrypt_note_record(note),
+                    'encrypted': True,
+                    'event_type': 'proposal',
+                    'status': 'pending',
+                    'edit_summary': 'Synced changes from my saved copy',
+                    'created_at': now,
+                    'is_read_by_owner': False
+                })
+                
+                # Notify original owner sessions.
+                try:
+                    socketio.emit('note_proposal_created', {
+                        'share_id': source_share_id,
+                        'note_id': str(source_note_id),
+                        'editor_name': editor_name,
+                        'summary': 'Synced changes from a saved copy'
+                    }, room=original_owner_id)
+                except Exception:
+                    pass
+
+                return jsonify({
+                    'success': True,
+                    'pending_approval': True,
+                    'message': 'Changes submitted to the note owner for review.'
+                })
+
+            # Owner flow: direct push permitted.
             # Version-snapshot the original before overwriting
             if original_note.get('content'):
                 note_versions_conf.insert_one({
@@ -7768,8 +7877,23 @@ def sync_personal_post(post_id):
                     'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
                     'content_plain': _decrypt_note_record(original_note),
                     'encrypted': original_note.get('encrypted', True),
-                    'created_at': now
+                    'created_at': now,
+                    'is_read_by_owner': False if not is_owner_of_original else True,
+                    'is_auto_approved': True if not is_owner_of_original else False,
+                    'event_type': 'snapshot'
                 })
+                
+                # Notify original owner of auto-approval push
+                if not is_owner_of_original:
+                    try:
+                        socketio.emit('note_auto_approved', {
+                            'share_id': source_share_id,
+                            'note_id': str(source_note_id),
+                            'editor_name': editor_name,
+                            'summary': 'Auto-synced changes from a saved copy'
+                        }, room=original_owner_id)
+                    except Exception:
+                        pass
                 version_count = note_versions_conf.count_documents({'note_id': source_note_id})
                 if version_count > 50:
                     oldest = note_versions_conf.find({'note_id': source_note_id}).sort('created_at', 1).limit(version_count - 50)
@@ -8096,6 +8220,7 @@ def api_create_share(post_id):
         valentine_photo = data.get('valentine_photo')
         valentine_audio = data.get('valentine_audio')
         use_typewriter = data.get('use_typewriter', False)
+        auto_approve = data.get('auto_approve', False)
     else:
         # Handle multipart/form-data
         permissions = request.form.get('permissions', 'view')
@@ -8106,6 +8231,7 @@ def api_create_share(post_id):
         if is_valentine and surprise_theme == 'none':
             surprise_theme = 'valentine'
         use_typewriter = request.form.get('use_typewriter') == 'true'
+        auto_approve = request.form.get('auto_approve') == 'true'
         
         # Handle file uploads
         if surprise_theme != 'none':
@@ -8160,7 +8286,8 @@ def api_create_share(post_id):
         'surprise_theme': surprise_theme,
         'valentine_photo': valentine_photo,
         'valentine_audio': valentine_audio,
-        'use_typewriter': use_typewriter
+        'use_typewriter': use_typewriter,
+        'auto_approve': auto_approve
     })
 
     share_url = url_for('view_shared_note', share_id=share_id, _external=True)
@@ -8274,6 +8401,16 @@ def view_shared_note(share_id):
             'source_note_id': share['note_id']
         }) > 0
 
+    # Check if there is a pending proposal by this user for this note
+    has_pending_proposal = False
+    if current_user.is_authenticated and not is_owner:
+        has_pending_proposal = note_versions_conf.count_documents({
+            'note_id': share['note_id'],
+            'editor_id': ObjectId(current_user.id),
+            'status': 'pending',
+            'event_type': 'proposal'
+        }) > 0
+
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
@@ -8283,6 +8420,7 @@ def view_shared_note(share_id):
                            created_at=note.get('created_at'),
                            is_owner=is_owner,
                            already_saved=already_saved,
+                           has_pending_proposal=has_pending_proposal,
                            surprise_theme=surprise_theme,
                            reference=note.get('reference', ''),
                            tags=note.get('tags', []),
@@ -8391,16 +8529,88 @@ def view_saved_note(note_id):
 @socketio.on('join_note')
 def handle_join_note(data):
     share_id = data.get('share_id')
+    user_name = data.get('user_name', 'Anonymous')
+    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    
     if share_id:
         join_room(share_id)
-        app.logger.info(f"User joined note room: {share_id}")
+        
+        # Track presence
+        if share_id not in active_note_viewers:
+            active_note_viewers[share_id] = {}
+        
+        active_note_viewers[share_id][user_id] = {
+            'name': user_name,
+            'avatar': getattr(current_user, 'profile_image_url', None) if current_user.is_authenticated else None,
+            'id': user_id
+        }
+        
+        # Broadcast updated presence list
+        emit('presence_update', {'users': list(active_note_viewers[share_id].values())}, room=share_id)
+        
+        # Check if note is currently locked
+        lock_info = note_locks.get(share_id)
+        if lock_info:
+            emit('lock_status', lock_info, room=request.sid)
+            
+        app.logger.info(f"User {user_name} joined note room: {share_id}")
 
 @socketio.on('leave_note')
 def handle_leave_note(data):
     share_id = data.get('share_id')
+    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    
     if share_id:
         leave_room(share_id)
+        if share_id in active_note_viewers:
+            active_note_viewers[share_id].pop(user_id, None)
+            emit('presence_update', {'users': list(active_note_viewers[share_id].values())}, room=share_id)
+            
+        # If this user held the lock, release it
+        lock_info = note_locks.get(share_id)
+        if lock_info and lock_info.get('user_id') == user_id:
+            note_locks.pop(share_id, None)
+            emit('lock_released', {'share_id': share_id}, room=share_id)
+            
         app.logger.info(f"User left note room: {share_id}")
+
+@socketio.on('acquire_lock')
+def handle_acquire_lock(data):
+    share_id = data.get('share_id')
+    user_name = data.get('user_name', 'Anonymous')
+    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    
+    if not share_id: return
+
+    now = time.time()
+    existing_lock = note_locks.get(share_id)
+    
+    # If lock exists and hasn't expired (10 mins)
+    if existing_lock and (now - existing_lock['timestamp'] < 600) and existing_lock['user_id'] != user_id:
+        emit('lock_denied', {
+            'message': f"Note is currently being edited by {existing_lock['user_name']}",
+            'user_name': existing_lock['user_name']
+        })
+        return
+
+    # Grant lock
+    lock_info = {
+        'user_id': user_id,
+        'user_name': user_name,
+        'timestamp': now,
+        'share_id': share_id
+    }
+    note_locks[share_id] = lock_info
+    emit('lock_acquired', lock_info, room=share_id)
+
+@socketio.on('release_lock')
+def handle_release_lock(data):
+    share_id = data.get('share_id')
+    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    
+    if share_id in note_locks and note_locks[share_id]['user_id'] == user_id:
+        note_locks.pop(share_id)
+        emit('lock_released', {'share_id': share_id}, room=share_id)
 
 @socketio.on('note_update')
 def handle_note_update(data):
@@ -8515,9 +8725,22 @@ def handle_leave_chat(data):
 
 @socketio.on('disconnect')
 def handle_dm_disconnect():
-    """Clean up active chat tracking on disconnect."""
+    """Clean up active chat and note presence on disconnect."""
+    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    
     if current_user.is_authenticated:
-        active_chat_views.pop(str(current_user.id), None)
+        active_chat_views.pop(user_id, None)
+    
+    # Cleanup note presence
+    for share_id, viewers in list(active_note_viewers.items()):
+        if user_id in viewers:
+            viewers.pop(user_id, None)
+            emit('presence_update', {'users': list(viewers.values())}, room=share_id)
+            
+            # Release lock if they held it
+            if share_id in note_locks and note_locks[share_id]['user_id'] == user_id:
+                note_locks.pop(share_id)
+                emit('lock_released', {'share_id': share_id}, room=share_id)
 
 
 @socketio.on('send_dm')
@@ -9428,7 +9651,7 @@ def api_edit_shared_note(share_id):
     if not content or not content.strip():
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content.strip()[:20000]
+    content = content.strip()[:100000]
 
     # Load current note state once for conflict checks/proposals.
     note = personal_posts_conf.find_one({'_id': share['note_id']})
@@ -9444,8 +9667,8 @@ def api_edit_shared_note(share_id):
     # Encrypt using the note owner's key
     encrypted_content = encrypt_note(content, user_id=owner_id_str if owner_id_str else None)
 
-    # Contributor flow: create a pending proposal for owner approval.
-    if not is_owner:
+    # Contributor flow: create a pending proposal from the contributor for owner approval.
+    if not is_owner and not share.get('auto_approve', False):
         editor_name = 'Anonymous'
         editor_id = None
         if current_user.is_authenticated:
@@ -9468,7 +9691,8 @@ def api_edit_shared_note(share_id):
             'event_type': 'proposal',
             'status': 'pending',
             'edit_summary': edit_summary or 'Proposed changes',
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'is_read_by_owner': False
         })
 
         # Soft notify owner sessions.
@@ -9518,8 +9742,22 @@ def api_edit_shared_note(share_id):
             'event_type': 'snapshot',
             'status': 'applied',
             'edit_summary': edit_summary or 'Edited via share link',
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'is_read_by_owner': False if not is_owner else True,
+            'is_auto_approved': True if not is_owner else False
         })
+        
+        # Notify owner of auto-approval
+        if not is_owner:
+            try:
+                socketio.emit('note_auto_approved', {
+                    'share_id': share_id,
+                    'note_id': str(share['note_id']),
+                    'editor_name': editor_name,
+                    'summary': edit_summary or 'Auto-approved edit'
+                }, room=owner_id_str)
+            except Exception:
+                pass
 
         # Cap at 50 versions per note
         version_count = note_versions_conf.count_documents({'note_id': share['note_id']})
@@ -10440,6 +10678,7 @@ def sitemap():
     today = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')
 
     # Start XML
+    # Standard: No leading whitespace, declaration on line 1, column 1
     xml_parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
@@ -10454,12 +10693,7 @@ def sitemap():
     ]
 
     for path, priority, changefreq in static_pages:
-        xml_parts.append(f'''  <url>
-    <loc>{escape(base_url + path)}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>{changefreq}</changefreq>
-    <priority>{priority}</priority>
-  </url>''')
+        xml_parts.append(f'  <url><loc>{escape(clean_xml_text(base_url + path))}</loc><lastmod>{today}</lastmod><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>')
 
     # All blog posts (published only)
     try:
@@ -10468,7 +10702,7 @@ def sitemap():
         posts = posts_conf.find(
             posts_query,
             {'slug': 1, 'timestamp': 1, 'edited_at': 1}
-        ).sort('timestamp', -1).limit(5000)
+        ).sort('timestamp', -1).limit(50000) # Increased limit for future-proofing
 
         for post in posts:
             slug = post.get('slug')
@@ -10478,20 +10712,12 @@ def sitemap():
             lastmod = post.get('edited_at') or post.get('timestamp')
             lastmod_str = ''
             if lastmod and hasattr(lastmod, 'strftime'):
-                lastmod_str = f'\n    <lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
+                lastmod_str = f'<lastmod>{lastmod.strftime("%Y-%m-%d")}</lastmod>'
 
             full_url = f"{base_url}/post/{slug}"
-            xml_parts.append(f'''  <url>
-    <loc>{escape(full_url)}</loc>{lastmod_str}
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>''')
+            xml_parts.append(f'  <url><loc>{escape(clean_xml_text(full_url))}</loc>{lastmod_str}<changefreq>weekly</changefreq><priority>0.7</priority></url>')
     except Exception as e:
         app.logger.error(f"Error generating sitemap posts: {e}")
-
-    # User profiles
-    # Note: Profile pages are login-required, so we exclude them from the sitemap
-    # to avoid serving redirect responses to crawlers.
 
     xml_parts.append('</urlset>')
     sitemap_xml = '\n'.join(xml_parts)
@@ -10507,6 +10733,15 @@ def sitemap():
     response.headers['Content-Type'] = 'application/xml; charset=utf-8'
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response
+
+@app.route('/api/admin/clear-sitemap-cache', methods=['POST'])
+@login_required # Ideally admin_required
+def api_clear_sitemap_cache():
+    """Manually clear the sitemap cache."""
+    if redis_cache:
+        redis_cache.delete('sitemap_xml')
+        return jsonify({'success': True, 'message': 'Sitemap cache cleared'})
+    return jsonify({'error': 'Redis not available'}), 503
 
 
 @app.route('/robots.txt')

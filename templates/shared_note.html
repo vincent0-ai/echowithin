@@ -13,8 +13,13 @@
 
 {% block content %}
 <div class="content-wrapper">
-    <div
-        class="shared-note-container {% if surprise_theme != 'none' %}surprise-note theme-{{ surprise_theme }}{% endif %}">
+    <div class="shared-note-layout">
+        <aside class="toc-sidebar" id="toc-sidebar">
+            <div class="toc-title">Study Sections</div>
+            <ul class="toc-list" id="toc-list"></ul>
+        </aside>
+        <div
+            class="shared-note-container {% if surprise_theme != 'none' %}surprise-note theme-{{ surprise_theme }}{% endif %}">
         {% if surprise_theme != 'none' %}
         <div class="animation-container" id="surprise-animation-container"></div>
         {% if valentine_audio %}
@@ -87,40 +92,60 @@
                         {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Note
                         {% elif surprise_theme == 'anniversary' %}<i class="fas fa-ring"></i> Anniversary Note
                         {% elif surprise_theme == 'celebration' %}<i class="fas fa-party-popper"></i> Celebration Note
-                        {% else %}<i class="fas fa-heart"></i> Valentine Note{% endif %}
+                        {% else %}<i class="fas fa-heart"></i> Personal Surprise Note{% endif %}
                     </div>
-                    <div class="permissions-badge {{ permissions }}">
-                        <i class="fas fa-{{ 'pen' if permissions == 'edit' else 'eye' }}"></i>
-                        {{ permissions.capitalize() }} Access
+
+                    <!-- Presence Bar -->
+                    <div id="presence-bar" class="presence-bar">
+                        <div class="presence-label">Studying Now:</div>
+                        <div id="viewers-list" class="viewers-list">
+                            <!-- Avatars populated by JS -->
+                        </div>
                     </div>
-                    {% if current_user.is_authenticated and not is_owner %}
-                    {% if already_saved %}
-                    <button id="save-to-notes-btn" class="btn btn-save-note saved" type="button"
-                        data-share-id="{{ share_id }}" disabled>
-                        Already Saved
-                    </button>
-                    {% else %}
-                    <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
-                        Save to My Notes
-                    </button>
-                    {% endif %}
-                    {% endif %}
-                    {% if permissions == 'edit' %}
-                    <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
-                         Edit
-                    </button>
-                    {% endif %}
-                    {% if is_owner %}
-                    <button id="view-version-control-btn" class="btn btn-history" type="button">
-                        <i class="fas fa-clock-rotate-left"></i> Version Control
-                    </button>
-                    <button id="view-owner-links-btn" class="btn btn-history" type="button">
-                        <i class="fas fa-link"></i> My Share Links
-                    </button>
-                    <button id="view-history-btn" class="btn btn-history" type="button">
-                        <i class="fas fa-chart-line"></i> Access History
-                    </button>
-                    {% endif %}
+
+                    <div class="header-actions">
+                        {% if current_user.is_authenticated and not is_owner %}
+                            {% if already_saved %}
+                            <button id="save-to-notes-btn" class="btn btn-save-note saved" type="button"
+                                data-share-id="{{ share_id }}" disabled>
+                                Already Saved
+                            </button>
+                            {% else %}
+                            <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
+                                Save to My Notes
+                            </button>
+                            {% endif %}
+                        {% endif %}
+                        
+                        {% if permissions == 'edit' %}
+                        <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
+                             Edit
+                        </button>
+                        {% endif %}
+
+                        {% if is_owner %}
+                        <button id="view-version-control-btn" class="btn btn-history" title="Versions" type="button">
+                            <i class="fas fa-clock-rotate-left"></i>
+                        </button>
+                        <button id="view-owner-links-btn" class="btn btn-history" title="Shared Links" type="button">
+                            <i class="fas fa-link"></i>
+                        </button>
+                        <button id="view-history-btn" class="btn btn-history" title="Stats" type="button">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Shared Lock Banner -->
+                <div id="lock-banner" class="lock-banner" style="display: none;">
+                    <i class="fas fa-lock"></i>
+                    <span id="lock-message">Partner is currently editing...</span>
+                </div>
+                <!-- Pending Review Banner -->
+                <div id="pending-review-banner" class="lock-banner" style="display: {{ 'flex' if has_pending_proposal else 'none' }}; background-color: #e3f2fd; color: #1565c0; border-bottom: 1px solid #bbdefb;">
+                    <i class="fas fa-clock"></i>
+                    <span id="pending-message">You have a pending proposal awaiting owner review.</span>
                 </div>
                 {% if permissions == 'edit' and not is_owner %}
                 <div style="padding: 0.55rem 1.25rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
@@ -205,40 +230,60 @@
                 <div class="owner-info">
                     Shared Note
                 </div>
-                <div class="permissions-badge {{ permissions }}">
-                    <i class="fas fa-{{ 'pen' if permissions == 'eye' else 'eye' }}"></i>
-                    {{ permissions.capitalize() }} Access
-                </div>
-                {% if current_user.is_authenticated and not is_owner %}
-                {% if already_saved %}
-                <button id="save-to-notes-btn" class="btn btn-save-note saved" type="button"
-                    data-share-id="{{ share_id }}" disabled>
-                    Already Saved
-                </button>
-                {% else %}
-                <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
-                    Save to My Notes
-                </button>
-                {% endif %}
-                {% endif %}
 
-                {% if permissions == 'edit' %}
-                <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
-                     Edit
-                </button>
-                {% endif %}
-                {% if is_owner %}
-                <button id="view-version-control-btn" class="btn btn-history" type="button">
-                    <i class="fas fa-clock-rotate-left"></i> Version Control
-                </button>
-                <button id="view-owner-links-btn" class="btn btn-history" type="button">
-                    <i class="fas fa-link"></i> My Share Links
-                </button>
-                <button id="view-history-btn" class="btn btn-history" type="button">
-                    <i class="fas fa-chart-line"></i> Access History
-                </button>
-                {% endif %}
+                <!-- Presence Bar -->
+                <div id="presence-bar" class="presence-bar">
+                    <div class="presence-label">Studying Now:</div>
+                    <div id="viewers-list" class="viewers-list">
+                        <!-- Avatars populated by JS -->
+                    </div>
+                </div>
+
+                <div class="header-actions">
+                    {% if current_user.is_authenticated and not is_owner %}
+                        {% if already_saved %}
+                        <button id="save-to-notes-btn" class="btn btn-save-note saved" type="button"
+                            data-share-id="{{ share_id }}" disabled>
+                            Already Saved
+                        </button>
+                        {% else %}
+                        <button id="save-to-notes-btn" class="btn btn-save-note" type="button" data-share-id="{{ share_id }}">
+                            Save to My Notes
+                        </button>
+                        {% endif %}
+                    {% endif %}
+
+                    {% if permissions == 'edit' %}
+                    <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
+                         Edit
+                    </button>
+                    {% endif %}
+
+                    {% if is_owner %}
+                    <button id="view-version-control-btn" class="btn btn-history" title="Versions" type="button">
+                        <i class="fas fa-clock-rotate-left"></i>
+                    </button>
+                    <button id="view-owner-links-btn" class="btn btn-history" title="Shared Links" type="button">
+                        <i class="fas fa-link"></i>
+                    </button>
+                    <button id="view-history-btn" class="btn btn-history" title="Stats" type="button">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
+
+            <!-- Shared Lock Banner -->
+            <div id="lock-banner" class="lock-banner" style="display: none;">
+                <i class="fas fa-lock"></i>
+                <span id="lock-message">Partner is currently editing...</span>
+            </div>
+            <!-- Pending Review Banner -->
+            <div id="pending-review-banner" class="lock-banner" style="display: {{ 'flex' if has_pending_proposal else 'none' }}; background-color: #e3f2fd; color: #1565c0; border-bottom: 1px solid #bbdefb;">
+                <i class="fas fa-clock"></i>
+                <span id="pending-message">You have a pending proposal awaiting owner review.</span>
+            </div>
+
             {% if permissions == 'edit' and not is_owner %}
             <div style="padding: 0.55rem 1.5rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
                 Your edits are submitted as proposals. The original note owner reviews and accepts/rejects them.
@@ -415,14 +460,158 @@
         </div>
         {% endif %}
         {% endif %}
-    </div>
+    </div> <!-- Close shared-note-container -->
+</div> <!-- Close shared-note-layout -->
 
     <style>
-        .shared-note-container {
-            max-width: 1000px;
+        .presence-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 0 1rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(0,0,0,0.03);
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .presence-label {
+            color: #777;
+            font-weight: 600;
+        }
+
+        .viewers-list {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .viewer-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #fff;
+            border: 2px solid #fff;
+            box-shadow: 0 0 0 1px #eee;
+            cursor: help;
+        }
+
+        .lock-banner {
+            background: #fff8f1;
+            border: 1px solid #ffe8cc;
+            color: #d9480f;
+            padding: 0.65rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+        .shared-note-layout {
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+            max-width: 1200px;
             margin: 1.5rem auto;
-            padding: 0 0.75rem;
-            /* Reduced from 1.5rem */
+            padding: 0 1rem;
+        }
+
+        .toc-sidebar {
+            width: 240px;
+            position: sticky;
+            top: 1.5rem;
+            max-height: calc(100vh - 3rem);
+            overflow-y: auto;
+            background: #fff;
+            padding: 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            display: none; /* Hidden by default, shown if headers exist */
+        }
+
+        .toc-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #3e2217;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #f0eee9;
+            padding-bottom: 0.5rem;
+        }
+
+        .toc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .toc-item {
+            margin-bottom: 0.4rem;
+        }
+
+        .toc-link {
+            color: #666;
+            text-decoration: none;
+            font-size: 0.88rem;
+            display: block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .toc-link:hover {
+            background: #f8f6f2;
+            color: #3e2217;
+            padding-left: 0.75rem;
+        }
+
+        .toc-link.active {
+            font-weight: 600;
+            color: #3e2217;
+            background: #f0eee9;
+        }
+
+        .toc-h2 { padding-left: 1rem; font-size: 0.84rem; opacity: 0.9; }
+        .toc-h3 { padding-left: 1.75rem; font-size: 0.8rem; opacity: 0.8; }
+
+        .shared-note-container {
+            flex: 1;
+            max-width: 850px; /* Limit width for readability */
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        @media (max-width: 1000px) {
+            .shared-note-layout { flex-direction: column; }
+            .toc-sidebar { 
+                width: 100%; 
+                position: static; 
+                max-height: none; 
+                margin-bottom: 1rem;
+            }
+        }
+
+        .shared-note-container {
+            max-width: 100%;
+            padding: 0;
         }
 
         .error-state,
@@ -1600,6 +1789,51 @@
                 }
             });
 
+            // Auto-generate TOC for long studies
+            function generateTOC() {
+                const noteView = document.querySelector('.rendered-note');
+                const tocList = document.getElementById('toc-list');
+                const tocSidebar = document.getElementById('toc-sidebar');
+                if (!noteView || !tocList || !tocSidebar) return;
+
+                // Scan for headers
+                const headers = noteView.querySelectorAll('h1, h2, h3');
+                tocList.innerHTML = '';
+                
+                if (headers.length < 2) {
+                    tocSidebar.style.display = 'none';
+                    return;
+                }
+
+                tocSidebar.style.display = 'block';
+                headers.forEach((header, index) => {
+                    const id = 'section-' + index;
+                    header.id = id;
+                    
+                    const li = document.createElement('li');
+                    li.className = 'toc-item';
+                    
+                    const a = document.createElement('a');
+                    a.href = '#' + id;
+                    a.className = 'toc-link toc-' + header.tagName.toLowerCase();
+                    a.textContent = header.textContent;
+                    
+                    a.onclick = (e) => {
+                        e.preventDefault();
+                        header.scrollIntoView({ behavior: 'smooth' });
+                        // Update active state
+                        document.querySelectorAll('.toc-link').forEach(l => l.classList.remove('active'));
+                        a.classList.add('active');
+                    };
+                    
+                    li.appendChild(a);
+                    tocList.appendChild(li);
+                });
+            }
+
+            // Generate TOC on page load
+            generateTOC();
+
             // --- Edit Toggle Logic ---
             const toggleBtn = document.getElementById('toggle-edit-btn');
             const noteView = document.getElementById('note-view');
@@ -1654,6 +1888,13 @@
 
             if (toggleBtn && noteView && editInterface) {
                 toggleBtn.addEventListener('click', function () {
+                    // Request a shared lock before entering edit mode
+                    if (typeof socket !== 'undefined' && SHARE_ID !== 'local') {
+                        socket.emit('acquire_lock', {
+                            share_id: SHARE_ID,
+                            user_name: CURRENT_USER_NAME || 'Guest'
+                        });
+                    }
                     // Switch to edit mode
                     noteView.style.display = 'none';
                     editInterface.style.display = 'block';
@@ -1663,6 +1904,10 @@
 
                 if (cancelBtn) {
                     cancelBtn.addEventListener('click', function () {
+                        // Release the shared lock
+                        if (typeof socket !== 'undefined' && SHARE_ID !== 'local') {
+                            socket.emit('release_lock', { share_id: SHARE_ID });
+                        }
                         // Switch back to view mode without saving
                         editInterface.style.display = 'none';
                         noteView.style.display = 'block';
@@ -1708,12 +1953,17 @@
                             if (result.pending_approval) {
                                 status.textContent = 'Submitted for owner approval.';
                                 status.style.color = '#1565c0';
-                                if (noteView) {
-                                    noteView.innerHTML = renderMarkdownWithMath(content);
-                                    noteView.setAttribute('data-raw', content);
-                                    noteView.setAttribute('data-updated-at', submittedAt);
+                                // Clear local draft -- the owner has the proposal now
+                                clearSharedDraft();
+                                // Show Pending Proposal banner
+                                const pendingBanner = document.getElementById('pending-review-banner');
+                                if (pendingBanner) {
+                                    pendingBanner.style.display = 'flex';
                                 }
-                                persistSharedDraft(content, editSummary, submittedAt);
+                                const lockBanner = document.getElementById('lock-banner');
+                                if (lockBanner) {
+                                  lockBanner.style.display = 'none';
+                                }
                             } else {
                                 status.textContent = 'Saved!';
                                 status.style.color = 'green';
@@ -1733,6 +1983,12 @@
                                 noteView.style.display = 'block';
                                 if (toggleBtn) toggleBtn.style.display = 'flex';
                                 status.textContent = '';
+                                // Release the shared lock after save
+                                if (typeof socket !== 'undefined' && SHARE_ID !== 'local') {
+                                    socket.emit('release_lock', { share_id: SHARE_ID });
+                                }
+                                // Regenerate TOC after save
+                                if (typeof generateTOC === 'function') generateTOC();
                             }, 900);
                         } else if (response.status === 409 && result.error === 'conflict') {
                             const merged = window.prompt(
@@ -1839,8 +2095,86 @@
             const socket = io();
             socket.on('connect', () => {
                 console.log('Connected to collaboration server');
-                socket.emit('join_note', { share_id: SHARE_ID });
+                // Join room with username for presence tracking
+                socket.emit('join_note', { 
+                    share_id: SHARE_ID, 
+                    user_name: CURRENT_USER_NAME || 'Guest' 
+                });
             });
+
+            // Handle Presence Updates (Who's in the study)
+            socket.on('presence_update', (data) => {
+                const list = document.getElementById('viewers-list');
+                if (!list) return;
+                list.innerHTML = '';
+                
+                (data.users || []).forEach(user => {
+                    const avatar = document.createElement('div');
+                    avatar.className = 'viewer-avatar';
+                    avatar.title = user.name;
+                    
+                    if (user.avatar) {
+                        avatar.style.backgroundImage = `url(${user.avatar})`;
+                        avatar.style.backgroundSize = 'cover';
+                    } else {
+                        // Initials
+                        avatar.textContent = user.name.charAt(0).toUpperCase();
+                        avatar.style.background = '#7a5d52';
+                    }
+                    list.appendChild(avatar);
+                });
+            });
+
+            // Handle Shared Edit Lock status
+            socket.on('lock_status', (data) => {
+                updateLockUI(data);
+            });
+
+            socket.on('lock_acquired', (data) => {
+                updateLockUI(data);
+            });
+
+            socket.on('lock_released', () => {
+                updateLockUI(null);
+            });
+
+            socket.on('lock_denied', (data) => {
+                if (typeof showToast === 'function') {
+                    showToast(data.message, 'error');
+                }
+            });
+
+            function updateLockUI(lockInfo) {
+                const banner = document.getElementById('lock-banner');
+                const lockMsg = document.getElementById('lock-message');
+                const editBtn = document.getElementById('toggle-edit-btn');
+                
+                // If I am NOT the lock owner, disable my edit button
+                const myId = socket.id; // Or current_user.id logic
+                // Backend sends string IDs. We simplified lock owner check.
+                
+                if (lockInfo) {
+                    banner.style.display = 'flex';
+                    lockMsg.textContent = `${lockInfo.user_name} is currently editing...`;
+                    
+                    // Simple hack: if lock was just acquired and it's not by me
+                    // (we'll implement the 'is_me' check by comparing user_name for simplicity here)
+                    if (lockInfo.user_name !== (CURRENT_USER_NAME || 'Guest')) {
+                        if (editBtn) {
+                            editBtn.disabled = true;
+                            editBtn.title = `Locked by ${lockInfo.user_name}`;
+                            editBtn.style.opacity = '0.5';
+                        }
+                    }
+                } else {
+                    banner.style.display = 'none';
+                    if (editBtn) {
+                        editBtn.disabled = false;
+                        editBtn.title = '';
+                        editBtn.style.opacity = '1';
+                    }
+                }
+            }
 
         socket.on('note_changed', (data) => {
             console.log('Note updated via WebSocket');
@@ -1848,6 +2182,8 @@
             if (noteContentEl) {
                 noteContentEl.setAttribute('data-raw', data.content);
                 if (data.updated_at) noteContentEl.setAttribute('data-updated-at', data.updated_at);
+                
+                // Re-render the markdown content
                 if (typeof renderMarkdownWithMath === 'function') {
                     noteContentEl.innerHTML = renderMarkdownWithMath(data.content);
                 } else {
@@ -1857,6 +2193,9 @@
                 if (typeof showToast === 'function') {
                     showToast('Note updated by collaborator', 'success');
                 }
+
+                // Update TOC if headers changed
+                if (typeof generateTOC === 'function') generateTOC();
 
                 // Trigger typewriter effect if enabled and not already revealed
                 const vContent = document.getElementById('valentine-content');

@@ -7177,6 +7177,9 @@ def personal_space():
     total_notes_pages = math.ceil(total_notes_count / per_page) if per_page else 0
     total_saved_pages = math.ceil(total_saved / per_page) if per_page else 0
 
+    # New users (fewer than 5 notes) see text labels beside action icons
+    show_icon_labels = (total_notes_count + locked_notes_count) < 5
+
     return render_template(
         'personal_space.html', 
         saved_posts=saved_posts, 
@@ -7197,7 +7200,8 @@ def personal_space():
         locked_notes=locked_notes,
         locked_notes_count=locked_notes_count,
         locked_shares_map=locked_shares_map,
-        locked_clones_map=locked_clones_map
+        locked_clones_map=locked_clones_map,
+        show_icon_labels=show_icon_labels
     )
 
 @app.route('/post/<post_id>/react', methods=['POST'])
@@ -7403,8 +7407,8 @@ def create_personal_post():
     """Creates a new personal note/post with encryption."""
     content = request.form.get('content')
     if content and content.strip():
-        # Limit note length to 8000 characters
-        content = content.strip()[:8000]
+        # Limit note length to 20000 characters
+        content = content.strip()[:20000]
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
@@ -7434,7 +7438,7 @@ def create_personal_post_json():
     if not content:
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content[:8000]
+    content = content[:20000]
     encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
@@ -7606,7 +7610,7 @@ def edit_personal_post(post_id):
         if not content:
             return jsonify({'error': 'Content cannot be empty'}), 400
 
-        content = content[:8000]
+        content = content[:20000]
         obj_id = safe_object_id(post_id)
         if not obj_id:
             return jsonify({'error': 'Invalid note ID'}), 400
@@ -9424,7 +9428,7 @@ def api_edit_shared_note(share_id):
     if not content or not content.strip():
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content.strip()[:8000]
+    content = content.strip()[:20000]
 
     # Load current note state once for conflict checks/proposals.
     note = personal_posts_conf.find_one({'_id': share['note_id']})
@@ -9769,7 +9773,7 @@ def api_decide_note_proposal(version_id):
                 'diff_text': build_unified_diff_text(current_plain, proposed_plain)
             }), 409
 
-        final_plain = (merged_content or proposed_plain).strip()[:8000]
+        final_plain = (merged_content or proposed_plain).strip()[:20000]
         final_encrypted = encrypt_note(final_plain, user_id=current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
 

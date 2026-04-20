@@ -234,6 +234,66 @@
             margin-bottom: 0.75rem;
         }
 
+        /* --- Collapsible Long Notes --- */
+        .note-content.note-collapsed {
+            max-height: 200px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .note-content.note-collapsed::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(transparent, white);
+            pointer-events: none;
+        }
+
+        .note-card.pinned .note-content.note-collapsed::after {
+            background: linear-gradient(transparent, #fffdf5);
+        }
+
+        .note-content.note-expanded {
+            max-height: none;
+            overflow: visible;
+        }
+
+        .note-content.note-expanded::after {
+            display: none;
+        }
+
+        .note-toggle-btn {
+            display: block;
+            width: 100%;
+            background: none;
+            border: none;
+            border-top: 1px dashed #e0e0e0;
+            color: var(--primary-color);
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.45rem 0;
+            cursor: pointer;
+            margin-top: 0.25rem;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .note-toggle-btn:hover {
+            color: #5a3328;
+            background: #faf8f7;
+        }
+
+        /* --- Icon Labels for New Users --- */
+        .note-actions .action-label {
+            font-size: 0.68rem;
+            font-weight: 500;
+            color: #888;
+            margin-left: 2px;
+            vertical-align: middle;
+        }
+
         /* Markdown rendered content styles */
         .note-content h1,
         .note-content h2,
@@ -1582,7 +1642,7 @@
             </div>
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="8000"
+                <textarea name="content" id="note-input" placeholder="Write a private note.." maxlength="20000"
                     required></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
@@ -1606,7 +1666,7 @@
                     </div>
                 </div>
                 <div class="create-note-footer">
-                    <span class="char-count"><span id="char-count">0</span>/8000</span>
+                    <span class="char-count"><span id="char-count">0</span>/20000</span>
                     <label class="preview-toggle">
                         <input type="checkbox" id="preview-toggle">
                         Preview
@@ -1728,13 +1788,13 @@
                     {% endif %}
                     <div class="note-actions">
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
-                            <i class="far fa-copy"></i>
+                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
-                            <i class="fas fa-pen"></i>
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
@@ -1751,21 +1811,21 @@
                         </a>
                         <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt"></i>
+                            <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span class="action-label">Sync</span>{% endif %}
                         </button>
                         {% endif %}
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
                             <span class="share-tooltip share-onboard-tip" style="display:none;">Send a surprise!
                                 🎁</span>
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
-                            <i class="fas fa-lock"></i>
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-clock-rotate-left"></i>
+                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
                         </button>
                         {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
@@ -2063,7 +2123,39 @@
                     class="fas fa-times"></i></button>
         </div>
 
-        <div id="share-config">
+        <!-- Guided Mode Selector -->
+        <div id="share-mode-selector" style="margin-bottom: 1rem;">
+            <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">What would you like to do?</p>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <button type="button" class="share-mode-btn" data-mode="simple" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    <span style="font-size: 1.5rem;">📄</span>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Simple Share</div>
+                        <div style="font-size: 0.75rem; color: #888;">Send a read-only link to view your note</div>
+                    </div>
+                </button>
+                <button type="button" class="share-mode-btn" data-mode="collaborate" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    <span style="font-size: 1.5rem;">✏️</span>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Collaborate</div>
+                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals</div>
+                    </div>
+                </button>
+                <button type="button" class="share-mode-btn" data-mode="surprise" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                    <span style="font-size: 1.5rem;">🎁</span>
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Send a Surprise</div>
+                        <div style="font-size: 0.75rem; color: #888;">Birthday, anniversary, or celebration with music & photos</div>
+                    </div>
+                </button>
+            </div>
+            <button type="button" id="show-all-share-options" style="background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; margin-top: 0.5rem; padding: 0;">Show all options ↓</button>
+        </div>
+
+        <div id="share-config" style="display: none;">
+            <div style="margin-bottom: 0.5rem;">
+                <button type="button" id="back-to-share-modes" style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;"><i class="fas fa-arrow-left"></i> Back to options</button>
+            </div>
             <div style="margin-bottom: 1rem;">
                 <label
                     style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Permissions</label>
@@ -2215,7 +2307,7 @@
             </h2>
             <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
         </div>
-        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="8000"
+        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="20000"
             placeholder="Edit your note..."></textarea>
         <div style="margin-top: 0.6rem;">
             <input type="text" id="edit-note-summary" maxlength="180"
@@ -2241,7 +2333,7 @@
                     style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem;">
             </div>
         </div>
-        <div class="edit-char-count"><span id="edit-char-count">0</span>/8000</div>
+        <div class="edit-char-count"><span id="edit-char-count">0</span>/20000</div>
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
             <button onclick="closeEditModal()" class="btn edit-btn"
                 style="padding: 0.6rem 1.2rem; border-radius: 8px;">Cancel</button>
@@ -3999,12 +4091,56 @@
             });
         }
 
+        // --- Collapsible Long Notes ---
+        const COLLAPSE_THRESHOLD = 200; // px
+
+        function initCollapsibleNotes() {
+            document.querySelectorAll('.note-card .note-content.rendered-note').forEach(el => {
+                // Skip if already processed
+                if (el.dataset.collapseInit) return;
+                el.dataset.collapseInit = '1';
+
+                // Measure natural height
+                if (el.scrollHeight > COLLAPSE_THRESHOLD + 40) {
+                    el.classList.add('note-collapsed');
+
+                    // Create toggle button
+                    const toggleBtn = document.createElement('button');
+                    toggleBtn.type = 'button';
+                    toggleBtn.className = 'note-toggle-btn';
+                    toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show more';
+                    toggleBtn.addEventListener('click', () => {
+                        const isCollapsed = el.classList.contains('note-collapsed');
+                        if (isCollapsed) {
+                            el.classList.remove('note-collapsed');
+                            el.classList.add('note-expanded');
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show less';
+                        } else {
+                            el.classList.remove('note-expanded');
+                            el.classList.add('note-collapsed');
+                            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show more';
+                            // Scroll the card back into view
+                            const card = el.closest('.note-card');
+                            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    });
+
+                    // Insert toggle after the note content (before the metadata/footer)
+                    el.parentNode.insertBefore(toggleBtn, el.nextSibling);
+                }
+            });
+        }
+
         // Progressive enhancement: libs load with defer, so they may not
         // be available yet. Poll briefly then render; raw text is already
         // visible so the user isn't staring at a spinner.
         (function upgradeNotes() {
             if (typeof katex !== 'undefined' && typeof marked !== 'undefined') {
                 renderAllNotes();
+                // Run collapsible note detection after content is rendered
+                requestAnimationFrame(() => {
+                    initCollapsibleNotes();
+                });
             } else {
                 // Check again in 50ms — libs are deferred, they'll arrive soon
                 setTimeout(upgradeNotes, 50);
@@ -4108,9 +4244,9 @@
                 const len = noteInput.value.length;
                 charCount.textContent = len;
                 charCountContainer.classList.remove('warning', 'danger');
-                if (len > 1800) {
+                if (len > 18000) {
                     charCountContainer.classList.add('danger');
-                } else if (len > 1500) {
+                } else if (len > 15000) {
                     charCountContainer.classList.add('warning');
                 }
             });
@@ -5008,6 +5144,195 @@
                 }, 8000);
             }
         }
+    })();
+
+    // --- Share Modal Guided Flow ---
+    (function initShareGuidedFlow() {
+        const modeSelector = document.getElementById('share-mode-selector');
+        const shareConfig = document.getElementById('share-config');
+        const backBtn = document.getElementById('back-to-share-modes');
+        const showAllBtn = document.getElementById('show-all-share-options');
+        const permSelect = document.getElementById('share-permissions');
+        const expirySelect = document.getElementById('share-expiry');
+        const themeSelect = document.getElementById('surprise-theme');
+        const surpriseOpts = document.getElementById('surprise-options');
+
+        if (!modeSelector || !shareConfig) return;
+
+        function showConfig() {
+            modeSelector.style.display = 'none';
+            shareConfig.style.display = 'block';
+        }
+
+        function showModes() {
+            shareConfig.style.display = 'none';
+            modeSelector.style.display = 'block';
+        }
+
+        // Mode button clicks
+        document.querySelectorAll('.share-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                if (mode === 'simple') {
+                    permSelect.value = 'view';
+                    expirySelect.value = 'never';
+                    themeSelect.value = 'none';
+                    if (surpriseOpts) surpriseOpts.style.display = 'none';
+                } else if (mode === 'collaborate') {
+                    permSelect.value = 'edit';
+                    expirySelect.value = 'never';
+                    themeSelect.value = 'none';
+                    if (surpriseOpts) surpriseOpts.style.display = 'none';
+                } else if (mode === 'surprise') {
+                    permSelect.value = 'view';
+                    expirySelect.value = 'never';
+                    themeSelect.value = 'birthday';
+                    if (surpriseOpts) surpriseOpts.style.display = 'block';
+                }
+                showConfig();
+            });
+
+            // Hover effect
+            btn.addEventListener('mouseenter', () => {
+                btn.style.borderColor = 'var(--primary-color)';
+                btn.style.background = '#faf8f7';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.borderColor = '#eee';
+                btn.style.background = 'white';
+            });
+        });
+
+        // Back button
+        if (backBtn) {
+            backBtn.addEventListener('click', showModes);
+        }
+
+        // "Show all options" bypasses the guided flow
+        if (showAllBtn) {
+            showAllBtn.addEventListener('click', () => {
+                showConfig();
+            });
+        }
+
+        // Reset mode selector when share modal opens for a new note
+        const origOpenShareModal = window.openShareModal;
+        if (typeof origOpenShareModal === 'function') {
+            // The openShareModal might not exist yet at parse time,
+            // so we hook into it via a MutationObserver on modal display
+        }
+
+        // Observe the share modal visibility to reset guided flow
+        const shareModal = document.getElementById('share-modal');
+        if (shareModal) {
+            const observer = new MutationObserver(() => {
+                if (shareModal.style.display === 'flex') {
+                    // Reset to mode selector when modal opens
+                    showModes();
+                }
+            });
+            observer.observe(shareModal, { attributes: true, attributeFilter: ['style'] });
+        }
+    })();
+
+    // --- Step-by-Step Onboarding Tooltip for New Users ---
+    (function initOnboardingTour() {
+        // Only show for new users (fewer than 5 notes)
+        if (localStorage.getItem('ew_onboarding_complete')) return;
+
+        const firstNoteCard = document.querySelector('.note-card[data-note-id]');
+        if (!firstNoteCard) return;
+
+        const steps = [
+            { selector: '.copy-btn', icon: 'fa-copy', text: 'Copy your note text to clipboard' },
+            { selector: '.edit-note-btn', icon: 'fa-pen', text: 'Edit your note content with markdown support' },
+            { selector: '.share-note-btn', icon: 'fa-share-alt', text: 'Share or send as a surprise to someone' },
+            { selector: '.lock-note-btn', icon: 'fa-lock', text: 'Lock this note behind your PIN' },
+            { selector: '.version-history-btn', icon: 'fa-clock-rotate-left', text: 'View edit history & restore versions' }
+        ];
+
+        let currentStep = 0;
+
+        // Create tooltip element
+        const tooltip = document.createElement('div');
+        tooltip.id = 'onboarding-tooltip';
+        tooltip.style.cssText = `
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 0.6rem 0.9rem;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            max-width: 220px;
+            z-index: 10000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            pointer-events: auto;
+            transition: opacity 0.3s, transform 0.3s;
+        `;
+        document.body.appendChild(tooltip);
+
+        function showStep(index) {
+            if (index >= steps.length) {
+                // Tour complete
+                tooltip.remove();
+                document.querySelectorAll('.onboarding-highlight').forEach(el => el.classList.remove('onboarding-highlight'));
+                localStorage.setItem('ew_onboarding_complete', '1');
+                return;
+            }
+
+            // Remove previous highlights
+            document.querySelectorAll('.onboarding-highlight').forEach(el => {
+                el.classList.remove('onboarding-highlight');
+                el.style.outline = '';
+                el.style.outlineOffset = '';
+            });
+
+            const step = steps[index];
+            const target = firstNoteCard.querySelector(step.selector);
+            if (!target) {
+                // Skip missing buttons
+                currentStep++;
+                showStep(currentStep);
+                return;
+            }
+
+            // Highlight target
+            target.classList.add('onboarding-highlight');
+            target.style.outline = '2px solid var(--primary-color)';
+            target.style.outlineOffset = '3px';
+            target.style.borderRadius = '6px';
+
+            // Position tooltip
+            const rect = target.getBoundingClientRect();
+            tooltip.innerHTML = `
+                <div style="margin-bottom: 0.4rem;">${step.text}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 0.7rem; color: #aaa;">${index + 1} of ${steps.length}</span>
+                    <button id="onboarding-next" style="background: var(--primary-color); color: white; border: none; padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                        ${index === steps.length - 1 ? 'Done' : 'Next'}
+                    </button>
+                </div>
+            `;
+
+            // Calculate position (below the target)
+            const scrollY = window.scrollY;
+            tooltip.style.top = (rect.bottom + scrollY + 8) + 'px';
+            tooltip.style.left = Math.max(10, rect.left + rect.width / 2 - 110) + 'px';
+            tooltip.style.opacity = '1';
+
+            // Wire next button
+            const nextBtn = document.getElementById('onboarding-next');
+            if (nextBtn) {
+                nextBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    currentStep++;
+                    showStep(currentStep);
+                });
+            }
+        }
+
+        // Start tour after a brief delay to let the page settle
+        setTimeout(() => showStep(0), 1500);
     })();
 </script>
 {% endblock %}

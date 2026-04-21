@@ -1352,7 +1352,7 @@ def add_security_headers(response):
     )
 
     # Prevent indexing of private/auth routes without triggering GSC blocked warnings
-    noindex_paths = ('/admin', '/api', '/logout', '/login', '/register', '/dashboard', '/messages', '/personal_space')
+    noindex_paths = ('/admin', '/api', '/logout', '/login', '/register', '/dashboard', '/messages', '/personal_space', '/shared/', '/search', '/profile_settings', '/reset_password', '/create_post', '/edit_post')
     if getattr(request, 'path', '').startswith(noindex_paths):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
 
@@ -5381,6 +5381,17 @@ def post():
             except Exception as e:
                 app.logger.error(f"Failed to enqueue push notification for new post: {e}")
 
+            # --- Clear sitemap cache and ping Google for faster indexing ---
+            try:
+                if redis_cache:
+                    redis_cache.delete('sitemap_xml')
+                # Ping Google to re-crawl sitemap (non-blocking, fire-and-forget)
+                import urllib.request
+                ping_url = 'https://www.google.com/ping?sitemap=https://echowithin.xyz/sitemap.xml'
+                urllib.request.urlopen(ping_url, timeout=5)
+            except Exception as e:
+                app.logger.debug(f"Sitemap ping failed (non-critical): {e}")
+
             flash("Post created successfully!", "success")
         else:
             flash("Title is required. Content is also required unless you attach media.", "danger")
@@ -5577,20 +5588,50 @@ def view_post(slug):
 
     # JSON-LD structured data for the post
     try:
-        jsonld = {
+        jsonld_article = {
             "@context": "https://schema.org",
             "@type": "BlogPosting",
-            "headline": post.get('title'),
+            "mainEntityOfPage": {
+                "@type": "WebPage",
+                "@id": meta_url
+            },
+            "headline": post.get('title', '')[:110],
             "image": [meta_image] if meta_image else [],
             "author": {
                 "@type": "Person",
                 "name": post.get('author')
             },
+            "publisher": {
+                "@type": "Organization",
+                "name": "EchoWithin",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": url_for('static', filename='logo.png', _external=True)
+                }
+            },
             "datePublished": post.get('timestamp').isoformat() if post.get('timestamp') else None,
+            "dateModified": (post.get('edited_at') or post.get('timestamp', '')).isoformat() if (post.get('edited_at') or post.get('timestamp')) else None,
             "url": meta_url,
             "description": page_description
         }
-        jsonld_str = json.dumps(jsonld)
+        jsonld_breadcrumb = {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "Blog",
+                    "item": url_for('blog', _external=True)
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": post.get('title', '')[:60]
+                }
+            ]
+        }
+        jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb)
     except Exception:
         jsonld_str = ''
 
@@ -10696,19 +10737,31 @@ def sitemap():
     for path, priority, changefreq in static_pages:
         xml_parts.append(f'  <url><loc>{escape(clean_xml_text(base_url + path))}</loc><lastmod>{today}</lastmod><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>')
 
-    # All blog posts (published only)
+    # All blog posts (published only, filtering thin content)
     try:
         # Optimization: Only select needed fields
         posts_query = {'status': 'published'} if 'status' in posts_conf.find_one({}).keys() else {}
         posts = posts_conf.find(
             posts_query,
-            {'slug': 1, 'timestamp': 1, 'edited_at': 1}
+            {'slug': 1, 'timestamp': 1, 'edited_at': 1, 'content': 1, 'title': 1}
         ).sort('timestamp', -1).limit(50000) # Increased limit for future-proofing
 
         for post in posts:
             slug = post.get('slug')
             if not slug:
                 continue
+
+            # Skip auto-generated slugs (post-HEXID pattern) — low SEO value
+            if re.match(r'^post-[0-9a-f]{8,}$', slug):
+                continue
+
+            # Skip posts with very thin content (less than 100 chars)
+            content = post.get('content', '')
+            if content:
+                # Strip HTML tags for accurate length check
+                plain = re.sub(r'<[^>]+>', '', content).strip()
+                if len(plain) < 100:
+                    continue
 
             lastmod = post.get('edited_at') or post.get('timestamp')
             lastmod_str = ''
@@ -10747,16 +10800,27 @@ def api_clear_sitemap_cache():
 
 @app.route('/robots.txt')
 def robots():
-    """Serves robots.txt with sitemap reference."""
-    base_url = request.url_root.rstrip('/')
-    robots_txt = f"""User-agent: *
+    """Serves robots.txt with sitemap reference and crawl directives."""
+    # Always use the canonical HTTPS URL for the sitemap
+    robots_txt = """User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+Disallow: /dashboard
+Disallow: /messages
+Disallow: /personal_space
+Disallow: /shared/
+Disallow: /search
+Disallow: /profile_settings
+Disallow: /create_post
+Disallow: /edit_post
+Disallow: /reset_password
 
 # Sitemap
-Sitemap: {base_url}/sitemap.xml
-
-# Crawl-delay for politeness
-Crawl-delay: 1
+Sitemap: https://echowithin.xyz/sitemap.xml
 """
     response = make_response(robots_txt)
     response.headers['Content-Type'] = 'text/plain'

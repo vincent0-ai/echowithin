@@ -7,6 +7,22 @@
 {% block meta_description %}
 <meta name="description" content="{{ description }}">
 {% endblock %}
+{% block head_meta %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "EchoWithin",
+    "url": "https://echowithin.xyz/",
+    "description": "{{ description }}",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://echowithin.xyz/blog?query={search_term_string}",
+        "query-input": "required name=search_term_string"
+    }
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="content-wrapper">

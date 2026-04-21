@@ -51,7 +51,7 @@ pylint-django==2.6.1
 pylint-plugin-utils==0.9.0
 pymongo==4.15.4
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 python-json-logger==4.0.0
 python-slugify==8.0.4
 pytz==2025.2

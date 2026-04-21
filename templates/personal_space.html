@@ -801,6 +801,83 @@
             margin-left: 0.5rem;
         }
 
+        /* --- Feature Tips Card --- */
+        .feature-tips-card {
+            background: #fefcf3;
+            border: 1px solid #f0e6dc;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.82rem;
+            color: #555;
+            animation: featureTipsFade 0.4s ease-out;
+        }
+
+        .feature-tips-card.tips-hidden {
+            display: none;
+        }
+
+        @keyframes featureTipsFade {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .feature-tips-header {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 0.5rem;
+            color: #3e2217;
+            font-size: 0.85rem;
+        }
+
+        .feature-tips-dismiss {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #aaa;
+            cursor: pointer;
+            padding: 0 0.25rem;
+            line-height: 1;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .feature-tips-dismiss:hover {
+            color: #666;
+            background: rgba(0,0,0,0.05);
+        }
+
+        .feature-tips-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .feature-tip-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            line-height: 1.4;
+        }
+
+        .feature-tip-row i {
+            flex-shrink: 0;
+            width: 16px;
+            text-align: center;
+            margin-top: 2px;
+            font-size: 0.85rem;
+        }
+
+        .feature-tip-row code {
+            background: #f0ebe5;
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.78rem;
+            color: #3e2217;
+        }
+
         /* Edit modal */
         .edit-note-textarea {
             width: 100%;
@@ -1641,6 +1718,33 @@
             <button class="share-promo-dismiss" id="share-promo-dismiss" aria-label="Dismiss">
                 <i class="fas fa-times"></i>
             </button>
+        </div>
+
+        <!-- Feature Tips Card for Saved/Collaboration Notes -->
+        <div class="feature-tips-card" id="feature-tips-card">
+            <div class="feature-tips-header">
+                <span>💡</span>
+                <strong>Did you know?</strong>
+                <button class="feature-tips-dismiss" id="dismiss-feature-tips" aria-label="Dismiss">&times;</button>
+            </div>
+            <div class="feature-tips-body">
+                <div class="feature-tip-row">
+                    <i class="fas fa-external-link-alt" style="color: #7b1fa2;"></i>
+                    <span><strong>External link icon</strong> on saved notes opens the original shared note &amp; its discussion thread</span>
+                </div>
+                <div class="feature-tip-row">
+                    <i class="fas fa-sync-alt" style="color: #2e7d32;"></i>
+                    <span><strong>Sync</strong> pulls the latest changes from the original — if both copies diverged, a merge dialog helps you combine them</span>
+                </div>
+                <div class="feature-tip-row">
+                    <i class="fas fa-list-ol" style="color: #3e2217;"></i>
+                    <span>Use markdown headers (<code># H1</code>, <code>## H2</code>) in shared notes to auto-generate a <strong>Table of Contents</strong> sidebar for easy navigation</span>
+                </div>
+                <div class="feature-tip-row">
+                    <i class="fas fa-clock-rotate-left" style="color: #e65100;"></i>
+                    <span><strong>Version History</strong> tracks every edit — compare changes side-by-side and restore any previous version</span>
+                </div>
+            </div>
         </div>
 
         <div class="create-note-card">
@@ -5391,6 +5495,32 @@
             }
         };
 
+    // --- Feature Tips Card Dismiss ---
+    (function() {
+        const tipsCard = document.getElementById('feature-tips-card');
+        const dismissBtn = document.getElementById('dismiss-feature-tips');
+        if (tipsCard) {
+            if (localStorage.getItem('ew_feature_tips_dismissed')) {
+                tipsCard.classList.add('tips-hidden');
+            }
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', function() {
+                    tipsCard.style.animation = 'none';
+                    tipsCard.style.transition = 'opacity 0.3s, max-height 0.3s, margin 0.3s, padding 0.3s';
+                    tipsCard.style.opacity = '0';
+                    tipsCard.style.maxHeight = '0';
+                    tipsCard.style.margin = '0';
+                    tipsCard.style.padding = '0';
+                    tipsCard.style.overflow = 'hidden';
+                    setTimeout(function() {
+                        tipsCard.classList.add('tips-hidden');
+                    }, 300);
+                    localStorage.setItem('ew_feature_tips_dismissed', '1');
+                });
+            }
+        }
+    })();
+
     // --- Step-by-Step Onboarding Tooltip for New Users ---
     (function initOnboardingTour() {
         // Only show for new users (fewer than 5 notes)
@@ -5400,11 +5530,13 @@
         if (!firstNoteCard) return;
 
         const steps = [
-            { selector: '.copy-btn', icon: 'fa-copy', text: 'Copy your note text to clipboard' },
-            { selector: '.edit-note-btn', icon: 'fa-pen', text: 'Edit your note content with markdown support' },
-            { selector: '.share-note-btn', icon: 'fa-share-alt', text: 'Share or send as a surprise to someone' },
-            { selector: '.lock-note-btn', icon: 'fa-lock', text: 'Lock this note behind your PIN' },
-            { selector: '.version-history-btn', icon: 'fa-clock-rotate-left', text: 'View edit history & restore versions' }
+            { selector: '.copy-btn', icon: 'fa-copy', text: '📋 Copy your note text to clipboard for pasting elsewhere' },
+            { selector: '.edit-note-btn', icon: 'fa-pen', text: '✏️ Edit your note — supports full markdown formatting' },
+            { selector: '.share-note-btn', icon: 'fa-share-alt', text: '📤 Share this note — create a link with view/edit access, or pick a surprise theme (Birthday, Anniversary) with music & photos' },
+            { selector: '.lock-note-btn', icon: 'fa-lock', text: '🔒 Lock this note behind your 4-digit PIN for extra privacy' },
+            { selector: '.version-history-btn', icon: 'fa-clock-rotate-left', text: '🕐 Version History — view all edits, compare versions side-by-side, and restore previous versions' },
+            { selector: '.sync-note-btn', icon: 'fa-sync-alt', text: '🔄 Sync — pull latest changes from the original shared note. If both copies changed, you can merge them' },
+            { selector: 'a[title="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' }
         ];
 
         let currentStep = 0;

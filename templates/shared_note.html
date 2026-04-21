@@ -12,12 +12,13 @@
 {% endblock %}
 
 {% block content %}
-<div class="content-wrapper">
     <div class="shared-note-layout">
+        {% if surprise_theme == 'none' %}
         <aside class="toc-sidebar" id="toc-sidebar">
             <div class="toc-title">Study Sections</div>
             <ul class="toc-list" id="toc-list"></ul>
         </aside>
+        {% endif %}
         <div
             class="shared-note-container {% if surprise_theme != 'none' %}surprise-note theme-{{ surprise_theme }}{% endif %}">
         {% if surprise_theme != 'none' %}
@@ -95,14 +96,6 @@
                         {% else %}<i class="fas fa-heart"></i> Personal Surprise Note{% endif %}
                     </div>
 
-                    <!-- Presence Bar -->
-                    <div id="presence-bar" class="presence-bar">
-                        <div class="presence-label">Studying Now:</div>
-                        <div id="viewers-list" class="viewers-list">
-                            <!-- Avatars populated by JS -->
-                        </div>
-                    </div>
-
                     <div class="header-actions">
                         {% if current_user.is_authenticated and not is_owner %}
                             {% if already_saved %}
@@ -116,42 +109,9 @@
                             </button>
                             {% endif %}
                         {% endif %}
-                        
-                        {% if permissions == 'edit' %}
-                        <button id="toggle-edit-btn" class="btn btn-edit-toggle" type="button">
-                             Edit
-                        </button>
-                        {% endif %}
-
-                        {% if is_owner %}
-                        <button id="view-version-control-btn" class="btn btn-history" title="Versions" type="button">
-                            <i class="fas fa-clock-rotate-left"></i>
-                        </button>
-                        <button id="view-owner-links-btn" class="btn btn-history" title="Shared Links" type="button">
-                            <i class="fas fa-link"></i>
-                        </button>
-                        <button id="view-history-btn" class="btn btn-history" title="Stats" type="button">
-                            <i class="fas fa-chart-line"></i>
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Shared Lock Banner -->
-                <div id="lock-banner" class="lock-banner" style="display: none;">
-                    <i class="fas fa-lock"></i>
-                    <span id="lock-message">Partner is currently editing...</span>
-                </div>
-                <!-- Pending Review Banner -->
-                <div id="pending-review-banner" class="lock-banner" style="display: {{ 'flex' if has_pending_proposal else 'none' }}; background-color: #e3f2fd; color: #1565c0; border-bottom: 1px solid #bbdefb;">
-                    <i class="fas fa-clock"></i>
-                    <span id="pending-message">You have a pending proposal awaiting owner review.</span>
-                </div>
-                {% if permissions == 'edit' and not is_owner %}
-                <div style="padding: 0.55rem 1.25rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
-                    Your edits are submitted as proposals. The original note owner reviews and accepts/rejects them.
-                </div>
-                {% endif %}
 
                 {% if permissions == 'edit' %}
                 <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
@@ -274,6 +234,7 @@
             </div>
 
             <!-- Shared Lock Banner -->
+            {% if permissions == 'edit' %}
             <div id="lock-banner" class="lock-banner" style="display: none;">
                 <i class="fas fa-lock"></i>
                 <span id="lock-message">Partner is currently editing...</span>
@@ -283,12 +244,48 @@
                 <i class="fas fa-clock"></i>
                 <span id="pending-message">You have a pending proposal awaiting owner review.</span>
             </div>
+            {% endif %}
 
             {% if permissions == 'edit' and not is_owner %}
             <div style="padding: 0.55rem 1.5rem 0.1rem; font-size: 0.8rem; color: #7a5d52;">
                 Your edits are submitted as proposals. The original note owner reviews and accepts/rejects them.
             </div>
             {% endif %}
+
+            <!-- Educational Tips Banner -->
+            <div class="shared-note-tips" id="shared-note-tips">
+                <div class="tips-header">
+                    <span class="tips-icon">💡</span>
+                    <span class="tips-title">Quick Tips</span>
+                    <button class="tips-dismiss" id="dismiss-shared-tips" aria-label="Dismiss tips">&times;</button>
+                </div>
+                <div class="tips-body">
+                    <div class="tip-item">
+                        <span class="tip-emoji">📖</span>
+                        <span>Use markdown headers (<code># H1</code>, <code>## H2</code>, <code>### H3</code>) to auto-generate a Table of Contents sidebar</span>
+                    </div>
+                    {% if permissions == 'edit' and not is_owner %}
+                    <div class="tip-item">
+                        <span class="tip-emoji">✏️</span>
+                        <span>Click <strong>Edit</strong> to propose changes — the note owner will review and approve them</span>
+                    </div>
+                    <div class="tip-item">
+                        <span class="tip-emoji">🔀</span>
+                        <span>If the note changes while you're editing, a merge dialog lets you combine both versions</span>
+                    </div>
+                    {% endif %}
+                    {% if is_owner %}
+                    <div class="tip-item">
+                        <span class="tip-emoji">🕐</span>
+                        <span><strong>Version Control</strong> — view all versions, compare changes, and restore any previous version</span>
+                    </div>
+                    <div class="tip-item">
+                        <span class="tip-emoji">🔗</span>
+                        <span><strong>Shared Links</strong> — manage all active share links and permissions for this note</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
 
             {% if permissions == 'edit' %}
             <div class="note-content rendered-note" id="note-view" data-raw="{{ content | e }}"
@@ -526,8 +523,8 @@
             gap: 2rem;
             align-items: flex-start;
             max-width: 1200px;
-            margin: 1.5rem auto;
-            padding: 0 1rem;
+            margin: 1rem auto;
+            padding: 0 0.75rem;
         }
 
         .toc-sidebar {
@@ -594,24 +591,22 @@
 
         .shared-note-container {
             flex: 1;
-            max-width: 850px; /* Limit width for readability */
-            margin: 0 !important;
-            padding: 0 !important;
+            max-width: 960px;
+            margin: 0;
+            padding: 0;
         }
 
         @media (max-width: 1000px) {
-            .shared-note-layout { flex-direction: column; }
+            .shared-note-layout { flex-direction: column; padding: 0 0.5rem; }
             .toc-sidebar { 
                 width: 100%; 
                 position: static; 
                 max-height: none; 
                 margin-bottom: 1rem;
             }
-        }
-
-        .shared-note-container {
-            max-width: 100%;
-            padding: 0;
+            .shared-note-container {
+                max-width: 100%;
+            }
         }
 
         .error-state,
@@ -693,8 +688,7 @@
         }
 
         .note-content {
-            padding: 1.5rem 3rem 1.5rem 3.5rem;
-            /* Increased padding, especially to the left */
+            padding: 1.5rem 2rem;
             line-height: 1.7;
             font-size: 1.1rem;
             color: #333;
@@ -1306,10 +1300,13 @@
         }
 
         @media (max-width: 600px) {
-            .shared-note-container {
+            .shared-note-layout {
                 padding: 0 0.25rem;
-                /* Reduced from 0.5rem */
-                margin: 1rem auto;
+            }
+
+            .shared-note-container {
+                padding: 0;
+                margin: 0;
             }
 
             .auth-state .input-group {
@@ -1317,9 +1314,114 @@
             }
 
             .note-content {
-                padding: 1rem 1.25rem;
-                /* Increased horizontal padding for mobile */
+                padding: 0.75rem 1rem;
             }
+
+            .shared-note-header {
+                padding: 0.75rem 1rem;
+                gap: 0.5rem;
+            }
+
+            .header-actions {
+                gap: 0.35rem;
+            }
+
+            .btn-history {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.8rem;
+            }
+
+            .btn-save-note {
+                padding: 0.4rem 0.7rem;
+                font-size: 0.78rem;
+            }
+
+            .shared-note-tips {
+                margin: 0 0.25rem;
+            }
+        }
+
+        /* --- Educational Tips Banner --- */
+        .shared-note-tips {
+            background: #fefcf3;
+            border: 1px solid #f0e6dc;
+            border-radius: 10px;
+            margin: 0.75rem 0;
+            padding: 0.75rem 1rem;
+            font-size: 0.82rem;
+            color: #555;
+            animation: tipsFadeIn 0.4s ease-out;
+        }
+
+        .shared-note-tips.tips-hidden {
+            display: none;
+        }
+
+        @keyframes tipsFadeIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .tips-header {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tips-icon {
+            font-size: 1rem;
+        }
+
+        .tips-title {
+            font-weight: 700;
+            color: #3e2217;
+            font-size: 0.85rem;
+        }
+
+        .tips-dismiss {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #aaa;
+            cursor: pointer;
+            padding: 0 0.25rem;
+            line-height: 1;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .tips-dismiss:hover {
+            color: #666;
+            background: rgba(0,0,0,0.05);
+        }
+
+        .tips-body {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .tip-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .tip-emoji {
+            flex-shrink: 0;
+            font-size: 0.9rem;
+            margin-top: 1px;
+        }
+
+        .tip-item code {
+            background: #f0ebe5;
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            font-size: 0.78rem;
+            color: #3e2217;
         }
 
         /* Valentine's Day Special CSS */
@@ -1507,6 +1609,32 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // --- Educational Tips Banner Dismiss ---
+            (function() {
+                const tipsBanner = document.getElementById('shared-note-tips');
+                const dismissBtn = document.getElementById('dismiss-shared-tips');
+                if (tipsBanner) {
+                    if (localStorage.getItem('ew_shared_note_tips_dismissed')) {
+                        tipsBanner.classList.add('tips-hidden');
+                    }
+                    if (dismissBtn) {
+                        dismissBtn.addEventListener('click', function() {
+                            tipsBanner.style.animation = 'none';
+                            tipsBanner.style.transition = 'opacity 0.3s, max-height 0.3s, margin 0.3s, padding 0.3s';
+                            tipsBanner.style.opacity = '0';
+                            tipsBanner.style.maxHeight = '0';
+                            tipsBanner.style.margin = '0';
+                            tipsBanner.style.padding = '0';
+                            tipsBanner.style.overflow = 'hidden';
+                            setTimeout(function() {
+                                tipsBanner.classList.add('tips-hidden');
+                            }, 300);
+                            localStorage.setItem('ew_shared_note_tips_dismissed', '1');
+                        });
+                    }
+                }
+            })();
+
             // Full Math Auto-Detection Function (Synced from personal_space.html)
             function autoDetectMath(text) {
                 if (!text) return text;

@@ -7956,6 +7956,20 @@ def sync_personal_post(post_id):
                 except Exception:
                     pass
 
+                # Push notification for owner devices (PWA + native app)
+                try:
+                    if original_owner_id:
+                        send_push_notification_to_user(
+                            original_owner_id,
+                            f"{editor_name} proposed note changes",
+                            "A collaborator submitted updates for your review.",
+                            url=url_for('personal_space', _external=True) + '#activity',
+                            tag=f'note-proposal-{source_note_id}',
+                            extra_data={'type': 'note_proposal', 'note_id': str(source_note_id), 'share_id': source_share_id}
+                        )
+                except Exception as notify_err:
+                    app.logger.error(f"Failed to send proposal push notification to owner {original_owner_id}: {notify_err}")
+
                 return jsonify({
                     'success': True,
                     'pending_approval': True,
@@ -9802,6 +9816,20 @@ def api_edit_shared_note(share_id):
             }, room=owner_id_str)
         except Exception:
             pass
+
+        # Push notification for owner devices (PWA + native app)
+        try:
+            if owner_id_str:
+                send_push_notification_to_user(
+                    owner_id_str,
+                    f"{editor_name} proposed note changes",
+                    (edit_summary or 'A collaborator submitted updates for your review.')[:120],
+                    url=url_for('personal_space', _external=True) + '#activity',
+                    tag=f'note-proposal-{share["note_id"]}',
+                    extra_data={'type': 'note_proposal', 'note_id': str(share['note_id']), 'share_id': share_id}
+                )
+        except Exception as notify_err:
+            app.logger.error(f"Failed to send proposal push notification to owner {owner_id_str}: {notify_err}")
 
         return jsonify({
             'success': True,

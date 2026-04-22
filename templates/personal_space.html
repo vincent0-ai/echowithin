@@ -1997,7 +1997,7 @@
                 <p style="color: #666; font-size: 0.85rem;">Review changes proposed or applied by collaborators.</p>
             </div>
             {% if activity_notifications|length > 0 %}
-            <button onclick="markAllActivityRead()" class="btn" style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
+            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead();" class="btn" style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
                 Clear notifications
             </button>
             {% endif %}
@@ -4392,6 +4392,12 @@
             return null;
         }
 
+        const invokeMarkAllActivityRead = () => {
+            if (typeof window.markAllActivityRead === 'function') {
+                window.markAllActivityRead();
+            }
+        };
+
         window.relockSession = async function (silent = false) {
             try {
                 const resp = await fetch('/api/app_lock/relock', {
@@ -4416,7 +4422,7 @@
             
             // Notification clearing logic
             if (tabId === 'activity') {
-                markAllActivityRead();
+                invokeMarkAllActivityRead();
             }
 
             const button = Array.from(tabButtons).find(b => b.dataset.tab === tabId);

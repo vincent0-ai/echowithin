@@ -131,6 +131,48 @@
             </script>
             {% endif %}
             {% endif %}
+
+            <div class="profile-user-search">
+                <form method="get" action="{{ url_for('profile', username=user.username) }}" class="profile-user-search-form">
+                    <label for="profile-user-search" class="profile-user-search-label">Find a profile</label>
+                    <div class="profile-user-search-row">
+                        <input id="profile-user-search" type="text" name="user_q" value="{{ user_search_query }}"
+                            placeholder="Search usernames" autocomplete="off" class="profile-user-search-input">
+                        <button type="submit" class="btn profile-user-search-button">Search</button>
+                    </div>
+                </form>
+
+                {% if user_search_query %}
+                <div class="profile-user-search-results">
+                    <div class="profile-user-search-results-header">
+                        <span>Matches for "{{ user_search_query }}"</span>
+                        <span>{{ user_search_results|length }} found</span>
+                    </div>
+
+                    {% if user_search_results %}
+                    <div class="profile-user-search-results-list">
+                        {% for profile_user in user_search_results %}
+                        <a class="profile-user-search-result"
+                            href="{{ url_for('profile', username=profile_user.username) }}">
+                            <img src="{{ profile_user.profile_image_url if profile_user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
+                                alt="Profile picture for {{ profile_user.username }}" class="profile-user-search-avatar">
+                            <div class="profile-user-search-result-body">
+                                <strong>{{ profile_user.username }}</strong>
+                                {% if profile_user.bio %}
+                                <span>{{ profile_user.bio|truncate(90, True, '...') }}</span>
+                                {% endif %}
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="profile-user-search-empty">No other profiles matched that search.</p>
+                    {% endif %}
+                </div>
+                {% else %}
+                <p class="profile-user-search-hint">Search usernames here to jump to another profile.</p>
+                {% endif %}
+            </div>
         </div>
 
         <div class="profile-main-content">

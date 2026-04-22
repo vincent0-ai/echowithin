@@ -485,6 +485,7 @@ note_locks = {}
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
 newsletter_conf.create_index('email', unique=True)
+users_conf.create_index('username')
 user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
 
 # Personal space performance indexes — eliminates full-collection scans
@@ -6796,6 +6797,16 @@ def profile(username):
         return redirect(url_for('home'))
 
     user_id = user['_id']
+    user_search_query = request.args.get('user_q', '').strip()
+    user_search_results = []
+    if user_search_query:
+        search_projection = {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0}
+        safe_query = re.escape(user_search_query)
+        user_search_cursor = users_conf.find(
+            {'username': {'$regex': safe_query, '$options': 'i'}},
+            search_projection
+        ).sort('username', 1).limit(10)
+        user_search_results = [candidate for candidate in user_search_cursor if str(candidate.get('_id')) != str(user_id)]
 
     # --- Pagination for user posts ---
     page = request.args.get('page', 1, type=int)
@@ -6869,7 +6880,9 @@ def profile(username):
                            total_posts=total_posts,
                            total_comments=total_comments,
                            user_achievements=get_active_achievements(user_id),
-                           dm_status=dm_status)
+                           dm_status=dm_status,
+                           user_search_query=user_search_query,
+                           user_search_results=user_search_results)
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])

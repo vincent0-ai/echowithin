@@ -2029,14 +2029,19 @@
                             <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">New proposed content:</div>
                             <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; max-height: 150px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
                         </div>
+                        
+                        <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="auto-allow-{{ proposal._id }}" name="auto_allow_subsequent">
+                            <label for="auto-allow-{{ proposal._id }}" style="font-size: 0.85rem; color: #555; cursor: pointer;">Automatically allow subsequent proposals for this user</label>
+                        </div>
 
                         <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
                             <button class="btn" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
-                                onclick="reviewProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
+                                onclick="reviewActivityProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
                                 <i class="fas fa-check"></i> Accept Changes
                             </button>
                             <button class="btn" style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
-                                onclick="reviewProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
+                                onclick="reviewActivityProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
                                 <i class="fas fa-times"></i> Reject
                             </button>
                         </div>
@@ -5537,7 +5542,10 @@
             observer.observe(shareModal, { attributes: true, attributeFilter: ['style'] });
         }
     })();
-        window.reviewProposal = async function(versionId, action, noteId) {
+        window.reviewActivityProposal = async function(versionId, action, noteId) {
+            const autoApproveCheckbox = document.getElementById(`auto-allow-${versionId}`);
+            const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
+
             if (!confirm(`Are you sure you want to ${action} these proposed changes?`)) {
                 return;
             }
@@ -5559,7 +5567,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
                     },
-                    body: JSON.stringify({ action: action })
+                    body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove })
                 });
 
                 const data = await response.json();
@@ -5567,6 +5575,34 @@
                     notify(`Proposal ${action}ed successfully.`, 'success');
                     // Reload to update the tab count and list
                     setTimeout(() => window.location.reload(), 1000);
+                } else if (response.status === 409 || data.error === 'conflict') {
+                    if (typeof window.openMergeConflictModal === 'function') {
+                        window.openMergeConflictModal(data);
+                        const saveMergeBtn = document.getElementById('save-merge-btn');
+                        if (saveMergeBtn) {
+                            saveMergeBtn.onclick = async () => {
+                                const previewEl = document.getElementById('merge-preview-content');
+                                const mContent = previewEl ? previewEl.value : '';
+                                const mResponse = await fetch(`/personal_post/proposal/${versionId}/decision`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                                    },
+                                    body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove, merged_content: mContent })
+                                });
+                                const mData = await mResponse.json();
+                                if (mResponse.ok && mData.success) {
+                                    notify(`Proposal ${action}ed successfully with merge.`, 'success');
+                                    setTimeout(() => window.location.reload(), 1000);
+                                } else {
+                                    notify(mData.error || `Failed to ${action} proposal.`, 'error');
+                                }
+                            };
+                        }
+                    } else {
+                        notify('Merge conflict detected. Please review from the version history.', 'error');
+                    }
                 } else {
                     notify(data.error || `Failed to ${action} proposal.`, 'error');
                 }

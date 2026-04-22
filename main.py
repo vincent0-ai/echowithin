@@ -10102,6 +10102,12 @@ def api_decide_note_proposal(version_id):
         action = (data.get('action') or '').strip().lower()
         decision_summary = (data.get('edit_summary') or '').strip()[:180]
 
+        if data.get('auto_approve_subsequent') and proposal.get('share_id'):
+            note_shares_conf.update_one(
+                {'share_id': proposal.get('share_id')},
+                {'$set': {'auto_approve': True}}
+            )
+
         if proposal.get('status') != 'pending':
             return jsonify({'error': 'Proposal already reviewed'}), 400
 

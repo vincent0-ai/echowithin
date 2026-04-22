@@ -1697,6 +1697,29 @@
             </button>
         </div>
 
+        <!-- Feature Tips Card for new users -->
+        <div class="feature-tips-card" id="feature-tips-card">
+            <div class="feature-tips-header">
+                <span>💡</span>
+                <strong>Quick Tips</strong>
+                <button class="feature-tips-dismiss" id="dismiss-feature-tips" aria-label="Dismiss">&times;</button>
+            </div>
+            <div class="feature-tips-body">
+                <div class="feature-tip-row">
+                    <i class="fas fa-pen" style="color: #3e2217;"></i>
+                    <span>Notes support <strong>markdown</strong> — use <code>**bold**</code>, <code>*italic*</code>, <code># headings</code></span>
+                </div>
+                <div class="feature-tip-row">
+                    <i class="fas fa-share-alt" style="color: #2e7d32;"></i>
+                    <span><strong>Share</strong> any note as a read-only or editable link — pick a surprise theme to make it special 🎁</span>
+                </div>
+                <div class="feature-tip-row">
+                    <i class="fas fa-lock" style="color: #e65100;"></i>
+                    <span><strong>Lock</strong> sensitive notes behind a PIN for extra privacy</span>
+                </div>
+            </div>
+        </div>
+
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -1851,22 +1874,25 @@
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
                             <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{% endif %}
                         </button>
+
+                        {% if note.surprise_theme and note.surprise_theme != 'none' %}
+                        {# === SURPRISE NOTE: only Copy, Gift view, Delete === #}
+                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
+                            title="View surprise" target="_blank"
+                            style="color: #ff4d6d; text-decoration: none;">
+                            <i class="fas fa-gift"></i>
+                        </a>
+
+                        {% elif note.source_note_id and note.source_share_id %}
+                        {# === SAVED COPY from shared note: Copy, Edit, External link, Sync, Delete === #}
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
                             <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
                         </button>
-                        {% if note.surprise_theme and note.surprise_theme != 'none' %}
-                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
-                            title="View your saved surprise" target="_blank"
-                            style="color: #ff4d6d; text-decoration: none;">
-                            <i class="fas fa-gift"></i>
-                        </a>
-                        {% endif %}
-                        {% if note.source_note_id and note.source_share_id %}
                         <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
-                            title="View original shared note &amp; discussion" target="_blank"
+                            title="View original shared note" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
                             <i class="fas fa-external-link-alt"></i>
                         </a>
@@ -1874,12 +1900,18 @@
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
                             <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span class="action-label">Sync</span>{% endif %}
                         </button>
-                        {% endif %}
+
+                        {% else %}
+                        {# === STANDARD NOTE: Copy, Edit, Share, Lock, History, Delete === #}
+                        <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
+                            data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
+                            data-tags='{{ (note.tags or []) | tojson | safe }}'
+                            data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
+                        </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
                             <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
-                            <span class="share-tooltip share-onboard-tip" style="display:none;">Send a surprise!
-                                🎁</span>
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
                             <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
@@ -1888,6 +1920,8 @@
                             data-id="{{ note._id }}">
                             <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
                         </button>
+                        {% endif %}
+
                         {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form"

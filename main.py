@@ -3220,12 +3220,6 @@ def google_login():
 
 @app.route('/google_callback')
 def google_callback():
-    # If user is already authenticated (duplicate request after successful login),
-    # just redirect them to home without showing an error
-    if current_user.is_authenticated:
-        app.logger.info(f"Google callback hit but user {current_user.username} already authenticated - redirecting to home")
-        return redirect(url_for('home'))
-    
     state_from_url = request.args.get('state')
     
     # If state is not in session, try to recover it from Redis (handles context switching on mobile)
@@ -3247,6 +3241,32 @@ def google_callback():
                     app.logger.warning(f"OAuth state {state_from_url[:8]}... not found in Redis (may have been consumed or expired)")
             except Exception as e:
                 app.logger.warning(f"Error checking Redis for state recovery: {e}")
+
+    # If user is already authenticated (duplicate request after successful login, or already logged in in browser),
+    # we still check if we need to redirect back to the mobile app before going to home.
+    if current_user.is_authenticated:
+        platform = session.pop('oauth_platform', None)
+        app.logger.info(f"Google callback hit but user {current_user.username} already authenticated. Platform: {platform}")
+        
+        if platform == 'mobile':
+            if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+                return redirect(url_for('home'))
+            
+            # Bridge the session to the app
+            otlt_token = secrets.token_urlsafe(32)
+            if redis_cache:
+                try:
+                    redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(current_user.id))
+                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
+                    return render_template('mobile_redirect.html', 
+                                         deep_link_url=custom_scheme_url,
+                                         https_deep_link=https_deep_link,
+                                         fallback_url=url_for('home', _external=True))
+                except Exception as e:
+                    app.logger.error(f"Failed to store OTLT in Redis for authenticated user: {e}")
+        
+        return redirect(url_for('home'))
 
     # If state is still not in session, it's a possible replay attack or session loss
     if 'oauth_state' not in session:

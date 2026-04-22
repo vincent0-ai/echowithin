@@ -3242,9 +3242,9 @@ def google_callback():
                         if isinstance(platform_saved, bytes):
                             platform_saved = platform_saved.decode('utf-8')
                         session['oauth_platform'] = platform_saved
-                        app.logger.info(f"Recovered platform from Redis: {platform_saved}")
+                        app.logger.info(f"Recovered platform from Redis for state {state_from_url[:8]}...: {platform_saved}")
                 else:
-                    app.logger.warning(f"OAuth state {state_from_url[:8]}... not found in Redis (may have been consumed)")
+                    app.logger.warning(f"OAuth state {state_from_url[:8]}... not found in Redis (may have been consumed or expired)")
             except Exception as e:
                 app.logger.warning(f"Error checking Redis for state recovery: {e}")
 
@@ -3323,6 +3323,7 @@ def google_callback():
         # Redirect to stored next URL or home
         # Check if we need to redirect back to the mobile app
         platform = session.pop('oauth_platform', None)
+        app.logger.info(f"Checking mobile platform in callback. Found: {platform}")
         if platform == 'mobile':
             # If callback is running inside the app's WebView (intent filter intercepted the URL),
             # the user is already logged in within the WebView context — just redirect to home

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="content-wrapper">
     <h1>Terms of Service</h1>
-    <p class="last-updated">Last updated: March 6, 2026</p>
+    <p class="last-updated">Last updated: April 22, 2026</p>
 
     <div class="terms-container">
         <section>
@@ -18,59 +18,89 @@
             <h2>2. Service Overview</h2>
             <p>EchoWithin provides a hybrid platform for digital expression, including:</p>
             <ul>
-                <li><strong>Public Blogs</strong>: Shared community content and discussions.</li>
-                <li><strong>Personal Space</strong>: Private, encrypted note-taking for personal thoughts.</li>
-                <li><strong>Shared Notes</strong>: Secure, temporary content sharing with optional surprise themes and
-                    access controls.</li>
+                <li><strong>Public Blogs</strong>: Shared community content, discussions, and comments.</li>
+                <li><strong>Personal Space</strong>: Private, encrypted note-taking for personal thoughts with search, tags, and references.</li>
+                <li><strong>Shared Notes</strong>: Secure, temporary content sharing with optional surprise themes,
+                    access controls, and collaboration features.</li>
+                <li><strong>Direct Messaging</strong>: Real-time private conversations between users, including text and image sharing.</li>
+                <li><strong>Mobile App & PWA</strong>: Installable progressive web app and native Android app with offline support.</li>
             </ul>
         </section>
 
         <section>
-            <h2>3. Privacy & Data Sovereignty</h2>
-            <p>We prioritize your privacy. <strong>Personal Notes</strong> are encrypted at rest using industry-standard
-                protocols. Our team cannot read the contents of your private personal notes. You are solely responsible
-                for maintaining the confidentiality of your account credentials and for all activities that occur under
-                your account.</p>
+            <h2>3. Account & Authentication</h2>
+            <p>You may create an account using an email/password or by signing in with <strong>Google OAuth</strong>. By using Google sign-in, you authorize us to access your basic profile information (name, email, profile picture) as provided by Google. We do not access your Google contacts, files, or any other data beyond what is needed for authentication.</p>
+            <p>You are solely responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account.</p>
         </section>
 
         <section>
-            <h2>4. Shared Content & Surprises</h2>
+            <h2>4. Privacy & Data Sovereignty</h2>
+            <p>We prioritize your privacy:</p>
+            <ul>
+                <li><strong>Note Encryption</strong>: Personal notes are encrypted at rest using industry-standard
+                    protocols. Our team cannot read the contents of your private personal notes.</li>
+                <li><strong>PIN-Locked Notes</strong>: You may add an additional PIN lock to sensitive notes. The PIN is hashed and stored securely. We cannot recover lost PINs.</li>
+                <li><strong>Security Headers</strong>: All traffic is served over HTTPS with HSTS, Content Security Policy, and XSS protection headers enforced.</li>
+                <li><strong>No Data Sales</strong>: We do not sell, trade, or rent your personal information to third parties.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>5. Shared Content & Collaboration</h2>
             <p>When sharing notes via links:</p>
             <ul>
                 <li><strong>Revocation</strong>: You may revoke shared links manually, or set them to expire
                     automatically. We do not guarantee access to shared links after expiration.</li>
                 <li><strong>Access Codes</strong>: If you protect a note with an access code, you are responsible for
                     distributing that code only to intended recipients.</li>
+                <li><strong>Collaboration & Proposals</strong>: Shared notes with edit permission allow collaborators to propose changes. Depending on your approval settings, changes are either auto-applied or queued for your review. You may accept or reject proposals at any time.</li>
+                <li><strong>Version History</strong>: Edits to notes are tracked with version snapshots (up to 50 per note). You can compare and restore any previous version. Older versions beyond the 50-version limit are automatically pruned.</li>
                 <li><strong>Media Ethics</strong>: Any media (photos/audio) uploaded for "Surprise Themes" must be owned
                     by you or used with permission and must comply with our safety guidelines.</li>
                 <li><strong>Data Persistence (Total Purge)</strong>: When a recipient "Saves" a shared note, they create
-                    a personal copy. However, to ensure user safety and content control, all copies remain linked to the
-                    original. If the original owner chooses to <strong>"Delete for Everyone"</strong>, all cloned copies
-                    will be permanently purged from the platform.</li>
+                    a personal copy. However, all copies remain linked to the original. If the original owner chooses to
+                    <strong>"Delete for Everyone"</strong>, all cloned copies will be permanently purged.</li>
             </ul>
         </section>
 
         <section>
-            <h2>5. Community Guidelines & Moderation</h2>
+            <h2>6. Direct Messaging</h2>
+            <p>EchoWithin provides real-time direct messaging between users. By using this feature:</p>
+            <ul>
+                <li>You agree not to send spam, harassment, or unsolicited commercial messages.</li>
+                <li>Messages may include text and images. All uploaded media must comply with our community guidelines.</li>
+                <li>We reserve the right to moderate or remove messages that violate our terms and to suspend accounts that engage in abusive messaging.</li>
+                <li>Message history is stored on our servers and is subject to the same deletion policies as other user data.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>7. Community Guidelines & Moderation</h2>
             <p>To maintain a safe and productive community, you agree NOT to:</p>
             <ul>
                 <li>Post or share illegal, abusive, harassing, or defamatory content.</li>
                 <li>Infringe upon the intellectual property rights of others.</li>
                 <li>Engage in automated scraping or systematic data collection without permission.</li>
+                <li>Impersonate other users or create misleading accounts.</li>
+                <li>Use the platform to distribute malware or phishing content.</li>
             </ul>
-            <p>EchoWithin reserves the right to remove any content (including blog posts and comments) and suspend or
+            <p>EchoWithin reserves the right to remove any content (including blog posts, comments, messages, and shared notes) and suspend or
                 terminate accounts that violate these guidelines.</p>
         </section>
 
         <section>
-            <h2>6. Communications & Notifications</h2>
-            <p>By creating an account, you may receive automated service emails (notifications, newsletters). We comply
-                with RFC 8058 "One-Click Unsubscribe" standards. You may opt out of non-essential communications at any
-                time via the unsubscribe links provided in our emails.</p>
+            <h2>8. Communications & Notifications</h2>
+            <p>By creating an account, you may receive:</p>
+            <ul>
+                <li><strong>Push Notifications</strong>: Browser and mobile push notifications for new comments, replies, messages, and collaboration activity. You can enable/disable these in your browser settings or Profile Settings.</li>
+                <li><strong>Email Notifications</strong>: Automated service emails (notifications, newsletters). We comply
+                    with RFC 8058 "One-Click Unsubscribe" standards. You may opt out of non-essential communications at any
+                    time via the unsubscribe links provided.</li>
+            </ul>
         </section>
 
         <section>
-            <h2>7. Data Export & Backup</h2>
+            <h2>9. Data Export & Backup</h2>
             <p>You have the right to a portable copy of your data at any time:</p>
             <ul>
                 <li><strong>Full Export</strong>: From your Account Settings you can download a JSON file containing
@@ -81,11 +111,11 @@
         </section>
 
         <section>
-            <h2>8. Account Deletion</h2>
+            <h2>10. Account Deletion</h2>
             <p>You may permanently delete your account from Account Settings. Deletion triggers the following:</p>
             <ul>
                 <li><strong>Full Data Purge</strong>: Your profile, blog posts, comments, personal notes, shared links,
-                    note versions, discussion threads, push subscriptions, and notification tokens are permanently
+                    note versions, discussion threads, messages, push subscriptions, and notification tokens are permanently
                     removed from our databases.</li>
                 <li><strong>Media Cleanup</strong>: Your profile picture and any images attached to your posts are
                     permanently destroyed from our cloud storage.</li>
@@ -97,8 +127,8 @@
         </section>
 
         <section>
-            <h2>9. Data Removal & "Hard Delete" Policy</h2>
-            <p>At EchoWithin, "Delete" means delete. When you choose to remove a blog post, a comment, or a personal
+            <h2>11. Data Removal & "Hard Delete" Policy</h2>
+            <p>At EchoWithin, "Delete" means delete. When you choose to remove a blog post, a comment, a message, or a personal
                 note, the following occurs:</p>
             <ul>
                 <li><strong>Permanent Removal</strong>: The record is immediately purged from our active databases. We
@@ -111,21 +141,21 @@
         </section>
 
         <section>
-            <h2>10. Limitation of Liability</h2>
+            <h2>12. Limitation of Liability</h2>
             <p>EchoWithin is provided "as is." While we strive for 100% uptime and data integrity (including background
                 sync for offline notes), we are not liable for data loss, service interruptions, or damages arising from
                 your use of the platform.</p>
         </section>
 
         <section>
-            <h2>11. Changes to Terms</h2>
+            <h2>13. Changes to Terms</h2>
             <p>We may update these terms to reflect new features or legal requirements. We will notify you of
                 significant changes, and continued use of the Platform constitutes acceptance of the updated terms.</p>
         </section>
     </div>
 
     <div class="contact-footer" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd;">
-        <p>Questions? Contact our administration team via the dashboard support channels.</p>
+        <p>Questions about these terms? <a href="{{ url_for('about') }}" style="color: var(--primary-color); font-weight: 600;">Contact us</a> or see our <a href="{{ url_for('faq') }}" style="color: var(--primary-color); font-weight: 600;">FAQ</a>.</p>
     </div>
 </div>
 

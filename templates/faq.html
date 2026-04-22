@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+
+{% block title %}<title>{{ title }}</title>{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block head_meta %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "What is EchoWithin?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "EchoWithin is a community platform for sharing thoughts, ideas, and stories through blog posts and private encrypted notes. It started as a podcast group and grew into a full platform."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Is EchoWithin free to use?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes, EchoWithin is completely free. You can read posts, create an account, write notes, share content, and message other users at no cost."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Are my notes private and encrypted?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. All personal notes are end-to-end encrypted and only visible to you. Even administrators cannot read your notes."
+            }
+        }
+    ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <style>
+        .faq-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem 1.25rem;
+            background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+            border-radius: 12px;
+            color: white;
+        }
+
+        .faq-header h1 {
+            color: white;
+            margin: 0 0 0.5rem 0;
+            font-size: 1.5rem;
+        }
+
+        .faq-header p {
+            color: rgba(255, 255, 255, 0.85);
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        .faq-section {
+            margin-bottom: 2rem;
+        }
+
+        .faq-section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            color: #3e2217;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #f0ebe5;
+        }
+
+        .faq-section-title i {
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+
+        .faq-item {
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 0.6rem;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+
+        .faq-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        }
+
+        .faq-question {
+            width: 100%;
+            text-align: left;
+            padding: 0.9rem 1rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+
+        .faq-question:hover {
+            color: #3e2217;
+        }
+
+        .faq-question .faq-chevron {
+            flex-shrink: 0;
+            transition: transform 0.25s ease;
+            color: #999;
+            font-size: 0.8rem;
+        }
+
+        .faq-item.open .faq-chevron {
+            transform: rotate(180deg);
+            color: #3e2217;
+        }
+
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease, padding 0.3s ease;
+        }
+
+        .faq-item.open .faq-answer {
+            max-height: 500px;
+        }
+
+        .faq-answer-inner {
+            padding: 0 1rem 1rem 1rem;
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.65;
+        }
+
+        .faq-answer-inner a {
+            color: #3e2217;
+            font-weight: 600;
+            text-decoration: underline;
+        }
+
+        .faq-answer-inner code {
+            background: #f5f0eb;
+            padding: 0.1em 0.35em;
+            border-radius: 3px;
+            font-size: 0.85em;
+            color: #3e2217;
+        }
+
+        .faq-contact {
+            text-align: center;
+            padding: 1.5rem;
+            background: #faf8f7;
+            border-radius: 12px;
+            border: 1px solid #f0ebe5;
+            margin-top: 2rem;
+        }
+
+        .faq-contact h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+            color: #3e2217;
+        }
+
+        .faq-contact p {
+            margin: 0 0 1rem 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .faq-contact a.btn {
+            display: inline-block;
+            padding: 0.6rem 1.5rem;
+            background: #3e2217;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .faq-contact a.btn:hover {
+            background: #5a3328;
+        }
+
+        @media (max-width: 600px) {
+            .faq-header {
+                padding: 1rem;
+            }
+
+            .faq-header h1 {
+                font-size: 1.25rem;
+            }
+
+            .faq-question {
+                padding: 0.75rem 0.85rem;
+                font-size: 0.9rem;
+            }
+
+            .faq-answer-inner {
+                padding: 0 0.85rem 0.85rem 0.85rem;
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+
+    <div class="faq-header">
+        <h1><i class="fas fa-circle-question" style="font-size: 1.2rem; opacity: 0.8;"></i> Frequently Asked Questions</h1>
+        <p>Everything you need to know about using EchoWithin</p>
+    </div>
+
+    <!-- Getting Started -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-rocket"></i> Getting Started</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                What is EchoWithin?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    EchoWithin is a community platform born from a podcast group. It's a space where you can read and write blog posts, keep private encrypted notes, share surprises with friends, and engage in meaningful conversations — all for free.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Is EchoWithin free to use?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes, completely free! You can read posts, create an account, write notes, share content, and message other users at no cost.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I create an account?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Click <a href="{{ url_for('register') }}">Register</a> and fill in your details, or sign in instantly with your Google account. No credit card or payment needed.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can I use EchoWithin without an account?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    You can read all blog posts without an account. However, you need to sign in to write posts, leave comments, save favourites, use private notes, or send messages.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Blog & Posts -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-pen-nib"></i> Blog & Posts</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I write a blog post?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Click the <strong>+</strong> button or go to <a href="{{ url_for('create_post') }}">Create Post</a>. Give your post a title, write your content (supports markdown formatting and images), add tags, and publish. Your post will appear on the blog for everyone to read.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can I edit or delete my posts after publishing?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes. Open your post, click the <strong>Edit</strong> button (pencil icon) to modify it, or <strong>Delete</strong> to remove it permanently. Only you and admins can edit or delete your posts.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I save a post to read later?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Click the <strong>bookmark icon</strong> <i class="far fa-bookmark"></i> on any post. Saved posts appear in your <a href="{{ url_for('personal_space') }}">Personal Space</a> under the "Saved Posts" tab.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                What are Hot Posts and how are they ranked?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Hot Posts are ranked by a combination of likes, comments, views, and recency. Posts with sustained, high-quality engagement can stay on the hot list even if they're older.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Personal Notes -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-sticky-note"></i> Personal Notes</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Are my notes private and encrypted?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes. All personal notes are <strong>end-to-end encrypted</strong> and only visible to you. Even administrators cannot read your notes. They are stored securely and decrypted only when you view them.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                What formatting can I use in notes?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Notes support full <strong>markdown</strong> formatting: <code>**bold**</code>, <code>*italic*</code>, <code># headings</code>, <code>- bullet lists</code>, <code>[links](url)</code>, code blocks, and even math equations with LaTeX syntax.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                What is the Locked Notes feature?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    You can move sensitive notes behind a <strong>PIN lock</strong> for an extra layer of privacy. Go to Profile Settings to set up your PIN, then use the lock icon <i class="fas fa-lock"></i> on any note. Locked notes require your PIN to view and auto-lock after 5 minutes.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can I see past versions of my notes?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes! Click the <strong>History</strong> icon <i class="fas fa-clock-rotate-left"></i> on any note to see all previous versions. You can compare changes side-by-side and restore any earlier version.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sharing & Collaboration -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-share-alt"></i> Sharing & Collaboration</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I share a note with someone?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Click the <strong>Share</strong> icon <i class="fas fa-share-alt"></i> on any note. You can choose read-only or edit access, set an expiry time, and optionally pick a surprise theme (like Birthday or Celebration) with music and visuals. A unique link is generated that you can send to anyone.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                What are Surprise Notes?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Surprise Notes let you turn any note into a special themed experience. Choose a celebration theme (Birthday, Anniversary, etc.), and the recipient sees your message with festive animations, music, and photos — perfect for long-distance surprises!
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can others edit my shared notes?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Only if you grant <strong>Edit</strong> permission when sharing. With edit access, collaborators can propose changes. Depending on your approval settings, changes are either applied automatically or queued for your review in the Activity tab.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I revoke a shared link?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    In your Personal Space, shared notes show a green "Shared Link" badge. Click it to see all active links, then press the <strong>✕</strong> button next to any link to revoke it instantly.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Messaging -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-comments"></i> Messaging</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How does messaging work?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    EchoWithin has <strong>real-time messaging</strong>. Visit any user's profile and click "Message" to start a conversation. Messages are delivered instantly, and you'll see typing indicators and read receipts.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can I send images or files in messages?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes, you can share images in chat. Click the attachment icon in the message input to upload a photo. You can also react to messages with emojis.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy & Security -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-shield-halved"></i> Privacy & Security</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How is my data protected?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    We use <strong>HTTPS encryption</strong> for all traffic, personal notes are end-to-end encrypted, passwords are securely hashed, and we enforce strict security headers (HSTS, CSP, XSS protection). We never sell your data.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Can I delete my account?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes. Go to <strong>Profile Settings</strong> and scroll to the bottom. You'll find a "Delete Account" option that permanently removes your account and all associated data. This action is irreversible.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                How do I reset my password?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    On the login page, click <strong>"Forgot Password?"</strong> and enter your email. You'll receive a reset link to set a new password. If you signed up with Google, you don't have a separate password — just use "Sign in with Google."
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile App & PWA -->
+    <div class="faq-section">
+        <h2 class="faq-section-title"><i class="fas fa-mobile-screen"></i> Mobile App</h2>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Is there a mobile app?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes! EchoWithin is available as a <strong>Progressive Web App (PWA)</strong> and as a native Android app. On your phone's browser, look for the "Install" or "Add to Home Screen" prompt. The app works offline and syncs when you reconnect.
+                </div>
+            </div>
+        </div>
+
+        <div class="faq-item">
+            <button class="faq-question" aria-expanded="false">
+                Do I get push notifications?
+                <i class="fas fa-chevron-down faq-chevron"></i>
+            </button>
+            <div class="faq-answer">
+                <div class="faq-answer-inner">
+                    Yes! Enable notifications in your browser or the app to receive alerts for new comments on your posts, replies to your comments, new messages, and collaboration activity on shared notes. You can manage your preferences in Profile Settings.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Still need help? -->
+    <div class="faq-contact">
+        <h3><i class="fas fa-envelope" style="margin-right: 0.3rem;"></i> Still have questions?</h3>
+        <p>We'd love to hear from you. Send us a message and we'll get back to you.</p>
+        <a href="{{ url_for('about') }}#contact" class="btn">Contact Us</a>
+    </div>
+
+    <script>
+        document.querySelectorAll('.faq-question').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const item = btn.closest('.faq-item');
+                const isOpen = item.classList.contains('open');
+
+                // Close all items in the same section
+                item.closest('.faq-section').querySelectorAll('.faq-item.open').forEach(openItem => {
+                    if (openItem !== item) {
+                        openItem.classList.remove('open');
+                        openItem.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+                    }
+                });
+
+                item.classList.toggle('open');
+                btn.setAttribute('aria-expanded', !isOpen);
+            });
+        });
+    </script>
+</div>
+{% endblock %}

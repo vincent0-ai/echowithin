@@ -6780,6 +6780,12 @@ def terms():
     page_description = "Terms and Conditions for using EchoWithin."
     return render_template('terms.html', title=page_title, description=page_description)
 
+@app.route('/faq')
+def faq():
+    page_title = "FAQ - EchoWithin"
+    page_description = "Frequently asked questions about using EchoWithin — accounts, notes, sharing, privacy, and more."
+    return render_template('faq.html', title=page_title, description=page_description)
+
 @app.route('/profile/<username>')
 @login_required
 def profile(username):
@@ -10761,6 +10767,7 @@ def sitemap():
         ('/', 1.0, 'daily'),
         ('/blog', 0.9, 'hourly'),
         ('/about', 0.5, 'monthly'),
+        ('/faq', 0.5, 'monthly'),
         ('/terms', 0.3, 'yearly'),
     ]
 

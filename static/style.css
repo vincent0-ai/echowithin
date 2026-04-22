@@ -1414,6 +1414,15 @@ body {
     cursor: pointer;
 }
 
+.profile-user-search-suggestion-avatar-wrap {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #eceff3;
+}
+
 .profile-user-search-suggestion:last-child {
     border-bottom: none;
 }
@@ -1426,8 +1435,11 @@ body {
 .profile-user-search-suggestion-avatar {
     width: 32px;
     height: 32px;
+    max-width: 32px;
+    max-height: 32px;
     border-radius: 50%;
     object-fit: cover;
+    display: block;
     flex-shrink: 0;
 }
 

@@ -291,10 +291,19 @@
                 button.className = 'profile-user-search-suggestion';
                 button.dataset.href = item.profile_url;
 
+                const avatarWrap = document.createElement('span');
+                avatarWrap.className = 'profile-user-search-suggestion-avatar-wrap';
+
                 const avatar = document.createElement('img');
                 avatar.className = 'profile-user-search-suggestion-avatar';
                 avatar.alt = 'Profile picture for ' + item.username;
                 avatar.src = item.profile_image_url;
+                avatar.width = 32;
+                avatar.height = 32;
+                avatar.decoding = 'async';
+                avatar.loading = 'lazy';
+
+                avatarWrap.appendChild(avatar);
 
                 const text = document.createElement('div');
                 text.className = 'profile-user-search-suggestion-text';
@@ -309,7 +318,7 @@
                     text.appendChild(bio);
                 }
 
-                button.appendChild(avatar);
+                button.appendChild(avatarWrap);
                 button.appendChild(text);
                 button.addEventListener('click', function () {
                     window.location.href = item.profile_url;

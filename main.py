@@ -7188,11 +7188,14 @@ def personal_space():
     # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.
     total_notes_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
     skip_notes = (notes_page - 1) * per_page
-    
-    personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
-                                                 .sort([('updated_at', -1), ('created_at', -1)])
-                                                 .skip(skip_notes)
-                                                 .limit(per_page))
+
+    personal_posts_raw = list(personal_posts_conf.aggregate([
+        {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}}},
+        {'$addFields': {'_sort_ts': {'$ifNull': ['$updated_at', '$created_at']}}},
+        {'$sort': {'_sort_ts': -1, 'created_at': -1}},
+        {'$skip': skip_notes},
+        {'$limit': per_page}
+    ]))
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = _decrypt_note_record(note)
@@ -7215,9 +7218,12 @@ def personal_space():
     locked_shares_map = {}
     locked_clones_map = {}
     if is_unlocked and locked_notes_count > 0:
-        locked_notes_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': True})
-                                                    .sort([('updated_at', -1), ('created_at', -1)])
-                                                    .limit(50))
+        locked_notes_raw = list(personal_posts_conf.aggregate([
+            {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': True}},
+            {'$addFields': {'_sort_ts': {'$ifNull': ['$updated_at', '$created_at']}}},
+            {'$sort': {'_sort_ts': -1, 'created_at': -1}},
+            {'$limit': 50}
+        ]))
         for note in locked_notes_raw:
             note['content'] = _decrypt_note_record(note)
             locked_notes.append(note)

@@ -66,7 +66,7 @@
             <div class="profile-meta" style="text-align: center;">
                 {% if user.join_date %}
                 <div class="profile-meta-item">
-                    <i class="fas fa-calendar-alt"></i> Member since {{ user.join_date.strftime('%B %Y') }}
+                     Member since {{ user.join_date.strftime('%B %Y') }}
                 </div>
                 {% endif %}
             </div>
@@ -135,10 +135,13 @@
             <div class="profile-user-search">
                 <form method="get" action="{{ url_for('profile', username=user.username) }}" class="profile-user-search-form">
                     <label for="profile-user-search" class="profile-user-search-label">Find a profile</label>
-                    <div class="profile-user-search-row">
+                    <div class="profile-user-search-row profile-user-search-row--autocomplete">
                         <input id="profile-user-search" type="text" name="user_q" value="{{ user_search_query }}"
-                            placeholder="Search usernames" autocomplete="off" class="profile-user-search-input">
+                            placeholder="Search usernames" autocomplete="off" class="profile-user-search-input"
+                            data-profile-suggest-url="{{ url_for('api_user_suggest') }}"
+                            data-profile-exclude="{{ user.username }}">
                         <button type="submit" class="btn profile-user-search-button">Search</button>
+                        <div id="profile-user-search-suggestions" class="profile-user-search-suggestions" hidden></div>
                     </div>
                 </form>
 
@@ -227,4 +230,180 @@
         </div>
     </div>
 </div>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const input = document.getElementById('profile-user-search');
+        const panel = document.getElementById('profile-user-search-suggestions');
+
+        if (!input || !panel) {
+            return;
+        }
+
+        const suggestionUrl = input.dataset.profileSuggestUrl;
+        const excludeUsername = input.dataset.profileExclude || '';
+        let debounceTimer = null;
+        let abortController = null;
+        let activeIndex = -1;
+
+        function hidePanel() {
+            panel.hidden = true;
+            panel.innerHTML = '';
+            activeIndex = -1;
+        }
+
+        function activateItem(nextIndex) {
+            const items = panel.querySelectorAll('.profile-user-search-suggestion');
+            if (!items.length) {
+                activeIndex = -1;
+                return;
+            }
+
+            activeIndex = (nextIndex + items.length) % items.length;
+            items.forEach(function (item, index) {
+                item.classList.toggle('is-active', index === activeIndex);
+            });
+            items[activeIndex].scrollIntoView({ block: 'nearest' });
+        }
+
+        function navigateToActiveSuggestion() {
+            const activeItem = panel.querySelector('.profile-user-search-suggestion.is-active');
+            if (activeItem) {
+                window.location.href = activeItem.dataset.href;
+            }
+        }
+
+        function renderSuggestions(items) {
+            panel.innerHTML = '';
+            activeIndex = -1;
+
+            if (!items.length) {
+                const empty = document.createElement('div');
+                empty.className = 'profile-user-search-suggestions-empty';
+                empty.textContent = 'No matching profiles found.';
+                panel.appendChild(empty);
+                panel.hidden = false;
+                return;
+            }
+
+            items.forEach(function (item, index) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'profile-user-search-suggestion';
+                button.dataset.href = item.profile_url;
+
+                const avatar = document.createElement('img');
+                avatar.className = 'profile-user-search-suggestion-avatar';
+                avatar.alt = 'Profile picture for ' + item.username;
+                avatar.src = item.profile_image_url;
+
+                const text = document.createElement('div');
+                text.className = 'profile-user-search-suggestion-text';
+
+                const username = document.createElement('strong');
+                username.textContent = item.username;
+                text.appendChild(username);
+
+                if (item.bio) {
+                    const bio = document.createElement('span');
+                    bio.textContent = item.bio;
+                    text.appendChild(bio);
+                }
+
+                button.appendChild(avatar);
+                button.appendChild(text);
+                button.addEventListener('click', function () {
+                    window.location.href = item.profile_url;
+                });
+                button.addEventListener('mouseenter', function () {
+                    activateItem(index);
+                });
+
+                panel.appendChild(button);
+            });
+
+            panel.hidden = false;
+        }
+
+        async function loadSuggestions(query) {
+            if (abortController) {
+                abortController.abort();
+            }
+
+            abortController = new AbortController();
+
+            try {
+                const url = new URL(suggestionUrl, window.location.origin);
+                url.searchParams.set('q', query);
+                if (excludeUsername) {
+                    url.searchParams.set('exclude', excludeUsername);
+                }
+
+                const response = await fetch(url.toString(), { signal: abortController.signal });
+                if (!response.ok) {
+                    hidePanel();
+                    return;
+                }
+
+                const data = await response.json();
+                renderSuggestions(data.suggestions || []);
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    hidePanel();
+                }
+            }
+        }
+
+        input.addEventListener('input', function () {
+            const query = input.value.trim();
+
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+
+            if (query.length < 1) {
+                hidePanel();
+                return;
+            }
+
+            debounceTimer = window.setTimeout(function () {
+                loadSuggestions(query);
+            }, 180);
+        });
+
+        input.addEventListener('keydown', function (event) {
+            if (panel.hidden) {
+                return;
+            }
+
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                activateItem(activeIndex + 1);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                activateItem(activeIndex - 1);
+            } else if (event.key === 'Enter' && activeIndex >= 0) {
+                event.preventDefault();
+                navigateToActiveSuggestion();
+            } else if (event.key === 'Escape') {
+                hidePanel();
+            }
+        });
+
+        input.addEventListener('blur', function () {
+            window.setTimeout(hidePanel, 120);
+        });
+
+        input.addEventListener('focus', function () {
+            if (input.value.trim().length >= 1 && panel.childElementCount > 0) {
+                panel.hidden = false;
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!panel.contains(event.target) && event.target !== input) {
+                hidePanel();
+            }
+        });
+    });
+</script>
 {% endblock %}

@@ -10682,6 +10682,37 @@ def api_suggest_tags():
     return jsonify({'tags': tags})
 
 
+@app.route('/api/users/suggest')
+@login_required
+def api_user_suggest():
+    query = request.args.get('q', '').strip()
+    exclude_username = request.args.get('exclude', '').strip()
+
+    if len(query) < 1:
+        return jsonify({'suggestions': []})
+
+    safe_query = re.escape(query)
+    filter_query = {'username': {'$regex': f'^{safe_query}', '$options': 'i'}}
+
+    cursor = users_conf.find(
+        filter_query,
+        {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0}
+    ).sort('username', 1).limit(6)
+
+    suggestions = []
+    for candidate in cursor:
+        if exclude_username and candidate.get('username') == exclude_username:
+            continue
+        suggestions.append({
+            'username': candidate.get('username'),
+            'bio': candidate.get('bio', ''),
+            'profile_image_url': candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png'),
+            'profile_url': url_for('profile', username=candidate.get('username')),
+        })
+
+    return jsonify({'suggestions': suggestions})
+
+
 @app.route('/unsubscribe/<email>/<token>', methods=['GET', 'POST'])
 @csrf.exempt
 @limits(calls=5, period=60)

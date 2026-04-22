@@ -83,13 +83,24 @@
     </div>
 
     <script>
+        var customScheme = "{{ deep_link_url | default('') }}";
         var httpsDeepLink = "{{ https_deep_link | default('') }}";
         var fallbackUrl = "{{ fallback_url }}";
         
         function openApp() {
-            // Use HTTPS deep link — Android's verified intent filter for echowithin.xyz
-            // intercepts this and opens it in the app's WebView
-            if (httpsDeepLink) {
+            // Try custom scheme first - more reliable for same-domain triggers
+            if (customScheme) {
+                console.log('Redirecting via custom scheme:', customScheme);
+                window.location.href = customScheme;
+                
+                // Fallback to HTTPS deep link after a short delay
+                setTimeout(function() {
+                    if (httpsDeepLink) {
+                        console.log('Fallback to HTTPS deep link:', httpsDeepLink);
+                        window.location.href = httpsDeepLink;
+                    }
+                }, 1000);
+            } else if (httpsDeepLink) {
                 console.log('Redirecting via HTTPS deep link:', httpsDeepLink);
                 window.location.href = httpsDeepLink;
             } else {

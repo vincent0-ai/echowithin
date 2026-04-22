@@ -47,7 +47,7 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script>
         // Global Socket.IO instance
-        window.socket = io();
+        window.socket = io({ transports: ['websocket'], upgrade: false });
         window.socket.on('connect', () => console.log('Connected to real-time server'));
     </script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
@@ -1569,6 +1569,9 @@
             }, duration);
         }
         window.showCustomAlert = showCustomAlert;
+        window.showToast = function (message, type = 'info', duration = 3500) {
+            showCustomAlert(message, type, duration);
+        };
 
         confirmOk.addEventListener('click', () => {
             if (confirmCallback) {

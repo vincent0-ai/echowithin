@@ -7346,7 +7346,8 @@ def personal_space():
         locked_clones_map=locked_clones_map,
         show_icon_labels=show_icon_labels,
         activity_notifications=activity_notifications,
-        pending_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal'],
+        pending_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') == 'pending'],
+        reviewed_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')],
         auto_approved_activity=[a for a in activity_notifications if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')]
     )
 

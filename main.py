@@ -1345,7 +1345,7 @@ def add_security_headers(response):
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "media-src 'self' https://res.cloudinary.com; "
-        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz wss://blog.echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net; "
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://accounts.google.com;"
@@ -5585,6 +5585,18 @@ def view_post(slug):
         meta_image = post.get('image_urls')[0]
     elif post.get('image_url'):
         meta_image = post.get('image_url')
+    elif post.get('video_url'):
+        # Auto-generate thumbnail from Cloudinary video URL
+        # Cloudinary serves a video poster frame when you change the extension to .jpg
+        video_url = post['video_url']
+        if 'res.cloudinary.com' in video_url:
+            # Replace /video/upload/ with /video/upload/so_0,w_1200,h_630,c_fill/ for optimal OG dimensions
+            # and swap extension to .jpg
+            thumb_url = video_url.rsplit('.', 1)[0] + '.jpg'
+            thumb_url = thumb_url.replace('/video/upload/', '/video/upload/so_0,w_1200,h_630,c_fill/')
+            meta_image = thumb_url
+        else:
+            meta_image = url_for('static', filename='og-image.png', _external=True)
 
     # JSON-LD structured data for the post
     try:
@@ -5631,7 +5643,25 @@ def view_post(slug):
                 }
             ]
         }
+
+        # Build combined JSON-LD string
         jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb)
+
+        # Add VideoObject schema for posts with videos (fixes "Video isn't on a watch page")
+        if post.get('video_url'):
+            video_url = post['video_url']
+            jsonld_video = {
+                "@context": "https://schema.org",
+                "@type": "VideoObject",
+                "name": post.get('title', 'Video'),
+                "description": page_description,
+                "contentUrl": video_url,
+                "uploadDate": post.get('timestamp').isoformat() if post.get('timestamp') else None,
+                "thumbnailUrl": meta_image or url_for('static', filename='og-image.png', _external=True)
+            }
+            # Also add video to the article schema
+            jsonld_article["video"] = jsonld_video
+            jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_video)
     except Exception:
         jsonld_str = ''
 
@@ -7141,7 +7171,7 @@ def personal_space():
     skip_notes = (notes_page - 1) * per_page
     
     personal_posts_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
-                                                 .sort('created_at', -1)
+                                                 .sort([('updated_at', -1), ('created_at', -1)])
                                                  .skip(skip_notes)
                                                  .limit(per_page))
     personal_posts = []
@@ -7167,7 +7197,7 @@ def personal_space():
     locked_clones_map = {}
     if is_unlocked and locked_notes_count > 0:
         locked_notes_raw = list(personal_posts_conf.find({'user_id': ObjectId(current_user.id), 'is_locked': True})
-                                                    .sort('created_at', -1)
+                                                    .sort([('updated_at', -1), ('created_at', -1)])
                                                     .limit(50))
         for note in locked_notes_raw:
             note['content'] = _decrypt_note_record(note)

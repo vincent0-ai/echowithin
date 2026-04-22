@@ -3222,25 +3222,23 @@ def google_login():
 def google_callback():
     state_from_url = request.args.get('state')
     
-    # If state is not in session, try to recover it from Redis (handles context switching on mobile)
-    if 'oauth_state' not in session and state_from_url:
-        if redis_cache:
-            try:
-                if redis_cache.exists(f"oauth_state:{state_from_url}"):
-                    session['oauth_state'] = state_from_url
-                    app.logger.info(f"Recovered state from Redis for {state_from_url[:8]}...")
-                    # Also recover platform if it was saved
-                    platform_saved = redis_cache.get(f"oauth_platform:{state_from_url}")
-                    if platform_saved:
-                        # Redis returns bytes, decode to string
-                        if isinstance(platform_saved, bytes):
-                            platform_saved = platform_saved.decode('utf-8')
-                        session['oauth_platform'] = platform_saved
-                        app.logger.info(f"Recovered platform from Redis for state {state_from_url[:8]}...: {platform_saved}")
-                else:
-                    app.logger.warning(f"OAuth state {state_from_url[:8]}... not found in Redis (may have been consumed or expired)")
-            except Exception as e:
-                app.logger.warning(f"Error checking Redis for state recovery: {e}")
+    # Always try to recover platform info from Redis if we have a state in the URL
+    if state_from_url and redis_cache:
+        try:
+            # Check for platform override first
+            platform_saved = redis_cache.get(f"oauth_platform:{state_from_url}")
+            if platform_saved:
+                if isinstance(platform_saved, bytes):
+                    platform_saved = platform_saved.decode('utf-8')
+                session['oauth_platform'] = platform_saved
+                app.logger.info(f"Recovered platform from Redis for state {state_from_url[:8]}...: {platform_saved}")
+            
+            # Also recover state if missing from session
+            if 'oauth_state' not in session and redis_cache.exists(f"oauth_state:{state_from_url}"):
+                session['oauth_state'] = state_from_url
+                app.logger.info(f"Recovered state from Redis for {state_from_url[:8]}...")
+        except Exception as e:
+            app.logger.warning(f"Error checking Redis for state recovery: {e}")
 
     # If user is already authenticated (duplicate request after successful login, or already logged in in browser),
     # we still check if we need to redirect back to the mobile app before going to home.

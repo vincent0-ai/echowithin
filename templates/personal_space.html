@@ -2984,7 +2984,11 @@
     // --- Immediate Event Handlers & Global Helpers ---
     (function () {
         // --- Socket.IO Integration ---
-        const socket = window.socket || io(); // Use global if available, fallback to local io()
+        const socket = window.socket;
+        if (!socket) {
+            console.warn('Socket client unavailable on personal space page.');
+            return;
+        }
         socket.on('connect', () => console.log('Connected to real-time sync server'));
 
         // Listen for updates from other devices/collaborators
@@ -5495,6 +5499,16 @@
                 return;
             }
 
+            const notify = function(message, level) {
+                if (typeof window.showFlashMessage === 'function') {
+                    window.showFlashMessage(message, level === 'error' ? 'danger' : level);
+                } else if (typeof window.showCustomAlert === 'function') {
+                    window.showCustomAlert(message, level === 'error' ? 'danger' : level);
+                } else {
+                    alert(message);
+                }
+            };
+
             try {
                 const response = await fetch(`/personal_post/proposal/${versionId}/decision`, {
                     method: 'POST',
@@ -5506,16 +5520,16 @@
                 });
 
                 const data = await response.json();
-                if (data.success) {
-                    showToast(`Proposal ${action}ed successfully.`, 'success');
+                if (response.ok && data.success) {
+                    notify(`Proposal ${action}ed successfully.`, 'success');
                     // Reload to update the tab count and list
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
-                    showToast(data.error || `Failed to ${action} proposal.`, 'error');
+                    notify(data.error || `Failed to ${action} proposal.`, 'error');
                 }
             } catch (err) {
                 console.error('Error reviewing proposal:', err);
-                showToast('An error occurred.', 'error');
+                notify('An error occurred while reviewing the proposal.', 'error');
             }
         };
 

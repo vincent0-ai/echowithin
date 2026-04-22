@@ -1858,21 +1858,21 @@
 
         // Socket.IO for real-time notification updates
         document.addEventListener('DOMContentLoaded', function () {
-            // Check if socket is already initialized elsewhere (to avoid duplicate connections)
-            if (typeof socket === 'undefined') {
-                const socket = io();
-                socket.on('connect', () => {
-                    socket.emit('join_inbox');
-                });
-                socket.on('new_dm', (data) => {
-                    if (window.location.pathname !== '/messages') {
-                        checkUnreadCount();
-                        if (typeof showToast !== 'undefined') {
-                            showToast(`New message from ${data.sender_username}`);
-                        }
+            // Reuse the global socket from the page head to avoid duplicate connections.
+            const inboxSocket = window.socket;
+            if (!inboxSocket) return;
+
+            inboxSocket.on('connect', () => {
+                inboxSocket.emit('join_inbox');
+            });
+            inboxSocket.on('new_dm', (data) => {
+                if (window.location.pathname !== '/messages') {
+                    checkUnreadCount();
+                    if (typeof showToast !== 'undefined') {
+                        showToast(`New message from ${data.sender_username}`);
                     }
-                });
-            }
+                }
+            });
         });
         {% endif %}
     })();

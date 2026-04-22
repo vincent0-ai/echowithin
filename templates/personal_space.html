@@ -3065,6 +3065,26 @@
             }
         });
 
+        // Real-time notifications for proposals and activity
+        socket.on('note_proposal_created', (data) => {
+            if (window.showToast) {
+                window.showToast(`${data.editor_name} proposed changes: "${data.summary}"`, 'info', 8000);
+            }
+            // Update activity badge if it exists
+            const badge = document.querySelector('#activity-tab-btn .badge');
+            if (badge) {
+                const current = parseInt(badge.textContent || '0');
+                badge.textContent = current + 1;
+                badge.style.display = 'inline-block';
+            }
+        });
+
+        socket.on('note_auto_approved', (data) => {
+            if (window.showToast) {
+                window.showToast(`${data.editor_name} updated your note automatically.`, 'success', 6000);
+            }
+        });
+
         // Helper Functions (Exposed to Window for global access)
         window.handleDeleteModalEsc = function (e) {
             if (e.key === 'Escape') window.closeDeleteModal();

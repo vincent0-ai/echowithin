@@ -9905,8 +9905,18 @@ def api_edit_shared_note(share_id):
                     'editor_name': editor_name,
                     'summary': edit_summary or 'Auto-approved edit'
                 }, room=owner_id_str)
-            except Exception:
-                pass
+                
+                if owner_id_str:
+                    send_push_notification_to_user(
+                        owner_id_str,
+                        f"{editor_name} updated your note",
+                        (edit_summary or 'A trusted collaborator applied changes to your note.')[:120],
+                        url=url_for('personal_space', _external=True) + '#activity',
+                        tag=f'note-auto-{share["note_id"]}',
+                        extra_data={'type': 'note_auto_approved', 'note_id': str(share['note_id'])}
+                    )
+            except Exception as notify_err:
+                app.logger.error(f"Failed to send auto-approve notifications: {notify_err}")
 
         # Cap at 50 versions per note
         version_count = note_versions_conf.count_documents({'note_id': share['note_id']})
@@ -10144,6 +10154,18 @@ def api_decide_note_proposal(version_id):
                     'decision_summary': decision_summary or 'Rejected by owner'
                 }}
             )
+            
+            # Notify contributor
+            contributor_id = proposal.get('editor_id')
+            if contributor_id:
+                send_push_notification_to_user(
+                    str(contributor_id),
+                    "Proposal Rejected",
+                    f"Your proposal for note '{note.get('reference', 'Untitled')[:30]}' was rejected.",
+                    url=url_for('view_shared_note', share_id=proposal.get('share_id'), _external=True) if proposal.get('share_id') else None,
+                    tag=f'prop-dec-{version_id}'
+                )
+                
             return jsonify({'success': True, 'status': 'rejected'})
 
         if action != 'accept':
@@ -10213,6 +10235,19 @@ def api_decide_note_proposal(version_id):
         socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))
         if proposal.get('share_id'):
             socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat()}, room=proposal.get('share_id'))
+
+        # Notify contributor of acceptance
+        contributor_id = proposal.get('editor_id')
+        if contributor_id:
+            try:
+                send_push_notification_to_user(
+                    str(contributor_id),
+                    "Proposal Accepted!",
+                    f"Your changes for note '{note.get('reference', 'Untitled')[:30]}' were accepted.",
+                    url=url_for('view_shared_note', share_id=proposal.get('share_id'), _external=True) if proposal.get('share_id') else None,
+                    tag=f'prop-dec-{version_id}'
+                )
+            except Exception: pass
 
         return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat()})
     except Exception as e:

@@ -3245,11 +3245,13 @@ def google_callback():
     # If user is already authenticated (duplicate request after successful login, or already logged in in browser),
     # we still check if we need to redirect back to the mobile app before going to home.
     if current_user.is_authenticated:
-        platform = session.pop('oauth_platform', None)
+        # Use get() instead of pop() so it persists if the redirect is interrupted/retried
+        platform = session.get('oauth_platform')
         app.logger.info(f"Google callback hit but user {current_user.username} already authenticated. Platform: {platform}")
         
         if platform == 'mobile':
             if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+                session.pop('oauth_platform', None) # Clear it now that we are in-app
                 return redirect(url_for('home'))
             
             # Bridge the session to the app
@@ -3342,12 +3344,14 @@ def google_callback():
         flash(f"Welcome back, {user['username']}!", "success")
         # Redirect to stored next URL or home
         # Check if we need to redirect back to the mobile app
-        platform = session.pop('oauth_platform', None)
+        # Use get() instead of pop() so it persists if the redirect is interrupted/retried
+        platform = session.get('oauth_platform')
         app.logger.info(f"Checking mobile platform in callback. Found: {platform}")
         if platform == 'mobile':
             # If callback is running inside the app's WebView (intent filter intercepted the URL),
             # the user is already logged in within the WebView context — just redirect to home
             if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
+                session.pop('oauth_platform', None) # Clear it now that we are in-app
                 app.logger.info(f"Mobile login completed for {user['username']} (direct WebView callback)")
                 return redirect(url_for('home'))
             
@@ -10534,6 +10538,9 @@ def mobile_auth():
             
             # Clean up token immediately (one-time use)
             redis_cache.delete(f"mobile_auth:{token}")
+            
+            # Clear the mobile platform flag from session now that bridge is complete
+            session.pop('oauth_platform', None)
             
             user = users_conf.find_one({'_id': ObjectId(user_id)})
             if user:

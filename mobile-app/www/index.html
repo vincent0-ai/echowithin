@@ -195,21 +195,35 @@
 
         function parseDeepLink(deepLinkUrl) {
             if (!deepLinkUrl) return null;
+            console.log('Bridge: Parsing deep link:', deepLinkUrl);
             try {
-                const url = new URL(deepLinkUrl);
-                if (url.protocol === 'echowithin:' && url.host === 'open') {
-                    let path = url.searchParams.get('path') || '/';
-                    const params = new URLSearchParams(url.search);
-                    params.delete('path');
-                    const search = params.toString();
-                    if (search) path += '?' + search;
-                    return normalizePathToLiveSite(path);
+                // Handle echowithin://open?path=/foo&token=bar
+                if (deepLinkUrl.startsWith('echowithin://')) {
+                    const url = new URL(deepLinkUrl.replace('echowithin://', 'http://localhost/'));
+                    if (url.hostname === 'open') {
+                        let path = url.searchParams.get('path') || '/';
+                        
+                        // Copy all other params except 'path'
+                        const otherParams = new URLSearchParams();
+                        url.searchParams.forEach((value, key) => {
+                            if (key !== 'path') otherParams.append(key, value);
+                        });
+                        
+                        const search = otherParams.toString();
+                        if (search) {
+                            path += (path.includes('?') ? '&' : '?') + search;
+                        }
+                        return normalizePathToLiveSite(path);
+                    }
                 }
 
-                if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname === LIVE_HOST) {
+                // Handle https://echowithin.xyz/...
+                const url = new URL(deepLinkUrl);
+                if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.includes('echowithin.xyz')) {
                     return `${url.origin}${url.pathname}${url.search}${url.hash}`;
                 }
             } catch (e) {
+                console.error('Bridge: parseDeepLink error:', e);
                 return normalizePathToLiveSite(deepLinkUrl);
             }
             return null;

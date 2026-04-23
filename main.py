@@ -3007,8 +3007,9 @@ def register():
         # Honeypot Check
         if honeypot:
             app.logger.warning(f"Honeypot filled during registration from IP {request.remote_addr}")
-            flash("Account creation failed due to suspicious activity.", "danger")
-            return redirect(url_for('register', form='register'))
+            # Trick the bot by faking a successful registration so it stops retrying
+            flash("Account created successfully! Please check your email for a confirmation code.", "success")
+            return redirect(url_for('login'))
 
         if not agree_terms:
             flash("You must agree to the Terms of Service to create an account.", "danger")

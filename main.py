@@ -3002,6 +3002,13 @@ def register():
         email = request.form.get("email")
         password = request.form.get("password")
         agree_terms = request.form.get("agree_terms")
+        honeypot = request.form.get("website")
+
+        # Honeypot Check
+        if honeypot:
+            app.logger.warning(f"Honeypot filled during registration from IP {request.remote_addr}")
+            flash("Account creation failed due to suspicious activity.", "danger")
+            return redirect(url_for('register', form='register'))
 
         if not agree_terms:
             flash("You must agree to the Terms of Service to create an account.", "danger")
@@ -3533,7 +3540,7 @@ def home():
         total_posts = cached_community['total_posts']
         most_active_member = cached_community['most_active_member']
     else:
-        total_members = users_conf.count_documents({})
+        total_members = users_conf.count_documents({'is_confirmed': True})
         total_posts = posts_conf.count_documents({})
 
         # Most Active Member Calculation

@@ -71,6 +71,13 @@
                 <div class="inputs">
                     <input type="text" name="username" class="form-input" placeholder="Username" required>
                     <input type="email" name="email" class="form-input" placeholder="Email" required>
+                    
+                    <!-- Honeypot Field -->
+                    <div style="display: none;" aria-hidden="true">
+                        <label for="website">Leave this field empty</label>
+                        <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">
+                    </div>
+                    
                     <div class="password-input-container">
                         <input type="password" name="password" class="form-input password-input" placeholder="Password"
                             required>

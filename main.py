@@ -1147,67 +1147,107 @@ def cleanup_share_media(share):
     """
     Checks if media files in a share are used elsewhere. 
     If not, deletes them from Cloudinary to save storage.
+    Uses media_hash for cross-collection dedup (avoids decrypting every record).
     """
-    media_fields = ['valentine_photo', 'valentine_audio']
-    for field in media_fields:
-        url = share.get(field)
-        if not url:
+    media_hash_fields = {
+        'valentine_photo': 'valentine_photo_hash',
+        'valentine_audio': 'valentine_audio_hash'
+    }
+    for field, hash_field in media_hash_fields.items():
+        media_hash = share.get(hash_field)
+        encrypted_url = share.get(field)
+        if not encrypted_url:
             continue
-            
-        # Check if any OTHER active share uses this exact URL
+
+        # Decrypt URL to get the actual Cloudinary URL for deletion
+        owner_id = str(share.get('owner_id', ''))
+        url = decrypt_note(encrypted_url, user_id=owner_id)
+        if not url or url.startswith('gAAAAA'):
+            continue  # Decryption failed, skip
+
         try:
-            other_usage = note_shares_conf.find_one({
-                field: url,
-                '_id': {'$ne': share['_id']}
-            })
-            
-            other_post = personal_posts_conf.find_one({
-                field: url
-            })
-            
+            # Check if any OTHER active share uses this exact media (by hash)
+            other_usage = None
+            other_post = None
+            if media_hash:
+                other_usage = note_shares_conf.find_one({
+                    hash_field: media_hash,
+                    '_id': {'$ne': share['_id']}
+                })
+                other_post = personal_posts_conf.find_one({
+                    hash_field: media_hash
+                })
+            else:
+                # Legacy records without hash — fall back to URL comparison
+                other_usage = note_shares_conf.find_one({
+                    field: encrypted_url,
+                    '_id': {'$ne': share['_id']}
+                })
+                other_post = personal_posts_conf.find_one({
+                    field: encrypted_url
+                })
+
             if not other_usage and not other_post:
-                # No other share or post uses this file. Safe to delete from Cloudinary.
                 public_id = extract_cloudinary_public_id(url)
                 if public_id:
-                    # Cloudinary destroy: audio/video are resource_type="video"
                     res_type = "video" if field == 'valentine_audio' else "image"
                     cloudinary.uploader.destroy(public_id, resource_type=res_type)
                     app.logger.info(f"Deleted orphaned Cloudinary media: {public_id} (Type: {res_type})")
         except Exception as e:
-            app.logger.error(f"Failed to cleanup media {url}: {e}")
+            app.logger.error(f"Failed to cleanup media: {e}")
 
 def cleanup_post_media(post):
     """
     Checks if media files in a personal post are used elsewhere. 
     If not, deletes them from Cloudinary to save storage.
+    Uses media_hash for cross-collection dedup (avoids decrypting every record).
     """
-    media_fields = ['valentine_photo', 'valentine_audio']
-    for field in media_fields:
-        url = post.get(field)
-        if not url:
+    media_hash_fields = {
+        'valentine_photo': 'valentine_photo_hash',
+        'valentine_audio': 'valentine_audio_hash'
+    }
+    for field, hash_field in media_hash_fields.items():
+        media_hash = post.get(hash_field)
+        encrypted_url = post.get(field)
+        if not encrypted_url:
             continue
-            
-        # Check if any OTHER post or active share uses this exact URL
+
+        # Decrypt URL to get the actual Cloudinary URL for deletion
+        owner_id = str(post.get('user_id', ''))
+        url = decrypt_note(encrypted_url, user_id=owner_id)
+        if not url or url.startswith('gAAAAA'):
+            continue  # Decryption failed, skip
+
         try:
-            other_post = personal_posts_conf.find_one({
-                field: url,
-                '_id': {'$ne': post['_id']}
-            })
-            
-            other_share = note_shares_conf.find_one({
-                field: url
-            })
-            
+            # Check if any OTHER post or share uses this exact media (by hash)
+            other_post = None
+            other_share = None
+            if media_hash:
+                other_post = personal_posts_conf.find_one({
+                    hash_field: media_hash,
+                    '_id': {'$ne': post['_id']}
+                })
+                other_share = note_shares_conf.find_one({
+                    hash_field: media_hash
+                })
+            else:
+                # Legacy records without hash — fall back to URL comparison
+                other_post = personal_posts_conf.find_one({
+                    field: encrypted_url,
+                    '_id': {'$ne': post['_id']}
+                })
+                other_share = note_shares_conf.find_one({
+                    field: encrypted_url
+                })
+
             if not other_post and not other_share:
-                # No other post or share uses this file. Safe to delete from Cloudinary.
                 public_id = extract_cloudinary_public_id(url)
                 if public_id:
-                    # Cloudinary destroy: audio/video are resource_type="video"
                     res_type = "video" if field == 'valentine_audio' else "image"
                     cloudinary.uploader.destroy(public_id, resource_type=res_type)
                     app.logger.info(f"Deleted orphaned Cloudinary media from post: {public_id} (Type: {res_type})")
         except Exception as e:
-            app.logger.error(f"Failed to cleanup post media {url}: {e}")
+            app.logger.error(f"Failed to cleanup post media: {e}")
 
 
 from markupsafe import Markup
@@ -7965,10 +8005,7 @@ def sync_personal_post(post_id):
                     'content': original_note.get('content', ''),
                     'base_content': original_note.get('content', ''),
                     'content_owner_id': ObjectId(original_owner_id),
-                    'content_plain': _decrypt_note_record(original_note),
-                    'base_content_plain': _decrypt_note_record(original_note),
                     'proposed_content': note.get('content'),
-                    'proposed_content_plain': _decrypt_note_record(note),
                     'encrypted': True,
                     'event_type': 'proposal',
                     'status': 'pending',
@@ -8018,7 +8055,6 @@ def sync_personal_post(post_id):
                     'editor_id': ObjectId(current_user.id),
                     'content': original_note['content'],
                     'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
-                    'content_plain': _decrypt_note_record(original_note),
                     'encrypted': original_note.get('encrypted', True),
                     'created_at': now,
                     'is_read_by_owner': False if not is_owner_of_original else True,
@@ -8080,7 +8116,6 @@ def sync_personal_post(post_id):
                     'editor_id': ObjectId(current_user.id),
                     'content': note['content'],
                     'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-                    'content_plain': _decrypt_note_record(note),
                     'encrypted': note.get('encrypted', True),
                     'created_at': now
                 })
@@ -8427,8 +8462,10 @@ def api_create_share(post_id):
         'expires_at': expires_at,
         'created_at': now,
         'surprise_theme': surprise_theme,
-        'valentine_photo': valentine_photo,
-        'valentine_audio': valentine_audio,
+        'valentine_photo': encrypt_note(valentine_photo, user_id=current_user.id) if valentine_photo else None,
+        'valentine_audio': encrypt_note(valentine_audio, user_id=current_user.id) if valentine_audio else None,
+        'valentine_photo_hash': hashlib.sha256(valentine_photo.encode()).hexdigest() if valentine_photo else None,
+        'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
         'use_typewriter': use_typewriter,
         'auto_approve': auto_approve
     })
@@ -8568,8 +8605,8 @@ def view_shared_note(share_id):
                            reference=note.get('reference', ''),
                            tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=share.get('valentine_photo'),
-                           valentine_audio=share.get('valentine_audio'),
+                           valentine_photo=decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))),
+                           valentine_audio=decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))),
                            use_typewriter=use_typewriter)
 
 
@@ -8624,8 +8661,10 @@ def api_save_shared_note(share_id):
         'source_note_id': share['note_id'],
         'source_share_id': share_id,
         'surprise_theme': share.get('surprise_theme', 'none'),
-        'valentine_photo': share.get('valentine_photo'),
-        'valentine_audio': share.get('valentine_audio'),
+        'valentine_photo': encrypt_note(decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_photo') else None,
+        'valentine_audio': encrypt_note(decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_audio') else None,
+        'valentine_photo_hash': share.get('valentine_photo_hash'),
+        'valentine_audio_hash': share.get('valentine_audio_hash'),
         'use_typewriter': share.get('use_typewriter', False),
         'permissions': share.get('permissions', 'view')
     })
@@ -8663,8 +8702,8 @@ def view_saved_note(note_id):
                            reference=note.get('reference', ''),
                            tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=note.get('valentine_photo'),
-                           valentine_audio=note.get('valentine_audio'),
+                           valentine_photo=decrypt_note(note.get('valentine_photo'), user_id=str(note.get('user_id', ''))),
+                           valentine_audio=decrypt_note(note.get('valentine_audio'), user_id=str(note.get('user_id', ''))),
                            use_typewriter=note.get('use_typewriter', False))
 
 
@@ -8976,12 +9015,18 @@ def handle_send_dm(data):
             'message_type': message_type
         }
         
-        if image_url: message_doc['image_url'] = image_url
+        if image_url: message_doc['image_url'] = encrypt_dm(image_url, sender_id_str, recipient_id_str)
         if reply_to_id:
             message_doc['reply_to_id'] = ObjectId(reply_to_id)
-            message_doc['reply_to_preview'] = reply_to_preview
+            message_doc['reply_to_preview'] = encrypt_dm(reply_to_preview, sender_id_str, recipient_id_str) if reply_to_preview else reply_to_preview
             message_doc['reply_to_sender'] = reply_to_sender
-        if link_preview: message_doc['link_preview'] = link_preview
+        if link_preview:
+            message_doc['link_preview'] = {
+                'url': encrypt_dm(link_preview.get('url', ''), sender_id_str, recipient_id_str),
+                'title': encrypt_dm(link_preview.get('title', ''), sender_id_str, recipient_id_str),
+                'description': encrypt_dm(link_preview.get('description', ''), sender_id_str, recipient_id_str),
+                'image': encrypt_dm(link_preview.get('image', ''), sender_id_str, recipient_id_str)
+            }
         
         # Save to DB
         direct_messages_conf.insert_one(message_doc)
@@ -9242,12 +9287,26 @@ def api_message_history(other_user_id):
                 'message_type': m.get('message_type', 'text')
             }
             
-            if 'image_url' in m: msg_data['image_url'] = m['image_url']
+            if 'image_url' in m:
+                raw_img = m['image_url']
+                msg_data['image_url'] = decrypt_dm(raw_img, str(current_user.id), str(other_id)) if raw_img and raw_img.startswith('gAAAAA') else raw_img
             if 'reply_to_id' in m:
                 msg_data['reply_to_id'] = str(m['reply_to_id'])
-                msg_data['reply_to_preview'] = m.get('reply_to_preview')
+                raw_rtp = m.get('reply_to_preview', '')
+                msg_data['reply_to_preview'] = decrypt_dm(raw_rtp, str(current_user.id), str(other_id)) if raw_rtp and raw_rtp.startswith('gAAAAA') else raw_rtp
                 msg_data['reply_to_sender'] = m.get('reply_to_sender')
-            if 'link_preview' in m: msg_data['link_preview'] = m['link_preview']
+            if 'link_preview' in m:
+                lp = m['link_preview']
+                if lp and isinstance(lp, dict):
+                    u1, u2 = str(current_user.id), str(other_id)
+                    msg_data['link_preview'] = {
+                        'url': decrypt_dm(lp.get('url', ''), u1, u2) if lp.get('url', '').startswith('gAAAAA') else lp.get('url', ''),
+                        'title': decrypt_dm(lp.get('title', ''), u1, u2) if lp.get('title', '').startswith('gAAAAA') else lp.get('title', ''),
+                        'description': decrypt_dm(lp.get('description', ''), u1, u2) if lp.get('description', '').startswith('gAAAAA') else lp.get('description', ''),
+                        'image': decrypt_dm(lp.get('image', ''), u1, u2) if lp.get('image', '').startswith('gAAAAA') else lp.get('image', '')
+                    }
+                else:
+                    msg_data['link_preview'] = lp
             if 'reactions' in m: msg_data['reactions'] = m['reactions']
 
             formatted_messages.append(msg_data)
@@ -9377,7 +9436,19 @@ def api_search_messages(other_user_id):
                 except Exception:
                     pass
                     
-            if query in content.lower() or (m.get('link_preview') and query in m['link_preview'].get('title', '').lower()):
+            # Decrypt link_preview title for search matching
+            lp_title = ''
+            if m.get('link_preview') and isinstance(m['link_preview'], dict):
+                raw_title = m['link_preview'].get('title', '')
+                if raw_title and raw_title.startswith('gAAAAA'):
+                    try:
+                        lp_title = decrypt_dm(raw_title, str(m['sender_id']), str(m['recipient_id']))
+                    except Exception:
+                        lp_title = ''
+                else:
+                    lp_title = raw_title
+
+            if query in content.lower() or (lp_title and query in lp_title.lower()):
                 results.append(str(m['_id']))
                 
             if len(results) >= 50: # Limit matches
@@ -9826,10 +9897,7 @@ def api_edit_shared_note(share_id):
             'content': note.get('content', ''),
             'base_content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', share.get('owner_id')),
-            'content_plain': _decrypt_note_record(note, share),
-            'base_content_plain': _decrypt_note_record(note, share),
             'proposed_content': encrypted_content,
-            'proposed_content_plain': content,
             'encrypted': True,
             'event_type': 'proposal',
             'status': 'pending',
@@ -9894,7 +9962,6 @@ def api_edit_shared_note(share_id):
             'editor_id': editor_id,
             'content': note['content'],  # previous encrypted content
             'content_owner_id': note.get('content_owner_id', share.get('owner_id')),
-            'content_plain': _decrypt_note_record(note, share),
             'encrypted': note.get('encrypted', True),
             'event_type': 'snapshot',
             'status': 'applied',
@@ -10096,7 +10163,6 @@ def api_restore_note_version(post_id, version_id):
             'editor_id': ObjectId(current_user.id),
             'content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-            'content_plain': _decrypt_note_record(note),
             'encrypted': True,
             'event_type': 'snapshot',
             'status': 'applied',
@@ -10208,7 +10274,6 @@ def api_decide_note_proposal(version_id):
             'editor_id': ObjectId(current_user.id),
             'content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-            'content_plain': current_plain,
             'encrypted': True,
             'event_type': 'snapshot',
             'status': 'applied',

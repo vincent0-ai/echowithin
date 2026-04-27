@@ -24,31 +24,25 @@ import sys
 import os
 import argparse
 from bson import ObjectId
+from dotenv import load_dotenv
 
 # Add parent directory to path so we can import from main
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+load_dotenv()
 
 
 def get_db_connection():
-    """Get MongoDB connection from environment or main app config."""
+    """Get MongoDB connection from environment (matches encrypt_legacy_data.py)."""
     from pymongo import MongoClient
-    mongo_uri = os.environ.get('MONGO_URI') or os.environ.get('MONGODB_URI')
+    mongo_uri = os.environ.get('MONGODB_CONNECTION')
     if not mongo_uri:
-        print("ERROR: No MONGO_URI or MONGODB_URI environment variable found.")
-        print("Set it before running this script, e.g.:")
-        print("  export MONGO_URI='mongodb+srv://...'")
+        print("ERROR: MONGODB_CONNECTION environment variable not found.")
+        print("Make sure your .env file is present or set the variable, e.g.:")
+        print("  export MONGODB_CONNECTION='mongodb+srv://...'")
         sys.exit(1)
     
     client = MongoClient(mongo_uri)
-    # Extract DB name from URI or use default
-    db_name = os.environ.get('MONGO_DBNAME', 'echowithin')
-    if '/' in mongo_uri.split('?')[0].split('//')[-1]:
-        # Try to extract db name from URI path
-        path = mongo_uri.split('?')[0].split('//')[-1]
-        if '/' in path:
-            db_name = path.split('/')[-1] or db_name
-    
-    db = client[db_name]
+    db = client['echowithin_db']
     return db
 
 

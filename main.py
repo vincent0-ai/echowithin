@@ -10003,7 +10003,12 @@ def api_edit_shared_note(share_id):
     now = datetime.datetime.now(datetime.timezone.utc)
     personal_posts_conf.update_one(
         {'_id': share['note_id']},
-        {'$set': {'content': encrypted_content, 'encrypted': True, 'updated_at': now}}
+        {'$set': {
+            'content': encrypted_content,
+            'encrypted': True,
+            'content_owner_id': ObjectId(owner_id_str) if owner_id_str else share.get('owner_id'),
+            'updated_at': now
+        }}
     )
 
     try:
@@ -10090,6 +10095,13 @@ def api_get_note_versions(post_id):
 
     current_plain = _decrypt_note_record(note)
     versions = list(note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
+    # Build a shared candidate list from the note record for decryption fallback
+    note_candidates = _candidate_user_ids(
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+
     result = []
     for v in versions:
         event_type = v.get('event_type', 'snapshot')
@@ -10104,15 +10116,22 @@ def api_get_note_versions(post_id):
             'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None
         }
 
+        # Build per-version candidate list: version-specific IDs first, then note-level fallbacks
+        version_candidates = _candidate_user_ids(
+            v.get('content_owner_id'),
+            v.get('editor_id'),
+            *note_candidates
+        )
+
         if event_type == 'proposal':
             base_plain = v.get('base_content_plain')
             if base_plain is None:
                 base_encrypted = v.get('base_content') or v.get('content', '')
-                base_plain = decrypt_note(base_encrypted, user_id=current_user.id) if base_encrypted else ''
+                base_plain = (_decrypt_with_candidate_ids(base_encrypted, version_candidates) if base_encrypted else '') or ''
             proposed_plain = v.get('proposed_content_plain')
             if proposed_plain is None:
                 proposed_encrypted = v.get('proposed_content', '')
-                proposed_plain = decrypt_note(proposed_encrypted, user_id=current_user.id) if proposed_encrypted else ''
+                proposed_plain = (_decrypt_with_candidate_ids(proposed_encrypted, version_candidates) if proposed_encrypted else '') or ''
             row.update({
                 'base_content': base_plain,
                 'proposed_content': proposed_plain,
@@ -10121,7 +10140,12 @@ def api_get_note_versions(post_id):
                 'can_review': status == 'pending'
             })
         else:
-            decrypted = v.get('content_plain') or (decrypt_note(v.get('content', ''), user_id=str(v.get('content_owner_id') or current_user.id)) if v.get('encrypted', True) else v.get('content', ''))
+            if not v.get('encrypted', True):
+                decrypted = v.get('content', '')
+            else:
+                decrypted = _decrypt_with_candidate_ids(v.get('content', ''), version_candidates)
+                if decrypted is None:
+                    decrypted = '[Content unavailable \u2014 decryption error]'
             row.update({
                 'content': decrypted,
                 'can_restore': True
@@ -10180,7 +10204,13 @@ def api_restore_note_version(post_id, version_id):
         }}
     )
 
-    plain = version.get('content_plain') or decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
+    restore_candidates = _candidate_user_ids(
+        version.get('content_owner_id'),
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+    plain = _decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
     index_note_to_meili(post_id, decrypted_content=plain)
 
     return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat()})

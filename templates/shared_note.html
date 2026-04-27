@@ -15,8 +15,17 @@
     <div class="shared-note-layout">
         {% if surprise_theme == 'none' %}
         <aside class="toc-sidebar" id="toc-sidebar">
-            <div class="toc-title">Study Sections</div>
-            <ul class="toc-list" id="toc-list"></ul>
+            <div class="toc-header">
+                <div class="toc-title">Study Sections</div>
+                <button class="toc-toggle-btn" id="toc-toggle-btn" aria-label="Toggle table of contents">
+                    <i class="fas fa-chevron-up"></i>
+                </button>
+            </div>
+            <input type="text" class="toc-search" id="toc-search" placeholder="Search sections..." autocomplete="off">
+            <div class="toc-body" id="toc-body">
+                <ul class="toc-list" id="toc-list"></ul>
+            </div>
+            <div class="toc-count" id="toc-count"></div>
         </aside>
         {% endif %}
         <div
@@ -194,6 +203,7 @@
                 <!-- Presence Bar -->
                 <div id="presence-bar" class="presence-bar">
                     <div class="presence-label">Studying Now:</div>
+                    <span id="presence-count" class="presence-count">0</span>
                     <div id="viewers-list" class="viewers-list">
                         <!-- Avatars populated by JS -->
                     </div>
@@ -316,6 +326,15 @@
             {% endif %}
             <div class="edit-interface" id="edit-interface" style="display: none;">
                 <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                <div class="editor-stats" id="editor-stats">
+                    <div class="stat">
+                        <span id="word-count">0 words</span>
+                        <span id="char-count">0 chars</span>
+                    </div>
+                    <div class="draft-indicator" id="draft-indicator">
+                        <i class="fas fa-circle" style="font-size:0.5rem;"></i> Unsaved draft
+                    </div>
+                </div>
                 <input type="text" id="edit-summary" maxlength="180"
                     placeholder="Edit summary (optional, helps owner review)"
                     style="width:100%; margin-bottom:0.75rem; border:1px solid #ddd; border-radius:8px; padding:0.55rem; font-size:0.85rem;">
@@ -529,7 +548,7 @@
         }
 
         .toc-sidebar {
-            width: 240px;
+            width: 260px;
             position: sticky;
             top: 1.5rem;
             max-height: calc(100vh - 3rem);
@@ -538,19 +557,72 @@
             padding: 1.25rem;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            display: none; /* Hidden by default, shown if headers exist */
+            display: none;
+            scrollbar-width: thin;
+            scrollbar-color: #ddd transparent;
+        }
+
+        .toc-sidebar::-webkit-scrollbar { width: 4px; }
+        .toc-sidebar::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+        .toc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #f0eee9;
+            padding-bottom: 0.5rem;
         }
 
         .toc-title {
             font-size: 0.9rem;
             font-weight: 700;
             color: #3e2217;
-            margin-bottom: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-bottom: 1px solid #f0eee9;
-            padding-bottom: 0.5rem;
         }
+
+        .toc-toggle-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .toc-toggle-btn:hover { color: #3e2217; background: rgba(0,0,0,0.04); }
+
+        .toc-search {
+            width: 100%;
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #e8e4df;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            margin-bottom: 0.6rem;
+            background: #fdfaf8;
+            transition: border-color 0.2s;
+            display: none;
+        }
+        .toc-search:focus { outline: none; border-color: #3e2217; background: #fff; }
+        .toc-search.visible { display: block; }
+
+        .toc-body {
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            overflow: hidden;
+        }
+        .toc-body.collapsed { max-height: 0 !important; opacity: 0; }
+
+        .toc-count {
+            font-size: 0.7rem;
+            color: #aaa;
+            text-align: center;
+            margin-top: 0.5rem;
+            display: none;
+        }
+        .toc-count.visible { display: block; }
 
         .toc-list {
             list-style: none;
@@ -558,37 +630,48 @@
             margin: 0;
         }
 
-        .toc-item {
-            margin-bottom: 0.4rem;
+        /* Multi-column for 15+ headings */
+        .toc-list.multi-column {
+            columns: 2;
+            column-gap: 0.75rem;
         }
+
+        .toc-item {
+            margin-bottom: 0.3rem;
+            break-inside: avoid;
+        }
+
+        .toc-item.toc-hidden { display: none; }
 
         .toc-link {
             color: #666;
             text-decoration: none;
-            font-size: 0.88rem;
+            font-size: 0.84rem;
             display: block;
-            padding: 0.25rem 0.5rem;
+            padding: 0.3rem 0.5rem;
             border-radius: 6px;
             transition: all 0.2s;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.35;
+            border-left: 2px solid transparent;
         }
 
         .toc-link:hover {
             background: #f8f6f2;
             color: #3e2217;
-            padding-left: 0.75rem;
+            border-left-color: #d4c4b5;
         }
 
         .toc-link.active {
             font-weight: 600;
             color: #3e2217;
             background: #f0eee9;
+            border-left-color: #3e2217;
         }
 
-        .toc-h2 { padding-left: 1rem; font-size: 0.84rem; opacity: 0.9; }
-        .toc-h3 { padding-left: 1.75rem; font-size: 0.8rem; opacity: 0.8; }
+        .toc-h2 { padding-left: 1rem; font-size: 0.8rem; opacity: 0.9; }
+        .toc-h3 { padding-left: 1.75rem; font-size: 0.76rem; opacity: 0.8; }
 
         .shared-note-container {
             flex: 1;
@@ -597,14 +680,49 @@
             padding: 0;
         }
 
+        /* Collaborator count badge */
+        .presence-count {
+            background: #3e2217;
+            color: #fff;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.1rem 0.45rem;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Word count bar in editor */
+        .editor-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            color: #999;
+            padding: 0.35rem 0;
+            margin-bottom: 0.5rem;
+        }
+        .editor-stats .stat { display: flex; gap: 0.75rem; }
+        .draft-indicator {
+            color: #e67e22;
+            font-weight: 600;
+            font-size: 0.75rem;
+            display: none;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .draft-indicator.visible { display: flex; }
+
         @media (max-width: 1000px) {
             .shared-note-layout { flex-direction: column; padding: 0 0.5rem; }
-            .toc-sidebar { 
-                width: 100%; 
-                position: static; 
-                max-height: none; 
+            .toc-sidebar {
+                width: 100%;
+                position: static;
+                max-height: none;
                 margin-bottom: 1rem;
             }
+            .toc-toggle-btn { display: inline-flex; }
+            .toc-list.multi-column { columns: 1; }
             .shared-note-container {
                 max-width: 100%;
             }
@@ -1921,15 +2039,19 @@
             });
 
             // Auto-generate TOC for long studies
+            let _tocHeaders = []; // Cache for scroll-spy
             function generateTOC() {
                 const noteView = document.querySelector('.rendered-note');
                 const tocList = document.getElementById('toc-list');
                 const tocSidebar = document.getElementById('toc-sidebar');
+                const tocSearch = document.getElementById('toc-search');
+                const tocCount = document.getElementById('toc-count');
+                const tocBody = document.getElementById('toc-body');
                 if (!noteView || !tocList || !tocSidebar) return;
 
-                // Scan for headers
                 const headers = noteView.querySelectorAll('h1, h2, h3');
                 tocList.innerHTML = '';
+                _tocHeaders = [];
                 
                 if (headers.length < 2) {
                     tocSidebar.style.display = 'none';
@@ -1937,12 +2059,36 @@
                 }
 
                 tocSidebar.style.display = 'block';
+
+                // Multi-column for 15+ headings
+                if (headers.length >= 15) {
+                    tocList.classList.add('multi-column');
+                } else {
+                    tocList.classList.remove('multi-column');
+                }
+
+                // Show search for 8+ headings
+                if (tocSearch && headers.length >= 8) {
+                    tocSearch.classList.add('visible');
+                } else if (tocSearch) {
+                    tocSearch.classList.remove('visible');
+                    tocSearch.value = '';
+                }
+
+                // Show count
+                if (tocCount) {
+                    tocCount.textContent = headers.length + ' sections';
+                    tocCount.classList.add('visible');
+                }
+
                 headers.forEach((header, index) => {
                     const id = 'section-' + index;
                     header.id = id;
+                    _tocHeaders.push(header);
                     
                     const li = document.createElement('li');
                     li.className = 'toc-item';
+                    li.setAttribute('data-toc-text', header.textContent.toLowerCase());
                     
                     const a = document.createElement('a');
                     a.href = '#' + id;
@@ -1951,8 +2097,7 @@
                     
                     a.onclick = (e) => {
                         e.preventDefault();
-                        header.scrollIntoView({ behavior: 'smooth' });
-                        // Update active state
+                        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         document.querySelectorAll('.toc-link').forEach(l => l.classList.remove('active'));
                         a.classList.add('active');
                     };
@@ -1960,10 +2105,88 @@
                     li.appendChild(a);
                     tocList.appendChild(li);
                 });
+
+                // Start scroll-spy
+                setupScrollSpy();
             }
+
+            // Scroll-spy: highlight current section in TOC
+            let _scrollSpyRaf = null;
+            function setupScrollSpy() {
+                if (_tocHeaders.length < 2) return;
+                window.addEventListener('scroll', () => {
+                    if (_scrollSpyRaf) return;
+                    _scrollSpyRaf = requestAnimationFrame(() => {
+                        _scrollSpyRaf = null;
+                        const scrollY = window.scrollY + 120;
+                        let activeIdx = 0;
+                        for (let i = _tocHeaders.length - 1; i >= 0; i--) {
+                            if (_tocHeaders[i].offsetTop <= scrollY) {
+                                activeIdx = i;
+                                break;
+                            }
+                        }
+                        const links = document.querySelectorAll('.toc-link');
+                        links.forEach((l, i) => {
+                            l.classList.toggle('active', i === activeIdx);
+                        });
+                        // Scroll TOC sidebar to keep active item visible
+                        const activeLink = links[activeIdx];
+                        const tocBody = document.getElementById('toc-body');
+                        if (activeLink && tocBody && tocBody.scrollHeight > tocBody.clientHeight) {
+                            const linkTop = activeLink.offsetTop - tocBody.offsetTop;
+                            const bodyHeight = tocBody.clientHeight;
+                            if (linkTop < tocBody.scrollTop || linkTop > tocBody.scrollTop + bodyHeight - 40) {
+                                tocBody.scrollTop = linkTop - bodyHeight / 3;
+                            }
+                        }
+                    });
+                }, { passive: true });
+            }
+
+            // TOC search/filter
+            (function() {
+                const searchInput = document.getElementById('toc-search');
+                if (!searchInput) return;
+                searchInput.addEventListener('input', function() {
+                    const query = this.value.toLowerCase().trim();
+                    const items = document.querySelectorAll('.toc-item');
+                    items.forEach(item => {
+                        const text = item.getAttribute('data-toc-text') || '';
+                        item.classList.toggle('toc-hidden', query && !text.includes(query));
+                    });
+                });
+            })();
+
+            // TOC collapsible toggle (mobile)
+            (function() {
+                const toggleBtn = document.getElementById('toc-toggle-btn');
+                const tocBody = document.getElementById('toc-body');
+                const tocSearch = document.getElementById('toc-search');
+                if (!toggleBtn || !tocBody) return;
+                let collapsed = false;
+                toggleBtn.addEventListener('click', () => {
+                    collapsed = !collapsed;
+                    tocBody.classList.toggle('collapsed', collapsed);
+                    if (tocSearch) tocSearch.style.display = collapsed ? 'none' : '';
+                    toggleBtn.querySelector('i').className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                });
+            })();
 
             // Generate TOC on page load
             generateTOC();
+
+            // --- Word/Character Count ---
+            function updateEditorStats() {
+                const editContent = document.getElementById('edit-content');
+                const wordCountEl = document.getElementById('word-count');
+                const charCountEl = document.getElementById('char-count');
+                if (!editContent) return;
+                const text = editContent.value || '';
+                const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+                if (wordCountEl) wordCountEl.textContent = words + ' word' + (words !== 1 ? 's' : '');
+                if (charCountEl) charCountEl.textContent = text.length.toLocaleString() + ' chars';
+            }
 
             // --- Edit Toggle Logic ---
             const toggleBtn = document.getElementById('toggle-edit-btn');
@@ -2031,7 +2254,21 @@
                     editInterface.style.display = 'block';
                     toggleBtn.style.display = 'none';
                     editContent.focus();
+                    updateEditorStats();
                 });
+
+                // Word count on typing + draft indicator
+                if (editContent) {
+                    editContent.addEventListener('input', function() {
+                        updateEditorStats();
+                        // Show draft indicator
+                        const draftInd = document.getElementById('draft-indicator');
+                        if (draftInd) draftInd.classList.add('visible');
+                        // Auto-persist draft
+                        const summaryInput = document.getElementById('edit-summary');
+                        persistSharedDraft(editContent.value, summaryInput ? summaryInput.value : '', '');
+                    });
+                }
 
                 if (cancelBtn) {
                     cancelBtn.addEventListener('click', function () {
@@ -2106,6 +2343,8 @@
                                     noteView.setAttribute('data-updated-at', submittedAt);
                                 }
                                 clearSharedDraft();
+                                const draftInd = document.getElementById('draft-indicator');
+                                if (draftInd) draftInd.classList.remove('visible');
                             }
 
                             // Switch back to view mode after a short delay
@@ -2122,48 +2361,81 @@
                                 if (typeof generateTOC === 'function') generateTOC();
                             }, 900);
                         } else if (response.status === 409 && result.error === 'conflict') {
-                            const merged = window.prompt(
-                                'Conflict detected. Review and merge your changes below before retrying:',
-                                result.merge_preview || content
-                            );
-                            if (merged !== null) {
-                                const mergeResp = await fetch(`/share/note/{{ share_id }}/edit`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': '{{ csrf_token() }}'
-                                    },
-                                    body: JSON.stringify({
-                                        content: merged,
-                                        edit_summary: editSummary || 'Merged after conflict',
-                                        base_updated_at: result.current_updated_at || baseUpdatedAt,
-                                        force_apply: true
-                                    })
-                                });
-                                const mergeResult = await mergeResp.json();
-                                if (mergeResult.success) {
-                                    editContent.value = merged;
-                                    if (noteView) {
-                                        noteView.innerHTML = renderMarkdownWithMath(merged);
-                                        noteView.setAttribute('data-raw', merged);
-                                        if (mergeResult.updated_at) noteView.setAttribute('data-updated-at', mergeResult.updated_at);
-                                    }
-                                    clearSharedDraft();
-                                    status.textContent = 'Merged and saved.';
-                                    status.style.color = 'green';
-                                    setTimeout(() => {
-                                        editInterface.style.display = 'none';
-                                        noteView.style.display = 'block';
-                                        if (toggleBtn) toggleBtn.style.display = 'flex';
-                                        status.textContent = '';
-                                    }, 900);
-                                } else {
-                                    status.textContent = mergeResult.error || 'Merge failed.';
-                                    status.style.color = 'red';
+                            // Use the merge conflict modal instead of window.prompt
+                            status.textContent = 'Conflict detected — review merge below.';
+                            status.style.color = '#e67e22';
+
+                            const mergeModal = document.getElementById('merge-conflict-modal');
+                            const currentEl = document.getElementById('merge-current-content');
+                            const incomingEl = document.getElementById('merge-incoming-content');
+                            const previewEl = document.getElementById('merge-preview-content');
+                            const saveMergeBtn = document.getElementById('save-merge-btn');
+
+                            if (mergeModal && currentEl && incomingEl && previewEl) {
+                                currentEl.value = result.current_content || '';
+                                incomingEl.value = content;
+                                previewEl.value = result.merge_preview || content;
+                                mergeModal.style.display = 'flex';
+                                document.body.style.overflow = 'hidden';
+
+                                if (saveMergeBtn) {
+                                    saveMergeBtn.onclick = async () => {
+                                        const merged = previewEl.value;
+                                        saveMergeBtn.disabled = true;
+                                        saveMergeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                                        try {
+                                            const mergeResp = await fetch(`/share/note/{{ share_id }}/edit`, {
+                                                method: 'POST',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'X-CSRFToken': '{{ csrf_token() }}'
+                                                },
+                                                body: JSON.stringify({
+                                                    content: merged,
+                                                    edit_summary: editSummary || 'Merged after conflict',
+                                                    base_updated_at: result.current_updated_at || baseUpdatedAt,
+                                                    force_apply: true
+                                                })
+                                            });
+                                            const mergeResult = await mergeResp.json();
+                                            if (mergeResult.success) {
+                                                editContent.value = merged;
+                                                if (noteView) {
+                                                    noteView.innerHTML = renderMarkdownWithMath(merged);
+                                                    noteView.setAttribute('data-raw', merged);
+                                                    if (mergeResult.updated_at) noteView.setAttribute('data-updated-at', mergeResult.updated_at);
+                                                }
+                                                clearSharedDraft();
+                                                const draftInd = document.getElementById('draft-indicator');
+                                                if (draftInd) draftInd.classList.remove('visible');
+                                                status.textContent = 'Merged and saved.';
+                                                status.style.color = 'green';
+                                                mergeModal.style.display = 'none';
+                                                document.body.style.overflow = '';
+                                                setTimeout(() => {
+                                                    editInterface.style.display = 'none';
+                                                    noteView.style.display = 'block';
+                                                    if (toggleBtn) toggleBtn.style.display = 'flex';
+                                                    status.textContent = '';
+                                                    if (typeof generateTOC === 'function') generateTOC();
+                                                }, 900);
+                                            } else {
+                                                status.textContent = mergeResult.error || 'Merge failed.';
+                                                status.style.color = 'red';
+                                            }
+                                        } catch (mergeErr) {
+                                            status.textContent = 'Merge save failed. Try again.';
+                                            status.style.color = 'red';
+                                        } finally {
+                                            saveMergeBtn.disabled = false;
+                                            saveMergeBtn.innerHTML = 'Save Merged Note';
+                                        }
+                                    };
                                 }
                             } else {
-                                status.textContent = 'Merge canceled.';
-                                status.style.color = '#888';
+                                // Fallback if modal elements don't exist (e.g. non-owner view)
+                                status.textContent = 'Conflict! Please refresh and try again.';
+                                status.style.color = 'red';
                             }
                         } else {
                             status.textContent = 'Error: ' + (result.error || 'Unknown error');
@@ -2236,10 +2508,13 @@
             // Handle Presence Updates (Who's in the study)
             socket.on('presence_update', (data) => {
                 const list = document.getElementById('viewers-list');
+                const countEl = document.getElementById('presence-count');
                 if (!list) return;
                 list.innerHTML = '';
+                const users = data.users || [];
+                if (countEl) countEl.textContent = users.length;
                 
-                (data.users || []).forEach(user => {
+                users.forEach(user => {
                     const avatar = document.createElement('div');
                     avatar.className = 'viewer-avatar';
                     avatar.title = user.name;

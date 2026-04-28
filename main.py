@@ -7020,7 +7020,7 @@ def user_posts_page(username):
                            page=page,
                            total_pages=total_pages,
                            total_posts=total_posts,
-                           now=datetime.utcnow())
+                           now=datetime.datetime.now(datetime.timezone.utc))
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])

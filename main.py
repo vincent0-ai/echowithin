@@ -6989,6 +6989,40 @@ def profile(username):
                            social_links=social_links)
 
 
+@app.route('/profile/<username>/posts')
+def user_posts_page(username):
+    """Dedicated page for viewing all posts by a specific user."""
+    user = users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('home'))
+
+    user_id = user['_id']
+    page = request.args.get('page', 1, type=int)
+    posts_per_page = 10
+
+    total_posts = posts_conf.count_documents({'author_id': user_id})
+    total_pages = math.ceil(total_posts / posts_per_page)
+    skip = (page - 1) * posts_per_page
+
+    user_posts_cursor = posts_conf.find({'author_id': user_id}).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    with app.app_context():
+        user_posts = prepare_posts(list(user_posts_cursor))
+
+    page_title = f"All posts by {user['username']} - EchoWithin"
+    page_description = f"Browse all community posts written by {user['username']} on EchoWithin."
+
+    return render_template('user_posts.html',
+                           user=user,
+                           posts=user_posts,
+                           title=page_title,
+                           description=page_description,
+                           page=page,
+                           total_pages=total_pages,
+                           total_posts=total_posts,
+                           now=datetime.utcnow())
+
+
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
 @login_required
 def profile_settings(username):

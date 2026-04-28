@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}<title>{{ title }}</title>{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="{{ description }}">
+{% endblock %}
+
+{% block content %}
+{% from '_macros.html' import render_post_item %}
+
+<div class="content-wrapper" style="max-width: 900px; margin: 0 auto;">
+    <div class="user-posts-header">
+        <a href="{{ url_for('profile', username=user.username) }}" class="user-posts-back">&larr; Back to profile</a>
+        <div class="user-posts-author">
+            <img src="{{ user.profile_image_url or url_for('static', filename='default_avatar.png') }}"
+                alt="{{ user.username }}" class="user-posts-avatar">
+            <div>
+                <h1 class="user-posts-title">Posts by {{ user.username }}</h1>
+                <p class="user-posts-count">{{ total_posts }} post{{ 's' if total_posts != 1 else '' }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if posts %}
+    <div class="user-posts-list">
+        {% for post in posts %}
+        {{ render_post_item(post, current_user, now) }}
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination-nav" style="margin-top: 2rem;">
+        <ul class="pagination">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link"
+                    href="{{ url_for('user_posts_page', username=user.username, page=page-1) }}">Previous</a>
+            </li>
+            {% endif %}
+
+            {% set max_visible = [8, page + 1] | max %}
+            {% for p in range(1, [max_visible + 1, total_pages + 1] | min) %}
+            <li class="page-item {% if p == page %}active{% endif %}">
+                <a class="page-link"
+                    href="{{ url_for('user_posts_page', username=user.username, page=p) }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+
+            {% if max_visible < total_pages - 1 %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+
+            {% if max_visible < total_pages %}
+            <li class="page-item {% if total_pages == page %}active{% endif %}">
+                <a class="page-link"
+                    href="{{ url_for('user_posts_page', username=user.username, page=total_pages) }}">{{ total_pages }}</a>
+            </li>
+            {% endif %}
+
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link"
+                    href="{{ url_for('user_posts_page', username=user.username, page=page+1) }}">Next</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+    {% else %}
+    <p style="color: #888; text-align: center; padding: 3rem 0;">{{ user.username }} has not created any posts yet.</p>
+    {% endif %}
+</div>
+
+<style>
+    .user-posts-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .user-posts-back {
+        display: inline-block;
+        color: #3e2217;
+        text-decoration: none;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+
+    .user-posts-back:hover {
+        opacity: 1;
+        text-decoration: underline;
+    }
+
+    .user-posts-author {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #eee;
+    }
+
+    .user-posts-avatar {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid #e8ddd2;
+    }
+
+    .user-posts-title {
+        margin: 0;
+        font-size: 1.4rem;
+        color: #2c1810;
+    }
+
+    .user-posts-count {
+        margin: 0.15rem 0 0 0;
+        font-size: 0.88rem;
+        color: #999;
+    }
+
+    .user-posts-list {
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}

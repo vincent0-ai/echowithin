@@ -66,7 +66,7 @@
             <div class="profile-meta" style="text-align: center;">
                 {% if user.join_date %}
                 <div class="profile-meta-item">
-                     Member since {{ user.join_date.strftime('%B %Y') }}
+                    Member since {{ user.join_date.strftime('%B %Y') }}
                 </div>
                 {% endif %}
             </div>
@@ -99,7 +99,7 @@
             {% elif dm_status == 'none' %}
             <button class="btn" onclick="sendMessageRequest('{{ user._id }}')" id="dm-request-btn"
                 style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
-                 Send Message Request
+                Send Message Request
             </button>
             <script>
                 function sendMessageRequest(userId) {
@@ -133,7 +133,8 @@
             {% endif %}
 
             <div class="profile-user-search">
-                <form method="get" action="{{ url_for('profile', username=user.username) }}" class="profile-user-search-form">
+                <form method="get" action="{{ url_for('profile', username=user.username) }}"
+                    class="profile-user-search-form">
                     <label for="profile-user-search" class="profile-user-search-label">Find a profile</label>
                     <div class="profile-user-search-row profile-user-search-row--autocomplete">
                         <input id="profile-user-search" type="text" name="user_q" value="{{ user_search_query }}"
@@ -158,7 +159,8 @@
                         <a class="profile-user-search-result"
                             href="{{ url_for('profile', username=profile_user.username) }}">
                             <img src="{{ profile_user.profile_image_url if profile_user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
-                                alt="Profile picture for {{ profile_user.username }}" class="profile-user-search-avatar">
+                                alt="Profile picture for {{ profile_user.username }}"
+                                class="profile-user-search-avatar">
                             <div class="profile-user-search-result-body">
                                 <strong>{{ profile_user.username }}</strong>
                                 {% if profile_user.bio %}
@@ -183,7 +185,6 @@
             {% if display_blog_space %}
             <div class="blog-space-card" id="blog-space-card">
                 <div class="blog-space-header">
-                    <i class="fas fa-pen-nib"></i>
                     <span>Blog Space</span>
                 </div>
                 {% if blog_tagline %}
@@ -198,22 +199,28 @@
                 {% if social_links %}
                 <div class="blog-space-socials">
                     {% if social_links.get('twitter') %}
-                    <a href="{{ social_links.twitter }}" target="_blank" rel="noopener noreferrer" title="X / Twitter"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="{{ social_links.twitter }}" target="_blank" rel="noopener noreferrer"
+                        title="X / Twitter"><i class="fa-brands fa-x-twitter"></i></a>
                     {% endif %}
                     {% if social_links.get('github') %}
-                    <a href="{{ social_links.github }}" target="_blank" rel="noopener noreferrer" title="GitHub"><i class="fa-brands fa-github"></i></a>
+                    <a href="{{ social_links.github }}" target="_blank" rel="noopener noreferrer" title="GitHub"><i
+                            class="fa-brands fa-github"></i></a>
                     {% endif %}
                     {% if social_links.get('linkedin') %}
-                    <a href="{{ social_links.linkedin }}" target="_blank" rel="noopener noreferrer" title="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>
+                    <a href="{{ social_links.linkedin }}" target="_blank" rel="noopener noreferrer" title="LinkedIn"><i
+                            class="fa-brands fa-linkedin"></i></a>
                     {% endif %}
                     {% if social_links.get('youtube') %}
-                    <a href="{{ social_links.youtube }}" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    <a href="{{ social_links.youtube }}" target="_blank" rel="noopener noreferrer" title="YouTube"><i
+                            class="fa-brands fa-youtube"></i></a>
                     {% endif %}
                     {% if social_links.get('tiktok') %}
-                    <a href="{{ social_links.tiktok }}" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    <a href="{{ social_links.tiktok }}" target="_blank" rel="noopener noreferrer" title="TikTok"><i
+                            class="fa-brands fa-tiktok"></i></a>
                     {% endif %}
                     {% if social_links.get('website') %}
-                    <a href="{{ social_links.website }}" target="_blank" rel="noopener noreferrer" title="Website"><i class="fas fa-globe"></i></a>
+                    <a href="{{ social_links.website }}" target="_blank" rel="noopener noreferrer" title="Website"><i
+                            class="fas fa-globe"></i></a>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -231,26 +238,69 @@
             </div>
             {% endif %}
 
-            <h2 class="section-title">Posts by {{ user.username }}</h2>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                <h2 class="section-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Posts by {{ user.username }}</h2>
+                {% if total_posts > 0 %}
+                <a href="{{ url_for('user_posts_page', username=user.username) }}" class="profile-view-all-link">
+                    View all {{ total_posts }} posts <i class="fas fa-arrow-right" style="font-size: 0.75rem;"></i>
+                </a>
+                {% endif %}
+            </div>
+            <div style="border-bottom: 2px solid var(--border-color, #eee); margin-bottom: 1.5rem;"></div>
+
             {% if user_posts %}
             <div class="profile-posts-list">
                 {% for post in user_posts %}
-                <div class="post-item-simple">
-                    <h4>
-                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                        {% if current_user.is_authenticated and current_user.id == user._id|string %}
-                        <button class="pin-post-btn" data-post-id="{{ post._id }}" title="{% if post._id in (user.get('pinned_post_ids', [])) %}Unpin from profile{% else %}Pin to profile{% endif %}"
-                            style="border: none; background: none; cursor: pointer; margin-left: 6px; font-size: 0.85rem; color: {% if post._id in (user.get('pinned_post_ids', [])) %}#3e2217{% else %}#ccc{% endif %};">
-                            <i class="fas fa-thumbtack"></i>
-                        </button>
+                <div class="profile-post-card">
+                    <div class="profile-post-card-body">
+                        <div class="profile-post-card-header">
+                            <h4 class="profile-post-card-title">
+                                <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                            </h4>
+                            {% if current_user.is_authenticated and current_user.id == user._id|string %}
+                            <button class="pin-post-btn" data-post-id="{{ post._id }}"
+                                title="{% if post._id in (user.get('pinned_post_ids', [])) %}Unpin from profile{% else %}Pin to profile{% endif %}"
+                                style="border: none; background: none; cursor: pointer; font-size: 0.9rem; color: {% if post._id in (user.get('pinned_post_ids', [])) %}#3e2217{% else %}#ccc{% endif %}; flex-shrink: 0;">
+                                <i class="fas fa-thumbtack"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                        {% if post.content %}
+                        <p class="profile-post-card-excerpt">{{ post.content|striptags|truncate(180, true, '...') }}</p>
                         {% endif %}
-                    </h4>
-                    <p class="post-meta">Posted on {{ post.timestamp|localtime('%B %d, %Y') }}</p>
+                        <div class="profile-post-card-meta">
+                            <span class="profile-post-card-date">
+                                <i class="far fa-calendar-alt"></i>
+                                {{ post.timestamp|localtime('%B %d, %Y') }}
+                            </span>
+                            <div class="profile-post-card-stats">
+                                <span title="Reactions"><i class="far fa-heart"></i> {{ post.likes_count|default(0) }}</span>
+                                <span title="Comments"><i class="far fa-comment"></i> {{ post.comment_count|default(0) }}</span>
+                                <span title="Views"><i class="far fa-eye"></i> {{ post.view_count|default(0) }}</span>
+                            </div>
+                        </div>
+                        {% if post.tags %}
+                        <div class="profile-post-card-tags">
+                            {% for tag in post.tags[:4] %}
+                            <span class="profile-post-tag">{{ tag }}</span>
+                            {% endfor %}
+                            {% if post.tags|length > 4 %}
+                            <span class="profile-post-tag" style="opacity: 0.6;">+{{ post.tags|length - 4 }}</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if post.image_url or (post.image_urls and post.image_urls|length > 0) %}
+                    <div class="profile-post-card-thumb">
+                        <img src="{{ post.image_urls[0] if post.image_urls else post.image_url }}"
+                            alt="Thumbnail for {{ post.title }}" loading="lazy">
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
             {% else %}
-            <p>{{ user.username }} has not created any posts yet.</p>
+            <p style="color: #888; text-align: center; padding: 2rem 0;">{{ user.username }} has not created any posts yet.</p>
             {% endif %}
             {% if user_posts and total_pages > 1 %}
             <nav class="pagination-nav" style="margin-top: 2rem;">
@@ -477,131 +527,289 @@
 </script>
 
 <style>
-/* Blog Space Card */
-.blog-space-card {
-    background: linear-gradient(135deg, #fdfaf7 0%, #f5efe8 100%);
-    border: 1px solid #e8ddd2;
-    border-radius: 14px;
-    padding: 1.4rem;
-    margin-bottom: 1.5rem;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 4px 16px rgba(62, 34, 23, 0.06);
-    transition: box-shadow 0.3s ease;
-}
-.blog-space-card:hover {
-    box-shadow: 0 6px 24px rgba(62, 34, 23, 0.1);
-}
-.blog-space-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #3e2217, #8b5e3c, #c9956b);
-}
-.blog-space-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #3e2217;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    margin-bottom: 0.8rem;
-}
-.blog-space-tagline {
-    font-style: italic;
-    color: #5a3e30;
-    font-size: 1.05rem;
-    line-height: 1.5;
-    margin: 0 0 1rem 0;
-}
-.blog-space-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: #3e2217;
-    color: #fff;
-    padding: 0.55rem 1.2rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
-    margin-bottom: 1rem;
-}
-.blog-space-link:hover {
-    background: #5a3328;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(62, 34, 23, 0.2);
-}
-.blog-space-socials {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    margin: 0.8rem 0;
-}
-.blog-space-socials a {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    background: #fff;
-    border: 1px solid #e0d5ca;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #3e2217;
-    text-decoration: none;
-    font-size: 1rem;
-    transition: all 0.2s ease;
-}
-.blog-space-socials a:hover {
-    background: #3e2217;
-    color: #fff;
-    border-color: #3e2217;
-    transform: scale(1.1);
-}
-.blog-space-pinned {
-    margin-top: 0.8rem;
-    border-top: 1px solid #e8ddd2;
-    padding-top: 0.8rem;
-}
-.blog-space-pinned-label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: #8b6f5e;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 0.5rem;
-}
-.blog-space-pinned-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.45rem 0.6rem;
-    border-radius: 6px;
-    text-decoration: none;
-    color: #3e2217;
-    font-size: 0.92rem;
-    transition: background 0.15s ease;
-}
-.blog-space-pinned-item:hover {
-    background: rgba(62, 34, 23, 0.06);
-}
-.pin-post-btn {
-    transition: color 0.2s ease, transform 0.2s ease;
-}
-.pin-post-btn:hover {
-    color: #3e2217 !important;
-    transform: scale(1.15);
-}
+    /* Profile Post Cards */
+    .profile-post-card {
+        display: flex;
+        gap: 1rem;
+        padding: 1.1rem 0;
+        border-bottom: 1px solid #eee;
+        transition: background 0.15s ease;
+    }
+
+    .profile-post-card:last-child {
+        border-bottom: none;
+    }
+
+    .profile-post-card:hover {
+        background: #faf9f7;
+        margin: 0 -0.5rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        border-radius: 8px;
+    }
+
+    .profile-post-card-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .profile-post-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .profile-post-card-title {
+        margin: 0 0 0.3rem 0;
+        font-size: 1.05rem;
+        line-height: 1.35;
+    }
+
+    .profile-post-card-title a {
+        color: #2c1810;
+        text-decoration: none;
+    }
+
+    .profile-post-card-title a:hover {
+        color: #3e2217;
+        text-decoration: underline;
+    }
+
+    .profile-post-card-excerpt {
+        color: #666;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin: 0 0 0.5rem 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .profile-post-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .profile-post-card-date {
+        font-size: 0.82rem;
+        color: #999;
+    }
+
+    .profile-post-card-stats {
+        display: flex;
+        gap: 0.8rem;
+        font-size: 0.82rem;
+        color: #999;
+    }
+
+    .profile-post-card-stats span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .profile-post-card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.45rem;
+    }
+
+    .profile-post-tag {
+        background: #f0ebe6;
+        color: #6b5544;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+
+    .profile-post-card-thumb {
+        flex-shrink: 0;
+        width: 100px;
+        height: 80px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .profile-post-card-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .profile-view-all-link {
+        font-size: 0.88rem;
+        color: #3e2217;
+        text-decoration: none;
+        font-weight: 500;
+        white-space: nowrap;
+        transition: opacity 0.2s;
+    }
+
+    .profile-view-all-link:hover {
+        opacity: 0.7;
+        text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+        .profile-post-card-thumb {
+            width: 70px;
+            height: 60px;
+        }
+
+        .profile-post-card-stats {
+            gap: 0.5rem;
+        }
+    }
+
+    /* Blog Space Card */
+    .blog-space-card {
+        background: linear-gradient(135deg, #fdfaf7 0%, #f5efe8 100%);
+        border: 1px solid #e8ddd2;
+        border-radius: 14px;
+        padding: 1.4rem;
+        margin-bottom: 1.5rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(62, 34, 23, 0.06);
+        transition: box-shadow 0.3s ease;
+    }
+
+    .blog-space-card:hover {
+        box-shadow: 0 6px 24px rgba(62, 34, 23, 0.1);
+    }
+
+    .blog-space-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #3e2217, #8b5e3c, #c9956b);
+    }
+
+    .blog-space-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #3e2217;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 0.8rem;
+    }
+
+    .blog-space-tagline {
+        font-style: italic;
+        color: #5a3e30;
+        font-size: 1.05rem;
+        line-height: 1.5;
+        margin: 0 0 1rem 0;
+    }
+
+    .blog-space-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: #3e2217;
+        color: #fff;
+        padding: 0.55rem 1.2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        margin-bottom: 1rem;
+    }
+
+    .blog-space-link:hover {
+        background: #5a3328;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(62, 34, 23, 0.2);
+    }
+
+    .blog-space-socials {
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+        margin: 0.8rem 0;
+    }
+
+    .blog-space-socials a {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #fff;
+        border: 1px solid #e0d5ca;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #3e2217;
+        text-decoration: none;
+        font-size: 1rem;
+        transition: all 0.2s ease;
+    }
+
+    .blog-space-socials a:hover {
+        background: #3e2217;
+        color: #fff;
+        border-color: #3e2217;
+        transform: scale(1.1);
+    }
+
+    .blog-space-pinned {
+        margin-top: 0.8rem;
+        border-top: 1px solid #e8ddd2;
+        padding-top: 0.8rem;
+    }
+
+    .blog-space-pinned-label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #8b6f5e;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .blog-space-pinned-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.45rem 0.6rem;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #3e2217;
+        font-size: 0.92rem;
+        transition: background 0.15s ease;
+    }
+
+    .blog-space-pinned-item:hover {
+        background: rgba(62, 34, 23, 0.06);
+    }
+
+    .pin-post-btn {
+        transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    .pin-post-btn:hover {
+        color: #3e2217 !important;
+        transform: scale(1.15);
+    }
 </style>
 
 {% if current_user.is_authenticated and current_user.id == user._id|string %}
 <script>
     // Pin/Unpin post functionality
-    document.querySelectorAll('.pin-post-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
+    document.querySelectorAll('.pin-post-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
             var postId = this.dataset.postId;
             var button = this;
             var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -615,29 +823,29 @@
                 },
                 body: JSON.stringify({ post_id: postId })
             })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                button.disabled = false;
-                if (data.error) {
-                    if (window.showCustomAlert) window.showCustomAlert(data.error, 'danger');
-                    return;
-                }
-                if (data.status === 'pinned') {
-                    button.style.color = '#3e2217';
-                    button.title = 'Unpin from profile';
-                    if (window.showCustomAlert) window.showCustomAlert('Post pinned to your profile!', 'success');
-                } else {
-                    button.style.color = '#ccc';
-                    button.title = 'Pin to profile';
-                    if (window.showCustomAlert) window.showCustomAlert('Post unpinned.', 'success');
-                }
-                // Reload to refresh the blog space card
-                setTimeout(function() { window.location.reload(); }, 800);
-            })
-            .catch(function() {
-                button.disabled = false;
-                if (window.showCustomAlert) window.showCustomAlert('Failed to update pin status.', 'danger');
-            });
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    button.disabled = false;
+                    if (data.error) {
+                        if (window.showCustomAlert) window.showCustomAlert(data.error, 'danger');
+                        return;
+                    }
+                    if (data.status === 'pinned') {
+                        button.style.color = '#3e2217';
+                        button.title = 'Unpin from profile';
+                        if (window.showCustomAlert) window.showCustomAlert('Post pinned to your profile!', 'success');
+                    } else {
+                        button.style.color = '#ccc';
+                        button.title = 'Pin to profile';
+                        if (window.showCustomAlert) window.showCustomAlert('Post unpinned.', 'success');
+                    }
+                    // Reload to refresh the blog space card
+                    setTimeout(function () { window.location.reload(); }, 800);
+                })
+                .catch(function () {
+                    button.disabled = false;
+                    if (window.showCustomAlert) window.showCustomAlert('Failed to update pin status.', 'danger');
+                });
         });
     });
 </script>

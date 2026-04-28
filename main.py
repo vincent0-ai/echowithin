@@ -6859,8 +6859,8 @@ def faq():
     return render_template('faq.html', title=page_title, description=page_description)
 
 @app.route('/profile/<username>')
-@login_required
 def profile(username):
+    # Profile is publicly accessible for SEO and shareability
     # Find the user by username, excluding sensitive fields
     user = users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
     if not user:
@@ -6919,13 +6919,40 @@ def profile(username):
         # Cache the posts
         profile_posts_cache[posts_cache_key] = user_posts
 
+    # --- Blog Space: Fetch pinned posts ---
+    pinned_posts = []
+    pinned_post_ids = user.get('pinned_post_ids', [])
+    if pinned_post_ids:
+        pinned_posts_cursor = posts_conf.find({'_id': {'$in': pinned_post_ids}})
+        with app.app_context():
+            pinned_posts_raw = prepare_posts(list(pinned_posts_cursor))
+        # Preserve pin order
+        pinned_order = {str(pid): i for i, pid in enumerate(pinned_post_ids)}
+        pinned_posts = sorted(pinned_posts_raw, key=lambda p: pinned_order.get(str(p['_id']), 999))
+
+    # --- Blog Space metadata ---
+    blog_tagline = user.get('blog_tagline', '')
+    blog_url = user.get('blog_url', '')
+    blog_url_label = user.get('blog_url_label', '')
+    social_links = user.get('social_links', {})
+    show_blog_space = user.get('show_blog_space', False)
+    # Show blog space if toggled on AND at least one field populated
+    has_blog_content = bool(blog_tagline or blog_url or social_links or pinned_posts)
+    display_blog_space = show_blog_space and has_blog_content
+
     page_title = f"Profile: {user['username']}"
-    page_description = f"View the profile and posts by {user['username']} on EchoWithin."
+    # Use tagline for description if available
+    if blog_tagline:
+        page_description = f"{user['username']} — {blog_tagline} | EchoWithin"
+    else:
+        page_description = f"View the profile and posts by {user['username']} on EchoWithin."
 
     # Determine DM permission status for the message button
-    dm_status = 'self'
-    if current_user.is_authenticated and str(current_user.id) != str(user_id):
-        if can_dm(str(current_user.id), str(user_id)):
+    dm_status = 'guest'  # Default for unauthenticated visitors
+    if current_user.is_authenticated:
+        if str(current_user.id) == str(user_id):
+            dm_status = 'self'
+        elif can_dm(str(current_user.id), str(user_id)):
             dm_status = 'accepted'
         else:
             pending = dm_permissions_conf.find_one({
@@ -6953,7 +6980,13 @@ def profile(username):
                            user_achievements=get_active_achievements(user_id),
                            dm_status=dm_status,
                            user_search_query=user_search_query,
-                           user_search_results=user_search_results)
+                           user_search_results=user_search_results,
+                           pinned_posts=pinned_posts,
+                           display_blog_space=display_blog_space,
+                           blog_tagline=blog_tagline,
+                           blog_url=blog_url,
+                           blog_url_label=blog_url_label,
+                           social_links=social_links)
 
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
@@ -7033,6 +7066,38 @@ def profile_settings(username):
         if dm_privacy in ('everyone', 'nobody'):
             update_data['dm_privacy'] = dm_privacy
 
+        # --- Blog Space settings ---
+        blog_tagline = request.form.get('blog_tagline', '').strip()
+        update_data['blog_tagline'] = bleach.clean(blog_tagline, tags=[], strip=True)[:120]
+
+        blog_url = request.form.get('blog_url', '').strip()
+        if blog_url:
+            parsed = urlparse(blog_url)
+            if parsed.scheme in ('http', 'https') and parsed.netloc:
+                update_data['blog_url'] = blog_url
+            else:
+                flash('Invalid blog URL. Please use a full URL starting with http:// or https://', 'danger')
+        else:
+            update_data['blog_url'] = ''
+
+        blog_url_label = request.form.get('blog_url_label', '').strip()
+        update_data['blog_url_label'] = bleach.clean(blog_url_label, tags=[], strip=True)[:60]
+
+        # Social links — validate each URL
+        social_links = {}
+        _social_platforms = ('twitter', 'github', 'linkedin', 'youtube', 'tiktok', 'website')
+        for platform in _social_platforms:
+            link = request.form.get(f'social_{platform}', '').strip()
+            if link:
+                parsed = urlparse(link)
+                if parsed.scheme in ('http', 'https') and parsed.netloc:
+                    social_links[platform] = link
+                # Silently skip invalid URLs
+        update_data['social_links'] = social_links
+
+        # Blog Space visibility toggle
+        update_data['show_blog_space'] = request.form.get('show_blog_space') == '1'
+
         if update_data:
             try:
                 users_conf.update_one({'_id': user['_id']}, {'$set': update_data})
@@ -7082,6 +7147,10 @@ def export_data(username):
             'join_date': str(user.get('join_date', '')),
             'notification_preference': user.get('notification_preference', 'weekly'),
             'profile_image_url': user.get('profile_image_url'),
+            'blog_tagline': user.get('blog_tagline', ''),
+            'blog_url': user.get('blog_url', ''),
+            'blog_url_label': user.get('blog_url_label', ''),
+            'social_links': user.get('social_links', {}),
         },
         'posts': [],
         'comments': [],
@@ -7219,6 +7288,49 @@ def delete_account(username):
         app.logger.error(f"Account deletion failed for {user_username}: {e}", exc_info=True)
         flash('An error occurred while deleting your account. Please try again or contact support.', 'danger')
         return redirect(url_for('profile_settings', username=username))
+
+
+
+# --- Blog Space: Pin/Unpin Post API ---
+@app.route('/api/profile/pin_post', methods=['POST'])
+@login_required
+@limits(calls=30, period=TIME)
+def api_pin_post():
+    """Toggle pin status of a post on the user's profile. Max 3 pinned."""
+    data = request.get_json(force=True)
+    post_id = data.get('post_id', '').strip()
+    if not post_id:
+        return jsonify({'error': 'post_id is required'}), 400
+
+    try:
+        post_oid = ObjectId(post_id)
+    except Exception:
+        return jsonify({'error': 'Invalid post_id'}), 400
+
+    # Verify the post belongs to the current user
+    post = posts_conf.find_one({'_id': post_oid, 'author_id': ObjectId(current_user.id)}, {'_id': 1})
+    if not post:
+        return jsonify({'error': 'Post not found or you are not the author'}), 404
+
+    user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'pinned_post_ids': 1})
+    pinned = user.get('pinned_post_ids', []) if user else []
+
+    if post_oid in pinned:
+        # Unpin
+        users_conf.update_one(
+            {'_id': ObjectId(current_user.id)},
+            {'$pull': {'pinned_post_ids': post_oid}}
+        )
+        return jsonify({'status': 'unpinned', 'pinned_count': len(pinned) - 1})
+    else:
+        if len(pinned) >= 3:
+            return jsonify({'error': 'Maximum 3 pinned posts allowed. Unpin one first.'}), 400
+        # Pin
+        users_conf.update_one(
+            {'_id': ObjectId(current_user.id)},
+            {'$addToSet': {'pinned_post_ids': post_oid}}
+        )
+        return jsonify({'status': 'pinned', 'pinned_count': len(pinned) + 1})
 
 
 @app.route('/personal_space')

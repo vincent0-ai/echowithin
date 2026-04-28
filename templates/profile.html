@@ -70,7 +70,7 @@
                 </div>
                 {% endif %}
             </div>
-            {% if current_user and current_user.username == user.username %}
+            {% if current_user.is_authenticated and current_user.username == user.username %}
             <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn"
                 style="width: 100%; margin-top: 1rem;">
                 <i class="fas fa-cog"></i> Account Settings
@@ -79,7 +79,7 @@
                 style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">
                 Personal Space
             </a>
-            {% elif current_user %}
+            {% elif current_user.is_authenticated %}
             {% if dm_status == 'accepted' %}
             <a href="{{ url_for('messages_page', user_id=user._id) }}" class="btn"
                 style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
@@ -179,12 +179,72 @@
         </div>
 
         <div class="profile-main-content">
+            <!-- Blog Space Card -->
+            {% if display_blog_space %}
+            <div class="blog-space-card" id="blog-space-card">
+                <div class="blog-space-header">
+                    <i class="fas fa-pen-nib"></i>
+                    <span>Blog Space</span>
+                </div>
+                {% if blog_tagline %}
+                <p class="blog-space-tagline">"{{ blog_tagline }}"</p>
+                {% endif %}
+                {% if blog_url %}
+                <a href="{{ blog_url }}" target="_blank" rel="noopener noreferrer" class="blog-space-link">
+                    <i class="fas fa-external-link-alt"></i>
+                    {{ blog_url_label or 'Visit Blog' }}
+                </a>
+                {% endif %}
+                {% if social_links %}
+                <div class="blog-space-socials">
+                    {% if social_links.get('twitter') %}
+                    <a href="{{ social_links.twitter }}" target="_blank" rel="noopener noreferrer" title="X / Twitter"><i class="fa-brands fa-x-twitter"></i></a>
+                    {% endif %}
+                    {% if social_links.get('github') %}
+                    <a href="{{ social_links.github }}" target="_blank" rel="noopener noreferrer" title="GitHub"><i class="fa-brands fa-github"></i></a>
+                    {% endif %}
+                    {% if social_links.get('linkedin') %}
+                    <a href="{{ social_links.linkedin }}" target="_blank" rel="noopener noreferrer" title="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>
+                    {% endif %}
+                    {% if social_links.get('youtube') %}
+                    <a href="{{ social_links.youtube }}" target="_blank" rel="noopener noreferrer" title="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    {% endif %}
+                    {% if social_links.get('tiktok') %}
+                    <a href="{{ social_links.tiktok }}" target="_blank" rel="noopener noreferrer" title="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    {% endif %}
+                    {% if social_links.get('website') %}
+                    <a href="{{ social_links.website }}" target="_blank" rel="noopener noreferrer" title="Website"><i class="fas fa-globe"></i></a>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if pinned_posts %}
+                <div class="blog-space-pinned">
+                    <div class="blog-space-pinned-label"><i class="fas fa-thumbtack"></i> Pinned Posts</div>
+                    {% for post in pinned_posts %}
+                    <a href="{{ url_for('view_post', slug=post.slug) }}" class="blog-space-pinned-item">
+                        <span>{{ post.title }}</span>
+                        <i class="fas fa-arrow-right" style="font-size: 0.7rem; opacity: 0.5;"></i>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <h2 class="section-title">Posts by {{ user.username }}</h2>
             {% if user_posts %}
             <div class="profile-posts-list">
                 {% for post in user_posts %}
                 <div class="post-item-simple">
-                    <h4><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></h4>
+                    <h4>
+                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                        {% if current_user.is_authenticated and current_user.id == user._id|string %}
+                        <button class="pin-post-btn" data-post-id="{{ post._id }}" title="{% if post._id in (user.get('pinned_post_ids', [])) %}Unpin from profile{% else %}Pin to profile{% endif %}"
+                            style="border: none; background: none; cursor: pointer; margin-left: 6px; font-size: 0.85rem; color: {% if post._id in (user.get('pinned_post_ids', [])) %}#3e2217{% else %}#ccc{% endif %};">
+                            <i class="fas fa-thumbtack"></i>
+                        </button>
+                        {% endif %}
+                    </h4>
                     <p class="post-meta">Posted on {{ post.timestamp|localtime('%B %d, %Y') }}</p>
                 </div>
                 {% endfor %}
@@ -415,4 +475,171 @@
         });
     });
 </script>
+
+<style>
+/* Blog Space Card */
+.blog-space-card {
+    background: linear-gradient(135deg, #fdfaf7 0%, #f5efe8 100%);
+    border: 1px solid #e8ddd2;
+    border-radius: 14px;
+    padding: 1.4rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(62, 34, 23, 0.06);
+    transition: box-shadow 0.3s ease;
+}
+.blog-space-card:hover {
+    box-shadow: 0 6px 24px rgba(62, 34, 23, 0.1);
+}
+.blog-space-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3e2217, #8b5e3c, #c9956b);
+}
+.blog-space-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #3e2217;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 0.8rem;
+}
+.blog-space-tagline {
+    font-style: italic;
+    color: #5a3e30;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    margin: 0 0 1rem 0;
+}
+.blog-space-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #3e2217;
+    color: #fff;
+    padding: 0.55rem 1.2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    margin-bottom: 1rem;
+}
+.blog-space-link:hover {
+    background: #5a3328;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(62, 34, 23, 0.2);
+}
+.blog-space-socials {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin: 0.8rem 0;
+}
+.blog-space-socials a {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #e0d5ca;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3e2217;
+    text-decoration: none;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+.blog-space-socials a:hover {
+    background: #3e2217;
+    color: #fff;
+    border-color: #3e2217;
+    transform: scale(1.1);
+}
+.blog-space-pinned {
+    margin-top: 0.8rem;
+    border-top: 1px solid #e8ddd2;
+    padding-top: 0.8rem;
+}
+.blog-space-pinned-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #8b6f5e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+.blog-space-pinned-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #3e2217;
+    font-size: 0.92rem;
+    transition: background 0.15s ease;
+}
+.blog-space-pinned-item:hover {
+    background: rgba(62, 34, 23, 0.06);
+}
+.pin-post-btn {
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+.pin-post-btn:hover {
+    color: #3e2217 !important;
+    transform: scale(1.15);
+}
+</style>
+
+{% if current_user.is_authenticated and current_user.id == user._id|string %}
+<script>
+    // Pin/Unpin post functionality
+    document.querySelectorAll('.pin-post-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var postId = this.dataset.postId;
+            var button = this;
+            var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            button.disabled = true;
+
+            fetch('/api/profile/pin_post', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ post_id: postId })
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                button.disabled = false;
+                if (data.error) {
+                    if (window.showCustomAlert) window.showCustomAlert(data.error, 'danger');
+                    return;
+                }
+                if (data.status === 'pinned') {
+                    button.style.color = '#3e2217';
+                    button.title = 'Unpin from profile';
+                    if (window.showCustomAlert) window.showCustomAlert('Post pinned to your profile!', 'success');
+                } else {
+                    button.style.color = '#ccc';
+                    button.title = 'Pin to profile';
+                    if (window.showCustomAlert) window.showCustomAlert('Post unpinned.', 'success');
+                }
+                // Reload to refresh the blog space card
+                setTimeout(function() { window.location.reload(); }, 800);
+            })
+            .catch(function() {
+                button.disabled = false;
+                if (window.showCustomAlert) window.showCustomAlert('Failed to update pin status.', 'danger');
+            });
+        });
+    });
+</script>
+{% endif %}
 {% endblock %}

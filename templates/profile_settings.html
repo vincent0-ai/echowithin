@@ -105,6 +105,105 @@
         </div>
       </div>
 
+      <!-- Blog Space Section -->
+      <div class="form-group" style="border-top: 1px solid #e0e0e0; padding-top: 1.5rem; margin-top: 1rem;">
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block; font-size: 1.1rem;">
+          <i class="fas fa-pen-nib" style="color: #3e2217; margin-right: 0.3rem;"></i> Blog Space
+        </label>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+          Customize your public profile with a tagline, external blog link, and social links.
+          Visitors to your profile will see this as a featured card.
+        </p>
+
+        <!-- Show Blog Space Toggle -->
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 1.2rem; padding: 0.6rem 0.8rem; background: #f8f5f2; border-radius: 8px; border: 1px solid #ebe5df;">
+          <input type="checkbox" name="show_blog_space" value="1"
+            {% if user.get('show_blog_space') %}checked{% endif %}
+            style="width: 18px; height: 18px; accent-color: #3e2217;">
+          <div>
+            <span style="font-weight: 500;">Show Blog Space on my profile</span>
+            <p style="font-size: 0.8rem; color: #888; margin: 0;">When enabled, visitors will see your blog card on your profile page.</p>
+          </div>
+        </label>
+
+        <!-- Blog Tagline -->
+        <div style="margin-bottom: 1rem;">
+          <label for="blog_tagline" style="font-weight: 500; margin-bottom: 0.3rem; display: block;">Tagline</label>
+          <input type="text" id="blog_tagline" name="blog_tagline" class="form-input"
+            placeholder="e.g. Faith, code, and everything in between"
+            value="{{ user.get('blog_tagline', '') }}" maxlength="120">
+          <div style="display: flex; justify-content: space-between; margin-top: 0.2rem;">
+            <span style="font-size: 0.8rem; color: #999;">A short description that appears on your profile card.</span>
+            <span id="tagline-counter" style="font-size: 0.8rem; color: #999;">0/120</span>
+          </div>
+        </div>
+
+        <!-- External Blog URL -->
+        <div style="margin-bottom: 1rem;">
+          <label for="blog_url" style="font-weight: 500; margin-bottom: 0.3rem; display: block;">External Blog Link</label>
+          <input type="url" id="blog_url" name="blog_url" class="form-input"
+            placeholder="https://medium.com/@yourname"
+            value="{{ user.get('blog_url', '') }}">
+          <span style="font-size: 0.8rem; color: #999;">Link to your external blog (Medium, Substack, WordPress, etc.)</span>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+          <label for="blog_url_label" style="font-weight: 500; margin-bottom: 0.3rem; display: block;">Link Label</label>
+          <input type="text" id="blog_url_label" name="blog_url_label" class="form-input"
+            placeholder="e.g. My Medium Blog"
+            value="{{ user.get('blog_url_label', '') }}" maxlength="60">
+          <span style="font-size: 0.8rem; color: #999;">Custom text for your blog link button (defaults to "Visit Blog").</span>
+        </div>
+
+        <!-- Social Links (Collapsible) -->
+        <details style="margin-bottom: 0.5rem;">
+          <summary style="font-weight: 500; cursor: pointer; user-select: none; padding: 0.5rem 0; list-style: none; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-chevron-right" style="font-size: 0.7rem; transition: transform 0.2s;"></i>
+            Social Links
+            <span style="font-size: 0.8rem; color: #999; font-weight: 400;">— optional</span>
+          </summary>
+          <div style="display: flex; flex-direction: column; gap: 0.8rem; padding-top: 0.8rem;">
+            {% set social_data = user.get('social_links', {}) %}
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-brands fa-x-twitter" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_twitter" class="form-input" placeholder="https://x.com/yourhandle"
+                value="{{ social_data.get('twitter', '') }}" style="flex: 1;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-brands fa-github" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_github" class="form-input" placeholder="https://github.com/yourusername"
+                value="{{ social_data.get('github', '') }}" style="flex: 1;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-brands fa-linkedin" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_linkedin" class="form-input" placeholder="https://linkedin.com/in/yourname"
+                value="{{ social_data.get('linkedin', '') }}" style="flex: 1;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-brands fa-youtube" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_youtube" class="form-input" placeholder="https://youtube.com/@yourchannel"
+                value="{{ social_data.get('youtube', '') }}" style="flex: 1;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-brands fa-tiktok" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_tiktok" class="form-input" placeholder="https://tiktok.com/@yourhandle"
+                value="{{ social_data.get('tiktok', '') }}" style="flex: 1;">
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fas fa-globe" style="width: 20px; text-align: center; color: #333;"></i>
+              <input type="url" name="social_website" class="form-input" placeholder="https://yourwebsite.com"
+                value="{{ social_data.get('website', '') }}" style="flex: 1;">
+            </div>
+          </div>
+        </details>
+      </div>
+
       <!-- Push Notifications Section -->
       <div class="form-group" id="push-notification-settings">
         <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Push Notifications</label>
@@ -375,6 +474,21 @@
 
 
 <script>
+  // Blog Space tagline character counter
+  (function() {
+    var taglineInput = document.getElementById('blog_tagline');
+    var counter = document.getElementById('tagline-counter');
+    if (taglineInput && counter) {
+      function updateCounter() {
+        var len = taglineInput.value.length;
+        counter.textContent = len + '/120';
+        counter.style.color = len > 100 ? '#e65100' : '#999';
+      }
+      updateCounter();
+      taglineInput.addEventListener('input', updateCounter);
+    }
+  })();
+
   // Delete account confirmation
   document.getElementById('delete-account-btn').addEventListener('click', function () {
     var form = document.getElementById('delete-account-form');

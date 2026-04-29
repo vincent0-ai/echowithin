@@ -10343,6 +10343,7 @@ def api_schedule_send_now(msg_id):
 
 
 @app.route('/api/messages/schedule/process', methods=['POST'])
+@csrf.exempt
 def api_process_scheduled_messages():
     """Internal endpoint called by the scheduler to process due messages.
     

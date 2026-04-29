@@ -1844,8 +1844,8 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                     'url': url or '/',
                     'tag': tag or 'echowithin',
                     'renotify': True,
-                    'icon': '/static/logo-192.png',
-                    'badge': '/static/logo-96.png'
+                    'icon': '/static/logo.png',
+                    'badge': '/static/logo.png'
                 })
 
                 for sub in subscriptions:
@@ -10275,10 +10275,10 @@ def api_list_scheduled_messages(other_user_id):
             entry = {
                 'id': str(m['_id']),
                 'content': content,
-                'scheduled_at': m['scheduled_at'].isoformat().replace('+00:00', 'Z') if m.get('scheduled_at') else None,
+                'scheduled_at': m['scheduled_at'].isoformat() + 'Z' if m.get('scheduled_at') and m['scheduled_at'].tzinfo is None else (m['scheduled_at'].isoformat().replace('+00:00', 'Z') if m.get('scheduled_at') else None),
                 'status': m['status'],
                 'message_type': m.get('message_type', 'text'),
-                'created_at': m['created_at'].isoformat().replace('+00:00', 'Z') if m.get('created_at') else None
+                'created_at': m['created_at'].isoformat() + 'Z' if m.get('created_at') and m['created_at'].tzinfo is None else (m['created_at'].isoformat().replace('+00:00', 'Z') if m.get('created_at') else None)
             }
             if m.get('image_url'):
                 raw_img = m['image_url']

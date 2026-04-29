@@ -299,8 +299,8 @@ self.addEventListener('push', event => {
     body: 'You have a new notification',
     url: '/',
     tag: 'echowithin',
-    icon: '/static/logo-192.png',
-    badge: '/static/logo-96.png'
+    icon: '/static/logo.png',
+    badge: '/static/logo.png'
   };
 
   if (event.data) {
@@ -323,8 +323,8 @@ self.addEventListener('push', event => {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
     return self.location.origin + path;
   }
-  const icon = toAbsoluteUrl(data.icon || '/static/logo-192.png');
-  const badge = toAbsoluteUrl(data.badge || '/static/logo-96.png');
+  const icon = toAbsoluteUrl(data.icon || '/static/logo.png');
+  const badge = toAbsoluteUrl(data.badge || '/static/logo.png');
 
   event.waitUntil(
     (isDM

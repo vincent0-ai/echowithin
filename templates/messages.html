@@ -168,6 +168,17 @@
                     <button onclick="cancelImageUpload()" style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i class="fas fa-times"></i></button>
                 </div>
 
+                <!-- Scheduled Messages Banner -->
+                <div id="scheduled-banner" style="display: none; border-top: 1px solid #f5ebe7; background: #fdfaf9; max-height: 160px; overflow-y: auto;">
+                    <div style="padding: 0.5rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0ece9;">
+                        <span style="font-size: 0.75rem; font-weight: 600; color: #3e2217; display: flex; align-items: center; gap: 6px;">
+                            <i class="far fa-clock"></i> Scheduled Messages
+                        </span>
+                        <span id="scheduled-count" style="font-size: 0.65rem; background: #3e2217; color: #fff; padding: 1px 6px; border-radius: 8px;">0</span>
+                    </div>
+                    <div id="scheduled-list"></div>
+                </div>
+
                 <!-- Message Input -->
                 <div class="chat-input-area"
                     style="padding: 1rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff;">
@@ -187,6 +198,14 @@
                             <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off"
                                 style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none;">
                         </div>
+
+                        <!-- Schedule Button -->
+                        <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
+                                title="Schedule message"
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            <i class="far fa-clock"></i>
+                        </button>
+
                         <button type="submit" class="btn" id="send-btn"
                             style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s;">
                             <i class="fas fa-paper-plane"></i>
@@ -536,10 +555,126 @@
     /* Hide PWA native refresh button when chatting to prevent blocking the send button */
     .mobile-fab { bottom: 85px !important; }
     body.mobile-chat-open .mobile-fab { display: none !important; }
+
+    /* Schedule Modal */
+    .schedule-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); z-index: 10001;
+        display: none; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.25s;
+    }
+    .schedule-overlay.show { display: flex; opacity: 1; }
+    .schedule-modal {
+        background: #fff; border-radius: 16px; padding: 0; width: 340px;
+        max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        transform: translateY(20px); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        overflow: hidden;
+    }
+    .schedule-overlay.show .schedule-modal { transform: translateY(0); }
+    .schedule-modal-header {
+        padding: 1.2rem 1.5rem; background: linear-gradient(135deg, #3e2217, #5a3828);
+        color: #fff; display: flex; align-items: center; justify-content: space-between;
+    }
+    .schedule-modal-header h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+    .schedule-modal-body { padding: 1.5rem; }
+    .schedule-presets {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1.2rem;
+    }
+    .schedule-preset-btn {
+        background: #fdfaf9; border: 1px solid #e8dcd5; border-radius: 10px;
+        padding: 10px 12px; cursor: pointer; text-align: left;
+        transition: all 0.2s; font-size: 0.8rem; color: #3e2217;
+    }
+    .schedule-preset-btn:hover {
+        background: #f5ebe7; border-color: #3e2217; transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(62,34,23,0.1);
+    }
+    .schedule-preset-btn .preset-label { font-weight: 600; display: block; margin-bottom: 2px; }
+    .schedule-preset-btn .preset-time { font-size: 0.7rem; color: #888; }
+    .schedule-custom-input {
+        width: 100%; padding: 10px 12px; border: 1px solid #e8dcd5;
+        border-radius: 10px; font-size: 0.85rem; outline: none;
+        background: #fdfaf9; color: #3e2217; margin-bottom: 1rem;
+    }
+    .schedule-custom-input:focus { border-color: #3e2217; box-shadow: 0 0 0 3px rgba(62,34,23,0.08); }
+    .schedule-confirm-btn {
+        width: 100%; background: linear-gradient(135deg, #3e2217, #5a3828);
+        color: #fff; border: none; border-radius: 10px; padding: 12px;
+        font-size: 0.9rem; font-weight: 600; cursor: pointer;
+        transition: all 0.2s; display: flex; align-items: center;
+        justify-content: center; gap: 8px;
+    }
+    .schedule-confirm-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(62,34,23,0.3); }
+    .schedule-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .schedule-preview {
+        text-align: center; font-size: 0.78rem; color: #888;
+        margin-bottom: 1rem; min-height: 1.2em;
+    }
+
+    /* Scheduled message item in banner */
+    .scheduled-item {
+        padding: 0.5rem 1rem; display: flex; align-items: center;
+        gap: 0.8rem; border-bottom: 1px solid #f0ece9;
+        font-size: 0.8rem; transition: background 0.2s;
+    }
+    .scheduled-item:hover { background: #f5ebe7; }
+    .scheduled-item-content {
+        flex: 1; min-width: 0; color: #555;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .scheduled-item-time {
+        font-size: 0.7rem; color: #3e2217; font-weight: 600;
+        white-space: nowrap; display: flex; align-items: center; gap: 4px;
+    }
+    .scheduled-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+    .sched-action-btn {
+        background: none; border: 1px solid #e8dcd5; border-radius: 6px;
+        padding: 3px 8px; cursor: pointer; font-size: 0.7rem;
+        color: #666; transition: all 0.2s;
+    }
+    .sched-action-btn:hover { background: #f5ebe7; color: #3e2217; border-color: #3e2217; }
+    .sched-action-btn.send-now:hover { background: #3e2217; color: #fff; }
+    .sched-action-btn.cancel-sched:hover { background: #fef2f2; color: #ef4444; border-color: #ef4444; }
 </style>
 
 
 <!-- Fullscreen Image Lightbox -->
+<!-- Schedule Message Modal -->
+<div class="schedule-overlay" id="schedule-overlay" onclick="if(event.target===this)closeScheduleModal()">
+    <div class="schedule-modal">
+        <div class="schedule-modal-header">
+            <h3><i class="far fa-clock" style="margin-right: 8px;"></i>Schedule Message</h3>
+            <button onclick="closeScheduleModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
+        </div>
+        <div class="schedule-modal-body">
+            <div class="schedule-presets">
+                <button class="schedule-preset-btn" onclick="setSchedulePreset('1h')">
+                    <span class="preset-label">In 1 Hour</span>
+                    <span class="preset-time" id="preset-1h-time"></span>
+                </button>
+                <button class="schedule-preset-btn" onclick="setSchedulePreset('3h')">
+                    <span class="preset-label">In 3 Hours</span>
+                    <span class="preset-time" id="preset-3h-time"></span>
+                </button>
+                <button class="schedule-preset-btn" onclick="setSchedulePreset('tomorrow_am')">
+                    <span class="preset-label">Tomorrow 9 AM</span>
+                    <span class="preset-time" id="preset-tomorrow-am-time"></span>
+                </button>
+                <button class="schedule-preset-btn" onclick="setSchedulePreset('tomorrow_pm')">
+                    <span class="preset-label">Tomorrow 6 PM</span>
+                    <span class="preset-time" id="preset-tomorrow-pm-time"></span>
+                </button>
+            </div>
+            <label style="font-size:0.78rem;font-weight:600;color:#3e2217;display:block;margin-bottom:6px;">Or pick a custom time:</label>
+            <input type="datetime-local" id="schedule-datetime" class="schedule-custom-input">
+            <div class="schedule-preview" id="schedule-preview"></div>
+            <button class="schedule-confirm-btn" id="schedule-confirm-btn" onclick="confirmSchedule()" disabled>
+                <i class="far fa-clock"></i> Schedule Send
+            </button>
+        </div>
+    </div>
+</div>
+
 <div id="lightbox" onclick="closeLightbox(event)">
     <button id="lightbox-close" onclick="closeLightbox(event)">&times;</button>
     <img id="lightbox-img" src="" alt="Zoomed image">
@@ -1420,6 +1555,266 @@
             document.body.appendChild(toast);
             setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
         }
+
+        // ==========================================
+        // SCHEDULED MESSAGES
+        // ==========================================
+        let scheduledDatetime = null;
+
+        window.openScheduleModal = function() {
+            const content = messageInput.value.trim();
+            const pendingUrl = document.getElementById('pending-image-url').value;
+            if (!content && !pendingUrl) {
+                showToast('Type a message first before scheduling');
+                return;
+            }
+            if (!activeRecipientId) {
+                showToast('Select a contact first');
+                return;
+            }
+
+            // Set min to 2 minutes from now
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 2);
+            const minStr = now.toISOString().slice(0, 16);
+            document.getElementById('schedule-datetime').min = minStr;
+            document.getElementById('schedule-datetime').value = '';
+            scheduledDatetime = null;
+            document.getElementById('schedule-preview').textContent = '';
+            document.getElementById('schedule-confirm-btn').disabled = true;
+
+            // Update preset labels
+            updatePresetLabels();
+
+            const overlay = document.getElementById('schedule-overlay');
+            overlay.style.display = 'flex';
+            requestAnimationFrame(() => overlay.classList.add('show'));
+        };
+
+        window.closeScheduleModal = function() {
+            const overlay = document.getElementById('schedule-overlay');
+            overlay.classList.remove('show');
+            setTimeout(() => { overlay.style.display = 'none'; }, 250);
+        };
+
+        function updatePresetLabels() {
+            const now = new Date();
+            const fmt = (d) => d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+            const in1h = new Date(now.getTime() + 60 * 60 * 1000);
+            const in3h = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomAM = new Date(tomorrow); tomAM.setHours(9, 0, 0, 0);
+            const tomPM = new Date(tomorrow); tomPM.setHours(18, 0, 0, 0);
+
+            const el1h = document.getElementById('preset-1h-time');
+            const el3h = document.getElementById('preset-3h-time');
+            const elAM = document.getElementById('preset-tomorrow-am-time');
+            const elPM = document.getElementById('preset-tomorrow-pm-time');
+            if (el1h) el1h.textContent = fmt(in1h);
+            if (el3h) el3h.textContent = fmt(in3h);
+            if (elAM) elAM.textContent = fmt(tomAM);
+            if (elPM) elPM.textContent = fmt(tomPM);
+        }
+
+        window.setSchedulePreset = function(preset) {
+            const now = new Date();
+            let target;
+            if (preset === '1h') {
+                target = new Date(now.getTime() + 60 * 60 * 1000);
+            } else if (preset === '3h') {
+                target = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+            } else if (preset === 'tomorrow_am') {
+                target = new Date(now);
+                target.setDate(target.getDate() + 1);
+                target.setHours(9, 0, 0, 0);
+            } else if (preset === 'tomorrow_pm') {
+                target = new Date(now);
+                target.setDate(target.getDate() + 1);
+                target.setHours(18, 0, 0, 0);
+            }
+            if (target) {
+                scheduledDatetime = target;
+                // Update the input visual
+                const localStr = new Date(target.getTime() - target.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                document.getElementById('schedule-datetime').value = localStr;
+                updateSchedulePreview(target);
+                document.getElementById('schedule-confirm-btn').disabled = false;
+            }
+        };
+
+        // Custom datetime change
+        document.getElementById('schedule-datetime').addEventListener('change', function() {
+            const val = this.value;
+            if (val) {
+                const target = new Date(val);
+                const now = new Date();
+                if (target <= new Date(now.getTime() + 60 * 1000)) {
+                    showToast('Please pick a time at least 1 minute ahead');
+                    document.getElementById('schedule-confirm-btn').disabled = true;
+                    return;
+                }
+                scheduledDatetime = target;
+                updateSchedulePreview(target);
+                document.getElementById('schedule-confirm-btn').disabled = false;
+            } else {
+                document.getElementById('schedule-confirm-btn').disabled = true;
+                document.getElementById('schedule-preview').textContent = '';
+            }
+        });
+
+        function updateSchedulePreview(date) {
+            const now = new Date();
+            const diffMs = date - now;
+            const diffMins = Math.round(diffMs / 60000);
+            let relativeStr;
+            if (diffMins < 60) {
+                relativeStr = `in ${diffMins} minute${diffMins !== 1 ? 's' : ''}`;
+            } else if (diffMins < 1440) {
+                const hrs = Math.round(diffMins / 60);
+                relativeStr = `in ~${hrs} hour${hrs !== 1 ? 's' : ''}`;
+            } else {
+                const days = Math.round(diffMins / 1440);
+                relativeStr = `in ~${days} day${days !== 1 ? 's' : ''}`;
+            }
+            const absStr = date.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            document.getElementById('schedule-preview').innerHTML = `Will send <strong>${relativeStr}</strong><br><span style="font-size:0.72rem;">${absStr}</span>`;
+        }
+
+        window.confirmSchedule = function() {
+            if (!scheduledDatetime || !activeRecipientId) return;
+
+            const content = messageInput.value.trim();
+            const pendingUrl = document.getElementById('pending-image-url').value;
+            const replyParentId = document.getElementById('reply-parent-id').value;
+            const msgType = pendingUrl ? 'image' : 'text';
+
+            const payload = {
+                recipient_id: activeRecipientId,
+                content: content,
+                scheduled_at: scheduledDatetime.toISOString(),
+                message_type: msgType
+            };
+            if (pendingUrl) payload.image_url = pendingUrl;
+            if (replyParentId) payload.reply_to_id = replyParentId;
+
+            document.getElementById('schedule-confirm-btn').disabled = true;
+            document.getElementById('schedule-confirm-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scheduling...';
+
+            fetch('/api/messages/schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    showToast(d.message || 'Message scheduled!');
+                    messageInput.value = '';
+                    cancelReply();
+                    cancelImageUpload();
+                    closeScheduleModal();
+                    loadScheduledMessages(activeRecipientId);
+                } else {
+                    showToast(d.error || 'Failed to schedule', 'error');
+                }
+            }).catch(() => {
+                showToast('Network error', 'error');
+            }).finally(() => {
+                document.getElementById('schedule-confirm-btn').disabled = false;
+                document.getElementById('schedule-confirm-btn').innerHTML = '<i class="far fa-clock"></i> Schedule Send';
+            });
+        };
+
+        function loadScheduledMessages(userId) {
+            if (!userId) return;
+            fetch(`/api/messages/scheduled/${userId}`).then(r => r.json()).then(data => {
+                const msgs = data.scheduled_messages || [];
+                const banner = document.getElementById('scheduled-banner');
+                const list = document.getElementById('scheduled-list');
+                const countEl = document.getElementById('scheduled-count');
+
+                if (msgs.length === 0) {
+                    banner.style.display = 'none';
+                    return;
+                }
+
+                banner.style.display = 'block';
+                countEl.textContent = msgs.length;
+                list.innerHTML = '';
+
+                msgs.forEach(m => {
+                    const schedTime = new Date(m.scheduled_at);
+                    const timeStr = schedTime.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const preview = m.message_type === 'image' ? '📸 Photo' : (m.content || '').substring(0, 50);
+                    list.insertAdjacentHTML('beforeend', `
+                        <div class="scheduled-item" data-sched-id="${m.id}">
+                            <div class="scheduled-item-content" title="${(m.content || '').replace(/"/g, '&quot;')}">${preview}</div>
+                            <div class="scheduled-item-time"><i class="far fa-clock"></i> ${timeStr}</div>
+                            <div class="scheduled-item-actions">
+                                <button class="sched-action-btn send-now" onclick="sendScheduledNow('${m.id}')" title="Send now">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                                <button class="sched-action-btn cancel-sched" onclick="cancelScheduled('${m.id}')" title="Cancel">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `);
+                });
+            }).catch(() => {});
+        }
+
+        window.sendScheduledNow = function(msgId) {
+            if (!confirm('Send this message now?')) return;
+            fetch(`/api/messages/schedule/${msgId}/send-now`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    showToast('Message sent!');
+                    const item = document.querySelector(`.scheduled-item[data-sched-id="${msgId}"]`);
+                    if (item) item.remove();
+                    updateScheduledBannerCount();
+                    // Refresh chat to show the delivered message
+                    if (activeRecipientId) loadChatHistory(activeRecipientId);
+                } else {
+                    showToast(d.error || 'Failed to send', 'error');
+                }
+            });
+        };
+
+        window.cancelScheduled = function(msgId) {
+            if (!confirm('Cancel this scheduled message?')) return;
+            fetch(`/api/messages/schedule/${msgId}/cancel`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    showToast('Scheduled message cancelled');
+                    const item = document.querySelector(`.scheduled-item[data-sched-id="${msgId}"]`);
+                    if (item) item.remove();
+                    updateScheduledBannerCount();
+                } else {
+                    showToast(d.error || 'Failed to cancel', 'error');
+                }
+            });
+        };
+
+        function updateScheduledBannerCount() {
+            const list = document.getElementById('scheduled-list');
+            const remaining = list ? list.querySelectorAll('.scheduled-item').length : 0;
+            document.getElementById('scheduled-count').textContent = remaining;
+            if (remaining === 0) {
+                document.getElementById('scheduled-banner').style.display = 'none';
+            }
+        }
+
+        // Load scheduled messages when opening a chat
+        const _origLoadChat = window.loadChat;
+        window.loadChat = function(userId, username, element) {
+            _origLoadChat(userId, username, element);
+            loadScheduledMessages(userId);
+        };
     });
 </script>
 <style>

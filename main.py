@@ -469,6 +469,11 @@ dm_permissions_conf = db['dm_permissions']
 dm_permissions_conf.create_index([('requester_id', 1), ('target_id', 1)], unique=True)
 dm_permissions_conf.create_index([('target_id', 1), ('status', 1)])
 
+# --- Scheduled Messages ---
+scheduled_messages_conf = db['scheduled_messages']
+scheduled_messages_conf.create_index([('scheduled_at', 1), ('status', 1)])
+scheduled_messages_conf.create_index([('sender_id', 1), ('status', 1)])
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -9982,6 +9987,388 @@ def api_dm_status(target_user_id):
         return jsonify({'status': 'none'})
     except Exception as e:
         return jsonify({'error': str(e)}), 400
+
+
+# --- Scheduled Messages ---
+
+def _deliver_scheduled_message(sched_msg):
+    """Core delivery logic: converts a scheduled_messages doc into a real DM.
+    
+    Called by:
+      1. process_scheduled_messages.py (background scheduler — every minute)
+      2. api_schedule_send_now() (user clicks 'Send Now')
+    """
+    try:
+        sender_id_str = str(sched_msg['sender_id'])
+        recipient_id_str = str(sched_msg['recipient_id'])
+
+        # Build the direct_messages document (content is already encrypted)
+        message_doc = {
+            'sender_id': sched_msg['sender_id'],
+            'recipient_id': sched_msg['recipient_id'],
+            'content': sched_msg['content'],
+            'encrypted': True,
+            'timestamp': datetime.datetime.now(datetime.timezone.utc),
+            'is_read': False,
+            'message_type': sched_msg.get('message_type', 'text')
+        }
+
+        if sched_msg.get('image_url'):
+            message_doc['image_url'] = sched_msg['image_url']
+        if sched_msg.get('reply_to_id'):
+            message_doc['reply_to_id'] = sched_msg['reply_to_id']
+            message_doc['reply_to_preview'] = sched_msg.get('reply_to_preview')
+            message_doc['reply_to_sender'] = sched_msg.get('reply_to_sender')
+        if sched_msg.get('link_preview'):
+            message_doc['link_preview'] = sched_msg['link_preview']
+
+        # Insert into direct_messages
+        direct_messages_conf.insert_one(message_doc)
+
+        # Decrypt content for the real-time payload (plain text for Socket.IO)
+        plain_content = sched_msg.get('content', '')
+        if plain_content and plain_content.startswith('gAAAAA'):
+            try:
+                plain_content = decrypt_dm(plain_content, sender_id_str, recipient_id_str)
+            except Exception:
+                plain_content = ''
+
+        plain_image = ''
+        if sched_msg.get('image_url'):
+            raw_img = sched_msg['image_url']
+            if raw_img and raw_img.startswith('gAAAAA'):
+                try:
+                    plain_image = decrypt_dm(raw_img, sender_id_str, recipient_id_str)
+                except Exception:
+                    plain_image = raw_img
+            else:
+                plain_image = raw_img
+
+        # Decrypt reply preview for payload
+        plain_reply_preview = sched_msg.get('reply_to_preview', '')
+        if plain_reply_preview and isinstance(plain_reply_preview, str) and plain_reply_preview.startswith('gAAAAA'):
+            try:
+                plain_reply_preview = decrypt_dm(plain_reply_preview, sender_id_str, recipient_id_str)
+            except Exception:
+                pass
+
+        # Decrypt link_preview for payload
+        plain_link_preview = None
+        if sched_msg.get('link_preview') and isinstance(sched_msg['link_preview'], dict):
+            lp = sched_msg['link_preview']
+            plain_link_preview = {}
+            for field in ['url', 'title', 'description', 'image']:
+                val = lp.get(field, '')
+                if val and isinstance(val, str) and val.startswith('gAAAAA'):
+                    try:
+                        plain_link_preview[field] = decrypt_dm(val, sender_id_str, recipient_id_str)
+                    except Exception:
+                        plain_link_preview[field] = val
+                else:
+                    plain_link_preview[field] = val
+
+        # Look up sender username
+        sender = users_conf.find_one({'_id': sched_msg['sender_id']}, {'username': 1})
+        sender_username = sender['username'] if sender else 'Unknown'
+
+        # Socket.IO real-time broadcast
+        payload = {
+            'id': str(message_doc['_id']),
+            'sender_id': sender_id_str,
+            'sender_username': sender_username,
+            'content': plain_content,
+            'timestamp': message_doc['timestamp'].isoformat().replace('+00:00', 'Z'),
+            'is_read': False,
+            'message_type': sched_msg.get('message_type', 'text')
+        }
+        if plain_image:
+            payload['image_url'] = plain_image
+        if sched_msg.get('reply_to_id'):
+            payload['reply_to_id'] = str(sched_msg['reply_to_id'])
+            payload['reply_to_preview'] = plain_reply_preview
+            payload['reply_to_sender'] = sched_msg.get('reply_to_sender')
+        if plain_link_preview:
+            payload['link_preview'] = plain_link_preview
+
+        socketio.emit('new_dm', payload, room=f"user_{recipient_id_str}")
+
+        # Push notification
+        push_body = "📸 Photo" if sched_msg.get('message_type') == 'image' else (plain_content[:100] + ('...' if len(plain_content) > 100 else ''))
+        send_push_notification_to_user(
+            recipient_id_str,
+            f"New message from {sender_username}",
+            push_body,
+            url=url_for('messages_page', _external=True),
+            tag=f'dm-{sender_id_str}'
+        )
+
+        # Invalidate badge cache
+        _invalidate_badge_cache(recipient_id_str)
+
+        # Mark scheduled message as sent
+        scheduled_messages_conf.update_one(
+            {'_id': sched_msg['_id']},
+            {'$set': {'status': 'sent', 'delivered_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+
+        app.logger.info(f"Scheduled message {sched_msg['_id']} delivered from {sender_id_str} to {recipient_id_str}")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to deliver scheduled message {sched_msg.get('_id')}: {e}")
+        return False
+
+
+@app.route('/api/messages/schedule', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_schedule_message():
+    """Schedule a message for future delivery."""
+    try:
+        data = request.get_json() or {}
+        recipient_id_str = data.get('recipient_id')
+        content = data.get('content', '')
+        scheduled_at_str = data.get('scheduled_at')  # ISO 8601 UTC string
+        image_url = data.get('image_url')
+        reply_to_id = data.get('reply_to_id')
+        message_type = data.get('message_type', 'text')
+
+        if not recipient_id_str or not scheduled_at_str:
+            return jsonify({'error': 'Missing required fields'}), 400
+        if not content and not image_url:
+            return jsonify({'error': 'Message cannot be empty'}), 400
+
+        # Parse and validate scheduled time
+        try:
+            scheduled_at = datetime.datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+            if scheduled_at.tzinfo is None:
+                scheduled_at = scheduled_at.replace(tzinfo=datetime.timezone.utc)
+        except (ValueError, AttributeError):
+            return jsonify({'error': 'Invalid date format. Use ISO 8601.'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if scheduled_at <= now + datetime.timedelta(minutes=1):
+            return jsonify({'error': 'Scheduled time must be at least 1 minute in the future.'}), 400
+        if scheduled_at > now + datetime.timedelta(days=30):
+            return jsonify({'error': 'Cannot schedule more than 30 days ahead.'}), 400
+
+        # Verify DM permission
+        sender_id_str = str(current_user.id)
+        if not can_dm(sender_id_str, recipient_id_str):
+            return jsonify({'error': 'You do not have permission to message this user.'}), 403
+
+        # Check recipient exists and hasn't disabled DMs
+        recipient = users_conf.find_one({'_id': ObjectId(recipient_id_str)})
+        if not recipient:
+            return jsonify({'error': 'Recipient not found'}), 404
+        if recipient.get('dm_privacy') == 'nobody':
+            return jsonify({'error': 'This user has disabled direct messages.'}), 403
+
+        # Limit pending scheduled messages per user (max 25)
+        pending_count = scheduled_messages_conf.count_documents({
+            'sender_id': ObjectId(current_user.id),
+            'status': 'pending'
+        })
+        if pending_count >= 25:
+            return jsonify({'error': 'You have too many scheduled messages. Cancel some first.'}), 429
+
+        # Handle reply preview
+        reply_to_preview = None
+        reply_to_sender = None
+        if reply_to_id:
+            try:
+                parent_msg = direct_messages_conf.find_one({'_id': ObjectId(reply_to_id)})
+                if parent_msg:
+                    parent_sender_id = str(parent_msg['sender_id'])
+                    is_me = parent_sender_id == sender_id_str
+                    parent_sender = current_user.username if is_me else recipient.get('username', 'User')
+                    raw_content = parent_msg.get('content', '')
+                    if parent_msg.get('encrypted') or raw_content.startswith('gAAAAA'):
+                        try:
+                            raw_content = decrypt_dm(raw_content, str(parent_msg['sender_id']), str(parent_msg['recipient_id']))
+                        except Exception:
+                            raw_content = "Encrypted message"
+                    reply_to_sender = parent_sender
+                    if parent_msg.get('message_type') == 'image':
+                        reply_to_preview = "📸 Photo"
+                    else:
+                        reply_to_preview = raw_content[:80] + ('...' if len(raw_content) > 80 else '')
+            except Exception as e:
+                app.logger.warning(f"Error fetching reply parent for scheduled msg: {e}")
+
+        # Handle link preview
+        link_preview = None
+        if message_type == 'text' and content:
+            url_match = re.search(r'(https?://[^\s]+)', content)
+            if url_match:
+                link_preview = fetch_link_preview(url_match.group(1))
+
+        # Encrypt everything
+        encrypted_content = encrypt_dm(content, sender_id_str, recipient_id_str) if content else ''
+
+        sched_doc = {
+            'sender_id': ObjectId(current_user.id),
+            'recipient_id': ObjectId(recipient_id_str),
+            'content': encrypted_content,
+            'encrypted': True,
+            'message_type': message_type,
+            'scheduled_at': scheduled_at,
+            'status': 'pending',
+            'created_at': now
+        }
+
+        if image_url:
+            sched_doc['image_url'] = encrypt_dm(image_url, sender_id_str, recipient_id_str)
+        if reply_to_id:
+            sched_doc['reply_to_id'] = ObjectId(reply_to_id)
+            sched_doc['reply_to_preview'] = encrypt_dm(reply_to_preview, sender_id_str, recipient_id_str) if reply_to_preview else reply_to_preview
+            sched_doc['reply_to_sender'] = reply_to_sender
+        if link_preview:
+            sched_doc['link_preview'] = {
+                'url': encrypt_dm(link_preview.get('url', ''), sender_id_str, recipient_id_str),
+                'title': encrypt_dm(link_preview.get('title', ''), sender_id_str, recipient_id_str),
+                'description': encrypt_dm(link_preview.get('description', ''), sender_id_str, recipient_id_str),
+                'image': encrypt_dm(link_preview.get('image', ''), sender_id_str, recipient_id_str)
+            }
+
+        scheduled_messages_conf.insert_one(sched_doc)
+
+        return jsonify({
+            'success': True,
+            'message': 'Message scheduled successfully!',
+            'scheduled_message': {
+                'id': str(sched_doc['_id']),
+                'content': content,
+                'scheduled_at': scheduled_at.isoformat().replace('+00:00', 'Z'),
+                'status': 'pending',
+                'message_type': message_type,
+                'image_url': image_url
+            }
+        })
+    except Exception as e:
+        app.logger.error(f"Error scheduling message: {e}")
+        return jsonify({'error': 'Failed to schedule message'}), 400
+
+
+@app.route('/api/messages/scheduled/<other_user_id>')
+@login_required
+def api_list_scheduled_messages(other_user_id):
+    """List pending scheduled messages for a specific conversation."""
+    try:
+        other_id = ObjectId(other_user_id)
+        sender_id = ObjectId(current_user.id)
+
+        msgs = list(scheduled_messages_conf.find({
+            'sender_id': sender_id,
+            'recipient_id': other_id,
+            'status': 'pending'
+        }).sort('scheduled_at', 1))
+
+        result = []
+        for m in msgs:
+            content = m.get('content', '')
+            if content and content.startswith('gAAAAA'):
+                try:
+                    content = decrypt_dm(content, str(current_user.id), other_user_id)
+                except Exception:
+                    pass
+
+            entry = {
+                'id': str(m['_id']),
+                'content': content,
+                'scheduled_at': m['scheduled_at'].isoformat().replace('+00:00', 'Z') if m.get('scheduled_at') else None,
+                'status': m['status'],
+                'message_type': m.get('message_type', 'text'),
+                'created_at': m['created_at'].isoformat().replace('+00:00', 'Z') if m.get('created_at') else None
+            }
+            if m.get('image_url'):
+                raw_img = m['image_url']
+                entry['image_url'] = decrypt_dm(raw_img, str(current_user.id), other_user_id) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+            result.append(entry)
+
+        return jsonify({'scheduled_messages': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/schedule/<msg_id>/cancel', methods=['POST'])
+@login_required
+def api_schedule_cancel(msg_id):
+    """Cancel a pending scheduled message."""
+    try:
+        obj_id = safe_object_id(msg_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid message ID'}), 400
+
+        msg = scheduled_messages_conf.find_one({
+            '_id': obj_id,
+            'sender_id': ObjectId(current_user.id),
+            'status': 'pending'
+        })
+        if not msg:
+            return jsonify({'error': 'Scheduled message not found or already processed'}), 404
+
+        scheduled_messages_conf.update_one(
+            {'_id': obj_id},
+            {'$set': {'status': 'cancelled', 'cancelled_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        return jsonify({'success': True, 'message': 'Scheduled message cancelled.'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/schedule/<msg_id>/send-now', methods=['POST'])
+@login_required
+def api_schedule_send_now(msg_id):
+    """Immediately deliver a pending scheduled message."""
+    try:
+        obj_id = safe_object_id(msg_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid message ID'}), 400
+
+        msg = scheduled_messages_conf.find_one({
+            '_id': obj_id,
+            'sender_id': ObjectId(current_user.id),
+            'status': 'pending'
+        })
+        if not msg:
+            return jsonify({'error': 'Scheduled message not found or already processed'}), 404
+
+        success = _deliver_scheduled_message(msg)
+        if success:
+            return jsonify({'success': True, 'message': 'Message sent!'})
+        else:
+            return jsonify({'error': 'Delivery failed'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/messages/schedule/process', methods=['POST'])
+def api_process_scheduled_messages():
+    """Internal endpoint called by the scheduler to process due messages.
+    
+    Protected by a shared secret to prevent unauthorized access.
+    """
+    auth_header = request.headers.get('X-Scheduler-Secret', '')
+    expected_secret = app.config.get('SECRET_KEY', '')
+    if not auth_header or auth_header != expected_secret:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    due_messages = list(scheduled_messages_conf.find({
+        'scheduled_at': {'$lte': now},
+        'status': 'pending'
+    }).limit(50))
+
+    delivered = 0
+    failed = 0
+    for msg in due_messages:
+        if _deliver_scheduled_message(msg):
+            delivered += 1
+        else:
+            failed += 1
+
+    return jsonify({'delivered': delivered, 'failed': failed, 'total': len(due_messages)})
+
 
 @app.route('/share/note/<share_id>/edit', methods=['POST'])
 @limits(calls=10, period=60)

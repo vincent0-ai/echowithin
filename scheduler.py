@@ -85,6 +85,21 @@ def run_backup_to_atlas():
         print(f"Error: The script at {script_path} was not found.")
 
 
+def run_scheduled_messages():
+    """
+    Runs the process_scheduled_messages.py script to deliver due messages.
+    """
+    script_path = os.path.join(os.path.dirname(__file__), 'process_scheduled_messages.py')
+    try:
+        subprocess.run(['python', script_path], check=True, timeout=60)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing process_scheduled_messages.py: {e}")
+    except subprocess.TimeoutExpired:
+        print("Warning: process_scheduled_messages.py timed out after 60 seconds")
+    except FileNotFoundError:
+        print(f"Error: The script at {script_path} was not found.")
+
+
 if __name__ == '__main__':
     # Schedule the log email job to run every day at 01:00 AM server time.
     schedule.every().day.at("01:00").do(run_schedule_log_email)
@@ -103,6 +118,9 @@ if __name__ == '__main__':
     schedule.every().day.at("06:00").do(run_backup_to_atlas)
     schedule.every().day.at("12:00").do(run_backup_to_atlas)
     schedule.every().day.at("18:00").do(run_backup_to_atlas)
+
+    # Process scheduled messages every minute for timely delivery
+    schedule.every(1).minutes.do(run_scheduled_messages)
     
     print("Scheduler started. Waiting for scheduled jobs...")
     print("  - Daily log email: 01:00 AM")
@@ -110,6 +128,8 @@ if __name__ == '__main__':
     print("  - Weekly achievements: Monday 00:01 AM")
     print("  - Auth cleanup: Every hour")
     print("  - Atlas backup: 00:00, 06:00, 12:00, 18:00")
+    print("  - Scheduled messages: Every minute")
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every 60 seconds
+

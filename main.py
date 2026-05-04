@@ -11980,11 +11980,13 @@ def sitemap():
 
     # All blog posts (published only, filtering thin content)
     try:
-        # Optimization: Only select needed fields
-        posts_query = {'status': 'published'} if 'status' in posts_conf.find_one({}).keys() else {}
+        # Optimization: Only select needed fields to prevent massive RAM/CPU usage and timeouts
+        sample_post = posts_conf.find_one({}) or {}
+        posts_query = {'status': 'published'} if 'status' in sample_post else {}
+        
         posts = posts_conf.find(
             posts_query,
-            {'slug': 1, 'timestamp': 1, 'edited_at': 1, 'content': 1, 'title': 1}
+            {'slug': 1, 'timestamp': 1, 'edited_at': 1} # Removed 'content' to drastically speed up query
         ).sort('timestamp', -1).limit(50000) # Increased limit for future-proofing
 
         for post in posts:
@@ -11995,14 +11997,6 @@ def sitemap():
             # Skip auto-generated slugs (post-HEXID pattern) — low SEO value
             if re.match(r'^post-[0-9a-f]{8,}$', slug):
                 continue
-
-            # Skip posts with very thin content (less than 100 chars)
-            content = post.get('content', '')
-            if content:
-                # Strip HTML tags for accurate length check
-                plain = re.sub(r'<[^>]+>', '', content).strip()
-                if len(plain) < 100:
-                    continue
 
             lastmod = post.get('edited_at') or post.get('timestamp')
             lastmod_str = ''

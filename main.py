@@ -31,6 +31,7 @@ import time
 import requests
 from werkzeug.utils import secure_filename
 import hashlib
+import hmac
 from slugify import slugify
 import cloudinary
 import cloudinary.uploader
@@ -7192,6 +7193,138 @@ def user_posts_page(username):
                            total_posts=total_posts,
                            now=datetime.datetime.now(datetime.timezone.utc))
 
+
+# ---------------- Paystack Integration ----------------
+
+@app.route('/api/paystack/initialize', methods=['POST'])
+@login_required
+def paystack_initialize():
+    if current_user.is_premium and not current_user.is_trial:
+        return jsonify({'error': 'You are already a Premium member'}), 400
+        
+    secret_key = os.environ.get('PAYSTACK_SECRET_KEY')
+    plan_code = os.environ.get('PAYSTACK_PLAN_CODE')
+    
+    if not secret_key:
+        return jsonify({'error': 'Payment integration is not configured yet. Please contact support.'}), 500
+        
+    url = "https://api.paystack.co/transaction/initialize"
+    headers = {
+        "Authorization": f"Bearer {secret_key}",
+        "Content-Type": "application/json"
+    }
+    
+    callback_url = urljoin(request.host_url, url_for('paystack_callback'))
+    
+    data = {
+        "email": current_user.email,
+        "amount": PREMIUM_PRICE_KSH * 100, # Paystack expects lowest currency unit (cents/kobo)
+        "callback_url": callback_url,
+        "metadata": {
+            "user_id": str(current_user.id)
+        }
+    }
+    
+    if plan_code:
+        data["plan"] = plan_code
+        
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        result = response.json()
+        
+        if result.get('status'):
+            return jsonify({'authorization_url': result['data']['authorization_url']})
+        else:
+            return jsonify({'error': result.get('message', 'Failed to initialize payment')}), 400
+    except Exception as e:
+        app.logger.error(f"Paystack init error: {str(e)}")
+        return jsonify({'error': 'An error occurred connecting to the payment provider.'}), 500
+
+@app.route('/paystack/callback')
+@login_required
+def paystack_callback():
+    reference = request.args.get('reference')
+    if not reference:
+        flash("Invalid payment callback.", "danger")
+        return redirect(url_for('profile_settings', username=current_user.username))
+        
+    secret_key = os.environ.get('PAYSTACK_SECRET_KEY')
+    if not secret_key:
+        flash("Payment configuration error.", "danger")
+        return redirect(url_for('profile_settings', username=current_user.username))
+        
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    headers = {
+        "Authorization": f"Bearer {secret_key}",
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        result = response.json()
+        
+        if result.get('status') and result['data']['status'] == 'success':
+            # Verification successful - Upgrade to Premium
+            users_conf.update_one(
+                {'_id': current_user.id},
+                {'$set': {
+                    'account_tier': 'premium',
+                    'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
+                }}
+            )
+            flash("Payment successful! You are now a Premium member.", "success")
+        else:
+            flash(f"Payment verification failed: {result.get('message', 'Unknown error')}", "danger")
+            
+    except Exception as e:
+        app.logger.error(f"Paystack verify error: {str(e)}")
+        flash("An error occurred verifying your payment. Please contact support.", "danger")
+        
+    return redirect(url_for('profile_settings', username=current_user.username))
+
+@app.route('/api/paystack/webhook', methods=['POST'])
+@csrf.exempt
+def paystack_webhook():
+    secret_key = os.environ.get('PAYSTACK_SECRET_KEY')
+    if not secret_key:
+        return 'Not configured', 500
+        
+    signature = request.headers.get('x-paystack-signature')
+    payload = request.get_data()
+    
+    hash_sign = hmac.new(secret_key.encode('utf-8'), payload, hashlib.sha512).hexdigest()
+    if hash_sign != signature:
+        return 'Invalid signature', 400
+        
+    try:
+        event = request.json
+        event_type = event.get('event')
+        data = event.get('data', {})
+        
+        if event_type == 'charge.success':
+            email = data.get('customer', {}).get('email')
+            metadata = data.get('metadata', {})
+            user_id_str = metadata.get('user_id')
+            
+            user = None
+            if user_id_str:
+                user = users_conf.find_one({'_id': ObjectId(user_id_str)})
+            elif email:
+                user = users_conf.find_one({'email': email})
+                
+            if user:
+                # Grant/renew 31 days from now
+                users_conf.update_one(
+                    {'_id': user['_id']},
+                    {'$set': {
+                        'account_tier': 'premium',
+                        'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
+                    }}
+                )
+                
+        return '', 200
+    except Exception as e:
+        app.logger.error(f"Paystack webhook error: {str(e)}")
+        return 'Error processing webhook', 500
 
 @app.route('/profile/<username>/settings', methods=['GET', 'POST'])
 @login_required

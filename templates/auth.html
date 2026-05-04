@@ -7,7 +7,8 @@
 {% block content %}
 
 <main>
-    <div class="auth-container">
+    <div class="auth-page-wrapper" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 2rem; width: 100%; max-width: 1000px; margin: 0 auto;">
+        <div class="auth-container" style="flex: 1 1 400px; max-width: 450px;">
         <nav class="auth-tabs">
             <div class="auth-tabs-wrapper">
                 <button class="tab-button {% if form == 'login' %}active{% endif %}"
@@ -118,38 +119,47 @@
         </div>
     </div>
 
-    <div class="auth-features-showcase" style="margin-top: 2rem; padding: 2rem 1rem; width: 100%; max-width: 900px; margin-left: auto; margin-right: auto;">
-        <h3 style="text-align: center; color: #3e2217; font-size: 1.5rem; margin-bottom: 2.5rem; font-weight: 700;">Discover EchoWithin</h3>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem;">
-            <div class="feature-card" style="background: #fff; padding: 1.5rem; border-radius: 16px; border: 1px solid #eee; transition: transform 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #3e2217, #5a3828); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; margin-bottom: 1rem;">
-                    <i class="fas fa-lock"></i>
+    <div class="auth-features-showcase" style="flex: 1 1 350px; padding: 1.5rem; width: 100%; max-width: 450px; background: #fff; border-radius: 16px; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+        <h3 style="text-align: center; color: #3e2217; font-size: 1.2rem; margin-bottom: 1.5rem; font-weight: 700;">Discover EchoWithin</h3>
+        <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1.2rem;">
+            <li style="display: flex; align-items: flex-start; gap: 1rem;">
+                <div style="width: 32px; height: 32px; background: rgba(90, 56, 40, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #5a3828; flex-shrink: 0;">
+                    <i class="fas fa-lock" style="font-size: 0.9rem;"></i>
                 </div>
-                <h4 style="color: #3e2217; margin-bottom: 0.5rem; font-weight: 600;">Secure Notes</h4>
-                <p style="color: #777; font-size: 0.85rem; line-height: 1.5;">End-to-end encrypted private notes with Markdown support and offline access.</p>
-            </div>
-            <div class="feature-card" style="background: #fff; padding: 1.5rem; border-radius: 16px; border: 1px solid #eee; transition: transform 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #8e44ad, #9b59b6); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; margin-bottom: 1rem;">
-                    <i class="fas fa-paper-plane"></i>
+                <div>
+                    <strong style="color: #3e2217; display: block; font-size: 0.95rem; margin-bottom: 0.2rem;">Secure Notes</strong>
+                    <span style="color: #777; font-size: 0.85rem; line-height: 1.4;">End-to-end encrypted private notes with Markdown support.</span>
                 </div>
-                <h4 style="color: #3e2217; margin-bottom: 0.5rem; font-weight: 600;">Direct Messaging</h4>
-                <p style="color: #777; font-size: 0.85rem; line-height: 1.5;">Real-time DMs with scheduled delivery, reactions, and link previews.</p>
-            </div>
-            <div class="feature-card" style="background: #fff; padding: 1.5rem; border-radius: 16px; border: 1px solid #eee; transition: transform 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #27ae60, #2ecc71); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; margin-bottom: 1rem;">
-                    <i class="fas fa-users"></i>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 1rem;">
+                <div style="width: 32px; height: 32px; background: rgba(142, 68, 173, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8e44ad; flex-shrink: 0;">
+                    <i class="fas fa-paper-plane" style="font-size: 0.9rem;"></i>
                 </div>
-                <h4 style="color: #3e2217; margin-bottom: 0.5rem; font-weight: 600;">Collaborations</h4>
-                <p style="color: #777; font-size: 0.85rem; line-height: 1.5;">Share notes via editable links with real-time presence and conflict resolution.</p>
-            </div>
-            <div class="feature-card" style="background: #fff; padding: 1.5rem; border-radius: 16px; border: 1px solid #eee; transition: transform 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #e67e22, #f39c12); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; margin-bottom: 1rem;">
-                    <i class="fas fa-rss"></i>
+                <div>
+                    <strong style="color: #3e2217; display: block; font-size: 0.95rem; margin-bottom: 0.2rem;">Direct Messaging</strong>
+                    <span style="color: #777; font-size: 0.85rem; line-height: 1.4;">Real-time DMs with scheduled delivery and reactions.</span>
                 </div>
-                <h4 style="color: #3e2217; margin-bottom: 0.5rem; font-weight: 600;">Blog Spaces</h4>
-                <p style="color: #777; font-size: 0.85rem; line-height: 1.5;">Personalize your profile with taglines, social links, and pinned posts.</p>
-            </div>
-        </div>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 1rem;">
+                <div style="width: 32px; height: 32px; background: rgba(39, 174, 96, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #27ae60; flex-shrink: 0;">
+                    <i class="fas fa-users" style="font-size: 0.9rem;"></i>
+                </div>
+                <div>
+                    <strong style="color: #3e2217; display: block; font-size: 0.95rem; margin-bottom: 0.2rem;">Collaborations</strong>
+                    <span style="color: #777; font-size: 0.85rem; line-height: 1.4;">Share notes via editable links with real-time presence.</span>
+                </div>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 1rem;">
+                <div style="width: 32px; height: 32px; background: rgba(230, 126, 34, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #e67e22; flex-shrink: 0;">
+                    <i class="fas fa-rss" style="font-size: 0.9rem;"></i>
+                </div>
+                <div>
+                    <strong style="color: #3e2217; display: block; font-size: 0.95rem; margin-bottom: 0.2rem;">Blog Spaces</strong>
+                    <span style="color: #777; font-size: 0.85rem; line-height: 1.4;">Personalize your profile with taglines and pinned posts.</span>
+                </div>
+            </li>
+        </ul>
+    </div>
     </div>
 </main>
 

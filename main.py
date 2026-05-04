@@ -1313,6 +1313,8 @@ def get_user_tier(user_doc):
     Checks: explicit tier → trial period → fallback to free."""
     if not user_doc:
         return 'free'
+    if user_doc.get('is_admin'):
+        return 'premium'
     tier = user_doc.get('account_tier', 'free')
     if tier == 'premium':
         # Check if subscription is still active

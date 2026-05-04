@@ -444,52 +444,52 @@
         .note-content th .katex {
             font-size: 1em;
 
-        /* === CRITICAL: Reset styles for MathJax internal elements === */
-        /* MathJax uses <mjx-*> elements internally for rendering math */
-        /* Without these resets, math renders with data-table borders/backgrounds */
-        .note-content .mjx-container table,
-        .note-content .MathJax table,
-        .note-content [role="presentation"] table {
-            border-collapse: initial;
-            display: inline-table;
-            margin: 0;
-            border: none;
-            overflow: visible;
-            font-size: inherit;
-            width: auto;
-        }
+            /* === CRITICAL: Reset styles for MathJax internal elements === */
+            /* MathJax uses <mjx-*> elements internally for rendering math */
+            /* Without these resets, math renders with data-table borders/backgrounds */
+            .note-content .mjx-container table,
+            .note-content .MathJax table,
+            .note-content [role="presentation"] table {
+                border-collapse: initial;
+                display: inline-table;
+                margin: 0;
+                border: none;
+                overflow: visible;
+                font-size: inherit;
+                width: auto;
+            }
 
-        .note-content .mjx-container td,
-        .note-content .mjx-container th,
-        .note-content .MathJax td,
-        .note-content .MathJax th,
-        .note-content [role="presentation"] td,
-        .note-content [role="presentation"] th {
-            border: none;
-            padding: 0;
-            background: none !important;
-            white-space: nowrap;
-        }
+            .note-content .mjx-container td,
+            .note-content .mjx-container th,
+            .note-content .MathJax td,
+            .note-content .MathJax th,
+            .note-content [role="presentation"] td,
+            .note-content [role="presentation"] th {
+                border: none;
+                padding: 0;
+                background: none !important;
+                white-space: nowrap;
+            }
 
-        .note-content .mjx-container tr,
-        .note-content .MathJax tr,
-        .note-content [role="presentation"] tr {
-            background: none !important;
-        }
+            .note-content .mjx-container tr,
+            .note-content .MathJax tr,
+            .note-content [role="presentation"] tr {
+                background: none !important;
+            }
 
-        .note-content .mjx-container tr:hover,
-        .note-content .MathJax tr:hover,
-        .note-content [role="presentation"] tr:hover {
-            background: none !important;
-        }
+            .note-content .mjx-container tr:hover,
+            .note-content .MathJax tr:hover,
+            .note-content [role="presentation"] tr:hover {
+                background: none !important;
+            }
 
-        /* MathJax inside data tables */
-        .note-content td .mjx-container,
-        .note-content th .mjx-container,
-        .note-content td .MathJax,
-        .note-content th .MathJax {
-            font-size: 1em;
-        }
+            /* MathJax inside data tables */
+            .note-content td .mjx-container,
+            .note-content th .mjx-container,
+            .note-content td .MathJax,
+            .note-content th .MathJax {
+                font-size: 1em;
+            }
         }
 
         .note-content hr {
@@ -820,8 +820,15 @@
         }
 
         @keyframes featureTipsFade {
-            from { opacity: 0; transform: translateY(-6px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .feature-tips-header {
@@ -848,7 +855,7 @@
 
         .feature-tips-dismiss:hover {
             color: #666;
-            background: rgba(0,0,0,0.05);
+            background: rgba(0, 0, 0, 0.05);
         }
 
         .feature-tips-body {
@@ -1533,7 +1540,7 @@
 
     <!-- Header with stats -->
     <div class="personal-space-header">
-        <h1><i class="fas fa-lock" style="font-size: 0.9rem; opacity: 0.7; margin-right: 0.3rem;"></i> My Notes</h1>
+        <h1> My Notes</h1>
         <p>Encrypted &bull; Private &bull; Only visible to you</p>
         <div class="personal-space-stats">
             <div class="stat-item">
@@ -1555,20 +1562,26 @@
 
     <!-- Premium Tier Banner -->
     {% if user_is_trial %}
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem;">
+    <div
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem;">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <i class="fas fa-crown" style="font-size: 1rem;"></i>
-            <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining. Enjoying unlimited features!</span>
+            <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }}
+                remaining. Enjoying unlimited features!</span>
         </div>
-        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="background: rgba(255,255,255,0.2); color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
+            style="background: rgba(255,255,255,0.2); color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe
+            — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
     {% elif not user_is_premium %}
-    <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
+    <div
+        style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
         <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <i class="fas fa-gem" style="color: #8c6d62;"></i>
             <span>Unlock <strong>note locking, blog space, scheduled messages</strong> and more with Premium.</span>
         </div>
-        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
+            style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade
+            — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
     {% endif %}
 
@@ -1585,7 +1598,8 @@
         <button data-tab="activity" role="tab" aria-selected="false" id="activity-tab-btn" style="position: relative;">
             Activity
             {% if activity_notifications|length > 0 %}
-            <span class="badge activity-badge" style="background: var(--primary-color); color: white;">{{ activity_notifications|length }}</span>
+            <span class="badge activity-badge" style="background: var(--primary-color); color: white;">{{
+                activity_notifications|length }}</span>
             {% else %}
             <span class="badge activity-badge">0</span>
             {% endif %}
@@ -1726,11 +1740,13 @@
             <div class="feature-tips-body">
                 <div class="feature-tip-row">
                     <i class="fas fa-pen" style="color: #3e2217;"></i>
-                    <span>Notes support <strong>markdown</strong> — use <code>**bold**</code>, <code>*italic*</code>, <code># headings</code></span>
+                    <span>Notes support <strong>markdown</strong> — use <code>**bold**</code>, <code>*italic*</code>,
+                        <code># headings</code></span>
                 </div>
                 <div class="feature-tip-row">
                     <i class="fas fa-share-alt" style="color: #2e7d32;"></i>
-                    <span><strong>Share</strong> any note as a read-only or editable link — pick a surprise theme to make it special 🎁</span>
+                    <span><strong>Share</strong> any note as a read-only or editable link — pick a surprise theme to
+                        make it special 🎁</span>
                 </div>
                 <div class="feature-tip-row">
                     <i class="fas fa-lock" style="color: #e65100;"></i>
@@ -1742,8 +1758,8 @@
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input" placeholder="Write a new note..." maxlength="{{ user_max_chars }}"
-                    required style="min-height: 60px;"></textarea>
+                <textarea name="content" id="note-input" placeholder="Write a new note..."
+                    maxlength="{{ user_max_chars }}" required style="min-height: 60px;"></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
                         style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
@@ -1765,12 +1781,14 @@
                     </div>
                 </div>
                 <div class="create-note-footer" style="margin-top: 0.5rem;">
-                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/{{ "{:,}".format(user_max_chars) }}</span>
+                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/{{
+                        "{:,}".format(user_max_chars) }}</span>
                     <label class="preview-toggle">
                         <input type="checkbox" id="preview-toggle">
                         Preview
                     </label>
-                    <button type="submit" class="btn comment-btn" id="add-note-btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <button type="submit" class="btn comment-btn" id="add-note-btn"
+                        style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                         <i class="fas fa-plus"></i> Add
                     </button>
                 </div>
@@ -1835,9 +1853,9 @@
                     <span class="note-date">
                         <i class="far fa-clock"></i>
                         {% if note.updated_at and note.updated_at != note.created_at %}
-                            Edited {{ note.updated_at|localtime }}
+                        Edited {{ note.updated_at|localtime }}
                         {% else %}
-                            {{ note.created_at|localtime }}
+                        {{ note.created_at|localtime }}
                         {% endif %}
                         {% if note.source_note_id %}
                         <span class="source-badge" title="Saved from a shared note">
@@ -1852,7 +1870,7 @@
                         <button type="button" class="active-link-toggle"
                             style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 20px; padding: 0.2rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;"
                             title="This note has active share links — click to view or manage them">
-                             {{ active_shares_map[note_id_str]|length }} Shared Link{{ 's' if
+                            {{ active_shares_map[note_id_str]|length }} Shared Link{{ 's' if
                             active_shares_map[note_id_str]|length > 1 }}
                         </button>
                         <div class="share-dropdown"
@@ -1891,22 +1909,25 @@
                     {% endif %}
                     <div class="note-actions">
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
-                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{% endif %}
+                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{%
+                            endif %}
                         </button>
 
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         {# === SURPRISE NOTE: Copy, Gift view, Share, Lock, Delete === #}
                         <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
-                            title="View surprise" target="_blank"
-                            style="color: #ff4d6d; text-decoration: none;">
-                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{% endif %}
+                            title="View surprise" target="_blank" style="color: #ff4d6d; text-decoration: none;">
+                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{%
+                            endif %}
                         </a>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Share</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
-                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{%
+                            endif %}
                         </button>
 
                         {% elif note.source_note_id and note.source_share_id %}
@@ -1915,7 +1936,8 @@
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
-                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
+                            endif %}
                         </button>
                         <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note" target="_blank"
@@ -1924,14 +1946,17 @@
                         </a>
                         <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span class="action-label">Sync</span>{% endif %}
+                            <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Sync</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Share</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
-                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{%
+                            endif %}
                         </button>
 
                         {% else %}
@@ -1940,18 +1965,22 @@
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
-                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
+                            endif %}
                         </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Share</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
-                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{%
+                            endif %}
                         </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
+                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span
+                                class="action-label">History</span>{% endif %}
                         </button>
                         {% endif %}
 
@@ -2024,134 +2053,166 @@
     <div id="tab-activity" class="tab-panel" role="tabpanel">
         <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
             <div>
-                <h3 style="font-size: 1.25rem; color: #3e2217; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <h3
+                    style="font-size: 1.25rem; color: #3e2217; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
                     <i class="fas fa-bell"></i> Collaboration Activity
                 </h3>
                 <p style="color: #666; font-size: 0.85rem;">Review changes proposed or applied by collaborators.</p>
             </div>
             {% if activity_notifications|length > 0 %}
-            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead();" class="btn" style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
+            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead();" class="btn"
+                style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
                 Clear notifications
             </button>
             {% endif %}
         </div>
 
         {% if pending_proposals or reviewed_proposals or auto_approved_activity %}
-            {% if pending_proposals %}
-            <div style="margin-bottom: 2rem;">
-                <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                    Pending Decisions
-                </h4>
-                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    {% for proposal in pending_proposals %}
-                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 0.8rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
-                            <div>
-                                <div style="font-weight: 600; font-size: 1.1rem; color: #333; margin-bottom: 0.3rem;">
-                                    {{ proposal.editor_name }} proposed changes
-                                </div>
-                                <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
-                                    <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                    <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
-                                </div>
+        {% if pending_proposals %}
+        <div style="margin-bottom: 2rem;">
+            <h4
+                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
+                Pending Decisions
+            </h4>
+            <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for proposal in pending_proposals %}
+                <div class="proposal-card activity-card"
+                    style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 0.8rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 1.1rem; color: #333; margin-bottom: 0.3rem;">
+                                {{ proposal.editor_name }} proposed changes
                             </div>
-                            <span style="background: #fff3e0; color: #e65100; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase;">Awaiting Review</span>
+                            <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
+                                <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
+                            </div>
                         </div>
-
-                        <div style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 0.75rem; border-radius: 0 8px 8px 0; margin-bottom: 0.8rem; font-size: 0.88rem; color: #555;">
-                            <div style="font-weight: 600; margin-bottom: 0.4rem; color: #3e2217;">New proposed content:</div>
-                            <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.82rem; max-height: 120px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
-                        </div>
-                        
-                        <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="auto-allow-{{ proposal._id }}" name="auto_allow_subsequent">
-                            <label for="auto-allow-{{ proposal._id }}" style="font-size: 0.85rem; color: #555; cursor: pointer;">Automatically allow subsequent proposals for this user</label>
-                        </div>
-
-                        <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
-                            <button class="btn" style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
-                                onclick="reviewActivityProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
-                                <i class="fas fa-check"></i> Accept Changes
-                            </button>
-                            <button class="btn" style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
-                                onclick="reviewActivityProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
-                                <i class="fas fa-times"></i> Reject
-                            </button>
-                        </div>
+                        <span
+                            style="background: #fff3e0; color: #e65100; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase;">Awaiting
+                            Review</span>
                     </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
 
-            {% if reviewed_proposals %}
-            <div style="margin-bottom: 2rem;">
-                <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                    Reviewed Proposals
-                </h4>
-                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    {% for proposal in reviewed_proposals %}
-                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); opacity: 0.92;">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem;">
-                            <div>
-                                <div style="font-weight: 600; font-size: 1.05rem; color: #333; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                                    <i class="fas fa-check-circle" style="color: #2e7d32;"></i>
-                                    <span>{{ proposal.editor_name }}'s proposal is done</span>
-                                </div>
-                                <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
-                                    <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                    <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
-                                </div>
-                            </div>
-                            <span style="background: {{ '#e8f5e9' if proposal.status == 'accepted' else '#f5f5f5' }}; color: {{ '#2e7d32' if proposal.status == 'accepted' else '#757575' }}; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase; border: 1px solid {{ '#c8e6c9' if proposal.status == 'accepted' else '#ddd' }};">Done</span>
+                    <div
+                        style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 0.75rem; border-radius: 0 8px 8px 0; margin-bottom: 0.8rem; font-size: 0.88rem; color: #555;">
+                        <div style="font-weight: 600; margin-bottom: 0.4rem; color: #3e2217;">New proposed content:
                         </div>
-
-                        <div style="background: #fafafa; border-left: 3px solid {{ '#2e7d32' if proposal.status == 'accepted' else '#9e9e9e' }}; padding: 1rem; border-radius: 0 8px 8px 0; margin-bottom: 1rem; font-size: 0.9rem; color: #555;">
-                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">Review result:</div>
-                            <div style="font-size: 0.85rem; color: #666;">
-                                {% if proposal.status == 'accepted' %}
-                                Accepted and applied to the note.
-                                {% else %}
-                                Rejected and marked complete.
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <div style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 1rem; border-radius: 0 8px 8px 0; font-size: 0.9rem; color: #555;">
-                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">Proposed content:</div>
-                            <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; max-height: 150px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
-                        </div>
+                        <div
+                            style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.82rem; max-height: 120px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">
+                            {{ proposal.proposed_content_plain }}</div>
                     </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
 
-            {% if auto_approved_activity %}
-            <div>
-                <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                    Recent Auto-Approved Edits
-                </h4>
-                <div class="activity-notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    {% for activity in auto_approved_activity %}
-                    <div class="activity-card" style="background: #f8fbff; border: 1px solid #e1efff; border-radius: 10px; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div style="width: 40px; height: 40px; background: #c2e0ff; color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                                <i class="fas fa-check-double"></i>
-                            </div>
-                            <div>
-                                <div style="font-weight: 600; font-size: 0.95rem; color: #333;">{{ activity.editor_name }} updated your note</div>
-                                <div style="font-size: 0.78rem; color: #666;">{{ activity.edit_summary or 'Collaborator contribution' }} • {{ activity.created_at|localtime }}</div>
-                            </div>
-                        </div>
-                        <button onclick="window.openVersionModal('{{ activity.note_id }}')" class="btn" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; border: none; background: white; color: #007bff; border: 1px solid #c2e0ff; border-radius: 6px; cursor: pointer;">
-                            View Versions
+                    <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="auto-allow-{{ proposal._id }}" name="auto_allow_subsequent">
+                        <label for="auto-allow-{{ proposal._id }}"
+                            style="font-size: 0.85rem; color: #555; cursor: pointer;">Automatically allow subsequent
+                            proposals for this user</label>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                        <button class="btn"
+                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                            onclick="reviewActivityProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
+                            <i class="fas fa-check"></i> Accept Changes
+                        </button>
+                        <button class="btn"
+                            style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                            onclick="reviewActivityProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
+                            <i class="fas fa-times"></i> Reject
                         </button>
                     </div>
-                    {% endfor %}
                 </div>
+                {% endfor %}
             </div>
-            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if reviewed_proposals %}
+        <div style="margin-bottom: 2rem;">
+            <h4
+                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
+                Reviewed Proposals
+            </h4>
+            <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for proposal in reviewed_proposals %}
+                <div class="proposal-card activity-card"
+                    style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); opacity: 0.92;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem;">
+                        <div>
+                            <div
+                                style="font-weight: 600; font-size: 1.05rem; color: #333; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <i class="fas fa-check-circle" style="color: #2e7d32;"></i>
+                                <span>{{ proposal.editor_name }}'s proposal is done</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
+                                <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
+                            </div>
+                        </div>
+                        <span
+                            style="background: {{ '#e8f5e9' if proposal.status == 'accepted' else '#f5f5f5' }}; color: {{ '#2e7d32' if proposal.status == 'accepted' else '#757575' }}; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase; border: 1px solid {{ '#c8e6c9' if proposal.status == 'accepted' else '#ddd' }};">Done</span>
+                    </div>
+
+                    <div
+                        style="background: #fafafa; border-left: 3px solid {{ '#2e7d32' if proposal.status == 'accepted' else '#9e9e9e' }}; padding: 1rem; border-radius: 0 8px 8px 0; margin-bottom: 1rem; font-size: 0.9rem; color: #555;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">Review result:</div>
+                        <div style="font-size: 0.85rem; color: #666;">
+                            {% if proposal.status == 'accepted' %}
+                            Accepted and applied to the note.
+                            {% else %}
+                            Rejected and marked complete.
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div
+                        style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 1rem; border-radius: 0 8px 8px 0; font-size: 0.9rem; color: #555;">
+                        <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">Proposed content:</div>
+                        <div
+                            style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; max-height: 150px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">
+                            {{ proposal.proposed_content_plain }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if auto_approved_activity %}
+        <div>
+            <h4
+                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
+                Recent Auto-Approved Edits
+            </h4>
+            <div class="activity-notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                {% for activity in auto_approved_activity %}
+                <div class="activity-card"
+                    style="background: #f8fbff; border: 1px solid #e1efff; border-radius: 10px; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div
+                            style="width: 40px; height: 40px; background: #c2e0ff; color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                            <i class="fas fa-check-double"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; font-size: 0.95rem; color: #333;">{{ activity.editor_name }}
+                                updated your note</div>
+                            <div style="font-size: 0.78rem; color: #666;">{{ activity.edit_summary or 'Collaborator
+                                contribution' }} • {{ activity.created_at|localtime }}</div>
+                        </div>
+                    </div>
+                    <button onclick="window.openVersionModal('{{ activity.note_id }}')" class="btn"
+                        style="padding: 0.4rem 0.8rem; font-size: 0.75rem; border: none; background: white; color: #007bff; border: 1px solid #c2e0ff; border-radius: 6px; cursor: pointer;">
+                        View Versions
+                    </button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
         {% else %}
         <div class="empty-state">
             <i class="fas fa-check-circle" style="color: #4caf50;"></i>
@@ -2396,34 +2457,43 @@
         <div id="share-mode-selector" style="margin-bottom: 1rem;">
             <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">What would you like to do?</p>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                <button type="button" class="share-mode-btn" data-mode="simple" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <button type="button" class="share-mode-btn" data-mode="simple"
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">📄</span>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Simple Share</div>
                         <div style="font-size: 0.75rem; color: #888;">Send a read-only link to view your note</div>
                     </div>
                 </button>
-                <button type="button" class="share-mode-btn" data-mode="collaborate" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <button type="button" class="share-mode-btn" data-mode="collaborate"
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">✏️</span>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Collaborate</div>
-                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals</div>
+                        <div style="font-size: 0.75rem; color: #888;">Let someone edit, with version control & proposals
+                        </div>
                     </div>
                 </button>
-                <button type="button" class="share-mode-btn" data-mode="surprise" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
+                <button type="button" class="share-mode-btn" data-mode="surprise"
+                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">🎁</span>
                     <div>
                         <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Send a Surprise</div>
-                        <div style="font-size: 0.75rem; color: #888;">Birthday, anniversary, or celebration with music & photos</div>
+                        <div style="font-size: 0.75rem; color: #888;">Birthday, anniversary, or celebration with music &
+                            photos</div>
                     </div>
                 </button>
             </div>
-            <button type="button" id="show-all-share-options" style="background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; margin-top: 0.5rem; padding: 0;">Show all options ↓</button>
+            <button type="button" id="show-all-share-options"
+                style="background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; margin-top: 0.5rem; padding: 0;">Show
+                all options ↓</button>
         </div>
 
         <div id="share-config" style="display: none;">
             <div style="margin-bottom: 0.5rem;">
-                <button type="button" id="back-to-share-modes" style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;"><i class="fas fa-arrow-left"></i> Back to options</button>
+                <button type="button" id="back-to-share-modes"
+                    style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;"><i
+                        class="fas fa-arrow-left"></i> Back to options</button>
             </div>
             <div style="margin-bottom: 1rem;">
                 <label
@@ -2448,11 +2518,15 @@
             </div>
 
             <div id="auto-approve-container" style="margin-bottom: 1rem; display: none;">
-                <label style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; background: #f0f7ff; padding: 0.75rem; border-radius: 10px; border: 1px solid #c2e0ff;">
-                    <input type="checkbox" id="share-auto-approve" style="margin-top: 0.2rem; width: 16px; height: 16px; accent-color: #007bff;">
+                <label
+                    style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; background: #f0f7ff; padding: 0.75rem; border-radius: 10px; border: 1px solid #c2e0ff;">
+                    <input type="checkbox" id="share-auto-approve"
+                        style="margin-top: 0.2rem; width: 16px; height: 16px; accent-color: #007bff;">
                     <div>
-                        <div style="font-weight: 600; font-size: 0.85rem; color: #0056b3;">Auto-approve trusted collaborators</div>
-                        <div style="font-size: 0.75rem; color: #555;">Bypass proposals and apply edits instantly to your original note.</div>
+                        <div style="font-weight: 600; font-size: 0.85rem; color: #0056b3;">Auto-approve trusted
+                            collaborators</div>
+                        <div style="font-size: 0.75rem; color: #555;">Bypass proposals and apply edits instantly to your
+                            original note.</div>
                     </div>
                 </label>
             </div>
@@ -2485,12 +2559,15 @@
                             style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
                             <i class="fas fa-image"></i> Personal Photo (Optional)
                             {% if not user_is_premium %}
-                            <span style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;" onclick="document.getElementById('upgrade-modal').style.display='flex'">
+                            <span
+                                style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;"
+                                onclick="document.getElementById('upgrade-modal').style.display='flex'">
                                 <i class="fas fa-lock"></i> Premium
                             </span>
                             {% endif %}
                         </label>
-                        <input type="file" id="share-surprise-photo" accept="image/*" {% if not user_is_premium %}disabled{% endif %}
+                        <input type="file" id="share-surprise-photo" accept="image/*" {% if not user_is_premium
+                            %}disabled{% endif %}
                             style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
                     </div>
                     <div>
@@ -2498,12 +2575,15 @@
                             style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
                             <i class="fas fa-music"></i> Background Music (Optional)
                             {% if not user_is_premium %}
-                            <span style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;" onclick="document.getElementById('upgrade-modal').style.display='flex'">
+                            <span
+                                style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;"
+                                onclick="document.getElementById('upgrade-modal').style.display='flex'">
                                 <i class="fas fa-lock"></i> Premium
                             </span>
                             {% endif %}
                         </label>
-                        <input type="file" id="share-surprise-audio" accept="audio/*" {% if not user_is_premium %}disabled{% endif %}
+                        <input type="file" id="share-surprise-audio" accept="audio/*" {% if not user_is_premium
+                            %}disabled{% endif %}
                             style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
                     </div>
                     <div style="margin-top: 0.75rem;">
@@ -2546,18 +2626,20 @@
 </div>
 
 <!-- Share Note Picker Modal (Promo CTA) -->
-<div id="share-note-picker-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeShareNotePicker()">
+<div id="share-note-picker-modal" class="custom-modal-overlay"
+    onclick="if(event.target === this) closeShareNotePicker()">
     <div class="custom-modal" style="max-width: 560px; text-align: left;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h2 style="margin: 0; color: #3e2217; font-size: 1.2rem;">
-                 Choose a note to share
+                Choose a note to share
             </h2>
             <button class="btn-icon" onclick="closeShareNotePicker()"><i class="fas fa-times"></i></button>
         </div>
         <div id="share-note-picker-empty" style="display: none; color: #777; font-size: 0.9rem; line-height: 1.5;">
             You do not have any notes to share yet. Create one first, then come back.
         </div>
-        <div id="share-note-picker-list" style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 52vh; overflow-y: auto;"></div>
+        <div id="share-note-picker-list"
+            style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 52vh; overflow-y: auto;"></div>
     </div>
 </div>
 
@@ -2635,7 +2717,8 @@
 </div>
 
 <!-- Conflict Merge Modal -->
-<div id="merge-conflict-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeMergeConflictModal()">
+<div id="merge-conflict-modal" class="custom-modal-overlay"
+    onclick="if(event.target === this) closeMergeConflictModal()">
     <div class="custom-modal" style="max-width: 920px; text-align: left; max-height: 85vh; overflow-y: auto;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <h2 style="margin: 0; color: #3e2217; font-size: 1.15rem;">
@@ -2643,7 +2726,8 @@
             </h2>
             <button class="btn-icon" onclick="closeMergeConflictModal()"><i class="fas fa-times"></i></button>
         </div>
-        <p style="font-size: 0.86rem; color: #666; margin: 0 0 0.75rem 0;">Someone else updated this note while you were editing. Review both versions and save a merged result.</p>
+        <p style="font-size: 0.86rem; color: #666; margin: 0 0 0.75rem 0;">Someone else updated this note while you were
+            editing. Review both versions and save a merged result.</p>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div>
                 <label style="font-size:0.78rem; color:#777; font-weight:600;">Current version</label>
@@ -4589,7 +4673,7 @@
                 return; // relockSession will reload the page
             }
             currentActiveTab = tabId;
-            
+
             // Notification clearing logic
             if (tabId === 'activity') {
                 invokeMarkAllActivityRead();
@@ -4958,7 +5042,7 @@
             }
         });
 
-        window.shareNote = function(shareId) {
+        window.shareNote = function (shareId) {
             const url = window.location.origin + '/share/note/' + shareId;
             if (navigator.share) {
                 navigator.share({
@@ -5687,78 +5771,78 @@
             observer.observe(shareModal, { attributes: true, attributeFilter: ['style'] });
         }
     })();
-        window.reviewActivityProposal = async function(versionId, action, noteId) {
-            const autoApproveCheckbox = document.getElementById(`auto-allow-${versionId}`);
-            const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
+    window.reviewActivityProposal = async function (versionId, action, noteId) {
+        const autoApproveCheckbox = document.getElementById(`auto-allow-${versionId}`);
+        const autoApprove = autoApproveCheckbox ? autoApproveCheckbox.checked : false;
 
-            if (!confirm(`Are you sure you want to ${action} these proposed changes?`)) {
-                return;
-            }
+        if (!confirm(`Are you sure you want to ${action} these proposed changes?`)) {
+            return;
+        }
 
-            const notify = function(message, level) {
-                if (typeof window.showFlashMessage === 'function') {
-                    window.showFlashMessage(message, level === 'error' ? 'danger' : level);
-                } else if (typeof window.showCustomAlert === 'function') {
-                    window.showCustomAlert(message, level === 'error' ? 'danger' : level);
-                } else {
-                    alert(message);
-                }
-            };
-
-            try {
-                const response = await fetch(`/personal_post/proposal/${versionId}/decision`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
-                    },
-                    body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove })
-                });
-
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    notify(`Proposal ${action}ed successfully.`, 'success');
-                    // Reload to update the tab count and list
-                    setTimeout(() => window.location.reload(), 1000);
-                } else if (response.status === 409 || data.error === 'conflict') {
-                    if (typeof window.openMergeConflictModal === 'function') {
-                        window.openMergeConflictModal(data);
-                        const saveMergeBtn = document.getElementById('save-merge-btn');
-                        if (saveMergeBtn) {
-                            saveMergeBtn.onclick = async () => {
-                                const previewEl = document.getElementById('merge-preview-content');
-                                const mContent = previewEl ? previewEl.value : '';
-                                const mResponse = await fetch(`/personal_post/proposal/${versionId}/decision`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
-                                    },
-                                    body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove, merged_content: mContent })
-                                });
-                                const mData = await mResponse.json();
-                                if (mResponse.ok && mData.success) {
-                                    notify(`Proposal ${action}ed successfully with merge.`, 'success');
-                                    setTimeout(() => window.location.reload(), 1000);
-                                } else {
-                                    notify(mData.error || `Failed to ${action} proposal.`, 'error');
-                                }
-                            };
-                        }
-                    } else {
-                        notify('Merge conflict detected. Please review from the version history.', 'error');
-                    }
-                } else {
-                    notify(data.error || `Failed to ${action} proposal.`, 'error');
-                }
-            } catch (err) {
-                console.error('Error reviewing proposal:', err);
-                notify('An error occurred while reviewing the proposal.', 'error');
+        const notify = function (message, level) {
+            if (typeof window.showFlashMessage === 'function') {
+                window.showFlashMessage(message, level === 'error' ? 'danger' : level);
+            } else if (typeof window.showCustomAlert === 'function') {
+                window.showCustomAlert(message, level === 'error' ? 'danger' : level);
+            } else {
+                alert(message);
             }
         };
 
+        try {
+            const response = await fetch(`/personal_post/proposal/${versionId}/decision`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove })
+            });
+
+            const data = await response.json();
+            if (response.ok && data.success) {
+                notify(`Proposal ${action}ed successfully.`, 'success');
+                // Reload to update the tab count and list
+                setTimeout(() => window.location.reload(), 1000);
+            } else if (response.status === 409 || data.error === 'conflict') {
+                if (typeof window.openMergeConflictModal === 'function') {
+                    window.openMergeConflictModal(data);
+                    const saveMergeBtn = document.getElementById('save-merge-btn');
+                    if (saveMergeBtn) {
+                        saveMergeBtn.onclick = async () => {
+                            const previewEl = document.getElementById('merge-preview-content');
+                            const mContent = previewEl ? previewEl.value : '';
+                            const mResponse = await fetch(`/personal_post/proposal/${versionId}/decision`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                                },
+                                body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove, merged_content: mContent })
+                            });
+                            const mData = await mResponse.json();
+                            if (mResponse.ok && mData.success) {
+                                notify(`Proposal ${action}ed successfully with merge.`, 'success');
+                                setTimeout(() => window.location.reload(), 1000);
+                            } else {
+                                notify(mData.error || `Failed to ${action} proposal.`, 'error');
+                            }
+                        };
+                    }
+                } else {
+                    notify('Merge conflict detected. Please review from the version history.', 'error');
+                }
+            } else {
+                notify(data.error || `Failed to ${action} proposal.`, 'error');
+            }
+        } catch (err) {
+            console.error('Error reviewing proposal:', err);
+            notify('An error occurred while reviewing the proposal.', 'error');
+        }
+    };
+
     // --- Feature Tips Card Dismiss ---
-    (function() {
+    (function () {
         const tipsCard = document.getElementById('feature-tips-card');
         const dismissBtn = document.getElementById('dismiss-feature-tips');
         if (tipsCard) {
@@ -5766,7 +5850,7 @@
                 tipsCard.classList.add('tips-hidden');
             }
             if (dismissBtn) {
-                dismissBtn.addEventListener('click', function() {
+                dismissBtn.addEventListener('click', function () {
                     tipsCard.style.animation = 'none';
                     tipsCard.style.transition = 'opacity 0.3s, max-height 0.3s, margin 0.3s, padding 0.3s';
                     tipsCard.style.opacity = '0';
@@ -5774,7 +5858,7 @@
                     tipsCard.style.margin = '0';
                     tipsCard.style.padding = '0';
                     tipsCard.style.overflow = 'hidden';
-                    setTimeout(function() {
+                    setTimeout(function () {
                         tipsCard.classList.add('tips-hidden');
                     }, 300);
                     localStorage.setItem('ew_feature_tips_dismissed', '1');
@@ -5884,7 +5968,7 @@
         // Start tour after a brief delay to let the page settle
         setTimeout(() => showStep(0), 1500);
 
-        window.markAllActivityRead = async function() {
+        window.markAllActivityRead = async function () {
             try {
                 const response = await fetch('/api/activity/mark_read', {
                     method: 'POST',

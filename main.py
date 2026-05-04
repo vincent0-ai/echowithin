@@ -8329,7 +8329,9 @@ def edit_personal_post(post_id):
         if not content:
             return jsonify({'error': 'Content cannot be empty'}), 400
 
-        content = content[:20000]
+        # Enforce max length
+        max_chars = current_user.get_limit('max_chars_per_note')
+        content = content[:max_chars]
         obj_id = safe_object_id(post_id)
         if not obj_id:
             return jsonify({'error': 'Invalid note ID'}), 400
@@ -10800,14 +10802,15 @@ def api_edit_shared_note(share_id):
     if not content or not content.strip():
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content.strip()[:100000]
+    owner_id_str = str(share.get('owner_id', ''))
+    owner_doc = users_conf.find_one({'_id': ObjectId(owner_id_str)})
+    max_chars = get_limit(owner_doc, 'max_chars_per_note')
+    content = content.strip()[:max_chars]
 
     # Load current note state once for conflict checks/proposals.
     note = personal_posts_conf.find_one({'_id': share['note_id']})
     if not note:
         return jsonify({'error': 'Note not found'}), 404
-
-    owner_id_str = str(share.get('owner_id', ''))
     is_owner = current_user.is_authenticated and str(current_user.id) == owner_id_str
     note_updated_at = note.get('updated_at') or note.get('created_at')
     if isinstance(note_updated_at, datetime.datetime) and note_updated_at.tzinfo is None:
@@ -11246,7 +11249,8 @@ def api_decide_note_proposal(version_id):
                 'diff_text': build_unified_diff_text(current_plain, proposed_plain)
             }), 409
 
-        final_plain = (merged_content or proposed_plain).strip()[:20000]
+        max_chars = current_user.get_limit('max_chars_per_note')
+        final_plain = (merged_content or proposed_plain).strip()[:max_chars]
         final_encrypted = encrypt_note(final_plain, user_id=current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
 

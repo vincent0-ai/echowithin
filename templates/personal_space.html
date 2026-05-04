@@ -2678,7 +2678,7 @@
             </h2>
             <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
         </div>
-        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="20000"
+        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="{{ user_max_chars }}"
             placeholder="Edit your note..."></textarea>
         <div style="margin-top: 0.6rem;">
             <input type="text" id="edit-note-summary" maxlength="180"
@@ -2704,7 +2704,7 @@
                     style="width: 100%; padding: 0.4rem; border: 1px solid #ddd; border-radius: 8px; font-size: 0.85rem;">
             </div>
         </div>
-        <div class="edit-char-count"><span id="edit-char-count">0</span>/20000</div>
+        <div class="edit-char-count"><span id="edit-char-count">0</span>/{{ "{:,}".format(user_max_chars) }}</div>
         <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
             <button onclick="closeEditModal()" class="btn edit-btn"
                 style="padding: 0.6rem 1.2rem; border-radius: 8px;">Cancel</button>

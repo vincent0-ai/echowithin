@@ -3264,7 +3264,10 @@ def register():
             return redirect(url_for("confirm", email=email, next=next_url))
         else:
             flash('Username and password are required', "danger")
-    return render_template("auth.html", active_page='register', form='register')
+    
+    page_title = "Join EchoWithin - Secure Notes & Collaborative Platform"
+    page_description = "Create an account on EchoWithin to secure your personal notes, share surprise themed notes with photos and music, and collaborate with others in our community."
+    return render_template("auth.html", active_page='register', form='register', title=page_title, description=page_description)
 
 @app.route("/confirm/<email>", methods=['GET', 'POST']) # snyk:disable=security-issue
 @csrf.exempt
@@ -3381,7 +3384,10 @@ def login():
             return resp
         else:
             flash("Wrong details provided", "danger")
-    return render_template("auth.html", active_page='login', form='login')
+            
+    page_title = "Log in to EchoWithin - Your Secure Personal Space"
+    page_description = "Log in to EchoWithin to access your private encrypted notes, collaborate with others, and share surprise themed notes."
+    return render_template("auth.html", active_page='login', form='login', title=page_title, description=page_description)
 
 @app.route('/google_login')
 @limits(calls=10, period=TIME)
@@ -3728,8 +3734,8 @@ def service_worker():
 @app.route('/')
 @app.route('/dashboard')
 def dashboard():
-    page_title = "EchoWithin - Social Networking & Idea Sharing"
-    page_description = "EchoWithin is a modern, privacy-focused platform for sharing and discussing ideas. Join our community of creative thinkers and innovators today."
+    page_title = "EchoWithin - Secure Notes, Collaboration & Community"
+    page_description = "EchoWithin is a modern platform for secure private notes, collaborative idea sharing, and surprise themed notes with photos and music. Join our community to organize your thoughts and let your voice echo within."
     # Generate absolute URL for social sharing preview image
     meta_image = url_for('static', filename='og-image.png', _external=True) 
     
@@ -4104,8 +4110,8 @@ def blog():
         # Cache the result for 15 seconds
         blog_feed_cache['main'] = latest_posts_prepared
 
-    page_title = "Blog - EchoWithin"
-    page_description = "Explore the latest posts and discussions from the EchoWithin community."
+    page_title = "EchoWithin Blog - Community & Collaboration"
+    page_description = "Explore the latest posts, collaborative discussions, and ideas from the EchoWithin community. Share your own thoughts or co-author notes with friends."
     return render_template("blog.html", latest_posts=latest_posts_prepared, active_page='blog', title=page_title, description=page_description)
 
 @app.route("/blog/all")
@@ -7014,8 +7020,8 @@ def offline():
 
 @app.route('/about')
 def about():
-    page_title = "About EchoWithin"
-    page_description = "Learn more about EchoWithin, our mission, and the team behind the platform."
+    page_title = "About EchoWithin - Secure Personal Notes & Community"
+    page_description = "Learn how EchoWithin empowers you with secure personal notes, collaborative features, and surprise themed notes with photos and music to share with loved ones."
     return render_template("about.html", title=page_title, description=page_description)
 
 
@@ -11963,6 +11969,7 @@ def sitemap():
     static_pages = [
         ('/', 1.0, 'daily'),
         ('/blog', 0.9, 'hourly'),
+        ('/auth', 0.8, 'monthly'),
         ('/about', 0.5, 'monthly'),
         ('/faq', 0.5, 'monthly'),
         ('/terms', 0.3, 'yearly'),

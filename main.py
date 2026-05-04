@@ -8740,6 +8740,7 @@ def view_shared_note(share_id):
                     'surprise_theme': surprise_theme,
                     'is_read': False
                 })
+                app.logger.info(f"Recorded access history for share {share_id} by {visitor_name}")
                 session[notif_id_key] = str(res.inserted_id)
                 session[f'notified_{share_id}'] = True # Backward compatibility
             elif current_user.is_authenticated:
@@ -10635,20 +10636,36 @@ def api_get_share_history(share_id):
     if not share:
         return jsonify({'error': 'Unauthorized or invalid share'}), 403
     
-    history = list(unlock_notifications_conf.find(
-        {'share_id': share_id},
-        sort=[('unlocked_at', -1)]
-    ).limit(50))
-    
-    result = []
-    for h in history:
-        result.append({
-            '_id': str(h['_id']),
-            'unlocked_by_name': h.get('unlocked_by_name', 'Anonymous visitor'),
-            'unlocked_at': h['unlocked_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if h.get('unlocked_at') else None,
-            'surprise_theme': h.get('surprise_theme', 'none')
-        })
-    return jsonify(result)
+    try:
+        history = list(unlock_notifications_conf.find(
+            {'share_id': share_id},
+            sort=[('unlocked_at', -1)]
+        ).limit(100))
+        
+        result = []
+        for h in history:
+            # Ensure we have a timestamp
+            ts = h.get('unlocked_at')
+            if ts:
+                if isinstance(ts, datetime.datetime):
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=datetime.timezone.utc)
+                    ts_iso = ts.isoformat().replace('+00:00', 'Z')
+                else:
+                    ts_iso = str(ts)
+            else:
+                ts_iso = None
+
+            result.append({
+                '_id': str(h['_id']),
+                'unlocked_by_name': h.get('unlocked_by_name', 'Anonymous visitor'),
+                'unlocked_at': ts_iso,
+                'surprise_theme': h.get('surprise_theme', 'none')
+            })
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"Error fetching share history for {share_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @app.route('/personal_post/versions/<post_id>')

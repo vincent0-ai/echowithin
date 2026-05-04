@@ -1154,6 +1154,21 @@
             color: #b71c1c;
         }
 
+        .merge-textarea {
+            transition: min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: zoom-in;
+            resize: vertical;
+        }
+        .merge-textarea.expanded-pad {
+            min-height: 500px !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-color: #3e2217 !important;
+            cursor: zoom-out;
+        }
+        .merge-textarea:focus {
+            cursor: text;
+        }
+
         .version-meta {
             font-size: 0.74rem;
             color: #777;
@@ -3063,9 +3078,58 @@
             currentEl.value = payload.current_content || '';
             incomingEl.value = payload.incoming_content || '';
             previewEl.value = payload.merge_preview || payload.incoming_content || '';
+            
+            // Reset expansion states
+            [currentEl, incomingEl, previewEl].forEach(el => {
+                el.classList.remove('expanded-pad');
+                el.style.height = 'auto';
+            });
+
             mergeModal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            
+            // Auto-expand initial heights
+            setTimeout(() => {
+                [currentEl, incomingEl, previewEl].forEach(el => {
+                    el.style.height = (el.scrollHeight + 5) + 'px';
+                });
+            }, 100);
         };
+
+        // Initialize merge textarea helpers
+        document.addEventListener('DOMContentLoaded', () => {
+            const pads = ['merge-current-content', 'merge-incoming-content', 'merge-preview-content'];
+            pads.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.classList.add('merge-textarea');
+                el.addEventListener('click', (e) => {
+                    // Only toggle if not already focused for typing
+                    if (document.activeElement !== el) {
+                        el.classList.toggle('expanded-pad');
+                        if (el.classList.contains('expanded-pad')) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }
+                });
+                el.addEventListener('input', () => {
+                    el.style.height = 'auto';
+                    el.style.height = (el.scrollHeight + 5) + 'px';
+                });
+            });
+
+            // Sync scrolling
+            const currentPad = document.getElementById('merge-current-content');
+            const incomingPad = document.getElementById('merge-incoming-content');
+            if (currentPad && incomingPad) {
+                currentPad.addEventListener('scroll', () => {
+                    incomingPad.scrollTop = currentPad.scrollTop;
+                });
+                incomingPad.addEventListener('scroll', () => {
+                    currentPad.scrollTop = incomingPad.scrollTop;
+                });
+            }
+        });
 
         window.closeVersionModal = function () {
             if (!versionModal) return;
@@ -3380,11 +3444,16 @@
                         return;
                     }
 
+                    if (!data || data.length === 0) {
+                        historyList.innerHTML = '<p style="text-align:center; color:#888; padding: 2rem 0;">No access history recorded yet.</p>';
+                        return;
+                    }
+
                     historyList.innerHTML = data.map(h => `
                         <div class="history-item">
                             <div>
                                 <div class="history-user"><i class="far fa-user"></i> ${h.unlocked_by_name}</div>
-                                <div class="history-time">${new Date(h.unlocked_at).toLocaleString()}</div>
+                                <div class="history-time">${h.unlocked_at ? new Date(h.unlocked_at).toLocaleString() : 'Recently'}</div>
                             </div>
                             ${h.surprise_theme !== 'none' ? `<span class="history-theme">${h.surprise_theme}</span>` : ''}
                         </div>

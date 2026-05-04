@@ -3068,10 +3068,10 @@
                     // Premium feature gate
                     if (typeof window.showCustomConfirm === 'function') {
                         window.showCustomConfirm(data.error + ' Go to settings to upgrade?', confirmed => {
-                            if (confirmed) window.location.href = '{{ url_for("profile_settings") }}#premium';
+                            if (confirmed) window.location.href = '{{ url_for("profile_settings", username=current_user.username) }}#premium';
                         });
                     } else if (confirm(data.error + ' Go to settings to upgrade?')) {
-                        window.location.href = '{{ url_for("profile_settings") }}#premium';
+                        window.location.href = '{{ url_for("profile_settings", username=current_user.username) }}#premium';
                     }
                 } else if (window.showFlashMessage) {
                     window.showFlashMessage(data.error, 'danger');

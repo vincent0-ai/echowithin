@@ -9131,6 +9131,9 @@ def view_shared_note(share_id):
             'event_type': 'proposal'
         }) > 0
 
+    owner_doc = users_conf.find_one({'_id': ObjectId(note_owner_id)})
+    owner_max_chars = get_limit(owner_doc, 'max_chars_per_note')
+
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
@@ -9147,7 +9150,8 @@ def view_shared_note(share_id):
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))),
                            valentine_audio=decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))),
-                           use_typewriter=use_typewriter)
+                           use_typewriter=use_typewriter,
+                           owner_max_chars=owner_max_chars)
 
 
 @app.route('/shared_note/save/<share_id>', methods=['POST'])

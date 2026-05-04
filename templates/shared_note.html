@@ -150,7 +150,7 @@
                 </div>
                 {% endif %}
                 <div class="edit-interface" id="edit-interface" style="display: none;">
-                    <textarea id="edit-content" placeholder="Type something...">{{ content }}</textarea>
+                    <textarea id="edit-content" placeholder="Type something..." maxlength="{{ owner_max_chars }}">{{ content }}</textarea>
                     <input type="text" id="edit-summary" maxlength="180"
                         placeholder="Edit summary (optional, helps owner review)"
                         style="width:100%; margin-bottom:0.75rem; border:1px solid #ddd; border-radius:8px; padding:0.55rem; font-size:0.85rem;">
@@ -337,7 +337,7 @@
             </div>
             {% endif %}
             <div class="edit-interface" id="edit-interface" style="display: none;">
-                <textarea id="edit-content" placeholder="Type something..." maxlength="100000">{{ content }}</textarea>
+                <textarea id="edit-content" placeholder="Type something..." maxlength="{{ owner_max_chars }}">{{ content }}</textarea>
                 <div class="editor-stats" id="editor-stats">
                     <div class="stat">
                         <span id="word-count">0 words</span>
@@ -478,7 +478,7 @@
                 </div>
                 <div style="margin-top:0.7rem;">
                     <label style="font-size:0.78rem; color:#777; font-weight:600;">Suggested merge</label>
-                    <textarea id="merge-preview-content" style="width:100%; min-height:180px; border:1px solid #ccc; border-radius:8px; padding:0.6rem; font-size:0.83rem;"></textarea>
+                    <textarea id="merge-preview-content" maxlength="{{ owner_max_chars }}" style="width:100%; min-height:180px; border:1px solid #ccc; border-radius:8px; padding:0.6rem; font-size:0.83rem;"></textarea>
                 </div>
                 <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
                     <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>

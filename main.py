@@ -8905,6 +8905,21 @@ def api_create_share(post_id):
         # Handle file uploads
         if surprise_theme != 'none':
             photo_file = request.files.get('valentine_photo')
+            audio_file = request.files.get('valentine_audio')
+            
+            # --- Premium check for media uploads ---
+            has_media = False
+            if photo_file and photo_file.filename:
+                has_media = True
+            if audio_file and audio_file.filename:
+                has_media = True
+                
+            if has_media and not is_premium(user_doc):
+                return jsonify({
+                    'error': 'Uploading custom photos and music to surprise notes is a Premium feature. Upgrade to unlock!',
+                    'upgrade': True
+                }), 403
+
             if photo_file and photo_file.filename:
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
                 if ext in ALLOWED_IMAGE_EXTENSIONS:

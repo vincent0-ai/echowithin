@@ -2484,17 +2484,27 @@
                         <label
                             style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
                             <i class="fas fa-image"></i> Personal Photo (Optional)
+                            {% if not user_is_premium %}
+                            <span style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;" onclick="document.getElementById('upgrade-modal').style.display='flex'">
+                                <i class="fas fa-lock"></i> Premium
+                            </span>
+                            {% endif %}
                         </label>
-                        <input type="file" id="share-surprise-photo" accept="image/*"
-                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff;">
+                        <input type="file" id="share-surprise-photo" accept="image/*" {% if not user_is_premium %}disabled{% endif %}
+                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
                     </div>
                     <div>
                         <label
                             style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
                             <i class="fas fa-music"></i> Background Music (Optional)
+                            {% if not user_is_premium %}
+                            <span style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;" onclick="document.getElementById('upgrade-modal').style.display='flex'">
+                                <i class="fas fa-lock"></i> Premium
+                            </span>
+                            {% endif %}
                         </label>
-                        <input type="file" id="share-surprise-audio" accept="audio/*"
-                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff;">
+                        <input type="file" id="share-surprise-audio" accept="audio/*" {% if not user_is_premium %}disabled{% endif %}
+                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
                     </div>
                     <div style="margin-top: 0.75rem;">
                         <label

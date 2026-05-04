@@ -1723,7 +1723,7 @@
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input" placeholder="Write a new note..." maxlength="20000"
+                <textarea name="content" id="note-input" placeholder="Write a new note..." maxlength="100000"
                     required style="min-height: 60px;"></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
@@ -1746,7 +1746,7 @@
                     </div>
                 </div>
                 <div class="create-note-footer" style="margin-top: 0.5rem;">
-                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/20000</span>
+                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/100000</span>
                     <label class="preview-toggle">
                         <input type="checkbox" id="preview-toggle">
                         Preview

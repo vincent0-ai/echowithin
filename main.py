@@ -3042,6 +3042,7 @@ def send_ntfy_notification(message, title, tags=""):
 @app.route('/register', methods=['GET', 'POST'])
 @limits(calls=15, period=TIME)
 def register():
+    next_url = request.args.get('next')
     if request.method == "POST":
         username = request.form.get("username")
         email = request.form.get("email")
@@ -3054,17 +3055,17 @@ def register():
             app.logger.warning(f"Honeypot filled during registration from IP {request.remote_addr}")
             # Trick the bot by faking a successful registration so it stops retrying
             flash("Account created successfully! Please check your email for a confirmation code.", "success")
-            return redirect(url_for('login'))
+            return redirect(url_for('login', next=next_url))
 
         if not agree_terms:
             flash("You must agree to the Terms of Service to create an account.", "danger")
-            return redirect(url_for('register', form='register'))
+            return redirect(url_for('register', form='register', next=next_url))
 
         if username and password and email:
             # 1. Check if username is already taken
             if users_conf.find_one({'username': username}):
                 flash("This username is already taken. Please choose a different one.", "danger")
-                return redirect(url_for('register', form='register'))
+                return redirect(url_for('register', form='register', next=next_url))
 
             # 2. Check if email is already registered
             existing_user_by_email = users_conf.find_one({'email': email})
@@ -3072,7 +3073,7 @@ def register():
                 # If the user is already confirmed, direct them to login
                 if existing_user_by_email.get('is_confirmed'):
                     flash("This email is already registered. Please log in.", "info")
-                    return redirect(url_for('login'))
+                    return redirect(url_for('login', next=next_url))
                 else:
                     # If not confirmed, resend the confirmation code
                     flash("This email is already registered but not confirmed. We've sent you a new confirmation code.", "info")
@@ -3081,7 +3082,7 @@ def register():
                     code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
                     auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
                     send_code(email, gen_code)
-                    return redirect(url_for("confirm", email=email))
+                    return redirect(url_for("confirm", email=email, next=next_url))
 
             # 3. If both username and email are new, create the new user
             hashed_password = generate_password_hash(password)
@@ -3114,7 +3115,7 @@ def register():
             except Exception as e:
                 app.logger.error(f"Failed to enqueue ntfy notification for new user '{username}': {e}")
 
-            return redirect(url_for("confirm", email=email))
+            return redirect(url_for("confirm", email=email, next=next_url))
         else:
             flash('Username and password are required', "danger")
     return render_template("auth.html", active_page='register', form='register')
@@ -3123,13 +3124,14 @@ def register():
 @csrf.exempt
 @limits(calls=15, period=TIME)
 def confirm(email):
+    next_url = request.args.get('next')
     user = users_conf.find_one({"email": email})
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for("register"))
+        return redirect(url_for("register", next=next_url))
     if user.get('is_confirmed'):
         flash("Your email is already confirmed. Please login.", "info")
-        return redirect(url_for("login"))
+        return redirect(url_for("login", next=next_url))
     if request.method == 'POST':
         confirm_code = request.form.get("code")
         if confirm_code:
@@ -3138,7 +3140,7 @@ def confirm(email):
             # Check if code exists and is not expired
             if not hashed_obj:
                 flash("No confirmation code found for this email.", "danger")
-                return redirect(url_for("confirm", email=email))
+                return redirect(url_for("confirm", email=email, next=next_url))
 
             # Check for expiry (use UTC-aware comparison)
             code_exp = hashed_obj.get('code_expiry')
@@ -3146,7 +3148,7 @@ def confirm(email):
                 code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
             if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
                 flash("This confirmation code has expired. Please register again to get a new code.", "danger")
-                return redirect(url_for("register"))
+                return redirect(url_for("register", next=next_url))
 
             if hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():
                 users_conf.update_one(
@@ -3155,7 +3157,7 @@ def confirm(email):
                 )
                 auth_conf.delete_one({'email': email})  # Clean up auth_conf after confirmation
                 flash("Your email has been confirmed successfully. Please login.", "success")
-                return redirect(url_for("login"))
+                return redirect(url_for("login", next=next_url))
             else:
                 flash("The confirmation code is incorrect.", "danger")
         else:
@@ -3188,18 +3190,18 @@ def login():
         # Check if user exists but signed up via Google (no password set)
         if user and user.get('password') is None:
             flash("This account was created with Google. Please sign in with Google, or use 'Forgot Password' to set a password.", "info")
-            return redirect(url_for('login'))
+            return redirect(url_for('login', next=request.args.get('next')))
 
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
                 flash('Please confirm your account first', "danger")
-                return redirect(url_for('login'))
+                return redirect(url_for('login', next=request.args.get('next')))
 
             # Check if the user is banned
             if user.get('is_banned'):
                 logout_user()
                 flash('Your account has been suspended. Please contact support.', 'danger')
-                return redirect(url_for('login'))
+                return redirect(url_for('login', next=request.args.get('next')))
 
 
             user_obj = User(user)
@@ -3269,6 +3271,16 @@ def google_login():
             except Exception:
                 pass
     
+    # Store next URL for redirect after callback
+    next_url = request.args.get('next')
+    if next_url:
+        session['oauth_next'] = next_url
+        if redis_cache:
+            try:
+                redis_cache.setex(f"oauth_next:{state}", 600, next_url)
+            except Exception:
+                pass
+    
     return redirect(authorization_url)
 
 @app.route('/google_callback')
@@ -3290,8 +3302,17 @@ def google_callback():
             if 'oauth_state' not in session and redis_cache.exists(f"oauth_state:{state_from_url}"):
                 session['oauth_state'] = state_from_url
                 app.logger.info(f"Recovered state from Redis for {state_from_url[:8]}...")
+
+            # Recover next URL if missing from session
+            if 'oauth_next' not in session:
+                next_url_saved = redis_cache.get(f"oauth_next:{state_from_url}")
+                if next_url_saved:
+                    if isinstance(next_url_saved, bytes):
+                        next_url_saved = next_url_saved.decode('utf-8')
+                    session['oauth_next'] = next_url_saved
+                    app.logger.info(f"Recovered next URL from Redis for state {state_from_url[:8]}...")
         except Exception as e:
-            app.logger.warning(f"Error checking Redis for state recovery: {e}")
+            app.logger.warning(f"Error checking Redis for recovery: {e}")
 
     # If user is already authenticated (duplicate request after successful login, or already logged in in browser),
     # we still check if we need to redirect back to the mobile app before going to home.
@@ -3365,6 +3386,7 @@ def google_callback():
         try:
             redis_cache.delete(f"oauth_state:{state_from_url}")
             redis_cache.delete(f"oauth_platform:{state_from_url}")
+            redis_cache.delete(f"oauth_next:{state_from_url}")
         except Exception:
             pass
     google = OAuth2Session(GOOGLE_CLIENT_ID, token=token)
@@ -7538,7 +7560,13 @@ def personal_space():
     for item in activity_raw:
         # Decrypt necessary fields for the preview if it's a proposal
         if item.get('event_type') == 'proposal':
-            item['proposed_content_plain'] = item.get('proposed_content_plain') or decrypt_note(item.get('proposed_content', ''), user_id=current_user.id)
+            # Use multi-candidate decryption for proposals
+            candidates = _candidate_user_ids(
+                item.get('content_owner_id'), 
+                item.get('editor_id'), 
+                current_user.id
+            )
+            item['proposed_content_plain'] = _decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or decrypt_note(item.get('proposed_content', ''), user_id=candidates[0] if candidates else None)
         
         # Fetch original note basic info
         note_info = personal_posts_conf.find_one({'_id': item['note_id']}, {'created_at': 1})
@@ -8692,7 +8720,8 @@ def view_shared_note(share_id):
             )
         except Exception as e:
             app.logger.error(f"Failed to mark notifications as read: {e}")
-    elif surprise_theme != 'none':
+    else:
+        # Record access history for ALL shared notes (standard and surprises)
         try:
             notif_id_key = f'notif_id_{share_id}'
             notif_id = session.get(notif_id_key)
@@ -9233,9 +9262,10 @@ def handle_send_dm(data):
 @login_required
 def handle_typing(data):
     """Broadcasts that the current user is typing to the recipient."""
-    recipient_id = str(data.get('recipient_id'))
+    recipient_id = data.get('recipient_id')
     if recipient_id:
-        recipient_room = f"user_{recipient_id}"
+        recipient_id_str = str(recipient_id)
+        recipient_room = f"user_{recipient_id_str}"
         emit('user_typing', {
             'sender_id': str(current_user.id),
             'username': current_user.username
@@ -9247,7 +9277,8 @@ def handle_stop_typing(data):
     """Broadcasts that the user has stopped typing."""
     recipient_id = data.get('recipient_id')
     if recipient_id:
-        recipient_room = f"user_{recipient_id}"
+        recipient_id_str = str(recipient_id)
+        recipient_room = f"user_{recipient_id_str}"
         emit('user_stop_typing', {
             'sender_id': str(current_user.id)
         }, room=recipient_room)
@@ -10379,6 +10410,10 @@ def api_edit_shared_note(share_id):
     if not share or share['permissions'] != 'edit':
         return jsonify({'error': 'Unauthorized or invalid share'}), 403
 
+    # Authentication is no longer strictly required for proposals, 
+    # but guests are always forced into the proposal flow.
+    pass
+
     # Check access code session
     if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
         return jsonify({'error': 'Access code required'}), 401
@@ -10416,8 +10451,11 @@ def api_edit_shared_note(share_id):
     encrypted_content = encrypt_note(content, user_id=owner_id_str if owner_id_str else None)
 
     # Contributor flow: create a pending proposal from the contributor for owner approval.
-    if not is_owner and not share.get('auto_approve', False):
-        editor_name = 'Anonymous'
+    # Guests and non-owners without auto-approval ALWAYS create proposals.
+    can_auto_approve = current_user.is_authenticated and share.get('auto_approve', False)
+    
+    if not is_owner and not can_auto_approve:
+        editor_name = 'Guest'
         editor_id = None
         if current_user.is_authenticated:
             editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
@@ -10598,7 +10636,7 @@ def api_get_share_history(share_id):
         return jsonify({'error': 'Unauthorized or invalid share'}), 403
     
     history = list(unlock_notifications_conf.find(
-        {'share_id': share_id, 'owner_id': ObjectId(current_user.id)},
+        {'share_id': share_id},
         sort=[('unlocked_at', -1)]
     ).limit(50))
     

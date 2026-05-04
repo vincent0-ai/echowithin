@@ -1876,12 +1876,19 @@
                         </button>
 
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
-                        {# === SURPRISE NOTE: only Copy, Gift view, Delete === #}
+                        {# === SURPRISE NOTE: Copy, Gift view, Share, Lock, Delete === #}
                         <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
                             title="View surprise" target="_blank"
                             style="color: #ff4d6d; text-decoration: none;">
-                            <i class="fas fa-gift"></i>
+                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{% endif %}
                         </a>
+                        <button type="button" class="btn-icon share-note-btn" title="Share note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                        </button>
+                        <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
+                        </button>
 
                         {% elif note.source_note_id and note.source_share_id %}
                         {# === SAVED COPY from shared note: Copy, Edit, External link, Sync, Delete === #}
@@ -1899,6 +1906,13 @@
                         <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
                             <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span class="action-label">Sync</span>{% endif %}
+                        </button>
+                        <button type="button" class="btn-icon share-note-btn" title="Share note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                        </button>
+                        <button type="button" class="btn-icon lock-note-btn" title="Lock note" data-id="{{ note._id }}">
+                            <i class="fas fa-lock"></i>{% if show_icon_labels %}<span class="action-label">Lock</span>{% endif %}
                         </button>
 
                         {% else %}
@@ -2009,10 +2023,10 @@
                 <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
                     Pending Decisions
                 </h4>
-                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
                     {% for proposal in pending_proposals %}
-                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
-                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 0.8rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
                             <div>
                                 <div style="font-weight: 600; font-size: 1.1rem; color: #333; margin-bottom: 0.3rem;">
                                     {{ proposal.editor_name }} proposed changes
@@ -2025,9 +2039,9 @@
                             <span style="background: #fff3e0; color: #e65100; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase;">Awaiting Review</span>
                         </div>
 
-                        <div style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 1rem; border-radius: 0 8px 8px 0; margin-bottom: 1rem; font-size: 0.9rem; color: #555;">
-                            <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">New proposed content:</div>
-                            <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; max-height: 150px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
+                        <div style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 0.75rem; border-radius: 0 8px 8px 0; margin-bottom: 0.8rem; font-size: 0.88rem; color: #555;">
+                            <div style="font-weight: 600; margin-bottom: 0.4rem; color: #3e2217;">New proposed content:</div>
+                            <div style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.82rem; max-height: 120px; overflow-y: auto; padding: 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
                         </div>
                         
                         <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
@@ -2056,9 +2070,9 @@
                 <h4 style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
                     Reviewed Proposals
                 </h4>
-                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 1rem;">
+                <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
                     {% for proposal in reviewed_proposals %}
-                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); opacity: 0.92;">
+                    <div class="proposal-card activity-card" style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); opacity: 0.92;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem;">
                             <div>
                                 <div style="font-weight: 600; font-size: 1.05rem; color: #333; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
@@ -2885,6 +2899,25 @@
         });
     }
 
+    async function sha256(message) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+    }
+
+    async function getStoredPinHash() {
+        const userId = "{{ current_user.id }}";
+        return localStorage.getItem(`pin_hash_${userId}`);
+    }
+
+    async function storePinHash(pin) {
+        const userId = "{{ current_user.id }}";
+        const hash = await sha256(pin + userId);
+        localStorage.setItem(`pin_hash_${userId}`, hash);
+    }
+
     async function processPin() {
         if (pinAction === 'verify') {
             verifyPin(currentPin);
@@ -2897,6 +2930,23 @@
 
     async function verifyPin(pin) {
         try {
+            // Try offline verification first if offline
+            if (!navigator.onLine) {
+                const storedHash = await getStoredPinHash();
+                if (storedHash) {
+                    const userId = "{{ current_user.id }}";
+                    const inputHash = await sha256(pin + userId);
+                    if (inputHash === storedHash) {
+                        // Offline success!
+                        handlePinSuccess();
+                        return;
+                    } else {
+                        handlePinError();
+                        return;
+                    }
+                }
+            }
+
             const resp = await fetch('/api/app_lock/verify', {
                 method: 'POST',
                 headers: {
@@ -2909,39 +2959,49 @@
             const data = await resp.json();
 
             if (resp.ok) {
-                // Success! Give visual feedback
-                const dots = document.querySelectorAll('#pin-dots .pin-dot');
-                dots.forEach(d => {
-                    d.classList.add('success');
-                    d.classList.remove('filled');
-                });
-
-                setTimeout(() => {
-                    // Force the hash to 'locked' before reloading so we come back to this tab
-                    window.location.hash = 'locked';
-                    window.location.reload();
-                }, 500);
+                // Online success - update local cache
+                await storePinHash(pin);
+                handlePinSuccess();
             } else {
-                // Error - shake and clear
-                const dots = document.querySelectorAll('#pin-dots .pin-dot');
-                dots.forEach(d => {
-                    d.classList.add('error');
-                    d.classList.remove('filled');
-                });
-
-                const error = document.getElementById('pin-error');
-                if (error) error.textContent = data.error || 'Incorrect PIN';
-
-                setTimeout(() => {
-                    currentPin = '';
-                    dots.forEach(d => d.classList.remove('error'));
-                    updatePinDots();
-                }, 600);
+                handlePinError(data.error);
             }
-        } catch (err) {
-            console.error('PIN error:', err);
-            alert('Security error. Please try again.');
+        } catch (e) {
+            console.error('PIN verification error:', e);
+            handlePinError('Network error. Check connection.');
         }
+    }
+
+    function handlePinSuccess() {
+        // Success! Give visual feedback
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach(d => {
+            d.classList.add('success');
+            d.classList.remove('filled');
+        });
+
+        setTimeout(() => {
+            // Force the hash to 'locked' before reloading so we come back to this tab
+            window.location.hash = 'locked';
+            window.location.reload();
+        }, 500);
+    }
+
+    function handlePinError(errorMsg) {
+        // Error - shake and clear
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach(d => {
+            d.classList.add('error');
+            d.classList.remove('filled');
+        });
+
+        const errorEl = document.getElementById('pin-error');
+        if (errorEl) errorEl.textContent = errorMsg || 'Incorrect PIN';
+
+        setTimeout(() => {
+            currentPin = '';
+            dots.forEach(d => d.classList.remove('error'));
+            updatePinDots();
+        }, 600);
     }
 
     // Toggle Note Lock
@@ -4837,11 +4897,43 @@
             loadExistingShares(currentShareNoteId);
         }
 
-        document.querySelectorAll('.share-note-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                openShareModalForNote(btn.dataset.id);
-            });
+        // Global event delegation for note actions
+        document.addEventListener('click', (e) => {
+            // Share button
+            const shareBtn = e.target.closest('.share-note-btn');
+            if (shareBtn) {
+                const noteId = shareBtn.dataset.id;
+                const shareId = shareBtn.dataset.shareId; // For "Shared with me" section if we use it
+                if (shareId) {
+                    window.shareNote(shareId);
+                } else {
+                    openShareModalForNote(noteId);
+                }
+                return;
+            }
+
+            // Lock button
+            const lockBtn = e.target.closest('.lock-note-btn');
+            if (lockBtn) {
+                toggleNoteLock(lockBtn.dataset.id);
+                return;
+            }
         });
+
+        window.shareNote = function(shareId) {
+            const url = window.location.origin + '/share/note/' + shareId;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'EchoWithin Shared Note',
+                    url: url
+                }).catch(err => console.log('Error sharing:', err));
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    if (window.showToast) showToast('Link copied to clipboard!');
+                    else alert('Link copied to clipboard!');
+                });
+            }
+        };
 
         // Promo CTA: let user choose which note to share first.
         const pickerModal = document.getElementById('share-note-picker-modal');
@@ -4924,12 +5016,7 @@
             });
         }
 
-        document.querySelectorAll('.lock-note-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const noteId = btn.dataset.id;
-                toggleNoteLock(noteId);
-            });
-        });
+        // Listeners handled via event delegation above
 
         function openShareModal() {
             const modal = document.getElementById('share-modal');

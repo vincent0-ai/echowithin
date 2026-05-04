@@ -438,8 +438,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         const CURRENT_USER_ID = '{{ current_user.id if current_user.is_authenticated else "" }}';
-        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }
-    };
+        const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
     const postSlug = '{{ post.slug }}';
 
     // Nest comments that were rendered flat by the server

@@ -254,37 +254,43 @@
 
     <!-- Premium Subscription Section -->
     <div id="premium" class="form-group" style="margin-top: 2rem; border-top: 1px solid #e0e0e0; padding-top: 1.5rem;">
-      <h2 style="font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #8e44ad;">
+      <h2
+        style="font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; color: #3e2217;">
         <i class="fas fa-crown"></i> EchoWithin Premium
       </h2>
-      
+
       {% if user_is_premium and not user_is_trial %}
-        <p style="font-size: 0.9rem; color: #2e7d32; margin-bottom: 1rem; font-weight: 500;">
-          <i class="fas fa-check-circle"></i> You are currently subscribed to Premium.
-        </p>
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">
-          Your subscription is active and managed via Paystack. You have access to all premium features including unlimited notes, app lock, and scheduled messages.
-        </p>
+      <p style="font-size: 0.9rem; color: #2e7d32; margin-bottom: 1rem; font-weight: 500;">
+        <i class="fas fa-check-circle"></i> You are currently subscribed to Premium.
+      </p>
+      <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">
+        Your subscription is active and managed via Paystack. You have access to all premium features including
+        unlimited notes, app lock, and scheduled messages.
+      </p>
       {% else %}
-        {% if user_is_trial %}
-          <div style="background: linear-gradient(to right, #f3e5f5, #fff); border-left: 4px solid #8e44ad; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
-            <p style="margin: 0; font-weight: 500; color: #8e44ad;">
-              <i class="fas fa-gift"></i> You are on a Premium Trial
-            </p>
-            <p style="margin: 0; font-size: 0.85rem; color: #666; margin-top: 0.2rem;">
-              Your trial expires in {{ trial_days_remaining }} day(s). Upgrade now to keep your premium features.
-            </p>
-          </div>
-        {% else %}
-          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
-            Upgrade to Premium for KSH {{ PREMIUM_PRICE_KSH }}/month to unlock unlimited notes, app lock, scheduled messages, and your own public blog space!
-          </p>
-        {% endif %}
-        
-        <button type="button" id="upgrade-btn" class="btn" style="background: linear-gradient(135deg, #8e44ad, #9b59b6); color: white; border: none; padding: 0.6rem 1.5rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;" onclick="initializePayment()">
-          <i class="fas fa-rocket"></i> Upgrade to Premium
-        </button>
-        <div id="payment-error" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; display: none;"></div>
+      {% if user_is_trial %}
+      <div
+        style="background: linear-gradient(to right, #f5eadd, #fff); border-left: 4px solid #3e2217; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+        <p style="margin: 0; font-weight: 500; color: #3e2217;">
+          <i class="fas fa-gift"></i> You are on a Premium Trial
+        </p>
+        <p style="margin: 0; font-size: 0.85rem; color: #666; margin-top: 0.2rem;">
+          Your trial expires in {{ trial_days_remaining }} day(s). Upgrade now to keep your premium features.
+        </p>
+      </div>
+      {% else %}
+      <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+        Upgrade to Premium for KSH {{ PREMIUM_PRICE_KSH }}/month to unlock unlimited notes, app lock, scheduled
+        messages, and your own public blog space!
+      </p>
+      {% endif %}
+
+      <button type="button" id="upgrade-btn" class="btn"
+        style="background: linear-gradient(135deg, #3e2217, #5a3828); color: white; border: none; padding: 0.6rem 1.5rem; font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;"
+        onclick="initializePayment()">
+        Upgrade to Premium
+      </button>
+      <div id="payment-error" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; display: none;"></div>
       {% endif %}
     </div>
 
@@ -715,11 +721,11 @@
     const btn = document.getElementById('upgrade-btn');
     const errorDiv = document.getElementById('payment-error');
     const originalText = btn.innerHTML;
-    
+
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...';
     btn.disabled = true;
     errorDiv.style.display = 'none';
-    
+
     try {
       const resp = await fetch('/api/paystack/initialize', {
         method: 'POST',
@@ -729,7 +735,7 @@
         }
       });
       const data = await resp.json();
-      
+
       if (resp.ok && data.authorization_url) {
         window.location.href = data.authorization_url;
       } else {

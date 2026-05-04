@@ -7216,8 +7216,13 @@ def paystack_initialize():
     
     callback_url = urljoin(request.host_url, url_for('paystack_callback'))
     
+    user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    user_email = user_doc.get('email') if user_doc else None
+    if not user_email:
+        user_email = f"{current_user.username}@echowithin.xyz" # Fallback if email is missing
+    
     data = {
-        "email": current_user.email,
+        "email": user_email,
         "amount": PREMIUM_PRICE_KSH * 100, # Paystack expects lowest currency unit (cents/kobo)
         "callback_url": callback_url,
         "metadata": {

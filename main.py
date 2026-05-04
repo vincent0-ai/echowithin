@@ -7515,7 +7515,7 @@ def export_data(username):
         })
 
     # Comments authored by user
-    for comment in comments_conf.find({'author': user.get('username')}):
+    for comment in comments_conf.find({'author_id': user_id}):
         export['comments'].append({
             'id': str(comment['_id']),
             'post_id': str(comment.get('post_id', '')),

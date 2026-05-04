@@ -1274,6 +1274,112 @@ def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
         return str(dt)
 
 
+# ----------------- Premium Tier Configuration -----------------
+# Philosophy: Free tier is generous and fully usable.
+# Premium unlocks power-user features at KSH 50/month.
+# 3-day free trial for all new users.
+TIER_LIMITS = {
+    'free': {
+        'max_notes': 50,
+        'max_chars_per_note': 20000,
+        'max_share_links_per_note': 3,
+        'max_surprise_notes': 20,         # total surprise notes (shared with theme)
+        'note_locking': False,
+        'blog_space': False,
+        'scheduled_messages': False,
+        'version_history_days': 7,
+        'auto_approve_collab': False,
+    },
+    'premium': {
+        'max_notes': 99999,               # effectively unlimited
+        'max_chars_per_note': 100000,
+        'max_share_links_per_note': 99999, # effectively unlimited
+        'max_surprise_notes': 99999,
+        'note_locking': True,
+        'blog_space': True,
+        'scheduled_messages': True,
+        'version_history_days': 365,
+        'auto_approve_collab': True,
+    }
+}
+
+PREMIUM_TRIAL_DAYS = 3
+PREMIUM_PRICE_KSH = 50  # per month
+
+
+def get_user_tier(user_doc):
+    """Determine the effective tier for a user document (dict from MongoDB).
+    Checks: explicit tier → trial period → fallback to free."""
+    if not user_doc:
+        return 'free'
+    tier = user_doc.get('account_tier', 'free')
+    if tier == 'premium':
+        # Check if subscription is still active
+        premium_until = user_doc.get('premium_until')
+        if premium_until:
+            if isinstance(premium_until, datetime.datetime):
+                if premium_until.tzinfo is None:
+                    premium_until = premium_until.replace(tzinfo=datetime.timezone.utc)
+                if datetime.datetime.now(datetime.timezone.utc) > premium_until:
+                    return 'free'  # expired
+        return 'premium'
+    # Check 3-day free trial for new accounts
+    join_date = user_doc.get('join_date')
+    if join_date:
+        if isinstance(join_date, datetime.datetime):
+            if join_date.tzinfo is None:
+                join_date = join_date.replace(tzinfo=datetime.timezone.utc)
+            trial_end = join_date + datetime.timedelta(days=PREMIUM_TRIAL_DAYS)
+            if datetime.datetime.now(datetime.timezone.utc) < trial_end:
+                return 'premium'  # still on free trial
+    return 'free'
+
+
+def get_limit(user_doc, limit_name):
+    """Get a specific limit value for a user based on their tier."""
+    tier = get_user_tier(user_doc)
+    return TIER_LIMITS.get(tier, TIER_LIMITS['free']).get(limit_name)
+
+
+def is_premium(user_doc):
+    """Check if a user currently has premium access (paid or trial)."""
+    return get_user_tier(user_doc) == 'premium'
+
+
+def is_on_trial(user_doc):
+    """Check if a user is on their free trial (not a paid subscriber)."""
+    if not user_doc:
+        return False
+    tier = user_doc.get('account_tier', 'free')
+    if tier == 'premium':
+        return False  # paid subscriber, not trial
+    join_date = user_doc.get('join_date')
+    if join_date:
+        if isinstance(join_date, datetime.datetime):
+            if join_date.tzinfo is None:
+                join_date = join_date.replace(tzinfo=datetime.timezone.utc)
+            trial_end = join_date + datetime.timedelta(days=PREMIUM_TRIAL_DAYS)
+            if datetime.datetime.now(datetime.timezone.utc) < trial_end:
+                return True
+    return False
+
+
+def get_trial_days_remaining(user_doc):
+    """Returns number of trial days remaining, or 0."""
+    if not user_doc:
+        return 0
+    join_date = user_doc.get('join_date')
+    if not join_date or user_doc.get('account_tier') == 'premium':
+        return 0
+    if isinstance(join_date, datetime.datetime):
+        if join_date.tzinfo is None:
+            join_date = join_date.replace(tzinfo=datetime.timezone.utc)
+        trial_end = join_date + datetime.timedelta(days=PREMIUM_TRIAL_DAYS)
+        remaining = (trial_end - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+        return max(0, int(remaining / 86400) + (1 if remaining % 86400 > 0 else 0))
+    return 0
+
+
 class User(UserMixin):
     def __init__(self, user_data):
         # Store user-specific properties
@@ -1285,10 +1391,28 @@ class User(UserMixin):
         self.last_activity_check = user_data.get('last_activity_check')
         # Email notification preference: 'immediate', 'weekly', or 'none'
         self.notification_preference = user_data.get('notification_preference', 'weekly')
+        # Premium tier
+        self._user_data_tier = user_data  # cache for tier resolution
+        self.account_tier = get_user_tier(user_data)
 
     @property
     def is_active(self):
         return self._is_active
+
+    @property
+    def is_premium(self):
+        return self.account_tier == 'premium'
+
+    @property
+    def is_trial(self):
+        return is_on_trial(self._user_data_tier)
+
+    @property
+    def trial_days_remaining(self):
+        return get_trial_days_remaining(self._user_data_tier)
+
+    def get_limit(self, limit_name):
+        return TIER_LIMITS.get(self.account_tier, TIER_LIMITS['free']).get(limit_name)
 
     def get_admin(self):
         return self.is_admin
@@ -1491,10 +1615,29 @@ def inject_pinned_announcement():
 @app.context_processor
 def inject_template_globals():
     """Makes common variables available to all templates."""
-    return {
+    ctx = {
         'current_year': datetime.date.today().year,
-        'now': datetime.datetime.now(datetime.timezone.utc)
+        'now': datetime.datetime.now(datetime.timezone.utc),
+        'TIER_LIMITS': TIER_LIMITS,
+        'PREMIUM_PRICE_KSH': PREMIUM_PRICE_KSH,
     }
+    if current_user.is_authenticated:
+        ctx['user_is_premium'] = current_user.is_premium
+        ctx['user_is_trial'] = current_user.is_trial
+        ctx['user_tier'] = current_user.account_tier
+        ctx['trial_days_remaining'] = current_user.trial_days_remaining
+        ctx['user_max_notes'] = current_user.get_limit('max_notes')
+        ctx['user_max_chars'] = current_user.get_limit('max_chars_per_note')
+        ctx['user_max_shares'] = current_user.get_limit('max_share_links_per_note')
+    else:
+        ctx['user_is_premium'] = False
+        ctx['user_is_trial'] = False
+        ctx['user_tier'] = 'free'
+        ctx['trial_days_remaining'] = 0
+        ctx['user_max_notes'] = TIER_LIMITS['free']['max_notes']
+        ctx['user_max_chars'] = TIER_LIMITS['free']['max_chars_per_note']
+        ctx['user_max_shares'] = TIER_LIMITS['free']['max_share_links_per_note']
+    return ctx
 
 
 @login_manager.user_loader
@@ -7156,8 +7299,12 @@ def profile_settings(username):
                 # Silently skip invalid URLs
         update_data['social_links'] = social_links
 
-        # Blog Space visibility toggle
-        update_data['show_blog_space'] = request.form.get('show_blog_space') == '1'
+        # Blog Space visibility toggle — Premium feature
+        show_blog_space_val = request.form.get('show_blog_space') == '1'
+        if show_blog_space_val and not is_premium(user):
+            flash('Blog Space customization is a Premium feature. Upgrade for just KSH 50/month!', 'warning')
+            show_blog_space_val = False
+        update_data['show_blog_space'] = show_blog_space_val
 
         if update_data:
             try:
@@ -7818,8 +7965,15 @@ def create_personal_post():
     """Creates a new personal note/post with encryption."""
     content = request.form.get('content')
     if content and content.strip():
-        # Limit note length to 100000 characters
-        content = content.strip()[:100000]
+        # --- Premium tier enforcement ---
+        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+        max_notes = get_limit(user_doc, 'max_notes')
+        max_chars = get_limit(user_doc, 'max_chars_per_note')
+        current_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
+        if current_count >= max_notes:
+            flash(f'You have reached the limit of {max_notes} notes on your current plan. Upgrade to Premium for unlimited notes!', 'warning')
+            return redirect(url_for('personal_space'))
+        content = content.strip()[:max_chars]
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
@@ -7849,7 +8003,15 @@ def create_personal_post_json():
     if not content:
         return jsonify({'error': 'Content cannot be empty'}), 400
 
-    content = content[:100000]
+    # --- Premium tier enforcement ---
+    user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    max_notes = get_limit(user_doc, 'max_notes')
+    max_chars = get_limit(user_doc, 'max_chars_per_note')
+    current_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
+    if current_count >= max_notes:
+        return jsonify({'error': f'Note limit reached ({max_notes}). Upgrade to Premium for unlimited notes.', 'upgrade': True}), 403
+
+    content = content[:max_chars]
     encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
@@ -8513,14 +8675,21 @@ def app_lock_check_status():
 @login_required
 @limits(calls=20, period=60)
 def toggle_note_lock(post_id):
-    """Toggle the is_locked flag on a personal note."""
+    """Toggle the is_locked flag on a personal note. Premium feature."""
     try:
         obj_id = safe_object_id(post_id)
         if not obj_id:
             return jsonify({'error': 'Invalid note ID'}), 400
 
+        # --- Premium tier enforcement ---
+        user = users_conf.find_one({'_id': ObjectId(current_user.id)})
+        if not is_premium(user):
+            return jsonify({
+                'error': 'Note Locking is a Premium feature. Upgrade to keep your sensitive notes behind a PIN.',
+                'upgrade': True
+            }), 403
+
         # Verify the user has a PIN set up
-        user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
         if not user or not user.get('app_lock_pin_hash'):
             return jsonify({'error': 'You need to set up an App Lock PIN first. Go to Profile Settings → App Lock.'}), 400
 
@@ -8556,6 +8725,16 @@ def api_create_share(post_id):
     note = personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    # --- Premium tier enforcement: share link limit ---
+    user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    max_shares = get_limit(user_doc, 'max_share_links_per_note')
+    active_count = note_shares_conf.count_documents({'note_id': obj_id, 'owner_id': ObjectId(current_user.id)})
+    if active_count >= max_shares:
+        return jsonify({
+            'error': f'You have reached the limit of {max_shares} share links per note. Upgrade to Premium for unlimited sharing!',
+            'upgrade': True
+        }), 403
 
     is_valentine = False
     surprise_theme = 'none'
@@ -8632,6 +8811,23 @@ def api_create_share(post_id):
 
     share_id = secrets.token_urlsafe(16)
     
+    # --- Premium tier enforcement: surprise note limit ---
+    if surprise_theme != 'none':
+        max_surprise = get_limit(user_doc, 'max_surprise_notes')
+        surprise_count = note_shares_conf.count_documents({
+            'owner_id': ObjectId(current_user.id),
+            'surprise_theme': {'$ne': 'none', '$exists': True}
+        })
+        if surprise_count >= max_surprise:
+            return jsonify({
+                'error': f'You have reached the limit of {max_surprise} surprise notes. Upgrade to Premium for unlimited surprises!',
+                'upgrade': True
+            }), 403
+
+    # --- Premium tier enforcement: auto-approve requires premium ---
+    if auto_approve and not is_premium(user_doc):
+        auto_approve = False  # silently downgrade, don't block the share
+
     note_shares_conf.insert_one({
         'share_id': share_id,
         'note_id': obj_id,
@@ -10154,8 +10350,16 @@ def _deliver_scheduled_message(sched_msg):
 @login_required
 @limits(calls=20, period=60)
 def api_schedule_message():
-    """Schedule a message for future delivery."""
+    """Schedule a message for future delivery. Premium feature."""
     try:
+        # --- Premium tier enforcement ---
+        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+        if not is_premium(user_doc):
+            return jsonify({
+                'error': 'Scheduled Messages is a Premium feature. Upgrade for just KSH 50/month!',
+                'upgrade': True
+            }), 403
+
         data = request.get_json() or {}
         recipient_id_str = data.get('recipient_id')
         content = data.get('content', '')

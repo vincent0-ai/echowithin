@@ -30,14 +30,17 @@ a {
 /* General Main Content Styles */
 main {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: flex-start;
     align-items: center;
-    height: 100vh;
+    min-height: calc(100vh - 60px);
+    padding: 2rem 1rem;
 }
 
 /* Auth Page Specific Styles */
 .auth-container {
-    width: 400px;
+    width: 100%;
+    max-width: 500px;
     background-color: white;
     border-radius: 12px;
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);

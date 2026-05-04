@@ -1553,6 +1553,25 @@
         </div>
     </div>
 
+    <!-- Premium Tier Banner -->
+    {% if user_is_trial %}
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-crown" style="font-size: 1rem;"></i>
+            <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining. Enjoying unlimited features!</span>
+        </div>
+        <a href="{{ url_for('profile_settings') }}#premium" style="background: rgba(255,255,255,0.2); color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+    </div>
+    {% elif not user_is_premium %}
+    <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="fas fa-gem" style="color: #8c6d62;"></i>
+            <span>Unlock <strong>note locking, blog space, scheduled messages</strong> and more with Premium.</span>
+        </div>
+        <a href="{{ url_for('profile_settings') }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+    </div>
+    {% endif %}
+
     <!-- Tab Navigation -->
     <div class="tab-nav" role="tablist">
         <button data-tab="saved" role="tab" aria-selected="false">
@@ -1723,7 +1742,7 @@
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
             <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input" placeholder="Write a new note..." maxlength="100000"
+                <textarea name="content" id="note-input" placeholder="Write a new note..." maxlength="{{ user_max_chars }}"
                     required style="min-height: 60px;"></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
@@ -1746,7 +1765,7 @@
                     </div>
                 </div>
                 <div class="create-note-footer" style="margin-top: 0.5rem;">
-                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/100000</span>
+                    <span class="char-count" style="font-size: 0.75rem;"><span id="char-count">0</span>/{{ "{:,}".format(user_max_chars) }}</span>
                     <label class="preview-toggle">
                         <input type="checkbox" id="preview-toggle">
                         Preview
@@ -3035,13 +3054,22 @@
                     window.showFlashMessage(data.message, 'success');
                 }
             } else {
-                if (window.showFlashMessage) {
+                if (data.upgrade) {
+                    // Premium feature gate
+                    if (typeof window.showCustomConfirm === 'function') {
+                        window.showCustomConfirm(data.error + ' Go to settings to upgrade?', confirmed => {
+                            if (confirmed) window.location.href = '{{ url_for("profile_settings") }}#premium';
+                        });
+                    } else if (confirm(data.error + ' Go to settings to upgrade?')) {
+                        window.location.href = '{{ url_for("profile_settings") }}#premium';
+                    }
+                } else if (window.showFlashMessage) {
                     window.showFlashMessage(data.error, 'danger');
                 } else {
                     alert(data.error);
                 }
                 // If it's the "No PIN" error, maybe redirect to settings?
-                if (data.error.includes('PIN first')) {
+                if (data.error && data.error.includes('PIN first')) {
                     // Handled by alert/flash
                 }
             }

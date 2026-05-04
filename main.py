@@ -7207,7 +7207,10 @@ def user_posts_page(username):
 @app.route('/api/paystack/initialize', methods=['POST'])
 @login_required
 def paystack_initialize():
-    if current_user.is_premium and not current_user.is_trial:
+    data_in = request.get_json() or {}
+    is_donation = data_in.get('is_donation', False)
+
+    if not is_donation and current_user.is_premium and not current_user.is_trial:
         return jsonify({'error': 'You are already a Premium member'}), 400
         
     secret_key = os.environ.get('PAYSTACK_SECRET_KEY')
@@ -7238,7 +7241,7 @@ def paystack_initialize():
         }
     }
     
-    if plan_code:
+    if plan_code and not is_donation:
         data["plan"] = plan_code
         
     try:

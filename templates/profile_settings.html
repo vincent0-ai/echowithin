@@ -272,11 +272,37 @@
         <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">
           Want to support us further? You can still donate to help keep EchoWithin fast and ad-free.
         </p>
-        <button type="button" class="btn"
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+          <button type="button" class="donate-amt-btn active" data-amount="50"
+            style="padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid #d4c5b5; background: #3e2217; color: #fff; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;"
+            onclick="selectDonateAmount(50, this)">KSH 50</button>
+          <button type="button" class="donate-amt-btn" data-amount="100"
+            style="padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid #d4c5b5; background: #f8f5f2; color: #3e2217; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;"
+            onclick="selectDonateAmount(100, this)">KSH 100</button>
+          <button type="button" class="donate-amt-btn" data-amount="500"
+            style="padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid #d4c5b5; background: #f8f5f2; color: #3e2217; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;"
+            onclick="selectDonateAmount(500, this)">KSH 500</button>
+          <button type="button" class="donate-amt-btn" data-amount="1000"
+            style="padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid #d4c5b5; background: #f8f5f2; color: #3e2217; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;"
+            onclick="selectDonateAmount(1000, this)">KSH 1,000</button>
+          <button type="button" class="donate-amt-btn" data-amount="custom"
+            style="padding: 0.4rem 0.9rem; border-radius: 8px; border: 1px solid #d4c5b5; background: #f8f5f2; color: #3e2217; font-weight: 600; font-size: 0.82rem; cursor: pointer; transition: all 0.15s;"
+            onclick="showCustomDonateInput(this)">Custom</button>
+        </div>
+        <div id="custom-donate-row" style="display: none; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 0.85rem; font-weight: 600; color: #3e2217;">KSH</span>
+            <input type="number" id="custom-donate-input" min="10" max="100000" placeholder="Enter amount"
+              style="width: 140px; padding: 0.4rem 0.6rem; border: 1px solid #d4c5b5; border-radius: 8px; font-size: 0.85rem;"
+              oninput="updateDonateAmount()">
+          </div>
+        </div>
+        <button type="button" id="donate-btn" class="btn"
           style="background: #f8f5f2; color: #3e2217; border: 1px solid #d4c5b5; padding: 0.5rem 1.2rem; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;"
           onclick="initializePayment(true)">
-          <i class="fas fa-heart"></i> Donate
+          <i class="fas fa-heart"></i> Donate KSH 50
         </button>
+        <div id="donate-error" style="color: #dc3545; font-size: 0.85rem; margin-top: 0.5rem; display: none;"></div>
       </div>
       {% else %}
       {% if user_is_trial %}
@@ -728,37 +754,106 @@
     return input ? input.value : '';
   }
 
+  let selectedDonateAmount = 50;
+
+  function selectDonateAmount(amount, el) {
+    selectedDonateAmount = amount;
+    document.getElementById('custom-donate-row').style.display = 'none';
+    document.querySelectorAll('.donate-amt-btn').forEach(b => {
+      b.style.background = '#f8f5f2';
+      b.style.color = '#3e2217';
+      b.classList.remove('active');
+    });
+    el.style.background = '#3e2217';
+    el.style.color = '#fff';
+    el.classList.add('active');
+    const donateBtn = document.getElementById('donate-btn');
+    if (donateBtn) donateBtn.innerHTML = '<i class="fas fa-heart"></i> Donate KSH ' + amount.toLocaleString();
+  }
+
+  function showCustomDonateInput(el) {
+    document.querySelectorAll('.donate-amt-btn').forEach(b => {
+      b.style.background = '#f8f5f2';
+      b.style.color = '#3e2217';
+      b.classList.remove('active');
+    });
+    el.style.background = '#3e2217';
+    el.style.color = '#fff';
+    el.classList.add('active');
+    document.getElementById('custom-donate-row').style.display = 'block';
+    const input = document.getElementById('custom-donate-input');
+    input.focus();
+    updateDonateAmount();
+  }
+
+  function updateDonateAmount() {
+    const val = parseInt(document.getElementById('custom-donate-input').value) || 0;
+    selectedDonateAmount = val;
+    const donateBtn = document.getElementById('donate-btn');
+    if (donateBtn) {
+      donateBtn.innerHTML = val > 0
+        ? '<i class="fas fa-heart"></i> Donate KSH ' + val.toLocaleString()
+        : '<i class="fas fa-heart"></i> Donate';
+    }
+  }
+
   async function initializePayment(isDonation = false) {
-    const btn = document.getElementById('upgrade-btn');
-    const errorDiv = document.getElementById('payment-error');
+    const btn = isDonation ? (document.getElementById('donate-btn') || document.getElementById('upgrade-btn')) : document.getElementById('upgrade-btn');
+    const errorDiv = isDonation ? (document.getElementById('donate-error') || document.getElementById('payment-error')) : document.getElementById('payment-error');
+    if (!btn) return;
     const originalText = btn.innerHTML;
+
+    // Validate donation amount
+    if (isDonation) {
+      if (!selectedDonateAmount || selectedDonateAmount < 10) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Please enter a donation amount of at least KSH 10.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+      if (selectedDonateAmount > 100000) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Maximum donation amount is KSH 100,000.';
+          errorDiv.style.display = 'block';
+        }
+        return;
+      }
+    }
 
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing...';
     btn.disabled = true;
-    errorDiv.style.display = 'none';
+    if (errorDiv) errorDiv.style.display = 'none';
 
     try {
+      const payload = { is_donation: isDonation };
+      if (isDonation) payload.amount = selectedDonateAmount;
+
       const resp = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-CSRFToken': getCsrfToken()
         },
-        body: JSON.stringify({ is_donation: isDonation })
+        body: JSON.stringify(payload)
       });
       const data = await resp.json();
 
       if (resp.ok && data.authorization_url) {
         window.location.href = data.authorization_url;
       } else {
-        errorDiv.textContent = data.error || 'Failed to initialize payment. Please try again later.';
-        errorDiv.style.display = 'block';
+        if (errorDiv) {
+          errorDiv.textContent = data.error || 'Failed to initialize payment. Please try again later.';
+          errorDiv.style.display = 'block';
+        }
         btn.innerHTML = originalText;
         btn.disabled = false;
       }
     } catch (e) {
-      errorDiv.textContent = 'Network error. Please try again.';
-      errorDiv.style.display = 'block';
+      if (errorDiv) {
+        errorDiv.textContent = 'Network error. Please try again.';
+        errorDiv.style.display = 'block';
+      }
       btn.innerHTML = originalText;
       btn.disabled = false;
     }

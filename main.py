@@ -6926,6 +6926,105 @@ def delete_announcement(announcement_id):
     flash('Announcement deleted.', 'success')
     return redirect(url_for('admin_announcements'))
 
+@app.route('/admin/premium_users')
+@login_required
+@admin_required
+def admin_premium_users():
+    query = request.args.get('query')
+    projection = {'password': 0, 'email_verification_token': 0, 'reset_password_token': 0}
+    
+    if query:
+        # If searching, show all matches so admin can grant premium
+        users = users_conf.find({
+            "$or": [
+                {"username": {"$regex": query, "$options": "i"}},
+                {"email": {"$regex": query, "$options": "i"}}
+            ]
+        }, projection).sort('username', 1)
+    else:
+        # Otherwise show only current premium users
+        now = datetime.datetime.now(datetime.timezone.utc)
+        users = users_conf.find({
+            "$or": [
+                {"account_tier": "premium", "premium_until": {"$gte": now}},
+                {"account_tier": "premium", "premium_until": {"$exists": False}},
+                {"account_tier": "premium", "premium_until": None}
+            ]
+        }, projection).sort('username', 1)
+
+    # Let's also ensure tzinfo is set for template rendering
+    user_list = list(users)
+    for u in user_list:
+        if u.get('premium_until') and u['premium_until'].tzinfo is None:
+            u['premium_until'] = u['premium_until'].replace(tzinfo=datetime.timezone.utc)
+
+    return render_template('admin_premium_users.html', title="Manage Premium Users", users=user_list, query=query)
+
+@app.route('/admin/premium/grant/<user_id>', methods=['POST'])
+@login_required
+@admin_required
+def grant_premium(user_id):
+    user_to_grant = users_conf.find_one({'_id': ObjectId(user_id)})
+    if not user_to_grant:
+        abort(404)
+        
+    days = request.form.get('days')
+    updates = {'account_tier': 'premium'}
+    
+    if days and days != 'indefinite':
+        try:
+            days_int = int(days)
+            current_until = user_to_grant.get('premium_until')
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if current_until:
+                if current_until.tzinfo is None:
+                    current_until = current_until.replace(tzinfo=datetime.timezone.utc)
+                if current_until > now:
+                    new_until = current_until + datetime.timedelta(days=days_int)
+                else:
+                    new_until = now + datetime.timedelta(days=days_int)
+            else:
+                new_until = now + datetime.timedelta(days=days_int)
+            updates['premium_until'] = new_until
+        except ValueError:
+            pass
+    elif days == 'indefinite':
+        # Need to $unset premium_until if it exists
+        pass
+
+    update_query = {'$set': updates}
+    if days == 'indefinite':
+        update_query['$unset'] = {'premium_until': ""}
+        
+    users_conf.update_one({'_id': ObjectId(user_id)}, update_query)
+    
+    if days == 'indefinite':
+        flash(f"Granted indefinite Premium to {user_to_grant.get('username')}.", "success")
+    else:
+        flash(f"Granted {days} days of Premium to {user_to_grant.get('username')}.", "success")
+        
+    return redirect(url_for('admin_premium_users'))
+
+@app.route('/admin/premium/revoke/<user_id>', methods=['POST'])
+@login_required
+@admin_required
+def revoke_premium(user_id):
+    user_to_revoke = users_conf.find_one({'_id': ObjectId(user_id)})
+    if not user_to_revoke:
+        abort(404)
+        
+    if user_to_revoke.get('is_admin'):
+        flash("Cannot revoke premium from an admin.", "danger")
+        return redirect(url_for('admin_premium_users'))
+
+    users_conf.update_one(
+        {'_id': ObjectId(user_id)}, 
+        {'$set': {'account_tier': 'free'}, '$unset': {'premium_until': ""}}
+    )
+    
+    flash(f"Revoked Premium from {user_to_revoke.get('username')}.", "success")
+    return redirect(url_for('admin_premium_users'))
+
 @app.route('/admin/users')
 @login_required
 @admin_required
@@ -7232,12 +7331,25 @@ def paystack_initialize():
     if not user_email:
         user_email = f"{current_user.username}@echowithin.xyz" # Fallback if email is missing
     
+    # Determine amount: custom for donations, fixed for subscriptions
+    if is_donation:
+        amount_ksh = data_in.get('amount', PREMIUM_PRICE_KSH)
+        try:
+            amount_ksh = int(amount_ksh)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid amount'}), 400
+        if amount_ksh < 10 or amount_ksh > 100000:
+            return jsonify({'error': 'Donation amount must be between KSH 10 and KSH 100,000'}), 400
+    else:
+        amount_ksh = PREMIUM_PRICE_KSH
+
     data = {
         "email": user_email,
-        "amount": PREMIUM_PRICE_KSH * 100, # Paystack expects lowest currency unit (cents/kobo)
+        "amount": amount_ksh * 100,  # Paystack expects lowest currency unit (cents/kobo)
         "callback_url": callback_url,
         "metadata": {
-            "user_id": str(current_user.id)
+            "user_id": str(current_user.id),
+            "is_donation": is_donation
         }
     }
     
@@ -7279,15 +7391,22 @@ def paystack_callback():
         result = response.json()
         
         if result.get('status') and result['data']['status'] == 'success':
-            # Verification successful - Upgrade to Premium
-            users_conf.update_one(
-                {'_id': current_user.id},
-                {'$set': {
-                    'account_tier': 'premium',
-                    'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
-                }}
-            )
-            flash("Payment successful! You are now a Premium member.", "success")
+            metadata = result['data'].get('metadata', {})
+            if metadata.get('is_donation'):
+                # Donation — don't upgrade, just thank them
+                amount_kobo = result['data'].get('amount', 0)
+                amount_ksh = amount_kobo // 100
+                flash(f"Thank you for your generous donation of KSH {amount_ksh:,}! Your support keeps EchoWithin running.", "success")
+            else:
+                # Subscription — Upgrade to Premium
+                users_conf.update_one(
+                    {'_id': current_user.id},
+                    {'$set': {
+                        'account_tier': 'premium',
+                        'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
+                    }}
+                )
+                flash("Payment successful! You are now a Premium member.", "success")
         else:
             flash(f"Payment verification failed: {result.get('message', 'Unknown error')}", "danger")
             
@@ -7327,8 +7446,8 @@ def paystack_webhook():
             elif email:
                 user = users_conf.find_one({'email': email})
                 
-            if user:
-                # Grant/renew 31 days from now
+            if user and not metadata.get('is_donation'):
+                # Grant/renew 31 days from now (skip for donations)
                 users_conf.update_one(
                     {'_id': user['_id']},
                     {'$set': {

@@ -1098,7 +1098,7 @@
 
     try {
       // Get VAPID key
-      console.log('Fetching VAPID key...');
+
       const vapidResponse = await fetch('/api/push/vapid-public-key');
       if (!vapidResponse.ok) {
         statusText.textContent = 'Push notifications not configured on server.';
@@ -1114,19 +1114,19 @@
         enableBtn.style.display = 'inline-block';
         return;
       }
-      console.log('Got VAPID key');
+
 
       // Get or register service worker
-      console.log('Getting service worker registration...');
+
       let registration = await navigator.serviceWorker.getRegistration('/');
 
       if (!registration) {
-        console.log('No registration found, registering new service worker...');
+
         try {
           registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
-          console.log('Service worker registered:', registration);
+
         } catch (regErr) {
-          console.error('Service worker registration failed:', regErr);
+
           statusText.textContent = 'Failed to register service worker.';
           statusText.style.color = '#dc3545';
           enableBtn.style.display = 'inline-block';
@@ -1136,7 +1136,7 @@
 
       // Wait for the service worker to be active
       if (!registration.active) {
-        console.log('Waiting for service worker to activate...');
+
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
             reject(new Error('Service worker activation timeout'));
@@ -1167,30 +1167,28 @@
         });
       }
 
-      console.log('Service worker is active:', registration.active);
+
 
       // First, check if there's an existing subscription and unsubscribe
       // This helps clear any corrupted subscriptions
       try {
         const existingSub = await registration.pushManager.getSubscription();
         if (existingSub) {
-          console.log('Found existing subscription, unsubscribing first...');
+
           await existingSub.unsubscribe();
-          console.log('Unsubscribed from old subscription');
+
         }
       } catch (unsubErr) {
-        console.warn('Error checking/clearing old subscription:', unsubErr);
+
       }
 
-      // Validate and log the VAPID key
-      console.log('VAPID key length:', publicKey.length);
-      console.log('VAPID key preview:', publicKey.substring(0, 20) + '...');
+
 
       const applicationServerKey = urlBase64ToUint8Array(publicKey);
-      console.log('Converted key length:', applicationServerKey.length, '(should be 65 for P-256)');
+
 
       // Subscribe to push with timeout
-      console.log('Subscribing to push manager...');
+
       const subscribePromise = registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey
@@ -1201,10 +1199,10 @@
         new Promise((_, reject) => setTimeout(() => reject(new Error('Push subscription timeout')), 15000))
       ]);
 
-      console.log('Got subscription:', subscription);
+
 
       // Send to server
-      console.log('Sending subscription to server...');
+
       const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
       const subResponse = await fetch('/api/push/subscribe', {
         method: 'POST',
@@ -1216,28 +1214,24 @@
       });
 
       if (subResponse.ok) {
-        console.log('Subscription saved to server');
+
         statusText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i> Push notifications enabled!';
         statusText.style.color = '#28a745';
         enableBtn.style.display = 'none';
         disableBtn.style.display = 'inline-block';
       } else {
         const errText = await subResponse.text();
-        console.error('Server rejected subscription:', errText);
+
         throw new Error('Failed to save subscription on server');
       }
     } catch (err) {
-      console.error('Error auto-subscribing:', err);
+
 
       // Provide specific error messages based on error type
       let errorMessage = 'Could not enable notifications.';
       if (err.name === 'AbortError' || (err.message && err.message.includes('push service'))) {
         errorMessage = 'Push service unavailable. Check browser settings or try a different browser.';
-        console.log('Hint: This error often occurs when:');
-        console.log('1. You are in Incognito/Private mode');
-        console.log('2. Push notifications are blocked at OS level');
-        console.log('3. Your browser cannot reach the push service (network/firewall)');
-        console.log('4. Try: chrome://settings/content/notifications (for Chrome)');
+
       } else if (err.name === 'NotAllowedError') {
         errorMessage = 'Notifications blocked. Enable in browser settings.';
       } else if (err.message) {

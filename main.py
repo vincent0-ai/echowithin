@@ -7346,6 +7346,7 @@ def paystack_initialize():
     data = {
         "email": user_email,
         "amount": amount_ksh * 100,  # Paystack expects lowest currency unit (cents/kobo)
+        "currency": "KES",
         "callback_url": callback_url,
         "metadata": {
             "user_id": str(current_user.id),

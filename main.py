@@ -3107,7 +3107,19 @@ def prepare_posts(posts):
     if urls_to_fetch:
         counts_map = get_batch_comment_counts(tuple(sorted(urls_to_fetch)))
 
-    # ---- Step 3: Assign comment counts and achievements back into posts ----
+    # ---- Step 3b: Batch-fetch premium status for all post authors ----
+    author_ids = list(set(p.get('author_id') for p in posts if p.get('author_id')))
+    premium_authors = set()
+    if author_ids:
+        premium_users = users_conf.find(
+            {'_id': {'$in': author_ids}},
+            {'account_tier': 1, 'premium_until': 1, 'join_date': 1}
+        )
+        for u in premium_users:
+            if get_user_tier(u) == 'premium':
+                premium_authors.add(u['_id'])
+
+    # ---- Step 3c: Assign comment counts, achievements, and premium badge ----
     for post in posts:
         if 'comment_count' not in post:
             slug = post.get('slug')
@@ -3119,8 +3131,10 @@ def prepare_posts(posts):
         author_id = post.get('author_id')
         if author_id:
             post['author_achievements'] = get_active_achievements(author_id)
+            post['author_is_premium'] = author_id in premium_authors
         else:
             post['author_achievements'] = []
+            post['author_is_premium'] = False
 
     return posts
 
@@ -4525,6 +4539,18 @@ def get_top_posts_json():
         # Sort by final score and limit to top 20
         results.sort(key=lambda x: x['engagement_score'], reverse=True)
         results = results[:20]
+
+        # Batch-enrich with premium status and achievements
+        result_author_ids = list(set(ObjectId(r['author_id']) for r in results if r.get('author_id')))
+        premium_set = set()
+        if result_author_ids:
+            for u in users_conf.find({'_id': {'$in': result_author_ids}}, {'account_tier': 1, 'premium_until': 1, 'join_date': 1}):
+                if get_user_tier(u) == 'premium':
+                    premium_set.add(str(u['_id']))
+        for r in results:
+            aid = r.get('author_id')
+            r['author_is_premium'] = aid in premium_set if aid else False
+            r['author_achievements'] = get_active_achievements(ObjectId(aid)) if aid else []
 
         # Cache the results
         if redis_cache:
@@ -7287,7 +7313,8 @@ def profile(username):
                            blog_tagline=blog_tagline,
                            blog_url=blog_url,
                            blog_url_label=blog_url_label,
-                           social_links=social_links)
+                           social_links=social_links,
+                           profile_is_premium=(get_user_tier(user) == 'premium'))
 
 
 @app.route('/profile/<username>/posts')

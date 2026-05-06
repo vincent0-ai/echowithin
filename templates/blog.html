@@ -624,6 +624,8 @@
                 <span class="share-count">${shareCount}</span>
             </button>`;
 
+            let premiumBadgeHtml = post.author_is_premium ? '<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>' : '';
+
             let achievementsHtml = '';
             if (post.author_achievements && post.author_achievements.length > 0) {
                 achievementsHtml = `<span class="author-achievements-inline" style="display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle;">`;
@@ -663,7 +665,7 @@
             <div class="post-content-rendered">${previewContent}</div>
             ${post.edited_at
                     ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
-                    : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong> on ${post.timestamp} ${achievementsHtml}</div>`
+                    : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong>${premiumBadgeHtml} on ${post.timestamp} ${achievementsHtml}</div>`
                 }
             <div class="post-actions">
                 ${reactionButton}

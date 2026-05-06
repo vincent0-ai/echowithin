@@ -1912,6 +1912,9 @@
                             <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{%
                             endif %}
                         </button>
+                        <button type="button" class="btn-icon export-note-btn" title="Export note" data-id="{{ note._id }}">
+                            <i class="fas fa-download"></i>{% if show_icon_labels %}<span class="action-label">Export</span>{% endif %}
+                        </button>
 
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         {# === SURPRISE NOTE: Copy, Gift view, Share, Lock, Delete === #}
@@ -5984,6 +5987,178 @@
                 console.error('Failed to mark activity as read:', err);
             }
         };
+    })();
+</script>
+
+<!-- Export Note Modal -->
+<div id="export-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeExportModal()" style="display:none;">
+    <div class="custom-modal" style="max-width: 380px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="color: #3e2217; margin: 0; font-size: 1.05rem;"><i class="fas fa-download"></i> Export Note</h3>
+            <button class="btn-icon" onclick="closeExportModal()" style="color: #999;"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+            <button onclick="exportNote('txt')" class="btn"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
+                <i class="fas fa-file-alt" style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">Plain Text</div>
+                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .txt file</div>
+                </div>
+            </button>
+            <button onclick="exportNote('pdf')" class="btn"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
+                <i class="fas fa-file-pdf" style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">PDF Document{% if not user_is_premium %} <span style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{% endif %}</div>
+                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Formatted with markdown styling</div>
+                </div>
+            </button>
+            <button onclick="exportNote('docx')" class="btn"
+                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
+                <i class="fas fa-file-word" style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">Word Document{% if not user_is_premium %} <span style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{% endif %}</div>
+                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .docx file</div>
+                </div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ====== Note Export Logic ======
+    (function() {
+        let exportNoteId = null;
+        const isPremium = {{ 'true' if user_is_premium else 'false' }};
+
+        // Open export modal
+        document.body.addEventListener('click', function(e) {
+            const btn = e.target.closest('.export-note-btn');
+            if (!btn) return;
+            exportNoteId = btn.dataset.id;
+            document.getElementById('export-note-modal').style.display = 'flex';
+        });
+
+        window.closeExportModal = function() {
+            document.getElementById('export-note-modal').style.display = 'none';
+            exportNoteId = null;
+        };
+
+        window.exportNote = function(format) {
+            if (!exportNoteId) return;
+
+            // Premium gate for PDF and DOCX
+            if ((format === 'pdf' || format === 'docx') && !isPremium) {
+                if (window.showCustomAlert) {
+                    window.showCustomAlert('PDF and DOCX export is a Premium feature. Upgrade to unlock formatted exports.', 'warning');
+                } else {
+                    alert('PDF and DOCX export is a Premium feature.');
+                }
+                return;
+            }
+
+            // Get the note content from the DOM
+            const noteCard = document.querySelector(`.note-card[data-note-id="${exportNoteId}"], .locked-note-card[data-note-id="${exportNoteId}"]`);
+            if (!noteCard) return;
+
+            const rawEl = noteCard.querySelector('.rendered-note');
+            const rawContent = rawEl ? rawEl.dataset.raw : '';
+            const renderedContent = rawEl ? rawEl.innerHTML : '';
+            const noteRef = noteCard.querySelector('.note-ref-display');
+            const reference = noteRef ? noteRef.textContent.trim() : '';
+
+            // Generate a filename from first line of content
+            const firstLine = rawContent.split('\n')[0].replace(/[#*_\[\]()]/g, '').trim().substring(0, 40) || 'note';
+            const safeName = firstLine.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') || 'note';
+
+            if (format === 'txt') {
+                exportAsTxt(rawContent, reference, safeName);
+            } else if (format === 'pdf') {
+                exportAsPdf(renderedContent, reference, safeName);
+            } else if (format === 'docx') {
+                exportAsDocx(rawContent, renderedContent, reference, safeName);
+            }
+
+            closeExportModal();
+        };
+
+        function exportAsTxt(content, reference, filename) {
+            let text = content;
+            if (reference) text = reference + '\n\n' + text;
+            text += '\n\n---\nExported from EchoWithin';
+
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            downloadBlob(blob, filename + '.txt');
+        }
+
+        function exportAsPdf(html, reference, filename) {
+            // Load html2pdf.js dynamically if not already loaded
+            if (typeof html2pdf === 'undefined') {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                script.onload = function() { generatePdf(html, reference, filename); };
+                script.onerror = function() {
+                    if (window.showCustomAlert) window.showCustomAlert('Failed to load PDF library. Please try again.', 'danger');
+                };
+                document.head.appendChild(script);
+            } else {
+                generatePdf(html, reference, filename);
+            }
+        }
+
+        function generatePdf(html, reference, filename) {
+            const container = document.createElement('div');
+            container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px;';
+
+            if (reference) {
+                container.innerHTML = '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
+            }
+            container.innerHTML += html;
+            container.innerHTML += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
+
+            const opt = {
+                margin: [15, 15, 15, 15],
+                filename: filename + '.pdf',
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(container).save();
+        }
+
+        function exportAsDocx(rawContent, html, reference, filename) {
+            // Build a simple HTML-based DOCX (using HTML-in-DOCX trick)
+            let docHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">';
+            docHtml += '<head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}h3{font-size:12pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;font-size:10pt;}pre{background:#f5f5f5;padding:10px;font-family:Consolas,monospace;font-size:10pt;}</style></head><body>';
+            if (reference) {
+                docHtml += '<p style="color:#666;font-size:9pt;border-bottom:1px solid #eee;padding-bottom:6px;">' + escapeHtml(reference) + '</p>';
+            }
+            docHtml += html;
+            docHtml += '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p>';
+            docHtml += '</body></html>';
+
+            const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword' });
+            downloadBlob(blob, filename + '.doc');
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function downloadBlob(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
     })();
 </script>
 {% endblock %}

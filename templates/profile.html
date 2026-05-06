@@ -10,7 +10,7 @@
         <div class="profile-sidebar">
             <img src="{{ user.profile_image_url if user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
                 alt="Profile picture for {{ user.username }}" class="profile-picture">
-            <h1 class="profile-username">{{ user.username }}</h1>
+            <h1 class="profile-username">{{ user.username }}{% if profile_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}</h1>
             {% if user.bio %}
             <p class="profile-bio">{{ user.bio }}</p>
             {% endif %}

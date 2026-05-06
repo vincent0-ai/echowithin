@@ -1294,6 +1294,7 @@ TIER_LIMITS = {
         'scheduled_messages': False,
         'note_media_attachments': False,
         'max_note_attachments': 0,
+        'voice_messages': False,
         'version_history_days': 7,
         'auto_approve_collab': False,
     },
@@ -1307,6 +1308,7 @@ TIER_LIMITS = {
         'scheduled_messages': True,
         'note_media_attachments': True,
         'max_note_attachments': 20,
+        'voice_messages': True,
         'version_history_days': 365,
         'auto_approve_collab': True,
     }
@@ -10260,6 +10262,40 @@ def api_upload_dm_image():
     except Exception as e:
         app.logger.error(f"Image upload failed for DM: {e}")
         return jsonify({'error': 'Failed to upload image'}), 500
+
+@app.route('/api/messages/upload_voice', methods=['POST'])
+@login_required
+def api_upload_dm_voice():
+    """Upload a voice message for DMs. Premium-only feature."""
+    # Premium gate
+    if not current_user.get_limit('voice_messages'):
+        return jsonify({'error': 'Voice messages are a Premium feature', 'upgrade': True}), 403
+
+    if 'voice' not in request.files:
+        return jsonify({'error': 'No audio provided'}), 400
+    file = request.files['voice']
+    if file.filename == '':
+        return jsonify({'error': 'Empty filename'}), 400
+
+    try:
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > 10 * 1024 * 1024:
+            return jsonify({'error': 'Voice note exceeds 10MB limit'}), 400
+
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder='dm_voice',
+            resource_type='auto'
+        )
+        return jsonify({
+            'success': True,
+            'url': upload_result.get('secure_url')
+        })
+    except Exception as e:
+        app.logger.error(f"Voice upload failed for DM: {e}")
+        return jsonify({'error': 'Failed to upload voice note'}), 500
 
 @app.route('/api/messages/react/<message_id>', methods=['POST'])
 @login_required

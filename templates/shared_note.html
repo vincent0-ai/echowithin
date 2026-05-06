@@ -2921,9 +2921,8 @@
         }
 
         // --- Note Media Attachments (upload, delete, lightbox) ---
-        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }
-    };
-    const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
+        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }};
+        const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
 
     // Lightbox
     function openLightbox(src) {

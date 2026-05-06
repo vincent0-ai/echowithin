@@ -4714,12 +4714,21 @@ def get_my_commented_posts_json():
         
         unlock_activities = []
         for notif in unlock_notifs:
+            u_name = notif.get('unlocked_by_name', 'Someone')
+            u_id = notif.get('unlocked_by')
+            if u_name in ['Someone', 'Anonymous visitor'] and u_id:
+                try:
+                    v_user = users_conf.find_one({'_id': ObjectId(u_id)}, {'username': 1})
+                    if v_user and v_user.get('username'):
+                        u_name = v_user['username']
+                except: pass
+
             unlock_activities.append({
                 '_id': notif['_id'],
                 'activity_type': 'surprise_unlocked',
                 'latest_activity': notif['unlocked_at'],
                 'share_id': notif.get('share_id'),
-                'unlocked_by_name': notif.get('unlocked_by_name', 'Someone'),
+                'unlocked_by_name': u_name,
                 'surprise_theme': notif.get('surprise_theme', 'none'),
                 'is_read': notif.get('is_read', False),
                 'unlocked_at': notif['unlocked_at']
@@ -4769,22 +4778,26 @@ def get_my_commented_posts_json():
                 }
                 theme_label = theme_labels.get(post.get('surprise_theme', ''), 'Surprise')
                 
+                u_name = post.get('unlocked_by_name', 'Someone')
+                u_id = post.get('unlocked_by') # unlock_activities dict has the ID if we include it
+                # For processed post data, let's just ensure we have the name
+                
                 post_data = {
                     '_id': str(post['_id']),
                     'activity_type': 'surprise_unlocked',
                     'has_unread': is_unread,
                     'share_id': post.get('share_id'),
-                    'unlocked_by_name': post.get('unlocked_by_name', 'Someone'),
+                    'unlocked_by_name': u_name,
                     'surprise_theme': post.get('surprise_theme'),
                     'theme_label': theme_label,
                     'unlocked_at': activity_time.isoformat() if activity_time else None,
                     'latest_comment_at': activity_time.isoformat() if activity_time else None,
                     'title': f"{theme_label} surprise unlocked",
                     'url': url_for('view_shared_note', share_id=post.get('share_id')) if post.get('share_id') else '#',
-                    'content': f"{post.get('unlocked_by_name', 'Someone')} opened your {theme_label} surprise note",
-                    'author': post.get('unlocked_by_name', 'Someone'),
+                    'content': f"{u_name} opened your {theme_label} surprise note",
+                    'author': u_name,
                     'slug': '',
-                    'author_id': '',
+                    'author_id': str(u_id) if u_id else '',
                     'timestamp': activity_time.strftime('%b %d, %Y') if activity_time else '',
                     'image_url': None,
                     'image_urls': [],
@@ -9217,7 +9230,12 @@ def view_shared_note(share_id):
         try:
             notif_id_key = f'notif_id_{share_id}'
             notif_id = session.get(notif_id_key)
-            visitor_name = current_user.username if current_user.is_authenticated else 'Anonymous visitor'
+            
+            # Use Someone/Anonymous visitor as fallback, but prioritize platform username if authenticated
+            visitor_name = 'Someone'
+            if current_user.is_authenticated:
+                visitor_name = getattr(current_user, 'username', 'Someone')
+            
             visitor_id = str(current_user.id) if current_user.is_authenticated else None
             
             if not notif_id:
@@ -11415,9 +11433,21 @@ def api_get_share_history(share_id):
             else:
                 ts_iso = None
 
+            unlocked_by_name = h.get('unlocked_by_name', 'Someone')
+            unlocked_by_id = h.get('unlocked_by')
+            
+            # If name is generic but we have a user ID, try to resolve the actual username (matching blog activity logic)
+            if unlocked_by_name in ['Someone', 'Anonymous visitor', 'Unknown'] and unlocked_by_id:
+                try:
+                    v_user = users_conf.find_one({'_id': ObjectId(unlocked_by_id)}, {'username': 1})
+                    if v_user and v_user.get('username'):
+                        unlocked_by_name = v_user['username']
+                except:
+                    pass
+
             result.append({
                 '_id': str(h['_id']),
-                'unlocked_by_name': h.get('unlocked_by_name', 'Anonymous visitor'),
+                'unlocked_by_name': unlocked_by_name,
                 'unlocked_at': ts_iso,
                 'surprise_theme': h.get('surprise_theme', 'none')
             })

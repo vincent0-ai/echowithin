@@ -475,6 +475,10 @@ scheduled_messages_conf = db['scheduled_messages']
 scheduled_messages_conf.create_index([('scheduled_at', 1), ('status', 1)])
 scheduled_messages_conf.create_index([('sender_id', 1), ('status', 1)])
 
+# --- Note Attachments (images & voice notes on shared/collaborative notes) ---
+note_attachments_conf = db['note_attachments']
+note_attachments_conf.create_index([('note_id', 1), ('created_at', 1)])
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -1288,6 +1292,8 @@ TIER_LIMITS = {
         'note_locking': False,
         'blog_space': False,
         'scheduled_messages': False,
+        'note_media_attachments': False,
+        'max_note_attachments': 0,
         'version_history_days': 7,
         'auto_approve_collab': False,
     },
@@ -1299,6 +1305,8 @@ TIER_LIMITS = {
         'note_locking': True,
         'blog_space': True,
         'scheduled_messages': True,
+        'note_media_attachments': True,
+        'max_note_attachments': 20,
         'version_history_days': 365,
         'auto_approve_collab': True,
     }
@@ -9257,6 +9265,27 @@ def view_shared_note(share_id):
     owner_doc = users_conf.find_one({'_id': ObjectId(note_owner_id)})
     owner_max_chars = get_limit(owner_doc, 'max_chars_per_note')
 
+    # --- Note Attachments (images & voice notes) ---
+    raw_attachments = list(note_attachments_conf.find({'note_id': note['_id']}).sort('created_at', 1))
+    note_attachments_list = []
+    for att in raw_attachments:
+        decrypted_url = decrypt_note(att.get('url'), user_id=note_owner_id)
+        if decrypted_url:
+            note_attachments_list.append({
+                'id': str(att['_id']),
+                'file_type': att.get('file_type', 'image'),
+                'url': decrypted_url,
+                'filename': att.get('filename', ''),
+                'uploader_name': att.get('uploader_name', 'Unknown'),
+                'uploader_id': str(att.get('uploader_id', '')),
+                'created_at': att.get('created_at', '').isoformat() if isinstance(att.get('created_at'), datetime.datetime) else ''
+            })
+
+    # Determine if current user can upload media (premium + edit permission)
+    can_upload_media = False
+    if current_user.is_authenticated and share['permissions'] == 'edit' and surprise_theme == 'none':
+        can_upload_media = current_user.get_limit('note_media_attachments') is True
+
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
@@ -9274,7 +9303,204 @@ def view_shared_note(share_id):
                            valentine_photo=decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))),
                            valentine_audio=decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))),
                            use_typewriter=use_typewriter,
-                           owner_max_chars=owner_max_chars)
+                           owner_max_chars=owner_max_chars,
+                           note_attachments=note_attachments_list,
+                           can_upload_media=can_upload_media)
+
+
+# --- Note Attachment APIs (images & voice notes on collaborative notes) ---
+
+@app.route('/share/note/<share_id>/upload', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_upload_note_attachment(share_id):
+    """Upload an image or voice note to a shared collaborative note (premium only)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share or share.get('permissions') != 'edit':
+        return jsonify({'error': 'Unauthorized or invalid share'}), 403
+
+    # Check surprise theme — attachments only for collaborative notes, not surprises
+    surprise_theme = share.get('surprise_theme', 'none')
+    if not surprise_theme:
+        surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
+    if surprise_theme != 'none':
+        return jsonify({'error': 'Attachments not available for surprise notes'}), 400
+
+    # Check expiration
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify({'error': 'Link expired'}), 410
+
+    # Check access code session
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
+
+    # Premium gate
+    if not current_user.get_limit('note_media_attachments'):
+        return jsonify({'error': 'Note media attachments require Premium', 'upgrade': True}), 403
+
+    # Check per-note attachment limit
+    note_id = share['note_id']
+    max_attachments = current_user.get_limit('max_note_attachments') or 20
+    existing_count = note_attachments_conf.count_documents({'note_id': note_id})
+    if existing_count >= max_attachments:
+        return jsonify({'error': f'Maximum {max_attachments} attachments per note reached'}), 400
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    file = request.files['file']
+    if not file or not file.filename:
+        return jsonify({'error': 'Empty file'}), 400
+
+    # Determine file type
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext in ALLOWED_IMAGE_EXTENSIONS:
+        file_type = 'image'
+        max_size = MAX_IMAGE_SIZE  # 5 MB
+    elif ext in ALLOWED_AUDIO_EXTENSIONS:
+        file_type = 'audio'
+        max_size = 10 * 1024 * 1024  # 10 MB for audio
+    else:
+        return jsonify({'error': f'Unsupported file type. Allowed: {", ".join(ALLOWED_IMAGE_EXTENSIONS | ALLOWED_AUDIO_EXTENSIONS)}'}), 400
+
+    # Check file size
+    try:
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > max_size:
+            limit_mb = max_size // (1024 * 1024)
+            return jsonify({'error': f'File exceeds {limit_mb}MB limit'}), 400
+    except Exception:
+        size = 0
+
+    # Upload to Cloudinary
+    try:
+        resource_type = 'auto' if file_type == 'audio' else 'image'
+        upload_opts = {'folder': 'echowithin_note_media', 'resource_type': resource_type}
+        if file_type == 'image':
+            upload_opts['transformation'] = [
+                {'width': 1600, 'height': 1600, 'crop': 'limit'},
+                {'quality': 'auto', 'fetch_format': 'auto'}
+            ]
+        upload_result = cloudinary.uploader.upload(file, **upload_opts)
+        plaintext_url = upload_result.get('secure_url')
+        public_id = upload_result.get('public_id')
+    except Exception as e:
+        app.logger.error(f"Note attachment upload failed: {e}")
+        return jsonify({'error': 'Failed to upload file'}), 500
+
+    # Encrypt URL with note owner's key
+    owner_id_str = str(share.get('owner_id', ''))
+    encrypted_url = encrypt_note(plaintext_url, user_id=owner_id_str) if owner_id_str else plaintext_url
+    url_hash = hashlib.sha256(plaintext_url.encode()).hexdigest() if plaintext_url else None
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    sanitized_filename = bleach.clean(file.filename[:120], strip=True)
+    doc = {
+        'note_id': note_id,
+        'share_id': share_id,
+        'uploader_id': ObjectId(current_user.id),
+        'uploader_name': current_user.username,
+        'file_type': file_type,
+        'url': encrypted_url,
+        'url_hash': url_hash,
+        'public_id': public_id,
+        'filename': sanitized_filename,
+        'size_bytes': size,
+        'created_at': now
+    }
+    result = note_attachments_conf.insert_one(doc)
+
+    return jsonify({
+        'success': True,
+        'attachment': {
+            'id': str(result.inserted_id),
+            'file_type': file_type,
+            'url': plaintext_url,
+            'filename': sanitized_filename,
+            'uploader_name': current_user.username,
+            'uploader_id': str(current_user.id),
+            'created_at': now.isoformat()
+        }
+    })
+
+
+@app.route('/share/note/<share_id>/attachments', methods=['GET'])
+@limits(calls=30, period=60)
+def api_list_note_attachments(share_id):
+    """List all attachments for a shared note (available to anyone with access)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+
+    # Check expiration
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify({'error': 'Link expired'}), 410
+
+    # Check access code session
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
+
+    owner_id_str = str(share.get('owner_id', ''))
+    raw_attachments = list(note_attachments_conf.find({'note_id': share['note_id']}).sort('created_at', 1))
+    attachments = []
+    for att in raw_attachments:
+        decrypted_url = decrypt_note(att.get('url'), user_id=owner_id_str)
+        if decrypted_url:
+            attachments.append({
+                'id': str(att['_id']),
+                'file_type': att.get('file_type', 'image'),
+                'url': decrypted_url,
+                'filename': att.get('filename', ''),
+                'uploader_name': att.get('uploader_name', 'Unknown'),
+                'uploader_id': str(att.get('uploader_id', '')),
+                'created_at': att.get('created_at', '').isoformat() if isinstance(att.get('created_at'), datetime.datetime) else ''
+            })
+
+    return jsonify({'attachments': attachments})
+
+
+@app.route('/share/note/<share_id>/attachment/<attachment_id>', methods=['DELETE'])
+@login_required
+@limits(calls=10, period=60)
+def api_delete_note_attachment(share_id, attachment_id):
+    """Delete an attachment from a shared note (owner or uploader only)."""
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+
+    obj_id = safe_object_id(attachment_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid attachment ID'}), 400
+
+    att = note_attachments_conf.find_one({'_id': obj_id, 'note_id': share['note_id']})
+    if not att:
+        return jsonify({'error': 'Attachment not found'}), 404
+
+    # Only note owner or original uploader can delete
+    is_owner = str(current_user.id) == str(share.get('owner_id', ''))
+    is_uploader = str(current_user.id) == str(att.get('uploader_id', ''))
+    if not is_owner and not is_uploader:
+        return jsonify({'error': 'Only the note owner or uploader can delete this'}), 403
+
+    # Delete from Cloudinary
+    if att.get('public_id'):
+        try:
+            res_type = 'video' if att.get('file_type') == 'audio' else 'image'
+            cloudinary.uploader.destroy(att['public_id'], resource_type=res_type)
+        except Exception as e:
+            app.logger.error(f"Failed to delete note attachment from Cloudinary: {e}")
+
+    note_attachments_conf.delete_one({'_id': obj_id})
+    return jsonify({'success': True})
 
 
 @app.route('/shared_note/save/<share_id>', methods=['POST'])
@@ -9371,7 +9597,9 @@ def view_saved_note(note_id):
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=decrypt_note(note.get('valentine_photo'), user_id=str(note.get('user_id', ''))),
                            valentine_audio=decrypt_note(note.get('valentine_audio'), user_id=str(note.get('user_id', ''))),
-                           use_typewriter=note.get('use_typewriter', False))
+                           use_typewriter=note.get('use_typewriter', False),
+                           note_attachments=[],
+                           can_upload_media=False)
 
 
 # --- WebSocket Real-time collaboration ---

@@ -347,6 +347,30 @@
                         <i class="fas fa-circle" style="font-size:0.5rem;"></i> Unsaved draft
                     </div>
                 </div>
+                <!-- Media Upload Toolbar -->
+                <div class="media-toolbar" id="media-toolbar">
+                    {% if can_upload_media %}
+                    <button type="button" class="media-toolbar-btn" id="upload-image-btn" title="Add image">
+                        <i class="fas fa-image"></i> Image
+                    </button>
+                    <button type="button" class="media-toolbar-btn" id="upload-audio-btn" title="Add voice note">
+                        <i class="fas fa-microphone"></i> Voice Note
+                    </button>
+                    <input type="file" id="image-file-input" accept="image/png,image/jpg,image/jpeg,image/gif" style="display:none;">
+                    <input type="file" id="audio-file-input" accept="audio/mp3,audio/wav,audio/ogg,audio/m4a,audio/aac,audio/mpeg" style="display:none;">
+                    <div id="upload-progress" class="upload-progress" style="display:none;">
+                        <div class="upload-progress-bar" id="upload-progress-bar"></div>
+                        <span id="upload-progress-text" class="upload-progress-text">Uploading...</span>
+                    </div>
+                    {% elif current_user.is_authenticated %}
+                    <button type="button" class="media-toolbar-btn media-toolbar-locked" title="Premium feature" onclick="window.location.href='{{ url_for('profile_settings', username=current_user.username) }}#premium'">
+                        <i class="fas fa-image"></i> Image <span class="premium-badge-small">Premium</span>
+                    </button>
+                    <button type="button" class="media-toolbar-btn media-toolbar-locked" title="Premium feature" onclick="window.location.href='{{ url_for('profile_settings', username=current_user.username) }}#premium'">
+                        <i class="fas fa-microphone"></i> Voice Note <span class="premium-badge-small">Premium</span>
+                    </button>
+                    {% endif %}
+                </div>
                 <input type="text" id="edit-summary" maxlength="180"
                     placeholder="Edit summary (optional, helps owner review)"
                     style="width:100%; margin-bottom:0.75rem; border:1px solid #ddd; border-radius:8px; padding:0.55rem; font-size:0.85rem;">
@@ -389,6 +413,56 @@
             {% endif %}
         </div>
         {% endif %}
+
+        <!-- Note Attachments Gallery (images & voice notes) -->
+        {% if surprise_theme == 'none' and (note_attachments or can_upload_media) %}
+        <div class="note-attachments-section" id="note-attachments-section">
+            <h3 class="attachments-title">
+                <i class="fas fa-paperclip"></i> Attachments
+                <span id="attachments-count" class="comment-count">{{ note_attachments|length if note_attachments else 0 }}</span>
+            </h3>
+            <div class="attachments-gallery" id="attachments-gallery">
+                {% for att in note_attachments %}
+                <div class="attachment-item attachment-{{ att.file_type }}" data-attachment-id="{{ att.id }}">
+                    {% if att.file_type == 'image' %}
+                    <div class="attachment-image-wrap">
+                        <img src="{{ att.url }}" alt="{{ att.filename }}" loading="lazy" onclick="openLightbox(this.src)">
+                    </div>
+                    {% elif att.file_type == 'audio' %}
+                    <div class="attachment-audio-wrap">
+                        <div class="audio-icon"><i class="fas fa-waveform-lines"></i></div>
+                        <div class="audio-details">
+                            <span class="audio-filename">{{ att.filename }}</span>
+                            <audio controls preload="metadata" style="width: 100%; max-width: 320px;">
+                                <source src="{{ att.url }}">
+                            </audio>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="attachment-meta">
+                        <span class="attachment-uploader">{{ att.uploader_name }}</span>
+                        {% if is_owner or (current_user.is_authenticated and current_user.id == att.uploader_id) %}
+                        <button type="button" class="attachment-delete-btn" onclick="deleteAttachment('{{ att.id }}')" title="Delete">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% if not note_attachments %}
+            <p class="attachments-empty" id="attachments-empty">No attachments yet. Use the editor toolbar to add images or voice notes.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Image Lightbox -->
+        <div id="image-lightbox" class="image-lightbox" onclick="closeLightbox()" style="display:none;">
+            <div class="lightbox-content">
+                <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+                <img id="lightbox-img" src="" alt="Attachment preview">
+            </div>
+        </div>
 
         <!-- Discussion Section -->
         {% if share_id != 'local' %}
@@ -725,6 +799,240 @@
         }
         .draft-indicator.visible { display: flex; }
 
+        /* --- Media Upload Toolbar --- */
+        .media-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            padding: 0.5rem 0;
+            border-top: 1px solid #f0eee9;
+            flex-wrap: wrap;
+        }
+        .media-toolbar-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.4rem 0.85rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fdfaf8;
+            color: #555;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .media-toolbar-btn:hover {
+            background: #f0eee9;
+            border-color: #c8bfb5;
+            color: #3e2217;
+        }
+        .media-toolbar-btn i { font-size: 0.9rem; }
+        .media-toolbar-locked {
+            opacity: 0.7;
+            cursor: pointer;
+        }
+        .media-toolbar-locked:hover { opacity: 0.85; }
+        .premium-badge-small {
+            background: linear-gradient(135deg, #f5af19, #f12711);
+            color: white;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            margin-left: 2px;
+        }
+        .upload-progress {
+            flex: 1;
+            max-width: 200px;
+            height: 6px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .upload-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #3e2217, #7a5d52);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .upload-progress-text {
+            font-size: 0.72rem;
+            color: #999;
+            white-space: nowrap;
+            margin-left: 0.5rem;
+        }
+
+        /* --- Attachments Gallery --- */
+        .note-attachments-section {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 1.25rem 1.5rem;
+            margin-top: 1rem;
+        }
+        .attachments-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #3e2217;
+            margin: 0 0 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .attachments-title i {
+            color: #7a5d52;
+            font-size: 0.95rem;
+        }
+        .attachments-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0.75rem;
+        }
+        .attachment-item {
+            border: 1px solid #f0eee9;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fdfaf8;
+            transition: box-shadow 0.2s;
+        }
+        .attachment-item:hover {
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        .attachment-image .attachment-image-wrap {
+            aspect-ratio: 4/3;
+            overflow: hidden;
+            cursor: pointer;
+            background: #f5f3f0;
+        }
+        .attachment-image-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.2s;
+        }
+        .attachment-image-wrap:hover img {
+            transform: scale(1.04);
+        }
+        .attachment-audio {
+            grid-column: span 2;
+        }
+        .attachment-audio-wrap {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+        }
+        .audio-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3e2217, #7a5d52);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1rem;
+        }
+        .audio-details {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .audio-filename {
+            font-size: 0.78rem;
+            color: #777;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .audio-details audio {
+            height: 32px;
+        }
+        .attachment-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0.75rem;
+            border-top: 1px solid #f0eee9;
+            font-size: 0.72rem;
+            color: #999;
+        }
+        .attachment-uploader { font-weight: 500; }
+        .attachment-delete-btn {
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .attachment-delete-btn:hover {
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.08);
+        }
+        .attachments-empty {
+            font-size: 0.85rem;
+            color: #aaa;
+            text-align: center;
+            padding: 1rem 0;
+            margin: 0;
+        }
+
+        /* --- Image Lightbox --- */
+        .image-lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .lightbox-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+        }
+        .lightbox-content img {
+            max-width: 90vw;
+            max-height: 85vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 40px rgba(0, 0, 0, 0.5);
+        }
+        .lightbox-close {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: white;
+            color: #333;
+            font-size: 1.3rem;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+
         @media (max-width: 1000px) {
             .shared-note-layout { flex-direction: column; padding: 0 0.5rem; }
             .toc-sidebar {
@@ -738,6 +1046,10 @@
             .shared-note-container {
                 max-width: 100%;
             }
+            .attachments-gallery {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            }
+            .attachment-audio { grid-column: span 1; }
         }
 
         .error-state,
@@ -2475,6 +2787,199 @@
                         saveSharedBtn.disabled = false;
                     }
                 });
+            }
+
+            // --- Note Media Attachments (upload, delete, lightbox) ---
+            const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }};
+            const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
+
+            // Lightbox
+            function openLightbox(src) {
+                const lb = document.getElementById('image-lightbox');
+                const img = document.getElementById('lightbox-img');
+                if (lb && img) {
+                    img.src = src;
+                    lb.style.display = 'flex';
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+            function closeLightbox() {
+                const lb = document.getElementById('image-lightbox');
+                if (lb) {
+                    lb.style.display = 'none';
+                    document.body.style.overflow = '';
+                }
+            }
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeLightbox();
+            });
+
+            // Upload handler
+            function uploadNoteAttachment(file) {
+                if (!file) return;
+                const progressWrap = document.getElementById('upload-progress');
+                const progressBar = document.getElementById('upload-progress-bar');
+                const progressText = document.getElementById('upload-progress-text');
+
+                if (progressWrap) progressWrap.style.display = 'flex';
+                if (progressBar) progressBar.style.width = '0%';
+                if (progressText) progressText.textContent = 'Uploading...';
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `/share/note/{{ share_id }}/upload`);
+                xhr.setRequestHeader('X-CSRFToken', '{{ csrf_token() }}');
+
+                xhr.upload.addEventListener('progress', function(e) {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        if (progressBar) progressBar.style.width = pct + '%';
+                        if (progressText) progressText.textContent = pct + '%';
+                    }
+                });
+
+                xhr.onload = function() {
+                    if (progressWrap) progressWrap.style.display = 'none';
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && result.success) {
+                            appendAttachmentToGallery(result.attachment);
+                            if (typeof showToast === 'function') showToast('Attachment uploaded!', 'info');
+                        } else {
+                            const errMsg = result.error || 'Upload failed';
+                            if (result.upgrade) {
+                                if (typeof showToast === 'function') showToast('This feature requires Premium.', 'error');
+                            } else {
+                                alert(errMsg);
+                            }
+                        }
+                    } catch (e) {
+                        alert('Upload failed. Please try again.');
+                    }
+                };
+
+                xhr.onerror = function() {
+                    if (progressWrap) progressWrap.style.display = 'none';
+                    alert('Network error during upload.');
+                };
+
+                xhr.send(formData);
+            }
+
+            // Append new attachment to the gallery dynamically
+            function appendAttachmentToGallery(att) {
+                const gallery = document.getElementById('attachments-gallery');
+                const emptyMsg = document.getElementById('attachments-empty');
+                const countEl = document.getElementById('attachments-count');
+                const section = document.getElementById('note-attachments-section');
+
+                if (emptyMsg) emptyMsg.remove();
+                if (section) section.style.display = '';
+
+                if (!gallery) return;
+
+                const div = document.createElement('div');
+                div.className = `attachment-item attachment-${att.file_type}`;
+                div.setAttribute('data-attachment-id', att.id);
+
+                let innerHtml = '';
+                if (att.file_type === 'image') {
+                    innerHtml = `
+                        <div class="attachment-image-wrap">
+                            <img src="${att.url}" alt="${att.filename}" loading="lazy" onclick="openLightbox(this.src)">
+                        </div>`;
+                } else if (att.file_type === 'audio') {
+                    innerHtml = `
+                        <div class="attachment-audio-wrap">
+                            <div class="audio-icon"><i class="fas fa-waveform-lines"></i></div>
+                            <div class="audio-details">
+                                <span class="audio-filename">${att.filename}</span>
+                                <audio controls preload="metadata" style="width:100%;max-width:320px;">
+                                    <source src="${att.url}">
+                                </audio>
+                            </div>
+                        </div>`;
+                }
+
+                // Add meta row with delete button
+                innerHtml += `
+                    <div class="attachment-meta">
+                        <span class="attachment-uploader">${att.uploader_name}</span>
+                        <button type="button" class="attachment-delete-btn" onclick="deleteAttachment('${att.id}')" title="Delete">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>`;
+
+                div.innerHTML = innerHtml;
+                gallery.appendChild(div);
+
+                // Update count
+                if (countEl) {
+                    const currentCount = parseInt(countEl.textContent) || 0;
+                    countEl.textContent = currentCount + 1;
+                }
+            }
+
+            // Delete attachment
+            async function deleteAttachment(attachmentId) {
+                if (!confirm('Delete this attachment?')) return;
+
+                try {
+                    const resp = await fetch(`/share/note/{{ share_id }}/attachment/${attachmentId}`, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+                    });
+                    const result = await resp.json();
+                    if (result.success) {
+                        const el = document.querySelector(`[data-attachment-id="${attachmentId}"]`);
+                        if (el) el.remove();
+                        const countEl = document.getElementById('attachments-count');
+                        if (countEl) {
+                            const newCount = Math.max(0, (parseInt(countEl.textContent) || 1) - 1);
+                            countEl.textContent = newCount;
+                            if (newCount === 0) {
+                                const gallery = document.getElementById('attachments-gallery');
+                                if (gallery && !gallery.querySelector('.attachment-item')) {
+                                    const emptyP = document.createElement('p');
+                                    emptyP.className = 'attachments-empty';
+                                    emptyP.id = 'attachments-empty';
+                                    emptyP.textContent = 'No attachments yet. Use the editor toolbar to add images or voice notes.';
+                                    gallery.parentNode.appendChild(emptyP);
+                                }
+                            }
+                        }
+                        if (typeof showToast === 'function') showToast('Attachment deleted.', 'info');
+                    } else {
+                        alert(result.error || 'Failed to delete attachment.');
+                    }
+                } catch (e) {
+                    alert('Network error while deleting.');
+                }
+            }
+
+            // Wire up file input buttons
+            if (CAN_UPLOAD_MEDIA) {
+                const imgBtn = document.getElementById('upload-image-btn');
+                const audioBtn = document.getElementById('upload-audio-btn');
+                const imgInput = document.getElementById('image-file-input');
+                const audioInput = document.getElementById('audio-file-input');
+
+                if (imgBtn && imgInput) {
+                    imgBtn.addEventListener('click', () => imgInput.click());
+                    imgInput.addEventListener('change', function() {
+                        if (this.files.length) uploadNoteAttachment(this.files[0]);
+                        this.value = '';
+                    });
+                }
+                if (audioBtn && audioInput) {
+                    audioBtn.addEventListener('click', () => audioInput.click());
+                    audioInput.addEventListener('change', function() {
+                        if (this.files.length) uploadNoteAttachment(this.files[0]);
+                        this.value = '';
+                    });
+                }
             }
 
             // --- Toast Notification System ---

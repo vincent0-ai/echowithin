@@ -241,6 +241,9 @@
                     <button id="view-history-btn" class="btn btn-history" title="Stats" type="button">
                         <i class="fas fa-chart-line"></i>
                     </button>
+                    <button id="ping-collaborators-btn" class="btn btn-history" title="Ping Collaborators" type="button" onclick="pingCollaborators('{{ share_id }}')">
+                        <i class="fas fa-bell"></i>
+                    </button>
                     {% endif %}
                 </div>
             </div>
@@ -364,9 +367,21 @@
                     <button type="button" class="media-toolbar-btn" id="upload-image-btn" title="Add image">
                         <i class="fas fa-image"></i> Image
                     </button>
-                    <button type="button" class="media-toolbar-btn" id="upload-audio-btn" title="Add voice note">
-                        <i class="fas fa-microphone"></i> Voice Note
+                    <button type="button" class="media-toolbar-btn" id="record-audio-btn" title="Hold to record voice note"
+                        onmousedown="window.startSharedVoiceRecording(event)" ontouchstart="window.startSharedVoiceRecording(event)"
+                        style="user-select: none; -webkit-user-select: none;">
+                        <i class="fas fa-microphone"></i> Record
                     </button>
+                    <button type="button" class="media-toolbar-btn" id="upload-audio-btn" title="Upload audio file">
+                        <i class="fas fa-file-audio"></i> Upload
+                    </button>
+                    <div id="shared-voice-recording-ui" class="voice-recording-ui" style="display:none; align-items:center; gap:8px; margin-left: auto; background: #fff8f8; padding: 4px 12px; border-radius: 20px; border: 1px solid #ffcccc; font-size: 0.85rem;">
+                        <span class="voice-pulse" style="width: 8px; height: 8px; background: red; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
+                        <span id="shared-voice-timer" style="font-family: monospace; font-weight: 600;">0:00</span>
+                        <button type="button" class="shared-voice-cancel-btn" style="background:none;border:none;color:#666;cursor:pointer;margin-left:4px;" title="Cancel">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
                     <input type="file" id="image-file-input" accept="image/png,image/jpg,image/jpeg,image/gif"
                         style="display:none;">
                     <input type="file" id="audio-file-input"
@@ -2925,7 +2940,7 @@
         const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
 
     // Lightbox
-    function openLightbox(src) {
+    window.openLightbox = function(src) {
         const lb = document.getElementById('image-lightbox');
         const img = document.getElementById('lightbox-img');
         if (lb && img) {
@@ -2933,20 +2948,125 @@
             lb.style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
-    }
-    function closeLightbox() {
+    };
+    window.closeLightbox = function() {
         const lb = document.getElementById('image-lightbox');
         if (lb) {
             lb.style.display = 'none';
             document.body.style.overflow = '';
         }
-    }
+    };
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closeLightbox();
+        if (e.key === 'Escape') window.closeLightbox();
     });
 
+    // Shared Note Voice Recording Logic
+    let sharedMediaRecorder;
+    let sharedAudioChunks = [];
+    let sharedRecordingStartTime;
+    let sharedRecordingTimer;
+
+    window.startSharedVoiceRecording = function(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert("Your browser doesn't support audio recording");
+            return;
+        }
+
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            sharedMediaRecorder = new MediaRecorder(stream);
+            sharedAudioChunks = [];
+            sharedMediaRecorder.ondataavailable = ev => sharedAudioChunks.push(ev.data);
+            sharedMediaRecorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+            };
+
+            sharedMediaRecorder.start();
+            sharedRecordingStartTime = Date.now();
+            
+            const recBtn = document.getElementById('record-audio-btn');
+            const upBtn = document.getElementById('upload-audio-btn');
+            if(recBtn) recBtn.style.display = 'none';
+            if(upBtn) upBtn.style.display = 'none';
+            document.getElementById('shared-voice-recording-ui').style.display = 'flex';
+            
+            sharedRecordingTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - sharedRecordingStartTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('shared-voice-timer').textContent = `${mins}:${secs}`;
+            }, 1000);
+            
+            const handleRelease = function(ev) {
+                document.removeEventListener('mouseup', handleRelease);
+                document.removeEventListener('touchend', handleRelease);
+                document.removeEventListener('keydown', handleKey);
+                
+                if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
+                    const cancelBtn = document.querySelector('.shared-voice-cancel-btn');
+                    if (cancelBtn) {
+                        let clientX = ev.clientX;
+                        let clientY = ev.clientY;
+                        if (ev.changedTouches && ev.changedTouches.length > 0) {
+                            clientX = ev.changedTouches[0].clientX;
+                            clientY = ev.changedTouches[0].clientY;
+                        }
+                        const rect = cancelBtn.getBoundingClientRect();
+                        if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                            window.cancelSharedVoiceRecording();
+                            return;
+                        }
+                    }
+                }
+                window.sendSharedVoiceRecording();
+            };
+            
+            const handleKey = function(ev) {
+                if (ev.key === 'Escape') {
+                    document.removeEventListener('mouseup', handleRelease);
+                    document.removeEventListener('touchend', handleRelease);
+                    document.removeEventListener('keydown', handleKey);
+                    window.cancelSharedVoiceRecording();
+                }
+            };
+
+            document.addEventListener('mouseup', handleRelease);
+            document.addEventListener('touchend', handleRelease);
+            document.addEventListener('keydown', handleKey);
+            
+        }).catch(err => {
+            console.error(err);
+            alert("Microphone access denied or permission dismissed");
+        });
+    };
+
+    window.cancelSharedVoiceRecording = function() {
+        if (sharedMediaRecorder && sharedMediaRecorder.state !== 'inactive') {
+            sharedMediaRecorder.stop();
+        }
+        clearInterval(sharedRecordingTimer);
+        document.getElementById('shared-voice-recording-ui').style.display = 'none';
+        const recBtn = document.getElementById('record-audio-btn');
+        const upBtn = document.getElementById('upload-audio-btn');
+        if(recBtn) recBtn.style.display = 'inline-flex';
+        if(upBtn) upBtn.style.display = 'inline-flex';
+    };
+
+    window.sendSharedVoiceRecording = function() {
+        if (!sharedMediaRecorder || sharedMediaRecorder.state === 'inactive') return;
+        
+        sharedMediaRecorder.onstop = () => {
+            const audioBlob = new Blob(sharedAudioChunks, { type: 'audio/webm' });
+            const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
+            window.cancelSharedVoiceRecording();
+            window.uploadNoteAttachment(file);
+        };
+        sharedMediaRecorder.stop();
+    };
+
     // Upload handler
-    function uploadNoteAttachment(file) {
+    window.uploadNoteAttachment = function(file) {
         if (!file) return;
         const progressWrap = document.getElementById('upload-progress');
         const progressBar = document.getElementById('upload-progress-bar');
@@ -3000,7 +3120,7 @@
     }
 
     // Append new attachment to the gallery dynamically
-    function appendAttachmentToGallery(att) {
+    window.appendAttachmentToGallery = function(att) {
         const gallery = document.getElementById('attachments-gallery');
         const emptyMsg = document.getElementById('attachments-empty');
         const countEl = document.getElementById('attachments-count');
@@ -3053,8 +3173,50 @@
         }
     }
 
+    // Ping collaborators
+    window.pingCollaborators = async function(shareId) {
+        const btn = document.getElementById('ping-collaborators-btn');
+        const icon = btn.querySelector('i');
+        const originalClass = icon.className;
+        
+        icon.className = 'fas fa-spinner fa-spin';
+        btn.disabled = true;
+        
+        try {
+            const resp = await fetch(`/api/share/${shareId}/ping`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
+            });
+            const result = await resp.json();
+            
+            if (resp.ok && result.success) {
+                if (typeof showToast === 'function') {
+                    showToast(`Pinged ${result.pinged_count} collaborator(s)!`, 'success');
+                } else {
+                    alert(`Pinged ${result.pinged_count} collaborator(s)!`);
+                }
+            } else {
+                if (result.code === 'cooldown') {
+                    if (typeof showToast === 'function') {
+                        showToast(result.error, 'error');
+                    } else {
+                        alert(result.error);
+                    }
+                } else {
+                    alert(result.error || 'Failed to ping collaborators.');
+                }
+            }
+        } catch (e) {
+            console.error('Ping error:', e);
+            alert('Network error while pinging.');
+        } finally {
+            icon.className = originalClass;
+            btn.disabled = false;
+        }
+    }
+
     // Delete attachment
-    async function deleteAttachment(attachmentId) {
+    window.deleteAttachment = async function(attachmentId) {
         if (!confirm('Delete this attachment?')) return;
 
         try {

@@ -9006,6 +9006,59 @@ def toggle_note_lock(post_id):
 
 # ----------------- Note Sharing Endpoints -----------------
 
+@app.route('/api/share/<share_id>/ping', methods=['POST'])
+@login_required
+@limits(calls=5, period=60)
+def ping_collaborators(share_id):
+    try:
+        share = note_shares_conf.find_one({'_id': ObjectId(share_id)})
+        if not share:
+            return jsonify({'error': 'Share not found'}), 404
+        
+        # Only owner can ping
+        if str(share.get('owner_id')) != current_user.id:
+            return jsonify({'error': 'Only the owner can ping collaborators'}), 403
+            
+        # Check cooldown in Redis (1 hour = 3600 seconds)
+        if redis_cache:
+            cooldown_key = f"ping_cooldown_{share_id}"
+            if redis_cache.get(cooldown_key):
+                return jsonify({'error': 'Ping on cooldown. Please wait 1 hour between pings.', 'code': 'cooldown'}), 429
+            
+        # Find all users who saved this note
+        note_id = share['note_id']
+        clones = list(personal_posts_conf.find({'source_note_id': note_id}))
+        
+        pinged_count = 0
+        for clone in clones:
+            clone_user_id = str(clone.get('user_id'))
+            if clone_user_id != current_user.id:
+                # Send push notification
+                share_url = url_for('view_shared_note', share_id=share_id, _external=True)
+                title = "Ping from Note Owner 🔔"
+                body = f"{current_user.username} is reminding you to check the shared note!"
+                try:
+                    send_push_notification_to_user(
+                        user_id_str=clone_user_id,
+                        title=title,
+                        body=body,
+                        url=share_url,
+                        tag=f"ping_{share_id}",
+                        extra_data={'type': 'note_ping', 'share_id': share_id}
+                    )
+                    pinged_count += 1
+                except Exception as notify_err:
+                    app.logger.error(f"Ping push failed for {clone_user_id}: {notify_err}")
+                
+        if pinged_count > 0 and redis_cache:
+            redis_cache.set(cooldown_key, '1', ex=3600)
+            
+        return jsonify({'success': True, 'pinged_count': pinged_count})
+        
+    except Exception as e:
+        app.logger.error(f"Error pinging collaborators: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/personal_post/share/<post_id>', methods=['POST'])
 @login_required
 @limits(calls=10, period=60)

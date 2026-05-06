@@ -120,7 +120,8 @@
                             <div id="chat-status" style="font-size: 0.75rem; color: #64748b; display: none;">Online</div>
                             <div id="typing-indicator" style="font-size: 0.75rem; color: #3e2217; font-style: italic; display: none;">Typing...</div>
                         </div>
-                        </a>\n                    </div>
+                        </a>
+                    </div>
                     <div class="chat-header-actions {{ 'hidden' if not active_chat else '' }}" id="chat-header-actions" 
                          style="gap: 8px;">
                         <button class="header-action-btn" onclick="toggleChatSearch()" title="Search Chat">
@@ -230,9 +231,9 @@
 
                         <!-- Voice Message Button (Premium) -->
                         {% if user_is_premium %}
-                        <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn" onclick="startVoiceRecording()"
-                                title="Voice message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                        <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn" onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
+                                title="Hold to record voice message"
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none;">
                             <i class="fas fa-microphone"></i>
                         </button>
                         {% endif %}
@@ -676,7 +677,7 @@
 
     /* --- Overhaul Styles --- */
     .scroll-bottom-fab {
-        position: absolute; bottom: 85px; right: 20px;
+        position: absolute; bottom: 110px; right: 20px;
         width: 40px; height: 40px; border-radius: 50%;
         background: #3e2217; color: #fff; border: none;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -1671,7 +1672,9 @@
         };
 
         // --- Voice Recording Logic (Premium) ---
-        window.startVoiceRecording = function() {
+        window.startVoiceRecording = function(e) {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showToast("Your browser doesn't support audio recording");
                 return;
@@ -1680,7 +1683,7 @@
             navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
-                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.ondataavailable = ev => audioChunks.push(ev.data);
                 mediaRecorder.onstop = () => {
                     stream.getTracks().forEach(t => t.stop());
                 };
@@ -1694,9 +1697,47 @@
                     const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
                     document.getElementById('voice-timer').textContent = formatTime(elapsed);
                 }, 1000);
+                
+                const handleRelease = function(ev) {
+                    document.removeEventListener('mouseup', handleRelease);
+                    document.removeEventListener('touchend', handleRelease);
+                    document.removeEventListener('keydown', handleKey);
+                    
+                    if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
+                        const cancelBtn = document.querySelector('.voice-cancel-btn');
+                        if (cancelBtn) {
+                            let clientX = ev.clientX;
+                            let clientY = ev.clientY;
+                            if (ev.changedTouches && ev.changedTouches.length > 0) {
+                                clientX = ev.changedTouches[0].clientX;
+                                clientY = ev.changedTouches[0].clientY;
+                            }
+                            const rect = cancelBtn.getBoundingClientRect();
+                            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                                cancelVoiceRecording();
+                                return;
+                            }
+                        }
+                    }
+                    sendVoiceRecording();
+                };
+                
+                const handleKey = function(ev) {
+                    if (ev.key === 'Escape') {
+                        document.removeEventListener('mouseup', handleRelease);
+                        document.removeEventListener('touchend', handleRelease);
+                        document.removeEventListener('keydown', handleKey);
+                        cancelVoiceRecording();
+                    }
+                };
+
+                document.addEventListener('mouseup', handleRelease);
+                document.addEventListener('touchend', handleRelease);
+                document.addEventListener('keydown', handleKey);
+                
             }).catch(err => {
                 console.error(err);
-                showToast("Microphone access denied");
+                showToast("Microphone access denied or permission dismissed");
             });
         };
 

@@ -4469,9 +4469,10 @@
 
     function genPdf(html, filename) {
         var c = document.createElement('div');
-        c.style.cssText = 'font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#333;padding:20px;max-width:650px;';
+        c.style.cssText = 'font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#333;padding:20px;max-width:650px;position:fixed;left:-9999px;top:0;z-index:-1;background:white;';
         c.innerHTML = html + '<div style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center;">Exported from EchoWithin</div>';
-        html2pdf().set({ margin:[15,15,15,15], filename: filename+'.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(c).save();
+        document.body.appendChild(c);
+        html2pdf().set({ margin:[15,15,15,15], filename: filename+'.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(c).save().then(function() { document.body.removeChild(c); });
     }
 
     function dlBlob(blob, name) {

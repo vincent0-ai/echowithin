@@ -6109,13 +6109,18 @@
 
         function generatePdf(html, reference, filename) {
             const container = document.createElement('div');
-            container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px;';
+            container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px; position: fixed; left: -9999px; top: 0; z-index: -1; background: white;';
 
+            let content = '';
             if (reference) {
-                container.innerHTML = '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
+                content += '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
             }
-            container.innerHTML += html;
-            container.innerHTML += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
+            content += html;
+            content += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
+            container.innerHTML = content;
+
+            // Must be in DOM for html2canvas to render
+            document.body.appendChild(container);
 
             const opt = {
                 margin: [15, 15, 15, 15],
@@ -6125,7 +6130,9 @@
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
             };
 
-            html2pdf().set(opt).from(container).save();
+            html2pdf().set(opt).from(container).save().then(function() {
+                document.body.removeChild(container);
+            });
         }
 
         function exportAsDocx(rawContent, html, reference, filename) {

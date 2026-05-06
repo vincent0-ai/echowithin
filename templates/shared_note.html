@@ -2965,16 +2965,89 @@
     let sharedAudioChunks = [];
     let sharedRecordingStartTime;
     let sharedRecordingTimer;
+    let _sharedVoiceState = 'idle';
+    let _sharedReleaseBeforeReady = false;
 
     window.startSharedVoiceRecording = function(e) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (_sharedVoiceState !== 'idle') return;
         
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             alert("Your browser doesn't support audio recording");
             return;
         }
 
+        _sharedVoiceState = 'waiting_permission';
+        _sharedReleaseBeforeReady = false;
+
+        // Register release listeners BEFORE the async permission call
+        const handleRelease = function(ev) {
+            document.removeEventListener('mouseup', handleRelease);
+            document.removeEventListener('touchend', handleRelease);
+            document.removeEventListener('keydown', handleKey);
+            
+            if (_sharedVoiceState === 'waiting_permission') {
+                _sharedReleaseBeforeReady = true;
+                return;
+            }
+            
+            if (_sharedVoiceState !== 'recording') return;
+            
+            // Check if release was over the cancel button
+            if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
+                const cancelBtn = document.querySelector('.shared-voice-cancel-btn');
+                if (cancelBtn) {
+                    let clientX = ev.clientX;
+                    let clientY = ev.clientY;
+                    if (ev.changedTouches && ev.changedTouches.length > 0) {
+                        clientX = ev.changedTouches[0].clientX;
+                        clientY = ev.changedTouches[0].clientY;
+                    }
+                    const rect = cancelBtn.getBoundingClientRect();
+                    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                        window.cancelSharedVoiceRecording();
+                        return;
+                    }
+                }
+            }
+            
+            // Enforce minimum 1-second recording
+            const elapsed = Date.now() - sharedRecordingStartTime;
+            if (elapsed < 1000) {
+                if (typeof showToast === 'function') showToast("Hold longer to record", 'info');
+                window.cancelSharedVoiceRecording();
+                return;
+            }
+            
+            window.sendSharedVoiceRecording();
+        };
+        
+        const handleKey = function(ev) {
+            if (ev.key === 'Escape') {
+                document.removeEventListener('mouseup', handleRelease);
+                document.removeEventListener('touchend', handleRelease);
+                document.removeEventListener('keydown', handleKey);
+                if (_sharedVoiceState === 'waiting_permission') {
+                    _sharedReleaseBeforeReady = true;
+                } else {
+                    window.cancelSharedVoiceRecording();
+                }
+            }
+        };
+
+        document.addEventListener('mouseup', handleRelease);
+        document.addEventListener('touchend', handleRelease);
+        document.addEventListener('keydown', handleKey);
+
         navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            // If user already released before we got here, abort immediately
+            if (_sharedReleaseBeforeReady) {
+                stream.getTracks().forEach(t => t.stop());
+                _sharedVoiceState = 'idle';
+                _sharedReleaseBeforeReady = false;
+                return;
+            }
+
             sharedMediaRecorder = new MediaRecorder(stream);
             sharedAudioChunks = [];
             sharedMediaRecorder.ondataavailable = ev => sharedAudioChunks.push(ev.data);
@@ -2983,6 +3056,7 @@
             };
 
             sharedMediaRecorder.start();
+            _sharedVoiceState = 'recording';
             sharedRecordingStartTime = Date.now();
             
             const recBtn = document.getElementById('record-audio-btn');
@@ -2998,45 +3072,13 @@
                 document.getElementById('shared-voice-timer').textContent = `${mins}:${secs}`;
             }, 1000);
             
-            const handleRelease = function(ev) {
-                document.removeEventListener('mouseup', handleRelease);
-                document.removeEventListener('touchend', handleRelease);
-                document.removeEventListener('keydown', handleKey);
-                
-                if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
-                    const cancelBtn = document.querySelector('.shared-voice-cancel-btn');
-                    if (cancelBtn) {
-                        let clientX = ev.clientX;
-                        let clientY = ev.clientY;
-                        if (ev.changedTouches && ev.changedTouches.length > 0) {
-                            clientX = ev.changedTouches[0].clientX;
-                            clientY = ev.changedTouches[0].clientY;
-                        }
-                        const rect = cancelBtn.getBoundingClientRect();
-                        if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-                            window.cancelSharedVoiceRecording();
-                            return;
-                        }
-                    }
-                }
-                window.sendSharedVoiceRecording();
-            };
-            
-            const handleKey = function(ev) {
-                if (ev.key === 'Escape') {
-                    document.removeEventListener('mouseup', handleRelease);
-                    document.removeEventListener('touchend', handleRelease);
-                    document.removeEventListener('keydown', handleKey);
-                    window.cancelSharedVoiceRecording();
-                }
-            };
-
-            document.addEventListener('mouseup', handleRelease);
-            document.addEventListener('touchend', handleRelease);
-            document.addEventListener('keydown', handleKey);
-            
         }).catch(err => {
             console.error(err);
+            _sharedVoiceState = 'idle';
+            _sharedReleaseBeforeReady = false;
+            document.removeEventListener('mouseup', handleRelease);
+            document.removeEventListener('touchend', handleRelease);
+            document.removeEventListener('keydown', handleKey);
             alert("Microphone access denied or permission dismissed");
         });
     };
@@ -3046,6 +3088,7 @@
             sharedMediaRecorder.stop();
         }
         clearInterval(sharedRecordingTimer);
+        _sharedVoiceState = 'idle';
         document.getElementById('shared-voice-recording-ui').style.display = 'none';
         const recBtn = document.getElementById('record-audio-btn');
         const upBtn = document.getElementById('upload-audio-btn');
@@ -3055,6 +3098,7 @@
 
     window.sendSharedVoiceRecording = function() {
         if (!sharedMediaRecorder || sharedMediaRecorder.state === 'inactive') return;
+        _sharedVoiceState = 'sending';
         
         sharedMediaRecorder.onstop = () => {
             const audioBlob = new Blob(sharedAudioChunks, { type: 'audio/webm' });
@@ -3190,20 +3234,21 @@
             const result = await resp.json();
             
             if (resp.ok && result.success) {
+                const msg = result.pinged_count > 0
+                    ? `Pinged ${result.pinged_count} collaborator(s)!`
+                    : (result.message || 'No collaborators to ping yet.');
+                const level = result.pinged_count > 0 ? 'success' : 'info';
                 if (typeof showToast === 'function') {
-                    showToast(`Pinged ${result.pinged_count} collaborator(s)!`, 'success');
+                    showToast(msg, level);
                 } else {
-                    alert(`Pinged ${result.pinged_count} collaborator(s)!`);
+                    alert(msg);
                 }
             } else {
-                if (result.code === 'cooldown') {
-                    if (typeof showToast === 'function') {
-                        showToast(result.error, 'error');
-                    } else {
-                        alert(result.error);
-                    }
+                const errMsg = result.error || 'Failed to ping collaborators.';
+                if (typeof showToast === 'function') {
+                    showToast(errMsg, 'error');
                 } else {
-                    alert(result.error || 'Failed to ping collaborators.');
+                    alert(errMsg);
                 }
             }
         } catch (e) {

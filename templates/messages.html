@@ -229,14 +229,12 @@
                                 style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none;">
                         </div>
 
-                        <!-- Voice Message Button (Premium) -->
-                        {% if user_is_premium %}
+                        <!-- Voice Message Button -->
                         <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn" onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
                                 title="Hold to record voice message"
                                 style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none;">
                             <i class="fas fa-microphone"></i>
                         </button>
-                        {% endif %}
 
                         <!-- Schedule Button -->
                         <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
@@ -1672,15 +1670,90 @@
         };
 
         // --- Voice Recording Logic (Premium) ---
+        let _voiceRecordingState = 'idle'; // idle | waiting_permission | recording | sending
+        let _releaseBeforeReady = false;
+
         window.startVoiceRecording = function(e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
+            if (_voiceRecordingState !== 'idle') return;
             
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showToast("Your browser doesn't support audio recording");
                 return;
             }
 
+            _voiceRecordingState = 'waiting_permission';
+            _releaseBeforeReady = false;
+
+            // Register release listeners BEFORE the async permission call
+            const handleRelease = function(ev) {
+                document.removeEventListener('mouseup', handleRelease);
+                document.removeEventListener('touchend', handleRelease);
+                document.removeEventListener('keydown', handleKey);
+                
+                if (_voiceRecordingState === 'waiting_permission') {
+                    // User released before getUserMedia resolved — flag it
+                    _releaseBeforeReady = true;
+                    return;
+                }
+                
+                if (_voiceRecordingState !== 'recording') return;
+                
+                // Check if release was over the cancel button
+                if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
+                    const cancelBtn = document.querySelector('.voice-cancel-btn');
+                    if (cancelBtn) {
+                        let clientX = ev.clientX;
+                        let clientY = ev.clientY;
+                        if (ev.changedTouches && ev.changedTouches.length > 0) {
+                            clientX = ev.changedTouches[0].clientX;
+                            clientY = ev.changedTouches[0].clientY;
+                        }
+                        const rect = cancelBtn.getBoundingClientRect();
+                        if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                            cancelVoiceRecording();
+                            return;
+                        }
+                    }
+                }
+                
+                // Enforce minimum 1-second recording
+                const elapsed = Date.now() - recordingStartTime;
+                if (elapsed < 1000) {
+                    showToast("Hold longer to record");
+                    cancelVoiceRecording();
+                    return;
+                }
+                
+                sendVoiceRecording();
+            };
+            
+            const handleKey = function(ev) {
+                if (ev.key === 'Escape') {
+                    document.removeEventListener('mouseup', handleRelease);
+                    document.removeEventListener('touchend', handleRelease);
+                    document.removeEventListener('keydown', handleKey);
+                    if (_voiceRecordingState === 'waiting_permission') {
+                        _releaseBeforeReady = true;
+                    } else {
+                        cancelVoiceRecording();
+                    }
+                }
+            };
+
+            document.addEventListener('mouseup', handleRelease);
+            document.addEventListener('touchend', handleRelease);
+            document.addEventListener('keydown', handleKey);
+
             navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                // If user already released before we got here, abort immediately
+                if (_releaseBeforeReady) {
+                    stream.getTracks().forEach(t => t.stop());
+                    _voiceRecordingState = 'idle';
+                    _releaseBeforeReady = false;
+                    return;
+                }
+
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
                 mediaRecorder.ondataavailable = ev => audioChunks.push(ev.data);
@@ -1689,6 +1762,7 @@
                 };
 
                 mediaRecorder.start();
+                _voiceRecordingState = 'recording';
                 recordingStartTime = Date.now();
                 document.getElementById('voice-recording-ui').style.display = 'flex';
                 document.getElementById('chat-form').style.display = 'none';
@@ -1698,45 +1772,14 @@
                     document.getElementById('voice-timer').textContent = formatTime(elapsed);
                 }, 1000);
                 
-                const handleRelease = function(ev) {
-                    document.removeEventListener('mouseup', handleRelease);
-                    document.removeEventListener('touchend', handleRelease);
-                    document.removeEventListener('keydown', handleKey);
-                    
-                    if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
-                        const cancelBtn = document.querySelector('.voice-cancel-btn');
-                        if (cancelBtn) {
-                            let clientX = ev.clientX;
-                            let clientY = ev.clientY;
-                            if (ev.changedTouches && ev.changedTouches.length > 0) {
-                                clientX = ev.changedTouches[0].clientX;
-                                clientY = ev.changedTouches[0].clientY;
-                            }
-                            const rect = cancelBtn.getBoundingClientRect();
-                            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-                                cancelVoiceRecording();
-                                return;
-                            }
-                        }
-                    }
-                    sendVoiceRecording();
-                };
-                
-                const handleKey = function(ev) {
-                    if (ev.key === 'Escape') {
-                        document.removeEventListener('mouseup', handleRelease);
-                        document.removeEventListener('touchend', handleRelease);
-                        document.removeEventListener('keydown', handleKey);
-                        cancelVoiceRecording();
-                    }
-                };
-
-                document.addEventListener('mouseup', handleRelease);
-                document.addEventListener('touchend', handleRelease);
-                document.addEventListener('keydown', handleKey);
-                
             }).catch(err => {
                 console.error(err);
+                _voiceRecordingState = 'idle';
+                _releaseBeforeReady = false;
+                // Clean up listeners if permission denied
+                document.removeEventListener('mouseup', handleRelease);
+                document.removeEventListener('touchend', handleRelease);
+                document.removeEventListener('keydown', handleKey);
                 showToast("Microphone access denied or permission dismissed");
             });
         };
@@ -1746,12 +1789,14 @@
                 mediaRecorder.stop();
             }
             clearInterval(recordingTimer);
+            _voiceRecordingState = 'idle';
             document.getElementById('voice-recording-ui').style.display = 'none';
             document.getElementById('chat-form').style.display = 'flex';
         };
 
         window.sendVoiceRecording = function() {
             if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+            _voiceRecordingState = 'sending';
             
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
@@ -1759,8 +1804,10 @@
                 fd.append('voice', audioBlob, 'voice.webm');
 
                 const sendBtn = document.querySelector('.voice-send-btn');
-                sendBtn.disabled = true;
-                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                if (sendBtn) {
+                    sendBtn.disabled = true;
+                    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                }
 
                 fetch('/api/messages/upload_voice', {
                     method: 'POST',
@@ -1770,7 +1817,7 @@
                     if (d.success) {
                         const tempId = Date.now().toString();
                         const msgData = {
-                            image_url: d.url, // Using image_url field for now as backend/frontend uses it for encrypted media
+                            image_url: d.url,
                             message_type: 'audio',
                             temp_id: tempId,
                             timestamp: new Date().toISOString()

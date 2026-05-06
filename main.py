@@ -1282,7 +1282,7 @@ def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
 # ----------------- Premium Tier Configuration -----------------
 # Philosophy: Free tier is generous and fully usable.
 # Premium unlocks power-user features at KSH 50/month.
-# 3-day free trial for all new users.
+# 1-day free trial for all new users.
 TIER_LIMITS = {
     'free': {
         'max_notes': 50,
@@ -1294,7 +1294,7 @@ TIER_LIMITS = {
         'scheduled_messages': False,
         'note_media_attachments': False,
         'max_note_attachments': 0,
-        'voice_messages': False,
+        'voice_messages': True,             # voice messages are free for all users
         'version_history_days': 7,
         'auto_approve_collab': False,
     },
@@ -1314,7 +1314,7 @@ TIER_LIMITS = {
     }
 }
 
-PREMIUM_TRIAL_DAYS = 3
+PREMIUM_TRIAL_DAYS = 1
 PREMIUM_PRICE_KSH = 50  # per month
 
 
@@ -4716,7 +4716,7 @@ def get_my_commented_posts_json():
         for notif in unlock_notifs:
             u_name = notif.get('unlocked_by_name', 'Someone')
             u_id = notif.get('unlocked_by')
-            if u_name in ['Someone', 'Anonymous visitor'] and u_id:
+            if u_id:
                 try:
                     v_user = users_conf.find_one({'_id': ObjectId(u_id)}, {'username': 1})
                     if v_user and v_user.get('username'):
@@ -9011,7 +9011,7 @@ def toggle_note_lock(post_id):
 @limits(calls=5, period=60)
 def ping_collaborators(share_id):
     try:
-        share = note_shares_conf.find_one({'_id': ObjectId(share_id)})
+        share = note_shares_conf.find_one({'share_id': share_id})
         if not share:
             return jsonify({'error': 'Share not found'}), 404
         
@@ -9019,21 +9019,27 @@ def ping_collaborators(share_id):
         if str(share.get('owner_id')) != current_user.id:
             return jsonify({'error': 'Only the owner can ping collaborators'}), 403
             
-        # Check cooldown in Redis (1 hour = 3600 seconds)
+        # Check cooldown (1 hour = 3600 seconds)
+        cooldown_key = f"ping_cooldown_{share_id}"
         if redis_cache:
-            cooldown_key = f"ping_cooldown_{share_id}"
             if redis_cache.get(cooldown_key):
                 return jsonify({'error': 'Ping on cooldown. Please wait 1 hour between pings.', 'code': 'cooldown'}), 429
+        else:
+            # Fallback: check cooldown via session if Redis is unavailable
+            last_ping = session.get(cooldown_key)
+            if last_ping:
+                elapsed = (datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(last_ping)).total_seconds()
+                if elapsed < 3600:
+                    return jsonify({'error': 'Ping on cooldown. Please wait 1 hour between pings.', 'code': 'cooldown'}), 429
             
         # Find all users who saved this note
         note_id = share['note_id']
-        clones = list(personal_posts_conf.find({'source_note_id': note_id}))
+        clones = list(personal_posts_conf.find({'source_note_id': note_id}, {'user_id': 1}))
         
         pinged_count = 0
         for clone in clones:
             clone_user_id = str(clone.get('user_id'))
             if clone_user_id != current_user.id:
-                # Send push notification
                 share_url = url_for('view_shared_note', share_id=share_id, _external=True)
                 title = "Ping from Note Owner 🔔"
                 body = f"{current_user.username} is reminding you to check the shared note!"
@@ -9049,15 +9055,21 @@ def ping_collaborators(share_id):
                     pinged_count += 1
                 except Exception as notify_err:
                     app.logger.error(f"Ping push failed for {clone_user_id}: {notify_err}")
+        
+        if pinged_count == 0:
+            return jsonify({'success': True, 'pinged_count': 0, 'message': 'No collaborators have saved this note yet.'})
                 
-        if pinged_count > 0 and redis_cache:
+        # Set cooldown
+        if redis_cache:
             redis_cache.set(cooldown_key, '1', ex=3600)
+        else:
+            session[cooldown_key] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             
         return jsonify({'success': True, 'pinged_count': pinged_count})
         
     except Exception as e:
         app.logger.error(f"Error pinging collaborators: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Something went wrong. Please try again.'}), 500
 
 @app.route('/personal_post/share/<post_id>', methods=['POST'])
 @login_required
@@ -9284,12 +9296,16 @@ def view_shared_note(share_id):
             notif_id_key = f'notif_id_{share_id}'
             notif_id = session.get(notif_id_key)
             
-            # Use Someone/Anonymous visitor as fallback, but prioritize platform username if authenticated
             visitor_name = 'Someone'
+            visitor_id = None
             if current_user.is_authenticated:
-                visitor_name = getattr(current_user, 'username', 'Someone')
-            
-            visitor_id = str(current_user.id) if current_user.is_authenticated else None
+                visitor_id = str(current_user.id)
+                # Always fetch fresh username from DB to avoid stale cached values
+                fresh_user = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'username': 1})
+                if fresh_user and fresh_user.get('username'):
+                    visitor_name = fresh_user['username']
+                else:
+                    visitor_name = getattr(current_user, 'username', 'Someone')
             
             if not notif_id:
                 # First time in session: Record notification
@@ -9307,10 +9323,24 @@ def view_shared_note(share_id):
                 session[notif_id_key] = str(res.inserted_id)
                 session[f'notified_{share_id}'] = True # Backward compatibility
             elif current_user.is_authenticated:
-                # Promotion logic: Update anonymous notif with name if user just logged in
+                # Promotion logic: Update this notification if it was recorded anonymously
                 unlock_notifications_conf.update_one(
                     {'_id': ObjectId(notif_id), 'unlocked_by': None},
                     {'$set': {'unlocked_by': visitor_id, 'unlocked_by_name': visitor_name}}
+                )
+                # Also update name on this notification if it was recorded with a stale/generic name
+                unlock_notifications_conf.update_one(
+                    {'_id': ObjectId(notif_id), 'unlocked_by': visitor_id, 'unlocked_by_name': {'$nin': [visitor_name]}},
+                    {'$set': {'unlocked_by_name': visitor_name}}
+                )
+                # Fix any OTHER old records from this user on this share that have generic names
+                unlock_notifications_conf.update_many(
+                    {
+                        'share_id': share_id,
+                        'unlocked_by': visitor_id,
+                        'unlocked_by_name': {'$in': ['Someone', 'Anonymous visitor', 'Unknown', '', None]}
+                    },
+                    {'$set': {'unlocked_by_name': visitor_name}}
                 )
         except Exception as e:
             app.logger.error(f"Failed to handle unlock notification: {e}")
@@ -10337,10 +10367,10 @@ def api_upload_dm_image():
 @app.route('/api/messages/upload_voice', methods=['POST'])
 @login_required
 def api_upload_dm_voice():
-    """Upload a voice message for DMs. Premium-only feature."""
-    # Premium gate
+    """Upload a voice message for DMs."""
+    # Tier check (voice_messages is True for all tiers)
     if not current_user.get_limit('voice_messages'):
-        return jsonify({'error': 'Voice messages are a Premium feature', 'upgrade': True}), 403
+        return jsonify({'error': 'Voice messages are not available', 'upgrade': True}), 403
 
     if 'voice' not in request.files:
         return jsonify({'error': 'No audio provided'}), 400
@@ -11489,8 +11519,8 @@ def api_get_share_history(share_id):
             unlocked_by_name = h.get('unlocked_by_name', 'Someone')
             unlocked_by_id = h.get('unlocked_by')
             
-            # If name is generic but we have a user ID, try to resolve the actual username (matching blog activity logic)
-            if unlocked_by_name in ['Someone', 'Anonymous visitor', 'Unknown'] and unlocked_by_id:
+            # Always resolve username from DB when we have a user ID (handles stale names, renames, generic fallbacks)
+            if unlocked_by_id:
                 try:
                     v_user = users_conf.find_one({'_id': ObjectId(unlocked_by_id)}, {'username': 1})
                     if v_user and v_user.get('username'):

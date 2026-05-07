@@ -1516,7 +1516,8 @@ def add_security_headers(response):
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     # Permissions policy (restrict features)
-    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    # Note: microphone is NOT blocked here so the PWA can request it for voice messages (user consent via browser prompt)
+    response.headers['Permissions-Policy'] = 'geolocation=()'
     # HSTS - enforce HTTPS (1 year) with preload
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'

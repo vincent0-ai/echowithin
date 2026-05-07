@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}
-    <title>{{ title }}</title>
+<title>{{ title }}</title>
 {% endblock %}
 
 {% block meta_description %}
@@ -45,12 +45,14 @@
 <div class="content-wrapper" style="text-align: center;">
     <div class="blog-header">
         <h1>EchoWithin</h1>
-        <p>A podcast group where the unspoken but real are uncovered.</p>
+        <p>A podcast group where the unspoken but real are uncovered. Our initiative is to use technology to bring
+            people together in a meaningful way, strengthen connections and relationships.</p>
     </div>
 
     <div class="about-content" style="margin-bottom: 2rem;">
-        <p>Built for authentic and real human perspective. We encourage meaningful debates and respectful engagement across all topics.</p>
-        <p style="margin-top: 1rem;">At EchoWithin, we value original human thought. Please avoid posting AI-generated content. We want your real ideas, experiences, and perspectives to echo within our community.</p>
+        <p style="margin-top: 1rem;">At EchoWithin, we value original human thought so please avoid posting AI-generated
+            content. We want your real ideas, experiences, and perspectives to echo within our community. Also take
+            advantage of the personal space area to create a private note and surprise someone or for collaboration.</p>
     </div>
 
     <div class="action-cards" style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
@@ -61,7 +63,7 @@
         </div>
         <div class="card" style="flex: 1; min-width: 250px; text-align: center;">
             <h3>Join the Conversation</h3>
-            <p>Create an account or log in to share your perspective.</p>
+            <p>Create an account or log in to share your perspective or start journaling.</p>
             <a href="{{ url_for('login') }}" class="btn edit-btn" style="margin-top: 1rem;">Login or Register</a>
         </div>
     </div>

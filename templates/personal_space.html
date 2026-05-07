@@ -2124,7 +2124,7 @@
                 <p style="color: #666; font-size: 0.85rem;">Review changes proposed or applied by collaborators.</p>
             </div>
             {% if activity_notifications|length > 0 %}
-            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead();" class="btn"
+            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead(true);" class="btn"
                 style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
                 Clear notifications
             </button>
@@ -6030,7 +6030,7 @@
         // Start tour after a brief delay to let the page settle
         setTimeout(() => showStep(0), 1500);
 
-        window.markAllActivityRead = async function () {
+        window.markAllActivityRead = async function (reload = false) {
             try {
                 const response = await fetch('/api/activity/mark_read', {
                     method: 'POST',
@@ -6043,6 +6043,9 @@
                     document.querySelectorAll('.activity-badge').forEach(b => {
                         b.textContent = '0';
                     });
+                    if (reload) {
+                        window.location.reload();
+                    }
                 }
             } catch (err) {
                 console.error('Failed to mark activity as read:', err);

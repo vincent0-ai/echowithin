@@ -8024,7 +8024,13 @@ def personal_space():
 
     # --- Fetch Activity for the User's Notes ---
     activity_raw = list(note_versions_conf.find(
-        {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False}
+        {
+            'content_owner_id': ObjectId(current_user.id),
+            '$or': [
+                {'is_read_by_owner': False},
+                {'event_type': 'proposal', 'status': 'pending'}
+            ]
+        }
     ).sort('created_at', -1))
     
     activity_notifications = []

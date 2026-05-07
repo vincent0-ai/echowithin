@@ -23,16 +23,21 @@
             </div>
 
             <!-- Message Requests Section -->
-            <div id="requests-section" style="border-bottom: 1px solid #f5ebe7; {{ 'display: none;' if not pending_request_count else '' }}">
-                <div onclick="toggleRequests()" style="padding: 0.8rem 1.5rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; background: #fdf4ee; transition: background 0.2s;"
-                     onmouseover="this.style.background='#f5ebe7'" onmouseout="this.style.background='#fdf4ee'">
+            <div id="requests-section"
+                style="border-bottom: 1px solid #f5ebe7; {{ 'display: none;' if not pending_request_count else '' }}">
+                <div onclick="toggleRequests()"
+                    style="padding: 0.8rem 1.5rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; background: #fdf4ee; transition: background 0.2s;"
+                    onmouseover="this.style.background='#f5ebe7'" onmouseout="this.style.background='#fdf4ee'">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-user-plus" style="color: #3e2217; font-size: 0.85rem;"></i>
                         <span style="font-weight: 600; color: #3e2217; font-size: 0.9rem;">Message Requests</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span id="request-badge" class="unread-badge" style="background: #e74c3c; color: #fff; font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 10px;">{{ pending_request_count or 0 }}</span>
-                        <i class="fas fa-chevron-down" id="requests-chevron" style="font-size: 0.7rem; color: #999; transition: transform 0.2s;"></i>
+                        <span id="request-badge" class="unread-badge"
+                            style="background: #e74c3c; color: #fff; font-size: 0.7rem; font-weight: bold; padding: 2px 6px; border-radius: 10px;">{{
+                            pending_request_count or 0 }}</span>
+                        <i class="fas fa-chevron-down" id="requests-chevron"
+                            style="font-size: 0.7rem; color: #999; transition: transform 0.2s;"></i>
                     </div>
                 </div>
                 <div id="requests-list" style="display: none; max-height: 240px; overflow-y: auto;"></div>
@@ -55,14 +60,17 @@
                             {% endif %}
                         </div>
                         {% if contact.is_online %}
-                        <div style="position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; background: #2ecc71; border: 2.5px solid #fff; border-radius: 50%; z-index: 2;"></div>
+                        <div
+                            style="position: absolute; bottom: 2px; right: 2px; width: 14px; height: 14px; background: #2ecc71; border: 2.5px solid #fff; border-radius: 50%; z-index: 2;">
+                        </div>
                         {% endif %}
                     </div>
                     <div class="contact-info" style="flex: 1; min-width: 0;">
                         <div style="display: flex; justify-content: space-between; align-items: baseline;">
                             <span style="font-weight: 600; color: #3e2217; font-size: 0.95rem;">{{ contact.username
                                 }}</span>
-                            <span class="contact-time" style="font-size: 0.7rem; color: #999;">{{ contact.timestamp|localtime('%H:%M')
+                            <span class="contact-time" style="font-size: 0.7rem; color: #999;">{{
+                                contact.timestamp|localtime('%H:%M')
                                 }}</span>
                         </div>
                         <div class="contact-last-msg"
@@ -111,19 +119,25 @@
                         <button class="action-btn back-btn" onclick="backToList()" id="mobile-back-btn">
                             <i class="fas fa-arrow-left"></i>
                         </button>
-                        <a href="/profile/" id="chat-header-link" style="text-decoration: none; display: flex; align-items: center; gap: 0.7rem;">
-                        <div class="active-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                            <i class="fas fa-user" style="color: #3e2217;"></i>
-                        </div>
-                        <div>
-                            <div id="active-chat-username" style="font-weight: 600; color: #3e2217;">{{ active_chat.username if active_chat else 'Select a contact' }}</div>
-                            <div id="chat-status" style="font-size: 0.75rem; color: #64748b; display: none;">Online</div>
-                            <div id="typing-indicator" style="font-size: 0.75rem; color: #3e2217; font-style: italic; display: none;">Typing...</div>
-                        </div>
+                        <a href="/profile/" id="chat-header-link"
+                            style="text-decoration: none; display: flex; align-items: center; gap: 0.7rem;">
+                            <div class="active-avatar"
+                                style="width: 40px; height: 40px; border-radius: 50%; background: #e8dcd5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                                <i class="fas fa-user" style="color: #3e2217;"></i>
+                            </div>
+                            <div>
+                                <div id="active-chat-username" style="font-weight: 600; color: #3e2217;">{{
+                                    active_chat.username if active_chat else 'Select a contact' }}</div>
+                                <div id="chat-status" style="font-size: 0.75rem; color: #64748b; display: none;">Online
+                                </div>
+                                <div id="typing-indicator"
+                                    style="font-size: 0.75rem; color: #3e2217; font-style: italic; display: none;">
+                                    Typing...</div>
+                            </div>
                         </a>
                     </div>
-                    <div class="chat-header-actions {{ 'hidden' if not active_chat else '' }}" id="chat-header-actions" 
-                         style="gap: 8px;">
+                    <div class="chat-header-actions {{ 'hidden' if not active_chat else '' }}" id="chat-header-actions"
+                        style="gap: 8px;">
                         <button class="header-action-btn" onclick="toggleChatSearch()" title="Search Chat">
                             <i class="fas fa-search"></i>
                         </button>
@@ -134,17 +148,21 @@
                         {% endif %}
                         <button class="header-action-btn" onclick="deleteChat()" title="Delete Conversation">
                             <i class="fas fa-trash-alt"></i>
-                            <span class="desktop-only" style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
+                            <span class="desktop-only"
+                                style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
                         </button>
                     </div>
                 </div>
-                
+
                 <!-- Chat Search Bar -->
-                <div id="chat-search-bar" style="display: none; padding: 0.8rem 1.5rem; background: #fafafa; border-bottom: 1px solid #f5ebe7; align-items: center; gap: 0.5rem;">
+                <div id="chat-search-bar"
+                    style="display: none; padding: 0.8rem 1.5rem; background: #fafafa; border-bottom: 1px solid #f5ebe7; align-items: center; gap: 0.5rem;">
                     <i class="fas fa-search" style="color: #999; font-size: 0.9rem;"></i>
                     <input type="text" id="chat-search-input" placeholder="Search in conversation..." autocomplete="off"
                         style="flex: 1; border: none; background: transparent; font-size: 0.9rem; outline: none; padding: 0.2rem;">
-                    <button onclick="toggleChatSearch()" style="background: none; border: none; color: #999; cursor: pointer;"><i class="fas fa-times"></i></button>
+                    <button onclick="toggleChatSearch()"
+                        style="background: none; border: none; color: #999; cursor: pointer;"><i
+                            class="fas fa-times"></i></button>
                 </div>
 
                 <!-- Messages List -->
@@ -152,44 +170,64 @@
                     style="flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa; position: relative;"
                     data-theme="default">
                     {% if not active_chat %}
-                    <div style="text-align: center; color: #999; font-size: 0.85rem; padding: 2rem;">Loading chat history...</div>
+                    <div style="text-align: center; color: #999; font-size: 0.85rem; padding: 2rem;">Loading chat
+                        history...</div>
                     {% endif %}
                 </div>
 
                 <!-- Scroll to Bottom FAB -->
-                <button id="scroll-bottom-fab" class="scroll-bottom-fab" onclick="scrollToBottom()" style="display:none;" title="Jump to latest">
+                <button id="scroll-bottom-fab" class="scroll-bottom-fab" onclick="scrollToBottom()"
+                    style="display:none;" title="Jump to latest">
                     <i class="fas fa-chevron-down"></i>
                 </button>
 
                 <!-- Interactive Banners for Reply / Image Upload Preview -->
-                <div id="reply-preview-banner" style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #666; border-left: 4px solid var(--primary-color);">
+                <div id="reply-preview-banner"
+                    style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #666; border-left: 4px solid var(--primary-color);">
                     <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; padding-right: 1rem;">
-                        <span style="font-weight: 600; color: var(--primary-color); margin-bottom: 2px;">Replying to <span id="reply-to-user">User</span></span>
-                        <span id="reply-to-text" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">...</span>
+                        <span style="font-weight: 600; color: var(--primary-color); margin-bottom: 2px;">Replying to
+                            <span id="reply-to-user">User</span></span>
+                        <span id="reply-to-text"
+                            style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">...</span>
                     </div>
-                    <button onclick="cancelReply()" style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i class="fas fa-times"></i></button>
+                    <button onclick="cancelReply()"
+                        style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i
+                            class="fas fa-times"></i></button>
                 </div>
-                
-                <div id="image-upload-banner" style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between;">
+
+                <div id="image-upload-banner"
+                    style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 0.8rem;">
-                        <img id="image-upload-preview" src="" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover; border: 1px solid #eee;">
+                        <img id="image-upload-preview" src=""
+                            style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover; border: 1px solid #eee;">
                         <div style="display: flex; flex-direction: column;">
                             <span style="font-size: 0.85rem; font-weight: 600; color: #333;">Attached Image</span>
                             <span id="image-upload-status" style="font-size: 0.75rem; color: #999;">Ready to send</span>
                         </div>
                     </div>
-                    <button onclick="cancelImageUpload()" style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i class="fas fa-times"></i></button>
+                    <button onclick="cancelImageUpload()"
+                        style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i
+                            class="fas fa-times"></i></button>
                 </div>
 
                 <!-- Scheduled Messages Banner -->
-                <div id="scheduled-banner" style="display: none; border-top: 1px solid #f5ebe7; background: #fdfaf9; max-height: 160px; overflow-y: auto;">
-                    <div style="padding: 0.5rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0ece9;">
-                        <span style="font-size: 0.75rem; font-weight: 600; color: #3e2217; display: flex; align-items: center; gap: 6px;">
+                <div id="scheduled-banner"
+                    style="display: none; border-top: 1px solid #f5ebe7; background: #fdfaf9; max-height: 160px; overflow-y: auto;">
+                    <div
+                        style="padding: 0.5rem 1rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f0ece9;">
+                        <span
+                            style="font-size: 0.75rem; font-weight: 600; color: #3e2217; display: flex; align-items: center; gap: 6px;">
                             <i class="far fa-clock"></i> Scheduled Messages
                         </span>
-                        <span id="scheduled-count" style="font-size: 0.65rem; background: #3e2217; color: #fff; padding: 1px 6px; border-radius: 8px;">0</span>
+                        <span id="scheduled-count"
+                            style="font-size: 0.65rem; background: #3e2217; color: #fff; padding: 1px 6px; border-radius: 8px;">0</span>
                     </div>
                     <div id="scheduled-list"></div>
+                </div>
+
+                <!-- Microphone Permission Status Indicator -->
+                <div id="mic-permission-indicator" class="mic-permission-status"
+                    style="display: none; padding: 0.4rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff; font-size: 0.75rem; align-items: center; gap: 6px; transition: all 0.3s;">
                 </div>
 
                 <!-- Message Input -->
@@ -203,7 +241,8 @@
                             <span id="voice-timer" class="voice-timer">0:00</span>
                         </div>
                         <div class="voice-recording-actions">
-                            <button type="button" class="voice-cancel-btn" onclick="cancelVoiceRecording()" title="Cancel">
+                            <button type="button" class="voice-cancel-btn" onclick="cancelVoiceRecording()"
+                                title="Cancel">
                                 <i class="fas fa-times"></i>
                             </button>
                             <button type="button" class="voice-send-btn" onclick="sendVoiceRecording()" title="Send">
@@ -216,13 +255,15 @@
                         <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
                         <input type="hidden" id="reply-parent-id" value="">
                         <input type="hidden" id="pending-image-url" value="">
-                        
+
                         <!-- Image Upload Button -->
-                        <button type="button" class="action-btn" onclick="document.getElementById('dm-image-upload').click()" 
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217;">
+                        <button type="button" class="action-btn"
+                            onclick="document.getElementById('dm-image-upload').click()"
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217;">
                             <i class="fas fa-paperclip"></i>
                         </button>
-                        <input type="file" id="dm-image-upload" accept="image/*" style="display: none;" onchange="handleImageSelection(event)">
+                        <input type="file" id="dm-image-upload" accept="image/*" style="display: none;"
+                            onchange="handleImageSelection(event)">
 
                         <div style="flex: 1; position: relative;">
                             <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off"
@@ -230,16 +271,17 @@
                         </div>
 
                         <!-- Voice Message Button -->
-                        <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn" onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
-                                title="Hold to record voice message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none;">
+                        <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn"
+                            onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
+                            title="Hold to record voice message"
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none;">
                             <i class="fas fa-microphone"></i>
                         </button>
 
                         <!-- Schedule Button -->
                         <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
-                                title="Schedule message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
+                            title="Schedule message"
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">
                             <i class="far fa-clock"></i>
                         </button>
 
@@ -255,11 +297,19 @@
 </div>
 
 <style>
-    :root { --primary-color: #3e2217; }
-    
+    :root {
+        --primary-color: #3e2217;
+    }
+
     /* Contact Items */
-    .contact-item:hover { background: #fdfaf9; }
-    .contact-item.active { background: #f5ebe7 !important; border-left: 4px solid #3e2217; }
+    .contact-item:hover {
+        background: #fdfaf9;
+    }
+
+    .contact-item.active {
+        background: #f5ebe7 !important;
+        border-left: 4px solid #3e2217;
+    }
 
     /* Chat Header Actions */
     .chat-header {
@@ -270,8 +320,15 @@
         align-items: center;
         justify-content: space-between;
     }
-    .chat-header-actions { display: flex; gap: 8px; }
-    .chat-header-actions.hidden { display: none; }
+
+    .chat-header-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .chat-header-actions.hidden {
+        display: none;
+    }
 
     .header-action-btn {
         background: transparent;
@@ -284,7 +341,11 @@
         align-items: center;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .header-action-btn:hover { background: #f1f5f9; color: #ef4444; }
+
+    .header-action-btn:hover {
+        background: #f1f5f9;
+        color: #ef4444;
+    }
 
     /* Message Bubble Refinements */
     .message-bubble {
@@ -333,18 +394,35 @@
         font-size: 0.62rem;
         opacity: 0.6;
     }
+
     /* Typing Indicator Dots */
     @keyframes typing-bounce {
-        0%, 100% { transform: translateY(0); opacity: 0.6; }
-        50% { transform: translateY(-3px); opacity: 1; }
+
+        0%,
+        100% {
+            transform: translateY(0);
+            opacity: 0.6;
+        }
+
+        50% {
+            transform: translateY(-3px);
+            opacity: 1;
+        }
     }
+
     .typing-dot {
         display: inline-block;
         animation: typing-bounce 1s infinite ease-in-out;
         margin: 0 1px;
     }
-    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+    }
 
     .message-time {
         display: inline-block;
@@ -364,7 +442,7 @@
         transition: opacity 0.2s;
         pointer-events: none;
     }
-    
+
     .message-sent .message-actions {
         right: auto;
         left: 100%;
@@ -372,7 +450,10 @@
         padding-left: 8px;
     }
 
-    .message-bubble:hover .message-actions { opacity: 1; pointer-events: auto; }
+    .message-bubble:hover .message-actions {
+        opacity: 1;
+        pointer-events: auto;
+    }
 
     .action-btn {
         background: rgba(255, 255, 255, 0.9);
@@ -386,11 +467,17 @@
         cursor: pointer;
         color: #64748b;
         font-size: 0.75rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    .action-btn:hover { color: var(--primary-color); background: #fff; }
-    .action-btn.delete:hover { color: #ef4444; }
+    .action-btn:hover {
+        color: var(--primary-color);
+        background: #fff;
+    }
+
+    .action-btn.delete:hover {
+        color: #ef4444;
+    }
 
     /* Reactions UI */
     .reaction-bar {
@@ -400,7 +487,7 @@
         background: #fff;
         border-radius: 30px;
         padding: 4px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
         display: flex;
         gap: 4px;
         opacity: 0;
@@ -408,12 +495,17 @@
         transition: all 0.2s;
         z-index: 10;
     }
+
     .message-sent .reaction-bar {
         left: auto;
         right: 0;
     }
-    .message-bubble:hover .reaction-bar { opacity: 1; pointer-events: auto; }
-    
+
+    .message-bubble:hover .reaction-bar {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
     .react-btn {
         background: none;
         border: none;
@@ -423,14 +515,19 @@
         transition: transform 0.2s;
         border-radius: 50%;
     }
-    .react-btn:hover { transform: scale(1.3); background: #f5ebe7; }
-    
+
+    .react-btn:hover {
+        transform: scale(1.3);
+        background: #f5ebe7;
+    }
+
     .reaction-badges {
         display: flex;
         gap: 4px;
         margin-top: 4px;
         flex-wrap: wrap;
     }
+
     .reaction-badge {
         background: #fdfaf9;
         border: 1px solid #f5ebe7;
@@ -444,12 +541,19 @@
         gap: 3px;
         user-select: none;
     }
-    .reaction-badge.user-reacted { background: #f5ebe7; border-color: #3e2217; }
-    .message-sent .reaction-badges { justify-content: flex-end; }
+
+    .reaction-badge.user-reacted {
+        background: #f5ebe7;
+        border-color: #3e2217;
+    }
+
+    .message-sent .reaction-badges {
+        justify-content: flex-end;
+    }
 
     /* Replied Message Preview in Bubble */
     .bubble-reply-preview {
-        background: rgba(0,0,0,0.05);
+        background: rgba(0, 0, 0, 0.05);
         border-left: 3px solid var(--primary-color);
         padding: 6px 8px;
         border-radius: 4px;
@@ -462,18 +566,19 @@
         color: inherit;
         opacity: 0.9;
     }
+
     .message-sent .bubble-reply-preview {
-        background: rgba(255,255,255,0.15);
-        border-left-color: rgba(255,255,255,0.8);
+        background: rgba(255, 255, 255, 0.15);
+        border-left-color: rgba(255, 255, 255, 0.8);
     }
 
     /* Link Preview Cards */
     .link-preview-card {
-        border: 1px solid rgba(0,0,0,0.1);
+        border: 1px solid rgba(0, 0, 0, 0.1);
         border-radius: 8px;
         overflow: hidden;
         margin-top: 6px;
-        background: rgba(255,255,255,0.7);
+        background: rgba(255, 255, 255, 0.7);
         text-decoration: none;
         color: inherit;
         display: flex;
@@ -481,15 +586,56 @@
         transition: background 0.2s;
         max-width: 250px;
     }
-    .link-preview-card:hover { background: rgba(255,255,255,0.9); text-decoration: none; }
-    .message-sent .link-preview-card { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.2); }
-    .message-sent .link-preview-card:hover { background: rgba(255,255,255,0.25); }
-    
-    .lp-img { width: 100%; height: 100px; object-fit: cover; border-bottom: 1px solid rgba(0,0,0,0.1); }
-    .message-sent .lp-img { border-bottom-color: rgba(255,255,255,0.2); }
-    .lp-content { padding: 8px; }
-    .lp-title { font-weight: 600; font-size: 0.8rem; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
-    .lp-desc { font-size: 0.7rem; opacity: 0.8; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+
+    .link-preview-card:hover {
+        background: rgba(255, 255, 255, 0.9);
+        text-decoration: none;
+    }
+
+    .message-sent .link-preview-card {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .message-sent .link-preview-card:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    .lp-img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+
+    .message-sent .lp-img {
+        border-bottom-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .lp-content {
+        padding: 8px;
+    }
+
+    .lp-title {
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-bottom: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.2;
+    }
+
+    .lp-desc {
+        font-size: 0.7rem;
+        opacity: 0.8;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.3;
+    }
 
     /* Image Messages */
     .chat-image {
@@ -504,59 +650,202 @@
 
     /* Highlight class for search */
     @keyframes highlightMessage {
-        0% { background-color: #fef08a; }
-        100% { background-color: transparent; }
+        0% {
+            background-color: #fef08a;
+        }
+
+        100% {
+            background-color: transparent;
+        }
     }
-    .search-highlight { animation: highlightMessage 2s ease-out; }
+
+    .search-highlight {
+        animation: highlightMessage 2s ease-out;
+    }
 
     /* Lightbox */
     #lightbox {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85);
-        z-index: 10000; display: none; align-items: center; justify-content: center;
-        opacity: 0; transition: opacity 0.3s;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        z-index: 10000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.3s;
     }
-    #lightbox img { max-width: 90%; max-height: 90%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    #lightbox.show { display: flex; opacity: 1; }
-    #lightbox.show img { transform: scale(1); }
-    #lightbox-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; }
+
+    #lightbox img {
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        transform: scale(0.95);
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    #lightbox.show {
+        display: flex;
+        opacity: 1;
+    }
+
+    #lightbox.show img {
+        transform: scale(1);
+    }
+
+    #lightbox-close {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        color: white;
+        font-size: 2rem;
+        cursor: pointer;
+        background: none;
+        border: none;
+    }
 
     /* Read Status Colors */
-    .read-status i.fa-check-double { color: #5dade2; }
-    .message-sent .read-status i.fa-check { color: rgba(255,255,255,0.6); }
+    .read-status i.fa-check-double {
+        color: #5dade2;
+    }
+
+    .message-sent .read-status i.fa-check {
+        color: rgba(255, 255, 255, 0.6);
+    }
 
     /* Grouping */
-    .message-grouped { margin-top: 2px !important; }
+    .message-grouped {
+        margin-top: 2px !important;
+    }
 
     /* Scrollbar */
-    #chat-history::-webkit-scrollbar { width: 6px; }
-    #chat-history::-webkit-scrollbar-thumb { background: #e8dcd5; border-radius: 10px; }
+    #chat-history::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #chat-history::-webkit-scrollbar-thumb {
+        background: #e8dcd5;
+        border-radius: 10px;
+    }
 
     @media (max-width: 768px) {
-        .messages-container { padding: 0 !important; height: 100vh !important; }
-        .messages-sidebar { width: 100% !important; min-width: 0; }
-        .chat-main { display: none !important; min-width: 0; width: 100%; }
-        .messages-wrapper.chat-view-active .messages-sidebar { display: none !important; }
-        .messages-wrapper.chat-view-active .chat-main { display: flex !important; min-width: 0; width: 100%; }
-        #mobile-back-btn { display: block !important; background: none; border: none; font-size: 1.1rem; color: var(--primary-color); padding: 5px; cursor: pointer; }
-        .desktop-only { display: none; }
-        
-        /* Compact Layout Overrides for Mobile Chat View */
-        body.mobile-chat-open .navbar { display: none !important; }
-        body.mobile-chat-open .page-container { padding-top: 0 !important; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        body.mobile-chat-open .messages-container { padding: 0 !important; margin: 0 !important; max-width: 100% !important; height: 100% !important; }
-        body.mobile-chat-open .messages-wrapper { height: 100%; max-height: 100%; border-radius: 0; box-shadow: none; margin: 0; border: none; width: 100%; min-width: 0; }
-        
-        .chat-header { padding: 0.5rem 0.8rem; min-width: 0; }
-        .chat-header .active-avatar { width: 32px !important; height: 32px !important; }
+        .messages-container {
+            padding: 0 !important;
+            height: 100vh !important;
+        }
 
-        #active-chat-username { font-size: 0.95rem !important; }
-        .header-action-btn { padding: 4px; font-size: 0.9rem; }
-        
-        .chat-input-area { padding: 0.6rem 0.8rem !important; }
-        .chat-input-area form { gap: 0.5rem !important; }
-        .chat-input-area .action-btn { width: 34px !important; height: 34px !important; font-size: 0.85rem; }
-        .chat-input-area #message-input { padding: 0.5rem 0.8rem !important; }
-        #send-btn { width: 40px !important; height: 40px !important; font-size: 0.9rem; }
+        .messages-sidebar {
+            width: 100% !important;
+            min-width: 0;
+        }
+
+        .chat-main {
+            display: none !important;
+            min-width: 0;
+            width: 100%;
+        }
+
+        .messages-wrapper.chat-view-active .messages-sidebar {
+            display: none !important;
+        }
+
+        .messages-wrapper.chat-view-active .chat-main {
+            display: flex !important;
+            min-width: 0;
+            width: 100%;
+        }
+
+        #mobile-back-btn {
+            display: block !important;
+            background: none;
+            border: none;
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .desktop-only {
+            display: none;
+        }
+
+        /* Compact Layout Overrides for Mobile Chat View */
+        body.mobile-chat-open .navbar {
+            display: none !important;
+        }
+
+        body.mobile-chat-open .page-container {
+            padding-top: 0 !important;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        body.mobile-chat-open .messages-container {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            height: 100% !important;
+        }
+
+        body.mobile-chat-open .messages-wrapper {
+            height: 100%;
+            max-height: 100%;
+            border-radius: 0;
+            box-shadow: none;
+            margin: 0;
+            border: none;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .chat-header {
+            padding: 0.5rem 0.8rem;
+            min-width: 0;
+        }
+
+        .chat-header .active-avatar {
+            width: 32px !important;
+            height: 32px !important;
+        }
+
+        #active-chat-username {
+            font-size: 0.95rem !important;
+        }
+
+        .header-action-btn {
+            padding: 4px;
+            font-size: 0.9rem;
+        }
+
+        .chat-input-area {
+            padding: 0.6rem 0.8rem !important;
+        }
+
+        .chat-input-area form {
+            gap: 0.5rem !important;
+        }
+
+        .chat-input-area .action-btn {
+            width: 34px !important;
+            height: 34px !important;
+            font-size: 0.85rem;
+        }
+
+        .chat-input-area #message-input {
+            padding: 0.5rem 0.8rem !important;
+        }
+
+        #send-btn {
+            width: 40px !important;
+            height: 40px !important;
+            font-size: 0.9rem;
+        }
 
         /* Mobile specific message actions fixes */
         .message-actions {
@@ -568,187 +857,563 @@
             background: #fdfaf9;
             border-radius: 20px;
             padding: 2px 6px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             z-index: 5;
         }
+
         .message-sent .message-actions {
             right: 0;
             left: auto;
         }
-        
+
         .message-bubble:hover {
-            margin-bottom: 30px; 
+            margin-bottom: 30px;
         }
 
         .react-btn {
             font-size: 1.1rem;
             padding: 3px;
         }
+
         .reaction-bar {
             padding: 2px 4px;
         }
     }
 
     /* Hide PWA native refresh button when chatting to prevent blocking the send button */
-    .mobile-fab { bottom: 85px !important; }
-    body.mobile-chat-open .mobile-fab { display: none !important; }
+    .mobile-fab {
+        bottom: 85px !important;
+    }
+
+    body.mobile-chat-open .mobile-fab {
+        display: none !important;
+    }
 
     /* Schedule Modal */
     .schedule-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5); z-index: 10001;
-        display: none; align-items: center; justify-content: center;
-        opacity: 0; transition: opacity 0.25s;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10001;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.25s;
     }
-    .schedule-overlay.show { display: flex; opacity: 1; }
+
+    .schedule-overlay.show {
+        display: flex;
+        opacity: 1;
+    }
+
     .schedule-modal {
-        background: #fff; border-radius: 16px; padding: 0; width: 340px;
-        max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-        transform: translateY(20px); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: #fff;
+        border-radius: 16px;
+        padding: 0;
+        width: 340px;
+        max-width: 90vw;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        transform: translateY(20px);
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         overflow: hidden;
     }
-    .schedule-overlay.show .schedule-modal { transform: translateY(0); }
+
+    .schedule-overlay.show .schedule-modal {
+        transform: translateY(0);
+    }
+
     .schedule-modal-header {
-        padding: 1.2rem 1.5rem; background: linear-gradient(135deg, #3e2217, #5a3828);
-        color: #fff; display: flex; align-items: center; justify-content: space-between;
+        padding: 1.2rem 1.5rem;
+        background: linear-gradient(135deg, #3e2217, #5a3828);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
-    .schedule-modal-header h3 { margin: 0; font-size: 1rem; font-weight: 600; }
-    .schedule-modal-body { padding: 1.5rem; }
+
+    .schedule-modal-header h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .schedule-modal-body {
+        padding: 1.5rem;
+    }
+
     .schedule-presets {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1.2rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 1.2rem;
     }
+
     .schedule-preset-btn {
-        background: #fdfaf9; border: 1px solid #e8dcd5; border-radius: 10px;
-        padding: 10px 12px; cursor: pointer; text-align: left;
-        transition: all 0.2s; font-size: 0.8rem; color: #3e2217;
+        background: #fdfaf9;
+        border: 1px solid #e8dcd5;
+        border-radius: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+        text-align: left;
+        transition: all 0.2s;
+        font-size: 0.8rem;
+        color: #3e2217;
     }
+
     .schedule-preset-btn:hover {
-        background: #f5ebe7; border-color: #3e2217; transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(62,34,23,0.1);
+        background: #f5ebe7;
+        border-color: #3e2217;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(62, 34, 23, 0.1);
     }
-    .schedule-preset-btn .preset-label { font-weight: 600; display: block; margin-bottom: 2px; }
-    .schedule-preset-btn .preset-time { font-size: 0.7rem; color: #888; }
+
+    .schedule-preset-btn .preset-label {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .schedule-preset-btn .preset-time {
+        font-size: 0.7rem;
+        color: #888;
+    }
+
     .schedule-custom-input {
-        width: 100%; padding: 10px 12px; border: 1px solid #e8dcd5;
-        border-radius: 10px; font-size: 0.85rem; outline: none;
-        background: #fdfaf9; color: #3e2217; margin-bottom: 1rem;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e8dcd5;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        outline: none;
+        background: #fdfaf9;
+        color: #3e2217;
+        margin-bottom: 1rem;
     }
-    .schedule-custom-input:focus { border-color: #3e2217; box-shadow: 0 0 0 3px rgba(62,34,23,0.08); }
+
+    .schedule-custom-input:focus {
+        border-color: #3e2217;
+        box-shadow: 0 0 0 3px rgba(62, 34, 23, 0.08);
+    }
+
     .schedule-confirm-btn {
-        width: 100%; background: linear-gradient(135deg, #3e2217, #5a3828);
-        color: #fff; border: none; border-radius: 10px; padding: 12px;
-        font-size: 0.9rem; font-weight: 600; cursor: pointer;
-        transition: all 0.2s; display: flex; align-items: center;
-        justify-content: center; gap: 8px;
+        width: 100%;
+        background: linear-gradient(135deg, #3e2217, #5a3828);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 12px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
     }
-    .schedule-confirm-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(62,34,23,0.3); }
-    .schedule-confirm-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .schedule-confirm-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px rgba(62, 34, 23, 0.3);
+    }
+
+    .schedule-confirm-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
     .schedule-preview {
-        text-align: center; font-size: 0.78rem; color: #888;
-        margin-bottom: 1rem; min-height: 1.2em;
+        text-align: center;
+        font-size: 0.78rem;
+        color: #888;
+        margin-bottom: 1rem;
+        min-height: 1.2em;
     }
 
     /* Scheduled message item in banner */
     .scheduled-item {
-        padding: 0.5rem 1rem; display: flex; align-items: center;
-        gap: 0.8rem; border-bottom: 1px solid #f0ece9;
-        font-size: 0.8rem; transition: background 0.2s;
+        padding: 0.5rem 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        border-bottom: 1px solid #f0ece9;
+        font-size: 0.8rem;
+        transition: background 0.2s;
     }
-    .scheduled-item:hover { background: #f5ebe7; }
+
+    .scheduled-item:hover {
+        background: #f5ebe7;
+    }
+
     .scheduled-item-content {
-        flex: 1; min-width: 0; color: #555;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        flex: 1;
+        min-width: 0;
+        color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
+
     .scheduled-item-time {
-        font-size: 0.7rem; color: #3e2217; font-weight: 600;
-        white-space: nowrap; display: flex; align-items: center; gap: 4px;
+        font-size: 0.7rem;
+        color: #3e2217;
+        font-weight: 600;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
-    .scheduled-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .scheduled-item-actions {
+        display: flex;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
     .sched-action-btn {
-        background: none; border: 1px solid #e8dcd5; border-radius: 6px;
-        padding: 3px 8px; cursor: pointer; font-size: 0.7rem;
-        color: #666; transition: all 0.2s;
+        background: none;
+        border: 1px solid #e8dcd5;
+        border-radius: 6px;
+        padding: 3px 8px;
+        cursor: pointer;
+        font-size: 0.7rem;
+        color: #666;
+        transition: all 0.2s;
     }
-    .sched-action-btn:hover { background: #f5ebe7; color: #3e2217; border-color: #3e2217; }
-    .sched-action-btn.send-now:hover { background: #3e2217; color: #fff; }
-    .sched-action-btn.cancel-sched:hover { background: #fef2f2; color: #ef4444; border-color: #ef4444; }
+
+    .sched-action-btn:hover {
+        background: #f5ebe7;
+        color: #3e2217;
+        border-color: #3e2217;
+    }
+
+    .sched-action-btn.send-now:hover {
+        background: #3e2217;
+        color: #fff;
+    }
+
+    .sched-action-btn.cancel-sched:hover {
+        background: #fef2f2;
+        color: #ef4444;
+        border-color: #ef4444;
+    }
 
     /* --- Overhaul Styles --- */
     .scroll-bottom-fab {
-        position: absolute; bottom: 110px; right: 20px;
-        width: 40px; height: 40px; border-radius: 50%;
-        background: #3e2217; color: #fff; border: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        display: flex; align-items: center; justify-content: center;
-        cursor: pointer; z-index: 100; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        position: absolute;
+        bottom: 110px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #3e2217;
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 100;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
-    .scroll-bottom-fab:hover { transform: scale(1.1); background: #5a3828; }
+
+    .scroll-bottom-fab:hover {
+        transform: scale(1.1);
+        background: #5a3828;
+    }
 
     .voice-recording-ui {
-        display: flex; align-items: center; justify-content: space-between;
-        background: #fdfaf9; border: 1px solid #e8dcd5; border-radius: 20px;
-        padding: 0.5rem 1rem; margin-bottom: 0.5rem; animation: slideUp 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #fdfaf9;
+        border: 1px solid #e8dcd5;
+        border-radius: 20px;
+        padding: 0.5rem 1rem;
+        margin-bottom: 0.5rem;
+        animation: slideUp 0.3s ease;
     }
-    .voice-recording-indicator { display: flex; align-items: center; gap: 10px; }
+
+    .voice-recording-indicator {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
     .voice-pulse {
-        width: 12px; height: 12px; background: #ef4444; border-radius: 50%;
+        width: 12px;
+        height: 12px;
+        background: #ef4444;
+        border-radius: 50%;
         animation: pulseRed 1.5s infinite;
     }
-    .voice-timer { font-family: monospace; font-weight: 600; color: #333; }
-    .voice-recording-actions { display: flex; gap: 10px; }
-    .voice-cancel-btn { background: #f1f1f1; border: none; width: 32px; height: 32px; border-radius: 50%; color: #666; cursor: pointer; }
-    .voice-send-btn { background: #3e2217; border: none; width: 32px; height: 32px; border-radius: 50%; color: #fff; cursor: pointer; }
 
-    @keyframes pulseRed { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .voice-timer {
+        font-family: monospace;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .voice-recording-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .voice-cancel-btn {
+        background: #f1f1f1;
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        color: #666;
+        cursor: pointer;
+    }
+
+    .voice-send-btn {
+        background: #3e2217;
+        border: none;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        color: #fff;
+        cursor: pointer;
+    }
+
+    @keyframes pulseRed {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 
     /* Inline Edit */
-    .edit-mode-bubble { background: #fff !important; border: 2px solid #3e2217 !important; padding: 10px !important; }
-    .edit-input { width: 100%; border: none; background: transparent; font-family: inherit; font-size: inherit; color: inherit; outline: none; margin-bottom: 8px; min-height: 40px; resize: none; }
-    .edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
-    .edit-save-btn { background: #3e2217; color: #fff; border: none; border-radius: 4px; padding: 4px 12px; font-size: 0.75rem; cursor: pointer; font-weight: 600; }
-    .edit-cancel-btn { background: #f1f1f1; color: #666; border: none; border-radius: 4px; padding: 4px 12px; font-size: 0.75rem; cursor: pointer; }
+    .edit-mode-bubble {
+        background: #fff !important;
+        border: 2px solid #3e2217 !important;
+        padding: 10px !important;
+    }
+
+    .edit-input {
+        width: 100%;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        color: inherit;
+        outline: none;
+        margin-bottom: 8px;
+        min-height: 40px;
+        resize: none;
+    }
+
+    .edit-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .edit-save-btn {
+        background: #3e2217;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .edit-cancel-btn {
+        background: #f1f1f1;
+        color: #666;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
 
     /* Formatting */
-    .fmt-bold { font-weight: bold; }
-    .fmt-italic { font-style: italic; }
-    .fmt-code { font-family: monospace; background: rgba(0,0,0,0.05); padding: 2px 4px; border-radius: 3px; font-size: 0.9em; }
+    .fmt-bold {
+        font-weight: bold;
+    }
+
+    .fmt-italic {
+        font-style: italic;
+    }
+
+    .fmt-code {
+        font-family: monospace;
+        background: rgba(0, 0, 0, 0.05);
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-size: 0.9em;
+    }
 
     /* Themes */
-    #chat-history[data-theme="sunset"] { background: linear-gradient(135deg, #fceabb 0%, #f8b500 100%) !important; }
-    #chat-history[data-theme="ocean"] { background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%) !important; }
-    #chat-history[data-theme="forest"] { background: linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%) !important; }
-    #chat-history[data-theme="lavender"] { background: linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%) !important; }
-    #chat-history[data-theme="midnight"] { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important; }
-    #chat-history[data-theme="midnight"] .date-divider span { background: #1e293b !important; color: #cbd5e1 !important; }
-    #chat-history[data-theme="midnight"] .message-received { background: #334155 !important; color: #f1f5f9 !important; }
-    #chat-history[data-theme="midnight"] .message-received .message-time { color: #94a3b8 !important; }
+    #chat-history[data-theme="sunset"] {
+        background: linear-gradient(135deg, #fceabb 0%, #f8b500 100%) !important;
+    }
+
+    #chat-history[data-theme="ocean"] {
+        background: linear-gradient(135deg, #e0f2fe 0%, #7dd3fc 100%) !important;
+    }
+
+    #chat-history[data-theme="forest"] {
+        background: linear-gradient(135deg, #f0fdf4 0%, #bbf7d0 100%) !important;
+    }
+
+    #chat-history[data-theme="lavender"] {
+        background: linear-gradient(135deg, #f5f3ff 0%, #ddd6fe 100%) !important;
+    }
+
+    #chat-history[data-theme="midnight"] {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    }
+
+    #chat-history[data-theme="midnight"] .date-divider span {
+        background: #1e293b !important;
+        color: #cbd5e1 !important;
+    }
+
+    #chat-history[data-theme="midnight"] .message-received {
+        background: #334155 !important;
+        color: #f1f5f9 !important;
+    }
+
+    #chat-history[data-theme="midnight"] .message-received .message-time {
+        color: #94a3b8 !important;
+    }
 
     /* Audio message */
-    .audio-player { display: flex; align-items: center; gap: 10px; min-width: 200px; padding: 5px 0; }
-    .audio-play-btn { background: #3e2217; color: #fff; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .audio-progress { flex: 1; height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; position: relative; overflow: hidden; }
-    .audio-progress-fill { position: absolute; left: 0; top: 0; height: 100%; background: #3e2217; width: 0%; }
+    .audio-player {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 200px;
+        padding: 5px 0;
+    }
+
+    .audio-play-btn {
+        background: #3e2217;
+        color: #fff;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .audio-progress {
+        flex: 1;
+        height: 4px;
+        background: rgba(0, 0, 0, 0.1);
+        border-radius: 2px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .audio-progress-fill {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: #3e2217;
+        width: 0%;
+    }
 
     /* Long press action menu */
     .mobile-action-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5); z-index: 2000; display: none;
-        align-items: center; justify-content: center; backdrop-filter: blur(4px);
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 2000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
     }
+
     .mobile-action-menu {
-        background: #fff; border-radius: 16px; width: 80%; max-width: 300px;
-        overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.3); animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        background: #fff;
+        border-radius: 16px;
+        width: 80%;
+        max-width: 300px;
+        overflow: hidden;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    @keyframes popIn {
+        from {
+            transform: scale(0.8);
+            opacity: 0;
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
     .mobile-action-item {
-        padding: 15px 20px; display: flex; align-items: center; gap: 15px;
-        color: #3e2217; text-decoration: none; border-bottom: 1px solid #f1f1f1;
-        font-weight: 500; cursor: pointer;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        color: #3e2217;
+        text-decoration: none;
+        border-bottom: 1px solid #f1f1f1;
+        font-weight: 500;
+        cursor: pointer;
     }
-    .mobile-action-item:last-child { border-bottom: none; }
-    .mobile-action-item i { width: 20px; text-align: center; }
-    .mobile-action-item.delete { color: #ef4444; }
+
+    .mobile-action-item:last-child {
+        border-bottom: none;
+    }
+
+    .mobile-action-item i {
+        width: 20px;
+        text-align: center;
+    }
+
+    .mobile-action-item.delete {
+        color: #ef4444;
+    }
 </style>
 
 
@@ -758,7 +1423,8 @@
     <div class="schedule-modal">
         <div class="schedule-modal-header">
             <h3><i class="far fa-clock" style="margin-right: 8px;"></i>Schedule Message</h3>
-            <button onclick="closeScheduleModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
+            <button onclick="closeScheduleModal()"
+                style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
         </div>
         <div class="schedule-modal-body">
             <div class="schedule-presets">
@@ -779,7 +1445,8 @@
                     <span class="preset-time" id="preset-tomorrow-pm-time"></span>
                 </button>
             </div>
-            <label style="font-size:0.78rem;font-weight:600;color:#3e2217;display:block;margin-bottom:6px;">Or pick a custom time:</label>
+            <label style="font-size:0.78rem;font-weight:600;color:#3e2217;display:block;margin-bottom:6px;">Or pick a
+                custom time:</label>
             <input type="datetime-local" id="schedule-datetime" class="schedule-custom-input">
             <div class="schedule-preview" id="schedule-preview"></div>
             <button class="schedule-confirm-btn" id="schedule-confirm-btn" onclick="confirmSchedule()" disabled>
@@ -799,18 +1466,32 @@
     <div class="schedule-modal" style="max-width: 400px;">
         <div class="schedule-modal-header" style="background: linear-gradient(135deg, #3e2217, #5a3828);">
             <h3><i class="fas fa-palette" style="margin-right: 8px;"></i>Chat Themes</h3>
-            <button onclick="closeThemePicker()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
+            <button onclick="closeThemePicker()"
+                style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
         </div>
         <div class="schedule-modal-body" style="padding: 1.5rem;">
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.5rem;">
-                <div class="theme-option" onclick="setChatTheme('default')" style="background: #fafafa; border: 2px solid #ddd; height: 60px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">Default</div>
-                <div class="theme-option" onclick="setChatTheme('sunset')" style="background: linear-gradient(135deg, #fceabb, #f8b500); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;"></div>
-                <div class="theme-option" onclick="setChatTheme('ocean')" style="background: linear-gradient(135deg, #e0f2fe, #7dd3fc); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;"></div>
-                <div class="theme-option" onclick="setChatTheme('forest')" style="background: linear-gradient(135deg, #f0fdf4, #bbf7d0); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;"></div>
-                <div class="theme-option" onclick="setChatTheme('lavender')" style="background: linear-gradient(135deg, #f5f3ff, #ddd6fe); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;"></div>
-                <div class="theme-option" onclick="setChatTheme('midnight')" style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;"></div>
+                <div class="theme-option" onclick="setChatTheme('default')"
+                    style="background: #fafafa; border: 2px solid #ddd; height: 60px; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600;">
+                    Default</div>
+                <div class="theme-option" onclick="setChatTheme('sunset')"
+                    style="background: linear-gradient(135deg, #fceabb, #f8b500); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
+                </div>
+                <div class="theme-option" onclick="setChatTheme('ocean')"
+                    style="background: linear-gradient(135deg, #e0f2fe, #7dd3fc); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
+                </div>
+                <div class="theme-option" onclick="setChatTheme('forest')"
+                    style="background: linear-gradient(135deg, #f0fdf4, #bbf7d0); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
+                </div>
+                <div class="theme-option" onclick="setChatTheme('lavender')"
+                    style="background: linear-gradient(135deg, #f5f3ff, #ddd6fe); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
+                </div>
+                <div class="theme-option" onclick="setChatTheme('midnight')"
+                    style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 2px solid transparent; height: 60px; border-radius: 12px; cursor: pointer;">
+                </div>
             </div>
-            <p style="font-size: 0.75rem; color: #666; text-align: center;">Themes are saved to your account and visible to you.</p>
+            <p style="font-size: 0.75rem; color: #666; text-align: center;">Themes are saved to your account and visible
+                to you.</p>
         </div>
     </div>
 </div>
@@ -882,6 +1563,139 @@
                 remoteTypingClearTimer = null;
             }
         }
+
+        // --- Microphone Permission Management ---
+        let _micPermissionState = 'prompt'; // 'prompt' | 'granted' | 'denied' | 'unavailable'
+
+        async function checkMicrophonePermission() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                    _micPermissionState = 'unavailable';
+                    updateMicPermissionUI();
+                    return;
+                }
+                // Check if Permissions API is available
+                if (navigator.permissions && navigator.permissions.query) {
+                    const result = await navigator.permissions.query({ name: 'microphone' });
+                    _micPermissionState = result.state; // 'granted', 'denied', 'prompt'
+
+                    // Listen for permission changes
+                    result.onchange = function () {
+                        _micPermissionState = this.state;
+                        updateMicPermissionUI();
+                    };
+                } else {
+                    // Fallback: try a quick getUserMedia to check
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        stream.getTracks().forEach(t => t.stop());
+                        _micPermissionState = 'granted';
+                    } catch (err) {
+                        _micPermissionState = err.name === 'NotAllowedError' ? 'denied' : 'prompt';
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not check mic permission:', err);
+                _micPermissionState = 'unavailable';
+            }
+            updateMicPermissionUI();
+        }
+
+        function updateMicPermissionUI() {
+            const indicator = document.getElementById('mic-permission-indicator');
+            if (!indicator) return;
+
+            switch (_micPermissionState) {
+                case 'granted':
+                    indicator.className = 'mic-permission-status granted';
+                    indicator.innerHTML = '<i class="fas fa-check-circle"></i> Microphone ready';
+                    indicator.title = 'Microphone access is granted';
+                    break;
+                case 'prompt':
+                    indicator.className = 'mic-permission-status prompt';
+                    indicator.innerHTML = '<i class="fas fa-exclamation-circle"></i> Tap to enable microphone';
+                    indicator.onclick = requestMicPermissionProactive;
+                    indicator.style.cursor = 'pointer';
+                    break;
+                case 'denied':
+                    indicator.className = 'mic-permission-status denied';
+                    indicator.innerHTML = '<i class="fas fa-times-circle"></i> Microphone blocked';
+                    indicator.title = 'Enable microphone in site settings';
+                    indicator.onclick = showMicDeniedHelp;
+                    indicator.style.cursor = 'pointer';
+                    break;
+                case 'unavailable':
+                    indicator.className = 'mic-permission-status unavailable';
+                    indicator.innerHTML = '<i class="fas fa-microphone-slash"></i> Recording not supported';
+                    break;
+            }
+        }
+
+        async function requestMicPermissionProactive() {
+            if (_micPermissionState === 'granted') return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showToast("Your browser doesn't support audio recording");
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(t => t.stop());
+                _micPermissionState = 'granted';
+                updateMicPermissionUI();
+                showToast('Microphone access granted!');
+            } catch (err) {
+                console.error('Mic permission request failed:', err);
+                _micPermissionState = 'denied';
+                updateMicPermissionUI();
+                showToast('Microphone access denied. Please allow microphone access in your browser site settings.');
+            }
+        }
+
+        function showMicDeniedHelp() {
+            // Show a modal with instructions on how to re-enable microphone permission
+            const menu = document.getElementById('mobile-action-menu');
+            const isAndroid = /Android/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+            let instructions = '';
+            if (isAndroid) {
+                instructions = `
+                <div style="padding: 15px 20px; border-bottom: 1px solid #eee; text-align: left;">
+                    <p style="font-size: 0.85rem; color: #555; margin-bottom: 8px;">
+                        <strong>Enable Microphone for EchoWithin:</strong>
+                    </p>
+                    <ol style="font-size: 0.8rem; color: #666; line-height: 1.6; padding-left: 20px;">
+                        <li>Open <strong>Chrome</strong> (not the PWA)</li>
+                        <li>Go to <strong>Site Settings</strong> for EchoWithin</li>
+                        <li>Find <strong>Microphone</strong> and set to <strong>Allow</strong></li>
+                        <li>Reload the app</li>
+                    </ol>
+                    <button onclick="closeMobileActions()" style="width:100%;margin-top:12px;background:#3e2217;color:#fff;border:none;border-radius:8px;padding:10px;font-size:0.85rem;cursor:pointer;">Got it</button>
+                </div>
+            `;
+            } else {
+                instructions = `
+                <div style="padding: 15px 20px; border-bottom: 1px solid #eee; text-align: left;">
+                    <p style="font-size: 0.85rem; color: #555; margin-bottom: 8px;">
+                        <strong>Enable Microphone for EchoWithin:</strong>
+                    </p>
+                    <ol style="font-size: 0.8rem; color: #666; line-height: 1.6; padding-left: 20px;">
+                        <li>Click the <strong>lock/info icon</strong> in the address bar</li>
+                        <li>Find <strong>Microphone</strong> and set to <strong>Allow</strong></li>
+                        <li>Reload the app</li>
+                    </ol>
+                    <button onclick="closeMobileActions()" style="width:100%;margin-top:12px;background:#3e2217;color:#fff;border:none;border-radius:8px;padding:10px;font-size:0.85rem;cursor:pointer;">Got it</button>
+                </div>
+            `;
+            }
+
+            menu.innerHTML = instructions;
+            document.getElementById('mobile-action-overlay').style.display = 'flex';
+        }
+
+        // Check microphone permission on page load
+        checkMicrophonePermission();
 
         function startChatSync() {
             if (chatSyncIntervalId) clearInterval(chatSyncIntervalId);
@@ -1041,47 +1855,47 @@
                 const content = messageInput.value.trim();
                 const pendingUrl = document.getElementById('pending-image-url').value;
                 const replyParentId = document.getElementById('reply-parent-id').value;
-                
+
                 if (!content && !pendingUrl) return;
                 if (!activeRecipientId) return;
                 socket.emit('stop_typing', { recipient_id: activeRecipientId });
                 if (typingTimeout) clearTimeout(typingTimeout);
-                
+
                 const tempId = Date.now().toString();
                 const msgType = pendingUrl ? 'image' : 'text';
-                
+
                 const msgData = {
                     content: content,
                     temp_id: tempId,
                     timestamp: new Date().toISOString(),
                     message_type: msgType
                 };
-                
+
                 const payload = { recipient_id: activeRecipientId, content: content, temp_id: tempId, message_type: msgType };
-                
+
                 if (pendingUrl) {
                     payload.image_url = pendingUrl;
                     msgData.image_url = pendingUrl;
                 }
-                
+
                 if (replyParentId) {
                     payload.reply_to_id = replyParentId;
                     msgData.reply_to_id = replyParentId;
                     msgData.reply_to_preview = document.getElementById('reply-to-text').textContent;
                     msgData.reply_to_sender = document.getElementById('reply-to-user').textContent;
                 }
-                
+
                 socket.emit('send_dm', payload);
-                
+
                 // Show optimistically
                 appendMessage(msgData, 'sent', false, null, false, tempId);
-                
+
                 // Reset form
                 messageInput.value = '';
                 cancelReply();
                 cancelImageUpload();
                 document.getElementById('send-btn').style.opacity = '1';
-                
+
                 scrollToBottom();
             };
         }
@@ -1107,18 +1921,18 @@
             if (window.innerWidth <= 768) { document.body.classList.add('mobile-chat-open'); }
             document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
             if (element) element.classList.add('active');
-            
+
             activeRecipientId = userId;
             document.getElementById('recipient-id').value = userId;
             document.getElementById('selection-splash').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('chat-header-actions').style.display = 'flex';
             document.getElementById('active-chat-username').textContent = username;
-            
+
             // Update profile link in header
             const headerLink = document.getElementById('chat-header-link');
             if (headerLink) headerLink.href = `/profile/${username}`;
-            
+
             // Load theme
             const savedTheme = localStorage.getItem(`chat_theme_${currentUserId}`);
             setChatTheme(savedTheme || 'default', false);
@@ -1130,10 +1944,10 @@
             if (status) status.style.display = 'block';
 
             chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
-            
+
             loadChatHistory(userId);
             loadScheduledMessages(userId);
-            
+
             if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
 
             socket.emit('viewing_chat', { partner_id: userId });
@@ -1282,30 +2096,30 @@
                         ${readIcon}
                     </div>
                 </div>`;
-            
+
             chatHistory.insertAdjacentHTML('beforeend', html);
             const newBubble = chatHistory.lastElementChild;
             if (resolvedId) renderedMessageIds.add(resolvedId);
-            
+
             if (msgData.reactions) updateReactions(newBubble, msgData.reactions);
             if (resolvedId) addMessageActions(newBubble, resolvedId, type);
 
             // Long press for mobile
-            newBubble.addEventListener('touchstart', (e) => startPressTimer(e, resolvedId, type), {passive: true});
-            newBubble.addEventListener('touchend', cancelPressTimer, {passive: true});
-            newBubble.addEventListener('touchmove', cancelPressTimer, {passive: true});
+            newBubble.addEventListener('touchstart', (e) => startPressTimer(e, resolvedId, type), { passive: true });
+            newBubble.addEventListener('touchend', cancelPressTimer, { passive: true });
+            newBubble.addEventListener('touchmove', cancelPressTimer, { passive: true });
         }
 
-        window.scrollToMessage = function(msgId) {
+        window.scrollToMessage = function (msgId) {
             const el = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
             if (el) {
-                el.scrollIntoView({behavior: 'smooth', block: 'center'});
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.classList.add('search-highlight');
                 setTimeout(() => el.classList.remove('search-highlight'), 2000);
             }
         };
 
-        window.toggleAudio = function(btn) {
+        window.toggleAudio = function (btn) {
             const player = btn.closest('.audio-player');
             const src = player.getAttribute('data-src');
             const icon = btn.querySelector('i');
@@ -1358,7 +2172,7 @@
             clearTimeout(longPressTimer);
         }
 
-        window.handleLongPress = function(e, msgId, type) {
+        window.handleLongPress = function (e, msgId, type) {
             if (window.innerWidth > 768) return true; // Default context menu on desktop
             e.preventDefault();
             showMobileActions(msgId, type);
@@ -1398,11 +2212,11 @@
             document.getElementById('mobile-action-overlay').style.display = 'flex';
         }
 
-        window.closeMobileActions = function() {
+        window.closeMobileActions = function () {
             document.getElementById('mobile-action-overlay').style.display = 'none';
         };
 
-        window.copyMessageText = function(msgId) {
+        window.copyMessageText = function (msgId) {
             const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
             const text = bubble.querySelector('.message-content').textContent;
             navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard"));
@@ -1412,17 +2226,17 @@
             const container = bubble.querySelector('.reaction-badges');
             if (!container) return;
             container.innerHTML = '';
-            
+
             let total = 0;
             for (const [emoji, users] of Object.entries(reactions)) {
                 if (!users || users.length === 0) continue;
                 total += users.length;
                 const iReacted = users.includes(currentUserId);
-                
+
                 const badge = document.createElement('div');
                 badge.className = `reaction-badge ${iReacted ? 'user-reacted' : ''}`;
                 badge.innerHTML = `${emoji} ${users.length > 1 ? `<span style="opacity:0.8;font-size:0.6rem;">${users.length}</span>` : ''}`;
-                
+
                 const msgId = bubble.getAttribute('data-id');
                 badge.onclick = (e) => {
                     e.stopPropagation();
@@ -1436,7 +2250,7 @@
         function addMessageActions(bubble, msgId, type) {
             if (bubble.querySelector('.message-actions')) return;
             const isSent = type === 'sent';
-            
+
             // Get sender name for reply
             let senderName = 'User';
             if (isSent) {
@@ -1452,10 +2266,10 @@
                 else if (contentNode.classList.contains('audio-player')) previewText = '🎤 Voice Message';
                 else previewText = contentNode.textContent.substring(0, 50);
             }
-            
+
             let actions = `<div class="message-actions">`;
             actions += `<button class="action-btn" onclick="replyToMessage('${msgId}', '${previewText.replace(/'/g, "\\'")}', false, '${senderName.replace(/'/g, "\\'")}')" title="Reply"><i class="fas fa-reply"></i></button>`;
-            
+
             if (isSent) {
                 actions += `
                 <button class="action-btn" onclick="editMessage('${msgId}')" title="Edit"><i class="fas fa-pencil-alt"></i></button>
@@ -1467,12 +2281,12 @@
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
 
-        window.editMessage = function(msgId) {
+        window.editMessage = function (msgId) {
             const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
             const contentNode = bubble.querySelector('.message-content');
             if (!contentNode) return;
             const oldVal = contentNode.textContent;
-            
+
             // Transform to edit mode
             bubble.classList.add('edit-mode-bubble');
             const originalContent = contentNode.innerHTML;
@@ -1483,7 +2297,7 @@
                     <button class="edit-save-btn">Save</button>
                 </div>
             `;
-            
+
             const textarea = contentNode.querySelector('textarea');
             textarea.focus();
             textarea.setSelectionRange(oldVal.length, oldVal.length);
@@ -1516,7 +2330,7 @@
             };
         };
 
-        window.deleteMessage = function(msgId) {
+        window.deleteMessage = function (msgId) {
             if (confirm("Delete this message?")) {
                 fetch(`/api/messages/delete/${msgId}`, {
                     method: 'POST',
@@ -1535,7 +2349,7 @@
             }
         };
 
-        window.deleteChat = function() {
+        window.deleteChat = function () {
             if (confirm("Permanently delete ALL messages in this chat?")) {
                 fetch(`/api/messages/chat/delete/${activeRecipientId}`, {
                     method: 'POST',
@@ -1618,16 +2432,16 @@
             const el = document.getElementById('chat-status');
             if (!el) return;
             if (!lastActiveStr) { el.textContent = 'Offline'; return; }
-            
+
             // ServerNow is UTC from Python isoformat()
             // lastActiveStr is UTC from Python isoformat()
             const now = serverNow ? new Date(serverNow) : new Date();
             const active = new Date(lastActiveStr);
-            
+
             // Get UTC millisecond values
             const diffMs = Math.max(0, now.getTime() - active.getTime());
             const diffMin = Math.floor(diffMs / 60000);
-            
+
             if (diffMin < 5) {
                 el.textContent = 'Active now';
                 el.style.color = '#27ae60';
@@ -1664,8 +2478,8 @@
             document.body.classList.remove('mobile-chat-open');
         };
 
-        window.scrollToBottom = function() { 
-            chatHistory.scrollTop = chatHistory.scrollHeight; 
+        window.scrollToBottom = function () {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
             document.getElementById('scroll-bottom-fab').style.display = 'none';
         };
 
@@ -1673,10 +2487,10 @@
         let _voiceRecordingState = 'idle'; // idle | waiting_permission | recording | sending
         let _releaseBeforeReady = false;
 
-        window.startVoiceRecording = function(e) {
+        window.startVoiceRecording = function (e) {
             if (e) { e.preventDefault(); e.stopPropagation(); }
             if (_voiceRecordingState !== 'idle') return;
-            
+
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showToast("Your browser doesn't support audio recording");
                 return;
@@ -1686,19 +2500,19 @@
             _releaseBeforeReady = false;
 
             // Register release listeners BEFORE the async permission call
-            const handleRelease = function(ev) {
+            const handleRelease = function (ev) {
                 document.removeEventListener('mouseup', handleRelease);
                 document.removeEventListener('touchend', handleRelease);
                 document.removeEventListener('keydown', handleKey);
-                
+
                 if (_voiceRecordingState === 'waiting_permission') {
                     // User released before getUserMedia resolved — flag it
                     _releaseBeforeReady = true;
                     return;
                 }
-                
+
                 if (_voiceRecordingState !== 'recording') return;
-                
+
                 // Check if release was over the cancel button
                 if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
                     const cancelBtn = document.querySelector('.voice-cancel-btn');
@@ -1716,7 +2530,7 @@
                         }
                     }
                 }
-                
+
                 // Enforce minimum 1-second recording
                 const elapsed = Date.now() - recordingStartTime;
                 if (elapsed < 1000) {
@@ -1724,11 +2538,11 @@
                     cancelVoiceRecording();
                     return;
                 }
-                
+
                 sendVoiceRecording();
             };
-            
-            const handleKey = function(ev) {
+
+            const handleKey = function (ev) {
                 if (ev.key === 'Escape') {
                     document.removeEventListener('mouseup', handleRelease);
                     document.removeEventListener('touchend', handleRelease);
@@ -1766,12 +2580,12 @@
                 recordingStartTime = Date.now();
                 document.getElementById('voice-recording-ui').style.display = 'flex';
                 document.getElementById('chat-form').style.display = 'none';
-                
+
                 recordingTimer = setInterval(() => {
                     const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
                     document.getElementById('voice-timer').textContent = formatTime(elapsed);
                 }, 1000);
-                
+
             }).catch(err => {
                 console.error(err);
                 _voiceRecordingState = 'idle';
@@ -1784,7 +2598,7 @@
             });
         };
 
-        window.cancelVoiceRecording = function() {
+        window.cancelVoiceRecording = function () {
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                 mediaRecorder.stop();
             }
@@ -1794,10 +2608,10 @@
             document.getElementById('chat-form').style.display = 'flex';
         };
 
-        window.sendVoiceRecording = function() {
+        window.sendVoiceRecording = function () {
             if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
             _voiceRecordingState = 'sending';
-            
+
             mediaRecorder.onstop = () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
@@ -1822,11 +2636,11 @@
                             temp_id: tempId,
                             timestamp: new Date().toISOString()
                         };
-                        socket.emit('send_dm', { 
-                            recipient_id: activeRecipientId, 
-                            image_url: d.url, 
-                            message_type: 'audio', 
-                            temp_id: tempId 
+                        socket.emit('send_dm', {
+                            recipient_id: activeRecipientId,
+                            image_url: d.url,
+                            message_type: 'audio',
+                            temp_id: tempId
                         });
                         appendMessage(msgData, 'sent', false, null, false, tempId);
                         cancelVoiceRecording();
@@ -1844,19 +2658,19 @@
         };
 
         // --- Theme Picker Logic (Premium) ---
-        window.openThemePicker = function() {
+        window.openThemePicker = function () {
             const overlay = document.getElementById('theme-overlay');
             overlay.style.display = 'flex';
             requestAnimationFrame(() => overlay.classList.add('show'));
         };
 
-        window.closeThemePicker = function() {
+        window.closeThemePicker = function () {
             const overlay = document.getElementById('theme-overlay');
             overlay.classList.remove('show');
             setTimeout(() => { overlay.style.display = 'none'; }, 250);
         };
 
-        window.setChatTheme = function(theme, save = true) {
+        window.setChatTheme = function (theme, save = true) {
             chatHistory.setAttribute('data-theme', theme);
             if (save) {
                 localStorage.setItem(`chat_theme_${currentUserId}`, theme);
@@ -1918,36 +2732,36 @@
         }
 
         // --- Feature Helper Functions ---
-        
-        window.replyToMessage = function(msgId, previewText, isFromMobileMenu = false, senderName = 'User') {
+
+        window.replyToMessage = function (msgId, previewText, isFromMobileMenu = false, senderName = 'User') {
             document.getElementById('reply-parent-id').value = msgId;
             document.getElementById('reply-to-text').textContent = previewText;
             document.getElementById('reply-to-user').textContent = senderName;
             document.getElementById('reply-preview-banner').style.display = 'flex';
             document.getElementById('message-input').focus();
         };
-        
-        window.cancelReply = function() {
+
+        window.cancelReply = function () {
             document.getElementById('reply-parent-id').value = '';
             document.getElementById('reply-preview-banner').style.display = 'none';
         };
-        
-        window.handleImageSelection = function(e) {
+
+        window.handleImageSelection = function (e) {
             const file = e.target.files[0];
             if (!file) return;
-            
+
             if (file.size > 5 * 1024 * 1024) {
                 showToast("Image too large. Maximum 5MB.");
                 return;
             }
-            
+
             const btn = document.getElementById('send-btn');
             btn.style.opacity = '0.5';
             btn.disabled = true;
-            
+
             const fd = new FormData();
             fd.append('image', file);
-            
+
             fetch('/api/messages/upload_image', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken },
@@ -1961,20 +2775,20 @@
                     showToast(d.error || "Upload failed");
                 }
             }).catch(() => showToast("Network error uploading image."))
-            .finally(() => {
-                btn.style.opacity = '1';
-                btn.disabled = false;
-                document.getElementById('dm-image-upload').value = '';
-            });
+                .finally(() => {
+                    btn.style.opacity = '1';
+                    btn.disabled = false;
+                    document.getElementById('dm-image-upload').value = '';
+                });
         };
-        
-        window.cancelImageUpload = function() {
+
+        window.cancelImageUpload = function () {
             document.getElementById('pending-image-url').value = '';
             document.getElementById('image-upload-banner').style.display = 'none';
         };
-        
+
         let searchDebounceId;
-        window.toggleChatSearch = function() {
+        window.toggleChatSearch = function () {
             const bar = document.getElementById('chat-search-bar');
             if (bar.style.display === 'none') {
                 bar.style.display = 'flex';
@@ -1985,31 +2799,31 @@
                 document.querySelectorAll('.search-highlight').forEach(el => el.classList.remove('search-highlight'));
             }
         };
-        
-        document.getElementById('chat-search-input')?.addEventListener('input', function(e) {
+
+        document.getElementById('chat-search-input')?.addEventListener('input', function (e) {
             clearTimeout(searchDebounceId);
             const query = e.target.value.trim();
             document.querySelectorAll('.search-highlight').forEach(el => el.classList.remove('search-highlight'));
-            
+
             if (!query || query.length < 2) return;
-            
+
             searchDebounceId = setTimeout(() => {
                 fetch(`/api/messages/search/${activeRecipientId}?q=${encodeURIComponent(query)}`)
-                .then(r => r.json()).then(d => {
-                    if (d.success && d.match_ids.length > 0) {
-                        d.match_ids.forEach(id => {
-                            const b = document.querySelector(`.message-bubble[data-id="${id}"]`);
-                            if (b) b.classList.add('search-highlight');
-                        });
-                        // Scroll to first
-                        const first = document.querySelector('.search-highlight');
-                        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
-                    }
-                });
+                    .then(r => r.json()).then(d => {
+                        if (d.success && d.match_ids.length > 0) {
+                            d.match_ids.forEach(id => {
+                                const b = document.querySelector(`.message-bubble[data-id="${id}"]`);
+                                if (b) b.classList.add('search-highlight');
+                            });
+                            // Scroll to first
+                            const first = document.querySelector('.search-highlight');
+                            if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
             }, 600);
         });
-        
-        window.reactToMessage = function(msgId, emoji) {
+
+        window.reactToMessage = function (msgId, emoji) {
             fetch(`/api/messages/react/${msgId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2024,11 +2838,11 @@
             });
         };
 
-        window.openLightbox = function(url) {
+        window.openLightbox = function (url) {
             document.getElementById('lightbox-img').src = url;
             document.getElementById('lightbox').classList.add('show');
         };
-        window.closeLightbox = function(e) {
+        window.closeLightbox = function (e) {
             if (e.target.tagName !== 'IMG') {
                 document.getElementById('lightbox').classList.remove('show');
             }
@@ -2140,7 +2954,7 @@
         // ==========================================
         let scheduledDatetime = null;
 
-        window.openScheduleModal = function() {
+        window.openScheduleModal = function () {
             const content = messageInput.value.trim();
             const pendingUrl = document.getElementById('pending-image-url').value;
             if (!content && !pendingUrl) {
@@ -2170,7 +2984,7 @@
             requestAnimationFrame(() => overlay.classList.add('show'));
         };
 
-        window.closeScheduleModal = function() {
+        window.closeScheduleModal = function () {
             const overlay = document.getElementById('schedule-overlay');
             overlay.classList.remove('show');
             setTimeout(() => { overlay.style.display = 'none'; }, 250);
@@ -2197,7 +3011,7 @@
             if (elPM) elPM.textContent = fmt(tomPM);
         }
 
-        window.setSchedulePreset = function(preset) {
+        window.setSchedulePreset = function (preset) {
             const now = new Date();
             let target;
             if (preset === '1h') {
@@ -2224,7 +3038,7 @@
         };
 
         // Custom datetime change
-        document.getElementById('schedule-datetime').addEventListener('change', function() {
+        document.getElementById('schedule-datetime').addEventListener('change', function () {
             const val = this.value;
             if (val) {
                 const target = new Date(val);
@@ -2261,7 +3075,7 @@
             document.getElementById('schedule-preview').innerHTML = `Will send <strong>${relativeStr}</strong><br><span style="font-size:0.72rem;">${absStr}</span>`;
         }
 
-        window.confirmSchedule = function() {
+        window.confirmSchedule = function () {
             if (!scheduledDatetime || !activeRecipientId) return;
 
             const content = messageInput.value.trim();
@@ -2340,10 +3154,10 @@
                         </div>
                     `);
                 });
-            }).catch(() => {});
+            }).catch(() => { });
         }
 
-        window.sendScheduledNow = function(msgId) {
+        window.sendScheduledNow = function (msgId) {
             if (!confirm('Send this message now?')) return;
             fetch(`/api/messages/schedule/${msgId}/send-now`, {
                 method: 'POST',
@@ -2362,7 +3176,7 @@
             });
         };
 
-        window.cancelScheduled = function(msgId) {
+        window.cancelScheduled = function (msgId) {
             if (!confirm('Cancel this scheduled message?')) return;
             fetch(`/api/messages/schedule/${msgId}/cancel`, {
                 method: 'POST',
@@ -2392,6 +3206,16 @@
     });
 </script>
 <style>
-    @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    @keyframes toastIn {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
 </style>
 {% endblock %}

@@ -920,6 +920,31 @@
             border-radius: 10px;
             padding: 1rem;
             margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .create-note-card.fullscreen-active {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 10000;
+            margin: 0;
+            border-radius: 0;
+            padding: 2rem;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .create-note-card.fullscreen-active form {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
         }
 
         .create-note-card textarea {
@@ -931,6 +956,42 @@
             min-height: 80px;
             font-family: inherit;
             font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .create-note-card.fullscreen-active textarea {
+            flex-grow: 1;
+            resize: none;
+            font-size: 1.15rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .close-fullscreen-btn {
+            display: none;
+            position: absolute;
+            top: 1.5rem;
+            right: 2rem;
+            background: rgba(0,0,0,0.05);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            color: #555;
+            cursor: pointer;
+            z-index: 10001;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .close-fullscreen-btn:hover {
+            background: rgba(0,0,0,0.1);
+        }
+
+        .create-note-card.fullscreen-active .close-fullscreen-btn {
+            display: flex;
         }
 
         .create-note-card textarea:focus {
@@ -6167,5 +6228,44 @@
             }, 100);
         }
     })();
+
+    // ====== Fullscreen Note Creation ======
+    document.addEventListener('DOMContentLoaded', function() {
+        const noteInput = document.getElementById('note-input');
+        const createNoteCard = document.querySelector('.create-note-card');
+        
+        if (noteInput && createNoteCard) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'close-fullscreen-btn';
+            closeBtn.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+            closeBtn.type = 'button';
+            closeBtn.title = 'Close fullscreen (Esc)';
+            createNoteCard.appendChild(closeBtn);
+
+            function openFullscreen() {
+                if (!createNoteCard.classList.contains('fullscreen-active')) {
+                    createNoteCard.classList.add('fullscreen-active');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function closeFullscreen() {
+                if (createNoteCard.classList.contains('fullscreen-active')) {
+                    createNoteCard.classList.remove('fullscreen-active');
+                    document.body.style.overflow = '';
+                    noteInput.blur();
+                }
+            }
+
+            noteInput.addEventListener('focus', openFullscreen);
+            closeBtn.addEventListener('click', closeFullscreen);
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && createNoteCard.classList.contains('fullscreen-active')) {
+                    closeFullscreen();
+                }
+            });
+        }
+    });
 </script>
 {% endblock %}

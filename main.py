@@ -3358,7 +3358,12 @@ def login():
         if is_pwa or remember:
             remember = True
 
-        user = users_conf.find_one({"username": username})
+        user = users_conf.find_one({
+            "$or": [
+                {"username": username},
+                {"email": username}
+            ]
+        })
 
         # Check if user exists but signed up via Google (no password set)
         if user and user.get('password') is None:

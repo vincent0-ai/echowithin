@@ -5690,10 +5690,10 @@ def post():
             # --- Clear sitemap cache and ping Google for faster indexing ---
             try:
                 if redis_cache:
-                    redis_cache.delete('sitemap_xml')
+                    redis_cache.delete('sitemap_index_xml')
                 # Ping Google to re-crawl sitemap (non-blocking, fire-and-forget)
                 import urllib.request
-                ping_url = 'https://www.google.com/ping?sitemap=https://echowithin.xyz/sitemap.xml'
+                ping_url = 'https://www.google.com/ping?sitemap=https://echowithin.xyz/sitemap_index.xml'
                 urllib.request.urlopen(ping_url, timeout=5)
             except Exception as e:
                 app.logger.debug(f"Sitemap ping failed (non-critical): {e}")
@@ -12472,14 +12472,14 @@ def api_newsletter_subscribe():
 # =====================================================
 # SEO: Sitemap and Robots.txt
 # =====================================================
-@app.route('/sitemap.xml')
-def sitemap():
+@app.route('/sitemap_index.xml')
+def sitemap_index():
     """
-    Auto-generates a sitemap.xml with all posts and static pages.
+    Auto-generates a sitemap_index.xml with all posts and static pages.
     Cached for 1 hour to reduce database load.
     """
     # Check cache first
-    cache_key = 'sitemap_xml'
+    cache_key = 'sitemap_index_xml'
     if redis_cache:
         try:
             cached = redis_cache.get(cache_key)
@@ -12575,7 +12575,7 @@ def sitemap():
 def api_clear_sitemap_cache():
     """Manually clear the sitemap cache."""
     if redis_cache:
-        redis_cache.delete('sitemap_xml')
+        redis_cache.delete('sitemap_index_xml')
         return jsonify({'success': True, 'message': 'Sitemap cache cleared'})
     return jsonify({'error': 'Redis not available'}), 503
 
@@ -12602,11 +12602,16 @@ Disallow: /edit_post
 Disallow: /reset_password
 
 # Sitemap
-Sitemap: https://echowithin.xyz/sitemap.xml
+Sitemap: https://echowithin.xyz/sitemap_index.xml
 """
     response = make_response(robots_txt)
     response.headers['Content-Type'] = 'text/plain'
     return response
+
+@app.route('/sitemap.xml')
+def sitemap_legacy_redirect():
+    """Redirect old sitemap.xml to the new sitemap_index.xml to resolve GSC cache issues."""
+    return redirect(url_for('sitemap_index'), code=301)
 
 
 # Handles any possible errors

@@ -55,27 +55,31 @@
             advantage of the personal space area to create a private note and surprise someone or for collaboration.</p>
     </div>
 
-    <div class="action-cards" style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 2rem;">
-        <div class="card" style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
-            <div style="font-size: 2.5rem; margin-bottom: 1rem;">📢</div>
+    <div class="action-cards"
+        style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 2rem;">
+        <div class="card"
+            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
             <h3>Explore Discussions</h3>
             <p>Dive into deep community debates and authentic long-form content.</p>
-            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1.5rem; width: 100%;">View Community Blog</a>
+            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1.5rem; width: 100%;">View
+                Community Blog</a>
         </div>
-        
-        <div class="card" style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease; border-top: 4px solid #3e2217;">
-            <div style="font-size: 2.5rem; margin-bottom: 1rem;">🔐</div>
+
+        <div class="card"
+            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease; border-top: 4px solid #3e2217;">
             <h3>Personal Space</h3>
             <p>Your private, end-to-end encrypted vault for notes and collaborative study.</p>
-            <a href="{{ url_for('personal_space') }}" class="btn comment-btn" style="margin-top: 1.5rem; width: 100%; background: #3e2217; color: white;">Open My Notes</a>
+            <a href="{{ url_for('personal_space') }}" class="btn comment-btn"
+                style="margin-top: 1.5rem; width: 100%; background: #3e2217; color: white;">Open My Notes</a>
         </div>
 
         {% if not current_user.is_authenticated %}
-        <div class="card" style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fdfaf8; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
-            <div style="font-size: 2.5rem; margin-bottom: 1rem;">✨</div>
+        <div class="card"
+            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fdfaf8; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
             <h3>Get Started</h3>
             <p>Join EchoWithin to start your secure journaling journey today.</p>
-            <a href="{{ url_for('login') }}" class="btn edit-btn" style="margin-top: 1.5rem; width: 100%;">Login / Register</a>
+            <a href="{{ url_for('login') }}" class="btn edit-btn" style="margin-top: 1.5rem; width: 100%;">Login /
+                Register</a>
         </div>
         {% endif %}
     </div>

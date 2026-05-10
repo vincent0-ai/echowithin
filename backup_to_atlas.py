@@ -57,7 +57,22 @@ def run_backup():
     try:
         # Connect to both databases
         local_client = MongoClient(local_uri, serverSelectionTimeoutMS=10000)
-        atlas_client = MongoClient(atlas_uri, serverSelectionTimeoutMS=15000)
+        
+        # Add retry logic for Atlas connection to handle transient DNS errors
+        import time
+        max_retries = 3
+        atlas_client = None
+        for attempt in range(max_retries):
+            try:
+                atlas_client = MongoClient(atlas_uri, serverSelectionTimeoutMS=15000)
+                atlas_client.admin.command('ping')
+                break
+            except Exception as e:
+                print(f"[{datetime.datetime.now(datetime.timezone.utc)}] Atlas connection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                else:
+                    raise
 
         local_db = local_client[db_name]
         atlas_db = atlas_client[db_name]

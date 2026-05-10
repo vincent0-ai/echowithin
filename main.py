@@ -1635,7 +1635,8 @@ def inject_template_globals():
         'TIER_LIMITS': TIER_LIMITS,
         'PREMIUM_PRICE_KSH': PREMIUM_PRICE_KSH,
     }
-    if current_user.is_authenticated:
+    from flask import has_request_context
+    if has_request_context() and current_user and getattr(current_user, 'is_authenticated', False):
         ctx['user_is_premium'] = current_user.is_premium
         ctx['user_is_trial'] = current_user.is_trial
         ctx['user_tier'] = current_user.account_tier

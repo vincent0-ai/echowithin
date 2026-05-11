@@ -6629,7 +6629,11 @@ def update_post(post_id):
     image_status = post.get('image_status', 'none')
     video_status = post.get('video_status', 'none')
 
-    if title and content:
+    content = content or ''
+    has_existing_media = bool(image_urls) or bool(image_url) or bool(video_url)
+    has_new_media = any(f and f.filename for f in images_files) or (video_file and video_file.filename)
+
+    if title and (content or has_existing_media or has_new_media):
         # Handle image replacement
         # If new images were provided, replace existing images (delete old public_ids and upload new ones)
         if images_files and any(f and f.filename for f in images_files):
@@ -6782,7 +6786,7 @@ def update_post(post_id):
         flash("Post updated successfully!", "success")
         return redirect(url_for('blog', slug=slug))
     else:
-        flash("Title and content cannot be empty.", "danger")
+        flash("Title and content/media cannot be empty.", "danger")
     return redirect(url_for('view_post', slug=slug))
 
 @app.route('/delete_post/<post_id>', methods=['POST'])
@@ -9319,7 +9323,7 @@ def view_shared_note(share_id):
         surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
     
     # Record unlock notification for surprise notes (once per session)
-    is_owner = current_user.is_authenticated and str(current_user.id) == str(share['owner_id'])
+    is_owner = current_user.is_authenticated and str(current_user.id) == str(share.get('owner_id', ''))
     
     if is_owner:
         # Mark all unread notifications for this share as read when owner views it
@@ -9336,7 +9340,7 @@ def view_shared_note(share_id):
             notif_id_key = f'notif_id_{share_id}'
             notif_id = session.get(notif_id_key)
             
-            visitor_name = 'Someone'
+            visitor_name = 'Anonymous visitor'
             visitor_id = None
             if current_user.is_authenticated:
                 visitor_id = str(current_user.id)
@@ -9345,7 +9349,7 @@ def view_shared_note(share_id):
                 if fresh_user and fresh_user.get('username'):
                     visitor_name = fresh_user['username']
                 else:
-                    visitor_name = getattr(current_user, 'username', 'Someone')
+                    visitor_name = getattr(current_user, 'username', 'Anonymous visitor')
             
             if not notif_id:
                 # First time in session: Record notification
@@ -11556,7 +11560,10 @@ def api_get_share_history(share_id):
             else:
                 ts_iso = None
 
-            unlocked_by_name = h.get('unlocked_by_name', 'Someone')
+            unlocked_by_name = h.get('unlocked_by_name')
+            if not unlocked_by_name or unlocked_by_name in ['Someone', 'Anonymous visitor', 'Unknown']:
+                unlocked_by_name = 'Anonymous visitor'
+            
             unlocked_by_id = h.get('unlocked_by')
             
             # Always resolve username from DB when we have a user ID (handles stale names, renames, generic fallbacks)

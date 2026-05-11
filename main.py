@@ -4758,6 +4758,7 @@ def get_my_commented_posts_json():
 
             unlock_activities.append({
                 '_id': notif['_id'],
+                'note_id': notif.get('note_id'),
                 'activity_type': 'surprise_unlocked',
                 'latest_activity': notif['unlocked_at'],
                 'share_id': notif.get('share_id'),
@@ -4809,10 +4810,36 @@ def get_my_commented_posts_json():
                     'anniversary': 'Anniversary',
                     'celebration': 'Celebration'
                 }
-                theme_label = theme_labels.get(post.get('surprise_theme', ''), 'Surprise')
+                theme = post.get('surprise_theme', 'none')
+                theme_label = theme_labels.get(theme, 'Surprise')
                 
                 u_name = post.get('unlocked_by_name', 'Someone')
                 u_id = post.get('unlocked_by') # unlock_activities dict has the ID if we include it
+                
+                # Fetch original note title if possible
+                note_title = "Shared note"
+                if post.get('note_id'):
+                    note = personal_posts_conf.find_one({'_id': post['note_id']})
+                    if note:
+                        ref = note.get('reference', '').strip()
+                        if ref:
+                            note_title = ref
+                        else:
+                            try:
+                                decrypted = _decrypt_note_record(note)
+                                if decrypted:
+                                    first_half = decrypted[:50].split('\n')[0].replace('#', '').strip()
+                                    note_title = first_half if first_half else "Shared note"
+                            except Exception:
+                                note_title = "Encrypted note"
+                            
+                if theme == 'none':
+                    title_text = f"Note accessed: {note_title}"
+                    content_text = f"{u_name} viewed your note"
+                else:
+                    title_text = f"{theme_label} surprise unlocked"
+                    content_text = f"{u_name} opened your {theme_label} surprise note"
+                
                 # For processed post data, let's just ensure we have the name
                 
                 post_data = {
@@ -4821,13 +4848,13 @@ def get_my_commented_posts_json():
                     'has_unread': is_unread,
                     'share_id': post.get('share_id'),
                     'unlocked_by_name': u_name,
-                    'surprise_theme': post.get('surprise_theme'),
+                    'surprise_theme': theme,
                     'theme_label': theme_label,
                     'unlocked_at': activity_time.isoformat() if activity_time else None,
                     'latest_comment_at': activity_time.isoformat() if activity_time else None,
-                    'title': f"{theme_label} surprise unlocked",
+                    'title': title_text,
                     'url': url_for('view_shared_note', share_id=post.get('share_id')) if post.get('share_id') else '#',
-                    'content': f"{u_name} opened your {theme_label} surprise note",
+                    'content': content_text,
                     'author': u_name,
                     'slug': '',
                     'author_id': str(u_id) if u_id else '',

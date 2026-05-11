@@ -365,8 +365,9 @@
 
                         // Handle surprise unlock notifications differently
                         if (p.activity_type === 'surprise_unlocked') {
+                            const badgeText = p.surprise_theme === 'none' ? 'Note accessed!' : 'Surprise opened!';
                             const unreadBadge = p.has_unread ?
-                                `<span class="unread-indicator" style="background-color: #ff4d6d">Surprise opened!</span>` : '';
+                                `<span class="unread-indicator" style="background-color: #ff4d6d">${badgeText}</span>` : '';
                             const timeAgo = p.unlocked_at ? new Date(p.unlocked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
                             html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}
                                 <div class="post-item" style="position: relative;">

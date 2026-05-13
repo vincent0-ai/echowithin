@@ -767,8 +767,7 @@ def _get_community_fernet(community_id):
         algorithm=hashes.SHA256(),
         length=32,
         salt=community_id_str.encode('utf-8'),
-        iterations=100000,
-        backend=default_backend()
+        iterations=100000
     )
     # We use a static key here derived from the application secret key
     # In a real enterprise app, we might store a separate community key
@@ -12761,7 +12760,17 @@ def communities_page():
         comm['note_count'] = community_notes_conf.count_documents({'community_id': comm['_id']})
         comm['is_admin'] = str(comm.get('admin_id')) == current_user.id
         
-    return render_template('communities.html', communities=user_communities)
+    # Get discoverable public communities
+    discover_communities = list(communities_conf.find({
+        'visibility': 'public',
+        'members': {'$ne': ObjectId(current_user.id)}
+    }).sort('updated_at', -1).limit(20))
+    
+    for comm in discover_communities:
+        comm['member_count'] = len(comm.get('members', []))
+        comm['note_count'] = community_notes_conf.count_documents({'community_id': comm['_id']})
+        
+    return render_template('communities.html', communities=user_communities, discover_communities=discover_communities)
 
 @app.route('/community/<community_id>', methods=['GET'])
 @login_required
@@ -12918,6 +12927,34 @@ def api_join_community_code():
         return redirect(url_for('communities_page'))
         
     return redirect(url_for('join_community_link', invite_code=invite_code))
+
+@app.route('/api/community/<community_id>/join-public', methods=['POST'])
+@login_required
+def api_join_public_community(community_id):
+    """Join a public community by ID directly from the discovery page."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id, 'visibility': 'public'})
+    if not community:
+        flash('Community not found or is not public.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    user_id_obj = ObjectId(current_user.id)
+    
+    if user_id_obj not in community.get('members', []):
+        communities_conf.update_one(
+            {'_id': comm_obj_id},
+            {
+                '$addToSet': {'members': user_id_obj},
+                '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
+            }
+        )
+        flash(f'Successfully joined {community.get("name")}!', 'success')
+        
+    return redirect(url_for('view_community', community_id=str(comm_obj_id)))
 
 @app.route('/api/community/<community_id>/settings', methods=['POST'])
 @login_required

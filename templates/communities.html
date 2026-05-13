@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 
 {% block title %}<title>Communities | EchoWithin</title>{% endblock %}
 
@@ -10,7 +10,7 @@
         margin: 2rem auto;
         padding: 0 1rem;
     }
-    
+
     .communities-header {
         display: flex;
         justify-content: space-between;
@@ -19,25 +19,25 @@
         flex-wrap: wrap;
         gap: 1rem;
     }
-    
+
     .header-text h1 {
         font-family: 'Playfair Display', serif;
         color: var(--primary-color, #3e2217);
         margin: 0 0 0.5rem 0;
         font-size: 2.2rem;
     }
-    
+
     .header-text p {
         color: #666;
         margin: 0;
         font-size: 0.95rem;
     }
-    
+
     .header-actions {
         display: flex;
         gap: 1rem;
     }
-    
+
     .btn-create {
         background: var(--primary-color, #3e2217);
         color: white;
@@ -51,12 +51,12 @@
         gap: 0.5rem;
         transition: transform 0.2s, background 0.2s;
     }
-    
+
     .btn-create:hover {
         transform: translateY(-2px);
         background: #2a160f;
     }
-    
+
     .btn-join {
         background: white;
         color: var(--primary-color, #3e2217);
@@ -70,11 +70,11 @@
         gap: 0.5rem;
         transition: background 0.2s;
     }
-    
+
     .btn-join:hover {
         background: #fdfaf9;
     }
-    
+
     /* Community Grid */
     .communities-grid {
         display: grid;
@@ -82,12 +82,12 @@
         gap: 1.5rem;
         margin-top: 2rem;
     }
-    
+
     .community-card {
         background: white;
         border-radius: 12px;
         padding: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         border: 1px solid #eee;
         transition: transform 0.3s, box-shadow 0.3s;
         display: flex;
@@ -97,13 +97,13 @@
         position: relative;
         overflow: hidden;
     }
-    
+
     .community-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 8px 25px rgba(62, 34, 23, 0.1);
         border-color: #e6dac3;
     }
-    
+
     .community-card::before {
         content: '';
         position: absolute;
@@ -114,14 +114,14 @@
         background: linear-gradient(90deg, #e8a87c, #c38d9e);
         opacity: 0.8;
     }
-    
+
     .comm-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         margin-bottom: 1rem;
     }
-    
+
     .comm-title {
         font-size: 1.25rem;
         font-weight: 700;
@@ -129,12 +129,12 @@
         margin: 0;
         line-height: 1.3;
     }
-    
+
     .comm-badges {
         display: flex;
         gap: 0.4rem;
     }
-    
+
     .comm-badge {
         font-size: 0.65rem;
         padding: 0.2rem 0.5rem;
@@ -142,25 +142,25 @@
         font-weight: 600;
         text-transform: uppercase;
     }
-    
+
     .badge-admin {
         background: #e8f5e9;
         color: #2e7d32;
         border: 1px solid #c8e6c9;
     }
-    
+
     .badge-public {
         background: #e3f2fd;
         color: #1565c0;
         border: 1px solid #bbdefb;
     }
-    
+
     .badge-private {
         background: #f5f5f5;
         color: #616161;
         border: 1px solid #e0e0e0;
     }
-    
+
     .comm-bio {
         font-size: 0.9rem;
         color: #555;
@@ -172,7 +172,7 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
     }
-    
+
     .comm-footer {
         display: flex;
         justify-content: space-between;
@@ -182,13 +182,13 @@
         font-size: 0.85rem;
         color: #777;
     }
-    
+
     .comm-stat {
         display: flex;
         align-items: center;
         gap: 0.4rem;
     }
-    
+
     /* Empty State */
     .empty-state {
         text-align: center;
@@ -198,18 +198,18 @@
         border: 2px dashed #e6dac3;
         color: #888;
     }
-    
+
     .empty-state i {
         font-size: 3rem;
         color: #e8a87c;
         margin-bottom: 1rem;
     }
-    
+
     .empty-state h3 {
         color: var(--primary-color, #3e2217);
         margin-bottom: 0.5rem;
     }
-    
+
     /* Modal Styles */
     .modal {
         display: none;
@@ -219,28 +219,35 @@
         top: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0,0,0,0.5);
+        background-color: rgba(0, 0, 0, 0.5);
         align-items: center;
         justify-content: center;
         backdrop-filter: blur(3px);
     }
-    
+
     .modal-content {
         background-color: #fff;
         padding: 2rem;
         border-radius: 16px;
         width: 90%;
         max-width: 450px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         position: relative;
         animation: modalSlideIn 0.3s ease-out;
     }
-    
+
     @keyframes modalSlideIn {
-        from { transform: translateY(-20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
+        from {
+            transform: translateY(-20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
     }
-    
+
     .close-modal {
         position: absolute;
         top: 1rem;
@@ -250,15 +257,15 @@
         cursor: pointer;
         transition: color 0.2s;
     }
-    
+
     .close-modal:hover {
         color: #333;
     }
-    
+
     .form-group {
         margin-bottom: 1.2rem;
     }
-    
+
     .form-group label {
         display: block;
         margin-bottom: 0.5rem;
@@ -266,7 +273,7 @@
         color: var(--primary-color, #3e2217);
         font-size: 0.9rem;
     }
-    
+
     .form-control {
         width: 100%;
         padding: 0.75rem;
@@ -277,18 +284,18 @@
         box-sizing: border-box;
         transition: border-color 0.2s;
     }
-    
+
     .form-control:focus {
         outline: none;
         border-color: #e8a87c;
         box-shadow: 0 0 0 2px rgba(232, 168, 124, 0.2);
     }
-    
+
     textarea.form-control {
         resize: vertical;
         min-height: 80px;
     }
-    
+
     .modal-submit {
         width: 100%;
         background: var(--primary-color, #3e2217);
@@ -302,11 +309,11 @@
         margin-top: 1rem;
         transition: background 0.2s;
     }
-    
+
     .modal-submit:hover {
         background: #2a160f;
     }
-    
+
     .char-count {
         display: block;
         text-align: right;
@@ -314,7 +321,7 @@
         color: #888;
         margin-top: 0.25rem;
     }
-    
+
     /* Tier Warning */
     .tier-warning {
         background: #fff3e0;
@@ -324,7 +331,7 @@
         border-radius: 0 8px 8px 0;
         font-size: 0.9rem;
     }
-    
+
     /* Segmented Control for Visibility */
     .segmented-control {
         display: flex;
@@ -332,7 +339,7 @@
         border-radius: 8px;
         padding: 4px;
     }
-    
+
     .segmented-control label {
         flex: 1;
         text-align: center;
@@ -344,15 +351,15 @@
         color: #666;
         transition: all 0.2s;
     }
-    
+
     .segmented-control input[type="radio"] {
         display: none;
     }
-    
-    .segmented-control input[type="radio"]:checked + label {
+
+    .segmented-control input[type="radio"]:checked+label {
         background: white;
         color: var(--primary-color, #3e2217);
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     }
 </style>
 {% endblock %}
@@ -361,7 +368,7 @@
 <div class="communities-container">
     <div class="communities-header">
         <div class="header-text">
-            <h1><i class="fas fa-users" style="color: #e8a87c; margin-right: 10px;"></i> Communities</h1>
+            <h1> Communities</h1>
             <p>Collaborative spaces for shared notes, study, and discussions.</p>
         </div>
         <div class="header-actions">
@@ -373,15 +380,17 @@
             </button>
         </div>
     </div>
-    
+
     {% set admin_count = communities|selectattr('is_admin', 'equalto', true)|list|length %}
     {% if admin_count >= user_max_communities %}
     <div class="tier-warning">
         <strong><i class="fas fa-info-circle"></i> Community Limit Reached</strong>
         <p style="margin: 0.5rem 0 0 0; color: #555;">
-            You have reached your limit of {{ user_max_communities }} created communit{{ 'ies' if user_max_communities > 1 else 'y' }}. 
+            You have reached your limit of {{ user_max_communities }} created communit{{ 'ies' if user_max_communities >
+            1 else 'y' }}.
             {% if not user_is_premium %}
-            <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="color: #e65100; font-weight: bold;">Upgrade to Premium</a> to create up to 5 spaces.
+            <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
+                style="color: #e65100; font-weight: bold;">Upgrade to Premium</a> to create up to 5 spaces.
             {% endif %}
         </p>
     </div>
@@ -404,11 +413,11 @@
                     {% endif %}
                 </div>
             </div>
-            
+
             <div class="comm-bio">
                 {{ comm.bio or 'A collaborative space for shared notes.' }}
             </div>
-            
+
             <div class="comm-footer">
                 <div class="comm-stat">
                     <i class="fas fa-user-friends"></i> {{ comm.member_count }}
@@ -425,7 +434,6 @@
     </div>
     {% else %}
     <div class="empty-state">
-        <i class="fas fa-users-slash"></i>
         <h3>No Communities Yet</h3>
         <p>You haven't joined or created any communities.</p>
         <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
@@ -433,6 +441,48 @@
         </div>
     </div>
     {% endif %}
+    
+    {% if discover_communities %}
+    <div style="margin-top: 4rem; border-top: 1px solid #eee; padding-top: 2rem;">
+        <h2 style="font-family: 'Playfair Display', serif; color: var(--primary-color, #3e2217); margin-bottom: 0.5rem;"><i class="fas fa-compass" style="color: #e8a87c; margin-right: 8px;"></i> Discover Public Communities</h2>
+        <p style="color: #666; margin-top: 0; margin-bottom: 2rem;">Explore and join open communities created by other users.</p>
+        
+        <div class="communities-grid">
+            {% for comm in discover_communities %}
+            <div class="community-card">
+                <div class="comm-header">
+                    <h3 class="comm-title">{{ comm.name }}</h3>
+                    <div class="comm-badges">
+                        <span class="comm-badge badge-public" title="Visible to all">Public</span>
+                    </div>
+                </div>
+                
+                <div class="comm-bio">
+                    {{ comm.bio or 'A collaborative space for shared notes.' }}
+                </div>
+                
+                <div class="comm-footer" style="flex-direction: column; align-items: stretch; gap: 1rem;">
+                    <div style="display: flex; justify-content: space-between; width: 100%;">
+                        <div class="comm-stat">
+                            <i class="fas fa-user-friends"></i> {{ comm.member_count }}
+                        </div>
+                        <div class="comm-stat">
+                            <i class="fas fa-sticky-note"></i> {{ comm.note_count }}
+                        </div>
+                    </div>
+                    <form action="{{ url_for('api_join_public_community', community_id=comm._id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn-action primary" style="width: 100%; justify-content: center; background: #e8a87c; border-color: #e8a87c;">
+                            <i class="fas fa-plus"></i> Join Community
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
 </div>
 
 <!-- Create Community Modal -->
@@ -440,28 +490,30 @@
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('createModal')">&times;</span>
         <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1.5rem;">Create Community</h2>
-        
+
         <form action="{{ url_for('api_create_community') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            
+
             <div class="form-group">
                 <label for="comm_name">Community Name</label>
-                <input type="text" id="comm_name" name="name" class="form-control" required maxlength="50" placeholder="e.g. Bible Study Group" oninput="updateCharCount(this, 'nameCount', 50)">
+                <input type="text" id="comm_name" name="name" class="form-control" required maxlength="50"
+                    placeholder="e.g. Bible Study Group" oninput="updateCharCount(this, 'nameCount', 50)">
                 <span class="char-count"><span id="nameCount">0</span>/50</span>
             </div>
-            
+
             <div class="form-group">
                 <label for="comm_bio">Description (Bio)</label>
-                <textarea id="comm_bio" name="bio" class="form-control" maxlength="200" placeholder="What is this space about?" oninput="updateCharCount(this, 'bioCount', 200)"></textarea>
+                <textarea id="comm_bio" name="bio" class="form-control" maxlength="200"
+                    placeholder="What is this space about?" oninput="updateCharCount(this, 'bioCount', 200)"></textarea>
                 <span class="char-count"><span id="bioCount">0</span>/200</span>
             </div>
-            
+
             <div class="form-group">
                 <label>Visibility</label>
                 <div class="segmented-control">
                     <input type="radio" id="vis_private" name="visibility" value="private" checked>
                     <label for="vis_private"><i class="fas fa-lock" style="margin-right: 4px;"></i> Private</label>
-                    
+
                     <input type="radio" id="vis_public" name="visibility" value="public">
                     <label for="vis_public"><i class="fas fa-globe" style="margin-right: 4px;"></i> Public</label>
                 </div>
@@ -469,8 +521,9 @@
                     Private: Invite-only. Public: Anyone with link can join.
                 </p>
             </div>
-            
-            <button type="submit" class="modal-submit" {% if admin_count >= user_max_communities %}disabled style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
+
+            <button type="submit" class="modal-submit" {% if admin_count>= user_max_communities %}disabled
+                style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
                 Create Space
             </button>
             {% if admin_count >= user_max_communities %}
@@ -485,15 +538,16 @@
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('joinModal')">&times;</span>
         <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1.5rem;">Join Community</h2>
-        
+
         <form action="{{ url_for('api_join_community_code') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            
+
             <div class="form-group">
                 <label for="invite_code">Invite Link or Code</label>
-                <input type="text" id="invite_code" name="invite_code" class="form-control" required placeholder="Paste link or code here">
+                <input type="text" id="invite_code" name="invite_code" class="form-control" required
+                    placeholder="Paste link or code here">
             </div>
-            
+
             <button type="submit" class="modal-submit">
                 Join Space
             </button>
@@ -505,18 +559,18 @@
     function openModal(id) {
         document.getElementById(id).style.display = 'flex';
     }
-    
+
     function closeModal(id) {
         document.getElementById(id).style.display = 'none';
     }
-    
+
     // Close modal when clicking outside
-    window.onclick = function(event) {
+    window.onclick = function (event) {
         if (event.target.classList.contains('modal')) {
             event.target.style.display = 'none';
         }
     }
-    
+
     function updateCharCount(input, countId, max) {
         document.getElementById(countId).textContent = input.value.length;
     }

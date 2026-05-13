@@ -70,7 +70,7 @@
                             <span style="font-weight: 600; color: #3e2217; font-size: 0.95rem;">{{ contact.username
                                 }}</span>
                             <span class="contact-time" style="font-size: 0.7rem; color: #999;"
-                                data-timestamp="{{ contact.timestamp.isoformat() if contact.timestamp else '' }}">{{
+                                data-timestamp="{{ (contact.timestamp.isoformat() + 'Z').replace('+00:00Z', 'Z') if contact.timestamp else '' }}">{{
                                 contact.timestamp|localtime('%b %d')
                                 }}</span>
                         </div>
@@ -1551,8 +1551,12 @@
         // --- Sidebar Relative Timestamps ---
         function updateSidebarTimestamps() {
             document.querySelectorAll('.contact-time[data-timestamp]').forEach(el => {
-                const iso = el.getAttribute('data-timestamp');
+                let iso = el.getAttribute('data-timestamp');
                 if (!iso) return;
+                // Ensure UTC interpretation — server timestamps are always UTC
+                if (!iso.endsWith('Z') && !iso.includes('+') && !iso.includes('-', 10)) {
+                    iso += 'Z';
+                }
                 const date = new Date(iso);
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

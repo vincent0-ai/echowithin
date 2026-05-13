@@ -461,6 +461,11 @@ unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 
+# --- Community Notes Collections ---
+communities_conf = db['communities']
+community_notes_conf = db['community_notes']
+community_reactions_conf = db['community_reactions']
+
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
 direct_messages_conf.create_index([('recipient_id', 1), ('is_read', 1)])
@@ -533,6 +538,16 @@ note_discussions_conf.create_index([('share_id', 1), ('created_at', -1)])
 app_tokens_conf.create_index('created_at', expireAfterSeconds=90*24*3600)
 app_tokens_conf.create_index('token', unique=True)
 app_tokens_conf.create_index('user_id')
+
+# --- Community Notes Performance Indexes ---
+communities_conf.create_index('admin_id')
+communities_conf.create_index('invite_code', unique=True, sparse=True)
+communities_conf.create_index([('members', 1)])
+community_notes_conf.create_index([('community_id', 1), ('created_at', -1)])
+community_notes_conf.create_index([('community_id', 1), ('score', -1)])
+community_notes_conf.create_index('author_id')
+community_reactions_conf.create_index([('note_id', 1), ('user_id', 1)], unique=True)
+community_reactions_conf.create_index([('note_id', 1)])
 
 # --- Encryption utilities for personal notes ---
 # v2: Per-user key derivation with increased iterations (OWASP 2024 recommendation).
@@ -738,6 +753,51 @@ def _decrypt_note_record(note, share=None):
     if decrypted is not None:
         return decrypted
     return decrypt_note(note.get('content', ''), user_id=candidates[0] if candidates else None)
+
+# --- Community Encryption Utilities ---
+
+def _get_community_fernet(community_id):
+    """
+    Derive a community-specific encryption key based on the community ID.
+    This ensures that community notes are encrypted but all members can read them.
+    """
+    community_id_str = str(community_id)
+    # Use PBKDF2 to derive a strong key from the global secret and community ID
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=community_id_str.encode('utf-8'),
+        iterations=100000,
+        backend=default_backend()
+    )
+    # We use a static key here derived from the application secret key
+    # In a real enterprise app, we might store a separate community key
+    base_secret = app.secret_key.encode('utf-8') if isinstance(app.secret_key, str) else app.secret_key
+    key = base64.urlsafe_b64encode(kdf.derive(base_secret))
+    return Fernet(key)
+
+def encrypt_community_note(plaintext, community_id):
+    if not plaintext:
+        return plaintext
+    try:
+        f = _get_community_fernet(community_id)
+        return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        app.logger.error(f"Failed to encrypt community note: {e}")
+        return plaintext
+
+def decrypt_community_note(ciphertext, community_id):
+    if not ciphertext:
+        return ciphertext
+    try:
+        # Check if it's actually a Fernet token (starts with gAAAAA...)
+        if not (isinstance(ciphertext, str) and ciphertext.startswith('gAAAAA')):
+            return ciphertext
+        f = _get_community_fernet(community_id)
+        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        app.logger.error(f"Failed to decrypt community note: {e}")
+        return ciphertext
 
 # --- Meilisearch setup for fast full-text search ---
 MEILI_URL = os.environ.get('MEILI_URL', '').strip()
@@ -1297,6 +1357,7 @@ TIER_LIMITS = {
         'voice_messages': True,             # voice messages are free for all users
         'version_history_days': 7,
         'auto_approve_collab': False,
+        'max_communities': 1,               # free users can create 1 community
     },
     'premium': {
         'max_notes': 99999,               # effectively unlimited
@@ -1311,6 +1372,7 @@ TIER_LIMITS = {
         'voice_messages': True,
         'version_history_days': 365,
         'auto_approve_collab': True,
+        'max_communities': 5,               # premium users can create up to 5 communities
     }
 }
 
@@ -1644,6 +1706,7 @@ def inject_template_globals():
         ctx['user_max_notes'] = current_user.get_limit('max_notes')
         ctx['user_max_chars'] = current_user.get_limit('max_chars_per_note')
         ctx['user_max_shares'] = current_user.get_limit('max_share_links_per_note')
+        ctx['user_max_communities'] = current_user.get_limit('max_communities')
     else:
         ctx['user_is_premium'] = False
         ctx['user_is_trial'] = False
@@ -1652,6 +1715,7 @@ def inject_template_globals():
         ctx['user_max_notes'] = TIER_LIMITS['free']['max_notes']
         ctx['user_max_chars'] = TIER_LIMITS['free']['max_chars_per_note']
         ctx['user_max_shares'] = TIER_LIMITS['free']['max_share_links_per_note']
+        ctx['user_max_communities'] = TIER_LIMITS['free']['max_communities']
     return ctx
 
 
@@ -12680,4 +12744,516 @@ def internal_server_error(e):
             app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
     except Exception as log_e:
         print(f"CRITICAL: Failed to log 500 error: {log_e}", file=sys.stderr)
-    return render_template("500.html"), 500
+    return render_template("500.html"), 500# ==============================================================================
+# COMMUNITY NOTES API ROUTES
+# ==============================================================================
+
+@app.route('/communities', methods=['GET'])
+@login_required
+def communities_page():
+    ""\"Page to list user's communities and show create/join forms.""\"
+    # Get all communities where user is a member
+    user_communities = list(communities_conf.find({'members': ObjectId(current_user.id)}).sort('updated_at', -1))
+    
+    # Calculate members count and notes count for each
+    for comm in user_communities:
+        comm['member_count'] = len(comm.get('members', []))
+        comm['note_count'] = community_notes_conf.count_documents({'community_id': comm['_id']})
+        comm['is_admin'] = str(comm.get('admin_id')) == current_user.id
+        
+    return render_template('communities.html', communities=user_communities)
+
+@app.route('/community/<community_id>', methods=['GET'])
+@login_required
+def view_community(community_id):
+    ""\"Main community page (the 'space' with notes feed).""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        flash('Invalid community ID.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        flash('Community not found.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    # Check membership
+    user_id_obj = ObjectId(current_user.id)
+    is_member = user_id_obj in community.get('members', [])
+    is_admin = str(community.get('admin_id')) == current_user.id
+    
+    if not is_member and community.get('visibility') == 'private':
+        flash('You are not a member of this private community.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    # Get notes for this community with pagination
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    skip = (page - 1) * per_page
+    
+    # Note: Encryption happens per-note using community ID during save/load
+    # So we don't need to decrypt here, we decrypt in the template or via API
+    total_notes = community_notes_conf.count_documents({'community_id': comm_obj_id})
+    raw_notes = list(community_notes_conf.find({'community_id': comm_obj_id})
+                    .sort([('score', -1), ('created_at', -1)])  # Rank by score, then recency
+                    .skip(skip)
+                    .limit(per_page))
+                    
+    # Decrypt contents for display
+    for note in raw_notes:
+        note['content'] = decrypt_community_note(note.get('content', ''), comm_obj_id)
+        # Check if user has reacted
+        if current_user.is_authenticated:
+            user_reaction = community_reactions_conf.find_one({
+                'note_id': note['_id'],
+                'user_id': user_id_obj
+            })
+            if user_reaction:
+                note['user_reaction_type'] = user_reaction.get('reaction_type')
+
+    # Get members list for admin panel
+    members = []
+    if is_admin:
+        member_ids = community.get('members', [])
+        members = list(users_conf.find({'_id': {'$in': member_ids}}, {'username': 1}))
+        
+    return render_template('community_space.html', 
+                          community=community,
+                          notes=raw_notes,
+                          is_member=is_member,
+                          is_admin=is_admin,
+                          members=members,
+                          page=page,
+                          total_pages=(total_notes + per_page - 1) // per_page)
+
+@app.route('/api/community/create', methods=['POST'])
+@login_required
+@limits(calls=5, period=3600)
+def api_create_community():
+    ""\"Create a new community space.""\"
+    name = request.form.get('name', '').strip()
+    bio = request.form.get('bio', '').strip()
+    visibility = request.form.get('visibility', 'private')
+    
+    if not name:
+        flash('Community name is required.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    if len(name) > 50:
+        flash('Name must be 50 characters or less.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    if len(bio) > 200:
+        flash('Bio must be 200 characters or less.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    # Check tier limits
+    user_id_obj = ObjectId(current_user.id)
+    current_count = communities_conf.count_documents({'admin_id': user_id_obj})
+    max_allowed = current_user.get_limit('max_communities')
+    
+    if current_count >= max_allowed:
+        flash(f'You have reached your limit of {max_allowed} communities. Upgrade to Premium for more!', 'warning')
+        return redirect(url_for('communities_page'))
+        
+    import secrets
+    invite_code = secrets.token_urlsafe(12)
+    
+    new_community = {
+        'name': name,
+        'bio': bio,
+        'admin_id': user_id_obj,
+        'members': [user_id_obj],
+        'visibility': visibility,
+        'invite_code': invite_code,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'updated_at': datetime.datetime.now(datetime.timezone.utc)
+    }
+    
+    res = communities_conf.insert_one(new_community)
+    flash(f'Community "{name}" created successfully!', 'success')
+    return redirect(url_for('view_community', community_id=str(res.inserted_id)))
+
+@app.route('/community/join/<invite_code>', methods=['GET'])
+@login_required
+def join_community_link(invite_code):
+    ""\"Join a community via invite link.""\"
+    community = communities_conf.find_one({'invite_code': invite_code})
+    if not community:
+        flash('Invalid or expired invite link.', 'danger')
+        return redirect(url_for('communities_page'))
+        
+    user_id_obj = ObjectId(current_user.id)
+    
+    # Check if already a member
+    if user_id_obj in community.get('members', []):
+        flash('You are already a member of this community.', 'info')
+        return redirect(url_for('view_community', community_id=str(community['_id'])))
+        
+    # Add member
+    communities_conf.update_one(
+        {'_id': community['_id']},
+        {
+            '': {'members': user_id_obj},
+            '': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
+        }
+    )
+    
+    flash(f'Successfully joined {community.get("name")}!', 'success')
+    return redirect(url_for('view_community', community_id=str(community['_id'])))
+
+@app.route('/api/community/join', methods=['POST'])
+@login_required
+def api_join_community_code():
+    ""\"Join a community via pasted code.""\"
+    invite_code = request.form.get('invite_code', '').strip()
+    
+    # Extract code if it's a full URL
+    if 'community/join/' in invite_code:
+        invite_code = invite_code.split('community/join/')[-1].strip()
+        
+    if not invite_code:
+        flash('Please provide an invite code.', 'warning')
+        return redirect(url_for('communities_page'))
+        
+    return redirect(url_for('join_community_link', invite_code=invite_code))
+
+@app.route('/api/community/<community_id>/settings', methods=['POST'])
+@login_required
+def api_update_community(community_id):
+    ""\"Update community settings (Admin only).""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    name = request.form.get('name', '').strip()
+    bio = request.form.get('bio', '').strip()
+    visibility = request.form.get('visibility')
+    
+    update_data = {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
+    if name and len(name) <= 50:
+        update_data['name'] = name
+    if bio is not None and len(bio) <= 200:
+        update_data['bio'] = bio
+    if visibility in ['public', 'private']:
+        update_data['visibility'] = visibility
+        
+    communities_conf.update_one({'_id': comm_obj_id}, {'': update_data})
+    flash('Community settings updated.', 'success')
+    return redirect(url_for('view_community', community_id=community_id))
+
+@app.route('/api/community/<community_id>/regenerate-invite', methods=['POST'])
+@login_required
+def api_regenerate_invite(community_id):
+    ""\"Regenerate invite link (Admin only).""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    import secrets
+    new_code = secrets.token_urlsafe(12)
+    communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'': {'invite_code': new_code}}
+    )
+    
+    return jsonify({'success': True, 'new_code': new_code})
+
+@app.route('/api/community/<community_id>/leave', methods=['POST'])
+@login_required
+def api_leave_community(community_id):
+    ""\"Leave a community.""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+        user_id_obj = ObjectId(current_user.id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return jsonify({'error': 'Not found'}), 404
+        
+    if str(community.get('admin_id')) == current_user.id:
+        flash('Admin cannot leave the community. Delete it instead or transfer ownership (not yet supported).', 'danger')
+        return redirect(url_for('view_community', community_id=community_id))
+        
+    communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'': {'members': user_id_obj}}
+    )
+    
+    flash('You have left the community.', 'success')
+    return redirect(url_for('communities_page'))
+
+@app.route('/api/community/<community_id>/remove-member', methods=['POST'])
+@login_required
+def api_remove_member(community_id):
+    ""\"Remove a member (Admin only).""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+        member_id = ObjectId(request.form.get('member_id'))
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    if str(member_id) == current_user.id:
+        return jsonify({'error': 'Cannot remove yourself'}), 400
+        
+    communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'': {'members': member_id}}
+    )
+    
+    flash('Member removed.', 'success')
+    return redirect(url_for('view_community', community_id=community_id))
+
+@app.route('/api/community/<community_id>/note/create', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_create_community_note(community_id):
+    ""\"Create a new community note.""\"
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return jsonify({'error': 'Not found'}), 404
+        
+    # Must be member
+    if ObjectId(current_user.id) not in community.get('members', []):
+        return jsonify({'error': 'Not a member'}), 403
+        
+    content = request.form.get('content', '').strip()
+    if not content:
+        flash('Note content cannot be empty.', 'warning')
+        return redirect(url_for('view_community', community_id=community_id))
+        
+    max_chars = current_user.get_limit('max_chars_per_note')
+    if len(content) > max_chars:
+        flash(f'Note exceeds maximum allowed length of {max_chars} characters.', 'danger')
+        return redirect(url_for('view_community', community_id=community_id))
+        
+    permissions = request.form.get('permissions', 'view')
+    share_style = request.form.get('share_style', 'standard')
+    font_style = request.form.get('font_style', 'standard')
+    
+    # Parse tags
+    tags_str = request.form.get('tags', '')
+    tags = [t.strip()[:20] for t in tags_str.split(',') if t.strip()] if tags_str else []
+    
+    # Encrypt content
+    encrypted_content = encrypt_community_note(content, comm_obj_id)
+    
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    import secrets
+    share_id = secrets.token_urlsafe(16)
+    
+    note_data = {
+        'community_id': comm_obj_id,
+        'author_id': ObjectId(current_user.id),
+        'author_name': current_user.username,
+        'content': encrypted_content,
+        'tags': tags[:5], # max 5 tags
+        'permissions': permissions,
+        'share_style': share_style,
+        'font_style': font_style,
+        'share_id': share_id,
+        'reactions': {'heart': 0, 'fire': 0, 'laugh': 0, 'wow': 0, 'pray': 0},
+        'reaction_count': 0,
+        'view_count': 0,
+        'score': 10.0, # Initial score
+        'created_at': now,
+        'updated_at': now,
+        'last_activity_at': now
+    }
+    
+    community_notes_conf.insert_one(note_data)
+    flash('Note added successfully.', 'success')
+    return redirect(url_for('view_community', community_id=community_id))
+
+@app.route('/api/community/note/<note_id>/react', methods=['POST'])
+@login_required
+@limits(calls=60, period=60)
+def api_react_community_note(note_id):
+    ""\"Toggle a reaction on a community note.""\"
+    try:
+        note_obj_id = ObjectId(note_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    data = request.get_json()
+    reaction_type = data.get('reaction_type')
+    valid_reactions = ['heart', 'fire', 'laugh', 'wow', 'pray']
+    
+    if reaction_type not in valid_reactions:
+        return jsonify({'error': 'Invalid reaction'}), 400
+        
+    note = community_notes_conf.find_one({'_id': note_obj_id})
+    if not note:
+        return jsonify({'error': 'Not found'}), 404
+        
+    user_id_obj = ObjectId(current_user.id)
+    
+    # Check existing reaction
+    existing = community_reactions_conf.find_one({
+        'note_id': note_obj_id,
+        'user_id': user_id_obj
+    })
+    
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    if existing:
+        if existing.get('reaction_type') == reaction_type:
+            # Remove reaction (toggle off)
+            community_reactions_conf.delete_one({'_id': existing['_id']})
+            # Update counts
+            community_notes_conf.update_one(
+                {'_id': note_obj_id},
+                {
+                    '': {
+                        f'reactions.{reaction_type}': -1,
+                        'reaction_count': -1
+                    }
+                }
+            )
+            action = 'removed'
+        else:
+            # Change reaction
+            old_type = existing.get('reaction_type')
+            community_reactions_conf.update_one(
+                {'_id': existing['_id']},
+                {'': {'reaction_type': reaction_type, 'created_at': now}}
+            )
+            # Update counts
+            community_notes_conf.update_one(
+                {'_id': note_obj_id},
+                {
+                    '': {
+                        f'reactions.{old_type}': -1,
+                        f'reactions.{reaction_type}': 1
+                    },
+                    '': {'last_activity_at': now}
+                }
+            )
+            action = 'changed'
+    else:
+        # Add new reaction
+        community_reactions_conf.insert_one({
+            'note_id': note_obj_id,
+            'user_id': user_id_obj,
+            'reaction_type': reaction_type,
+            'created_at': now
+        })
+        community_notes_conf.update_one(
+            {'_id': note_obj_id},
+            {
+                '': {
+                    f'reactions.{reaction_type}': 1,
+                    'reaction_count': 1
+                },
+                '': {'last_activity_at': now}
+            }
+        )
+        action = 'added'
+        
+    # Re-calculate score asynchronously (simplified here, in production use background task)
+    # The cron job will also recalculate this periodically
+    
+    # Fetch updated counts to return
+    updated_note = community_notes_conf.find_one({'_id': note_obj_id}, {'reactions': 1, 'reaction_count': 1})
+    
+    return jsonify({
+        'success': True,
+        'action': action,
+        'reactions': updated_note.get('reactions', {}),
+        'total': updated_note.get('reaction_count', 0)
+    })
+
+@app.route('/api/community/note/<note_id>/delete', methods=['POST'])
+@login_required
+def api_delete_community_note(note_id):
+    ""\"Delete a community note (Author or Admin only).""\"
+    try:
+        note_obj_id = ObjectId(note_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    note = community_notes_conf.find_one({'_id': note_obj_id})
+    if not note:
+        return jsonify({'error': 'Not found'}), 404
+        
+    community = communities_conf.find_one({'_id': note['community_id']})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+        
+    is_author = str(note.get('author_id')) == current_user.id
+    is_admin = str(community.get('admin_id')) == current_user.id
+    
+    if not (is_author or is_admin):
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    # Delete note and its reactions
+    community_notes_conf.delete_one({'_id': note_obj_id})
+    community_reactions_conf.delete_many({'note_id': note_obj_id})
+    
+    flash('Note deleted.', 'success')
+    return redirect(url_for('view_community', community_id=str(note['community_id'])))
+
+@app.route('/share/community-note/<share_id>', methods=['GET'])
+def view_shared_community_note(share_id):
+    ""\"Public view for a shared community note.""\"
+    note = community_notes_conf.find_one({'share_id': share_id})
+    if not note:
+        return render_template('shared_note.html', expired=True), 410
+        
+    # Decrypt content
+    content = decrypt_community_note(note.get('content', ''), note['community_id'])
+    
+    # Increment view count
+    community_notes_conf.update_one(
+        {'_id': note['_id']},
+        {
+            '': {'view_count': 1},
+            '': {'last_activity_at': datetime.datetime.now(datetime.timezone.utc)}
+        }
+    )
+    
+    # Use existing shared note template but adapt variables
+    return render_template('shared_note.html',
+                           share_id=share_id,
+                           content=content,
+                           permissions='view', # Community shared links are read-only externally
+                           note_id=str(note['_id']),
+                           updated_at=note.get('updated_at'),
+                           created_at=note.get('created_at'),
+                           is_owner=False,
+                           already_saved=False,
+                           has_pending_proposal=False,
+                           surprise_theme=note.get('share_style', 'none'),
+                           reference='',
+                           tags=note.get('tags', []),
+                           is_valentine=(note.get('share_style') == 'valentine'),
+                           valentine_photo=None,
+                           valentine_audio=None,
+                           use_typewriter=False,
+                           owner_max_chars=TIER_LIMITS['free']['max_chars_per_note'],
+                           note_attachments=[],
+                           can_upload_media=False)
+                           

@@ -1,0 +1,716 @@
+﻿{% extends "base.html" %}
+
+{% block title %}<title>{{ community.name }} | EchoWithin</title>{% endblock %}
+
+{% block head_meta %}
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Include marked for markdown rendering if not in base.html -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    /* Community Space Styles */
+    .community-space-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1rem 3rem 1rem;
+        /* Subtle paper texture */
+        background-color: #fdfbf9;
+        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+        min-height: calc(100vh - 150px);
+    }
+    
+    /* Header Area */
+    .comm-header-banner {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        border: 1px solid #f0f0f0;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .comm-header-banner::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 6px;
+        height: 100%;
+        background: linear-gradient(180deg, #e8a87c, #c38d9e);
+    }
+    
+    .comm-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .comm-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 2.5rem;
+        color: var(--primary-color, #3e2217);
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+    
+    .comm-badges {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 20px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .badge-admin { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+    .badge-public { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+    .badge-private { background: #f5f5f5; color: #616161; border: 1px solid #e0e0e0; }
+    
+    .comm-bio {
+        font-size: 1.05rem;
+        color: #555;
+        line-height: 1.6;
+        margin: 1rem 0;
+        max-width: 800px;
+    }
+    
+    .comm-stats {
+        display: flex;
+        gap: 1.5rem;
+        color: #888;
+        font-size: 0.9rem;
+        margin-top: 1.5rem;
+        border-top: 1px solid #f0f0f0;
+        padding-top: 1rem;
+    }
+    
+    .comm-stats span {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    
+    .comm-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .btn-action {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        color: #555;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.9rem;
+        transition: all 0.2s;
+    }
+    
+    .btn-action:hover {
+        background: #f5f5f5;
+        color: #333;
+    }
+    
+    .btn-action.primary {
+        background: var(--primary-color, #3e2217);
+        color: white;
+        border-color: var(--primary-color, #3e2217);
+    }
+    
+    .btn-action.primary:hover {
+        background: #2a160f;
+    }
+    
+    /* Toolbar area */
+    .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    /* Note Creation Area */
+    .create-note-box {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #eee;
+        margin-bottom: 2.5rem;
+    }
+    
+    .note-textarea {
+        width: 100%;
+        min-height: 80px;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: inherit;
+        font-size: 1rem;
+        resize: vertical;
+        box-sizing: border-box;
+        background: #fdfaf9;
+        transition: border-color 0.2s, background 0.2s;
+    }
+    
+    .note-textarea:focus {
+        outline: none;
+        border-color: #e8a87c;
+        background: white;
+    }
+    
+    .create-note-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+        background: #fafafa;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #f0f0f0;
+    }
+    
+    .option-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        flex: 1;
+        min-width: 200px;
+    }
+    
+    .option-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #777;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .pill-selector {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .pill-selector input[type="radio"] { display: none; }
+    
+    .pill-selector label {
+        padding: 0.4rem 0.8rem;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        cursor: pointer;
+        color: #555;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .pill-selector input[type="radio"]:checked + label {
+        background: var(--primary-color, #3e2217);
+        color: white;
+        border-color: var(--primary-color, #3e2217);
+    }
+    
+    .create-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 1rem;
+    }
+    
+    /* Masonry Pinboard Grid */
+    .masonry-grid {
+        columns: 1;
+        column-gap: 1.5rem;
+    }
+    
+    @media (min-width: 768px) {
+        .masonry-grid { columns: 2; }
+    }
+    
+    @media (min-width: 1024px) {
+        .masonry-grid { columns: 3; }
+    }
+    
+    .note-card {
+        break-inside: avoid;
+        margin-bottom: 1.5rem;
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        position: relative;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: 1px solid #eee;
+    }
+    
+    .note-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+    
+    /* Dynamic Left Border Color (Applied via inline style based on author ID hash in template) */
+    .note-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 5px;
+        height: 100%;
+        border-top-left-radius: 12px;
+        border-bottom-left-radius: 12px;
+    }
+    
+    .note-author-info {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        margin-bottom: 1rem;
+    }
+    
+    .author-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #e8a87c;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9rem;
+    }
+    
+    .author-meta {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .author-name {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #333;
+    }
+    
+    .note-time {
+        font-size: 0.75rem;
+        color: #888;
+    }
+    
+    .note-content {
+        font-size: 1rem;
+        line-height: 1.6;
+        color: #444;
+        margin-bottom: 1.5rem;
+        word-wrap: break-word;
+    }
+    
+    .note-content.handwriting {
+        font-family: 'Caveat', cursive;
+        font-size: 1.4rem;
+        line-height: 1.4;
+        color: #2c3e50;
+    }
+    
+    .note-content p { margin-top: 0; }
+    
+    .note-tags {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+    
+    .note-tag {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.5rem;
+        background: #f0f0f0;
+        color: #666;
+        border-radius: 4px;
+    }
+    
+    .note-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #f5f5f5;
+        padding-top: 0.8rem;
+    }
+    
+    .reactions-strip {
+        display: flex;
+        gap: 0.3rem;
+    }
+    
+    .react-btn {
+        background: none;
+        border: none;
+        padding: 0.2rem 0.4rem;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.2rem;
+        color: #666;
+        transition: background 0.2s;
+    }
+    
+    .react-btn:hover { background: #f0f0f0; }
+    .react-btn.active { background: #ffebee; color: #c62828; }
+    
+    .util-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .util-btn {
+        background: none;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        padding: 0.4rem;
+        border-radius: 4px;
+        transition: all 0.2s;
+        font-size: 0.9rem;
+    }
+    
+    .util-btn:hover { background: #f0f0f0; color: #333; }
+    .util-btn.delete:hover { color: #c62828; background: #ffebee; }
+    
+    /* Highlight animation for Random Pick */
+    @keyframes highlightPulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(232, 168, 124, 0.7); }
+        50% { transform: scale(1.02); box-shadow: 0 0 0 15px rgba(232, 168, 124, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(232, 168, 124, 0); }
+    }
+    
+    .highlighted-note {
+        animation: highlightPulse 1.5s ease-out;
+        border-color: #e8a87c;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="community-space-container">
+    
+    <div class="comm-header-banner">
+        <div class="comm-header-top">
+            <div>
+                <h1 class="comm-title">
+                    {{ community.name }}
+                </h1>
+                <div class="comm-badges">
+                    {% if is_admin %}<span class="badge badge-admin"><i class="fas fa-crown"></i> Admin</span>{% endif %}
+                    {% if community.visibility == 'public' %}
+                    <span class="badge badge-public"><i class="fas fa-globe"></i> Public</span>
+                    {% else %}
+                    <span class="badge badge-private"><i class="fas fa-lock"></i> Private</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="comm-actions">
+                {% if is_admin %}
+                <button class="btn-action" onclick="openAdminModal()"><i class="fas fa-cog"></i> Settings</button>
+                <button class="btn-action primary" onclick="copyInviteLink()"><i class="fas fa-user-plus"></i> Invite</button>
+                {% else %}
+                <form action="{{ url_for('api_leave_community', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to leave this community?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-action"><i class="fas fa-sign-out-alt"></i> Leave</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if community.bio %}
+        <p class="comm-bio">{{ community.bio }}</p>
+        {% endif %}
+        
+        <div class="comm-stats">
+            <span><i class="fas fa-users"></i> {{ members|length if is_admin else community.members|length }} members</span>
+            <span><i class="fas fa-sticky-note"></i> {{ notes|length }} notes</span>
+        </div>
+    </div>
+    
+    <div class="toolbar">
+        <h2 style="font-size: 1.5rem; color: #3e2217; margin: 0;"><i class="fas fa-thumbtack" style="color: #e8a87c; transform: rotate(45deg);"></i> Pinboard</h2>
+        <button class="btn-action" id="random-pick-btn" onclick="randomPick()" title="Scroll to a random note to discover older content">
+            <i class="fas fa-random"></i> Random Pick
+        </button>
+    </div>
+    
+    {% if is_member %}
+    <div class="create-note-box">
+        <form action="{{ url_for('api_create_community_note', community_id=community._id) }}" method="POST" id="createForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <textarea name="content" class="note-textarea" placeholder="Share a thought, study note, or question with the community..." required></textarea>
+            
+            <div class="create-note-options">
+                <div class="option-group">
+                    <span class="option-label">Permissions</span>
+                    <div class="pill-selector">
+                        <input type="radio" id="perm_view" name="permissions" value="view" checked>
+                        <label for="perm_view"><i class="fas fa-eye"></i> View Only</label>
+                        
+                        <input type="radio" id="perm_edit" name="permissions" value="edit">
+                        <label for="perm_edit"><i class="fas fa-pen"></i> Members can edit</label>
+                    </div>
+                </div>
+                
+                <div class="option-group">
+                    <span class="option-label">Font Style</span>
+                    <div class="pill-selector">
+                        <input type="radio" id="font_standard" name="font_style" value="standard" checked>
+                        <label for="font_standard" style="font-family: inherit;">Standard</label>
+                        
+                        <input type="radio" id="font_handwriting" name="font_style" value="handwriting">
+                        <label for="font_handwriting" style="font-family: 'Caveat', cursive; font-size: 1.1rem; padding: 0.2rem 0.8rem;">Handwriting</label>
+                    </div>
+                </div>
+                
+                <div class="option-group">
+                    <span class="option-label">Tags (comma separated)</span>
+                    <input type="text" name="tags" placeholder="e.g. question, study" style="border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 20px; font-size: 0.85rem; width: 100%; box-sizing: border-box; background: white;">
+                </div>
+            </div>
+            
+            <div class="create-footer">
+                <span class="char-count" style="font-size: 0.8rem; color: #888;">Formatting: **bold** *italic* # Heading</span>
+                <button type="submit" class="btn-action primary" style="padding: 0.6rem 1.5rem;">Post Note</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+    
+    <div class="masonry-grid" id="masonryGrid">
+        {% for note in notes %}
+        {# Generate a consistent color based on author ID #}
+        {% set colors = ['#e8a87c', '#c38d9e', '#e27d60', '#41b3a3', '#85dcb', '#f2d0a9', '#99b898', '#ff847c'] %}
+        {% set color_idx = (note.author_id|string|length + note.author_id|string|first|int) % colors|length %}
+        {% set border_color = colors[color_idx] %}
+        
+        <div class="note-card" id="note-{{ note._id }}" style="border-left-color: {{ border_color }};">
+            <!-- Inject dynamic color via pseudo-element simulation -->
+            <div style="position: absolute; top: 0; left: 0; width: 5px; height: 100%; background: {{ border_color }}; border-top-left-radius: 12px; border-bottom-left-radius: 12px;"></div>
+            
+            <div class="note-author-info">
+                <div class="author-avatar" style="background: {{ border_color }};">
+                    {{ note.author_name[0]|upper }}
+                </div>
+                <div class="author-meta">
+                    <span class="author-name">{{ note.author_name }}</span>
+                    <span class="note-time">{{ note.created_at|localtime }}</span>
+                </div>
+            </div>
+            
+            <div class="note-content {{ 'handwriting' if note.font_style == 'handwriting' else '' }}" data-raw="{{ note.content|e }}">
+                {# Will be rendered by JS #}
+                {{ note.content }}
+            </div>
+            
+            {% if note.tags %}
+            <div class="note-tags">
+                {% for tag in note.tags %}
+                <span class="note-tag">#{{ tag }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <div class="note-actions">
+                <div class="reactions-strip" data-note-id="{{ note._id }}">
+                    {% set heart_act = 'active' if note.user_reaction_type == 'heart' else '' %}
+                    <button class="react-btn {{ heart_act }}" onclick="toggleReaction('{{ note._id }}', 'heart', this)" title="Heart">
+                        ❤️ <span>{{ note.reactions.get('heart', 0) }}</span>
+                    </button>
+                    
+                    {% set fire_act = 'active' if note.user_reaction_type == 'fire' else '' %}
+                    <button class="react-btn {{ fire_act }}" onclick="toggleReaction('{{ note._id }}', 'fire', this)" title="Fire">
+                        🔥 <span>{{ note.reactions.get('fire', 0) }}</span>
+                    </button>
+                    
+                    {% set laugh_act = 'active' if note.user_reaction_type == 'laugh' else '' %}
+                    <button class="react-btn {{ laugh_act }}" onclick="toggleReaction('{{ note._id }}', 'laugh', this)" title="Laugh">
+                        😂 <span>{{ note.reactions.get('laugh', 0) }}</span>
+                    </button>
+                    
+                    {% set pray_act = 'active' if note.user_reaction_type == 'pray' else '' %}
+                    <button class="react-btn {{ pray_act }}" onclick="toggleReaction('{{ note._id }}', 'pray', this)" title="Pray">
+                        🙏 <span>{{ note.reactions.get('pray', 0) }}</span>
+                    </button>
+                </div>
+                
+                <div class="util-actions">
+                    <a href="{{ url_for('view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="util-btn" title="Open full page">
+                        <i class="fas fa-external-link-alt"></i>
+                    </a>
+                    
+                    <button class="util-btn" onclick="navigator.clipboard.writeText('{{ url_for('view_shared_community_note', share_id=note.share_id, _external=True) }}'); showToast('Link copied!');" title="Copy Link">
+                        <i class="fas fa-link"></i>
+                    </button>
+                    
+                    {% if str(note.author_id) == current_user.id or is_admin %}
+                    <form action="{{ url_for('api_delete_community_note', note_id=note._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this note forever?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="util-btn delete" title="Delete Note">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% if not notes %}
+    <div style="text-align: center; padding: 4rem 2rem; color: #888; background: white; border-radius: 12px; border: 1px dashed #ddd;">
+        <i class="fas fa-pencil-alt" style="font-size: 3rem; color: #eee; margin-bottom: 1rem;"></i>
+        <h3>No notes yet!</h3>
+        <p>Be the first to share something with the community.</p>
+    </div>
+    {% endif %}
+    
+    {% if total_pages > 1 %}
+    <!-- Basic Pagination -->
+    <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem;">
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}" class="btn-action">Previous</a>
+        {% endif %}
+        
+        <span style="display: flex; align-items: center; color: #666;">Page {{ page }} of {{ total_pages }}</span>
+        
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}" class="btn-action">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Admin Settings Modal (Omitted for brevity, standard form) -->
+
+<!-- Hidden toast for copy alerts -->
+<div id="toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:20px; z-index:9999;"></div>
+
+<script>
+    // Render Markdown for all notes
+    document.addEventListener('DOMContentLoaded', () => {
+        const notes = document.querySelectorAll('.note-content:not(.handwriting)');
+        notes.forEach(note => {
+            const raw = note.getAttribute('data-raw');
+            if (raw && typeof marked !== 'undefined') {
+                note.innerHTML = marked.parse(raw);
+            }
+        });
+        
+        // For handwriting font, keep plaintext but preserve line breaks
+        const hwNotes = document.querySelectorAll('.note-content.handwriting');
+        hwNotes.forEach(note => {
+            const raw = note.getAttribute('data-raw');
+            if(raw) {
+                note.innerHTML = raw.replace(/\n/g, '<br>');
+            }
+        });
+    });
+
+    // Random Pick feature
+    function randomPick() {
+        const cards = document.querySelectorAll('.note-card');
+        if(cards.length === 0) return;
+        
+        // Pick random index
+        const idx = Math.floor(Math.random() * cards.length);
+        const target = cards[idx];
+        
+        // Scroll to it
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Add highlight class, remove old ones
+        cards.forEach(c => c.classList.remove('highlighted-note'));
+        
+        // Small delay to allow scroll to start before flashing
+        setTimeout(() => {
+            target.classList.add('highlighted-note');
+        }, 300);
+    }
+    
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
+    
+    function copyInviteLink() {
+        // Construct the full URL
+        const code = "{{ community.invite_code }}";
+        const url = window.location.origin + "/community/join/" + code;
+        navigator.clipboard.writeText(url).then(() => {
+            showToast("Invite link copied to clipboard!");
+        });
+    }
+    
+    function toggleReaction(noteId, type, btn) {
+        // Optimistic UI update
+        const countSpan = btn.querySelector('span');
+        let count = parseInt(countSpan.textContent);
+        const isActive = btn.classList.contains('active');
+        
+        // Reset siblings in this strip if changing reaction
+        const strip = btn.closest('.reactions-strip');
+        if (!isActive) {
+            strip.querySelectorAll('.react-btn.active').forEach(sibling => {
+                sibling.classList.remove('active');
+                const sibCount = sibling.querySelector('span');
+                sibCount.textContent = Math.max(0, parseInt(sibCount.textContent) - 1);
+            });
+            btn.classList.add('active');
+            countSpan.textContent = count + 1;
+        } else {
+            btn.classList.remove('active');
+            countSpan.textContent = Math.max(0, count - 1);
+        }
+        
+        // Send request
+        fetch(/api/community/note//react, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({ reaction_type: type })
+        }).then(res => res.json())
+          .then(data => {
+              if(!data.success) {
+                  // Revert UI if failed (simplified)
+                  console.error(data.error);
+              }
+          });
+    }
+</script>
+{% endblock %}

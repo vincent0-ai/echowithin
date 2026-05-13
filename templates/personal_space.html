@@ -1656,6 +1656,9 @@
             Notes
             <span class="badge">{{ total_notes_count }}</span>
         </button>
+        <button data-tab="communities" role="tab" aria-selected="false" onclick="window.location.href='{{ url_for('communities_page') }}'">
+            Communities
+        </button>
         <button data-tab="activity" role="tab" aria-selected="false" id="activity-tab-btn" style="position: relative;">
             Activity
             {% if activity_notifications|length > 0 %}

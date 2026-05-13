@@ -12751,7 +12751,7 @@ def internal_server_error(e):
 @app.route('/communities', methods=['GET'])
 @login_required
 def communities_page():
-    ""\"Page to list user's communities and show create/join forms.""\"
+    """Page to list user's communities and show create/join forms."""
     # Get all communities where user is a member
     user_communities = list(communities_conf.find({'members': ObjectId(current_user.id)}).sort('updated_at', -1))
     
@@ -12766,7 +12766,7 @@ def communities_page():
 @app.route('/community/<community_id>', methods=['GET'])
 @login_required
 def view_community(community_id):
-    ""\"Main community page (the 'space' with notes feed).""\"
+    """Main community page (the 'space' with notes feed)."""
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -12831,7 +12831,7 @@ def view_community(community_id):
 @login_required
 @limits(calls=5, period=3600)
 def api_create_community():
-    ""\"Create a new community space.""\"
+    """Create a new community space."""
     name = request.form.get('name', '').strip()
     bio = request.form.get('bio', '').strip()
     visibility = request.form.get('visibility', 'private')
@@ -12878,7 +12878,7 @@ def api_create_community():
 @app.route('/community/join/<invite_code>', methods=['GET'])
 @login_required
 def join_community_link(invite_code):
-    ""\"Join a community via invite link.""\"
+    """Join a community via invite link."""
     community = communities_conf.find_one({'invite_code': invite_code})
     if not community:
         flash('Invalid or expired invite link.', 'danger')
@@ -12906,7 +12906,7 @@ def join_community_link(invite_code):
 @app.route('/api/community/join', methods=['POST'])
 @login_required
 def api_join_community_code():
-    ""\"Join a community via pasted code.""\"
+    """Join a community via pasted code."""
     invite_code = request.form.get('invite_code', '').strip()
     
     # Extract code if it's a full URL
@@ -12922,7 +12922,7 @@ def api_join_community_code():
 @app.route('/api/community/<community_id>/settings', methods=['POST'])
 @login_required
 def api_update_community(community_id):
-    ""\"Update community settings (Admin only).""\"
+    """Update community settings (Admin only)."""
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -12951,7 +12951,7 @@ def api_update_community(community_id):
 @app.route('/api/community/<community_id>/regenerate-invite', methods=['POST'])
 @login_required
 def api_regenerate_invite(community_id):
-    ""\"Regenerate invite link (Admin only).""\"
+    """Regenerate invite link (Admin only)."""
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -12973,7 +12973,7 @@ def api_regenerate_invite(community_id):
 @app.route('/api/community/<community_id>/leave', methods=['POST'])
 @login_required
 def api_leave_community(community_id):
-    ""\"Leave a community.""\"
+    """Leave a community."""
     try:
         comm_obj_id = ObjectId(community_id)
         user_id_obj = ObjectId(current_user.id)
@@ -12999,7 +12999,7 @@ def api_leave_community(community_id):
 @app.route('/api/community/<community_id>/remove-member', methods=['POST'])
 @login_required
 def api_remove_member(community_id):
-    ""\"Remove a member (Admin only).""\"
+    """Remove a member (Admin only)."""
     try:
         comm_obj_id = ObjectId(community_id)
         member_id = ObjectId(request.form.get('member_id'))
@@ -13025,7 +13025,7 @@ def api_remove_member(community_id):
 @login_required
 @limits(calls=20, period=60)
 def api_create_community_note(community_id):
-    ""\"Create a new community note.""\"
+    """Create a new community note."""
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -13092,7 +13092,7 @@ def api_create_community_note(community_id):
 @login_required
 @limits(calls=60, period=60)
 def api_react_community_note(note_id):
-    ""\"Toggle a reaction on a community note.""\"
+    """Toggle a reaction on a community note."""
     try:
         note_obj_id = ObjectId(note_id)
     except Exception:
@@ -13189,7 +13189,7 @@ def api_react_community_note(note_id):
 @app.route('/api/community/note/<note_id>/delete', methods=['POST'])
 @login_required
 def api_delete_community_note(note_id):
-    ""\"Delete a community note (Author or Admin only).""\"
+    """Delete a community note (Author or Admin only)."""
     try:
         note_obj_id = ObjectId(note_id)
     except Exception:
@@ -13218,7 +13218,7 @@ def api_delete_community_note(note_id):
 
 @app.route('/share/community-note/<share_id>', methods=['GET'])
 def view_shared_community_note(share_id):
-    ""\"Public view for a shared community note.""\"
+    """Public view for a shared community note."""
     note = community_notes_conf.find_one({'share_id': share_id})
     if not note:
         return render_template('shared_note.html', expired=True), 410

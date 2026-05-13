@@ -4,210 +4,212 @@
 
 {% block head_meta %}
 <style>
-    /* Communities Page Specific Styles */
     .communities-container {
         max-width: 900px;
-        margin: 2rem auto;
-        padding: 0 1rem;
+        margin: 0 auto;
+        padding: 0 1rem 2rem 1rem;
     }
 
+    /* Brown gradient header — matches personal_space */
     .communities-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-end;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .header-text h1 {
-        font-family: 'Playfair Display', serif;
-        color: var(--primary-color, #3e2217);
-        margin: 0 0 0.5rem 0;
-        font-size: 2.2rem;
-    }
-
-    .header-text p {
-        color: #666;
-        margin: 0;
-        font-size: 0.95rem;
-    }
-
-    .header-actions {
-        display: flex;
-        gap: 1rem;
-    }
-
-    .btn-create {
-        background: var(--primary-color, #3e2217);
-        color: white;
-        border: none;
-        padding: 0.6rem 1.2rem;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: transform 0.2s, background 0.2s;
-    }
-
-    .btn-create:hover {
-        transform: translateY(-2px);
-        background: #2a160f;
-    }
-
-    .btn-join {
-        background: white;
-        color: var(--primary-color, #3e2217);
-        border: 1px solid var(--primary-color, #3e2217);
-        padding: 0.6rem 1.2rem;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        transition: background 0.2s;
-    }
-
-    .btn-join:hover {
-        background: #fdfaf9;
-    }
-
-    /* Community Grid */
-    .communities-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 1.5rem;
-        margin-top: 2rem;
-    }
-
-    .community-card {
-        background: white;
+        text-align: center;
+        margin-bottom: 1.25rem;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
         border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-        border: 1px solid #eee;
-        transition: transform 0.3s, box-shadow 0.3s;
+        color: white;
+    }
+
+    .communities-header h1 {
+        color: white;
+        margin: 0 0 0.25rem 0;
+        font-size: 1.3rem;
+    }
+
+    .communities-header p {
+        color: rgba(255, 255, 255, 0.8);
+        margin: 0;
+        font-size: 0.8rem;
+    }
+
+    .communities-header .header-stats {
         display: flex;
-        flex-direction: column;
-        text-decoration: none;
-        color: inherit;
-        position: relative;
-        overflow: hidden;
+        justify-content: center;
+        gap: 2rem;
+        margin-top: 0.75rem;
+        flex-wrap: wrap;
     }
 
-    .community-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(62, 34, 23, 0.1);
-        border-color: #e6dac3;
+    .communities-header .stat-item {
+        text-align: center;
     }
 
-    .community-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 4px;
-        background: linear-gradient(90deg, #e8a87c, #c38d9e);
-        opacity: 0.8;
+    .communities-header .stat-number {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
 
-    .comm-header {
+    .communities-header .stat-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #fff;
+        opacity: 0.95;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Action bar */
+    .action-bar {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
+        gap: 0.5rem;
         margin-bottom: 1rem;
     }
 
-    .comm-title {
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--primary-color, #3e2217);
-        margin: 0;
-        line-height: 1.3;
+    .btn-sm {
+        background: var(--primary-color, #3e2217);
+        color: white;
+        border: none;
+        padding: 0.4rem 0.9rem;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.82rem;
+        transition: background 0.2s;
     }
 
-    .comm-badges {
+    .btn-sm:hover {
+        background: #2a160f;
+    }
+
+    .btn-sm.outline {
+        background: white;
+        color: var(--primary-color, #3e2217);
+        border: 1px solid #ddd;
+    }
+
+    .btn-sm.outline:hover {
+        background: #faf8f6;
+    }
+
+    /* Community cards */
+    .community-card {
         display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid #eee;
+        margin-bottom: 0.5rem;
+        text-decoration: none;
+        color: inherit;
+        transition: background 0.15s;
+    }
+
+    .community-card:hover {
+        background: #faf8f6;
+    }
+
+    .comm-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .comm-name {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #3e2217;
+        margin: 0 0 0.15rem 0;
+        display: flex;
+        align-items: center;
         gap: 0.4rem;
+    }
+
+    .comm-desc {
+        font-size: 0.8rem;
+        color: #777;
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .comm-meta {
+        display: flex;
+        gap: 0.75rem;
+        font-size: 0.75rem;
+        color: #999;
+        flex-shrink: 0;
     }
 
     .comm-badge {
-        font-size: 0.65rem;
-        padding: 0.2rem 0.5rem;
-        border-radius: 20px;
+        font-size: 0.6rem;
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
         font-weight: 600;
         text-transform: uppercase;
+        letter-spacing: 0.3px;
     }
 
-    .badge-admin {
-        background: #e8f5e9;
-        color: #2e7d32;
-        border: 1px solid #c8e6c9;
-    }
+    .badge-admin { background: #e8f5e9; color: #2e7d32; }
+    .badge-public { background: #e3f2fd; color: #1565c0; }
+    .badge-private { background: #f5f5f5; color: #616161; }
 
-    .badge-public {
-        background: #e3f2fd;
-        color: #1565c0;
-        border: 1px solid #bbdefb;
-    }
-
-    .badge-private {
-        background: #f5f5f5;
-        color: #616161;
-        border: 1px solid #e0e0e0;
-    }
-
-    .comm-bio {
-        font-size: 0.9rem;
-        color: #555;
-        line-height: 1.5;
-        margin-bottom: 1.5rem;
-        flex-grow: 1;
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
-    .comm-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-top: 1px solid #f0f0f0;
-        padding-top: 1rem;
-        font-size: 0.85rem;
-        color: #777;
-    }
-
-    .comm-stat {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
+    /* Section divider */
+    .section-label {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #999;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 1.5rem 0 0.5rem 0;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid #f0f0f0;
     }
 
     /* Empty State */
     .empty-state {
         text-align: center;
-        padding: 4rem 2rem;
-        background: #fdfaf9;
-        border-radius: 12px;
-        border: 2px dashed #e6dac3;
+        padding: 2rem 1rem;
         color: #888;
-    }
-
-    .empty-state i {
-        font-size: 3rem;
-        color: #e8a87c;
-        margin-bottom: 1rem;
+        font-size: 0.9rem;
     }
 
     .empty-state h3 {
         color: var(--primary-color, #3e2217);
-        margin-bottom: 0.5rem;
+        margin: 0 0 0.25rem 0;
+        font-size: 1rem;
+    }
+
+    /* Tier Warning */
+    .tier-warning {
+        background: #fff3e0;
+        border-left: 3px solid #ff9800;
+        padding: 0.6rem 0.8rem;
+        margin-bottom: 0.75rem;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.8rem;
+        color: #555;
+    }
+
+    /* Join button inside discover cards */
+    .btn-join-inline {
+        background: #3e2217;
+        color: white;
+        border: none;
+        padding: 0.3rem 0.7rem;
+        border-radius: 5px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+        flex-shrink: 0;
+    }
+
+    .btn-join-inline:hover {
+        background: #2a160f;
     }
 
     /* Modal Styles */
@@ -227,59 +229,50 @@
 
     .modal-content {
         background-color: #fff;
-        padding: 2rem;
-        border-radius: 16px;
+        padding: 1.5rem;
+        border-radius: 12px;
         width: 90%;
-        max-width: 450px;
+        max-width: 420px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         position: relative;
         animation: modalSlideIn 0.3s ease-out;
     }
 
     @keyframes modalSlideIn {
-        from {
-            transform: translateY(-20px);
-            opacity: 0;
-        }
-
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
+        from { transform: translateY(-15px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
     }
 
     .close-modal {
         position: absolute;
-        top: 1rem;
-        right: 1.5rem;
-        font-size: 1.5rem;
+        top: 0.75rem;
+        right: 1rem;
+        font-size: 1.3rem;
         color: #aaa;
         cursor: pointer;
         transition: color 0.2s;
     }
 
-    .close-modal:hover {
-        color: #333;
-    }
+    .close-modal:hover { color: #333; }
 
     .form-group {
-        margin-bottom: 1.2rem;
+        margin-bottom: 1rem;
     }
 
     .form-group label {
         display: block;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.35rem;
         font-weight: 600;
         color: var(--primary-color, #3e2217);
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
 
     .form-control {
         width: 100%;
-        padding: 0.75rem;
+        padding: 0.6rem;
         border: 1px solid #ddd;
-        border-radius: 8px;
-        font-size: 1rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
         font-family: inherit;
         box-sizing: border-box;
         transition: border-color 0.2s;
@@ -293,7 +286,7 @@
 
     textarea.form-control {
         resize: vertical;
-        min-height: 80px;
+        min-height: 60px;
     }
 
     .modal-submit {
@@ -301,208 +294,162 @@
         background: var(--primary-color, #3e2217);
         color: white;
         border: none;
-        padding: 0.8rem;
-        border-radius: 8px;
+        padding: 0.6rem;
+        border-radius: 6px;
         font-weight: bold;
-        font-size: 1rem;
+        font-size: 0.9rem;
         cursor: pointer;
-        margin-top: 1rem;
+        margin-top: 0.5rem;
         transition: background 0.2s;
     }
 
-    .modal-submit:hover {
-        background: #2a160f;
-    }
+    .modal-submit:hover { background: #2a160f; }
 
     .char-count {
         display: block;
         text-align: right;
-        font-size: 0.75rem;
-        color: #888;
-        margin-top: 0.25rem;
+        font-size: 0.7rem;
+        color: #aaa;
+        margin-top: 0.15rem;
     }
 
-    /* Tier Warning */
-    .tier-warning {
-        background: #fff3e0;
-        border-left: 4px solid #ff9800;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
-        border-radius: 0 8px 8px 0;
-        font-size: 0.9rem;
-    }
-
-    /* Segmented Control for Visibility */
     .segmented-control {
         display: flex;
         background: #f0f0f0;
-        border-radius: 8px;
-        padding: 4px;
+        border-radius: 6px;
+        padding: 3px;
     }
 
     .segmented-control label {
         flex: 1;
         text-align: center;
-        padding: 0.5rem;
+        padding: 0.35rem;
         margin: 0;
         cursor: pointer;
-        border-radius: 6px;
+        border-radius: 4px;
         font-weight: 600;
+        font-size: 0.85rem;
         color: #666;
         transition: all 0.2s;
     }
 
-    .segmented-control input[type="radio"] {
-        display: none;
-    }
+    .segmented-control input[type="radio"] { display: none; }
 
-    .segmented-control input[type="radio"]:checked+label {
+    .segmented-control input[type="radio"]:checked + label {
         background: white;
         color: var(--primary-color, #3e2217);
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="communities-container">
+    <!-- Brown gradient header -->
+    {% set admin_count = communities|selectattr('is_admin', 'equalto', true)|list|length %}
     <div class="communities-header">
-        <div class="header-text">
-            <h1> Communities</h1>
-            <p>Collaborative spaces for shared notes, study, and discussions.</p>
-        </div>
-        <div class="header-actions">
-            <button class="btn-join" onclick="openModal('joinModal')">
-                <i class="fas fa-link"></i> Join
-            </button>
-            <button class="btn-create" onclick="openModal('createModal')">
-                <i class="fas fa-plus"></i> Create
-            </button>
+        <h1>Communities</h1>
+        <p>Shared &bull; Collaborative &bull; {{ community.visibility if community is defined else 'Open to members' }}</p>
+        <div class="header-stats">
+            <div class="stat-item">
+                <div class="stat-number">{{ communities|length }}</div>
+                <div class="stat-label">Joined</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-number">{{ admin_count }}</div>
+                <div class="stat-label">Created</div>
+            </div>
         </div>
     </div>
 
-    {% set admin_count = communities|selectattr('is_admin', 'equalto', true)|list|length %}
+    <!-- Action buttons -->
+    <div class="action-bar">
+        <button class="btn-sm outline" onclick="openModal('joinModal')">Join</button>
+        <button class="btn-sm" onclick="openModal('createModal')">+ Create</button>
+    </div>
+
     {% if admin_count >= user_max_communities %}
     <div class="tier-warning">
-        <strong><i class="fas fa-info-circle"></i> Community Limit Reached</strong>
-        <p style="margin: 0.5rem 0 0 0; color: #555;">
-            You have reached your limit of {{ user_max_communities }} created communit{{ 'ies' if user_max_communities >
-            1 else 'y' }}.
-            {% if not user_is_premium %}
-            <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
-                style="color: #e65100; font-weight: bold;">Upgrade to Premium</a> to create up to 5 spaces.
-            {% endif %}
-        </p>
+        <strong>Community limit reached.</strong>
+        You've created {{ user_max_communities }}/{{ user_max_communities }}.
+        {% if not user_is_premium %}
+        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="color: #e65100; font-weight: 600;">Upgrade</a>
+        {% endif %}
     </div>
     {% endif %}
 
+    <!-- My Communities -->
     {% if communities %}
-    <div class="communities-grid">
-        {% for comm in communities %}
-        <a href="{{ url_for('view_community', community_id=comm._id) }}" class="community-card">
-            <div class="comm-header">
-                <h3 class="comm-title">{{ comm.name }}</h3>
-                <div class="comm-badges">
-                    {% if comm.is_admin %}
-                    <span class="comm-badge badge-admin">Admin</span>
-                    {% endif %}
-                    {% if comm.visibility == 'public' %}
-                    <span class="comm-badge badge-public" title="Visible to all">Public</span>
-                    {% else %}
-                    <span class="comm-badge badge-private" title="Invite only">Private</span>
-                    {% endif %}
-                </div>
+    <div class="section-label">Your Communities</div>
+    {% for comm in communities %}
+    <a href="{{ url_for('view_community', community_id=comm._id) }}" class="community-card">
+        <div class="comm-info">
+            <div class="comm-name">
+                {{ comm.name }}
+                {% if comm.is_admin %}<span class="comm-badge badge-admin">Admin</span>{% endif %}
+                {% if comm.visibility == 'public' %}
+                <span class="comm-badge badge-public">Public</span>
+                {% else %}
+                <span class="comm-badge badge-private">Private</span>
+                {% endif %}
             </div>
-
-            <div class="comm-bio">
-                {{ comm.bio or 'A collaborative space for shared notes.' }}
-            </div>
-
-            <div class="comm-footer">
-                <div class="comm-stat">
-                    <i class="fas fa-user-friends"></i> {{ comm.member_count }}
-                </div>
-                <div class="comm-stat">
-                    <i class="fas fa-sticky-note"></i> {{ comm.note_count }}
-                </div>
-                <div class="comm-stat" title="Last active">
-                    <i class="far fa-clock"></i> {{ comm.updated_at|localtime('%b %d') }}
-                </div>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
+            <p class="comm-desc">{{ comm.bio or 'No description' }}</p>
+        </div>
+        <div class="comm-meta">
+            <span>{{ comm.member_count }} members</span>
+            <span>{{ comm.note_count }} notes</span>
+        </div>
+    </a>
+    {% endfor %}
     {% else %}
     <div class="empty-state">
         <h3>No Communities Yet</h3>
-        <p>You haven't joined or created any communities.</p>
-        <div style="margin-top: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
-            <button class="btn-create" onclick="openModal('createModal')">Create Your First Space</button>
-        </div>
-    </div>
-    {% endif %}
-    
-    {% if discover_communities %}
-    <div style="margin-top: 4rem; border-top: 1px solid #eee; padding-top: 2rem;">
-        <h2 style="font-family: 'Playfair Display', serif; color: var(--primary-color, #3e2217); margin-bottom: 0.5rem;"><i class="fas fa-compass" style="color: #e8a87c; margin-right: 8px;"></i> Discover Public Communities</h2>
-        <p style="color: #666; margin-top: 0; margin-bottom: 2rem;">Explore and join open communities created by other users.</p>
-        
-        <div class="communities-grid">
-            {% for comm in discover_communities %}
-            <div class="community-card">
-                <div class="comm-header">
-                    <h3 class="comm-title">{{ comm.name }}</h3>
-                    <div class="comm-badges">
-                        <span class="comm-badge badge-public" title="Visible to all">Public</span>
-                    </div>
-                </div>
-                
-                <div class="comm-bio">
-                    {{ comm.bio or 'A collaborative space for shared notes.' }}
-                </div>
-                
-                <div class="comm-footer" style="flex-direction: column; align-items: stretch; gap: 1rem;">
-                    <div style="display: flex; justify-content: space-between; width: 100%;">
-                        <div class="comm-stat">
-                            <i class="fas fa-user-friends"></i> {{ comm.member_count }}
-                        </div>
-                        <div class="comm-stat">
-                            <i class="fas fa-sticky-note"></i> {{ comm.note_count }}
-                        </div>
-                    </div>
-                    <form action="{{ url_for('api_join_public_community', community_id=comm._id) }}" method="POST">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn-action primary" style="width: 100%; justify-content: center; background: #e8a87c; border-color: #e8a87c;">
-                            <i class="fas fa-plus"></i> Join Community
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+        <p>Create a space or join one with an invite link.</p>
     </div>
     {% endif %}
 
+    <!-- Discover Public Communities -->
+    {% if discover_communities %}
+    <div class="section-label">Discover</div>
+    {% for comm in discover_communities %}
+    <div class="community-card" style="cursor: default;">
+        <div class="comm-info">
+            <div class="comm-name">
+                {{ comm.name }}
+                <span class="comm-badge badge-public">Public</span>
+            </div>
+            <p class="comm-desc">{{ comm.bio or 'No description' }}</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <span style="font-size: 0.75rem; color: #999;">{{ comm.member_count }} members</span>
+            <form action="{{ url_for('api_join_public_community', community_id=comm._id) }}" method="POST" style="margin: 0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-join-inline">Join</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
 </div>
 
 <!-- Create Community Modal -->
 <div id="createModal" class="modal">
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('createModal')">&times;</span>
-        <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1.5rem;">Create Community</h2>
+        <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1rem; font-size: 1.1rem;">Create Community</h2>
 
         <form action="{{ url_for('api_create_community') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">
-                <label for="comm_name">Community Name</label>
+                <label for="comm_name">Name</label>
                 <input type="text" id="comm_name" name="name" class="form-control" required maxlength="50"
                     placeholder="e.g. Bible Study Group" oninput="updateCharCount(this, 'nameCount', 50)">
                 <span class="char-count"><span id="nameCount">0</span>/50</span>
             </div>
 
             <div class="form-group">
-                <label for="comm_bio">Description (Bio)</label>
+                <label for="comm_bio">Description</label>
                 <textarea id="comm_bio" name="bio" class="form-control" maxlength="200"
                     placeholder="What is this space about?" oninput="updateCharCount(this, 'bioCount', 200)"></textarea>
                 <span class="char-count"><span id="bioCount">0</span>/200</span>
@@ -512,22 +459,21 @@
                 <label>Visibility</label>
                 <div class="segmented-control">
                     <input type="radio" id="vis_private" name="visibility" value="private" checked>
-                    <label for="vis_private"><i class="fas fa-lock" style="margin-right: 4px;"></i> Private</label>
-
+                    <label for="vis_private">Private</label>
                     <input type="radio" id="vis_public" name="visibility" value="public">
-                    <label for="vis_public"><i class="fas fa-globe" style="margin-right: 4px;"></i> Public</label>
+                    <label for="vis_public">Public</label>
                 </div>
-                <p style="font-size: 0.8rem; color: #777; margin-top: 0.5rem;">
-                    Private: Invite-only. Public: Anyone with link can join.
+                <p style="font-size: 0.75rem; color: #999; margin-top: 0.35rem;">
+                    Private: invite-only. Public: discoverable by all users.
                 </p>
             </div>
 
-            <button type="submit" class="modal-submit" {% if admin_count>= user_max_communities %}disabled
+            <button type="submit" class="modal-submit" {% if admin_count >= user_max_communities %}disabled
                 style="opacity: 0.5; cursor: not-allowed;"{% endif %}>
-                Create Space
+                Create
             </button>
             {% if admin_count >= user_max_communities %}
-            <p style="color: #c62828; font-size: 0.8rem; text-align: center; margin-top: 0.5rem;">Limit reached.</p>
+            <p style="color: #c62828; font-size: 0.75rem; text-align: center; margin-top: 0.4rem;">Limit reached.</p>
             {% endif %}
         </form>
     </div>
@@ -537,7 +483,7 @@
 <div id="joinModal" class="modal">
     <div class="modal-content">
         <span class="close-modal" onclick="closeModal('joinModal')">&times;</span>
-        <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1.5rem;">Join Community</h2>
+        <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1rem; font-size: 1.1rem;">Join Community</h2>
 
         <form action="{{ url_for('api_join_community_code') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -548,9 +494,7 @@
                     placeholder="Paste link or code here">
             </div>
 
-            <button type="submit" class="modal-submit">
-                Join Space
-            </button>
+            <button type="submit" class="modal-submit">Join</button>
         </form>
     </div>
 </div>
@@ -564,7 +508,6 @@
         document.getElementById(id).style.display = 'none';
     }
 
-    // Close modal when clicking outside
     window.onclick = function (event) {
         if (event.target.classList.contains('modal')) {
             event.target.style.display = 'none';

@@ -757,7 +757,7 @@
         <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
             <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Invite Link</label>
             <div style="display:flex;gap:0.4rem;margin-top:0.25rem;">
-                <input type="text" readonly value="{{ url_for('api_join_community_code', _external=True) }}?code={{ community.invite_code }}" id="inviteLinkInput" style="flex:1;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.78rem;box-sizing:border-box;">
+                <input type="text" readonly value="{{ url_for('join_community_link', invite_code=community.invite_code, _external=True) }}" id="inviteLinkInput" style="flex:1;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.78rem;box-sizing:border-box;">
                 <button onclick="document.getElementById('inviteLinkInput').select();navigator.clipboard.writeText(document.getElementById('inviteLinkInput').value);showToast('Copied!');" style="background:#3e2217;color:white;border:none;padding:0.4rem 0.7rem;border-radius:6px;font-size:0.78rem;cursor:pointer;">Copy</button>
             </div>
             <form action="{{ url_for('api_regenerate_invite', community_id=community._id) }}" method="POST" style="margin-top:0.4rem;" onsubmit="return confirm('This will invalidate the old invite link. Continue?');">

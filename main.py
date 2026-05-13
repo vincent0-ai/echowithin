@@ -13005,7 +13005,8 @@ def api_regenerate_invite(community_id):
         {'$set': {'invite_code': new_code}}
     )
     
-    return jsonify({'success': True, 'new_code': new_code})
+    flash('Invite link regenerated.', 'success')
+    return redirect(url_for('view_community', community_id=str(comm_obj_id)))
 
 @app.route('/api/community/<community_id>/leave', methods=['POST'])
 @login_required

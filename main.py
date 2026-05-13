@@ -10326,12 +10326,14 @@ def api_message_history(other_user_id):
         if not other_user:
             return jsonify({'error': 'User not found'}), 404
 
+        # Fetch the NEWEST 200 messages (sort descending, then reverse for chronological order)
         messages = list(direct_messages_conf.find({
             '$or': [
                 {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
                 {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}
             ]
-        }).sort('timestamp', 1).limit(50))
+        }).sort('timestamp', -1).limit(200))
+        messages.reverse()  # Back to chronological order for display
         
         # Mark as read
         direct_messages_conf.update_many(

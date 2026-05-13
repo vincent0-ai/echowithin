@@ -69,8 +69,9 @@
                         <div style="display: flex; justify-content: space-between; align-items: baseline;">
                             <span style="font-weight: 600; color: #3e2217; font-size: 0.95rem;">{{ contact.username
                                 }}</span>
-                            <span class="contact-time" style="font-size: 0.7rem; color: #999;">{{
-                                contact.timestamp|localtime('%H:%M')
+                            <span class="contact-time" style="font-size: 0.7rem; color: #999;"
+                                data-timestamp="{{ contact.timestamp.isoformat() if contact.timestamp else '' }}">{{
+                                contact.timestamp|localtime('%b %d')
                                 }}</span>
                         </div>
                         <div class="contact-last-msg"
@@ -1532,6 +1533,41 @@
         let recordingStartTime = null;
         let longPressTimer = null;
 
+        // --- Contact Search ---
+        const contactSearchInput = document.getElementById('contact-search-input');
+        if (contactSearchInput) {
+            contactSearchInput.addEventListener('input', function () {
+                const query = this.value.trim().toLowerCase();
+                document.querySelectorAll('#contact-list .contact-item').forEach(item => {
+                    const username = (item.querySelector('.contact-info span') || item.querySelector('.contact-username'));
+                    const name = username ? username.textContent.toLowerCase() : '';
+                    const lastMsg = item.querySelector('.contact-last-msg');
+                    const msg = lastMsg ? lastMsg.textContent.toLowerCase() : '';
+                    item.style.display = (!query || name.includes(query) || msg.includes(query)) ? '' : 'none';
+                });
+            });
+        }
+
+        // --- Sidebar Relative Timestamps ---
+        function updateSidebarTimestamps() {
+            document.querySelectorAll('.contact-time[data-timestamp]').forEach(el => {
+                const iso = el.getAttribute('data-timestamp');
+                if (!iso) return;
+                const date = new Date(iso);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const yesterday = new Date(today.getTime() - 86400000);
+                if (date >= today) {
+                    el.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } else if (date >= yesterday) {
+                    el.textContent = 'Yesterday';
+                } else {
+                    el.textContent = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                }
+            });
+        }
+        updateSidebarTimestamps();
+
         // Formatting Helpers
         function formatMessageText(text) {
             if (!text) return '';
@@ -1702,7 +1738,7 @@
             if (!activeRecipientId) return;
             chatSyncIntervalId = setInterval(() => {
                 syncActiveChatHistory();
-            }, 6000);
+            }, 15000);
         }
 
         function stopChatSync() {
@@ -1889,6 +1925,19 @@
 
                 // Show optimistically
                 appendMessage(msgData, 'sent', false, null, false, tempId);
+
+                // Update sidebar preview for active chat
+                const activeContact = document.querySelector(`.contact-item[data-user-id="${activeRecipientId}"]`);
+                if (activeContact) {
+                    const lastMsgEl = activeContact.querySelector('.contact-last-msg');
+                    if (lastMsgEl) lastMsgEl.textContent = pendingUrl ? '📸 Photo' : content.substring(0, 60);
+                    const timeEl = activeContact.querySelector('.contact-time');
+                    if (timeEl) {
+                        timeEl.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        timeEl.setAttribute('data-timestamp', new Date().toISOString());
+                    }
+                    document.getElementById('contact-list').prepend(activeContact);
+                }
 
                 // Reset form
                 messageInput.value = '';
@@ -2412,9 +2461,13 @@
             if (messageNode) messageNode.textContent = previewText || '';
 
             const timeNode = item.querySelector('.contact-time');
-            if (timeNode) timeNode.textContent = timeLabel;
+            if (timeNode) {
+                timeNode.textContent = timeLabel;
+                if (timestampIso) timeNode.setAttribute('data-timestamp', timestampIso);
+            }
 
             document.getElementById('contact-list').prepend(item);
+            updateSidebarTimestamps();
             return item;
         }
 

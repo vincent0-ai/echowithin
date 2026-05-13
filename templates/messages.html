@@ -1569,9 +1569,17 @@
         updateSidebarTimestamps();
 
         // Formatting Helpers
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+
         function formatMessageText(text) {
             if (!text) return '';
-            // Basic linkification first
+            // SECURITY: Escape HTML entities first to prevent XSS
+            text = escapeHtml(text);
+            // Basic linkification
             text = linkifyText(text);
             // Bold: *text*
             text = text.replace(/\*(.*?)\*/g, '<span class="fmt-bold">$1</span>');
@@ -1585,7 +1593,7 @@
         function linkifyText(text) {
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             return text.replace(urlRegex, (url) => {
-                return `<a href="${url}" target="_blank" style="color: inherit; text-decoration: underline;">${url}</a>`;
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${url}</a>`;
             });
         }
 
@@ -2088,8 +2096,8 @@
             if (msgData.reply_to_id && msgData.reply_to_preview) {
                 replyHTML = `
                 <div class="bubble-reply-preview" onclick="scrollToMessage('${msgData.reply_to_id}')">
-                    <div style="font-weight: 600; font-size: 0.75rem; margin-bottom: 2px;">${msgData.reply_to_sender || 'User'}</div>
-                    <div style="opacity: 0.8;">${msgData.reply_to_preview}</div>
+                    <div style="font-weight: 600; font-size: 0.75rem; margin-bottom: 2px;">${escapeHtml(msgData.reply_to_sender || 'User')}</div>
+                    <div style="opacity: 0.8;">${escapeHtml(msgData.reply_to_preview)}</div>
                 </div>`;
             }
 
@@ -2117,12 +2125,14 @@
             if (msgData.link_preview && msgData.link_preview.title) {
                 let absoluteUrl = msgData.link_preview.url;
                 if (!absoluteUrl.startsWith('http')) absoluteUrl = 'http://' + absoluteUrl;
+                // Prevent javascript: protocol injection
+                const safeUrl = absoluteUrl.match(/^https?:\/\//) ? escapeHtml(absoluteUrl) : '#';
                 linkPreviewHTML = `
-                <a href="${absoluteUrl}" target="_blank" class="link-preview-card">
-                    ${msgData.link_preview.image ? `<img src="${msgData.link_preview.image}" class="lp-img" onerror="this.style.display='none'">` : ''}
+                <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+                    ${msgData.link_preview.image ? `<img src="${escapeHtml(msgData.link_preview.image)}" class="lp-img" onerror="this.style.display='none'">` : ''}
                     <div class="lp-content">
-                        <div class="lp-title">${msgData.link_preview.title}</div>
-                        <div class="lp-desc">${msgData.link_preview.description || absoluteUrl}</div>
+                        <div class="lp-title">${escapeHtml(msgData.link_preview.title)}</div>
+                        <div class="lp-desc">${escapeHtml(msgData.link_preview.description || absoluteUrl)}</div>
                     </div>
                 </a>`;
             }

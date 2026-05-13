@@ -2,10 +2,10 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v21';
-const STATIC_CACHE = 'echowithin-static-v21';
-const PAGES_CACHE = 'echowithin-pages-v21';
-const POSTS_CACHE = 'echowithin-posts-v21';
+const CACHE_NAME = 'echowithin-v22';
+const STATIC_CACHE = 'echowithin-static-v22';
+const PAGES_CACHE = 'echowithin-pages-v22';
+const POSTS_CACHE = 'echowithin-posts-v22';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -412,27 +412,31 @@ self.addEventListener('notificationclick', event => {
     return;
   }
 
-  const urlToOpen = event.notification.data?.url || '/';
+  const targetPath = event.notification.data?.url || '/';
+  // Resolve to absolute URL for reliable comparison with client.url
+  const absoluteTarget = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      // Check if there's already a window open with this URL
+      // 1. Check if there's already a window open at this exact URL — just focus it
       for (let client of windowClients) {
-        if (client.url === urlToOpen && 'focus' in client) {
+        if (client.url === absoluteTarget && 'focus' in client) {
           return client.focus();
         }
       }
-      // Navigate an existing window to the URL instead of opening a new one.
-      // This is critical for iOS PWA where openWindow opens Safari instead of
-      // navigating the standalone PWA window.
+      // 2. Navigate an existing window to the target URL.
+      //    This is critical for iOS PWA where openWindow opens Safari
+      //    instead of navigating the standalone PWA window.
       for (let client of windowClients) {
         if ('navigate' in client) {
-          return client.navigate(urlToOpen).then(c => c ? c.focus() : null);
+          return client.navigate(absoluteTarget)
+            .then(c => c ? c.focus() : clients.openWindow(absoluteTarget))
+            .catch(() => clients.openWindow(absoluteTarget));
         }
       }
-      // Fallback: open a new window (desktop browsers)
+      // 3. Fallback: open a new window (desktop browsers, or no existing window)
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(absoluteTarget);
       }
     })
   );

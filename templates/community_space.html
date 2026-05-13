@@ -128,8 +128,36 @@
     .note-textarea:focus {
         outline: none;
         border-color: #e8a87c;
-        background: white;
     }
+
+    /* Collapsible long notes in feed */
+    .note-content.note-collapsed {
+        max-height: 150px;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .note-content.note-collapsed::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 50px;
+        background: linear-gradient(transparent, white);
+        pointer-events: none;
+    }
+
+    .note-read-more {
+        display: block;
+        font-size: 0.78rem;
+        color: #3e2217;
+        font-weight: 600;
+        text-decoration: none;
+        margin-top: 0.25rem;
+    }
+
+    .note-read-more:hover { text-decoration: underline; }
 
     .create-note-options {
         display: flex;
@@ -421,9 +449,14 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <textarea name="content" class="note-textarea" placeholder="Share a thought, note, or question..." required maxlength="{{ current_user.get_limit('max_chars_per_note') }}" oninput="document.getElementById('charCount').textContent=this.value.length"></textarea>
-            <span style="font-size:0.7rem;color:#aaa;float:right;"><span id="charCount">0</span>/{{ current_user.get_limit('max_chars_per_note') }}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.3rem;">
+                <button type="button" id="toggle-comm-options" style="background:none;border:none;color:#3e2217;font-size:0.75rem;cursor:pointer;padding:0;display:flex;align-items:center;gap:4px;">
+                    <i class="fas fa-chevron-down" id="comm-opts-chevron"></i> More options
+                </button>
+                <span style="font-size:0.7rem;color:#aaa;"><span id="charCount">0</span>/{{ current_user.get_limit('max_chars_per_note') }}</span>
+            </div>
 
-            <div class="create-note-options">
+            <div class="create-note-options" id="comm-create-options" style="display:none;">
                 <div class="option-group">
                     <span class="option-label">Permissions</span>
                     <div class="pill-selector">
@@ -511,6 +544,9 @@
             <div class="note-content {{ 'handwriting' if note.font_style == 'handwriting' else '' }}" data-raw="{{ note.content|e }}">
                 {{ note.content }}
             </div>
+            {% if note.content|length > 300 %}
+            <a href="{{ url_for('view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="note-read-more">Read more →</a>
+            {% endif %}
 
             {% if note.tags %}
             <div class="note-tags">
@@ -659,6 +695,34 @@
             commThemeOpts.style.display = commThemeSelect.value === 'none' ? 'none' : 'block';
         });
     }
+
+    // More options toggle (matching personal space)
+    const toggleOptsBtn = document.getElementById('toggle-comm-options');
+    const optsPanel = document.getElementById('comm-create-options');
+    const optsChevron = document.getElementById('comm-opts-chevron');
+    if (toggleOptsBtn && optsPanel) {
+        toggleOptsBtn.addEventListener('click', () => {
+            const visible = optsPanel.style.display !== 'none';
+            optsPanel.style.display = visible ? 'none' : 'flex';
+            if (optsChevron) optsChevron.className = visible ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+        });
+    }
+
+    // Auto-expand textarea (matching personal space)
+    const noteTextarea = document.querySelector('.note-textarea');
+    if (noteTextarea) {
+        noteTextarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 400) + 'px';
+        });
+    }
+
+    // Collapse long notes in feed
+    document.querySelectorAll('.note-content').forEach(el => {
+        if (el.scrollHeight > 190) {
+            el.classList.add('note-collapsed');
+        }
+    });
 </script>
 
 <!-- Admin Settings Modal -->

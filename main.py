@@ -13340,7 +13340,7 @@ def view_shared_community_note(share_id):
     # Check if current user already saved this community note
     already_saved = False
     if current_user.is_authenticated:
-        already_saved = bool(notes_conf.find_one({
+        already_saved = bool(personal_posts_conf.find_one({
             'user_id': ObjectId(current_user.id),
             'saved_from_community_note': str(note['_id'])
         }))
@@ -13384,7 +13384,7 @@ def api_save_community_note(note_id):
     user_id_obj = ObjectId(current_user.id)
     
     # Check if already saved
-    existing = notes_conf.find_one({
+    existing = personal_posts_conf.find_one({
         'user_id': user_id_obj,
         'saved_from_community_note': str(note_obj_id)
     })
@@ -13402,7 +13402,7 @@ def api_save_community_note(note_id):
     encrypted = encrypt_note(content, user_id=current_user.id)
     now = datetime.datetime.now(datetime.timezone.utc)
     
-    notes_conf.insert_one({
+    personal_posts_conf.insert_one({
         'user_id': user_id_obj,
         'content': encrypted,
         'reference': f'Saved from community: {comm_name} (by {note.get("author_name", "unknown")})',

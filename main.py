@@ -13062,7 +13062,7 @@ def api_remove_member(community_id):
 @login_required
 @limits(calls=20, period=60)
 def api_create_community_note(community_id):
-    """Create a new community note."""
+    """Create a new community note with optional surprise theme and media."""
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -13087,12 +13087,46 @@ def api_create_community_note(community_id):
         return redirect(url_for('view_community', community_id=community_id))
         
     permissions = request.form.get('permissions', 'view')
-    share_style = request.form.get('share_style', 'standard')
+    surprise_theme = request.form.get('surprise_theme', 'none')
     font_style = request.form.get('font_style', 'standard')
+    use_typewriter = request.form.get('use_typewriter') == 'true'
     
     # Parse tags
     tags_str = request.form.get('tags', '')
     tags = [t.strip()[:20] for t in tags_str.split(',') if t.strip()] if tags_str else []
+    
+    # Handle media uploads (premium gated, same as personal shared notes)
+    valentine_photo = None
+    valentine_audio = None
+    user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    
+    if surprise_theme != 'none':
+        photo_file = request.files.get('valentine_photo')
+        audio_file = request.files.get('valentine_audio')
+        
+        has_media = bool((photo_file and photo_file.filename) or (audio_file and audio_file.filename))
+        if has_media and not is_premium(user_doc):
+            flash('Uploading photos and music to surprise notes is a Premium feature.', 'warning')
+            # Still allow the note, just skip media
+        else:
+            if photo_file and photo_file.filename:
+                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+                if ext in ALLOWED_IMAGE_EXTENSIONS:
+                    try:
+                        upload_result = cloudinary.uploader.upload(photo_file, folder="echowithin_community")
+                        valentine_photo = upload_result.get('secure_url')
+                    except Exception as e:
+                        app.logger.error(f"Community note photo upload failed: {e}")
+            
+            if audio_file and audio_file.filename:
+                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+                if ext in ALLOWED_AUDIO_EXTENSIONS:
+                    try:
+                        audio_file.seek(0)
+                        upload_result = cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_community")
+                        valentine_audio = upload_result.get('secure_url')
+                    except Exception as e:
+                        app.logger.error(f"Community note audio upload failed: {e}")
     
     # Encrypt content
     encrypted_content = encrypt_community_note(content, comm_obj_id)
@@ -13107,15 +13141,18 @@ def api_create_community_note(community_id):
         'author_id': ObjectId(current_user.id),
         'author_name': current_user.username,
         'content': encrypted_content,
-        'tags': tags[:5], # max 5 tags
+        'tags': tags[:5],
         'permissions': permissions,
-        'share_style': share_style,
+        'surprise_theme': surprise_theme,
         'font_style': font_style,
         'share_id': share_id,
+        'use_typewriter': use_typewriter,
+        'valentine_photo': valentine_photo,
+        'valentine_audio': valentine_audio,
         'reactions': {'heart': 0, 'fire': 0, 'laugh': 0, 'wow': 0, 'pray': 0},
         'reaction_count': 0,
         'view_count': 0,
-        'score': 10.0, # Initial score
+        'score': 10.0,
         'created_at': now,
         'updated_at': now,
         'last_activity_at': now
@@ -13210,8 +13247,31 @@ def api_react_community_note(note_id):
         )
         action = 'added'
         
-    # Re-calculate score asynchronously (simplified here, in production use background task)
-    # The cron job will also recalculate this periodically
+    # Re-calculate score based on reactions, views, and time decay
+    updated_note = community_notes_conf.find_one({'_id': note_obj_id})
+    if updated_note:
+        reactions = updated_note.get('reactions', {})
+        total_reactions = sum(reactions.values())
+        views = updated_note.get('view_count', 0)
+        created = updated_note.get('created_at', now)
+        
+        # Weighted engagement: reactions(3) + views(0.1)
+        import math as math_module
+        raw_score = (total_reactions * 3) + (views * 0.1)
+        log_score = math_module.log1p(raw_score) * 10
+        
+        # Time decay: halve score every 7 days
+        age_hours = max((now - created).total_seconds() / 3600, 0.1)
+        decay = max(1.0 / (1 + (age_hours / 168)), 0.05)
+        
+        # Recency boost for notes < 6 hours old
+        recency_boost = 2.0 if age_hours < 6 else (1.5 if age_hours < 24 else 1.0)
+        
+        final_score = round(log_score * decay * recency_boost, 2)
+        community_notes_conf.update_one(
+            {'_id': note_obj_id},
+            {'$set': {'score': final_score}}
+        )
     
     # Fetch updated counts to return
     updated_note = community_notes_conf.find_one({'_id': note_obj_id}, {'reactions': 1, 'reaction_count': 1})
@@ -13272,25 +13332,86 @@ def view_shared_community_note(share_id):
         }
     )
     
-    # Use existing shared note template but adapt variables
+    surprise_theme = note.get('surprise_theme', 'none')
+    # Backward compat: old notes stored 'share_style' instead of 'surprise_theme'
+    if surprise_theme == 'none' and note.get('share_style') and note.get('share_style') != 'standard':
+        surprise_theme = note.get('share_style')
+    
+    # Check if current user already saved this community note
+    already_saved = False
+    if current_user.is_authenticated:
+        already_saved = bool(notes_conf.find_one({
+            'user_id': ObjectId(current_user.id),
+            'saved_from_community_note': str(note['_id'])
+        }))
+    
     return render_template('shared_note.html',
                            share_id=share_id,
                            content=content,
-                           permissions='view', # Community shared links are read-only externally
+                           permissions='view',
                            note_id=str(note['_id']),
                            updated_at=note.get('updated_at'),
                            created_at=note.get('created_at'),
                            is_owner=False,
-                           already_saved=False,
+                           already_saved=already_saved,
                            has_pending_proposal=False,
-                           surprise_theme=note.get('share_style', 'none'),
+                           surprise_theme=surprise_theme,
                            reference='',
                            tags=note.get('tags', []),
-                           is_valentine=(note.get('share_style') == 'valentine'),
-                           valentine_photo=None,
-                           valentine_audio=None,
-                           use_typewriter=False,
+                           is_valentine=(surprise_theme != 'none'),
+                           valentine_photo=note.get('valentine_photo'),
+                           valentine_audio=note.get('valentine_audio'),
+                           use_typewriter=note.get('use_typewriter', False),
                            owner_max_chars=TIER_LIMITS['free']['max_chars_per_note'],
                            note_attachments=[],
-                           can_upload_media=False)
-                           
+                           can_upload_media=False,
+                           is_community_note=True,
+                           community_note_id=str(note['_id']))
+
+@app.route('/api/community/note/<note_id>/save', methods=['POST'])
+@login_required
+def api_save_community_note(note_id):
+    """Save a community note to user's personal notes."""
+    try:
+        note_obj_id = ObjectId(note_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+        
+    note = community_notes_conf.find_one({'_id': note_obj_id})
+    if not note:
+        return jsonify({'error': 'Note not found'}), 404
+        
+    user_id_obj = ObjectId(current_user.id)
+    
+    # Check if already saved
+    existing = notes_conf.find_one({
+        'user_id': user_id_obj,
+        'saved_from_community_note': str(note_obj_id)
+    })
+    if existing:
+        return jsonify({'error': 'Already saved', 'already_saved': True}), 409
+    
+    # Decrypt the community note content
+    content = decrypt_community_note(note.get('content', ''), note['community_id'])
+    
+    # Get the community name for reference
+    community = communities_conf.find_one({'_id': note['community_id']}, {'name': 1})
+    comm_name = community.get('name', 'Unknown') if community else 'Unknown'
+    
+    # Encrypt with user's personal key and save
+    encrypted = encrypt_note(content, user_id=current_user.id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    notes_conf.insert_one({
+        'user_id': user_id_obj,
+        'content': encrypted,
+        'reference': f'Saved from community: {comm_name} (by {note.get("author_name", "unknown")})',
+        'tags': note.get('tags', []),
+        'surprise_theme': note.get('surprise_theme', 'none'),
+        'saved_from_community_note': str(note_obj_id),
+        'created_at': now,
+        'updated_at': now
+    })
+    
+    return jsonify({'success': True, 'message': 'Note saved to your personal notes!'})
+

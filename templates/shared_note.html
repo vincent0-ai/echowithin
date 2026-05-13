@@ -4378,7 +4378,12 @@
             saveToNotesBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
             try {
-                const resp = await fetch(`/shared_note/save/${shareId}`, {
+                // Community notes use a different save endpoint
+                const isCommunityNote = {{ 'true' if is_community_note is defined and is_community_note else 'false' }};
+                const communityNoteId = '{{ community_note_id if community_note_id is defined else "" }}';
+                const saveUrl = isCommunityNote ? `/api/community/note/${communityNoteId}/save` : `/shared_note/save/${shareId}`;
+                
+                const resp = await fetch(saveUrl, {
                     method: 'POST',
                     headers: { 'X-CSRFToken': CSRF_TOKEN }
                 });

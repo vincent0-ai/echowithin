@@ -12895,8 +12895,8 @@ def join_community_link(invite_code):
     communities_conf.update_one(
         {'_id': community['_id']},
         {
-            '': {'members': user_id_obj},
-            '': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
+            '$addToSet': {'members': user_id_obj},
+            '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
         }
     )
     
@@ -12944,7 +12944,7 @@ def api_update_community(community_id):
     if visibility in ['public', 'private']:
         update_data['visibility'] = visibility
         
-    communities_conf.update_one({'_id': comm_obj_id}, {'': update_data})
+    communities_conf.update_one({'_id': comm_obj_id}, {'$set': update_data})
     flash('Community settings updated.', 'success')
     return redirect(url_for('view_community', community_id=community_id))
 
@@ -12965,7 +12965,7 @@ def api_regenerate_invite(community_id):
     new_code = secrets.token_urlsafe(12)
     communities_conf.update_one(
         {'_id': comm_obj_id},
-        {'': {'invite_code': new_code}}
+        {'$set': {'invite_code': new_code}}
     )
     
     return jsonify({'success': True, 'new_code': new_code})
@@ -12990,7 +12990,7 @@ def api_leave_community(community_id):
         
     communities_conf.update_one(
         {'_id': comm_obj_id},
-        {'': {'members': user_id_obj}}
+        {'$pull': {'members': user_id_obj}}
     )
     
     flash('You have left the community.', 'success')
@@ -13015,7 +13015,7 @@ def api_remove_member(community_id):
         
     communities_conf.update_one(
         {'_id': comm_obj_id},
-        {'': {'members': member_id}}
+        {'$pull': {'members': member_id}}
     )
     
     flash('Member removed.', 'success')
@@ -13127,7 +13127,7 @@ def api_react_community_note(note_id):
             community_notes_conf.update_one(
                 {'_id': note_obj_id},
                 {
-                    '': {
+                    '$inc': {
                         f'reactions.{reaction_type}': -1,
                         'reaction_count': -1
                     }
@@ -13139,17 +13139,17 @@ def api_react_community_note(note_id):
             old_type = existing.get('reaction_type')
             community_reactions_conf.update_one(
                 {'_id': existing['_id']},
-                {'': {'reaction_type': reaction_type, 'created_at': now}}
+                {'$set': {'reaction_type': reaction_type, 'created_at': now}}
             )
             # Update counts
             community_notes_conf.update_one(
                 {'_id': note_obj_id},
                 {
-                    '': {
+                    '$inc': {
                         f'reactions.{old_type}': -1,
                         f'reactions.{reaction_type}': 1
                     },
-                    '': {'last_activity_at': now}
+                    '$set': {'last_activity_at': now}
                 }
             )
             action = 'changed'
@@ -13164,11 +13164,11 @@ def api_react_community_note(note_id):
         community_notes_conf.update_one(
             {'_id': note_obj_id},
             {
-                '': {
+                '$inc': {
                     f'reactions.{reaction_type}': 1,
                     'reaction_count': 1
                 },
-                '': {'last_activity_at': now}
+                '$set': {'last_activity_at': now}
             }
         )
         action = 'added'
@@ -13230,8 +13230,8 @@ def view_shared_community_note(share_id):
     community_notes_conf.update_one(
         {'_id': note['_id']},
         {
-            '': {'view_count': 1},
-            '': {'last_activity_at': datetime.datetime.now(datetime.timezone.utc)}
+            '$inc': {'view_count': 1},
+            '$set': {'last_activity_at': datetime.datetime.now(datetime.timezone.utc)}
         }
     )
     

@@ -465,6 +465,7 @@ app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app sess
 communities_conf = db['communities']
 community_notes_conf = db['community_notes']
 community_reactions_conf = db['community_reactions']
+community_reports_conf = db['community_reports']
 
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
@@ -548,6 +549,8 @@ community_notes_conf.create_index([('community_id', 1), ('score', -1)])
 community_notes_conf.create_index('author_id')
 community_reactions_conf.create_index([('note_id', 1), ('user_id', 1)], unique=True)
 community_reactions_conf.create_index([('note_id', 1)])
+community_reports_conf.create_index([('community_id', 1), ('status', 1)])
+community_reports_conf.create_index('reporter_id')
 
 # --- Encryption utilities for personal notes ---
 # v2: Per-user key derivation with increased iterations (OWASP 2024 recommendation).
@@ -3018,6 +3021,16 @@ def admin_system_health():
             health['backup'] = {'status': 'not_configured'}
     except Exception as e:
         health['backup'] = {'status': 'error', 'detail': str(e)}
+
+    # --- Communities & Reports ---
+    try:
+        health['communities'] = {
+            'status': 'healthy',
+            'total': communities_conf.count_documents({}),
+            'pending_reports': community_reports_conf.count_documents({'status': 'pending'})
+        }
+    except Exception as e:
+        health['communities'] = {'status': 'error', 'detail': str(e)}
 
     return jsonify(health)
 
@@ -12786,6 +12799,11 @@ def view_community(community_id):
     if not community:
         flash('Community not found.', 'danger')
         return redirect(url_for('communities_page'))
+    
+    # Check if community is banned by site admin
+    if community.get('banned'):
+        flash('This community has been suspended for violating our community guidelines.', 'danger')
+        return redirect(url_for('communities_page'))
         
     # Check membership
     user_id_obj = ObjectId(current_user.id)
@@ -13320,6 +13338,11 @@ def view_shared_community_note(share_id):
     note = community_notes_conf.find_one({'share_id': share_id})
     if not note:
         return render_template('shared_note.html', expired=True), 410
+    
+    # Check if parent community is banned
+    parent_community = communities_conf.find_one({'_id': note['community_id']}, {'banned': 1})
+    if parent_community and parent_community.get('banned'):
+        return render_template('shared_note.html', expired=True), 410
         
     # Decrypt content
     content = decrypt_community_note(note.get('content', ''), note['community_id'])
@@ -13415,4 +13438,264 @@ def api_save_community_note(note_id):
     })
     
     return jsonify({'success': True, 'message': 'Note saved to your personal notes!'})
+
+
+# ==============================================================================
+# COMMUNITY REPORTING & ADMIN MODERATION
+# ==============================================================================
+
+@app.route('/api/community/<community_id>/report', methods=['POST'])
+@login_required
+@limits(calls=5, period=3600)
+def api_report_community(community_id):
+    """Submit a report against a community for violations."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+    
+    # Cannot report your own community
+    if str(community.get('admin_id')) == current_user.id:
+        return jsonify({'error': 'You cannot report your own community'}), 400
+    
+    # Check for existing pending report from this user
+    existing = community_reports_conf.find_one({
+        'community_id': comm_obj_id,
+        'reporter_id': ObjectId(current_user.id),
+        'status': 'pending'
+    })
+    if existing:
+        return jsonify({'error': 'You already have a pending report for this community'}), 409
+    
+    data = request.get_json() if request.is_json else request.form
+    reason = data.get('reason', '').strip()
+    details = data.get('details', '').strip()
+    
+    valid_reasons = ['spam', 'harassment', 'inappropriate', 'hate_speech', 'other']
+    if reason not in valid_reasons:
+        return jsonify({'error': 'Invalid reason'}), 400
+    
+    if len(details) > 500:
+        details = details[:500]
+    
+    report = {
+        'community_id': comm_obj_id,
+        'community_name': community.get('name', ''),
+        'reporter_id': ObjectId(current_user.id),
+        'reporter_username': current_user.username,
+        'reason': reason,
+        'details': details,
+        'status': 'pending',
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'reviewed_at': None,
+        'reviewed_by': None
+    }
+    
+    community_reports_conf.insert_one(report)
+    
+    # Send ntfy notification to admin
+    try:
+        send_ntfy_notification.queue(
+            f"Community '{community.get('name')}' reported by {current_user.username} for: {reason}",
+            "Community Report", "warning"
+        )
+    except Exception:
+        pass
+    
+    if request.is_json:
+        return jsonify({'success': True, 'message': 'Report submitted. Our team will review it.'})
+    
+    flash('Report submitted. Our team will review it.', 'success')
+    return redirect(url_for('view_community', community_id=community_id))
+
+
+@app.route('/admin/communities')
+@login_required
+@admin_required
+def admin_communities():
+    """Admin page to manage all communities and view reports."""
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+    skip = (page - 1) * per_page
+    
+    # Get filter
+    filter_type = request.args.get('filter', 'all')  # all, reported, banned
+    query = {}
+    if filter_type == 'reported':
+        # Communities with pending reports
+        reported_ids = community_reports_conf.distinct('community_id', {'status': 'pending'})
+        query = {'_id': {'$in': reported_ids}}
+    elif filter_type == 'banned':
+        query = {'banned': True}
+    
+    total = communities_conf.count_documents(query)
+    communities_list = list(communities_conf.find(query).sort('updated_at', -1).skip(skip).limit(per_page))
+    
+    # Enrich with stats
+    for comm in communities_list:
+        comm['member_count'] = len(comm.get('members', []))
+        comm['note_count'] = community_notes_conf.count_documents({'community_id': comm['_id']})
+        comm['pending_reports'] = community_reports_conf.count_documents({
+            'community_id': comm['_id'],
+            'status': 'pending'
+        })
+        comm['total_reports'] = community_reports_conf.count_documents({'community_id': comm['_id']})
+        # Get admin username
+        admin_user = users_conf.find_one({'_id': comm.get('admin_id')}, {'username': 1})
+        comm['admin_username'] = admin_user.get('username', 'Unknown') if admin_user else 'Unknown'
+    
+    total_pending = community_reports_conf.count_documents({'status': 'pending'})
+    
+    return render_template('admin_communities.html',
+                          communities=communities_list,
+                          page=page,
+                          total_pages=(total + per_page - 1) // per_page,
+                          total_communities=total,
+                          total_pending_reports=total_pending,
+                          filter_type=filter_type)
+
+
+@app.route('/api/admin/community/<community_id>/ban', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_ban_community(community_id):
+    """Ban a community — sets banned flag, removes from discover."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+    
+    communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$set': {
+            'banned': True,
+            'banned_at': datetime.datetime.now(datetime.timezone.utc),
+            'banned_by': ObjectId(current_user.id)
+        }}
+    )
+    
+    # Mark all pending reports for this community as reviewed
+    community_reports_conf.update_many(
+        {'community_id': comm_obj_id, 'status': 'pending'},
+        {'$set': {
+            'status': 'reviewed',
+            'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+            'reviewed_by': ObjectId(current_user.id)
+        }}
+    )
+    
+    flash(f'Community "{community.get("name")}" has been banned.', 'success')
+    return redirect(url_for('admin_communities'))
+
+
+@app.route('/api/admin/community/<community_id>/unban', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_unban_community(community_id):
+    """Unban a previously banned community."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$unset': {'banned': '', 'banned_at': '', 'banned_by': ''}}
+    )
+    
+    flash('Community has been unbanned.', 'success')
+    return redirect(url_for('admin_communities'))
+
+
+@app.route('/api/admin/community/<community_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_delete_community(community_id):
+    """Permanently delete a community and all its data."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    community = communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+    
+    comm_name = community.get('name', 'Unknown')
+    
+    # Delete all community notes
+    note_ids = [n['_id'] for n in community_notes_conf.find({'community_id': comm_obj_id}, {'_id': 1})]
+    if note_ids:
+        community_reactions_conf.delete_many({'note_id': {'$in': note_ids}})
+    community_notes_conf.delete_many({'community_id': comm_obj_id})
+    
+    # Delete all reports
+    community_reports_conf.delete_many({'community_id': comm_obj_id})
+    
+    # Delete the community
+    communities_conf.delete_one({'_id': comm_obj_id})
+    
+    flash(f'Community "{comm_name}" and all its data has been permanently deleted.', 'success')
+    return redirect(url_for('admin_communities'))
+
+
+@app.route('/api/admin/community/<community_id>/reports', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_community_reports(community_id):
+    """View all reports for a specific community."""
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    reports = list(community_reports_conf.find({'community_id': comm_obj_id}).sort('created_at', -1))
+    
+    result = []
+    for r in reports:
+        result.append({
+            'id': str(r['_id']),
+            'reporter_username': r.get('reporter_username', 'Unknown'),
+            'reason': r.get('reason', ''),
+            'details': r.get('details', ''),
+            'status': r.get('status', 'pending'),
+            'created_at': r['created_at'].isoformat() if r.get('created_at') else '',
+            'reviewed_at': r['reviewed_at'].isoformat() if r.get('reviewed_at') else None
+        })
+    
+    return jsonify({'success': True, 'reports': result})
+
+
+@app.route('/api/admin/reports/<report_id>/dismiss', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_dismiss_report(report_id):
+    """Dismiss a specific community report."""
+    try:
+        report_obj_id = ObjectId(report_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    
+    result = community_reports_conf.update_one(
+        {'_id': report_obj_id},
+        {'$set': {
+            'status': 'dismissed',
+            'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+            'reviewed_by': ObjectId(current_user.id)
+        }}
+    )
+    
+    if result.modified_count == 0:
+        return jsonify({'error': 'Report not found'}), 404
+    
+    return jsonify({'success': True, 'message': 'Report dismissed'})
+
 

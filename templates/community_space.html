@@ -434,6 +434,9 @@
             {% if is_admin %}
             <button class="btn-sm" onclick="document.getElementById('adminModal').style.display='flex'">Settings</button>
             {% else %}
+            <button class="btn-sm" onclick="document.getElementById('reportModal').style.display='flex'" title="Report this community" style="color:#c62828;border-color:#ffcdd2;">
+                <i class="fas fa-flag" style="margin-right:3px;"></i> Report
+            </button>
             <form action="{{ url_for('api_leave_community', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Leave this community?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-sm danger">Leave</button>
@@ -786,6 +789,118 @@
         </div>
     </div>
 </div>
+{% endif %}
+<!-- Report Community Modal -->
+{% if not is_admin %}
+<div id="reportModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;padding:1.5rem;border-radius:12px;width:90%;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;animation:modalSlideIn 0.3s ease-out;">
+        <span onclick="document.getElementById('reportModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+        <h2 style="margin:0 0 0.25rem 0;color:#c62828;font-size:1.1rem;display:flex;align-items:center;gap:0.5rem;">
+            <i class="fas fa-flag"></i> Report Community
+        </h2>
+        <p style="font-size:0.8rem;color:#888;margin:0 0 1rem 0;">Help us keep EchoWithin safe. Reports are reviewed by our team.</p>
+
+        <div style="margin-bottom:0.75rem;">
+            <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Reason</label>
+            <select id="report-reason" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+                <option value="">Select a reason...</option>
+                <option value="spam">Spam or misleading content</option>
+                <option value="harassment">Harassment or bullying</option>
+                <option value="inappropriate">Inappropriate or offensive content</option>
+                <option value="hate_speech">Hate speech</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom:0.75rem;">
+            <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Details (optional)</label>
+            <textarea id="report-details" maxlength="500" placeholder="Tell us more about why you're reporting this community..." style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;min-height:80px;resize:vertical;font-family:inherit;"></textarea>
+            <span style="font-size:0.7rem;color:#aaa;float:right;" id="report-char-count">0/500</span>
+        </div>
+
+        <button id="submit-report-btn" onclick="submitReport()" style="width:100%;background:#c62828;color:white;border:none;padding:0.6rem;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;transition:background 0.2s;">
+            Submit Report
+        </button>
+        <p id="report-status" style="font-size:0.8rem;text-align:center;margin-top:0.5rem;display:none;"></p>
+    </div>
+</div>
+
+<style>
+    @keyframes modalSlideIn {
+        from { transform: translateY(-15px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+</style>
+
+<script>
+    // Report character count
+    const reportDetails = document.getElementById('report-details');
+    const reportCharCount = document.getElementById('report-char-count');
+    if (reportDetails && reportCharCount) {
+        reportDetails.addEventListener('input', function() {
+            reportCharCount.textContent = this.value.length + '/500';
+        });
+    }
+
+    function submitReport() {
+        const reason = document.getElementById('report-reason').value;
+        const details = document.getElementById('report-details').value.trim();
+        const btn = document.getElementById('submit-report-btn');
+        const status = document.getElementById('report-status');
+
+        if (!reason) {
+            status.style.display = 'block';
+            status.style.color = '#c62828';
+            status.textContent = 'Please select a reason.';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Submitting...';
+        status.style.display = 'none';
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+
+        fetch('/api/community/{{ community._id }}/report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ reason: reason, details: details })
+        })
+        .then(res => res.json())
+        .then(data => {
+            status.style.display = 'block';
+            if (data.success) {
+                status.style.color = '#2e7d32';
+                status.textContent = data.message || 'Report submitted successfully.';
+                btn.textContent = 'Submitted ✓';
+                setTimeout(() => {
+                    document.getElementById('reportModal').style.display = 'none';
+                    btn.disabled = false;
+                    btn.textContent = 'Submit Report';
+                    document.getElementById('report-reason').value = '';
+                    document.getElementById('report-details').value = '';
+                    reportCharCount.textContent = '0/500';
+                    status.style.display = 'none';
+                }, 2000);
+            } else {
+                status.style.color = '#c62828';
+                status.textContent = data.error || 'Failed to submit report.';
+                btn.disabled = false;
+                btn.textContent = 'Submit Report';
+            }
+        })
+        .catch(err => {
+            status.style.display = 'block';
+            status.style.color = '#c62828';
+            status.textContent = 'Network error. Please try again.';
+            btn.disabled = false;
+            btn.textContent = 'Submit Report';
+        });
+    }
+</script>
 {% endif %}
 
 {% endblock %}

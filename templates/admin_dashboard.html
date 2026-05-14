@@ -8,6 +8,7 @@
     <button id="reindex-btn" class="btn btn-primary">Reindex Posts</button>
     <button id="reindex-notes-btn" class="btn btn-primary" style="background: #f5f5f5;">Reindex Notes</button>
     <a href="{{ url_for('admin_premium_users') }}" class="btn btn-secondary" style="background-color: #28a745; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; text-decoration: none;">Manage Premium</a>
+    <a href="{{ url_for('admin_communities') }}" class="btn btn-secondary" style="background-color: #3e2217; color: white; border: none; padding: 0.5rem 1rem; border-radius: 5px; text-decoration: none;">Manage Communities</a>
   </div>
 
   <!-- CSV Export Section -->
@@ -332,6 +333,19 @@
         html += `<p>No backup recorded</p>`;
       } else {
         html += `<p>${b.detail || 'Error'}</p>`;
+      }
+      html += '</div>';
+
+      // Communities
+      const c = h.communities || {};
+      const cCls = c.status === 'healthy' ? (c.pending_reports > 0 ? 'stale' : 'healthy') : 'error';
+      html += `<div class="health-card ${cCls}">`;
+      html += `<h4><span class="health-dot"></span> Communities</h4>`;
+      if (c.status === 'healthy') {
+        html += `<p>Total: <strong>${c.total}</strong></p>`;
+        html += `<p>Pending Reports: <strong style="${c.pending_reports > 0 ? 'color:#ef4444' : ''}">${c.pending_reports}</strong></p>`;
+      } else {
+        html += `<p>${c.detail || 'Error'}</p>`;
       }
       html += '</div>';
 

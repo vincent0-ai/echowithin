@@ -12805,14 +12805,19 @@ def view_community(community_id):
         flash('This community has been suspended for violating our community guidelines.', 'danger')
         return redirect(url_for('communities_page'))
         
-    # Check membership
+    # Check membership (Bypass for site admins to allow investigation of reports)
     user_id_obj = ObjectId(current_user.id)
     is_member = user_id_obj in community.get('members', [])
     is_admin = str(community.get('admin_id')) == current_user.id
+    is_site_admin = getattr(current_user, 'is_admin', False)
     
-    if not is_member and community.get('visibility') == 'private':
+    if not is_member and not is_site_admin and community.get('visibility') == 'private':
         flash('You are not a member of this private community.', 'danger')
         return redirect(url_for('communities_page'))
+    
+    # If site admin is inspecting, add a notification banner info
+    if is_site_admin and not is_member:
+        flash('ADMIN INSPECTION: You are viewing this community as a site administrator.', 'info')
         
     # Get notes for this community with pagination
     page = request.args.get('page', 1, type=int)

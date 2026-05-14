@@ -3294,8 +3294,7 @@
         }
 
         // --- Note Media Attachments (upload, delete, lightbox) ---
-        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }
-    };
+        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }};
     const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
 
     // Lightbox
@@ -4732,8 +4731,7 @@
 
             try {
                 // Community notes use a different save endpoint
-                const isCommunityNote = {{ 'true' if is_community_note is defined and is_community_note else 'false' }
-            };
+                const isCommunityNote = {{ 'true' if is_community_note is defined and is_community_note else 'false' }};
             const communityNoteId = '{{ community_note_id if community_note_id is defined else "" }}';
             const saveUrl = isCommunityNote ? `/api/community/note/${communityNoteId}/save` : `/shared_note/save/${shareId}`;
 

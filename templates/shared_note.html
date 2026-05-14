@@ -244,11 +244,13 @@
                     <button id="view-history-btn" class="btn btn-history" title="Stats" type="button">
                         <i class="fas fa-chart-line"></i>
                     </button>
-                    <button id="ping-collaborators-btn" class="btn btn-history" title="Ping Collaborators" type="button" onclick="pingCollaborators('{{ share_id }}')">
+                    <button id="ping-collaborators-btn" class="btn btn-history" title="Ping Collaborators" type="button"
+                        onclick="pingCollaborators('{{ share_id }}')">
                         <i class="fas fa-bell"></i>
                     </button>
                     {% endif %}
-                    <button type="button" class="btn btn-history" title="Export note" id="export-shared-note-btn2" onclick="document.getElementById('export-shared-modal').style.display='flex'">
+                    <button type="button" class="btn btn-history" title="Export note" id="export-shared-note-btn2"
+                        onclick="document.getElementById('export-shared-modal').style.display='flex'">
                         <i class="fas fa-download"></i>
                     </button>
                 </div>
@@ -373,18 +375,23 @@
                     <button type="button" class="media-toolbar-btn" id="upload-image-btn" title="Add image">
                         <i class="fas fa-image"></i> Image
                     </button>
-                    <button type="button" class="media-toolbar-btn" id="record-audio-btn" title="Hold to record voice note"
-                        onmousedown="window.startSharedVoiceRecording(event)" ontouchstart="window.startSharedVoiceRecording(event)"
+                    <button type="button" class="media-toolbar-btn" id="record-audio-btn"
+                        title="Hold to record voice note" onmousedown="window.startSharedVoiceRecording(event)"
+                        ontouchstart="window.startSharedVoiceRecording(event)"
                         style="user-select: none; -webkit-user-select: none;">
                         <i class="fas fa-microphone"></i> Record
                     </button>
                     <button type="button" class="media-toolbar-btn" id="upload-audio-btn" title="Upload audio file">
                         <i class="fas fa-file-audio"></i> Upload
                     </button>
-                    <div id="shared-voice-recording-ui" class="voice-recording-ui" style="display:none; align-items:center; gap:8px; margin-left: auto; background: #fff8f8; padding: 4px 12px; border-radius: 20px; border: 1px solid #ffcccc; font-size: 0.85rem;">
-                        <span class="voice-pulse" style="width: 8px; height: 8px; background: red; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
+                    <div id="shared-voice-recording-ui" class="voice-recording-ui"
+                        style="display:none; align-items:center; gap:8px; margin-left: auto; background: #fff8f8; padding: 4px 12px; border-radius: 20px; border: 1px solid #ffcccc; font-size: 0.85rem;">
+                        <span class="voice-pulse"
+                            style="width: 8px; height: 8px; background: red; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
                         <span id="shared-voice-timer" style="font-family: monospace; font-weight: 600;">0:00</span>
-                        <button type="button" class="shared-voice-cancel-btn" style="background:none;border:none;color:#666;cursor:pointer;margin-left:4px;" title="Cancel">
+                        <button type="button" class="shared-voice-cancel-btn"
+                            style="background:none;border:none;color:#666;cursor:pointer;margin-left:4px;"
+                            title="Cancel">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -545,26 +552,31 @@
                     {% if surprise_theme == 'birthday' %}
                     <div class="cta-icon-wrap cta-birthday"><i class="fas fa-birthday-cake"></i></div>
                     <h3 class="cta-heading">Want to surprise someone on their birthday?</h3>
-                    <p class="cta-text">Create a magical birthday note just like this one — with animations, photos, music, and a beautiful reveal effect. Make their day unforgettable.</p>
+                    <p class="cta-text">Create a magical birthday note just like this one — with animations, photos,
+                        music, and a beautiful reveal effect. Make their day unforgettable.</p>
                     {% elif surprise_theme == 'anniversary' %}
                     <div class="cta-icon-wrap cta-anniversary"><i class="fas fa-ring"></i></div>
                     <h3 class="cta-heading">Celebrate your love story</h3>
-                    <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music, and a stunning envelope reveal. Your partner will love it.</p>
+                    <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music, and
+                        a stunning envelope reveal. Your partner will love it.</p>
                     {% elif surprise_theme == 'celebration' %}
-                    <div class="cta-icon-wrap cta-celebration"><i class="fas fa-glass-cheers"></i></div>
+                    <div class="cta-icon-wrap cta-celebration"></div>
                     <h3 class="cta-heading">Got something to celebrate?</h3>
-                    <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti animations, photos, and music. Perfect for graduations, promotions, or any milestone.</p>
+                    <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti animations,
+                        photos, and music. Perfect for graduations, promotions, or any milestone.</p>
                     {% elif surprise_theme != 'none' %}
                     <div class="cta-icon-wrap cta-valentine"><i class="fas fa-heart"></i></div>
                     <h3 class="cta-heading">Express your love beautifully</h3>
-                    <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a heartfelt message wrapped in an interactive envelope reveal.</p>
+                    <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a
+                        heartfelt message wrapped in an interactive envelope reveal.</p>
                     {% else %}
                     <div class="cta-icon-wrap cta-standard"><i class="fas fa-pen-fancy"></i></div>
                     <h3 class="cta-heading">Create your own notes like this</h3>
-                    <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting, real-time collaboration, version control, and much more.</p>
+                    <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting, real-time
+                        collaboration, version control, and much more.</p>
                     {% endif %}
                     <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
-                        <i class="fas fa-rocket"></i> Join Free — It takes 30 seconds
+                        Join Free — It takes 30 seconds
                     </a>
                 </div>
             </div>
@@ -573,13 +585,15 @@
             <div class="cta-card cta-community">
                 <div class="cta-content">
                     <div class="cta-community-header">
-                        <div class="cta-icon-wrap cta-comm-icon"><i class="fas fa-users"></i></div>
+                        <div class="cta-icon-wrap cta-comm-icon"></div>
                         <div>
                             <h3 class="cta-heading" style="margin-bottom: 0.15rem;">Join Community Spaces</h3>
                             <span class="cta-badge">Popular Feature</span>
                         </div>
                     </div>
-                    <p class="cta-text">Share notes, react, and collaborate with groups of friends, study buddies, or teams. Create or discover public communities and connect with people who share your interests.</p>
+                    <p class="cta-text">Share notes, react, and collaborate with groups of friends, study buddies, or
+                        teams. Create or discover public communities and connect with people who share your interests.
+                    </p>
                     <div class="cta-community-features">
                         <div class="cta-feature-item"><i class="fas fa-pencil-alt"></i> Post & Share</div>
                         <div class="cta-feature-item"><i class="fas fa-heart"></i> React & Engage</div>
@@ -590,12 +604,6 @@
                         <i class="fas fa-arrow-right"></i> Explore Communities
                     </a>
                 </div>
-            </div>
-
-            <!-- Trust Signal -->
-            <div class="cta-trust">
-                <i class="fas fa-shield-alt"></i>
-                <span>Free forever &bull; No credit card required &bull; Your notes are encrypted</span>
             </div>
         </div>
         {% endif %}
@@ -2287,26 +2295,52 @@
        Marketing CTA Section — Shared Note
        ============================================= */
     @keyframes ctaSlideUp {
-        from { opacity: 0; transform: translateY(30px); }
-        to   { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     @keyframes ctaPulse {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(62, 34, 23, 0.35); }
-        50%      { box-shadow: 0 0 0 10px rgba(62, 34, 23, 0); }
+
+        0%,
+        100% {
+            box-shadow: 0 0 0 0 rgba(62, 34, 23, 0.35);
+        }
+
+        50% {
+            box-shadow: 0 0 0 10px rgba(62, 34, 23, 0);
+        }
     }
 
     @keyframes ctaGlow {
-        0%   { opacity: 0.4; transform: scale(0.95) rotate(0deg); }
-        50%  { opacity: 0.7; transform: scale(1.05) rotate(3deg); }
-        100% { opacity: 0.4; transform: scale(0.95) rotate(0deg); }
+        0% {
+            opacity: 0.4;
+            transform: scale(0.95) rotate(0deg);
+        }
+
+        50% {
+            opacity: 0.7;
+            transform: scale(1.05) rotate(3deg);
+        }
+
+        100% {
+            opacity: 0.4;
+            transform: scale(0.95) rotate(0deg);
+        }
     }
 
     .marketing-cta-section {
-        margin-top: 1.5rem;
+        margin-top: 2.5rem;
+        padding: 0 1rem;
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 1.5rem;
         animation: ctaSlideUp 0.7s ease-out both;
         animation-delay: 1.5s;
     }
@@ -2328,7 +2362,7 @@
     }
 
     .cta-primary {
-        background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(253,250,248,0.95) 100%);
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(253, 250, 248, 0.95) 100%);
         border: 1px solid rgba(62, 34, 23, 0.1);
     }
 
@@ -2339,7 +2373,7 @@
         width: 120px;
         height: 120px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(232,168,124,0.3) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(232, 168, 124, 0.3) 0%, transparent 70%);
         animation: ctaGlow 4s ease-in-out infinite;
         pointer-events: none;
     }
@@ -2360,15 +2394,32 @@
         font-size: 1.4rem;
         margin-bottom: 1rem;
         color: white;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
     }
 
-    .cta-birthday   { background: linear-gradient(135deg, #f97316, #ef4444); }
-    .cta-anniversary { background: linear-gradient(135deg, #ec4899, #a855f7); }
-    .cta-celebration { background: linear-gradient(135deg, #f59e0b, #10b981); }
-    .cta-valentine   { background: linear-gradient(135deg, #ef4444, #ec4899); }
-    .cta-standard    { background: linear-gradient(135deg, #3e2217, #7a5d52); }
-    .cta-comm-icon   { background: linear-gradient(135deg, #3b82f6, #6366f1); }
+    .cta-birthday {
+        background: linear-gradient(135deg, #f97316, #ef4444);
+    }
+
+    .cta-anniversary {
+        background: linear-gradient(135deg, #ec4899, #a855f7);
+    }
+
+    .cta-celebration {
+        background: linear-gradient(135deg, #f59e0b, #10b981);
+    }
+
+    .cta-valentine {
+        background: linear-gradient(135deg, #ef4444, #ec4899);
+    }
+
+    .cta-standard {
+        background: linear-gradient(135deg, #3e2217, #7a5d52);
+    }
+
+    .cta-comm-icon {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+    }
 
     .cta-heading {
         font-size: 1.2rem;
@@ -3243,11 +3294,12 @@
         }
 
         // --- Note Media Attachments (upload, delete, lightbox) ---
-        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }};
-        const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
+        const CAN_UPLOAD_MEDIA = {{ 'true' if can_upload_media else 'false' }
+    };
+    const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
 
     // Lightbox
-    window.openLightbox = function(src) {
+    window.openLightbox = function (src) {
         const lb = document.getElementById('image-lightbox');
         const img = document.getElementById('lightbox-img');
         if (lb && img) {
@@ -3256,7 +3308,7 @@
             document.body.style.overflow = 'hidden';
         }
     };
-    window.closeLightbox = function() {
+    window.closeLightbox = function () {
         const lb = document.getElementById('image-lightbox');
         if (lb) {
             lb.style.display = 'none';
@@ -3275,10 +3327,10 @@
     let _sharedVoiceState = 'idle';
     let _sharedReleaseBeforeReady = false;
 
-    window.startSharedVoiceRecording = function(e) {
+    window.startSharedVoiceRecording = function (e) {
         if (e) { e.preventDefault(); e.stopPropagation(); }
         if (_sharedVoiceState !== 'idle') return;
-        
+
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             alert("Your browser doesn't support audio recording");
             return;
@@ -3288,18 +3340,18 @@
         _sharedReleaseBeforeReady = false;
 
         // Register release listeners BEFORE the async permission call
-        const handleRelease = function(ev) {
+        const handleRelease = function (ev) {
             document.removeEventListener('mouseup', handleRelease);
             document.removeEventListener('touchend', handleRelease);
             document.removeEventListener('keydown', handleKey);
-            
+
             if (_sharedVoiceState === 'waiting_permission') {
                 _sharedReleaseBeforeReady = true;
                 return;
             }
-            
+
             if (_sharedVoiceState !== 'recording') return;
-            
+
             // Check if release was over the cancel button
             if (ev && (ev.type === 'mouseup' || ev.type === 'touchend')) {
                 const cancelBtn = document.querySelector('.shared-voice-cancel-btn');
@@ -3317,7 +3369,7 @@
                     }
                 }
             }
-            
+
             // Enforce minimum 1-second recording
             const elapsed = Date.now() - sharedRecordingStartTime;
             if (elapsed < 1000) {
@@ -3325,11 +3377,11 @@
                 window.cancelSharedVoiceRecording();
                 return;
             }
-            
+
             window.sendSharedVoiceRecording();
         };
-        
-        const handleKey = function(ev) {
+
+        const handleKey = function (ev) {
             if (ev.key === 'Escape') {
                 document.removeEventListener('mouseup', handleRelease);
                 document.removeEventListener('touchend', handleRelease);
@@ -3365,20 +3417,20 @@
             sharedMediaRecorder.start();
             _sharedVoiceState = 'recording';
             sharedRecordingStartTime = Date.now();
-            
+
             const recBtn = document.getElementById('record-audio-btn');
             const upBtn = document.getElementById('upload-audio-btn');
-            if(recBtn) recBtn.style.display = 'none';
-            if(upBtn) upBtn.style.display = 'none';
+            if (recBtn) recBtn.style.display = 'none';
+            if (upBtn) upBtn.style.display = 'none';
             document.getElementById('shared-voice-recording-ui').style.display = 'flex';
-            
+
             sharedRecordingTimer = setInterval(() => {
                 const elapsed = Math.floor((Date.now() - sharedRecordingStartTime) / 1000);
                 const mins = Math.floor(elapsed / 60);
                 const secs = (elapsed % 60).toString().padStart(2, '0');
                 document.getElementById('shared-voice-timer').textContent = `${mins}:${secs}`;
             }, 1000);
-            
+
         }).catch(err => {
             console.error(err);
             _sharedVoiceState = 'idle';
@@ -3390,7 +3442,7 @@
         });
     };
 
-    window.cancelSharedVoiceRecording = function() {
+    window.cancelSharedVoiceRecording = function () {
         if (sharedMediaRecorder && sharedMediaRecorder.state !== 'inactive') {
             sharedMediaRecorder.stop();
         }
@@ -3399,14 +3451,14 @@
         document.getElementById('shared-voice-recording-ui').style.display = 'none';
         const recBtn = document.getElementById('record-audio-btn');
         const upBtn = document.getElementById('upload-audio-btn');
-        if(recBtn) recBtn.style.display = 'inline-flex';
-        if(upBtn) upBtn.style.display = 'inline-flex';
+        if (recBtn) recBtn.style.display = 'inline-flex';
+        if (upBtn) upBtn.style.display = 'inline-flex';
     };
 
-    window.sendSharedVoiceRecording = function() {
+    window.sendSharedVoiceRecording = function () {
         if (!sharedMediaRecorder || sharedMediaRecorder.state === 'inactive') return;
         _sharedVoiceState = 'sending';
-        
+
         sharedMediaRecorder.onstop = () => {
             const audioBlob = new Blob(sharedAudioChunks, { type: 'audio/webm' });
             const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
@@ -3417,7 +3469,7 @@
     };
 
     // Upload handler
-    window.uploadNoteAttachment = function(file) {
+    window.uploadNoteAttachment = function (file) {
         if (!file) return;
         const progressWrap = document.getElementById('upload-progress');
         const progressBar = document.getElementById('upload-progress-bar');
@@ -3471,7 +3523,7 @@
     }
 
     // Append new attachment to the gallery dynamically
-    window.appendAttachmentToGallery = function(att) {
+    window.appendAttachmentToGallery = function (att) {
         const gallery = document.getElementById('attachments-gallery');
         const emptyMsg = document.getElementById('attachments-empty');
         const countEl = document.getElementById('attachments-count');
@@ -3525,21 +3577,21 @@
     }
 
     // Ping collaborators
-    window.pingCollaborators = async function(shareId) {
+    window.pingCollaborators = async function (shareId) {
         const btn = document.getElementById('ping-collaborators-btn');
         const icon = btn.querySelector('i');
         const originalClass = icon.className;
-        
+
         icon.className = 'fas fa-spinner fa-spin';
         btn.disabled = true;
-        
+
         try {
             const resp = await fetch(`/api/share/${shareId}/ping`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
             });
             const result = await resp.json();
-            
+
             if (resp.ok && result.success) {
                 const msg = result.pinged_count > 0
                     ? `Pinged ${result.pinged_count} collaborator(s)!`
@@ -3568,7 +3620,7 @@
     }
 
     // Delete attachment
-    window.deleteAttachment = async function(attachmentId) {
+    window.deleteAttachment = async function (attachmentId) {
         if (!confirm('Delete this attachment?')) return;
 
         try {
@@ -4680,115 +4732,132 @@
 
             try {
                 // Community notes use a different save endpoint
-                const isCommunityNote = {{ 'true' if is_community_note is defined and is_community_note else 'false' }};
-                const communityNoteId = '{{ community_note_id if community_note_id is defined else "" }}';
-                const saveUrl = isCommunityNote ? `/api/community/note/${communityNoteId}/save` : `/shared_note/save/${shareId}`;
-                
-                const resp = await fetch(saveUrl, {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': CSRF_TOKEN }
-                });
-                const data = await resp.json();
-                if (data.success) {
-                    saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
-                    saveToNotesBtn.classList.add('saved');
-                } else if (data.already_saved) {
-                    saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Already Saved';
-                    saveToNotesBtn.classList.add('saved');
-                } else {
-                    alert(data.error || 'Failed to save note');
-                    saveToNotesBtn.disabled = false;
-                    saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
-                }
-            } catch (e) {
-                alert('Network error. Please try again.');
+                const isCommunityNote = {{ 'true' if is_community_note is defined and is_community_note else 'false' }
+            };
+            const communityNoteId = '{{ community_note_id if community_note_id is defined else "" }}';
+            const saveUrl = isCommunityNote ? `/api/community/note/${communityNoteId}/save` : `/shared_note/save/${shareId}`;
+
+            const resp = await fetch(saveUrl, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF_TOKEN }
+            });
+            const data = await resp.json();
+            if (data.success) {
+                saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                saveToNotesBtn.classList.add('saved');
+            } else if (data.already_saved) {
+                saveToNotesBtn.innerHTML = '<i class="fas fa-check"></i> Already Saved';
+                saveToNotesBtn.classList.add('saved');
+            } else {
+                alert(data.error || 'Failed to save note');
                 saveToNotesBtn.disabled = false;
                 saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
             }
-        });
+        } catch (e) {
+            alert('Network error. Please try again.');
+            saveToNotesBtn.disabled = false;
+            saveToNotesBtn.innerHTML = '<i class="fas fa-bookmark"></i> Save to My Notes';
+        }
+    });
     }
     });
 
 </script>
 
 <!-- Export Shared Note Modal -->
-<div id="export-shared-modal" class="custom-modal-overlay" onclick="if(event.target === this) this.style.display='none'" style="display:none;">
-    <div style="background: white; border-radius: 14px; padding: 1.5rem; max-width: 380px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+<div id="export-shared-modal" class="custom-modal-overlay" onclick="if(event.target === this) this.style.display='none'"
+    style="display:none;">
+    <div
+        style="background: white; border-radius: 14px; padding: 1.5rem; max-width: 380px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: #3e2217; margin: 0; font-size: 1.05rem;"><i class="fas fa-download"></i> Export Note</h3>
-            <button onclick="document.getElementById('export-shared-modal').style.display='none'" style="border:none; background:none; color:#999; cursor:pointer; font-size:1.1rem;"><i class="fas fa-times"></i></button>
+            <button onclick="document.getElementById('export-shared-modal').style.display='none'"
+                style="border:none; background:none; color:#999; cursor:pointer; font-size:1.1rem;"><i
+                    class="fas fa-times"></i></button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
             <button onclick="exportSharedNote('txt')"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem;">
-                <i class="fas fa-file-alt" style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
-                <div><div style="font-weight: 600;">Plain Text</div><div style="font-size: 0.75rem; color: #888;">Download as .txt file</div></div>
+                <i class="fas fa-file-alt"
+                    style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">Plain Text</div>
+                    <div style="font-size: 0.75rem; color: #888;">Download as .txt file</div>
+                </div>
             </button>
             <button onclick="exportSharedNote('pdf')"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem;">
-                <i class="fas fa-file-pdf" style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
-                <div><div style="font-weight: 600;">PDF Document</div><div style="font-size: 0.75rem; color: #888;">Formatted with styling</div></div>
+                <i class="fas fa-file-pdf"
+                    style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">PDF Document</div>
+                    <div style="font-size: 0.75rem; color: #888;">Formatted with styling</div>
+                </div>
             </button>
             <button onclick="exportSharedNote('docx')"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem;">
-                <i class="fas fa-file-word" style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
-                <div><div style="font-weight: 600;">Word Document</div><div style="font-size: 0.75rem; color: #888;">Download as .doc file</div></div>
+                <i class="fas fa-file-word"
+                    style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
+                <div>
+                    <div style="font-weight: 600;">Word Document</div>
+                    <div style="font-size: 0.75rem; color: #888;">Download as .doc file</div>
+                </div>
             </button>
         </div>
     </div>
 </div>
 
 <script>
-(function() {
-    // Wire up both export buttons to open the modal
-    ['export-shared-note-btn', 'export-shared-note-btn2'].forEach(function(id) {
-        var btn = document.getElementById(id);
-        if (btn) btn.addEventListener('click', function() {
-            document.getElementById('export-shared-modal').style.display = 'flex';
+    (function () {
+        // Wire up both export buttons to open the modal
+        ['export-shared-note-btn', 'export-shared-note-btn2'].forEach(function (id) {
+            var btn = document.getElementById(id);
+            if (btn) btn.addEventListener('click', function () {
+                document.getElementById('export-shared-modal').style.display = 'flex';
+            });
         });
-    });
 
-    window.exportSharedNote = function(format) {
-        var noteEl = document.querySelector('.rendered-note, #note-view');
-        if (!noteEl) return;
-        var rawContent = noteEl.dataset.raw || noteEl.textContent || '';
-        var renderedContent = noteEl.innerHTML || '';
-        var safeName = rawContent.split('\n')[0].replace(/[#*_\[\]()]/g, '').trim().substring(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') || 'shared_note';
+        window.exportSharedNote = function (format) {
+            var noteEl = document.querySelector('.rendered-note, #note-view');
+            if (!noteEl) return;
+            var rawContent = noteEl.dataset.raw || noteEl.textContent || '';
+            var renderedContent = noteEl.innerHTML || '';
+            var safeName = rawContent.split('\n')[0].replace(/[#*_\[\]()]/g, '').trim().substring(0, 40).replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') || 'shared_note';
 
-        if (format === 'txt') {
-            var blob = new Blob([rawContent + '\n\n---\nExported from EchoWithin'], { type: 'text/plain;charset=utf-8' });
-            dlBlob(blob, safeName + '.txt');
-        } else if (format === 'pdf') {
-            if (typeof html2pdf === 'undefined') {
-                var s = document.createElement('script');
-                s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                s.onload = function() { genPdf(renderedContent, safeName); };
-                document.head.appendChild(s);
-            } else { genPdf(renderedContent, safeName); }
-        } else if (format === 'docx') {
-            var dh = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;}</style></head><body>' + renderedContent + '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p></body></html>';
-            var blob = new Blob(['\ufeff' + dh], { type: 'application/msword' });
-            dlBlob(blob, safeName + '.doc');
+            if (format === 'txt') {
+                var blob = new Blob([rawContent + '\n\n---\nExported from EchoWithin'], { type: 'text/plain;charset=utf-8' });
+                dlBlob(blob, safeName + '.txt');
+            } else if (format === 'pdf') {
+                if (typeof html2pdf === 'undefined') {
+                    var s = document.createElement('script');
+                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                    s.onload = function () { genPdf(renderedContent, safeName); };
+                    document.head.appendChild(s);
+                } else { genPdf(renderedContent, safeName); }
+            } else if (format === 'docx') {
+                var dh = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;}</style></head><body>' + renderedContent + '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p></body></html>';
+                var blob = new Blob(['\ufeff' + dh], { type: 'application/msword' });
+                dlBlob(blob, safeName + '.doc');
+            }
+            document.getElementById('export-shared-modal').style.display = 'none';
+        };
+
+        function genPdf(html, filename) {
+            var c = document.createElement('div');
+            c.style.cssText = 'font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#333;padding:20px;max-width:650px;position:fixed;left:-9999px;top:0;z-index:-1;background:white;';
+            c.innerHTML = html + '<div style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center;">Exported from EchoWithin</div>';
+            document.body.appendChild(c);
+            html2pdf().set({ margin: [15, 15, 15, 15], filename: filename + '.pdf', image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(c).save().then(function () { document.body.removeChild(c); });
         }
-        document.getElementById('export-shared-modal').style.display = 'none';
-    };
 
-    function genPdf(html, filename) {
-        var c = document.createElement('div');
-        c.style.cssText = 'font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#333;padding:20px;max-width:650px;position:fixed;left:-9999px;top:0;z-index:-1;background:white;';
-        c.innerHTML = html + '<div style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center;">Exported from EchoWithin</div>';
-        document.body.appendChild(c);
-        html2pdf().set({ margin:[15,15,15,15], filename: filename+'.pdf', image:{type:'jpeg',quality:0.95}, html2canvas:{scale:2,useCORS:true}, jsPDF:{unit:'mm',format:'a4',orientation:'portrait'} }).from(c).save().then(function() { document.body.removeChild(c); });
-    }
-
-    function dlBlob(blob, name) {
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url; a.download = name;
-        document.body.appendChild(a); a.click();
-        setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-    }
-})();
+        function dlBlob(blob, name) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = name;
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        }
+    })();
 </script>
 </div>
 {% endblock %}

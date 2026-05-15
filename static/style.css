@@ -38,6 +38,94 @@ main {
 }
 
 /* Auth Page Specific Styles */
+
+/* Discover EchoWithin Showcase */
+.auth-features-showcase {
+    flex: 1 1 350px;
+    width: 100%;
+    max-width: 450px;
+    background: linear-gradient(145deg, #fdfaf8, #f5ede7);
+    border-radius: 14px;
+    border: 1px solid rgba(62, 34, 23, 0.1);
+    box-shadow: 0 4px 15px rgba(62, 34, 23, 0.06);
+    padding: 1.75rem;
+    transition: box-shadow 0.3s ease;
+}
+
+.auth-features-showcase:hover {
+    box-shadow: 0 6px 22px rgba(62, 34, 23, 0.1);
+}
+
+.auth-features-title {
+    text-align: center;
+    color: var(--primary-color);
+    font-size: 1.15rem;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.auth-features-title i {
+    font-size: 1rem;
+    color: #a1887f;
+}
+
+.auth-features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.auth-feature-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    padding: 0.75rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(62, 34, 23, 0.05);
+    transition: background 0.25s ease, transform 0.25s ease;
+}
+
+.auth-feature-item:hover {
+    background: rgba(255, 255, 255, 0.95);
+    transform: translateX(3px);
+}
+
+.auth-feature-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--primary-color), #5a3828);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+    box-shadow: 0 2px 8px rgba(62, 34, 23, 0.18);
+}
+
+.auth-feature-label {
+    color: var(--primary-dark-color);
+    display: block;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+
+.auth-feature-desc {
+    color: #777;
+    font-size: 0.83rem;
+    line-height: 1.45;
+}
+
 .auth-container {
     width: 100%;
     max-width: 500px;
@@ -2416,7 +2504,7 @@ body {
 /* Mobile spacing fixes */
 @media (max-width: 768px) {
     .container {
-        padding: 0.5rem 0;
+        padding: 0.5rem 1rem;
     }
 
     .blog-container {

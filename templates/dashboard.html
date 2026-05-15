@@ -55,33 +55,191 @@
             advantage of the personal space area to create a private note and surprise someone or for collaboration.</p>
     </div>
 
-    <div class="action-cards"
-        style="display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 2rem;">
-        <div class="card"
-            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
+    <div class="dash-action-cards">
+        <a href="{{ url_for('blog') }}" class="dash-card" id="dash-card-blog">
+            <div class="dash-card-icon">
+                <i class="fas fa-comments"></i>
+            </div>
             <h3>Explore Discussions</h3>
             <p>Dive into deep community debates and authentic long-form content.</p>
-            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1.5rem; width: 100%;">View
-                Community Blog</a>
-        </div>
+            <span class="dash-card-link">View Community Blog <i class="fas fa-arrow-right"></i></span>
+        </a>
 
-        <div class="card"
-            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fff; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease; border-top: 4px solid #3e2217;">
+        <a href="{{ url_for('personal_space') }}" class="dash-card dash-card-featured" id="dash-card-notes">
+            <div class="dash-card-icon">
+                <i class="fas fa-lock"></i>
+            </div>
             <h3>Personal Space</h3>
             <p>Your private, end-to-end encrypted vault for notes and collaborative study.</p>
-            <a href="{{ url_for('personal_space') }}" class="btn comment-btn"
-                style="margin-top: 1.5rem; width: 100%; background: #3e2217; color: white;">Open My Notes</a>
-        </div>
+            <span class="dash-card-link">Open My Notes <i class="fas fa-arrow-right"></i></span>
+        </a>
 
         {% if not current_user.is_authenticated %}
-        <div class="card"
-            style="flex: 1; min-width: 280px; text-align: center; padding: 2rem; background: #fdfaf8; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease;">
+        <a href="{{ url_for('login') }}" class="dash-card dash-card-cta" id="dash-card-auth">
+            <div class="dash-card-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
             <h3>Get Started</h3>
             <p>Join EchoWithin to start your secure journaling journey today.</p>
-            <a href="{{ url_for('login') }}" class="btn edit-btn" style="margin-top: 1.5rem; width: 100%;">Login /
-                Register</a>
-        </div>
+            <span class="dash-card-link">Login / Register <i class="fas fa-arrow-right"></i></span>
+        </a>
         {% endif %}
     </div>
 </div>
+
+<style>
+    .dash-action-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.25rem;
+        margin-top: 2rem;
+    }
+
+    .dash-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        text-decoration: none;
+        color: inherit;
+        padding: 2rem 1.5rem 1.75rem;
+        background: #fff;
+        border-radius: 14px;
+        border: 1px solid rgba(62, 34, 23, 0.08);
+        box-shadow: 0 2px 10px rgba(62, 34, 23, 0.06);
+        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        overflow: hidden;
+    }
+
+    .dash-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary-color), #7a5d52);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+
+    .dash-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 28px rgba(62, 34, 23, 0.12);
+        border-color: rgba(62, 34, 23, 0.15);
+    }
+
+    .dash-card:hover::before {
+        opacity: 1;
+    }
+
+    .dash-card-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        margin-bottom: 1.1rem;
+        background: rgba(62, 34, 23, 0.07);
+        color: var(--primary-color);
+        transition: transform 0.3s ease, background 0.3s ease;
+    }
+
+    .dash-card:hover .dash-card-icon {
+        transform: scale(1.08);
+        background: rgba(62, 34, 23, 0.12);
+    }
+
+    .dash-card h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--primary-dark-color);
+        margin: 0 0 0.5rem 0;
+    }
+
+    .dash-card p {
+        font-size: 0.9rem;
+        color: #666;
+        line-height: 1.5;
+        margin: 0 0 1.25rem 0;
+        flex-grow: 1;
+    }
+
+    .dash-card-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--primary-color);
+        padding: 0.5rem 1.2rem;
+        border-radius: 8px;
+        background: rgba(62, 34, 23, 0.06);
+        transition: background 0.3s ease, gap 0.3s ease;
+    }
+
+    .dash-card:hover .dash-card-link {
+        background: rgba(62, 34, 23, 0.1);
+        gap: 0.65rem;
+    }
+
+    /* Featured card - Personal Space */
+    .dash-card-featured {
+        border-top: 4px solid var(--primary-color);
+    }
+
+    .dash-card-featured::before {
+        display: none;
+    }
+
+    .dash-card-featured .dash-card-icon {
+        background: linear-gradient(135deg, var(--primary-color), #5a3328);
+        color: white;
+        box-shadow: 0 4px 12px rgba(62, 34, 23, 0.2);
+    }
+
+    .dash-card-featured .dash-card-link {
+        background: linear-gradient(135deg, var(--primary-color), #5a3328);
+        color: white;
+    }
+
+    .dash-card-featured:hover .dash-card-link {
+        background: linear-gradient(135deg, #2a1810, var(--primary-color));
+    }
+
+    /* CTA card - Login/Register */
+    .dash-card-cta {
+        background: linear-gradient(135deg, #fdfaf8, #f8f0eb);
+        border-color: rgba(62, 34, 23, 0.1);
+    }
+
+    .dash-card-cta .dash-card-icon {
+        background: linear-gradient(135deg, #4CAF50, #2e7d32);
+        color: white;
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.25);
+    }
+
+    .dash-card-cta .dash-card-link {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .dash-card-cta:hover .dash-card-link {
+        background: #45a049;
+    }
+
+    @media (max-width: 768px) {
+        .dash-action-cards {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .dash-card {
+            padding: 1.5rem 1.25rem;
+        }
+    }
+</style>
 {% endblock %}

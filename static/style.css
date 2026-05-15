@@ -2504,7 +2504,7 @@ body {
 /* Mobile spacing fixes */
 @media (max-width: 768px) {
     .container {
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 0;
     }
 
     .blog-container {

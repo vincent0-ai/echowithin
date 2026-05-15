@@ -545,65 +545,68 @@
         <!-- Marketing CTA for Unauthenticated Users -->
         {% if not current_user.is_authenticated %}
         <div class="marketing-cta-section" id="marketing-cta">
-            <!-- Primary CTA — contextual to note type -->
-            <div class="cta-card cta-primary">
-                <div class="cta-glow"></div>
-                <div class="cta-content">
-                    {% if surprise_theme == 'birthday' %}
-                    <div class="cta-icon-wrap cta-birthday"><i class="fas fa-birthday-cake"></i></div>
-                    <h3 class="cta-heading">Want to surprise someone on their birthday?</h3>
-                    <p class="cta-text">Create a magical birthday note just like this one — with animations, photos,
-                        music, and a beautiful reveal effect. Make their day unforgettable.</p>
-                    {% elif surprise_theme == 'anniversary' %}
-                    <div class="cta-icon-wrap cta-anniversary"><i class="fas fa-ring"></i></div>
-                    <h3 class="cta-heading">Celebrate your love story</h3>
-                    <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music, and
-                        a stunning envelope reveal. Your partner will love it.</p>
-                    {% elif surprise_theme == 'celebration' %}
-                    <div class="cta-icon-wrap cta-celebration"></div>
-                    <h3 class="cta-heading">Got something to celebrate?</h3>
-                    <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti animations,
-                        photos, and music. Perfect for graduations, promotions, or any milestone.</p>
-                    {% elif surprise_theme != 'none' %}
-                    <div class="cta-icon-wrap cta-valentine"><i class="fas fa-heart"></i></div>
-                    <h3 class="cta-heading">Express your love beautifully</h3>
-                    <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a
-                        heartfelt message wrapped in an interactive envelope reveal.</p>
-                    {% else %}
-                    <div class="cta-icon-wrap cta-standard"><i class="fas fa-pen-fancy"></i></div>
-                    <h3 class="cta-heading">Create your own notes like this</h3>
-                    <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting, real-time
-                        collaboration, version control, and much more.</p>
-                    {% endif %}
-                    <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
-                        Join Free — It takes 30 seconds
-                    </a>
+            <div class="cta-grid">
+                <!-- Primary CTA — contextual to note type -->
+                <div class="cta-card cta-primary">
+                    <div class="cta-glow"></div>
+                    <div class="cta-content">
+                        {% if surprise_theme == 'birthday' %}
+                        <div class="cta-icon-wrap cta-birthday"><i class="fas fa-birthday-cake"></i></div>
+                        <h3 class="cta-heading">Want to surprise someone on their birthday?</h3>
+                        <p class="cta-text">Create a magical birthday note just like this one — with animations, photos,
+                            music, and a beautiful reveal effect. Make their day unforgettable.</p>
+                        {% elif surprise_theme == 'anniversary' %}
+                        <div class="cta-icon-wrap cta-anniversary"><i class="fas fa-ring"></i></div>
+                        <h3 class="cta-heading">Celebrate your love story</h3>
+                        <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music, and
+                            a stunning envelope reveal. Your partner will love it.</p>
+                        {% elif surprise_theme == 'celebration' %}
+                        <div class="cta-icon-wrap cta-celebration"><i class="fas fa-gift"></i></div>
+                        <h3 class="cta-heading">Got something to celebrate?</h3>
+                        <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti animations,
+                            photos, and music. Perfect for graduations, promotions, or any milestone.</p>
+                        {% elif surprise_theme != 'none' %}
+                        <div class="cta-icon-wrap cta-valentine"><i class="fas fa-heart"></i></div>
+                        <h3 class="cta-heading">Express your love beautifully</h3>
+                        <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a
+                            heartfelt message wrapped in an interactive envelope reveal.</p>
+                        {% else %}
+                        <div class="cta-icon-wrap cta-standard"><i class="fas fa-pen-fancy"></i></div>
+                        <h3 class="cta-heading">Create your own notes like this</h3>
+                        <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting, real-time
+                            collaboration, and secure encryption.</p>
+                        {% endif %}
+                        <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
+                            Get Started Free <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Community Notes Promo -->
+                <div class="cta-card cta-community">
+                    <div class="cta-content">
+                        <div class="cta-community-header">
+                            <div class="cta-icon-wrap cta-comm-icon"><i class="fas fa-users"></i></div>
+                            <div>
+                                <h3 class="cta-heading">Join Community Spaces</h3>
+                                <span class="cta-badge">Trending Feature</span>
+                            </div>
+                        </div>
+                        <p class="cta-text">Share notes, react, and collaborate with groups. Discover public communities and connect with people who share your interests.
+                        </p>
+                        <div class="cta-community-features">
+                            <div class="cta-feature-item"><i class="fas fa-pencil-alt"></i> Post & Share</div>
+                            <div class="cta-feature-item"><i class="fas fa-heart"></i> React & Engage</div>
+                        </div>
+                        <a href="{{ url_for('login') }}" class="cta-button cta-button-secondary">
+                            Explore Communities <i class="fas fa-compass"></i>
+                        </a>
+                    </div>
                 </div>
             </div>
-
-            <!-- Community Notes Promo -->
-            <div class="cta-card cta-community">
-                <div class="cta-content">
-                    <div class="cta-community-header">
-                        <div class="cta-icon-wrap cta-comm-icon"></div>
-                        <div>
-                            <h3 class="cta-heading" style="margin-bottom: 0.15rem;">Join Community Spaces</h3>
-                            <span class="cta-badge">Popular Feature</span>
-                        </div>
-                    </div>
-                    <p class="cta-text">Share notes, react, and collaborate with groups of friends, study buddies, or
-                        teams. Create or discover public communities and connect with people who share your interests.
-                    </p>
-                    <div class="cta-community-features">
-                        <div class="cta-feature-item"><i class="fas fa-pencil-alt"></i> Post & Share</div>
-                        <div class="cta-feature-item"><i class="fas fa-heart"></i> React & Engage</div>
-                        <div class="cta-feature-item"><i class="fas fa-globe"></i> Discover Communities</div>
-                        <div class="cta-feature-item"><i class="fas fa-lock"></i> Private Groups</div>
-                    </div>
-                    <a href="{{ url_for('login') }}" class="cta-button cta-button-secondary">
-                        <i class="fas fa-arrow-right"></i> Explore Communities
-                    </a>
-                </div>
+            
+            <div class="cta-trust">
+                <i class="fas fa-shield-alt"></i> End-to-end encrypted & Private by default
             </div>
         </div>
         {% endif %}
@@ -2336,237 +2339,192 @@
     }
 
     .marketing-cta-section {
-        margin-top: 2.5rem;
+        margin-top: 3rem;
         padding: 0 1rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1.5rem;
         animation: ctaSlideUp 0.7s ease-out both;
         animation-delay: 1.5s;
     }
 
+    .cta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
     .cta-card {
         position: relative;
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        background: #fff;
         border: 1px solid rgba(62, 34, 23, 0.08);
-        border-radius: 16px;
+        border-radius: 18px;
         overflow: hidden;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 4px 15px rgba(62, 34, 23, 0.05);
     }
 
     .cta-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 12px 40px rgba(62, 34, 23, 0.12);
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(62, 34, 23, 0.12);
     }
 
     .cta-primary {
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(253, 250, 248, 0.95) 100%);
-        border: 1px solid rgba(62, 34, 23, 0.1);
+        background: linear-gradient(135deg, #fff 0%, #fdfaf8 100%);
+        border-top: 5px solid var(--primary-color);
     }
 
     .cta-glow {
         position: absolute;
-        top: -30px;
-        right: -30px;
-        width: 120px;
-        height: 120px;
+        top: -40px;
+        right: -40px;
+        width: 150px;
+        height: 150px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(232, 168, 124, 0.3) 0%, transparent 70%);
-        animation: ctaGlow 4s ease-in-out infinite;
+        background: radial-gradient(circle, rgba(232, 168, 124, 0.2) 0%, transparent 70%);
+        animation: ctaGlow 5s ease-in-out infinite;
         pointer-events: none;
     }
 
     .cta-content {
         position: relative;
         z-index: 1;
-        padding: 1.75rem 1.75rem 1.5rem;
+        padding: 2rem;
     }
 
     .cta-icon-wrap {
-        width: 52px;
-        height: 52px;
-        border-radius: 14px;
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.4rem;
-        margin-bottom: 1rem;
+        font-size: 1.5rem;
+        margin-bottom: 1.25rem;
         color: white;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
     }
 
-    .cta-birthday {
-        background: linear-gradient(135deg, #f97316, #ef4444);
-    }
-
-    .cta-anniversary {
-        background: linear-gradient(135deg, #ec4899, #a855f7);
-    }
-
-    .cta-celebration {
-        background: linear-gradient(135deg, #f59e0b, #10b981);
-    }
-
-    .cta-valentine {
-        background: linear-gradient(135deg, #ef4444, #ec4899);
-    }
-
-    .cta-standard {
-        background: linear-gradient(135deg, #3e2217, #7a5d52);
-    }
-
-    .cta-comm-icon {
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
-    }
+    .cta-birthday { background: linear-gradient(135deg, #f97316, #ef4444); }
+    .cta-anniversary { background: linear-gradient(135deg, #ec4899, #a855f7); }
+    .cta-celebration { background: linear-gradient(135deg, #f59e0b, #10b981); }
+    .cta-valentine { background: linear-gradient(135deg, #ef4444, #ec4899); }
+    .cta-standard { background: linear-gradient(135deg, #3e2217, #7a5d52); }
+    .cta-comm-icon { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
 
     .cta-heading {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #3e2217;
-        margin: 0 0 0.5rem 0;
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: var(--primary-dark-color);
+        margin: 0 0 0.75rem 0;
         line-height: 1.3;
     }
 
     .cta-text {
-        font-size: 0.92rem;
-        color: #666;
-        line-height: 1.55;
-        margin: 0 0 1.25rem 0;
+        font-size: 0.95rem;
+        color: #555;
+        line-height: 1.6;
+        margin: 0 0 1.5rem 0;
     }
 
     .cta-button {
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
-        padding: 0.7rem 1.5rem;
-        border-radius: 10px;
+        gap: 0.6rem;
+        padding: 0.8rem 1.75rem;
+        border-radius: 12px;
         font-weight: 700;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         text-decoration: none;
         transition: all 0.3s ease;
-        cursor: pointer;
         border: none;
     }
 
     .cta-button-primary {
-        background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+        background: var(--primary-color);
         color: white;
-        box-shadow: 0 4px 15px rgba(62, 34, 23, 0.3);
-        animation: ctaPulse 2.5s ease-in-out infinite;
-        animation-delay: 3s;
+        box-shadow: 0 5px 15px rgba(62, 34, 23, 0.25);
     }
 
     .cta-button-primary:hover {
-        background: linear-gradient(135deg, #5a3328 0%, #7a4d3e 100%);
-        box-shadow: 0 6px 20px rgba(62, 34, 23, 0.4);
-        transform: translateY(-1px);
-        animation: none;
+        background: var(--primary-dark-color);
+        transform: scale(1.02);
     }
 
     .cta-button-secondary {
-        background: rgba(62, 34, 23, 0.06);
-        color: #3e2217;
-        border: 1px solid rgba(62, 34, 23, 0.15);
+        background: #f0f0f0;
+        color: #333;
+        border: 1px solid #ddd;
     }
 
     .cta-button-secondary:hover {
-        background: rgba(62, 34, 23, 0.12);
-        border-color: rgba(62, 34, 23, 0.25);
+        background: #e5e5e5;
     }
 
-    /* Community CTA card */
     .cta-community {
-        border-left: 4px solid #6366f1;
+        background: #fff;
+        border-top: 5px solid #6366f1;
     }
 
     .cta-community-header {
         display: flex;
         align-items: center;
-        gap: 0.85rem;
-        margin-bottom: 0.85rem;
+        gap: 1rem;
+        margin-bottom: 1rem;
     }
 
     .cta-community-header .cta-icon-wrap {
         margin-bottom: 0;
-        width: 44px;
-        height: 44px;
-        font-size: 1.15rem;
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
     }
 
     .cta-badge {
         display: inline-block;
-        font-size: 0.65rem;
+        font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        padding: 0.15rem 0.5rem;
+        background: rgba(99, 102, 241, 0.1);
+        color: #6366f1;
+        padding: 0.2rem 0.6rem;
         border-radius: 6px;
     }
 
     .cta-community-features {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem;
-        margin-bottom: 1.25rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
     }
 
     .cta-feature-item {
         display: flex;
         align-items: center;
-        gap: 0.45rem;
-        font-size: 0.82rem;
-        font-weight: 500;
-        color: #555;
-        padding: 0.4rem 0.6rem;
-        background: rgba(99, 102, 241, 0.05);
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #666;
+        padding: 0.4rem 0.75rem;
+        background: #f8f9fa;
         border-radius: 8px;
-        border: 1px solid rgba(99, 102, 241, 0.08);
     }
 
-    .cta-feature-item i {
-        color: #6366f1;
-        font-size: 0.78rem;
-        width: 16px;
-        text-align: center;
-    }
-
-    /* Trust signal */
     .cta-trust {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 0.5rem;
-        font-size: 0.78rem;
-        color: #999;
-        padding: 0.5rem 0;
-    }
-
-    .cta-trust i {
-        color: #10b981;
+        gap: 0.6rem;
         font-size: 0.85rem;
+        color: #888;
+        padding: 1rem 0;
+        font-weight: 500;
     }
 
-    @media (max-width: 600px) {
-        .cta-content {
-            padding: 1.25rem 1.15rem 1.15rem;
-        }
+    .cta-trust i { color: #10b981; }
 
-        .cta-heading {
-            font-size: 1.05rem;
-        }
-
-        .cta-community-features {
-            grid-template-columns: 1fr;
-        }
-
-        .cta-button {
-            width: 100%;
-            justify-content: center;
-        }
+    @media (max-width: 768px) {
+        .cta-grid { grid-template-columns: 1fr; }
+        .cta-content { padding: 1.5rem; }
+        .cta-button { width: 100%; justify-content: center; }
     }
 </style>
 

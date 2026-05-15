@@ -2632,3 +2632,16 @@ body {
 .relative-time {
     color: #888;
 }
+
+/* Admin Pages Layout */
+.admin-page-container {
+    padding: 2rem 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .admin-page-container {
+        padding: 1.5rem 1rem;
+    }
+}

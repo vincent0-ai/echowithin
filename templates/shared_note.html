@@ -558,12 +558,14 @@
                         {% elif surprise_theme == 'anniversary' %}
                         <div class="cta-icon-wrap cta-anniversary"><i class="fas fa-ring"></i></div>
                         <h3 class="cta-heading">Celebrate your love story</h3>
-                        <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music, and
+                        <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music,
+                            and
                             a stunning envelope reveal. Your partner will love it.</p>
                         {% elif surprise_theme == 'celebration' %}
                         <div class="cta-icon-wrap cta-celebration"><i class="fas fa-gift"></i></div>
                         <h3 class="cta-heading">Got something to celebrate?</h3>
-                        <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti animations,
+                        <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti
+                            animations,
                             photos, and music. Perfect for graduations, promotions, or any milestone.</p>
                         {% elif surprise_theme != 'none' %}
                         <div class="cta-icon-wrap cta-valentine"><i class="fas fa-heart"></i></div>
@@ -573,7 +575,8 @@
                         {% else %}
                         <div class="cta-icon-wrap cta-standard"><i class="fas fa-pen-fancy"></i></div>
                         <h3 class="cta-heading">Create your own notes like this</h3>
-                        <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting, real-time
+                        <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting,
+                            real-time
                             collaboration, and secure encryption.</p>
                         {% endif %}
                         <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
@@ -581,32 +584,6 @@
                         </a>
                     </div>
                 </div>
-
-                <!-- Community Notes Promo -->
-                <div class="cta-card cta-community">
-                    <div class="cta-content">
-                        <div class="cta-community-header">
-                            <div class="cta-icon-wrap cta-comm-icon"><i class="fas fa-users"></i></div>
-                            <div>
-                                <h3 class="cta-heading">Join Community Spaces</h3>
-                                <span class="cta-badge">Trending Feature</span>
-                            </div>
-                        </div>
-                        <p class="cta-text">Share notes, react, and collaborate with groups. Discover public communities and connect with people who share your interests.
-                        </p>
-                        <div class="cta-community-features">
-                            <div class="cta-feature-item"><i class="fas fa-pencil-alt"></i> Post & Share</div>
-                            <div class="cta-feature-item"><i class="fas fa-heart"></i> React & Engage</div>
-                        </div>
-                        <a href="{{ url_for('login') }}" class="cta-button cta-button-secondary">
-                            Explore Communities <i class="fas fa-compass"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="cta-trust">
-                <i class="fas fa-shield-alt"></i> End-to-end encrypted & Private by default
             </div>
         </div>
         {% endif %}
@@ -2403,12 +2380,29 @@
         box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
     }
 
-    .cta-birthday { background: linear-gradient(135deg, #f97316, #ef4444); }
-    .cta-anniversary { background: linear-gradient(135deg, #ec4899, #a855f7); }
-    .cta-celebration { background: linear-gradient(135deg, #f59e0b, #10b981); }
-    .cta-valentine { background: linear-gradient(135deg, #ef4444, #ec4899); }
-    .cta-standard { background: linear-gradient(135deg, #3e2217, #7a5d52); }
-    .cta-comm-icon { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+    .cta-birthday {
+        background: linear-gradient(135deg, #f97316, #ef4444);
+    }
+
+    .cta-anniversary {
+        background: linear-gradient(135deg, #ec4899, #a855f7);
+    }
+
+    .cta-celebration {
+        background: linear-gradient(135deg, #f59e0b, #10b981);
+    }
+
+    .cta-valentine {
+        background: linear-gradient(135deg, #ef4444, #ec4899);
+    }
+
+    .cta-standard {
+        background: linear-gradient(135deg, #3e2217, #7a5d52);
+    }
+
+    .cta-comm-icon {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    }
 
     .cta-heading {
         font-size: 1.3rem;
@@ -2519,12 +2513,23 @@
         font-weight: 500;
     }
 
-    .cta-trust i { color: #10b981; }
+    .cta-trust i {
+        color: #10b981;
+    }
 
     @media (max-width: 768px) {
-        .cta-grid { grid-template-columns: 1fr; }
-        .cta-content { padding: 1.5rem; }
-        .cta-button { width: 100%; justify-content: center; }
+        .cta-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .cta-content {
+            padding: 1.5rem;
+        }
+
+        .cta-button {
+            width: 100%;
+            justify-content: center;
+        }
     }
 </style>
 

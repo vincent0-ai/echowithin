@@ -550,36 +550,31 @@
                 <div class="cta-card cta-primary">
                     <div class="cta-content">
                         {% if surprise_theme == 'birthday' %}
-                        <div class="cta-icon-wrap cta-birthday"><i class="fas fa-birthday-cake"></i></div>
                         <h3 class="cta-heading">Want to surprise someone on their birthday?</h3>
                         <p class="cta-text">Create a magical birthday note just like this one — with animations, photos,
                             music, and a beautiful reveal effect. Make their day unforgettable.</p>
                         {% elif surprise_theme == 'anniversary' %}
-                        <div class="cta-icon-wrap cta-anniversary"><i class="fas fa-ring"></i></div>
                         <h3 class="cta-heading">Celebrate your love story</h3>
                         <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music,
                             and
                             a stunning envelope reveal. Your partner will love it.</p>
                         {% elif surprise_theme == 'celebration' %}
-                        <div class="cta-icon-wrap cta-celebration"><i class="fas fa-gift"></i></div>
                         <h3 class="cta-heading">Got something to celebrate?</h3>
                         <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti
                             animations,
                             photos, and music. Perfect for graduations, promotions, or any milestone.</p>
                         {% elif surprise_theme != 'none' %}
-                        <div class="cta-icon-wrap cta-valentine"><i class="fas fa-heart"></i></div>
                         <h3 class="cta-heading">Express your love beautifully</h3>
                         <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a
                             heartfelt message wrapped in an interactive envelope reveal.</p>
                         {% else %}
-                        <div class="cta-icon-wrap cta-standard"><i class="fas fa-pen-fancy"></i></div>
                         <h3 class="cta-heading">Create your own notes like this</h3>
                         <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting,
                             real-time
                             collaboration, and secure encryption.</p>
                         {% endif %}
                         <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
-                            Get Started Free <i class="fas fa-arrow-right"></i>
+                            Get Started Free
                         </a>
                     </div>
                 </div>
@@ -2348,59 +2343,10 @@
         border-top: 5px solid var(--primary-color);
     }
 
-    .cta-glow {
-        position: absolute;
-        top: -40px;
-        right: -40px;
-        width: 150px;
-        height: 150px;
-        border-radius: 50%;
-        background: radial-gradient(circle, rgba(232, 168, 124, 0.2) 0%, transparent 70%);
-        animation: ctaGlow 5s ease-in-out infinite;
-        pointer-events: none;
-    }
-
     .cta-content {
         position: relative;
         z-index: 1;
         padding: 2rem;
-    }
-
-    .cta-icon-wrap {
-        width: 60px;
-        height: 60px;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        margin-bottom: 1.25rem;
-        color: white;
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
-    }
-
-    .cta-birthday {
-        background: linear-gradient(135deg, #f97316, #ef4444);
-    }
-
-    .cta-anniversary {
-        background: linear-gradient(135deg, #ec4899, #a855f7);
-    }
-
-    .cta-celebration {
-        background: linear-gradient(135deg, #f59e0b, #10b981);
-    }
-
-    .cta-valentine {
-        background: linear-gradient(135deg, #ef4444, #ec4899);
-    }
-
-    .cta-standard {
-        background: linear-gradient(135deg, #3e2217, #7a5d52);
-    }
-
-    .cta-comm-icon {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
     }
 
     .cta-heading {

@@ -14,7 +14,7 @@
     <!-- Welcome header -->
     <div class="home-header">
         <h1>Welcome, {{ username }}!</h1>
-        <p>Your notes are waiting.</p>
+        <p>Our Community and your notes are waiting.</p>
     </div>
 
     <!-- Share promo (dismissable) -->
@@ -23,9 +23,11 @@
         <div style="display:flex; align-items:flex-start; gap:0.65rem;">
             <div style="font-size:1.5rem; line-height:1;">🎁</div>
             <div style="color:#555; font-size:0.88rem; line-height:1.4;">
-                <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a surprise note today</strong>
+                <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a
+                    surprise note today</strong>
                 <span id="home-share-promo-copy">Pick one private note and turn it into a magic link.</span>
-                <a id="home-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
+                <a id="home-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes"
+                    style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
             </div>
         </div>
         <button type="button" id="home-share-promo-dismiss" aria-label="Dismiss"
@@ -222,7 +224,7 @@
     }
 
     .home-header p {
-        color: rgba(255,255,255,0.8);
+        color: rgba(255, 255, 255, 0.8);
         font-size: 0.9rem;
         margin: 0;
     }
@@ -240,8 +242,8 @@
         padding: 1rem 1.1rem;
         background: white;
         border-radius: 10px;
-        border: 1px solid rgba(62,34,23,0.08);
-        box-shadow: 0 2px 6px rgba(62,34,23,0.04);
+        border: 1px solid rgba(62, 34, 23, 0.08);
+        box-shadow: 0 2px 6px rgba(62, 34, 23, 0.04);
         text-decoration: none;
         color: inherit;
         transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
@@ -249,8 +251,8 @@
 
     .quick-action-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 14px rgba(62,34,23,0.1);
-        border-color: rgba(62,34,23,0.15);
+        box-shadow: 0 4px 14px rgba(62, 34, 23, 0.1);
+        border-color: rgba(62, 34, 23, 0.15);
     }
 
     .quick-action-card strong {
@@ -306,7 +308,7 @@
         background: white;
         border-radius: 10px;
         padding: 1.25rem;
-        border: 1px solid rgba(62,34,23,0.08);
+        border: 1px solid rgba(62, 34, 23, 0.08);
     }
 
     .notes-count-display {
@@ -347,7 +349,7 @@
         padding: 0.75rem 0.5rem;
         background: white;
         border-radius: 8px;
-        border: 1px solid rgba(62,34,23,0.08);
+        border: 1px solid rgba(62, 34, 23, 0.08);
     }
 
     .stat-pill strong {
@@ -367,7 +369,7 @@
         background: white;
         border-radius: 10px;
         padding: 1rem 1.25rem;
-        border: 1px solid rgba(62,34,23,0.08);
+        border: 1px solid rgba(62, 34, 23, 0.08);
     }
 
     .home-trending h3 {
@@ -408,9 +410,11 @@
             grid-template-columns: 1fr 1fr;
             gap: 0.6rem;
         }
+
         .quick-action-card {
             padding: 0.85rem 0.9rem;
         }
+
         .quick-action-card strong {
             font-size: 0.88rem;
         }

@@ -48,7 +48,8 @@
     <div class="landing-hero">
         <h1>EchoWithin</h1>
         <p class="landing-tagline">Your private, encrypted space for notes, surprises & collaboration</p>
-        <p class="landing-subtitle">A podcast group where the unspoken but real are uncovered — now with the tools to write, share, and connect.</p>
+        <p class="landing-subtitle">A podcast group where the unspoken but real are uncovered — now with the tools to
+            write, share, and connect.</p>
         <div class="landing-ctas">
             <a href="{{ url_for('login') }}" class="landing-btn landing-btn-primary">Start Writing</a>
             <a href="{{ url_for('blog') }}" class="landing-btn landing-btn-secondary">Explore Blog</a>
@@ -59,15 +60,18 @@
     <div class="landing-features">
         <div class="feature-card">
             <h3>Private Notes</h3>
-            <p>End-to-end encrypted. Your notes stay yours — zero-knowledge privacy with Markdown & LaTeX support. Perfect for students and developers.</p>
+            <p>End-to-end encrypted. Your notes stay yours — zero-knowledge privacy with Markdown & LaTeX support.
+                Perfect for students and developers.</p>
         </div>
         <div class="feature-card">
             <h3>Surprise Themes</h3>
-            <p>Switch on Valentine, Birthday, Anniversary, or Celebration themes to send beautifully styled, heartfelt messages with photos and music.</p>
+            <p>Switch on Valentine, Birthday, Anniversary, or Celebration themes to send beautifully styled, heartfelt
+                messages with photos and music.</p>
         </div>
         <div class="feature-card">
             <h3>Communities & Blog</h3>
-            <p>Create or join community hubs for real-time collaboration. Publish long-form content on the blog and engage with authentic discussions.</p>
+            <p>Create or join community hubs for real-time collaboration. Publish long-form content on the blog and
+                engage with authentic discussions.</p>
         </div>
     </div>
 
@@ -89,8 +93,9 @@
 
     <!-- Bottom CTA -->
     <div class="landing-bottom-cta">
-        <p>At EchoWithin, we value original human thought. Avoid AI-generated content — we want your real ideas, experiences, and perspectives to echo within our community.</p>
-        <a href="{{ url_for('login') }}" class="landing-btn landing-btn-primary">Get Started — It's Free</a>
+        <p>At EchoWithin, we value original human thought. Avoid AI-generated content — we want your real ideas,
+            experiences, and perspectives to echo within our community.</p>
+        <a href="{{ url_for('login') }}" class="landing-btn landing-btn-primary">Get Started</a>
     </div>
 
 </div>
@@ -101,12 +106,12 @@
         padding: 2.5rem 1.25rem 2rem;
         background: linear-gradient(135deg, #3e2217 0%, #5a3328 60%, #7a5d52 100%);
         border-radius: 14px;
-        color: white;
+        color: white !important;
         margin-bottom: 2rem;
     }
 
     .landing-hero h1 {
-        color: white;
+        color: white !important;
         font-size: 2rem;
         font-weight: 800;
         margin: 0 0 0.5rem 0;
@@ -116,14 +121,14 @@
     .landing-tagline {
         font-size: 1.1rem;
         font-weight: 500;
-        color: rgba(255,255,255,0.95);
+        color: rgba(255, 255, 255, 0.95) !important;
         margin: 0 0 0.5rem 0;
         line-height: 1.4;
     }
 
     .landing-subtitle {
         font-size: 0.88rem;
-        color: rgba(255,255,255,0.7);
+        color: rgba(255, 255, 255, 0.7) !important;
         margin: 0 0 1.5rem 0;
         max-width: 520px;
         margin-left: auto;
@@ -155,23 +160,23 @@
 
     .landing-btn-primary {
         background: white;
-        color: #3e2217;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        color: #3e2217 !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
 
     .landing-btn-primary:hover {
         background: #faf8f6;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
 
     .landing-btn-secondary {
-        background: rgba(255,255,255,0.15);
-        color: white;
-        border: 1px solid rgba(255,255,255,0.3);
+        background: rgba(255, 255, 255, 0.15);
+        color: white !important;
+        border: 1px solid rgba(255, 255, 255, 0.3);
     }
 
     .landing-btn-secondary:hover {
-        background: rgba(255,255,255,0.25);
+        background: rgba(255, 255, 255, 0.25);
     }
 
     /* Feature Cards */
@@ -258,7 +263,7 @@
 
     .landing-bottom-cta .landing-btn-primary {
         background: #3e2217;
-        color: white;
+        color: white !important;
     }
 
     .landing-bottom-cta .landing-btn-primary:hover {
@@ -270,16 +275,20 @@
         .landing-hero {
             padding: 2rem 1rem 1.5rem;
         }
+
         .landing-hero h1 {
             font-size: 1.6rem;
         }
+
         .landing-tagline {
             font-size: 1rem;
         }
+
         .landing-features {
             grid-template-columns: 1fr;
             gap: 1rem;
         }
+
         .landing-highlights {
             gap: 1.25rem;
         }

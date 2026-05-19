@@ -14,14 +14,14 @@
 <meta property="og:title" content="{{ title }}" />
 <meta property="og:description" content="{{ description }}" />
 <meta property="og:url" content="{{ request.url }}" />
-<meta property="og:image" content="{{ url_for('static', filename='logo.png', _external=True) }}" />
+<meta property="og:image" content="{{ url_for('static', filename='logo-512.png', _external=True) }}" />
 {% endblock %}
 
 {% block twitter_tags %}
 <meta name="twitter:card" content="summary" />
 <meta name="twitter:title" content="{{ title }}" />
 <meta name="twitter:description" content="{{ description }}" />
-<meta name="twitter:image" content="{{ url_for('static', filename='logo.png', _external=True) }}" />
+<meta name="twitter:image" content="{{ url_for('static', filename='logo-512.png', _external=True) }}" />
 {% endblock %}
 
 {% block head_meta %}

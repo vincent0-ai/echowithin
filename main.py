@@ -2071,8 +2071,8 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                     'url': url or '/',
                     'tag': tag or 'echowithin',
                     'renotify': True,
-                    'icon': '/static/logo.png',
-                    'badge': '/static/logo.png'
+                    'icon': '/static/logo-192.png',
+                    'badge': '/static/logo-96.png'
                 })
 
                 for sub in subscriptions:
@@ -2158,8 +2158,8 @@ def send_admin_broadcast_push(title, body, url=None):
                 'body': body,
                 'url': url or '/',
                 'tag': 'admin-announcement',
-                'icon': '/static/logo.png',
-                'badge': '/static/logo.png'
+                'icon': '/static/logo-192.png',
+                'badge': '/static/logo-96.png'
             })
             
             for sub in subscriptions:
@@ -2255,8 +2255,8 @@ def send_push_notifications_for_new_post(post_id_str):
                 'body': body,
                 'url': post_url,
                 'tag': f'new-post-{post_id_str}',
-                'icon': '/static/logo.png',
-                'badge': '/static/logo.png'
+                'icon': '/static/logo-192.png',
+                'badge': '/static/logo-96.png'
             })
 
             for sub in subscriptions:

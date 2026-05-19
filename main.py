@@ -1868,11 +1868,11 @@ def send_new_post_notifications(post_id_str):
             return
 
         # Build absolute URL for the post
+        base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
         with app.app_context():
             try:
                 post_url = url_for('view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
-                base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
             subject = f"New post on EchoWithin: {post.get('title')}"
@@ -1895,7 +1895,10 @@ def send_new_post_notifications(post_id_str):
                         # Generate unsubscribe token
                         secret = app.config["SECRET_KEY"]
                         unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
-                        unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                        try:
+                            unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                        except RuntimeError:
+                            unsub_url = f"{base_url}/unsubscribe?email={recipient_email}&token={unsub_token}"
                         
                         msg = Message(
                             subject=subject,
@@ -4073,11 +4076,17 @@ def home():
 
     hot_posts = _mix_home_posts(hot_posts, fresh_posts)
 
+    # Personal stats for the home dashboard
+    user_oid = ObjectId(current_user.id)
+    note_count = personal_posts_conf.count_documents({'user_id': user_oid})
+    user_community_count = communities_conf.count_documents({'members': user_oid})
+
     return render_template("home.html", username=current_user.username, active_page='home',
                            title=page_title, description=page_description,
                            meta_image=url_for('static', filename='og-image.png', _external=True),
                            total_members=total_members, total_posts=total_posts,
-                           most_active_member=most_active_member, hot_posts=hot_posts)
+                           most_active_member=most_active_member, hot_posts=hot_posts,
+                           note_count=note_count, user_community_count=user_community_count)
 
 @app.route("/blog")
 def blog():
@@ -13278,6 +13287,9 @@ def api_react_community_note(note_id):
         total_reactions = sum(reactions.values())
         views = updated_note.get('view_count', 0)
         created = updated_note.get('created_at', now)
+        # Ensure created is timezone-aware (older docs may be naive)
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=datetime.timezone.utc)
         
         # Weighted engagement: reactions(3) + views(0.1)
         import math as math_module
@@ -13333,6 +13345,9 @@ def api_delete_community_note(note_id):
     # Delete note and its reactions
     community_notes_conf.delete_one({'_id': note_obj_id})
     community_reactions_conf.delete_many({'note_id': note_obj_id})
+    
+    if request.headers.get('X-CSRFToken') or request.is_json:
+        return jsonify({'success': True, 'message': 'Note deleted.'})
     
     flash('Note deleted.', 'success')
     return redirect(url_for('view_community', community_id=str(note['community_id'])))

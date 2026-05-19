@@ -547,9 +547,6 @@
             <div class="note-content {{ 'handwriting' if note.font_style == 'handwriting' else '' }}" data-raw="{{ note.content|e }}">
                 {{ note.content }}
             </div>
-            {% if note.content|length > 300 %}
-            <a href="{{ url_for('view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="note-read-more">Read more →</a>
-            {% endif %}
 
             {% if note.tags %}
             <div class="note-tags">
@@ -587,12 +584,9 @@
                         <i class="fas fa-link"></i>
                     </button>
                     {% if note.author_id|string == current_user.id or is_admin %}
-                    <form action="{{ url_for('api_delete_community_note', note_id=note._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this note?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="util-btn delete" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </form>
+                    <button type="button" class="util-btn delete" title="Delete" onclick="deleteCommunityNote('{{ note._id }}', '{{ note.community_id }}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
                     {% endif %}
                 </div>
             </div>
@@ -720,12 +714,48 @@
         });
     }
 
-    // Collapse long notes in feed
+    // Collapse long notes and add "See more" toggle
     document.querySelectorAll('.note-content').forEach(el => {
         if (el.scrollHeight > 190) {
             el.classList.add('note-collapsed');
+            const toggle = document.createElement('a');
+            toggle.href = 'javascript:void(0)';
+            toggle.className = 'note-read-more';
+            toggle.textContent = 'See more';
+            toggle.addEventListener('click', () => {
+                const isCollapsed = el.classList.contains('note-collapsed');
+                el.classList.toggle('note-collapsed');
+                toggle.textContent = isCollapsed ? 'See less' : 'See more';
+            });
+            el.insertAdjacentElement('afterend', toggle);
         }
     });
+
+    // Delete community note via fetch (avoids CSRF token expiry on stale pages)
+    function deleteCommunityNote(noteId, communityId) {
+        if (!confirm('Delete this note?')) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        fetch(`/api/community/note/${noteId}/delete`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        }).then(res => res.json().then(data => ({ok: res.ok, data})))
+        .then(({ok, data}) => {
+            if (ok && data.success) {
+                const card = document.getElementById('note-' + noteId);
+                if (card) {
+                    // Also remove the "See more" link if it follows the card
+                    const nextEl = card.nextElementSibling;
+                    if (nextEl && nextEl.classList.contains('note-read-more')) nextEl.remove();
+                    card.remove();
+                }
+                showToast('Note deleted.');
+            } else {
+                showToast(data.error || 'Failed to delete note.');
+            }
+        }).catch(() => showToast('Failed to delete note.'));
+    }
 </script>
 
 <!-- Admin Settings Modal -->

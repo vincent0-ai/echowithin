@@ -10,44 +10,74 @@
 
 {% block content %}
 <div class="content-wrapper">
+
+    <!-- Welcome header -->
+    <div class="home-header">
+        <h1>Welcome, {{ username }}!</h1>
+        <p>Your notes are waiting.</p>
+    </div>
+
+    <!-- Share promo (dismissable) -->
     <div class="share-promo-card" id="home-share-promo" data-promo-mode="temporary"
         style="display:none; background: linear-gradient(135deg, #fdf2f8, #fef3e7); border: 1px solid #f5d0e0; border-radius: 12px; padding: 0.9rem 1.1rem; margin-bottom: 1rem; position: relative;">
         <div style="display:flex; align-items:flex-start; gap:0.65rem;">
             <div style="font-size:1.5rem; line-height:1;">🎁</div>
             <div style="color:#555; font-size:0.88rem; line-height:1.4;">
                 <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a surprise note today</strong>
-                {% if current_user.is_authenticated %}
                 <span id="home-share-promo-copy">Pick one private note and turn it into a magic link.</span>
                 <a id="home-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
-                {% else %}
-                <span id="home-share-promo-copy">Sign in to create and share private notes.</span>
-                <a id="home-share-promo-link" href="{{ url_for('login') }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
-                {% endif %}
             </div>
         </div>
         <button type="button" id="home-share-promo-dismiss" aria-label="Dismiss"
             style="position:absolute; top:6px; right:8px; border:none; background:none; color:#999; cursor:pointer; font-size:1rem;">
-            <i class="fas fa-times"></i>
+            &times;
         </button>
     </div>
 
-    <div class="blog-header">
-        <h1>Welcome, {{ username }}!</h1>
-        <p>See what's happening in the community.</p>
-        <a href="{{ url_for('blog') }}" class="btn comment-btn"
-            style="display: inline-block; margin-top: 1rem; font-size: 1rem; padding: 0.6rem 1.2rem;">Explore The
-            Blog</a>
+    <!-- Quick Actions -->
+    <div class="home-quick-actions">
+        <a href="{{ url_for('personal_space') }}" class="quick-action-card qa-primary">
+            <strong>New Note</strong>
+            <span>Create a private, encrypted note</span>
+        </a>
+        <a href="{{ url_for('personal_space') }}?open_share_picker=1#notes" class="quick-action-card">
+            <strong>Send Surprise</strong>
+            <span>Share a themed note with someone</span>
+        </a>
+        <a href="{{ url_for('create_post') }}" class="quick-action-card">
+            <strong>Write Blog Post</strong>
+            <span>Publish to the community blog</span>
+        </a>
+        <a href="{{ url_for('communities_page') }}" class="quick-action-card">
+            <strong>Communities</strong>
+            <span>{{ user_community_count }} space{{ 's' if user_community_count != 1 }} joined</span>
+        </a>
     </div>
 
-    <!-- Daily Quote Section -->
+    <!-- Your Notes -->
+    <div class="home-section">
+        <div class="home-section-header">
+            <h2>Your Notes</h2>
+            <a href="{{ url_for('personal_space') }}" class="home-section-link">Open Notes →</a>
+        </div>
+        <div class="home-notes-summary">
+            <div class="notes-count-display">
+                <span class="notes-count-number">{{ note_count }}</span>
+                <span class="notes-count-label">note{{ 's' if note_count != 1 }} in your personal space</span>
+            </div>
+            {% if note_count == 0 %}
+            <p class="notes-empty-hint">Start writing — your notes are end-to-end encrypted and private to you.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Daily Quote -->
     <div id="zen-quote-container"
-        style="display: none; margin: 1.5rem auto; max-width: 600px; padding: 1rem 1.25rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 5px solid var(--primary-color); transition: opacity 0.3s ease;">
+        style="display: none; margin: 0 auto 1.5rem auto; max-width: 600px; padding: 1rem 1.25rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border-left: 5px solid var(--primary-color); transition: opacity 0.3s ease;">
         <div id="zen-quote-content"
             style="font-style: italic; font-size: 1rem; color: var(--primary-dark-color); margin-bottom: 0.5rem; line-height: 1.5;">
-            <!-- Quote text will be injected here -->
         </div>
         <div id="zen-quote-author" style="text-align: right; font-weight: 600; font-size: 0.85rem; color: #555;">
-            <!-- Author name will be injected here -->
         </div>
         <div class="quote-attribution" style="margin-top: 0.75rem; font-size: 0.75rem; color: #bbb; text-align: right;">
             <a href="https://zenquotes.io/" target="_blank" rel="noopener noreferrer"
@@ -55,138 +85,337 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            (function initTemporarySharePromo() {
-                const promo = document.getElementById('home-share-promo');
-                const dismissBtn = document.getElementById('home-share-promo-dismiss');
-                const titleEl = document.getElementById('home-share-promo-title');
-                const copyEl = document.getElementById('home-share-promo-copy');
-                const linkEl = document.getElementById('home-share-promo-link');
-                if (!promo) return;
-
-                const key = 'ew_share_promo_snooze_until';
-                const snoozeUntil = parseInt(localStorage.getItem(key) || '0', 10);
-                if (Date.now() >= snoozeUntil) {
-                    promo.style.display = 'block';
-                }
-
-                if (dismissBtn) {
-                    dismissBtn.addEventListener('click', () => {
-                        localStorage.setItem(key, String(Date.now() + (12 * 60 * 60 * 1000)));
-                        promo.style.display = 'none';
-                    });
-                }
-
-                if (titleEl && copyEl && linkEl) {
-                    {% if current_user.is_authenticated %}
-                    const variants = [
-                        {
-                            title: 'Share a surprise note today',
-                            copy: 'Pick one private note and turn it into a magic link.',
-                            cta: 'Open note picker ->'
-                        },
-                        {
-                            title: 'Need standard note cooperation?',
-                            copy: 'Use a standard note for collaboration, edit workflows, and version tracking.',
-                            cta: 'Start collaboration ->'
-                        }
-                    ];
-                    {% else %}
-                    const variants = [
-                        {
-                            title: 'Share a surprise note today',
-                            copy: 'Sign in to create and share private notes.',
-                            cta: 'Log in ->'
-                        },
-                        {
-                            title: 'Need standard note cooperation?',
-                            copy: 'Sign in to collaborate with edit permissions and tracked versions.',
-                            cta: 'Log in ->'
-                        }
-                    ];
-                    {% endif %}
-
-                    let variantIndex = 0;
-                    const applyVariant = (index) => {
-                        const item = variants[index];
-                        titleEl.textContent = item.title;
-                        copyEl.textContent = item.copy;
-                        linkEl.textContent = item.cta;
-                    };
-
-                    applyVariant(variantIndex);
-                    setInterval(() => {
-                        variantIndex = (variantIndex + 1) % variants.length;
-                        applyVariant(variantIndex);
-                    }, 9000);
-                }
-            })();
-
-            const container = document.getElementById('zen-quote-container');
-            const content = document.getElementById('zen-quote-content');
-            const author = document.getElementById('zen-quote-author');
-
-            fetch('/api/quote')
-                .then(response => {
-                    if (!response.ok) throw new Error('Network response was not ok');
-                    return response.json();
-                })
-                .then(data => {
-                    if (data && data.text) {
-                        content.textContent = '"' + data.text + '"';
-                        author.textContent = '— ' + data.author;
-                        container.style.display = 'block';
-                        // Subtle fade in
-                        container.style.opacity = '0';
-                        setTimeout(() => {
-                            container.style.opacity = '1';
-                        }, 50);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching ZenQuote:', error);
-                });
-        });
-    </script>
-
-    <!-- Community Stats Section -->
-    <section class="community-stats">
-        <div class="stat-card">
-            <h3>Total Members</h3>
-            <p class="stat-number">{{ total_members }}</p>
+    <!-- Community Pulse -->
+    <div class="home-section">
+        <div class="home-section-header">
+            <h2>Community Pulse</h2>
+            <a href="{{ url_for('blog') }}" class="home-section-link">Explore Blog →</a>
         </div>
-        <div class="stat-card">
-            <h3>Total Posts</h3>
-            <p class="stat-number">{{ total_posts }}</p>
-        </div>
-        <div class="stat-card">
-            <h3>Most Active Member</h3>
+
+        <div class="community-stats-row">
+            <div class="stat-pill">
+                <strong>{{ total_members }}</strong>
+                <span>Members</span>
+            </div>
+            <div class="stat-pill">
+                <strong>{{ total_posts }}</strong>
+                <span>Posts</span>
+            </div>
             {% if most_active_member %}
-            <p class="stat-text">{{ most_active_member._id }}</p>
-            <p class="stat-subtext">with {{ most_active_member.post_count }} posts</p>
-            {% else %}
-            <p class="stat-subtext">No activity yet.</p>
+            <div class="stat-pill">
+                <strong>{{ most_active_member._id }}</strong>
+                <span>Most Active</span>
+            </div>
             {% endif %}
         </div>
 
-        <!-- Trending Posts Card -->
-        <div class="stat-card trending-card">
-            <h3>Top Posts</h3>
-            {% if hot_posts %}
-            <ul class="trending-list">
+        {% if hot_posts %}
+        <div class="home-trending">
+            <h3>Trending</h3>
+            <ul>
                 {% for post in hot_posts %}
-                <li>
-                    <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
-                </li>
+                <li><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></li>
                 {% endfor %}
             </ul>
-            {% else %}
-            <p class="stat-subtext">No trending posts right now.</p>
-            {% endif %}
         </div>
-    </section>
+        {% endif %}
+    </div>
+
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Share promo dismiss
+        (function initTemporarySharePromo() {
+            const promo = document.getElementById('home-share-promo');
+            const dismissBtn = document.getElementById('home-share-promo-dismiss');
+            const titleEl = document.getElementById('home-share-promo-title');
+            const copyEl = document.getElementById('home-share-promo-copy');
+            const linkEl = document.getElementById('home-share-promo-link');
+            if (!promo) return;
+
+            const key = 'ew_share_promo_snooze_until';
+            const snoozeUntil = parseInt(localStorage.getItem(key) || '0', 10);
+            if (Date.now() >= snoozeUntil) {
+                promo.style.display = 'block';
+            }
+
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', () => {
+                    localStorage.setItem(key, String(Date.now() + (12 * 60 * 60 * 1000)));
+                    promo.style.display = 'none';
+                });
+            }
+
+            if (titleEl && copyEl && linkEl) {
+                const variants = [
+                    {
+                        title: 'Share a surprise note today',
+                        copy: 'Pick one private note and turn it into a magic link.',
+                        cta: 'Open note picker →'
+                    },
+                    {
+                        title: 'Need standard note cooperation?',
+                        copy: 'Use a standard note for collaboration, edit workflows, and version tracking.',
+                        cta: 'Start collaboration →'
+                    }
+                ];
+
+                let variantIndex = 0;
+                const applyVariant = (index) => {
+                    const item = variants[index];
+                    titleEl.textContent = item.title;
+                    copyEl.textContent = item.copy;
+                    linkEl.textContent = item.cta;
+                };
+
+                applyVariant(variantIndex);
+                setInterval(() => {
+                    variantIndex = (variantIndex + 1) % variants.length;
+                    applyVariant(variantIndex);
+                }, 9000);
+            }
+        })();
+
+        // Daily quote
+        const container = document.getElementById('zen-quote-container');
+        const content = document.getElementById('zen-quote-content');
+        const author = document.getElementById('zen-quote-author');
+
+        fetch('/api/quote')
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.text) {
+                    content.textContent = '"' + data.text + '"';
+                    author.textContent = '— ' + data.author;
+                    container.style.display = 'block';
+                    container.style.opacity = '0';
+                    setTimeout(() => {
+                        container.style.opacity = '1';
+                    }, 50);
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching ZenQuote:', error);
+            });
+    });
+</script>
+
+<style>
+    .home-header {
+        text-align: center;
+        padding: 1.5rem 1rem 1rem;
+        margin-bottom: 1.25rem;
+        background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%);
+        border-radius: 12px;
+        color: white;
+    }
+
+    .home-header h1 {
+        color: white;
+        font-size: 1.4rem;
+        font-weight: 700;
+        margin: 0 0 0.25rem 0;
+    }
+
+    .home-header p {
+        color: rgba(255,255,255,0.8);
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    /* Quick Actions */
+    .home-quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .quick-action-card {
+        display: block;
+        padding: 1rem 1.1rem;
+        background: white;
+        border-radius: 10px;
+        border: 1px solid rgba(62,34,23,0.08);
+        box-shadow: 0 2px 6px rgba(62,34,23,0.04);
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .quick-action-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 14px rgba(62,34,23,0.1);
+        border-color: rgba(62,34,23,0.15);
+    }
+
+    .quick-action-card strong {
+        display: block;
+        font-size: 0.95rem;
+        color: #3e2217;
+        margin-bottom: 0.2rem;
+    }
+
+    .quick-action-card span {
+        font-size: 0.8rem;
+        color: #888;
+    }
+
+    .quick-action-card.qa-primary {
+        border-left: 4px solid #3e2217;
+    }
+
+    /* Sections */
+    .home-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .home-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .home-section-header h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #3e2217;
+        margin: 0;
+    }
+
+    .home-section-link {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #3e2217;
+        text-decoration: none;
+    }
+
+    .home-section-link:hover {
+        text-decoration: underline;
+    }
+
+    /* Notes summary */
+    .home-notes-summary {
+        background: white;
+        border-radius: 10px;
+        padding: 1.25rem;
+        border: 1px solid rgba(62,34,23,0.08);
+    }
+
+    .notes-count-display {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+    }
+
+    .notes-count-number {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #3e2217;
+    }
+
+    .notes-count-label {
+        font-size: 0.9rem;
+        color: #888;
+    }
+
+    .notes-empty-hint {
+        margin: 0.5rem 0 0 0;
+        font-size: 0.85rem;
+        color: #aaa;
+    }
+
+    /* Community stats */
+    .community-stats-row {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .stat-pill {
+        flex: 1;
+        min-width: 100px;
+        text-align: center;
+        padding: 0.75rem 0.5rem;
+        background: white;
+        border-radius: 8px;
+        border: 1px solid rgba(62,34,23,0.08);
+    }
+
+    .stat-pill strong {
+        display: block;
+        font-size: 1.15rem;
+        color: #3e2217;
+        font-weight: 700;
+    }
+
+    .stat-pill span {
+        font-size: 0.75rem;
+        color: #999;
+    }
+
+    /* Trending */
+    .home-trending {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+        border: 1px solid rgba(62,34,23,0.08);
+    }
+
+    .home-trending h3 {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #3e2217;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .home-trending ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .home-trending li {
+        padding: 0.35rem 0;
+        border-bottom: 1px solid #f8f8f8;
+    }
+
+    .home-trending li:last-child {
+        border-bottom: none;
+    }
+
+    .home-trending a {
+        color: #555;
+        text-decoration: none;
+        font-size: 0.88rem;
+    }
+
+    .home-trending a:hover {
+        color: #3e2217;
+        text-decoration: underline;
+    }
+
+    @media (max-width: 600px) {
+        .home-quick-actions {
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem;
+        }
+        .quick-action-card {
+            padding: 0.85rem 0.9rem;
+        }
+        .quick-action-card strong {
+            font-size: 0.88rem;
+        }
+    }
+</style>
 
 {# Load Remark42 script to enable comment counters on this page #}
 {# Remark42 removed: use server-provided comment_count on posts #}

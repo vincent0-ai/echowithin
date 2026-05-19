@@ -483,9 +483,9 @@
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 <a href="{{ url_for('profile', username=current_user.username) }}"
                     class="{{ 'active' if active_page == 'profile' }}">Profile</a>
-                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
                     Notes</a>
+                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
                     Messages
                     <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
@@ -495,6 +495,7 @@
                 {% else %}
                 <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
                 <a href="{{ url_for('login') }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
+                <a href="{{ url_for('login') }}">Notes</a>
                 <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% endif %}

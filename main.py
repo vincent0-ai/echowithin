@@ -13719,3 +13719,10 @@ def api_admin_dismiss_report(report_id):
     return jsonify({'success': True, 'message': 'Report dismissed'})
 
 
+# Register Mobile REST JSON API Blueprint
+from api import api_bp
+csrf.exempt(api_bp)
+app.register_blueprint(api_bp, url_prefix='/api/v1')
+
+
+

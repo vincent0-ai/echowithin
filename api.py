@@ -362,6 +362,22 @@ def api_edit_note(note_id):
 
     return jsonify({'success': True, 'id': str(obj_id)})
 
+@api_bp.route('/premium/activate', methods=['POST'])
+@login_required
+def api_activate_premium():
+    m = get_main_globals()
+    # Grant premium for 30 days
+    new_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+    m.users_conf.update_one(
+        {'_id': ObjectId(current_user.id)},
+        {'$set': {'account_tier': 'premium', 'premium_until': new_until}}
+    )
+    return jsonify({
+        'success': True,
+        'message': 'Premium activated successfully!',
+        'premium_until': new_until.isoformat()
+    })
+
 # --- APP LOCK ENDPOINTS ---
 
 @api_bp.route('/app_lock/setup', methods=['POST'])

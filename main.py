@@ -116,6 +116,18 @@ if not app.debug:
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'  # snyk:disable=security-issue
 
+# Return JSON 401 for API/mobile requests instead of redirecting to the login page
+@login_manager.unauthorized_handler
+def unauthorized_api():
+    """Return JSON 401 for API/native-app requests, redirect for web browser requests."""
+    if (request.is_json
+            or request.headers.get('X-App-Token')
+            or request.path.startswith('/api/')):
+        return jsonify({'error': 'Authentication required. Please log in.'}), 401
+    # Standard web browser flow — redirect to login page
+    return redirect(url_for('login'))
+
+
 # Secure session cookie settings
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Prevent client-side JS from accessing the cookie
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'True').lower() == 'true' # Only send cookie over HTTPS
@@ -1748,6 +1760,47 @@ def load_user(user_id):
         # Cache the "not found" result too to avoid repeated queries
         user_loader_cache[cache_key] = '__none__'
         return None
+
+
+@login_manager.request_loader
+def load_user_from_request(req):
+    """Authenticate API requests using a persistent app token.
+
+    The Android app sends an X-App-Token header (or Bearer token) instead
+    of browser session cookies. This callback lets Flask-Login transparently
+    authenticate those requests. Website users are unaffected because they
+    never send these headers — they rely on the session-based user_loader.
+    """
+    # 1. Check X-App-Token header (preferred for native apps)
+    token = req.headers.get('X-App-Token', '').strip()
+
+    # 2. Fallback: Authorization: Bearer <token>
+    if not token:
+        auth_header = req.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+
+    # 3. Fallback: httpOnly cookie set during login
+    if not token:
+        token = req.cookies.get('x_app_token', '').strip()
+
+    if not token:
+        return None  # Let Flask-Login fall back to session-based user_loader
+
+    doc = app_tokens_conf.find_one({'token': token})
+    if not doc:
+        return None
+
+    user_data = users_conf.find_one({'_id': doc['user_id']})
+    if not user_data:
+        return None
+
+    if user_data.get('is_banned'):
+        return None
+
+    return User(user_data)
+
+
 
 def check_image_for_nsfw(image_path):
     """

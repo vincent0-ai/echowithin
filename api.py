@@ -4,6 +4,7 @@ import hashlib
 from flask import Blueprint, request, jsonify, session, url_for, make_response
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # Create the API blueprint
 api_bp = Blueprint('api_v1', __name__)
@@ -485,7 +486,7 @@ def api_share_comments(share_id):
             roots.append(comment_map[c_id])
 
     roots.reverse()
-    return jsonify(roots)
+    return jsonify({'comments': roots})
 
 @api_bp.route('/notes/share/<share_id>/comments', methods=['POST'])
 @login_required
@@ -765,13 +766,13 @@ def api_join_community_invite():
 
     user_id_obj = ObjectId(current_user.id)
     if user_id_obj in community.get('members', []):
-        return jsonify({'success': True, 'message': 'Already a member.'})
+        return jsonify({'success': True, 'message': 'Already a member.', 'id': str(community['_id'])})
 
     m.communities_conf.update_one(
         {'_id': community['_id']},
         {'$addToSet': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
     )
-    return jsonify({'success': True, 'id': str(community['_id'])})
+    return jsonify({'success': True, 'id': str(community['_id']), 'message': 'Joined community successfully.'})
 
 @api_bp.route('/community/join-public/<community_id>', methods=['POST'])
 @login_required
@@ -867,4 +868,49 @@ def api_create_community_note(community_id):
     }
     result = m.community_notes_conf.insert_one(new_note)
     return jsonify({'success': True, 'id': str(result.inserted_id)})
+
+
+# --- APP RE-AUTHENTICATION (Persistent Token) ---
+
+@api_bp.route('/app_reauth', methods=['POST'])
+def api_app_reauth():
+    """Re-authenticate a native app user using a persistent token.
+    Accepts token from JSON body, Authorization header, or httpOnly cookie."""
+    m = get_main_globals()
+    data = request.get_json(silent=True) or {}
+    token = data.get('token', '').strip()
+
+    # Fallback: check Authorization header (Bearer <token>)
+    if not token:
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+
+    # Fallback: read from X-App-Token header
+    if not token:
+        token = request.headers.get('X-App-Token', '').strip()
+
+    # Fallback: read from httpOnly cookie
+    if not token:
+        token = request.cookies.get('x_app_token', '').strip()
+
+    if not token:
+        return jsonify({'error': 'No token'}), 400
+
+    doc = m.app_tokens_conf.find_one({'token': token})
+    if not doc:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    user = m.users_conf.find_one({'_id': doc['user_id']})
+    if not user:
+        m.app_tokens_conf.delete_one({'_id': doc['_id']})
+        return jsonify({'error': 'User not found'}), 401
+
+    if user.get('is_banned'):
+        m.app_tokens_conf.delete_many({'user_id': doc['user_id']})
+        return jsonify({'error': 'Account suspended'}), 403
+
+    user_obj = m.User(user)
+    login_user(user_obj, remember=True)
+    return jsonify({'success': True, 'username': user['username']})
 

@@ -417,9 +417,13 @@ def api_app_lock_verify():
 @api_bp.route('/app_lock/check_status', methods=['GET'])
 @login_required
 def api_app_lock_status():
+    m = get_main_globals()
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    has_pin = bool(user and user.get('app_lock_pin_hash'))
+
     unlock_ts = session.get('app_lock_unlocked_at')
     if not unlock_ts:
-        return jsonify({'unlocked': False})
+        return jsonify({'unlocked': False, 'has_pin': has_pin})
     
     if unlock_ts.tzinfo is None:
         unlock_ts = unlock_ts.replace(tzinfo=datetime.timezone.utc)
@@ -427,9 +431,9 @@ def api_app_lock_status():
     elapsed = (datetime.datetime.now(datetime.timezone.utc) - unlock_ts).total_seconds()
     if elapsed >= 300:
         session.pop('app_lock_unlocked_at', None)
-        return jsonify({'unlocked': False})
+        return jsonify({'unlocked': False, 'has_pin': has_pin})
         
-    return jsonify({'unlocked': True, 'remaining': int(300 - elapsed)})
+    return jsonify({'unlocked': True, 'has_pin': has_pin, 'remaining': int(300 - elapsed)})
 
 @api_bp.route('/app_lock/remove', methods=['POST'])
 @login_required

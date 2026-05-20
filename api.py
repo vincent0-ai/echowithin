@@ -236,6 +236,30 @@ def api_get_notes():
         }
     })
 
+@api_bp.route('/notes/<note_id>', methods=['GET'])
+@login_required
+def api_get_note(note_id):
+    m = get_main_globals()
+    obj_id = safe_obj_id(note_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID.'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found.'}), 404
+
+    content_plain = m._decrypt_note_record(note)
+    return jsonify({
+        'id': str(note['_id']),
+        'content': content_plain,
+        'reference': note.get('reference', ''),
+        'tags': note.get('tags', []),
+        'is_locked': note.get('is_locked', False),
+        'is_pinned': note.get('is_pinned', False),
+        'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None,
+        'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
+    })
+
 @api_bp.route('/notes/create', methods=['POST'])
 @login_required
 def api_create_note():
@@ -272,6 +296,71 @@ def api_create_note():
     m.index_note_to_meili(str(result.inserted_id), decrypted_content=content)
     
     return jsonify({'success': True, 'id': str(result.inserted_id)})
+
+@api_bp.route('/notes/edit/<note_id>', methods=['POST'])
+@login_required
+def api_edit_note(note_id):
+    m = get_main_globals()
+    data = request.get_json(silent=True) or {}
+    content = data.get('content', '').strip()
+    reference = data.get('reference', '').strip()[:200]
+    tags = data.get('tags', [])
+    edit_summary = (data.get('edit_summary') or '').strip()[:180]
+
+    if not content:
+        return jsonify({'error': 'Content cannot be empty.'}), 400
+
+    obj_id = safe_obj_id(note_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID.'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized.'}), 404
+
+    user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    max_chars = m.get_limit(user_doc, 'max_chars_per_note')
+    content = content[:max_chars]
+
+    # Snapshot for version control
+    if note.get('content'):
+        editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+        m.note_versions_conf.insert_one({
+            'note_id': obj_id,
+            'share_id': None,
+            'editor_name': editor_name,
+            'editor_id': ObjectId(current_user.id),
+            'content': note['content'],
+            'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+            'encrypted': note.get('encrypted', True),
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': edit_summary or 'Edited note via App',
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        version_count = m.note_versions_conf.count_documents({'note_id': obj_id})
+        if version_count > 50:
+            oldest = m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
+            for old_ver in oldest:
+                m.note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+    encrypted_content = m.encrypt_note(content, user_id=current_user.id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    m.personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {
+            'content': encrypted_content,
+            'encrypted': True,
+            'content_owner_id': ObjectId(current_user.id),
+            'reference': reference,
+            'tags': tags,
+            'updated_at': now
+        }}
+    )
+
+    m.index_note_to_meili(str(obj_id), decrypted_content=content)
+
+    return jsonify({'success': True, 'id': str(obj_id)})
 
 # --- APP LOCK ENDPOINTS ---
 

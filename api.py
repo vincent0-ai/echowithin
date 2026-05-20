@@ -120,6 +120,8 @@ def api_login():
     password = data.get("password", "").strip()
     remember = bool(data.get("remember", True))
 
+    print(f"[DEBUG LOGIN] Attempt for username/email: '{username}'", flush=True)
+
     user = m.users_conf.find_one({
         "$or": [
             {"username": username},
@@ -127,41 +129,54 @@ def api_login():
         ]
     })
 
+    print(f"[DEBUG LOGIN] User found in DB: {user is not None}", flush=True)
+
     if user and user.get('password') is None:
+        print("[DEBUG LOGIN] User password is None (Google Auth account)", flush=True)
         return jsonify({'error': 'This account was created with Google. Please use Google Login.'}), 400
 
-    if user and check_password_hash(user["password"], password):
-        if not user.get('is_confirmed'):
-            return jsonify({'error': 'Please confirm your account first.'}), 400
+    if user:
+        is_correct = check_password_hash(user["password"], password)
+        print(f"[DEBUG LOGIN] Password check result: {is_correct}", flush=True)
+        if is_correct:
+            if not user.get('is_confirmed'):
+                print("[DEBUG LOGIN] User is not confirmed", flush=True)
+                return jsonify({'error': 'Please confirm your account first.'}), 400
 
-        if user.get('is_banned'):
-            return jsonify({'error': 'Your account has been suspended.'}), 403
+            if user.get('is_banned'):
+                print("[DEBUG LOGIN] User is banned", flush=True)
+                return jsonify({'error': 'Your account has been suspended.'}), 403
 
-        user_obj = m.User(user)
-        login_user(user_obj, remember=remember)
+            user_obj = m.User(user)
+            login_user(user_obj, remember=remember)
 
-        # Clear app lock state on fresh login
-        session.pop('app_lock_unlocked_at', None)
+            # Clear app lock state on fresh login
+            session.pop('app_lock_unlocked_at', None)
 
-        # Generate persistent token for native app session revival
-        _app_token = secrets.token_urlsafe(48)
-        m.app_tokens_conf.insert_one({
-            'token': _app_token,
-            'user_id': user['_id'],
-            'created_at': datetime.datetime.now(datetime.timezone.utc)
-        })
+            # Generate persistent token for native app session revival
+            _app_token = secrets.token_urlsafe(48)
+            m.app_tokens_conf.insert_one({
+                'token': _app_token,
+                'user_id': user['_id'],
+                'created_at': datetime.datetime.now(datetime.timezone.utc)
+            })
+            print(f"[DEBUG LOGIN] Login successful. Generated token: {_app_token[:12]}...", flush=True)
 
-        resp = make_response(jsonify({
-            'success': True,
-            'username': user['username'],
-            'email': user['email'],
-            'x_app_token': _app_token
-        }))
-        # Set persistent token as httpOnly cookie
-        resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
-                        httponly=True, secure=True, samesite='Lax')
-        return resp
+            resp = make_response(jsonify({
+                'success': True,
+                'username': user['username'],
+                'email': user['email'],
+                'x_app_token': _app_token
+            }))
+            # Set persistent token as httpOnly cookie
+            resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600,
+                            httponly=True, secure=True, samesite='Lax')
+            return resp
+        else:
+            print("[DEBUG LOGIN] Password hash mismatch", flush=True)
+            return jsonify({'error': 'Wrong details provided.'}), 401
     else:
+        print("[DEBUG LOGIN] User not found", flush=True)
         return jsonify({'error': 'Wrong details provided.'}), 401
 
 @api_bp.route('/logout', methods=['POST', 'GET'])

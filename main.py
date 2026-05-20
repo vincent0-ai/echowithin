@@ -120,9 +120,13 @@ login_manager.login_view = 'login'  # snyk:disable=security-issue
 @login_manager.unauthorized_handler
 def unauthorized_api():
     """Return JSON 401 for API/native-app requests, redirect for web browser requests."""
-    if (request.is_json
+    is_api = (request.is_json
             or request.headers.get('X-App-Token')
-            or request.path.startswith('/api/')):
+            or request.path.startswith('/api/'))
+    
+    print(f"[DEBUG UNAUTHORIZED] Path: {request.path}, is_json: {request.is_json}, X-App-Token header present: {request.headers.get('X-App-Token') is not None}, is_api: {is_api}", flush=True)
+    
+    if is_api:
         return jsonify({'error': 'Authentication required. Please log in.'}), 401
     # Standard web browser flow — redirect to login page
     return redirect(url_for('login'))
@@ -1773,31 +1777,45 @@ def load_user_from_request(req):
     """
     # 1. Check X-App-Token header (preferred for native apps)
     token = req.headers.get('X-App-Token', '').strip()
+    token_src = "X-App-Token header"
 
     # 2. Fallback: Authorization: Bearer <token>
     if not token:
         auth_header = req.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             token = auth_header[7:].strip()
+            token_src = "Authorization Bearer header"
 
     # 3. Fallback: httpOnly cookie set during login
     if not token:
         token = req.cookies.get('x_app_token', '').strip()
+        token_src = "x_app_token cookie"
 
     if not token:
-        return None  # Let Flask-Login fall back to session-based user_loader
+        # Don't log normal web requests that have no tokens
+        if req.path.startswith('/api/'):
+            print(f"[DEBUG REQ_LOADER] Path: {req.path}. No token found in headers or cookies.", flush=True)
+        return None
+
+    print(f"[DEBUG REQ_LOADER] Path: {req.path}. Token found in {token_src}: '{token[:12]}...'", flush=True)
 
     doc = app_tokens_conf.find_one({'token': token})
     if not doc:
+        print(f"[DEBUG REQ_LOADER] Token '{token[:12]}...' NOT found in app_tokens collection.", flush=True)
         return None
+
+    print(f"[DEBUG REQ_LOADER] Token document found for user_id: {doc.get('user_id')}", flush=True)
 
     user_data = users_conf.find_one({'_id': doc['user_id']})
     if not user_data:
+        print(f"[DEBUG REQ_LOADER] User with ID {doc['user_id']} not found in users collection.", flush=True)
         return None
 
     if user_data.get('is_banned'):
+        print(f"[DEBUG REQ_LOADER] User '{user_data.get('username')}' is banned.", flush=True)
         return None
 
+    print(f"[DEBUG REQ_LOADER] User authenticated successfully: '{user_data.get('username')}'", flush=True)
     return User(user_data)
 
 

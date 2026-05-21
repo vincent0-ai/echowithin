@@ -1775,6 +1775,9 @@ def load_user_from_request(req):
     authenticate those requests. Website users are unaffected because they
     never send these headers — they rely on the session-based user_loader.
     """
+    if req.path == '/api/messages/schedule/process':
+        return None
+
     # 1. Check X-App-Token header (preferred for native apps)
     token = req.headers.get('X-App-Token', '').strip()
     token_src = "X-App-Token header"
@@ -1793,7 +1796,7 @@ def load_user_from_request(req):
 
     if not token:
         # Don't log normal web requests that have no tokens
-        if req.path.startswith('/api/'):
+        if req.path.startswith('/api/') and req.path != '/api/messages/schedule/process':
             print(f"[DEBUG REQ_LOADER] Path: {req.path}. No token found in headers or cookies.", flush=True)
         return None
 

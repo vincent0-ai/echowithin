@@ -13,19 +13,29 @@ import sys
 import datetime
 
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 # Load environment variables
 load_dotenv()
 
-# Add the project root to the Python path to allow imports from main
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app, auth_conf
+def get_env_variable(name: str) -> str:
+    """Get an environment variable or raise an exception."""
+    try:
+        return os.environ[name]
+    except KeyError:
+        message = f"Expected environment variable '{name}' not set."
+        raise Exception(message)
+
+
+client = MongoClient(get_env_variable('MONGODB_CONNECTION'))
+db = client['echowithin_db']
+auth_conf = db['auth']
 
 
 def cleanup_expired_auth():
     """Removes expired verification codes and password reset tokens."""
-    with app.app_context():
+    try:
         now = datetime.datetime.now(datetime.timezone.utc)
         now_naive = datetime.datetime.now()  # For records stored without timezone
 
@@ -41,12 +51,14 @@ def cleanup_expired_auth():
 
         total_deleted = result_codes.deleted_count + result_tokens.deleted_count
         if total_deleted > 0:
-            app.logger.info(
+            print(
                 f"Auth cleanup: removed {result_codes.deleted_count} expired verification codes "
                 f"and {result_tokens.deleted_count} expired reset tokens."
             )
         else:
-            app.logger.debug("Auth cleanup: no expired records found.")
+            print("Auth cleanup: no expired records found.")
+    finally:
+        client.close()
 
 
 if __name__ == '__main__':

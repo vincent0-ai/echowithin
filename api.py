@@ -1038,3 +1038,64 @@ def api_app_reauth():
     login_user(user_obj, remember=True)
     return jsonify({'success': True, 'username': user['username']})
 
+@api_bp.route('/profile', methods=['GET'])
+@login_required
+def api_profile():
+    m = get_main_globals()
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+        
+    is_prem = m.is_premium(user)
+    return jsonify({
+        'username': user['username'],
+        'email': user['email'],
+        'account_tier': 'premium' if is_prem else 'free',
+        'premium_until': user.get('premium_until').isoformat() if user.get('premium_until') else None,
+        'has_pin': bool(user.get('app_lock_pin_hash'))
+    })
+
+@api_bp.route('/notes/delete/<note_id>', methods=['POST'])
+@login_required
+def api_delete_note(note_id):
+    m = get_main_globals()
+    obj_id = safe_obj_id(note_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID.'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized.'}), 404
+
+    target_ids = [obj_id]
+    
+    # 1. Cleanup all share links and their media for target notes
+    shares = m.note_shares_conf.find({'note_id': {'$in': target_ids}})
+    for share in shares:
+        m.cleanup_share_media(share)
+        m.note_shares_conf.delete_one({'_id': share['_id']})
+
+    # 1.5. Cleanup media from the posts themselves before deleting
+    target_posts = m.personal_posts_conf.find({'_id': {'$in': target_ids}})
+    for post in target_posts:
+        m.cleanup_post_media(post)
+
+    # 2. Cleanup all versions for target notes
+    m.note_versions_conf.delete_many({'note_id': {'$in': target_ids}})
+
+    # 3. Cleanup all unlock notifications for target notes
+    m.unlock_notifications_conf.delete_many({'note_id': {'$in': target_ids}})
+
+    # 4. Remove from Meilisearch index
+    try:
+        m.remove_notes_from_meili(target_ids)
+    except Exception:
+        pass
+
+    # 5. Final: Delete entries from personal_posts_conf
+    m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
+
+    return jsonify({'success': True, 'message': 'Note deleted successfully.'})
+
+
+

@@ -717,7 +717,7 @@ def api_get_note_versions(post_id):
     for v in versions:
         result.append({
             'version_id': str(v['_id']),
-            'content': m.decrypt_note(v['content']) if v.get('encrypted', False) else v['content'],
+            'content': m.decrypt_note(v['content'], user_id=current_user.id) if v.get('encrypted', False) else v.get('content', ''),
             'author_username': v.get('author_username', 'Unknown'),
             'created_at': v.get('created_at').isoformat() if v.get('created_at') else None,
             'is_proposal': v.get('is_proposal', False),
@@ -1037,6 +1037,58 @@ def api_app_reauth():
     user_obj = m.User(user)
     login_user(user_obj, remember=True)
     return jsonify({'success': True, 'username': user['username']})
+
+
+@api_bp.route('/notes/toggle_lock/<post_id>', methods=['POST'])
+@login_required
+def api_toggle_note_lock(post_id):
+    m = get_main_globals()
+    obj_id = safe_obj_id(post_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    new_locked = not note.get('is_locked', False)
+    m.personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {'is_locked': new_locked}}
+    )
+    return jsonify({'success': True, 'is_locked': new_locked})
+
+
+@api_bp.route('/notes/proposals', methods=['GET'])
+@login_required
+def api_get_all_proposals():
+    m = get_main_globals()
+    user_notes = list(m.personal_posts_conf.find(
+        {'user_id': ObjectId(current_user.id)},
+        {'_id': 1, 'content': 1}
+    ))
+    note_ids = [n['_id'] for n in user_notes]
+    note_map = {str(n['_id']): (m.decrypt_note(n['content']) if isinstance(n.get('content'), bytes) else n.get('content', ''))[:80] for n in user_notes}
+
+    proposals = list(m.note_versions_conf.find({
+        'note_id': {'$in': note_ids},
+        'is_proposal': True,
+        'status': {'$in': ['pending', None]}
+    }).sort('created_at', -1))
+
+    result = []
+    for p in proposals:
+        result.append({
+            'version_id': str(p['_id']),
+            'note_id': str(p['note_id']),
+            'note_preview': note_map.get(str(p['note_id']), 'Unknown note'),
+            'content': m.decrypt_note(p['content']) if p.get('encrypted', False) else p.get('content', ''),
+            'author_username': p.get('author_username', 'Unknown'),
+            'created_at': p.get('created_at').isoformat() if p.get('created_at') else None,
+            'status': p.get('status', 'pending')
+        })
+    return jsonify({'proposals': result})
+
 
 @api_bp.route('/profile', methods=['GET'])
 @login_required

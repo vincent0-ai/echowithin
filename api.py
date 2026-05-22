@@ -522,13 +522,74 @@ def api_create_note_share(post_id):
     if active_count >= max_shares:
         return jsonify({'error': f'You have reached the limit of {max_shares} share links per note.'}), 403
 
-    data = request.get_json(silent=True) or {}
-    permissions = data.get('permissions', 'view')
-    expires_in = data.get('expires_in')
-    access_code = data.get('access_code')
-    surprise_theme = data.get('surprise_theme', 'none')
-    use_typewriter = data.get('use_typewriter', False)
-    auto_approve = data.get('auto_approve', False)
+    is_valentine = False
+    surprise_theme = 'none'
+    valentine_photo = None
+    valentine_audio = None
+    use_typewriter = False
+    auto_approve = False
+
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        permissions = data.get('permissions', 'view')
+        expires_in = data.get('expires_in')
+        access_code = data.get('access_code')
+        surprise_theme = data.get('surprise_theme', 'none')
+        is_valentine = data.get('is_valentine', False)
+        if is_valentine and surprise_theme == 'none':
+            surprise_theme = 'valentine'
+        valentine_photo = data.get('valentine_photo')
+        valentine_audio = data.get('valentine_audio')
+        use_typewriter = data.get('use_typewriter', False)
+        auto_approve = data.get('auto_approve', False)
+    else:
+        # Handle multipart/form-data
+        permissions = request.form.get('permissions', 'view')
+        expires_in = request.form.get('expires_in')
+        access_code = request.form.get('access_code')
+        surprise_theme = request.form.get('surprise_theme', 'none')
+        is_valentine = request.form.get('is_valentine') == 'true'
+        if is_valentine and surprise_theme == 'none':
+            surprise_theme = 'valentine'
+        use_typewriter = request.form.get('use_typewriter') == 'true'
+        auto_approve = request.form.get('auto_approve') == 'true'
+        
+        # Handle file uploads
+        if surprise_theme != 'none':
+            photo_file = request.files.get('valentine_photo')
+            audio_file = request.files.get('valentine_audio')
+            
+            # --- Premium check for media uploads ---
+            has_media = False
+            if photo_file and photo_file.filename:
+                has_media = True
+            if audio_file and audio_file.filename:
+                has_media = True
+                
+            if has_media and not m.is_premium(user_doc):
+                return jsonify({
+                    'error': 'Uploading custom photos and music to surprise notes is a Premium feature. Upgrade to unlock!',
+                    'upgrade': True
+                }), 403
+
+            if photo_file and photo_file.filename:
+                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+                if ext in m.ALLOWED_IMAGE_EXTENSIONS:
+                    try:
+                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
+                        valentine_photo = upload_result.get('secure_url')
+                    except Exception as e:
+                        m.app.logger.error(f"Valentine photo upload failed: {e}")
+
+            if audio_file and audio_file.filename:
+                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+                if ext in m.ALLOWED_AUDIO_EXTENSIONS:
+                    try:
+                        audio_file.seek(0)
+                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
+                        valentine_audio = upload_result.get('secure_url')
+                    except Exception as e:
+                        m.app.logger.error(f"Valentine audio upload failed: {e}")
 
     if permissions not in ['view', 'edit']:
         permissions = 'view'
@@ -548,12 +609,33 @@ def api_create_note_share(post_id):
 
     share_id = secrets.token_urlsafe(16)
     
+    # --- Premium tier enforcement: surprise note limit ---
+    if surprise_theme != 'none':
+        max_surprise = m.get_limit(user_doc, 'max_surprise_notes')
+        surprise_count = m.note_shares_conf.count_documents({
+            'owner_id': ObjectId(current_user.id),
+            'surprise_theme': {'$ne': 'none', '$exists': True}
+        })
+        if surprise_count >= max_surprise:
+            return jsonify({
+                'error': f'You have reached the limit of {max_surprise} surprise notes. Upgrade to Premium for unlimited surprises!',
+                'upgrade': True
+            }), 403
+
+    # --- Premium tier enforcement: auto-approve requires premium ---
+    if auto_approve and not m.is_premium(user_doc):
+        auto_approve = False  # silently downgrade
+
     m.note_shares_conf.insert_one({
         'share_id': share_id,
         'note_id': obj_id,
         'owner_id': ObjectId(current_user.id),
         'permissions': permissions,
         'surprise_theme': surprise_theme,
+        'valentine_photo': m.encrypt_note(valentine_photo, user_id=current_user.id) if valentine_photo else None,
+        'valentine_audio': m.encrypt_note(valentine_audio, user_id=current_user.id) if valentine_audio else None,
+        'valentine_photo_hash': hashlib.sha256(valentine_photo.encode()).hexdigest() if valentine_photo else None,
+        'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
         'use_typewriter': use_typewriter,
         'auto_approve': auto_approve,
         'access_code_hash': access_code_hash,
@@ -795,203 +877,6 @@ def api_proposal_decision(version_id):
 
     return jsonify({'success': True, 'message': f'Proposal successfully {decision}d.'})
 
-
-# --- COMMUNITIES & COMMUNITY NOTES ---
-
-@api_bp.route('/communities', methods=['GET'])
-@login_required
-def api_get_communities():
-    m = get_main_globals()
-    user_id_obj = ObjectId(current_user.id)
-    
-    joined = list(m.communities_conf.find({'members': user_id_obj}).sort('updated_at', -1))
-    joined_list = []
-    for c in joined:
-        joined_list.append({
-            'id': str(c['_id']),
-            'name': c.get('name'),
-            'bio': c.get('bio', ''),
-            'visibility': c.get('visibility', 'private'),
-            'invite_code': c.get('invite_code') if str(c.get('admin_id')) == current_user.id else None,
-            'is_admin': str(c.get('admin_id')) == current_user.id,
-            'member_count': len(c.get('members', [])),
-            'note_count': m.community_notes_conf.count_documents({'community_id': c['_id']})
-        })
-
-    discover = list(m.communities_conf.find({
-        'visibility': 'public',
-        'members': {'$ne': user_id_obj}
-    }).sort('updated_at', -1).limit(20))
-    discover_list = []
-    for c in discover:
-        discover_list.append({
-            'id': str(c['_id']),
-            'name': c.get('name'),
-            'bio': c.get('bio', ''),
-            'member_count': len(c.get('members', [])),
-            'note_count': m.community_notes_conf.count_documents({'community_id': c['_id']})
-        })
-
-    return jsonify({
-        'joined': joined_list,
-        'discoverable': discover_list
-    })
-
-@api_bp.route('/community/create', methods=['POST'])
-@login_required
-def api_create_community():
-    m = get_main_globals()
-    data = request.get_json(silent=True) or {}
-    name = data.get('name', '').strip()
-    bio = data.get('bio', '').strip()
-    visibility = data.get('visibility', 'private')
-
-    if not name or len(name) > 50:
-        return jsonify({'error': 'Name is required and must be 50 chars or less.'}), 400
-
-    user_id_obj = ObjectId(current_user.id)
-    current_count = m.communities_conf.count_documents({'admin_id': user_id_obj})
-    max_allowed = m.get_limit(m.users_conf.find_one({'_id': user_id_obj}), 'max_communities')
-    
-    if current_count >= max_allowed:
-        return jsonify({'error': f'Reached limit of {max_allowed} communities.'}), 403
-
-    invite_code = secrets.token_urlsafe(8)
-    new_community = {
-        'name': name,
-        'bio': bio,
-        'visibility': visibility,
-        'admin_id': user_id_obj,
-        'members': [user_id_obj],
-        'invite_code': invite_code,
-        'created_at': datetime.datetime.now(datetime.timezone.utc),
-        'updated_at': datetime.datetime.now(datetime.timezone.utc)
-    }
-    result = m.communities_conf.insert_one(new_community)
-    return jsonify({
-        'success': True,
-        'id': str(result.inserted_id),
-        'invite_code': invite_code
-    })
-
-@api_bp.route('/community/join', methods=['POST'])
-@login_required
-def api_join_community_invite():
-    m = get_main_globals()
-    data = request.get_json(silent=True) or {}
-    invite_code = data.get('invite_code', '').strip()
-
-    if not invite_code:
-        return jsonify({'error': 'Invite code required.'}), 400
-
-    community = m.communities_conf.find_one({'invite_code': invite_code})
-    if not community:
-        return jsonify({'error': 'Invalid invite code.'}), 404
-
-    user_id_obj = ObjectId(current_user.id)
-    if user_id_obj in community.get('members', []):
-        return jsonify({'success': True, 'message': 'Already a member.', 'id': str(community['_id'])})
-
-    m.communities_conf.update_one(
-        {'_id': community['_id']},
-        {'$addToSet': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
-    )
-    return jsonify({'success': True, 'id': str(community['_id']), 'message': 'Joined community successfully.'})
-
-@api_bp.route('/community/join-public/<community_id>', methods=['POST'])
-@login_required
-def api_join_community_public(community_id):
-    m = get_main_globals()
-    comm_obj_id = safe_obj_id(community_id)
-    if not comm_obj_id:
-        return jsonify({'error': 'Invalid community ID'}), 400
-
-    community = m.communities_conf.find_one({'_id': comm_obj_id, 'visibility': 'public'})
-    if not community:
-        return jsonify({'error': 'Community not found or not public.'}), 404
-
-    user_id_obj = ObjectId(current_user.id)
-    m.communities_conf.update_one(
-        {'_id': comm_obj_id},
-        {'$addToSet': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
-    )
-    return jsonify({'success': True})
-
-@api_bp.route('/community/<community_id>/leave', methods=['POST'])
-@login_required
-def api_leave_community(community_id):
-    m = get_main_globals()
-    comm_obj_id = safe_obj_id(community_id)
-    if not comm_obj_id:
-        return jsonify({'error': 'Invalid community ID'}), 400
-
-    community = m.communities_conf.find_one({'_id': comm_obj_id})
-    if not community:
-        return jsonify({'error': 'Community not found.'}), 404
-
-    if str(community.get('admin_id')) == current_user.id:
-        return jsonify({'error': 'Admin cannot leave the community. Delete it instead.'}), 400
-
-    user_id_obj = ObjectId(current_user.id)
-    m.communities_conf.update_one(
-        {'_id': comm_obj_id},
-        {'$pull': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
-    )
-    return jsonify({'success': True})
-
-@api_bp.route('/community/<community_id>/notes', methods=['GET'])
-@login_required
-def api_get_community_notes(community_id):
-    m = get_main_globals()
-    comm_obj_id = safe_obj_id(community_id)
-    if not comm_obj_id:
-        return jsonify({'error': 'Invalid community ID'}), 400
-
-    community = m.communities_conf.find_one({'_id': comm_obj_id, 'members': ObjectId(current_user.id)})
-    if not community:
-        return jsonify({'error': 'Unauthorized or community not found'}), 403
-
-    notes = list(m.community_notes_conf.find({'community_id': comm_obj_id}).sort('created_at', -1))
-    result = []
-    for n in notes:
-        result.append({
-            'id': str(n['_id']),
-            'title': n.get('title'),
-            'content': n.get('content'),
-            'author_username': n.get('author_username', 'Unknown'),
-            'created_at': n.get('created_at').isoformat() if n.get('created_at') else None
-        })
-    return jsonify({'notes': result})
-
-@api_bp.route('/community/<community_id>/note/create', methods=['POST'])
-@login_required
-def api_create_community_note(community_id):
-    m = get_main_globals()
-    comm_obj_id = safe_obj_id(community_id)
-    if not comm_obj_id:
-        return jsonify({'error': 'Invalid community ID'}), 400
-
-    community = m.communities_conf.find_one({'_id': comm_obj_id, 'members': ObjectId(current_user.id)})
-    if not community:
-        return jsonify({'error': 'Unauthorized or community not found'}), 403
-
-    data = request.get_json(silent=True) or {}
-    title = data.get('title', '').strip()
-    content = data.get('content', '').strip()
-
-    if not title or not content:
-        return jsonify({'error': 'Title and content cannot be empty.'}), 400
-
-    new_note = {
-        'community_id': comm_obj_id,
-        'title': title,
-        'content': content,
-        'author_id': ObjectId(current_user.id),
-        'author_username': current_user.username,
-        'created_at': datetime.datetime.now(datetime.timezone.utc)
-    }
-    result = m.community_notes_conf.insert_one(new_note)
-    return jsonify({'success': True, 'id': str(result.inserted_id)})
 
 
 # --- APP RE-AUTHENTICATION (Persistent Token) ---

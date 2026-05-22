@@ -273,11 +273,11 @@ _vapid_sub_raw = os.environ.get('VAPID_SUBJECT', '').strip()
 if _vapid_sub_raw and (_vapid_sub_raw.startswith('mailto:') or _vapid_sub_raw.startswith('https://')):
     _vapid_sub = _vapid_sub_raw
 else:
-    mail_sender = os.environ.get('MAIL_USERNAME', 'admin@echowithin.com').strip()
+    mail_sender = os.environ.get('MAIL_USERNAME', 'admin@echowithin.xyz').strip()
     if '@' in mail_sender:
         _vapid_sub = f"mailto:{mail_sender}"
     else:
-        _vapid_sub = 'mailto:admin@echowithin.com'
+        _vapid_sub = 'mailto:admin@echowithin.xyz'
         if _vapid_sub_raw:
             app.logger.warning(
                 "Invalid VAPID_SUBJECT format. Use mailto:you@example.com or https://yourdomain"

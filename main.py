@@ -3536,8 +3536,13 @@ def login():
 
         if user and check_password_hash(user["password"], password):
             if not user.get('is_confirmed'):
-                flash('Please confirm your account first', "danger")
-                return redirect(url_for('login', next=request.args.get('next')))
+                flash("Please confirm your account first. We've sent a new confirmation code to your email.", "warning")
+                gen_code = str(secrets.randbelow(10**6)).zfill(6)
+                hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+                code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+                auth_conf.update_one({'email': user['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+                send_code(user['email'], gen_code)
+                return redirect(url_for('confirm', email=user['email'], next=request.args.get('next')))
 
             # Check if the user is banned
             if user.get('is_banned'):

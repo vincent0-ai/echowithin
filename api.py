@@ -141,10 +141,18 @@ def api_login():
         print(f"[DEBUG LOGIN] Password check result: {is_correct}", flush=True)
         if is_correct:
             if not user.get('is_confirmed'):
-                print("[DEBUG LOGIN] User is not confirmed. Auto-confirming user in dev/local environment.", flush=True)
-                m.users_conf.update_one({'_id': user['_id']}, {'$set': {'is_confirmed': True}})
-                m.auth_conf.delete_one({'email': user.get('email')})
-                user['is_confirmed'] = True
+                print(f"[DEBUG LOGIN] User '{user['username']}' is not confirmed. Regenerating code and returning unconfirmed status.", flush=True)
+                gen_code = str(secrets.randbelow(10**6)).zfill(6)
+                hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+                code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+                m.auth_conf.update_one({'email': user['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+                m.send_code(user['email'], gen_code)
+                return jsonify({
+                    'success': False,
+                    'confirmed': False,
+                    'email': user['email'],
+                    'error': 'Your email is not confirmed. A new verification code has been sent.'
+                }), 200
 
             if user.get('is_banned'):
                 print("[DEBUG LOGIN] User is banned", flush=True)

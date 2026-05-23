@@ -895,12 +895,16 @@ def api_profile():
         return jsonify({'error': 'User not found'}), 404
         
     is_prem = m.is_premium(user)
+    is_trial = m.is_on_trial(user)
+    trial_days = m.get_trial_days_remaining(user)
     return jsonify({
         'username': user['username'],
         'email': user['email'],
         'account_tier': 'premium' if is_prem else 'free',
         'premium_until': user.get('premium_until').isoformat() if user.get('premium_until') else None,
-        'has_pin': bool(user.get('app_lock_pin_hash'))
+        'has_pin': bool(user.get('app_lock_pin_hash')),
+        'is_trial': is_trial,
+        'trial_days_remaining': trial_days
     })
 
 @api_bp.route('/notes/delete/<note_id>', methods=['POST'])

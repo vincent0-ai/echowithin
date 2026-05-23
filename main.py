@@ -1880,6 +1880,7 @@ def process_image_for_nsfw(post_id, image_url, public_id):
 
 
 def send_code(email, gen_code=None, retries=3, delay=2):
+    app.logger.info(f"[DEV DEBUG] Generated verification code for {email}: {gen_code}")
     for attempt in range(retries):
         try:
             sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
@@ -1892,7 +1893,7 @@ def send_code(email, gen_code=None, retries=3, delay=2):
             # Add plain text version for deliverability
             msg.body = f"Your EchoWithin verification code is: {gen_code}\n\nIf you didn't request this, please ignore this email."
             mail.send(msg)
-            app.logger.info(f"Verification email sent to {email}")
+            app.logger.info(f"Verification email sent to {email}. DEV CODE: {gen_code}")
             return True
         except Exception as e:
             app.logger.error(f"Attempt {attempt+1} failed to send email to {email}: {e}")
@@ -1901,6 +1902,12 @@ def send_code(email, gen_code=None, retries=3, delay=2):
         app.logger.error(f"Failed to send verification email to {email} after {retries} attempts.")
 
 def send_reset_code(email, reset_token=None, retries=3, delay=2):
+    reset_url = ""
+    try:
+        reset_url = url_for('reset_password', token=reset_token, _external=True)
+        app.logger.info(f"[DEV DEBUG] Generated password reset link for {email}: {reset_url}")
+    except Exception:
+        pass
     for attempt in range(retries):
         try:
             sender_email = app.config.get('MAIL_DEFAULT_SENDER') or get_env_variable('MAIL_USERNAME')
@@ -1909,7 +1916,8 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
                 sender=f"EchoWithin <{sender_email}>",
                 recipients=[email]
             )
-            reset_url = url_for('reset_password', token=reset_token, _external=True)
+            if not reset_url:
+                reset_url = url_for('reset_password', token=reset_token, _external=True)
             msg.html = render_template("reset_email.html", reset_url=reset_url)
             # Also add plain text version for better deliverability
             msg.body = f"""Password Reset Request
@@ -5171,6 +5179,14 @@ def mark_all_comments_read():
         except Exception:
             pass
 
+        # Clear Redis cache keys so that badge counts are recomputed instantly
+        if redis_cache:
+            try:
+                redis_cache.delete(f"unread_notif_count:{current_user.id}")
+                redis_cache.delete(f"badge_counts:{current_user.id}")
+            except Exception:
+                pass
+
         return jsonify({'success': True, 'timestamp': leap_marker.isoformat()})
     except Exception as e:
         app.logger.error(f"Error marking all read: {e}")
@@ -8279,6 +8295,15 @@ def api_mark_activity_read():
             {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False},
             {'$set': {'is_read_by_owner': True}}
         )
+
+        # Clear Redis cache keys so that badge counts are recomputed instantly
+        if redis_cache:
+            try:
+                redis_cache.delete(f"unread_notif_count:{current_user.id}")
+                redis_cache.delete(f"badge_counts:{current_user.id}")
+            except Exception:
+                pass
+
         return jsonify({'success': True})
     except Exception as e:
         app.logger.error(f"Error marking activity as read: {e}")

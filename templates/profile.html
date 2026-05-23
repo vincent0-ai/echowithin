@@ -184,7 +184,7 @@
             <!-- Premium Tier Banner -->
             {% if current_user.is_authenticated and current_user.username == user.username %}
                 {% if user_is_trial %}
-                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem;">
+                <div style="background: linear-gradient(135deg, #3e2217, #5a3828); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.15);">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <i class="fas fa-crown" style="font-size: 1rem;"></i>
                         <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining. Enjoying unlimited features!</span>

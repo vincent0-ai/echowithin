@@ -3378,7 +3378,7 @@ def register():
     next_url = request.args.get('next')
     if request.method == "POST":
         username = request.form.get("username")
-        email = request.form.get("email")
+        email = request.form.get("email", "").strip().lower()
         password = request.form.get("password")
         agree_terms = request.form.get("agree_terms")
         honeypot = request.form.get("website")
@@ -3460,6 +3460,7 @@ def register():
 @csrf.exempt
 @limits(calls=15, period=TIME)
 def confirm(email):
+    email = email.strip().lower()
     next_url = request.args.get('next')
     user = users_conf.find_one({"email": email})
     if not user:
@@ -3524,7 +3525,7 @@ def login():
         user = users_conf.find_one({
             "$or": [
                 {"username": username},
-                {"email": username}
+                {"email": username.lower() if "@" in username else username}
             ]
         })
 

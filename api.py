@@ -29,7 +29,7 @@ def api_register():
     m = get_main_globals()
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
-    email = data.get("email", "").strip()
+    email = data.get("email", "").strip().lower()
     password = data.get("password", "").strip()
     agree_terms = data.get("agree_terms", True)
 
@@ -82,6 +82,7 @@ def api_register():
 @api_bp.route('/confirm/<email>', methods=['POST'])
 def api_confirm(email):
     m = get_main_globals()
+    email = email.strip().lower()
     data = request.get_json(silent=True) or {}
     confirm_code = data.get("code", "").strip()
 
@@ -125,7 +126,7 @@ def api_login():
     user = m.users_conf.find_one({
         "$or": [
             {"username": username},
-            {"email": username}
+            {"email": username.lower() if "@" in username else username}
         ]
     })
 

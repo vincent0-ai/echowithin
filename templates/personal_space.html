@@ -1624,14 +1624,14 @@
     <!-- Premium Tier Banner -->
     {% if user_is_trial %}
     <div
-        style="background: linear-gradient(135deg, #3e2217, #5a3828); color: white; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.15);">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <i class="fas fa-crown" style="font-size: 1rem;"></i>
-            <span><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }}
+        style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217 !important; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.05);">
+        <div style="display: flex; align-items: center; gap: 0.5rem; color: #3e2217 !important;">
+            <i class="fas fa-crown" style="font-size: 1rem; color: #3e2217 !important;"></i>
+            <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }}
                 remaining. Enjoying unlimited features!</span>
         </div>
         <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
-            style="background: rgba(255,255,255,0.2); color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe
+            style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe
             — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
     {% elif not user_is_premium %}

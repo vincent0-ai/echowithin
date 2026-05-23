@@ -194,69 +194,14 @@
                 {% elif not user_is_premium %}
                 <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span>Unlock <strong>note locking, blog space, scheduled messages</strong> and more with Premium.</span>
+                        <span>Unlock <strong>note locking, scheduled messages</strong> and more with Premium.</span>
                     </div>
                     <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
                 </div>
                 {% endif %}
             {% endif %}
 
-            <!-- Blog Space Card -->
-            {% if display_blog_space %}
-            <div class="blog-space-card" id="blog-space-card">
-                <div class="blog-space-header">
-                    <span>Blog Space</span>
-                </div>
-                {% if blog_tagline %}
-                <p class="blog-space-tagline">"{{ blog_tagline }}"</p>
-                {% endif %}
-                {% if blog_url %}
-                <a href="{{ blog_url }}" target="_blank" rel="noopener noreferrer" class="blog-space-link">
-                    <i class="fas fa-external-link-alt"></i>
-                    {{ blog_url_label or 'Visit Blog' }}
-                </a>
-                {% endif %}
-                {% if social_links %}
-                <div class="blog-space-socials">
-                    {% if social_links.get('twitter') %}
-                    <a href="{{ social_links.twitter }}" target="_blank" rel="noopener noreferrer"
-                        title="X / Twitter"><i class="fa-brands fa-x-twitter"></i></a>
-                    {% endif %}
-                    {% if social_links.get('github') %}
-                    <a href="{{ social_links.github }}" target="_blank" rel="noopener noreferrer" title="GitHub"><i
-                            class="fa-brands fa-github"></i></a>
-                    {% endif %}
-                    {% if social_links.get('linkedin') %}
-                    <a href="{{ social_links.linkedin }}" target="_blank" rel="noopener noreferrer" title="LinkedIn"><i
-                            class="fa-brands fa-linkedin"></i></a>
-                    {% endif %}
-                    {% if social_links.get('youtube') %}
-                    <a href="{{ social_links.youtube }}" target="_blank" rel="noopener noreferrer" title="YouTube"><i
-                            class="fa-brands fa-youtube"></i></a>
-                    {% endif %}
-                    {% if social_links.get('tiktok') %}
-                    <a href="{{ social_links.tiktok }}" target="_blank" rel="noopener noreferrer" title="TikTok"><i
-                            class="fa-brands fa-tiktok"></i></a>
-                    {% endif %}
-                    {% if social_links.get('website') %}
-                    <a href="{{ social_links.website }}" target="_blank" rel="noopener noreferrer" title="Website"><i
-                            class="fas fa-globe"></i></a>
-                    {% endif %}
-                </div>
-                {% endif %}
-                {% if pinned_posts %}
-                <div class="blog-space-pinned">
-                    <div class="blog-space-pinned-label"><i class="fas fa-thumbtack"></i> Pinned Posts</div>
-                    {% for post in pinned_posts %}
-                    <a href="{{ url_for('view_post', slug=post.slug) }}" class="blog-space-pinned-item">
-                        <span>{{ post.title }}</span>
-                        <i class="fas fa-arrow-right" style="font-size: 0.7rem; opacity: 0.5;"></i>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-            {% endif %}
+
 
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
                 <h2 class="section-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Posts by {{ user.username }}</h2>
@@ -277,13 +222,7 @@
                             <h4 class="profile-post-card-title">
                                 <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
                             </h4>
-                            {% if current_user.is_authenticated and current_user.id == user._id|string %}
-                            <button class="pin-post-btn" data-post-id="{{ post._id }}"
-                                title="{% if post._id in (user.get('pinned_post_ids', [])) %}Unpin from profile{% else %}Pin to profile{% endif %}"
-                                style="border: none; background: none; cursor: pointer; font-size: 0.9rem; color: {% if post._id in (user.get('pinned_post_ids', [])) %}#3e2217{% else %}#ccc{% endif %}; flex-shrink: 0;">
-                                <i class="fas fa-thumbtack"></i>
-                            </button>
-                            {% endif %}
+
                         </div>
                         {% if post.content %}
                         <p class="profile-post-card-excerpt">{{ post.content|striptags|truncate(180, true, '...') }}</p>
@@ -825,49 +764,4 @@
     }
 </style>
 
-{% if current_user.is_authenticated and current_user.id == user._id|string %}
-<script>
-    // Pin/Unpin post functionality
-    document.querySelectorAll('.pin-post-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var postId = this.dataset.postId;
-            var button = this;
-            var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            button.disabled = true;
-
-            fetch('/api/profile/pin_post', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ post_id: postId })
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    button.disabled = false;
-                    if (data.error) {
-                        if (window.showCustomAlert) window.showCustomAlert(data.error, 'danger');
-                        return;
-                    }
-                    if (data.status === 'pinned') {
-                        button.style.color = '#3e2217';
-                        button.title = 'Unpin from profile';
-                        if (window.showCustomAlert) window.showCustomAlert('Post pinned to your profile!', 'success');
-                    } else {
-                        button.style.color = '#ccc';
-                        button.title = 'Pin to profile';
-                        if (window.showCustomAlert) window.showCustomAlert('Post unpinned.', 'success');
-                    }
-                    // Reload to refresh the blog space card
-                    setTimeout(function () { window.location.reload(); }, 800);
-                })
-                .catch(function () {
-                    button.disabled = false;
-                    if (window.showCustomAlert) window.showCustomAlert('Failed to update pin status.', 'danger');
-                });
-        });
-    });
-</script>
-{% endif %}
 {% endblock %}

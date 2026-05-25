@@ -1957,7 +1957,7 @@
                         {% endif %}
                         {% if note.source_note_id %}
                         <span class="source-badge" title="Saved from a shared note">
-                            Saved copy
+                            Saved note by {{ note.original_user_doc.username if note.original_user_doc else 'someone' }}
                         </span>
                         {% endif %}
                         {% if note.update_available %}

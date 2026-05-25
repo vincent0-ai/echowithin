@@ -15,7 +15,7 @@ def get_env_variable(name: str) -> str:
         message = f"Expected environment variable '{name}' not set."
         raise Exception(message)
 
-    # MongoDB connection
+# MongoDB connection
 client = MongoClient(get_env_variable('MONGODB_CONNECTION'))
 db = client['echowithin_db']
 users_conf = db['users']
@@ -32,14 +32,26 @@ def calculate_weekly_winners():
     now = datetime.datetime.now(datetime.timezone.utc)
     one_week_ago = now - datetime.timedelta(days=7)
     
-    # 1. Most Active (Most platform activity - visits/interactions)
+    # 1. Most Active (Most platform activity - visits/interactions, prioritized by consistency)
     most_active = list(logs_conf.aggregate([
         {'$match': {
             'timestamp': {'$gte': one_week_ago},
             'user_identifier': {'$regex': '^[0-9a-fA-F]{24}$'}
         }},
-        {'$group': {'_id': '$user_identifier', 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'user_id': '$user_identifier',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'user_id': '$user_id', 'day': '$day'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.user_id',
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
     
@@ -47,11 +59,26 @@ def calculate_weekly_winners():
         user_doc = users_conf.find_one({'_id': ObjectId(most_active[0]['_id'])})
         most_active[0]['username'] = user_doc['username'] if user_doc else 'Unknown'
     
-    # 2. Most Engager (Most comments written on blog posts)
+    # 2. Most Engager (Most comments written on blog posts, prioritized by consistency)
     most_engager = list(comments_conf.aggregate([
         {'$match': {'timestamp': {'$gte': one_week_ago}}},
-        {'$group': {'_id': '$author_id', 'username': {'$first': '$author_name'}, 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'author_id': '$author_id',
+            'author_name': '$author_name',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'author_id': '$author_id', 'day': '$day'},
+            'author_name': {'$first': '$author_name'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.author_id',
+            'username': {'$first': '$author_name'},
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
     
@@ -67,11 +94,26 @@ def calculate_weekly_winners():
         {'$limit': 1}
     ]))
 
-    # 4. Top Writer (Most blog posts published this week)
+    # 4. Top Writer (Most blog posts published this week, prioritized by consistency)
     top_writer = list(posts_conf.aggregate([
         {'$match': {'timestamp': {'$gte': one_week_ago}}},
-        {'$group': {'_id': '$author_id', 'username': {'$first': '$author'}, 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'author_id': '$author_id',
+            'author': '$author',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$timestamp', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'author_id': '$author_id', 'day': '$day'},
+            'author': {'$first': '$author'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.author_id',
+            'username': {'$first': '$author'},
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
 
@@ -79,11 +121,23 @@ def calculate_weekly_winners():
         user_doc = users_conf.find_one({'_id': ObjectId(top_writer[0]['_id'])})
         top_writer[0]['username'] = user_doc['username'] if user_doc else top_writer[0].get('username', 'Unknown')
 
-    # 5. Top Noter (Most personal notes created this week)
+    # 5. Top Noter (Most personal notes created this week, prioritized by consistency)
     top_noter = list(personal_posts_conf.aggregate([
         {'$match': {'created_at': {'$gte': one_week_ago}}},
-        {'$group': {'_id': '$user_id', 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'user_id': '$user_id',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'user_id': '$user_id', 'day': '$day'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.user_id',
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
 
@@ -91,11 +145,23 @@ def calculate_weekly_winners():
         user_doc = users_conf.find_one({'_id': top_noter[0]['_id']})
         top_noter[0]['username'] = user_doc['username'] if user_doc else 'Unknown'
 
-    # 6. Top Sharer (Most notes shared this week)
+    # 6. Top Sharer (Most notes shared this week, prioritized by consistency)
     top_sharer = list(note_shares_conf.aggregate([
         {'$match': {'created_at': {'$gte': one_week_ago}}},
-        {'$group': {'_id': '$owner_id', 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'owner_id': '$owner_id',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$created_at', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'owner_id': '$owner_id', 'day': '$day'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.owner_id',
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
 
@@ -103,11 +169,23 @@ def calculate_weekly_winners():
         user_doc = users_conf.find_one({'_id': top_sharer[0]['_id']})
         top_sharer[0]['username'] = user_doc['username'] if user_doc else 'Unknown'
 
-    # 7. Top Reader (Most post views this week)
+    # 7. Top Reader (Most post views this week, prioritized by consistency)
     top_reader = list(user_post_views_conf.aggregate([
         {'$match': {'last_viewed': {'$gte': one_week_ago}}},
-        {'$group': {'_id': '$user_id', 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
+        {'$project': {
+            'user_id': '$user_id',
+            'day': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$last_viewed', 'timezone': 'UTC'}}
+        }},
+        {'$group': {
+            '_id': {'user_id': '$user_id', 'day': '$day'},
+            'day_count': {'$sum': 1}
+        }},
+        {'$group': {
+            '_id': '$_id.user_id',
+            'unique_days': {'$sum': 1},
+            'count': {'$sum': '$day_count'}
+        }},
+        {'$sort': {'unique_days': -1, 'count': -1}},
         {'$limit': 1}
     ]))
 

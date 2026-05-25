@@ -1,99 +1,245 @@
-# EchoWithin — A Community Discussion Platform
+# EchoWithin — Secure Notes, Community & Collaboration Platform
 
-EchoWithin is a high-performance community blogging and discussion platform designed for authentic, deep engagement. It provides a private, moderated space for users to share long-form content, multimedia, and encrypted personal notes.
-
-Built with a modern Python stack and a mobile-first Progressive Web App (PWA) approach, EchoWithin ensures your community's voice echoes with clarity and security.
+EchoWithin is a community platform that combines blogging, encrypted personal notes, collaborative note sharing, direct messaging, and premium-tier power features. It is built with a Python/Flask backend, MongoDB, real-time WebSocket communication, and ships as both a Progressive Web App (PWA) and a native Android application.
 
 ---
 
-## 🚀 Key Features
+## Features
 
-### 📝 Content & Community
-- **Rich Blogging**: Create and edit posts with Markdown support, multiple images, and videos.
-- **Threaded Discussions**: Engaging, hierarchical comment system with voting and real-time activity tracking.
-- **Personal Space**: A private repository for saved posts and **end-to-end encrypted** personal notes.
-- **Engagement Tools**: Multiple reaction types (Heart, Wow, Insightful, etc.) and native sharing integration.
+### Encrypted Personal Notes
+- End-to-end encrypted personal notes using **Fernet symmetric encryption** with per-user **PBKDF2-HMAC-SHA256** key derivation (480,000 iterations, OWASP 2024).
+- Full-text search over personal notes via Meilisearch.
+- Version history with restore, diff previews, and merge conflict handling.
+- Note locking, pinning, tags, and reference fields.
+- Tiered limits: 50 notes / 20K chars (free) → unlimited / 100K chars (premium).
 
-### 📱 Modern Experience (PWA)
-- **Installable**: Full Progressive Web App support for Android and iOS.
-- **Offline Mode**: Access cached content and a dedicated offline fallback page.
-- **Push Notifications**: Real-time web push notifications for comments and replies, with specialized "Marker Leap" logic to ensure read-state synchronization.
+### Note Sharing & Real-Time Collaboration
+- Share notes with view or edit permissions, optional access codes, and expiry (1h, 1d, 7d).
+- **Surprise themes** (Valentine, Birthday, Anniversary, Celebration) with custom photo and audio uploads.
+- Typewriter-effect reveal for recipients.
+- Real-time collaboration via **Socket.IO**: live co-editing, edit locks, presence tracking ("Studying Now").
+- Merge proposal system: collaborators propose changes, owners review, accept, or reject.
+- Bidirectional sync between saved copies and the original source.
+- Discussion threads and file attachments on shared notes.
 
-### 🛡️ Safety & Security
-- **AI Moderation**: Automatic NSFW detection for all uploaded images via JigsawStack.
-- **Secure Authentication**: Email verification, session persistence, and Google OAuth2 integration.
-- **Rate Limiting**: Intelligent protection against brute-force and spam across all critical endpoints.
+### Community Blogging
+- Rich posts with **Markdown** support, image/video uploads, and tag categorization.
+- **Threaded comments** with replies, voting, and reactions (Heart, Wow, Insightful, etc.).
+- Post saving/bookmarking, view tracking, and engagement-based sorting (hot / top / trending).
+- Full-text search with **typo tolerance** (Meilisearch) plus tag, author, and date filters.
+- Auto-generated RSS feed, sitemap_index.xml, and OpenGraph/Twitter meta tags.
 
-### 🔍 Discovery & SEO
-- **Blazing Fast Search**: Full-text search powered by Meilisearch with real-time indexing.
-- **Automated SEO**: Dynamic `sitemap.xml`, `robots.txt`, and rich OpenGraph/Twitter meta tags.
-- **Newsletter**: Weekly automated digests of the most popular community content.
+### Communities
+- Create and join topic-based communities with public or invite-code access.
+- Community notes with surprise themes, reactions, and moderation tools.
+- Reporting system for rule violations.
+- Tiered limits: 1 community (free) → 5 communities (premium).
+
+### Direct Messaging
+- Encrypted 1-on-1 conversations with text, images, and voice notes.
+- Emoji reactions, message editing, deletion, and full conversation deletion.
+- Message **request system** — users approve or reject first contact.
+- Typing indicators, read receipts, and active chat presence via Socket.IO.
+- **Scheduled messages** for delayed delivery (premium feature).
+
+### Push Notifications
+- **Web Push** (PWA) via VAPID for browser notifications on desktop, Android, and iOS.
+- **Firebase Cloud Messaging (FCM)** for native Android app notifications.
+- Notifications for: new posts, comments, replies, message requests, collaboration proposals, and admin announcements.
+- Smart suppression: no push when the recipient is actively viewing the conversation.
+- Stale subscription cleanup, iOS Safari-specific handling.
+
+### Premium Tier — KSH 50/month
+| Feature | Free | Premium |
+|---------|------|---------|
+| Personal notes | 50 | Unlimited |
+| Characters per note | 20,000 | 100,000 |
+| Share links per note | 3 | Unlimited |
+| Surprise notes | 20 | Unlimited |
+| Note locking | No | Yes |
+| Blog space | No | Yes |
+| Scheduled messages | No | Yes |
+| Note media attachments | No | Up to 20 |
+| Version history retention | 7 days | 365 days |
+| Auto-approve collaborations | No | Yes |
+| Communities | 1 | 5 |
+
+All new accounts receive a **1-day free trial** of premium features. Payments processed via **Paystack**.
+
+### Admin Dashboard
+- Real-time analytics: posts/day, comments/day, active users, traffic, system health.
+- User management: ban, unban, delete accounts, grant/revoke premium.
+- Post management: pin, unpin, force-delete.
+- Announcements and site-wide push broadcast.
+- CSV data export and Meilisearch reindex.
+- APK upload with OTA update manifest for the Android app.
+
+### Security & Safety
+- **CSRF protection** via Flask-WTF on all mutating routes.
+- **Rate limiting** on authentication endpoints (15 calls/minute).
+- Honeypot bot detection on registration.
+- Secure cookies (HttpOnly, Secure, SameSite=Lax), **HSTS** (1 year with preload), and **CSP** headers.
+- HTML sanitization via **Bleach** — Markdown rendered safely, links set to `target="_blank" rel="noopener"`.
+- NSFW image detection via **JigsawStack** — flagged images are tagged and hidden.
+- Canonical domain enforcement and automatic HTTP→HTTPS redirects.
+- Open redirect protection via `is_safe_url()`.
+- ProxyFix middleware for correct IP/URL generation behind reverse proxies.
+
+### PWA & Native App
+- Installable on Android and iOS via the browser.
+- Service Worker with offline caching and a dedicated `/offline` fallback page.
+- Web Share Target API support.
+- **Capacitor**-wrapped native Android app with:
+  - Persistent auth tokens (90-day httpOnly cookies).
+  - App Lock: optional 4-digit PIN with 5-minute unlock session.
+  - Bidirectional offline sync for personal notes.
+  - Deep linking via Android App Links.
 
 ---
 
-## 🛠️ Technical Stack
+## Tech Stack
 
-- **Backend**: Python 3.8+, Flask, Gunicorn
-- **Database**: MongoDB (Persistence), Redis (Caching & Task Queue)
-- **Background Jobs**: Flask-RQ2 for asynchronous media processing and notifications.
-- **Search Engine**: Meilisearch
-- **Integrations**:
-  - **Cloudinary**: Cloud-based image and video management.
-  - **JigsawStack**: AI-powered content safety.
-  - **Mailgun/SMTP**: Transactional and newsletter email delivery.
+| Category | Technology |
+|----------|------------|
+| **Backend Framework** | Python 3.12, Flask 3.1, Gunicorn 23 (gevent WebSocket worker) |
+| **Database** | MongoDB 7 (primary), Redis 7 (caching + task queue) |
+| **Real-time** | Flask-SocketIO 5.3, gevent-websocket |
+| **Search** | Meilisearch (full-text with typo tolerance) |
+| **Media** | Cloudinary (images, video, audio) |
+| **Background Jobs** | Flask-RQ2 (RQ 2.6) |
+| **Push Notifications** | pywebpush (VAPID), firebase-admin (FCM) |
+| **Email** | Flask-Mail (SMTP) with List-Unsubscribe headers |
+| **Authentication** | Flask-Login, Google OAuth2 (requests-oauthlib) |
+| **Encryption** | Fernet (cryptography 46), PBKDF2-HMAC-SHA256 |
+| **AI / Moderation** | JigsawStack (NSFW detection, tag suggestions) |
+| **Markdown** | Python-Markdown 3.10 + Bleach 6.3 sanitization |
+| **Payments** | Paystack |
+| **Frontend** | Jinja2 templates, vanilla JS, CSS |
+| **PWA** | Service Worker, Web App Manifest, Web Share Target |
+| **Native App** | Capacitor (Android + iOS) with Jetpack Compose UI |
+| **Scheduling** | schedule library + custom scheduler.py |
+| **Deployment** | Docker, CapRover, Render/Heroku Procfile |
+| **Monitoring** | JSON-formatted rotating logs, ntfy push notifications, system health dashboard |
+| **Linting** | Flake8, Pylint, Prospector |
 
 ---
 
-## 🛠️ Installation & Setup
+## Architecture
 
-### 1. Prerequisites
-- Python 3.8+
+```
+echowithin/
+├── main.py              # Flask app, routes, config, helpers (monolithic core)
+├── api.py               # REST API blueprint (/api/v1/*) for mobile/native clients
+├── wsgi.py              # WSGI entry point
+├── worker.py            # RQ background job worker
+├── scheduler.py         # Cron-style scheduler (log emails, newsletter, backups, etc.)
+├── backup_to_atlas.py   # Incremental MongoDB → Atlas backup sync
+├── weekly_achievements.py  # Weekly leaderboard calculation
+├── process_scheduled_messages.py  # Delivers due scheduled messages
+├── schedule_log_email.py    # Enqueues weekly log email job
+├── send_weekly_newsletter.py # Enqueues weekly newsletter job
+├── cleanup_expired_auth.py   # Removes expired verification codes/tokens
+├── fix_template_syntax.py    # Template syntax repair utility
+├── templates/           # Jinja2 templates (38 files)
+├── static/              # CSS, JS, service worker, PWA assets
+├── mobile-app/          # Capacitor native app wrapper + Android/iOS configs
+├── requirements.txt     # Python dependencies
+├── Procfile             # Process types for Render/Heroku
+├── Dockerfile           # Docker image definition
+├── captain-definition   # CapRover deployment config
+└── README.md
+```
+
+**Process model** (via Procfile / honcho):
+- `web`: Gunicorn with 3 gevent WebSocket workers
+- `worker`: RQ worker for background jobs
+- `scheduler`: Custom scheduler for periodic tasks
+
+---
+
+## Installation & Setup
+
+### Prerequisites
+- Python 3.12+
 - MongoDB instance (Atlas or local)
 - Redis server
-- Meilisearch instance
+- Meilisearch instance (optional; search works in degraded mode without it)
 
-### 2. Quickstart
+### Quickstart
+
 ```bash
-# Clone the repository
 git clone <repo-url>
 cd echowithin
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Configure environment (see below)
+# Configure environment variables (see below)
 cp .env.example .env
 
-# Run the application
+# Run locally (development)
 python main.py
+
+# Run with all processes (production simulation)
+honcho start
 ```
 
-### 3. Environment Variables
-The application requires the following core variables:
-
-| Variable | Description |
-|----------|-------------|
-| `SECRET` | Flask secret key for sessions and CSRF. |
-| `MONGODB_CONNECTION` | Your MongoDB URI. |
-| `REDIS_HOST`, `REDIS_PORT` | Redis connection details. |
-| `GOOGLE_CLIENT_ID/SECRET` | For Google OAuth login. |
-| `CLOUDINARY_*` | API keys for media storage. |
-| `JIGSAW_API_KEY` | For AI content moderation. |
-| `VAPID_PUBLIC/PRIVATE_KEY`| For Web Push notifications. |
-
----
-
-## 🏗️ Deployment
-Professional deployment is handled via Gunicorn. A `Procfile` is included for compatibility with platforms like Heroku or Render.
+### Production
 
 ```bash
-gunicorn wsgi:app --workers 3 --bind 0.0.0.0:$PORT
+gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
+  -w 3 --timeout 120 --keep-alive 5 \
+  -b 0.0.0.0:$PORT main:app
 ```
 
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SECRET` | Yes | Flask secret key for sessions, CSRF, and encryption derivation |
+| `MONGODB_CONNECTION` | Yes | MongoDB connection URI |
+| `REDIS_HOST` | Yes | Redis hostname |
+| `REDIS_PORT` | Yes | Redis port |
+| `REDIS_PASSWORD` | Yes | Redis password |
+| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` | Yes | SMTP credentials |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth2 credentials |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Yes | Cloudinary media storage |
+| `JIGSAW_API_KEY` | Yes | AI content moderation & tag suggestions |
+| `MEILI_URL`, `MEILI_MASTER_KEY` | No | Meilisearch endpoint (search degrades without it) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web Push notifications |
+| `FIREBASE_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT` | No | FCM native app push |
+| `PAYSTACK_SECRET_KEY` | No | Payment processing |
+| `NTFY_TOPIC`, `NTFY_USERNAME`, `NTFY_PASSWORD` | No | Admin push notifications via ntfy |
+| `FLASK_URL` | No | Canonical base URL for email links (default: https://echowithin.xyz) |
+| `SESSION_COOKIE_SECURE` | No | Force secure cookies (default: True) |
+| `BYPASS_RATE_LIMIT` | No | Development only — disables rate limiting when FLASK_ENV=development |
+
 ---
 
-## 🤝 Contributing
-We value original human thought. If you'd like to contribute, please fork the repository and submit a pull request with a clear description of your changes.
+## API
+
+A REST API is available at `/api/v1/*` for mobile/native app clients. Key endpoint groups:
+
+| Group | Endpoints |
+|-------|-----------|
+| **Auth** | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth` |
+| **Notes** | `GET /notes`, `GET /notes/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
+| **Note Shares** | `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/revoke_share/<id>` |
+| **Versions** | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>` |
+| **Proposals** | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision` |
+| **Sync** | `POST /notes/<id>/sync` |
+| **Lock** | `POST /notes/toggle_lock/<id>` |
+| **App Lock** | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove` |
+| **FCM** | `POST /fcm/register`, `POST /fcm/unregister` |
+| **Premium** | `POST /premium/activate` |
+| **Profile** | `GET /profile` |
+| **Collaboration** | `GET /notes/share/<share_id>/attachments` |
 
 ---
-*Built with ❤️ by the EchoWithin Team.*
+
+## Contributing
+
+Contributions are welcome. Fork the repository and submit a pull request with a clear description of your changes. Please ensure code passes existing linting (`flake8`, `pylint`).
+
+---
+
+Built with care by the EchoWithin Team.

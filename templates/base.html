@@ -560,6 +560,7 @@
             <button onclick="dismissNativePromo(true)" style="background: none; border: none; font-size: 1.5rem; color: #999; cursor: pointer; padding: 0 4px; line-height: 0.8; font-weight: bold;">&times;</button>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button onclick="dismissNativePromo(true)" style="background: none; border: none; color: #7f6e65; font-size: 0.8rem; cursor: pointer; font-weight: 600; padding: 8px 10px; margin-right: auto; text-decoration: underline;">Don't show again</button>
             <button onclick="dismissNativePromo(false)" style="background: none; border: 1px solid rgba(62, 34, 23, 0.3); color: #3e2217; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;">Later</button>
             <a href="{{ url_for('about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.3);">
                 Download
@@ -1980,8 +1981,10 @@
         const isMobile = window.innerWidth < 992;
         const isNative = navigator.userAgent.includes('EchoWithinApp') || navigator.userAgent.includes('Capacitor');
         const dismissed = localStorage.getItem('ew_native_prompt_dismissed');
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 
-        if (!isMobile || isNative || dismissed === 'true') {
+        if (!isMobile || isNative || dismissed === 'true' || isIOS || isStandalone) {
             return;
         }
 

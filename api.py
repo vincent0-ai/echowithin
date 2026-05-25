@@ -226,6 +226,28 @@ def api_get_notes():
     formatted_notes = []
     for note in notes_list:
         content_plain = m._decrypt_note_record(note)
+        
+        # Calculate if update is available
+        source_note_id = note.get('source_note_id')
+        update_available = False
+        if source_note_id:
+            orig = m.personal_posts_conf.find_one({'_id': source_note_id})
+            if orig:
+                orig_ts = orig.get('updated_at') or orig.get('created_at')
+                clone_ts = note.get('updated_at') or note.get('created_at')
+                if orig_ts and clone_ts:
+                    if orig_ts.tzinfo is None:
+                        orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
+                    if clone_ts.tzinfo is None:
+                        clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
+                    if orig_ts > clone_ts:
+                        try:
+                            orig_decrypted = m._decrypt_note_record(orig)
+                            if content_plain != orig_decrypted:
+                                update_available = True
+                        except Exception:
+                            update_available = True
+
         formatted_notes.append({
             'id': str(note['_id']),
             'content': content_plain,
@@ -233,6 +255,7 @@ def api_get_notes():
             'tags': note.get('tags', []),
             'is_locked': note.get('is_locked', False),
             'is_pinned': note.get('is_pinned', False),
+            'update_available': update_available,
             'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None,
             'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
         })
@@ -260,6 +283,28 @@ def api_get_note(note_id):
         return jsonify({'error': 'Note not found.'}), 404
 
     content_plain = m._decrypt_note_record(note)
+    
+    # Calculate if update is available
+    source_note_id = note.get('source_note_id')
+    update_available = False
+    if source_note_id:
+        orig = m.personal_posts_conf.find_one({'_id': source_note_id})
+        if orig:
+            orig_ts = orig.get('updated_at') or orig.get('created_at')
+            clone_ts = note.get('updated_at') or note.get('created_at')
+            if orig_ts and clone_ts:
+                if orig_ts.tzinfo is None:
+                    orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
+                if clone_ts.tzinfo is None:
+                    clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
+                if orig_ts > clone_ts:
+                    try:
+                        orig_decrypted = m._decrypt_note_record(orig)
+                        if content_plain != orig_decrypted:
+                            update_available = True
+                    except Exception:
+                        update_available = True
+
     return jsonify({
         'id': str(note['_id']),
         'content': content_plain,
@@ -267,6 +312,7 @@ def api_get_note(note_id):
         'tags': note.get('tags', []),
         'is_locked': note.get('is_locked', False),
         'is_pinned': note.get('is_pinned', False),
+        'update_available': update_available,
         'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None,
         'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
     })

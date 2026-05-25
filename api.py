@@ -256,6 +256,8 @@ def api_get_notes():
             'is_locked': note.get('is_locked', False),
             'is_pinned': note.get('is_pinned', False),
             'update_available': update_available,
+            'source_note_id': str(note['source_note_id']) if note.get('source_note_id') else None,
+            'source_share_id': note.get('source_share_id'),
             'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None,
             'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
         })
@@ -313,6 +315,8 @@ def api_get_note(note_id):
         'is_locked': note.get('is_locked', False),
         'is_pinned': note.get('is_pinned', False),
         'update_available': update_available,
+        'source_note_id': str(note['source_note_id']) if note.get('source_note_id') else None,
+        'source_share_id': note.get('source_share_id'),
         'created_at': note.get('created_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('created_at') else None,
         'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
     })
@@ -994,6 +998,237 @@ def api_delete_note(note_id):
     m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
     return jsonify({'success': True, 'message': 'Note deleted successfully.'})
+
+@api_bp.route('/notes/<note_id>/sync', methods=['POST'])
+@login_required
+def api_sync_note(note_id):
+    m = get_main_globals()
+    try:
+        obj_id = safe_obj_id(note_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid note ID'}), 400
+
+        # Find the cloned note owned by current user
+        note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        source_note_id = note.get('source_note_id')
+        source_share_id = note.get('source_share_id')
+        if not source_note_id:
+            return jsonify({'error': 'This note is not a saved copy — nothing to sync'}), 400
+
+        # Verify the share still exists and grants edit permission
+        if source_share_id:
+            share = m.note_shares_conf.find_one({'share_id': source_share_id})
+            if not share:
+                return jsonify({'error': 'The original share link no longer exists'}), 404
+            if share.get('permissions') != 'edit':
+                return jsonify({'error': 'You need edit permission to sync with the original'}), 403
+            # Check expiration
+            if share.get('expires_at'):
+                expires_at = share['expires_at']
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+                if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+                    return jsonify({'error': 'The share link has expired'}), 410
+        else:
+            return jsonify({'error': 'No share link associated with this copy'}), 400
+
+        # Fetch the original note
+        original_note = m.personal_posts_conf.find_one({'_id': source_note_id})
+        if not original_note:
+            return jsonify({'error': 'Original note no longer exists', 'code': 'original_missing'}), 410
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
+
+        # Determine sync direction by comparing last-modified timestamps
+        clone_modified = note.get('updated_at') or note.get('created_at') or now
+        original_modified = original_note.get('updated_at') or original_note.get('created_at') or now
+        # Ensure timezone-aware comparison
+        if clone_modified.tzinfo is None:
+            clone_modified = clone_modified.replace(tzinfo=datetime.timezone.utc)
+        if original_modified.tzinfo is None:
+            original_modified = original_modified.replace(tzinfo=datetime.timezone.utc)
+
+        # Check if content is actually different
+        if note.get('content') == original_note.get('content'):
+            decrypted = m._decrypt_note_record(note)
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'none',
+                'message': 'Already in sync — no changes found.'
+            })
+
+        if clone_modified > original_modified:
+            # --- PUSH: Clone is newer → push clone's content to the original ---
+            original_owner_id = str(original_note.get('user_id', ''))
+            is_owner_of_original = str(current_user.id) == original_owner_id
+
+            if not is_owner_of_original and not share.get('auto_approve', False):
+                # Contributor flow: create a pending proposal instead of overwriting.
+                m.note_versions_conf.insert_one({
+                    'note_id': source_note_id,
+                    'share_id': source_share_id,
+                    'editor_name': editor_name + ' (Sync)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': original_note.get('content', ''),
+                    'base_content': original_note.get('content', ''),
+                    'content_owner_id': ObjectId(original_owner_id),
+                    'proposed_content': note.get('content'),
+                    'encrypted': True,
+                    'event_type': 'proposal',
+                    'status': 'pending',
+                    'edit_summary': 'Synced changes from my saved copy',
+                    'created_at': now,
+                    'is_read_by_owner': False
+                })
+                
+                # Notify original owner sessions.
+                try:
+                    m.socketio.emit('note_proposal_created', {
+                        'share_id': source_share_id,
+                        'note_id': str(source_note_id),
+                        'editor_name': editor_name,
+                        'summary': 'Synced changes from a saved copy'
+                    }, room=original_owner_id)
+                except Exception:
+                    pass
+
+                # Push notification for owner devices
+                try:
+                    if original_owner_id:
+                        m.send_push_notification_to_user(
+                            original_owner_id,
+                            f"{editor_name} proposed note changes",
+                            "A collaborator submitted updates for your review.",
+                            url=url_for('personal_space', _external=True) + '#activity',
+                            tag=f'note-proposal-{source_note_id}',
+                            extra_data={'type': 'note_proposal', 'note_id': str(source_note_id), 'share_id': source_share_id}
+                        )
+                except Exception as notify_err:
+                    m.app.logger.error(f"Failed to send proposal push notification to owner {original_owner_id}: {notify_err}")
+
+                return jsonify({
+                    'success': True,
+                    'pending_approval': True,
+                    'message': 'Changes submitted to the note owner for review.'
+                })
+
+            # Owner flow: direct push permitted.
+            if original_note.get('content'):
+                m.note_versions_conf.insert_one({
+                    'note_id': source_note_id,
+                    'share_id': source_share_id,
+                    'editor_name': editor_name + ' (sync push)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': original_note['content'],
+                    'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
+                    'encrypted': original_note.get('encrypted', True),
+                    'created_at': now,
+                    'is_read_by_owner': False if not is_owner_of_original else True,
+                    'is_auto_approved': True if not is_owner_of_original else False,
+                    'event_type': 'snapshot'
+                })
+                
+                if not is_owner_of_original:
+                    try:
+                        m.socketio.emit('note_auto_approved', {
+                            'share_id': source_share_id,
+                            'note_id': str(source_note_id),
+                            'editor_name': editor_name,
+                            'summary': 'Auto-synced changes from a saved copy'
+                        }, room=original_owner_id)
+                    except Exception:
+                        pass
+                version_count = m.note_versions_conf.count_documents({'note_id': source_note_id})
+                if version_count > 50:
+                    oldest = m.note_versions_conf.find({'note_id': source_note_id}).sort('created_at', 1).limit(version_count - 50)
+                    for old_ver in oldest:
+                        m.note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+            # Push clone content to original
+            m.personal_posts_conf.update_one(
+                {'_id': source_note_id},
+                {'$set': {
+                    'content': note.get('content'),
+                    'encrypted': note.get('encrypted', True),
+                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+                    'reference': note.get('reference', ''),
+                    'tags': note.get('tags', []),
+                    'updated_at': now
+                }}
+            )
+
+            # Re-index original in Meilisearch
+            decrypted = m._decrypt_note_record(note)
+            m.index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
+
+            # Broadcast update to participants in the share room
+            m.socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
+
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'push',
+                'message': 'Your changes have been pushed to the original note.'
+            })
+        else:
+            # --- PULL: Original is newer → pull original's content to the clone ---
+            if note.get('content'):
+                m.note_versions_conf.insert_one({
+                    'note_id': obj_id,
+                    'share_id': None,
+                    'editor_name': editor_name + ' (sync pull)',
+                    'editor_id': ObjectId(current_user.id),
+                    'content': note['content'],
+                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+                    'encrypted': note.get('encrypted', True),
+                    'created_at': now
+                })
+                version_count = m.note_versions_conf.count_documents({'note_id': obj_id})
+                if version_count > 50:
+                    oldest = m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', 1).limit(version_count - 50)
+                    for old_ver in oldest:
+                        m.note_versions_conf.delete_one({'_id': old_ver['_id']})
+
+            # Pull original content to clone
+            m.personal_posts_conf.update_one(
+                {'_id': obj_id},
+                {'$set': {
+                    'content': original_note.get('content'),
+                    'encrypted': original_note.get('encrypted', True),
+                    'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
+                    'reference': original_note.get('reference', ''),
+                    'tags': original_note.get('tags', []),
+                    'updated_at': now
+                }}
+            )
+
+            # Re-index clone in Meilisearch
+            decrypted = m._decrypt_note_record(original_note)
+            m.index_note_to_meili(note_id, decrypted_content=decrypted)
+
+            # Broadcast to other sessions of the SAME USER
+            m.socketio.emit('note_changed', {
+                'note_id': note_id, 
+                'content': decrypted,
+                'reference': original_note.get('reference', ''),
+                'tags': original_note.get('tags', [])
+            }, room=str(current_user.id))
+
+            return jsonify({
+                'success': True,
+                'content': decrypted,
+                'direction': 'pull',
+                'message': 'Note updated with latest changes from the original.'
+            })
+    except Exception as e:
+        m.app.logger.error(f"Error syncing note {note_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
 
 
 

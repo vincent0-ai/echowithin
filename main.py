@@ -476,6 +476,7 @@ user_post_views_conf = db['user_post_views']
 unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
+app_updates_conf = db['app_updates']
 
 # --- Community Notes Collections ---
 communities_conf = db['communities']
@@ -2852,16 +2853,45 @@ def search():
 @login_required
 @admin_required
 def admin_dashboard():
-    # Read the current update-manifest.json if it exists to display in the UI
-    manifest = None
+    # 1. Read update-manifest.json from disk (pushed via git)
+    file_manifest = None
     manifest_path = os.path.join(app.static_folder, 'update-manifest.json')
     if os.path.exists(manifest_path):
         try:
             with open(manifest_path, 'r', encoding='utf-8') as f:
                 import json
-                manifest = json.load(f)
+                file_manifest = json.load(f)
         except Exception as e:
-            app.logger.error(f"Failed to read update manifest: {e}")
+            app.logger.error(f"Failed to read update manifest from file: {e}")
+
+    # 2. Get manifest from database
+    db_manifest = app_updates_conf.find_one({'key': 'latest'})
+
+    # 3. Synchronize database if file is newer or database is empty
+    if file_manifest:
+        should_sync = False
+        if not db_manifest:
+            should_sync = True
+        else:
+            file_code = file_manifest.get('versionCode', 0)
+            db_code = db_manifest.get('versionCode', 0)
+            if file_code > db_code:
+                should_sync = True
+                
+        if should_sync:
+            app_updates_conf.update_one(
+                {'key': 'latest'},
+                {'$set': {
+                    'versionCode': file_manifest.get('versionCode'),
+                    'versionName': file_manifest.get('versionName'),
+                    'apkUrl': file_manifest.get('apkUrl'),
+                    'changelog': file_manifest.get('changelog')
+                }},
+                upsert=True
+            )
+            db_manifest = app_updates_conf.find_one({'key': 'latest'})
+
+    manifest = db_manifest or file_manifest
             
     return render_template('admin_dashboard.html', manifest=manifest)
 
@@ -2905,12 +2935,51 @@ def admin_upload_apk():
         with open(manifest_path, 'w', encoding='utf-8') as f:
             json.dump(manifest_payload, f, indent=2)
 
+        # Write to database
+        app_updates_conf.update_one(
+            {'key': 'latest'},
+            {'$set': {
+                'versionCode': int(version_code_str),
+                'versionName': version_name,
+                'apkUrl': apk_url,
+                'changelog': changelog
+            }},
+            upsert=True
+        )
+
         flash("Android OTA app update published successfully!", "success")
     except Exception as e:
         app.logger.error(f"Failed to upload APK and write manifest: {e}")
         flash(f"Error publishing update: {str(e)}", "danger")
 
     return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/static/update-manifest.json')
+def serve_update_manifest():
+    # 1. Try to read from database
+    db_manifest = app_updates_conf.find_one({'key': 'latest'})
+    if db_manifest:
+        payload = {
+            "versionCode": db_manifest.get('versionCode'),
+            "versionName": db_manifest.get('versionName'),
+            "apkUrl": db_manifest.get('apkUrl'),
+            "changelog": db_manifest.get('changelog')
+        }
+        return jsonify(payload)
+    
+    # 2. Fallback to physical file
+    manifest_path = os.path.join(app.static_folder, 'update-manifest.json')
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                import json
+                return jsonify(json.load(f))
+        except Exception:
+            pass
+            
+    return jsonify({"error": "Manifest not found"}), 404
+
 
 
 @app.route('/admin/metrics')

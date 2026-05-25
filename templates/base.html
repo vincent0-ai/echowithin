@@ -549,6 +549,39 @@
         </footer>
 
     </div>
+
+    <!-- Native App Promotion Banner -->
+    <div id="native-app-promo-banner" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 92%; max-width: 500px; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(62, 34, 23, 0.2); border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); padding: 20px; z-index: 9999; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1);">
+        <div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 12px;">
+            <div style="background: #3e2217; color: white; border-radius: 12px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
+                <i class="fa-brands fa-android" style="font-size: 1.6rem;"></i>
+            </div>
+            <div style="flex-grow: 1;">
+                <h4 style="margin: 0 0 4px 0; color: #3e2217; font-family: 'Poppins', sans-serif; font-size: 1.05rem; font-weight: 700; text-align: left;">Get the EchoWithin Native App!</h4>
+                <p style="margin: 0; color: #555; font-size: 0.85rem; line-height: 1.4; text-align: left;">Experience instant <strong>0ms local loading</strong>, robust <strong>offline-first search</strong>, secure <strong>PIN AppLock</strong>, and reliable system push notifications!</p>
+            </div>
+            <button onclick="dismissNativePromo(true)" style="background: none; border: none; font-size: 1.5rem; color: #999; cursor: pointer; padding: 0 4px; line-height: 0.8; font-weight: bold;">&times;</button>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+            <button onclick="dismissNativePromo(false)" style="background: none; border: 1px solid rgba(62, 34, 23, 0.3); color: #3e2217; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;">Later</button>
+            <a href="{{ url_for('about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 8px 18px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.3);">
+                <i class="fa-brands fa-android"></i> Install Native App
+            </a>
+        </div>
+    </div>
+
+    <style>
+    @keyframes slideUpFade {
+        0% {
+            opacity: 0;
+            transform: translate(-50%, 40px);
+        }
+        100% {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+    }
+    </style>
 </body>
 
 <script>
@@ -1944,6 +1977,46 @@
             });
         }
     });
+
+    // Native App Promotion Dialog for frequent visitors
+    function initNativeAppPromo() {
+        const isMobile = window.innerWidth < 992;
+        const isNative = navigator.userAgent.includes('EchoWithinApp') || navigator.userAgent.includes('Capacitor');
+        const dismissed = localStorage.getItem('ew_native_prompt_dismissed');
+
+        if (!isMobile || isNative || dismissed === 'true') {
+            return;
+        }
+
+        // Track visit count using localStorage
+        let visits = parseInt(localStorage.getItem('ew_visit_count') || '0');
+        visits += 1;
+        localStorage.setItem('ew_visit_count', visits);
+
+        // Show prompt to frequent users (3rd visit or more)
+        if (visits >= 3) {
+            setTimeout(function() {
+                const banner = document.getElementById('native-app-promo-banner');
+                if (banner) {
+                    banner.style.display = 'block';
+                }
+            }, 3000); // 3-second delay on page load for smoother UX
+        }
+    }
+
+    // Dismiss banner action
+    window.dismissNativePromo = function(forever) {
+        const banner = document.getElementById('native-app-promo-banner');
+        if (banner) {
+            banner.style.display = 'none';
+        }
+        if (forever) {
+            localStorage.setItem('ew_native_prompt_dismissed', 'true');
+        }
+    };
+
+    // Initialize promotion on DOM ready
+    window.addEventListener('DOMContentLoaded', initNativeAppPromo);
 </script>
 
 

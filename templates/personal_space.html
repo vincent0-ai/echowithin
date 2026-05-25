@@ -535,10 +535,14 @@
 
         .note-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.35rem 0.5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            align-items: center;
         }
 
-        .note-actions button {
+        .note-actions button,
+        .note-actions a.btn-icon {
             background: none;
             border: none;
             cursor: pointer;
@@ -546,9 +550,15 @@
             border-radius: 4px;
             color: #666;
             font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            white-space: nowrap;
         }
 
-        .note-actions button:hover {
+        .note-actions button:hover,
+        .note-actions a.btn-icon:hover {
             background: #f5f5f5;
         }
 
@@ -574,6 +584,30 @@
         .note-actions .sync-note-btn.syncing {
             pointer-events: none;
             opacity: 0.6;
+        }
+
+        @keyframes pulse-orange {
+            0% { box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(230, 81, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(230, 81, 0, 0); }
+        }
+
+        .note-card.update-available {
+            border-left-color: #e65100 !important;
+            background: #fffbf7;
+        }
+
+        .note-actions .sync-note-btn.update-pending-btn {
+            background: #ffe0b2;
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            animation: pulse-orange 2s infinite;
+            color: #e65100;
+        }
+
+        .note-actions .sync-note-btn.update-pending-btn:hover {
+            background: #ffd19a;
+            color: #bf4300;
         }
 
         /* Lock Note Button */
@@ -1887,7 +1921,7 @@
 
         <div class="personal-notes-list" id="notes-list-container">
             {% for note in personal_posts %}
-            <div class="note-card" data-note-id="{{ note._id }}" {% if note.source_note_id
+            <div class="note-card {% if note.update_available %}update-available{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
@@ -1924,6 +1958,11 @@
                         {% if note.source_note_id %}
                         <span class="source-badge" title="Saved from a shared note">
                             Saved copy
+                        </span>
+                        {% endif %}
+                        {% if note.update_available %}
+                        <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
                         </span>
                         {% endif %}
                     </span>
@@ -2009,12 +2048,14 @@
                         <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
-                            <i class="fas fa-external-link-alt"></i>
+                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
                         </a>
-                        <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
+                        <button type="button" class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt"></i>{% if show_icon_labels %}<span
-                                class="action-label">Sync</span>{% endif %}
+                            <i class="fas fa-sync-alt" {% if note.update_available %}style="color: #e65100; font-weight: bold;"{% endif %}></i>
+                            {% if show_icon_labels or note.update_available %}
+                            <span class="action-label" {% if note.update_available %}style="color: #e65100; font-weight: 600;"{% endif %}>{{ 'Sync Now' if note.update_available else 'Sync' }}</span>
+                            {% endif %}
                         </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
@@ -2058,7 +2099,7 @@
                             data-has-clones="{{ 'true' if has_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="button" class="delete-btn" title="Delete note">
-                                <i class="far fa-trash-alt"></i>
+                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span class="action-label">Delete</span>{% endif %}
                             </button>
                         </form>
                     </div>
@@ -2366,7 +2407,7 @@
         </script>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}
-            <div class="locked-note-card note-card" data-note-id="{{ note._id }}">
+            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}" data-note-id="{{ note._id }}">
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
                     {{ note.content | markdown | safe }}
                 </div>
@@ -2396,6 +2437,11 @@
                             style="display: inline-flex; align-items: center; gap: 0.2rem; background: #f5ebe7; color: #5a3328; border-radius: 20px; padding: 0.1rem 0.4rem; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem;">
                             <i class="fas fa-lock" style="font-size: 0.55rem;"></i> Locked
                         </span>
+                        {% if note.update_available %}
+                        <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
+                        </span>
+                        {% endif %}
                     </span>
                     {% set note_id_str = note._id|string %}
                     {% if locked_shares_map.get(note_id_str) %}
@@ -2443,43 +2489,46 @@
                     {% endif %}
                     <div class="note-actions">
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
-                            <i class="far fa-copy"></i>
+                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
-                            <i class="fas fa-pen"></i>
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
                             title="View your saved surprise" target="_blank"
                             style="color: #ff4d6d; text-decoration: none;">
-                            <i class="fas fa-gift"></i>
+                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{% endif %}
                         </a>
                         {% endif %}
                         {% if note.source_note_id and note.source_share_id %}
                         <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note &amp; discussion" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
-                            <i class="fas fa-external-link-alt"></i>
+                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
                         </a>
-                        <button type="button" class="btn-icon sync-note-btn" title="Sync with original"
+                        <button type="button" class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}" title="Sync with original"
                             data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt"></i>
+                            <i class="fas fa-sync-alt" {% if note.update_available %}style="color: #e65100; font-weight: bold;"{% endif %}></i>
+                            {% if show_icon_labels or note.update_available %}
+                            <span class="action-label" {% if note.update_available %}style="color: #e65100; font-weight: 600;"{% endif %}>{{ 'Sync Now' if note.update_available else 'Sync' }}</span>
+                            {% endif %}
                         </button>
                         {% endif %}
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-lock-open"></i>
+                            <i class="fas fa-lock-open"></i>{% if show_icon_labels %}<span class="action-label">Unlock</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-clock-rotate-left"></i>
+                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
                         </button>
                         {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
@@ -2488,7 +2537,7 @@
                             data-has-clones="{{ 'true' if locked_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="button" class="delete-btn" title="Delete note">
-                                <i class="far fa-trash-alt"></i>
+                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span class="action-label">Delete</span>{% endif %}
                             </button>
                         </form>
                     </div>
@@ -4096,6 +4145,24 @@
                         // Update copy button
                         const copyBtnEl = noteCard.querySelector('.copy-btn');
                         if (copyBtnEl) copyBtnEl.dataset.copyText = result.content;
+
+                        // Clean up update badges and warning highlights on sync success
+                        noteCard.classList.remove('update-available');
+                        const updateBadge = noteCard.querySelector('.update-badge');
+                        if (updateBadge) updateBadge.remove();
+                        
+                        // Revert sync button custom class/styles
+                        btn.classList.remove('update-pending-btn');
+                        const syncActionLabel = btn.querySelector('.action-label');
+                        if (syncActionLabel) {
+                            syncActionLabel.style.color = '';
+                            syncActionLabel.style.fontWeight = '';
+                            syncActionLabel.textContent = 'Sync';
+                        }
+                        if (icon) {
+                            icon.style.color = '';
+                            icon.style.fontWeight = '';
+                        }
                     }
                     // Direction-aware success feedback
                     const direction = result.direction || 'pull';
@@ -5943,11 +6010,13 @@
         const steps = [
             { selector: '.copy-btn', icon: 'fa-copy', text: '📋 Copy your note text to clipboard for pasting elsewhere' },
             { selector: '.edit-note-btn', icon: 'fa-pen', text: '✏️ Edit your note — supports full markdown formatting' },
+            { selector: '.export-note-btn', icon: 'fa-download', text: '📥 Export — Download this note as Plain Text, PDF, or Word document' },
             { selector: '.share-note-btn', icon: 'fa-share-alt', text: '📤 Share this note — create a link with view/edit access, or pick a surprise theme (Birthday, Anniversary) with music & photos' },
             { selector: '.lock-note-btn', icon: 'fa-lock', text: '🔒 Lock this note behind your 4-digit PIN for extra privacy' },
             { selector: '.version-history-btn', icon: 'fa-clock-rotate-left', text: '🕐 Version History — view all edits, compare versions side-by-side, and restore previous versions' },
             { selector: '.sync-note-btn', icon: 'fa-sync-alt', text: '🔄 Sync — pull latest changes from the original shared note. If both copies changed, you can merge them' },
-            { selector: 'a[title="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' }
+            { selector: 'a.btn-icon[title*="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' },
+            { selector: '.delete-btn', icon: 'fa-trash-alt', text: '🗑️ Delete — Permanently remove this note (or choose to delete it for everyone if it has active shares or clones)' }
         ];
 
         let currentStep = 0;
@@ -5966,15 +6035,30 @@
             z-index: 10000;
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
             pointer-events: auto;
-            transition: opacity 0.3s, transform 0.3s;
+            transition: opacity 0.2s, transform 0.2s;
+            opacity: 0;
         `;
         document.body.appendChild(tooltip);
+
+        function repositionTooltip() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            const target = firstNoteCard.querySelector(step.selector);
+            if (!target) return;
+
+            const rect = target.getBoundingClientRect();
+            const scrollX = window.scrollX || window.pageXOffset;
+            const scrollY = window.scrollY || window.pageYOffset;
+
+            // Position tooltip below the target, ensuring horizontal fit in viewport
+            tooltip.style.top = (rect.bottom + scrollY + 8) + 'px';
+            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 240, rect.left + scrollX + rect.width / 2 - 110)) + 'px';
+        }
 
         function showStep(index) {
             if (index >= steps.length) {
                 // Tour complete
-                tooltip.remove();
-                document.querySelectorAll('.onboarding-highlight').forEach(el => el.classList.remove('onboarding-highlight'));
+                cleanUpTour();
                 localStorage.setItem('ew_onboarding_complete', '1');
                 return;
             }
@@ -6001,22 +6085,17 @@
             target.style.outlineOffset = '3px';
             target.style.borderRadius = '6px';
 
-            // Position tooltip
-            const rect = target.getBoundingClientRect();
             tooltip.innerHTML = `
-                <div style="margin-bottom: 0.4rem;">${step.text}</div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="margin-bottom: 0.4rem; line-height: 1.4;">${step.text}</div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
                     <span style="font-size: 0.7rem; color: #aaa;">${index + 1} of ${steps.length}</span>
-                    <button id="onboarding-next" style="background: var(--primary-color); color: white; border: none; padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">
+                    <button id="onboarding-next" style="background: var(--primary-color); color: white; border: none; padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
                         ${index === steps.length - 1 ? 'Done' : 'Next'}
                     </button>
                 </div>
             `;
 
-            // Calculate position (below the target)
-            const scrollY = window.scrollY;
-            tooltip.style.top = (rect.bottom + scrollY + 8) + 'px';
-            tooltip.style.left = Math.max(10, rect.left + rect.width / 2 - 110) + 'px';
+            repositionTooltip();
             tooltip.style.opacity = '1';
 
             // Wire next button
@@ -6030,8 +6109,25 @@
             }
         }
 
-        // Start tour after a brief delay to let the page settle
-        setTimeout(() => showStep(0), 1500);
+        function cleanUpTour() {
+            tooltip.remove();
+            window.removeEventListener('scroll', repositionTooltip);
+            window.removeEventListener('resize', repositionTooltip);
+            document.querySelectorAll('.onboarding-highlight').forEach(el => {
+                el.classList.remove('onboarding-highlight');
+                el.style.outline = '';
+                el.style.outlineOffset = '';
+            });
+        }
+
+        // Keep tooltip aligned during scroll or viewport resizing
+        window.addEventListener('scroll', repositionTooltip);
+        window.addEventListener('resize', repositionTooltip);
+
+        // Start tour after window load and brief settle to get correct DOM layout positions
+        window.addEventListener('load', () => {
+            setTimeout(() => showStep(0), 1000);
+        });
 
         window.markAllActivityRead = async function (reload = false) {
             try {

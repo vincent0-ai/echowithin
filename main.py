@@ -8016,7 +8016,29 @@ def personal_space():
 
     personal_posts_raw = list(personal_posts_conf.aggregate([
         {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}}},
-        {'$addFields': {'_sort_ts': {'$ifNull': ['$updated_at', '$created_at']}}},
+        {'$lookup': {
+            'from': 'personal_posts',
+            'localField': 'source_note_id',
+            'foreignField': '_id',
+            'as': 'original'
+        }},
+        {'$addFields': {
+            'original_doc': {'$arrayElemAt': ['$original', 0]}
+        }},
+        {'$addFields': {
+            '_sort_ts': {
+                '$cond': {
+                    'if': {'$gt': ['$original_doc', None]},
+                    'then': {
+                        '$max': [
+                            {'$ifNull': ['$updated_at', '$created_at']},
+                            {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}
+                        ]
+                    },
+                    'else': {'$ifNull': ['$updated_at', '$created_at']}
+                }
+            }
+        }},
         {'$sort': {'_sort_ts': -1, 'created_at': -1}},
         {'$skip': skip_notes},
         {'$limit': per_page}
@@ -8024,6 +8046,24 @@ def personal_space():
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = _decrypt_note_record(note)
+        # Determine if an update is available on the original note
+        note['update_available'] = False
+        if note.get('source_note_id') and note.get('original_doc'):
+            orig = note['original_doc']
+            orig_ts = orig.get('updated_at') or orig.get('created_at')
+            clone_ts = note.get('updated_at') or note.get('created_at')
+            if orig_ts and clone_ts:
+                if orig_ts.tzinfo is None:
+                    orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
+                if clone_ts.tzinfo is None:
+                    clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
+                if orig_ts > clone_ts:
+                    try:
+                        orig_decrypted = _decrypt_note_record(orig)
+                        if note['content'] != orig_decrypted:
+                            note['update_available'] = True
+                    except Exception:
+                        note['update_available'] = True
         personal_posts.append(note)
 
     # --- Locked Notes ---
@@ -8045,12 +8085,51 @@ def personal_space():
     if is_unlocked and locked_notes_count > 0:
         locked_notes_raw = list(personal_posts_conf.aggregate([
             {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': True}},
-            {'$addFields': {'_sort_ts': {'$ifNull': ['$updated_at', '$created_at']}}},
+            {'$lookup': {
+                'from': 'personal_posts',
+                'localField': 'source_note_id',
+                'foreignField': '_id',
+                'as': 'original'
+            }},
+            {'$addFields': {
+                'original_doc': {'$arrayElemAt': ['$original', 0]}
+            }},
+            {'$addFields': {
+                '_sort_ts': {
+                    '$cond': {
+                        'if': {'$gt': ['$original_doc', None]},
+                        'then': {
+                            '$max': [
+                                {'$ifNull': ['$updated_at', '$created_at']},
+                                {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}
+                            ]
+                        },
+                        'else': {'$ifNull': ['$updated_at', '$created_at']}
+                    }
+                }
+            }},
             {'$sort': {'_sort_ts': -1, 'created_at': -1}},
             {'$limit': 50}
         ]))
         for note in locked_notes_raw:
             note['content'] = _decrypt_note_record(note)
+            note['update_available'] = False
+            if note.get('source_note_id') and note.get('original_doc'):
+                orig = note['original_doc']
+                orig_ts = orig.get('updated_at') or orig.get('created_at')
+                clone_ts = note.get('updated_at') or note.get('created_at')
+                if orig_ts and clone_ts:
+                    if orig_ts.tzinfo is None:
+                        orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
+                    if clone_ts.tzinfo is None:
+                        clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
+                    if orig_ts > clone_ts:
+                        try:
+                            orig_decrypted = _decrypt_note_record(orig)
+                            if note['content'] != orig_decrypted:
+                                note['update_available'] = True
+                        except Exception:
+                            note['update_available'] = True
             locked_notes.append(note)
         # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]

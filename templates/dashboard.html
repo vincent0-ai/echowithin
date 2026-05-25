@@ -51,8 +51,8 @@
         <p class="landing-subtitle">A blog community focused on sharing original ideas and thoughts, now with the tools
             to write, share, and connect.</p>
         <div class="landing-ctas">
-            <a href="{{ url_for('login') }}" class="landing-btn landing-btn-primary">Start Writing</a>
-            <a href="{{ url_for('blog') }}" class="landing-btn landing-btn-secondary">Explore Blog</a>
+            <a href="{{ url_for('login', next=url_for('personal_space')) }}" class="landing-btn landing-btn-primary">Start Writing</a>
+            <a href="{{ url_for('blog') }}" class="landing-btn landing-btn-primary">Explore Blog</a>
         </div>
     </div>
 
@@ -95,7 +95,7 @@
     <div class="landing-bottom-cta">
         <p>At EchoWithin, we value original human thought. Avoid AI-generated content — we want your real ideas,
             experiences, and perspectives to echo within our community.</p>
-        <a href="{{ url_for('login') }}" class="landing-btn landing-btn-primary">Get Started</a>
+        <a href="{{ url_for('login', next=url_for('personal_space')) }}" class="landing-btn landing-btn-primary">Get Started</a>
     </div>
 
 </div>

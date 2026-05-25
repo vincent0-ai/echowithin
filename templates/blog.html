@@ -38,7 +38,7 @@
                 <a id="blog-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Choose a note →</a>
                 {% else %}
                 <span id="blog-share-promo-copy">Log in first, then share a private note as a surprise link.</span>
-                <a id="blog-share-promo-link" href="{{ url_for('login') }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
+                <a id="blog-share-promo-link" href="{{ url_for('login', next=request.path) }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
                 {% endif %}
             </div>
         </div>

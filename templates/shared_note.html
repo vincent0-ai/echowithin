@@ -532,7 +532,7 @@
             {% else %}
             <div class="login-prompt">
                 <i class="fas fa-sign-in-alt"></i>
-                <a href="{{ url_for('login') }}">Log in</a> to join the discussion.
+                <a href="{{ url_for('login', next=request.path) }}">Log in</a> to join the discussion.
             </div>
             {% endif %}
 
@@ -573,7 +573,7 @@
                             real-time
                             collaboration, and secure encryption.</p>
                         {% endif %}
-                        <a href="{{ url_for('login') }}" class="cta-button cta-button-primary" id="cta-join-btn">
+                        <a href="{{ url_for('login', next=request.path) }}" class="cta-button cta-button-primary" id="cta-join-btn">
                             Get Started Free
                         </a>
                     </div>

@@ -283,7 +283,11 @@ self.addEventListener('push', event => {
     if (rawTarget.startsWith('http://') || rawTarget.startsWith('https://')) {
       try {
         const targetUrl = new URL(rawTarget);
-        if (targetUrl.origin === self.location.origin) {
+        // Allow origin match OR same hostname OR localhost / 127.0.0.1 equivalents
+        if (targetUrl.origin === self.location.origin || 
+            targetUrl.hostname === self.location.hostname ||
+            (self.location.hostname === 'localhost' && targetUrl.hostname === '127.0.0.1') ||
+            (self.location.hostname === '127.0.0.1' && targetUrl.hostname === 'localhost')) {
           return targetUrl.pathname + targetUrl.search + targetUrl.hash;
         }
       } catch (_) {
@@ -424,17 +428,14 @@ self.addEventListener('notificationclick', event => {
           return client.focus();
         }
       }
-      // 2. Navigate an existing window to the target URL.
-      //    This is critical for iOS PWA where openWindow opens Safari
-      //    instead of navigating the standalone PWA window.
+      // 2. Navigate any existing window on our app's origin to the target URL and focus it
       for (let client of windowClients) {
-        if ('navigate' in client) {
-          return client.navigate(absoluteTarget)
-            .then(c => c ? c.focus() : clients.openWindow(absoluteTarget))
-            .catch(() => clients.openWindow(absoluteTarget));
+        if ('navigate' in client && 'focus' in client) {
+          client.focus();
+          return client.navigate(absoluteTarget);
         }
       }
-      // 3. Fallback: open a new window (desktop browsers, or no existing window)
+      // 3. Fallback: open a new window safely in the main promise chain
       if (clients.openWindow) {
         return clients.openWindow(absoluteTarget);
       }

@@ -2852,7 +2852,65 @@ def search():
 @login_required
 @admin_required
 def admin_dashboard():
-    return render_template('admin_dashboard.html')
+    # Read the current update-manifest.json if it exists to display in the UI
+    manifest = None
+    manifest_path = os.path.join(app.static_folder, 'update-manifest.json')
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                import json
+                manifest = json.load(f)
+        except Exception as e:
+            app.logger.error(f"Failed to read update manifest: {e}")
+            
+    return render_template('admin_dashboard.html', manifest=manifest)
+
+
+@app.route('/admin/upload_apk', methods=['POST'])
+@login_required
+@admin_required
+def admin_upload_apk():
+    try:
+        version_code_str = request.form.get('version_code')
+        version_name = request.form.get('version_name')
+        changelog = request.form.get('changelog')
+        apk_file = request.files.get('apk_file')
+
+        if not version_code_str or not version_name or not changelog or not apk_file:
+            flash("All fields are required!", "danger")
+            return redirect(url_for('admin_dashboard'))
+
+        # Create downloads directory in static if it doesn't exist
+        downloads_dir = os.path.join(app.static_folder, 'downloads')
+        os.makedirs(downloads_dir, exist_ok=True)
+
+        # Save APK to echowithin/static/downloads/app-debug.apk
+        apk_path = os.path.join(downloads_dir, 'app-debug.apk')
+        apk_file.save(apk_path)
+
+        # Generate absolute URL for the app client to consume
+        apk_url = url_for('static', filename='downloads/app-debug.apk', _external=True)
+
+        # Create the manifest payload
+        import json
+        manifest_payload = {
+            "versionCode": int(version_code_str),
+            "versionName": version_name,
+            "apkUrl": apk_url,
+            "changelog": changelog
+        }
+
+        # Write to echowithin/static/update-manifest.json
+        manifest_path = os.path.join(app.static_folder, 'update-manifest.json')
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            json.dump(manifest_payload, f, indent=2)
+
+        flash("Android OTA app update published successfully!", "success")
+    except Exception as e:
+        app.logger.error(f"Failed to upload APK and write manifest: {e}")
+        flash(f"Error publishing update: {str(e)}", "danger")
+
+    return redirect(url_for('admin_dashboard'))
 
 
 @app.route('/admin/metrics')

@@ -37,6 +37,47 @@
     </div>
   </div>
 
+  <!-- App OTA Update Section -->
+  <div class="card mb-4" style="padding: 1.5rem; background: #fdfaf7; border: 1px solid #d4c5b5; border-radius: 8px;">
+    <h4 style="color: #3e2217; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
+      <i class="fas fa-mobile-alt"></i> Mobile App OTA Updater
+    </h4>
+    
+    {% if manifest %}
+    <div style="background: #fcf8f2; border: 1px dashed #d4c5b5; padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 1.25rem; font-size: 0.88rem; color: #555;">
+      <p style="margin: 0 0 0.35rem; font-weight: 500;">Current Live OTA Version: <span style="color: #28a745;">{{ manifest.versionName }}</span> (Code: <strong>{{ manifest.versionCode }}</strong>)</p>
+      <p style="margin: 0 0 0.35rem; font-weight: 500;">Changelog:</p>
+      <p style="margin: 0 0 0.5rem; font-size: 0.82rem; white-space: pre-wrap; font-family: monospace; background: #fafafa; padding: 8px; border-radius: 4px; border: 1px solid #eee;">{{ manifest.changelog }}</p>
+      <p style="margin: 0; font-size: 0.78rem;">Download Link: <a href="{{ manifest.apkUrl }}" target="_blank" style="color: #3e2217; font-weight: 600;">{{ manifest.apkUrl }}</a></p>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('admin_upload_apk') }}" method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
+        <div style="flex: 1; min-width: 150px;">
+          <label for="version_code" style="display: block; font-size: 0.85rem; font-weight: 600; color: #3e2217; margin-bottom: 0.25rem;">Version Code</label>
+          <input type="number" id="version_code" name="version_code" class="form-input" required style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px;" placeholder="e.g. 2">
+        </div>
+        <div style="flex: 1; min-width: 150px;">
+          <label for="version_name" style="display: block; font-size: 0.85rem; font-weight: 600; color: #3e2217; margin-bottom: 0.25rem;">Version Name</label>
+          <input type="text" id="version_name" name="version_name" class="form-input" required style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px;" placeholder="e.g. 1.0.1">
+        </div>
+        <div style="flex: 2; min-width: 250px;">
+          <label for="apk_file" style="display: block; font-size: 0.85rem; font-weight: 600; color: #3e2217; margin-bottom: 0.25rem;">Upload APK File</label>
+          <input type="file" id="apk_file" name="apk_file" accept=".apk" required style="width: 100%; padding: 0.45rem; border: 1px solid #ccc; border-radius: 6px; background: white;">
+        </div>
+      </div>
+      <div style="margin-bottom: 1.25rem;">
+        <label for="changelog" style="display: block; font-size: 0.85rem; font-weight: 600; color: #3e2217; margin-bottom: 0.25rem;">Changelog</label>
+        <textarea id="changelog" name="changelog" required rows="3" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 0.9rem;" placeholder="e.g. - Fixed note scrolling&#10;- Added shimmer skeleton loader&#10;- Bouncy spring scale click animations"></textarea>
+      </div>
+      <button type="submit" class="btn" style="background: #3e2217; color: white; padding: 0.6rem 1.5rem; border-radius: 6px; font-weight: bold; border: none; cursor: pointer; transition: background 0.2s;">
+        Publish OTA Update
+      </button>
+    </form>
+  </div>
+
   <h3>Posts per Day</h3>
   <div class="chart-container"><canvas id="postsChart"></canvas></div>
 

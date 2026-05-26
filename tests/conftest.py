@@ -27,6 +27,7 @@ os.environ.setdefault('FLASK_ENV', 'development')
 os.environ.setdefault('BYPASS_RATE_LIMIT', 'true')
 
 import gevent.monkey
+gevent.monkey.patch_all = lambda **kw: None
 
 
 @pytest.fixture(scope='session', autouse=True)

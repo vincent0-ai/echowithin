@@ -192,7 +192,7 @@
     {% endif %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         // Temporary promo behavior for blog/home pages.
         (function initTemporarySharePromo() {

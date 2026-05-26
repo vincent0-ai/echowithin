@@ -1654,7 +1654,7 @@ def add_security_headers(response):
     # (per CSP spec §3.3.3) so nonce-adoption is enforced on compliant browsers.
     nonce = getattr(g, 'csp_nonce', '')
     script_src = (
-        f"'nonce-{nonce}' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
+        f"'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
         f"https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
     ) if nonce else (
         "'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
@@ -1663,6 +1663,7 @@ def add_security_headers(response):
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         f"script-src {script_src}; "
+        "worker-src 'self'; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "

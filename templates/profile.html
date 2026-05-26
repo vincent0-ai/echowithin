@@ -101,7 +101,7 @@
                 style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
                 Send Message Request
             </button>
-            <script>
+            <script nonce="{{ csp_nonce }}">
                 function sendMessageRequest(userId) {
                     const btn = document.getElementById('dm-request-btn');
                     btn.disabled = true;
@@ -299,7 +299,7 @@
         </div>
     </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         const input = document.getElementById('profile-user-search');
         const panel = document.getElementById('profile-user-search-suggestions');

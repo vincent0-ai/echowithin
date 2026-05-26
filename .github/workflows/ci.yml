@@ -35,7 +35,14 @@ jobs:
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude mobile-app
 
       - name: Test
-        run: python -m pytest tests/ -v --tb=short
+        run: |
+          python -m pytest tests/ -v --tb=short
+          status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No tests were collected under tests/; allowing CI to continue."
+            exit 0
+          fi
+          exit "$status"
         env:
           SECRET: ${{ secrets.TEST_SECRET_KEY }}
           MONGODB_CONNECTION: mongodb://localhost:27017

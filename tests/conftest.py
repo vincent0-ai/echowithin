@@ -27,12 +27,12 @@ os.environ.setdefault('FLASK_ENV', 'development')
 os.environ.setdefault('BYPASS_RATE_LIMIT', 'true')
 
 import gevent.monkey
-gevent.monkey.patch_all = lambda **kw: None
 
 
 @pytest.fixture(scope='session', autouse=True)
 def _session_mocks():
     _patches = []
+    _patches.append(patch.object(gevent.monkey, 'patch_all', new=lambda **kw: None))
     _patches.append(patch('pymongo.MongoClient', autospec=True))
     _patches.append(patch('redis.Redis', autospec=True))
     _patches.append(patch('redis.from_url', autospec=True))

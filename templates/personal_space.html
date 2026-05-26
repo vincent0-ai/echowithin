@@ -2367,7 +2367,7 @@
                 <i class="fas fa-lock"></i> Lock Now
             </button>
         </div>
-        <script>
+        <script nonce="{{ csp_nonce }}">
             (function () {
                 const UNLOCK_DURATION = 300; // 5 minutes in seconds
                 const timerEl = document.getElementById('relock-timer');
@@ -3040,7 +3040,7 @@
 <!-- DOMPurify for sanitization -->
 <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 
     // --- App Lock & Note Locking Logic ---
     let currentPin = '';
@@ -5484,7 +5484,7 @@
     });
 </script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // ========== Offline Notes Sync System ==========
     (function () {
         const DB_NAME = 'echowithin_offline';
@@ -6189,7 +6189,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // ====== Note Export Logic ======
     (function() {
         let exportNoteId = null;

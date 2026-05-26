@@ -1975,15 +1975,14 @@
         }
     });
 
-    // Native App Promotion Dialog for frequent visitors
+    // Native App Promotion Dialog for frequent visitors (Android APK only)
     function initNativeAppPromo() {
-        const isMobile = window.innerWidth < 992;
+        const isAndroid = /Android/i.test(navigator.userAgent);
         const isNative = navigator.userAgent.includes('EchoWithinApp') || navigator.userAgent.includes('Capacitor');
         const dismissed = localStorage.getItem('ew_native_prompt_dismissed');
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 
-        if (!isMobile || isNative || dismissed === 'true' || isIOS || isStandalone) {
+        if (!isAndroid || isNative || dismissed === 'true' || isStandalone) {
             return;
         }
 

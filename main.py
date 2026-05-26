@@ -1648,18 +1648,26 @@ def add_security_headers(response):
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
     # Content-Security-Policy — mitigates XSS, data injection, and click-jacking
-    # Nonce-based CSP: inline scripts MUST use nonce="{{ csp_nonce }}" to execute.
-    # 'unsafe-inline' is kept as a fallback pending full template migration;
-    # modern browsers will ignore 'unsafe-inline' when a valid nonce is present
-    # (per CSP spec §3.3.3) so nonce-adoption is enforced on compliant browsers.
-    nonce = getattr(g, 'csp_nonce', '')
-    script_src = (
-        f"'self' 'nonce-{nonce}' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
-        f"https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
-    ) if nonce else (
-        "'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
-        "https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
-    )
+    # NOTE: nonce infrastructure (g.csp_nonce, context processor, base.html nonce
+    # attributes) is in place for a staged migration to nonce-based CSP.
+    # Set CSP_STRICT_NONCES=true in production once ALL inline scripts in EVERY
+    # template include nonce="{{ csp_nonce }}" AND inline event handlers
+    # (onclick, onsubmit etc.) are replaced with addEventListener.
+    _use_nonces = os.environ.get('CSP_STRICT_NONCES', '').lower() in ('1', 'true', 'yes')
+    if _use_nonces:
+        nonce = getattr(g, 'csp_nonce', '')
+        script_src = (
+            f"'self' 'nonce-{nonce}' https://cdn.socket.io https://cdn.jsdelivr.net "
+            f"https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
+        ) if nonce else (
+            "'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
+            "https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
+        )
+    else:
+        script_src = (
+            "'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
+            "https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
+        )
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
         f"script-src {script_src}; "

@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block head_meta %}
-<script type="application/ld+json">
+<script type="application/ld+json" nonce="{{ csp_nonce }}">
 {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -668,7 +668,7 @@
         <a href="{{ url_for('about') }}#contact" class="btn">Contact Us</a>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
         document.querySelectorAll('.faq-question').forEach(btn => {
             btn.addEventListener('click', () => {
                 const item = btn.closest('.faq-item');

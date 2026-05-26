@@ -8,7 +8,7 @@
 <meta name="description" content="{{ description }}">
 {% endblock %}
 {% block head_meta %}
-<script type="application/ld+json">
+<script type="application/ld+json" nonce="{{ csp_nonce }}">
 {
     "@context": "https://schema.org",
     "@type": "WebSite",

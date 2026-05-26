@@ -241,7 +241,7 @@
 {% endmacro %}
 
 {% macro post_polling_script() %}
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         const postsToPoll = document.querySelectorAll('.post-media-container[data-status="processing_media"]');
 

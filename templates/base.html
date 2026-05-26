@@ -46,7 +46,7 @@
     {% endblock %}
 
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         // Global Socket.IO instance
         window.socket = io({ transports: ['websocket'], upgrade: false });
         window.socket.on('connect', () => console.log('Connected to real-time server'));
@@ -399,7 +399,7 @@
 
 <body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">
     <!-- Native app: auto-reauth on session loss using httpOnly cookie -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function(){
         var isNative = navigator.userAgent.indexOf('EchoWithinApp') !== -1;
         if (!isNative) return;
@@ -423,7 +423,7 @@
     })();
     </script>
     <!-- Inject reload button IMMEDIATELY — runs before any page content downloads -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function(){
         var show = false;
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) show = true;
@@ -582,7 +582,7 @@
     </style>
 </body>
 
-<script>
+<script nonce="{{ csp_nonce }}">
     // --- Capacitor Native App Support ---
     // Hide splash screen when page is ready (for Capacitor app)
     // Also handles deep linking from notifications
@@ -1851,7 +1851,7 @@
 </script>
 
 <!-- App Badge (Unread Count) Script -->
-<script>
+<script nonce="{{ csp_nonce }}">
     (function () {
         // App Badge API for showing unread count on PWA icon
         // Works on: iOS Safari 16.4+ (PWA), Chrome 81+ (Android PWA + desktop)
@@ -1928,7 +1928,7 @@
 </script>
 
 <!-- Newsletter Script -->
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function () {
         const newsletterForm = document.getElementById('newsletter-form');
         const newsletterMessage = document.getElementById('newsletter-message');

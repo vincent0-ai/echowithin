@@ -5,7 +5,7 @@ monkey.patch_all()
 import datetime
 import re
 
-from flask import Flask, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
+from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
 import logging
 import math
 import redis
@@ -87,6 +87,50 @@ executor = ThreadPoolExecutor(max_workers=10)
 
 app = Flask(__name__)
 csrf = CSRFProtect(app)
+
+# --- Request-ID logging filter ---
+class RequestIDFilter(logging.Filter):
+    def filter(self, record):
+        try:
+            record.request_id = getattr(g, 'request_id', '-')
+        except RuntimeError:
+            record.request_id = '-'
+        return True
+
+@app.before_request
+def set_request_id():
+    g.request_id = secrets.token_hex(8)
+
+@app.before_request
+def set_csp_nonce():
+    g.csp_nonce = secrets.token_hex(16)
+
+# --- Periodic global state cleanup ---
+_last_state_cleanup = {'at': 0}
+
+@app.before_request
+def cleanup_stale_global_state():
+    now_ts = time.time()
+    if now_ts - _last_state_cleanup['at'] < 300:
+        return
+    _last_state_cleanup['at'] = now_ts
+
+    for user_id, partners in list(active_chat_views.items()):
+        if not partners:
+            active_chat_views.pop(user_id, None)
+
+    for share_id in list(active_note_viewers.keys()):
+        if not active_note_viewers[share_id]:
+            active_note_viewers.pop(share_id, None)
+
+    for share_id, lock_data in list(note_locks.items()):
+        lock_age = now_ts - lock_data.get('timestamp', now_ts)
+        if lock_age > 300:
+            try:
+                socketio.emit('lock_released', {'share_id': share_id}, room=share_id)
+            except Exception:
+                pass
+            note_locks.pop(share_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
 _ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz').split(',')
 socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
@@ -104,13 +148,14 @@ if not app.debug:
 
     # Define the format for the log messages
     formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d %(request_id)s'
     )
     file_handler.setFormatter(formatter)
 
     # Add the handler to the app's logger
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
+    app.logger.addFilter(RequestIDFilter())
     app.logger.info('EchoWithin application startup')
 
 login_manager = LoginManager(app)
@@ -1603,9 +1648,21 @@ def add_security_headers(response):
     if request.is_secure:
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
     # Content-Security-Policy — mitigates XSS, data injection, and click-jacking
+    # Nonce-based CSP: inline scripts MUST use nonce="{{ csp_nonce }}" to execute.
+    # 'unsafe-inline' is kept as a fallback pending full template migration;
+    # modern browsers will ignore 'unsafe-inline' when a valid nonce is present
+    # (per CSP spec §3.3.3) so nonce-adoption is enforced on compliant browsers.
+    nonce = getattr(g, 'csp_nonce', '')
+    script_src = (
+        f"'nonce-{nonce}' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
+        f"https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
+    ) if nonce else (
+        "'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net "
+        "https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com"
+    )
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.socket.io https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://js.stripe.com https://www.googletagmanager.com; "
+        f"script-src {script_src}; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
@@ -1715,6 +1772,7 @@ def inject_template_globals():
         'now': datetime.datetime.now(datetime.timezone.utc),
         'TIER_LIMITS': TIER_LIMITS,
         'PREMIUM_PRICE_KSH': PREMIUM_PRICE_KSH,
+        'csp_nonce': getattr(g, 'csp_nonce', ''),
     }
     from flask import has_request_context
     if has_request_context() and current_user and getattr(current_user, 'is_authenticated', False):
@@ -3303,7 +3361,6 @@ def feed():
                 'title': p.get('title'),
                 'link': url_for('view_post', slug=p.get('slug'), _external=True),
                 'guid': str(p.get('_id')),
-                'pubDate': p.get('created_at').strftime('%a, %d %b %Y %H:%M:%S GMT') if p.get('created_at') else '',
                 'pubDate': pub_date.strftime('%a, %d %b %Y %H:%M:%S GMT') if pub_date else '',
                 'description': (p.get('content') or '')[:400]
             })

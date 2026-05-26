@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Lint
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude mobile-app
+
+      - name: Test
+        run: python -m pytest tests/ -v --tb=short
+        env:
+          SECRET: test-secret-key-for-pytest
+          MONGODB_CONNECTION: mongodb://localhost:27017
+          REDIS_HOST: localhost
+          REDIS_PORT: '6379'
+          REDIS_PASSWORD: ''
+          MAIL_SERVER: localhost
+          MAIL_PORT: '587'
+          MAIL_USERNAME: test@test.com
+          MAIL_PASSWORD: test
+          CLOUDINARY_CLOUD_NAME: test
+          CLOUDINARY_API_KEY: test
+          CLOUDINARY_API_SECRET: test
+          JIGSAW_API_KEY: test
+          GOOGLE_CLIENT_ID: test.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: test
+          TIME: '3600'

@@ -4,6 +4,7 @@ monkey.patch_all()
 
 import datetime
 import re
+import sys
 
 from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
 import logging
@@ -19,6 +20,7 @@ from flask_mail import Mail, Message
 from concurrent.futures import ThreadPoolExecutor
 import os
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from bson.son import SON

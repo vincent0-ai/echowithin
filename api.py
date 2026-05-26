@@ -914,7 +914,7 @@ def api_get_all_proposals():
         {'_id': 1, 'content': 1}
     ))
     note_ids = [n['_id'] for n in user_notes]
-    note_map = {str(n['_id']): (m.decrypt_note(n['content']) if isinstance(n.get('content'), bytes) else n.get('content', ''))[:80] for n in user_notes}
+    note_map = {str(n['_id']): (m.decrypt_note(n['content'], user_id=current_user.id) if isinstance(n.get('content'), (str, bytes)) else n.get('content', ''))[:80] for n in user_notes}
 
     proposals = list(m.note_versions_conf.find({
         'note_id': {'$in': note_ids},
@@ -928,7 +928,7 @@ def api_get_all_proposals():
             'version_id': str(p['_id']),
             'note_id': str(p['note_id']),
             'note_preview': note_map.get(str(p['note_id']), 'Unknown note'),
-            'content': m.decrypt_note(p['content']) if p.get('encrypted', False) else p.get('content', ''),
+            'content': m.decrypt_note(p['content'], user_id=current_user.id) if p.get('encrypted', False) else p.get('content', ''),
             'author_username': p.get('author_username', 'Unknown'),
             'created_at': p.get('created_at').isoformat() if p.get('created_at') else None,
             'status': p.get('status', 'pending')

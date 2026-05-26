@@ -1664,7 +1664,7 @@ def add_security_headers(response):
         "default-src 'self'; "
         f"script-src {script_src}; "
         "worker-src 'self'; "
-        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://maxcdn.bootstrapcdn.com; "
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
         "media-src 'self' https://res.cloudinary.com; "

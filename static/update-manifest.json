@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1",
+  "versionCode": 3,
+  "versionName": "1.2",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "Added note-level bidirectional sync, update available warnings, and offline app security PIN protection."
+  "changelog": "Flawless scrolling performance, secure offline PIN fallback, beautiful Notesnook design overhaul, rich markdown toolbar, character/word counters, and copy note features."
 }

@@ -156,6 +156,41 @@ if not app.debug:
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
     app.logger.addFilter(RequestIDFilter())
+
+    # --- SECRET_KEY leak prevention ---
+    class SecretRedactionFilter(logging.Filter):
+        _sensitive = None
+
+        @classmethod
+        def _get_sensitive(cls):
+            if cls._sensitive is None:
+                cls._sensitive = []
+                secret = app.config.get('SECRET_KEY', '')
+                if secret:
+                    cls._sensitive.append(secret)
+            return cls._sensitive
+
+        def filter(self, record):
+            for val in self._get_sensitive():
+                record.msg = str(record.msg).replace(val, '[REDACTED]')
+                if record.args:
+                    record.args = tuple(
+                        str(a).replace(val, '[REDACTED]') if isinstance(a, str) else a
+                        for a in record.args
+                    )
+            return True
+
+    app.logger.addFilter(SecretRedactionFilter())
+
+    # Warn if debug mode is on in a non-development environment
+    _flask_env = os.environ.get('FLASK_ENV', 'production').lower()
+    if app.debug and _flask_env != 'development':
+        app.logger.critical(
+            'CRITICAL: Debug mode is ON in non-development environment. '
+            'Set FLASK_DEBUG=0 and FLASK_ENV=production.'
+        )
+        app.config['DEBUG'] = False
+
     app.logger.info('EchoWithin application startup')
 
 login_manager = LoginManager(app)
@@ -522,6 +557,8 @@ unlock_notifications_conf = db['unlock_notifications']
 weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 app_updates_conf = db['app_updates']
+dm_fernet_salts_conf = db['dm_fernet_salts']  # Per-conversation random salts for DM encryption
+dm_fernet_salts_conf.create_index('conv_id', unique=True)
 
 # --- Community Notes Collections ---
 communities_conf = db['communities']
@@ -648,14 +685,52 @@ def get_notes_fernet():
 # -- v2 per-user key derivation & caching --
 _user_fernet_cache = TTLCache(maxsize=512, ttl=300)  # 5-min cache
 
+def _ensure_user_salt_exists(user_id: str):
+    """Generate and store a per-user random salt if one doesn't exist.
+    The salt is encrypted with the v1 global key (acting as a KEK) so that
+    even with SECRET_KEY an attacker needs the DB-stored encrypted salt to
+    derive the user's Fernet key."""
+    user_id = str(user_id)
+    obj_id = safe_object_id(user_id)
+    if not obj_id:
+        return  # non-ObjectId identifier, skip salt provisioning
+    user_doc = users_conf.find_one({'_id': obj_id}, {'fernet_salt_v2': 1})
+    if user_doc and user_doc.get('fernet_salt_v2'):
+        return
+    try:
+        random_salt = secrets.token_bytes(32)
+        encrypted_salt = get_notes_fernet().encrypt(random_salt).decode('utf-8')
+        users_conf.update_one(
+            {'_id': obj_id},
+            {'$set': {'fernet_salt_v2': encrypted_salt}}
+        )
+        _user_fernet_cache.pop(user_id, None)
+    except Exception as e:
+        app.logger.warning(f"Could not store per-user salt for {user_id}: {e}")
+
 def _get_user_fernet(user_id: str) -> Fernet:
-    """Per-user Fernet instance. Derives key from SECRET_KEY + user_id salt."""
+    """Per-user Fernet instance. Includes random per-user salt when available."""
     cached = _user_fernet_cache.get(user_id)
     if cached:
         return cached
     secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
-    # Per-user salt: combines fixed namespace + user_id for uniqueness
-    salt = f'echowithin_notes_v2_{user_id}'.encode()
+    user_salt = None
+    try:
+        obj_id = safe_object_id(user_id)
+        if obj_id:
+            user_doc = users_conf.find_one({'_id': obj_id}, {'fernet_salt_v2': 1})
+            if user_doc and user_doc.get('fernet_salt_v2'):
+                try:
+                    raw = get_notes_fernet().decrypt(user_doc['fernet_salt_v2'].encode('utf-8'))
+                    user_salt = raw.hex()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    if user_salt:
+        salt = f'echowithin_notes_v2_{user_id}_{user_salt}'.encode()
+    else:
+        salt = f'echowithin_notes_v2_{user_id}'.encode()
     key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
     f = Fernet(key)
     _user_fernet_cache[user_id] = f
@@ -664,19 +739,54 @@ def _get_user_fernet(user_id: str) -> Fernet:
 # -- v3 per-conversation DM key derivation & caching --
 _dm_fernet_cache = TTLCache(maxsize=1024, ttl=300) # 5-min cache for conversation keys
 
-def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
-    """Derives a unique Fernet key for a conversation between two users."""
-    # Deterministic order ensures both users derive the same key
+def _dm_conv_id(user1_id, user2_id):
     uids = sorted([str(user1_id), str(user2_id)])
-    conv_id = f"{uids[0]}_{uids[1]}"
-    
+    return f"{uids[0]}_{uids[1]}"
+
+def _ensure_dm_salt_exists(user1_id, user2_id):
+    """Provision a random per-conversation salt for DM encryption.
+    Encrypted with the v1 global key (KEK pattern) so DB-only breaches
+    can't derive the conversation key without SECRET_KEY."""
+    conv_id = _dm_conv_id(user1_id, user2_id)
+    existing = dm_fernet_salts_conf.find_one({'conv_id': conv_id}, {'_id': 1})
+    if existing:
+        return
+    try:
+        random_salt = secrets.token_bytes(32)
+        encrypted_salt = get_notes_fernet().encrypt(random_salt).decode('utf-8')
+        dm_fernet_salts_conf.update_one(
+            {'conv_id': conv_id},
+            {'$setOnInsert': {'conv_id': conv_id, 'encrypted_salt': encrypted_salt, 'created_at': datetime.datetime.now(datetime.timezone.utc)}},
+            upsert=True
+        )
+        _dm_fernet_cache.pop(conv_id, None)
+    except Exception as e:
+        app.logger.warning(f"Could not store DM salt for {conv_id}: {e}")
+
+def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
+    """Derives a unique Fernet key for a conversation between two users.
+    Includes random per-conversation salt when available (v3.1)."""
+    conv_id = _dm_conv_id(user1_id, user2_id)
     cached = _dm_fernet_cache.get(conv_id)
     if cached:
         return cached
-        
+
     secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
-    # Salt combines fixed namespace + the unique pair IDs
-    salt = f'echowithin_dm_v1_{conv_id}'.encode()
+    dm_salt = None
+    try:
+        salt_doc = dm_fernet_salts_conf.find_one({'conv_id': conv_id}, {'encrypted_salt': 1})
+        if salt_doc and salt_doc.get('encrypted_salt'):
+            try:
+                raw = get_notes_fernet().decrypt(salt_doc['encrypted_salt'].encode('utf-8'))
+                dm_salt = raw.hex()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    if dm_salt:
+        salt = f'echowithin_dm_v1_{conv_id}_{dm_salt}'.encode()
+    else:
+        salt = f'echowithin_dm_v1_{conv_id}'.encode()
     key = _derive_fernet_key(secret, salt, iterations=_NOTES_KDF_ITERATIONS)
     f = Fernet(key)
     _dm_fernet_cache[conv_id] = f
@@ -685,6 +795,7 @@ def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
 def encrypt_dm(content, user1_id, user2_id):
     if not content: return content
     try:
+        _ensure_dm_salt_exists(user1_id, user2_id)
         f = _get_dm_fernet(user1_id, user2_id)
         return f.encrypt(content.encode('utf-8')).decode('utf-8')
     except Exception as e:
@@ -702,11 +813,13 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
         return encrypted_content
 
 def encrypt_note(content, user_id=None):
-    """Encrypts note content. Uses per-user key (v2) when user_id is provided."""
+    """Encrypts note content. Uses per-user key (v2) when user_id is provided.
+    Lazily provisions a per-user random salt on first encryption after deployment."""
     if not content:
         return content
     try:
         if user_id:
+            _ensure_user_salt_exists(str(user_id))
             f = _get_user_fernet(str(user_id))
         else:
             f = get_notes_fernet()
@@ -821,21 +934,22 @@ def _decrypt_note_record(note, share=None):
 
 # --- Community Encryption Utilities ---
 
-def _get_community_fernet(community_id):
+_COMMUNITY_LEGACY_ITERATIONS = 100000
+
+def _get_community_fernet(community_id, iterations=None):
     """
     Derive a community-specific encryption key based on the community ID.
-    This ensures that community notes are encrypted but all members can read them.
+    Uses 480K iterations (OWASP 2024) for new data, 100K for legacy decrypt.
     """
     community_id_str = str(community_id)
-    # Use PBKDF2 to derive a strong key from the global secret and community ID
+    if iterations is None:
+        iterations = _NOTES_KDF_ITERATIONS
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=community_id_str.encode('utf-8'),
-        iterations=100000
+        iterations=iterations
     )
-    # We use a static key here derived from the application secret key
-    # In a real enterprise app, we might store a separate community key
     base_secret = app.secret_key.encode('utf-8') if isinstance(app.secret_key, str) else app.secret_key
     key = base64.urlsafe_b64encode(kdf.derive(base_secret))
     return Fernet(key)
@@ -854,11 +968,14 @@ def decrypt_community_note(ciphertext, community_id):
     if not ciphertext:
         return ciphertext
     try:
-        # Check if it's actually a Fernet token (starts with gAAAAA...)
         if not (isinstance(ciphertext, str) and ciphertext.startswith('gAAAAA')):
             return ciphertext
-        f = _get_community_fernet(community_id)
-        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        try:
+            f = _get_community_fernet(community_id)  # 480K first
+            return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        except Exception:
+            f = _get_community_fernet(community_id, iterations=_COMMUNITY_LEGACY_ITERATIONS)
+            return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
     except Exception as e:
         app.logger.error(f"Failed to decrypt community note: {e}")
         return ciphertext
@@ -8719,7 +8836,7 @@ def create_personal_post():
             'user_id': ObjectId(current_user.id),
             'content_owner_id': ObjectId(current_user.id),
             'content': encrypted_content,
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'reference': request.form.get('reference', '').strip()[:200],
             'tags': [t.strip() for t in request.form.get('tags', '').split(',') if t.strip()][:10],
             'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -8756,7 +8873,7 @@ def create_personal_post_json():
         'user_id': ObjectId(current_user.id),
         'content_owner_id': ObjectId(current_user.id),
         'content': encrypted_content,
-        'encrypted': True,
+        'encrypted': True, 'encryption_version': 2,
         'reference': data.get('reference', '').strip()[:200],
         'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
         'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -8979,7 +9096,7 @@ def edit_personal_post(post_id):
             {'_id': obj_id},
             {'$set': {
                 'content': encrypted_content, 
-                'encrypted': True, 
+                'encrypted': True, 'encryption_version': 2, 
                 'content_owner_id': ObjectId(current_user.id),
                 'reference': data.get('reference', '').strip()[:200],
                 'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
@@ -9088,7 +9205,7 @@ def sync_personal_post(post_id):
                     'base_content': original_note.get('content', ''),
                     'content_owner_id': ObjectId(original_owner_id),
                     'proposed_content': note.get('content'),
-                    'encrypted': True,
+                    'encrypted': True, 'encryption_version': 2,
                     'event_type': 'proposal',
                     'status': 'pending',
                     'edit_summary': 'Synced changes from my saved copy',
@@ -10097,7 +10214,7 @@ def api_save_shared_note(share_id):
         'user_id': ObjectId(current_user.id),
         'content_owner_id': ObjectId(current_user.id),
         'content': cloned_encrypted,
-        'encrypted': True,
+        'encrypted': True, 'encryption_version': 2,
         'reference': original_note.get('reference', ''),
         'tags': original_note.get('tags', []),
         'created_at': datetime.datetime.now(datetime.timezone.utc),
@@ -10454,7 +10571,7 @@ def handle_send_dm(data):
             'sender_id': ObjectId(current_user.id),
             'recipient_id': recipient_id,
             'content': encrypted_content,
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'timestamp': datetime.datetime.now(datetime.timezone.utc),
             'is_read': is_actively_reading,
             'message_type': message_type
@@ -11339,7 +11456,7 @@ def _deliver_scheduled_message(sched_msg):
             'sender_id': sched_msg['sender_id'],
             'recipient_id': sched_msg['recipient_id'],
             'content': sched_msg['content'],
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'timestamp': datetime.datetime.now(datetime.timezone.utc),
             'is_read': False,
             'message_type': sched_msg.get('message_type', 'text')
@@ -11549,7 +11666,7 @@ def api_schedule_message():
             'sender_id': ObjectId(current_user.id),
             'recipient_id': ObjectId(recipient_id_str),
             'content': encrypted_content,
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'message_type': message_type,
             'scheduled_at': scheduled_at,
             'status': 'pending',
@@ -11780,7 +11897,7 @@ def api_edit_shared_note(share_id):
             'base_content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', share.get('owner_id')),
             'proposed_content': encrypted_content,
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'event_type': 'proposal',
             'status': 'pending',
             'edit_summary': edit_summary or 'Proposed changes',
@@ -11887,7 +12004,7 @@ def api_edit_shared_note(share_id):
         {'_id': share['note_id']},
         {'$set': {
             'content': encrypted_content,
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'content_owner_id': ObjectId(owner_id_str) if owner_id_str else share.get('owner_id'),
             'updated_at': now
         }}
@@ -12100,7 +12217,7 @@ def api_restore_note_version(post_id, version_id):
             'editor_id': ObjectId(current_user.id),
             'content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'event_type': 'snapshot',
             'status': 'applied',
             'edit_summary': 'Backup before restore',
@@ -12111,7 +12228,7 @@ def api_restore_note_version(post_id, version_id):
         {'_id': obj_id},
         {'$set': {
             'content': version.get('content', ''),
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'content_owner_id': ObjectId(current_user.id),
             'updated_at': now
         }}
@@ -12218,7 +12335,7 @@ def api_decide_note_proposal(version_id):
             'editor_id': ObjectId(current_user.id),
             'content': note.get('content', ''),
             'content_owner_id': note.get('content_owner_id', note.get('user_id')),
-            'encrypted': True,
+            'encrypted': True, 'encryption_version': 2,
             'event_type': 'snapshot',
             'status': 'applied',
             'edit_summary': 'Backup before accepting proposal',
@@ -12229,7 +12346,7 @@ def api_decide_note_proposal(version_id):
             {'_id': note_id},
             {'$set': {
                 'content': final_encrypted,
-                'encrypted': True,
+                'encrypted': True, 'encryption_version': 2,
                 'content_owner_id': ObjectId(current_user.id),
                 'updated_at': now
             }}
@@ -12340,7 +12457,7 @@ def api_post_note_comment(share_id):
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
         'content': encrypt_note(content),
-        'encrypted': True,
+        'encrypted': True, 'encryption_version': 2,
         'parent_id': None,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
@@ -12392,7 +12509,7 @@ def api_post_note_reply(share_id, comment_id):
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
         'content': encrypt_note(content),
-        'encrypted': True,
+        'encrypted': True, 'encryption_version': 2,
         'parent_id': parent_id,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
@@ -12557,6 +12674,17 @@ def reset_password(token):
         else:
             flash("Please fill in all fields.", "danger") # snyk:disable=security-issue
     return render_template('reset_password.html', token=token, active_page='reset_password', current_username=user_to_update.get('username'))
+
+@app.route('/health')
+def health_check():
+    """Lightweight health check for Docker healthcheck / load balancers.
+    Returns 200 if the app is running; Django/docker expects this."""
+    try:
+        if redis_cache:
+            redis_cache.ping()
+        return jsonify({'status': 'healthy', 'version': '2.0'}), 200
+    except Exception as e:
+        return jsonify({'status': 'degraded', 'error': str(e)}), 200
 
 @app.route('/favicon.ico')
 def favicon():

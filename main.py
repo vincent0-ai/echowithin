@@ -8946,11 +8946,20 @@ def merge_conflict_ai():
     """Uses JigsawStack AI to intelligently resolve merge conflicts between two versions."""
     try:
         data = request.get_json() or {}
-        current_content = data.get('current_content', '').strip()
-        incoming_content = data.get('incoming_content', '').strip()
+        current_content = data.get('current_content', '')
+        incoming_content = data.get('incoming_content', '')
+
+        # Safe string conversion and stripping
+        current_content = current_content.strip() if isinstance(current_content, str) else ''
+        incoming_content = incoming_content.strip() if isinstance(incoming_content, str) else ''
 
         if not current_content and not incoming_content:
             return jsonify({'error': 'Both note versions are empty.'}), 400
+
+        # JigsawStack's schema validation requires input_values to contain at least 1 character.
+        # If one version is empty, we fall back to a descriptive "(empty)" label.
+        current_content = current_content if current_content else "(empty)"
+        incoming_content = incoming_content if incoming_content else "(empty)"
 
         try:
             api_key = get_env_variable('JIGSAW_API_KEY')
@@ -8979,8 +8988,8 @@ def merge_conflict_ai():
             res_data = client.prompt_engine.run_prompt_direct({
                 'prompt': prompt_text,
                 'inputs': [
-                    {'key': 'current_version', 'optional': False},
-                    {'key': 'incoming_version', 'optional': False}
+                    {'key': 'current_version'},
+                    {'key': 'incoming_version'}
                 ],
                 'input_values': {
                     'current_version': current_content,

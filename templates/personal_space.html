@@ -3239,7 +3239,7 @@
         </div>
         <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
             <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>
-            <button type="button" id="save-merge-btn" class="btn comment-btn"> Save Merged Note</button>
+            <button type="button" id="save-merge-btn" class="btn comment-btn" onclick="if (typeof window.handleSaveMergeClick === 'function') window.handleSaveMergeClick(this)"> Save Merged Note</button>
         </div>
     </div>
 </div>
@@ -3935,12 +3935,46 @@
             }
         }
 
+        window.onSaveMergeConflict = null;
+
+        window.handleSaveMergeClick = async function(btn) {
+            if (!window.onSaveMergeConflict) {
+                console.warn("No save handler defined for merge conflict.");
+                return;
+            }
+            const previewEl = document.getElementById('merge-preview-content');
+            const mergedText = previewEl ? previewEl.value : '';
+            
+            // Check for unresolved conflict markers
+            if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
+                if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
+                    return;
+                }
+            }
+            
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            try {
+                await window.onSaveMergeConflict(mergedText);
+            } catch (e) {
+                console.error(e);
+                alert('An error occurred while saving the merged note.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        };
+
         window.openMergeConflictModal = function (payload) {
             const modal = document.getElementById('merge-conflict-modal');
             const currentEl = document.getElementById('merge-current-content');
             const incomingEl = document.getElementById('merge-incoming-content');
             const previewEl = document.getElementById('merge-preview-content');
             if (!modal || !currentEl || !incomingEl || !previewEl) return;
+
+            window.onSaveMergeConflict = null;
 
             currentEl.value = payload.current_content || '';
             incomingEl.value = payload.incoming_content || '';
@@ -3954,6 +3988,7 @@
             if (!modal) return;
             modal.style.display = 'none';
             document.body.style.overflow = '';
+            window.onSaveMergeConflict = null;
         };
 
         window.useCurrentVersion = function() {
@@ -4211,15 +4246,10 @@
                         incoming_content: row.proposed_content || '',
                         merge_preview: row.proposed_content || ''
                     });
-                    const saveMergeBtn = document.getElementById('save-merge-btn');
-                    if (saveMergeBtn) {
-                        saveMergeBtn.onclick = async () => {
-                            const previewEl = document.getElementById('merge-preview-content');
-                            mergedContent = previewEl ? previewEl.value : '';
-                            await window.performProposalDecision(proposalId, action, csrfToken, mergedContent);
-                            window.closeMergeConflictModal();
-                        };
-                    }
+                    window.onSaveMergeConflict = async (mergedText) => {
+                        await window.performProposalDecision(proposalId, action, csrfToken, mergedText);
+                        window.closeMergeConflictModal();
+                    };
                     return;
                 }
             }
@@ -4250,23 +4280,10 @@
             if (!response.ok || !result.success) {
                 if (result.error === 'conflict') {
                     window.openMergeConflictModal(result);
-                    const saveMergeBtn = document.getElementById('save-merge-btn');
-                    if (saveMergeBtn) {
-                        saveMergeBtn.onclick = async () => {
-                            const previewEl = document.getElementById('merge-preview-content');
-                            const merged = previewEl ? previewEl.value : '';
-                            
-                            // Check for unresolved conflict markers
-                            if (merged.includes('<<<<<<< CURRENT') || merged.includes('=======') || merged.includes('>>>>>>> INCOMING')) {
-                                if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
-                                    return;
-                                }
-                            }
-                            
-                            await window.performProposalDecision(proposalId, action, csrfToken, merged);
-                            window.closeMergeConflictModal();
-                        };
-                    }
+                    window.onSaveMergeConflict = async (mergedText) => {
+                        await window.performProposalDecision(proposalId, action, csrfToken, mergedText);
+                        window.closeMergeConflictModal();
+                    };
                 } else {
                     alert(result.error || 'Could not review proposal.');
                 }
@@ -4575,94 +4592,70 @@
                     window.closeEditModal();
                 } else if (response.status === 409 && result.error === 'conflict') {
                     window.openMergeConflictModal(result);
-                    const saveMergeBtn = document.getElementById('save-merge-btn');
-                    if (saveMergeBtn) {
-                        saveMergeBtn.onclick = async () => {
-                            const mergedText = (document.getElementById('merge-preview-content') || {}).value || '';
-                            
-                            // Check for unresolved conflict markers
-                            if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
-                                if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
-                                    return;
+                    window.onSaveMergeConflict = async (mergedText) => {
+                        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                        const csrfInput = document.querySelector('input[name="csrf_token"]');
+                        const activeCsrfToken = (csrfMeta ? csrfMeta.getAttribute('content') : '') || (csrfInput ? csrfInput.value : '') || csrfToken;
+
+                        const mergeResponse = await fetch(`/personal_post/edit/${noteId}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': activeCsrfToken
+                            },
+                            body: JSON.stringify({
+                                content: mergedText,
+                                reference: reference,
+                                tags: tags,
+                                edit_summary: editSummary || 'Merged after conflict',
+                                base_updated_at: result.current_updated_at || window.currentEditBaseUpdatedAt,
+                                force_overwrite: true
+                            })
+                        });
+                        
+                        const mergeResult = await mergeResponse.json();
+                        if (mergeResult.success) {
+                            window.closeMergeConflictModal();
+                            clearCurrentEditDraft();
+                            const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                            if (noteCard) {
+                                const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                                if (contentEl) {
+                                    contentEl.setAttribute('data-raw', mergedText);
+                                    contentEl.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(mergedText) : mergedText;
+                                }
+                                const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                                if (editBtnEl) {
+                                    const tmp = document.createElement('textarea');
+                                    tmp.textContent = mergedText;
+                                    editBtnEl.dataset.raw = tmp.innerHTML;
+                                    if (mergeResult.updated_at) editBtnEl.dataset.updatedAt = mergeResult.updated_at;
+                                }
+                                const copyBtnEl = noteCard.querySelector('.copy-btn');
+                                if (copyBtnEl) copyBtnEl.dataset.copyText = mergedText;
+
+                                // Update timestamp and move to top
+                                const dateEl = noteCard.querySelector('.note-date');
+                                if (dateEl) {
+                                    const sourceIcon = dateEl.querySelector('i');
+                                    const sourceBadge = dateEl.querySelector('.source-badge');
+                                    dateEl.innerHTML = '';
+                                    if (sourceIcon) dateEl.appendChild(sourceIcon);
+                                    dateEl.appendChild(document.createTextNode(' Edited just now'));
+                                    if (sourceBadge) dateEl.appendChild(sourceBadge);
+                                }
+                                const notesList = document.getElementById('notes-list-container');
+                                if (notesList && noteCard.parentElement === notesList) {
+                                    notesList.prepend(noteCard);
+                                    noteCard.style.animation = 'featureTipsFade 0.4s ease-out';
                                 }
                             }
-                            
-                            const originalHtml = saveMergeBtn.innerHTML;
-                            saveMergeBtn.disabled = true;
-                            saveMergeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-                            
-                            try {
-                                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                                const csrfInput = document.querySelector('input[name="csrf_token"]');
-                                const activeCsrfToken = (csrfMeta ? csrfMeta.getAttribute('content') : '') || (csrfInput ? csrfInput.value : '') || csrfToken;
-
-                                const mergeResponse = await fetch(`/personal_post/edit/${noteId}`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'X-CSRFToken': activeCsrfToken
-                                    },
-                                    body: JSON.stringify({
-                                        content: mergedText,
-                                        reference: reference,
-                                        tags: tags,
-                                        edit_summary: editSummary || 'Merged after conflict',
-                                        base_updated_at: result.current_updated_at || window.currentEditBaseUpdatedAt,
-                                        force_overwrite: true
-                                    })
-                                });
-                                
-                                const mergeResult = await mergeResponse.json();
-                                if (mergeResult.success) {
-                                    window.closeMergeConflictModal();
-                                    clearCurrentEditDraft();
-                                    const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-                                    if (noteCard) {
-                                        const contentEl = noteCard.querySelector('.note-content.rendered-note');
-                                        if (contentEl) {
-                                            contentEl.setAttribute('data-raw', mergedText);
-                                            contentEl.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(mergedText) : mergedText;
-                                        }
-                                        const editBtnEl = noteCard.querySelector('.edit-note-btn');
-                                        if (editBtnEl) {
-                                            const tmp = document.createElement('textarea');
-                                            tmp.textContent = mergedText;
-                                            editBtnEl.dataset.raw = tmp.innerHTML;
-                                            if (mergeResult.updated_at) editBtnEl.dataset.updatedAt = mergeResult.updated_at;
-                                        }
-                                        const copyBtnEl = noteCard.querySelector('.copy-btn');
-                                        if (copyBtnEl) copyBtnEl.dataset.copyText = mergedText;
-
-                                        // Update timestamp and move to top
-                                        const dateEl = noteCard.querySelector('.note-date');
-                                        if (dateEl) {
-                                            const sourceIcon = dateEl.querySelector('i');
-                                            const sourceBadge = dateEl.querySelector('.source-badge');
-                                            dateEl.innerHTML = '';
-                                            if (sourceIcon) dateEl.appendChild(sourceIcon);
-                                            dateEl.appendChild(document.createTextNode(' Edited just now'));
-                                            if (sourceBadge) dateEl.appendChild(sourceBadge);
-                                        }
-                                        const notesList = document.getElementById('notes-list-container');
-                                        if (notesList && noteCard.parentElement === notesList) {
-                                            notesList.prepend(noteCard);
-                                            noteCard.style.animation = 'featureTipsFade 0.4s ease-out';
-                                        }
-                                    }
-                                    window.currentEditBaseUpdatedAt = mergeResult.updated_at || window.currentEditBaseUpdatedAt;
-                                    window.closeEditModal();
-                                } else {
-                                    alert(mergeResult.error || 'Merge save failed.');
-                                }
-                            } catch (e) {
-                                console.error(e);
-                                alert('Network or server error occurred while saving the merged note.');
-                            } finally {
-                                saveMergeBtn.disabled = false;
-                                saveMergeBtn.innerHTML = originalHtml;
-                            }
-                        };
-                    }
+                            window.currentEditBaseUpdatedAt = mergeResult.updated_at || window.currentEditBaseUpdatedAt;
+                            window.closeEditModal();
+                        } else {
+                            alert(mergeResult.error || 'Merge save failed.');
+                        }
+                    };
                 } else {
                     alert(result.error || 'Failed to save changes.');
                 }
@@ -6517,28 +6510,24 @@
             } else if (response.status === 409 || data.error === 'conflict') {
                 if (typeof window.openMergeConflictModal === 'function') {
                     window.openMergeConflictModal(data);
-                    const saveMergeBtn = document.getElementById('save-merge-btn');
-                    if (saveMergeBtn) {
-                        saveMergeBtn.onclick = async () => {
-                            const previewEl = document.getElementById('merge-preview-content');
-                            const mContent = previewEl ? previewEl.value : '';
-                            const mResponse = await fetch(`/personal_post/proposal/${versionId}/decision`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
-                                },
-                                body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove, merged_content: mContent })
-                            });
-                            const mData = await mResponse.json();
-                            if (mResponse.ok && mData.success) {
-                                notify(`Proposal ${action}ed successfully with merge.`, 'success');
-                                setTimeout(() => window.location.reload(), 1000);
-                            } else {
-                                notify(mData.error || `Failed to ${action} proposal.`, 'error');
-                            }
-                        };
-                    }
+                    window.onSaveMergeConflict = async (mergedText) => {
+                        const mResponse = await fetch(`/personal_post/proposal/${versionId}/decision`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                            },
+                            body: JSON.stringify({ action: action, auto_approve_subsequent: autoApprove, merged_content: mergedText })
+                        });
+                        const mData = await mResponse.json();
+                        if (mResponse.ok && mData.success) {
+                            notify(`Proposal ${action}ed successfully with merge.`, 'success');
+                            window.closeMergeConflictModal();
+                            setTimeout(() => window.location.reload(), 1000);
+                        } else {
+                            notify(mData.error || `Failed to ${action} proposal.`, 'error');
+                        }
+                    };
                 } else {
                     notify('Merge conflict detected. Please review from the version history.', 'error');
                 }

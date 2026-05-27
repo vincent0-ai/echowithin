@@ -2644,8 +2644,8 @@
                     </div>
                     {% if activity.share_id %}
                     <div class="activity-auto-approve-revert" style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
-                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" checked>
-                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future changes from this link</label>
+                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" checked>
+                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future changes from this collaborator</label>
                     </div>
                     {% endif %}
                 </div>
@@ -4416,6 +4416,7 @@
             if (!checkbox) return;
 
             const shareId = checkbox.dataset.shareId;
+            const editorId = checkbox.dataset.editorId || '';
             const isChecked = checkbox.checked;
             const originalState = !isChecked;
 
@@ -4430,13 +4431,13 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
                     },
-                    body: JSON.stringify({ auto_approve: isChecked })
+                    body: JSON.stringify({ auto_approve: isChecked, editor_id: editorId })
                 });
 
                 const result = await response.json();
                 if (result.success) {
                     if (window.showToast) {
-                        window.showToast(isChecked ? 'Auto-approve enabled for this collaborator link.' : 'Collaborator changes now require manual approval.', 'success');
+                        window.showToast(isChecked ? 'Auto-approve enabled for this collaborator.' : 'Collaborator changes now require manual approval.', 'success');
                     }
                 } else {
                     alert(result.error || 'Failed to update auto-approve setting.');

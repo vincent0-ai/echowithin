@@ -1067,7 +1067,10 @@ def api_sync_note(note_id):
             original_owner_id = str(original_note.get('user_id', ''))
             is_owner_of_original = str(current_user.id) == original_owner_id
 
-            if not is_owner_of_original and not share.get('auto_approve', False):
+            auto_approved_users = share.get('auto_approved_users', [])
+            is_user_auto_approved = ObjectId(current_user.id) in auto_approved_users
+
+            if not is_owner_of_original and not share.get('auto_approve', False) and not is_user_auto_approved:
                 # Contributor flow: create a pending proposal instead of overwriting.
                 m.note_versions_conf.insert_one({
                     'note_id': source_note_id,

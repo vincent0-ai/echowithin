@@ -8959,13 +8959,13 @@ def merge_conflict_ai():
                 'error': 'JigsawStack AI key is not configured. Please resolve the conflict manually.'
             }), 400
 
-        # Construct a detailed prompt for direct merging
+        # Construct a detailed prompt template for direct merging
         prompt_text = (
             "You are an expert editor. Resolve a conflict between two versions of a note.\n\n"
             "Version A (Current Saved Version):\n"
-            f"{current_content}\n\n"
+            "{current_version}\n\n"
             "Version B (User's Incoming Version):\n"
-            f"{incoming_content}\n\n"
+            "{incoming_version}\n\n"
             "Intelligently merge these two versions into a single, cohesive note.\n"
             "Guidelines:\n"
             "- Keep all unique facts, ideas, and additions from BOTH versions.\n"
@@ -8976,7 +8976,17 @@ def merge_conflict_ai():
 
         try:
             client = JigsawStack(api_key=api_key)
-            res_data = client.prompt_engine.run_prompt_direct({'prompt': prompt_text})
+            res_data = client.prompt_engine.run_prompt_direct({
+                'prompt': prompt_text,
+                'inputs': [
+                    {'key': 'current_version', 'optional': False},
+                    {'key': 'incoming_version', 'optional': False}
+                ],
+                'input_values': {
+                    'current_version': current_content,
+                    'incoming_version': incoming_content
+                }
+            })
         except Exception as sdk_err:
             app.logger.error(f"JigsawStack SDK run_prompt_direct failed: {sdk_err}")
             return jsonify({'error': 'AI merging service returned an error. Please resolve manually.'}), 502
@@ -9172,7 +9182,10 @@ def sync_personal_post(post_id):
             original_owner_id = str(original_note.get('user_id', ''))
             is_owner_of_original = str(current_user.id) == original_owner_id
 
-            if not is_owner_of_original and not share.get('auto_approve', False):
+            auto_approved_users = share.get('auto_approved_users', [])
+            is_user_auto_approved = ObjectId(current_user.id) in auto_approved_users
+
+            if not is_owner_of_original and not share.get('auto_approve', False) and not is_user_auto_approved:
                 # Contributor flow: create a pending proposal instead of overwriting.
                 editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
                 note_versions_conf.insert_one({
@@ -11858,7 +11871,8 @@ def api_edit_shared_note(share_id):
 
     # Contributor flow: create a pending proposal from the contributor for owner approval.
     # Guests and non-owners without auto-approval ALWAYS create proposals.
-    can_auto_approve = current_user.is_authenticated and share.get('auto_approve', False)
+    is_user_auto_approved = current_user.is_authenticated and ObjectId(current_user.id) in share.get('auto_approved_users', [])
+    can_auto_approve = current_user.is_authenticated and (share.get('auto_approve', False) or is_user_auto_approved)
     
     if not is_owner and not can_auto_approve:
         editor_name = 'Guest'
@@ -12026,16 +12040,31 @@ def api_toggle_share_auto_approve(share_id):
     
     data = request.get_json() or {}
     new_status = bool(data.get('auto_approve', False))
+    editor_id = data.get('editor_id')
     
     # Premium tier enforcement: auto-approve requires premium
     user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
     if new_status and not is_premium(user_doc):
         return jsonify({'error': 'Auto-approve requires a Premium subscription.', 'upgrade_required': True}), 403
 
-    note_shares_conf.update_one(
-        {'_id': share['_id']},
-        {'$set': {'auto_approve': new_status}}
-    )
+    if editor_id:
+        # Toggle auto-approve for a specific collaborator
+        if new_status:
+            note_shares_conf.update_one(
+                {'_id': share['_id']},
+                {'$addToSet': {'auto_approved_users': ObjectId(editor_id)}}
+            )
+        else:
+            note_shares_conf.update_one(
+                {'_id': share['_id']},
+                {'$pull': {'auto_approved_users': ObjectId(editor_id)}}
+            )
+    else:
+        # Toggle link-wide auto-approve
+        note_shares_conf.update_one(
+            {'_id': share['_id']},
+            {'$set': {'auto_approve': new_status}}
+        )
     return jsonify({'success': True, 'auto_approve': new_status})
 
 
@@ -12274,10 +12303,10 @@ def api_decide_note_proposal(version_id):
         action = (data.get('action') or '').strip().lower()
         decision_summary = (data.get('edit_summary') or '').strip()[:180]
 
-        if data.get('auto_approve_subsequent') and proposal.get('share_id'):
+        if data.get('auto_approve_subsequent') and proposal.get('share_id') and proposal.get('editor_id'):
             note_shares_conf.update_one(
                 {'share_id': proposal.get('share_id')},
-                {'$set': {'auto_approve': True}}
+                {'$addToSet': {'auto_approved_users': ObjectId(proposal['editor_id'])}}
             )
 
         if proposal.get('status') != 'pending':

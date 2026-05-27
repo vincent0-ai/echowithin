@@ -610,6 +610,352 @@
             color: #bf4300;
         }
 
+        /* --- Proposal Available Badge on Note Cards --- */
+        .note-card.has-proposal {
+            border-left-color: #5a3328 !important;
+            background: #fdf8f6;
+        }
+
+        .proposal-badge {
+            background: #f5ebe7;
+            color: #5a3328;
+            border: 1px solid #e0cfc8;
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            margin-left: 0.3rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
+        }
+
+        .proposal-badge i {
+            font-size: 0.6rem;
+            animation: pulse-proposal 2s infinite;
+        }
+
+        @keyframes pulse-proposal {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .proposal-view-btn {
+            background: #f5ebe7;
+            color: #5a3328;
+            border: 1px solid #e0cfc8;
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .proposal-view-btn:hover {
+            background: #5a3328;
+            color: white;
+        }
+
+        /* --- Refactored Activity Tab --- */
+        .activity-header {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .activity-header-title {
+            font-size: 1.15rem;
+            color: #3e2217;
+            margin: 0 0 0.3rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 700;
+        }
+
+        .activity-header-subtitle {
+            color: #888;
+            font-size: 0.82rem;
+            margin: 0;
+        }
+
+        .activity-clear-btn {
+            font-size: 0.75rem;
+            color: #888;
+            background: none;
+            border: 1px solid #e0cfc8;
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .activity-clear-btn:hover {
+            background: #f5ebe7;
+            color: #5a3328;
+        }
+
+        .activity-section-heading {
+            font-size: 0.82rem;
+            color: #5a3328;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #f5ebe7;
+            padding-bottom: 0.5rem;
+            font-weight: 700;
+        }
+
+        .activity-section {
+            margin-bottom: 2rem;
+        }
+
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .activity-card {
+            background: white;
+            border: 1px solid #f0ebe8;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 1px 4px rgba(62, 34, 23, 0.04);
+            transition: box-shadow 0.2s;
+        }
+
+        .activity-card:hover {
+            box-shadow: 0 3px 12px rgba(62, 34, 23, 0.08);
+        }
+
+        .activity-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.6rem;
+            gap: 0.75rem;
+        }
+
+        .activity-card-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #3e2217;
+            margin-bottom: 0.2rem;
+        }
+
+        .activity-card-meta {
+            font-size: 0.78rem;
+            color: #999;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .activity-card-meta i {
+            margin-right: 0.2rem;
+        }
+
+        .activity-status-tag {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.25rem 0.55rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+        }
+
+        .activity-status-tag.pending {
+            background: #fff3e0;
+            color: #e65100;
+            border: 1px solid #ffe0b2;
+        }
+
+        .activity-status-tag.done {
+            background: #f5ebe7;
+            color: #5a3328;
+            border: 1px solid #e0cfc8;
+        }
+
+        .activity-status-tag.accepted {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .activity-content-preview {
+            background: #fdfaf9;
+            border-left: 3px solid var(--primary-color, #5a3328);
+            padding: 0.75rem;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 0.8rem;
+        }
+
+        .activity-content-label {
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+            color: #3e2217;
+            font-size: 0.82rem;
+        }
+
+        .activity-content-body {
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.8rem;
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 0.4rem 0.5rem;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 4px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .activity-auto-approve {
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .activity-auto-approve label {
+            font-size: 0.82rem;
+            color: #666;
+            cursor: pointer;
+        }
+
+        .activity-card-actions {
+            display: flex;
+            gap: 0.6rem;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        .activity-btn {
+            border: none;
+            border-radius: 6px;
+            padding: 0.45rem 0.9rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .activity-btn:active {
+            transform: scale(0.97);
+        }
+
+        .activity-btn.accept {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .activity-btn.accept:hover {
+            background: #c8e6c9;
+            color: #1b5e20;
+        }
+
+        .activity-btn.reject {
+            background: #fce8e6;
+            color: #c62828;
+            border: 1px solid #f5c6c2;
+        }
+
+        .activity-btn.reject:hover {
+            background: #f5c6c2;
+            color: #b71c1c;
+        }
+
+        .activity-btn.neutral {
+            background: white;
+            color: var(--primary-color, #5a3328);
+            border: 1px solid #e0cfc8;
+        }
+
+        .activity-btn.neutral:hover {
+            background: #f5ebe7;
+        }
+
+        .activity-review-result {
+            background: #fafafa;
+            border-left: 3px solid #5a3328;
+            padding: 0.75rem;
+            border-radius: 0 8px 8px 0;
+            margin-bottom: 0.8rem;
+        }
+
+        .activity-review-result.accepted {
+            border-left-color: #2e7d32;
+        }
+
+        .activity-review-result.rejected {
+            border-left-color: #9e9e9e;
+        }
+
+        .activity-auto-icon {
+            width: 36px;
+            height: 36px;
+            background: #f5ebe7;
+            color: #5a3328;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .activity-auto-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .activity-auto-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-auto-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #3e2217;
+        }
+
+        .activity-auto-summary {
+            font-size: 0.76rem;
+            color: #888;
+        }
+
+        /* Activity tab badge styling */
+        .tab-nav button[data-tab="activity"] .badge {
+            background: #f5ebe7;
+            color: #5a3328;
+        }
+
+        .tab-nav button[data-tab="activity"].active .badge {
+            background: #5a3328;
+            color: white;
+        }
+
         /* Lock Note Button */
         .note-actions .lock-note-btn {
             color: #9e9e9e;
@@ -1921,7 +2267,7 @@
 
         <div class="personal-notes-list" id="notes-list-container">
             {% for note in personal_posts %}
-            <div class="note-card {% if note.update_available %}update-available{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
+            <div class="note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
@@ -1963,6 +2309,11 @@
                         {% if note.update_available %}
                         <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
                             <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
+                        </span>
+                        {% endif %}
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <span class="proposal-badge" title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
+                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }} Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
                         </span>
                         {% endif %}
                     </span>
@@ -2092,6 +2443,13 @@
                         </button>
                         {% endif %}
 
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <button type="button" class="proposal-view-btn" title="Review pending proposals"
+                            onclick="document.querySelector('[data-tab=activity]').click(); window.location.hash = 'activity';">
+                            <i class="fas fa-code-branch"></i> Review
+                        </button>
+                        {% endif %}
+
                         {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form"
@@ -2159,73 +2517,59 @@
 
     <!-- Activity Tab -->
     <div id="tab-activity" class="tab-panel" role="tabpanel">
-        <div style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div class="activity-header">
             <div>
-                <h3
-                    style="font-size: 1.25rem; color: #3e2217; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <h3 class="activity-header-title">
                     <i class="fas fa-bell"></i> Collaboration Activity
                 </h3>
-                <p style="color: #666; font-size: 0.85rem;">Review changes proposed or applied by collaborators.</p>
+                <p class="activity-header-subtitle">Review changes proposed or applied by collaborators.</p>
             </div>
             {% if activity_notifications|length > 0 %}
-            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead(true);" class="btn"
-                style="font-size: 0.75rem; color: #666; background: none; border: 1px solid #ddd; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer;">
+            <button onclick="if (window.markAllActivityRead) window.markAllActivityRead(true);"
+                class="activity-clear-btn">
                 Clear notifications
             </button>
             {% endif %}
         </div>
 
         {% if pending_proposals or reviewed_proposals or auto_approved_activity %}
+
         {% if pending_proposals %}
-        <div style="margin-bottom: 2rem;">
-            <h4
-                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                Pending Decisions
-            </h4>
-            <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Pending Decisions</h4>
+            <div class="activity-list">
                 {% for proposal in pending_proposals %}
-                <div class="proposal-card activity-card"
-                    style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 0.8rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03);">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem;">
+                <div class="activity-card">
+                    <div class="activity-card-header">
                         <div>
-                            <div style="font-weight: 600; font-size: 1.1rem; color: #333; margin-bottom: 0.3rem;">
+                            <div class="activity-card-name">
                                 {{ proposal.editor_name }} proposed changes
                             </div>
-                            <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
+                            <div class="activity-card-meta">
                                 <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
-                                    proposal.note_id|string|truncate(12) }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
                             </div>
                         </div>
-                        <span
-                            style="background: #fff3e0; color: #e65100; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase;">Awaiting
-                            Review</span>
+                        <span class="activity-status-tag pending">Awaiting Review</span>
                     </div>
 
-                    <div
-                        style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 0.75rem; border-radius: 0 8px 8px 0; margin-bottom: 0.8rem; font-size: 0.88rem; color: #555;">
-                        <div style="font-weight: 600; margin-bottom: 0.4rem; color: #3e2217;">New proposed content:
-                        </div>
-                        <div
-                            style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.82rem; max-height: 120px; overflow-y: auto; padding: 0.4rem 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
+                    <div class="activity-content-preview">
+                        <div class="activity-content-label">New proposed content:</div>
+                        <div class="activity-content-body">{{ proposal.proposed_content_plain }}</div>
                     </div>
 
-                    <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <div class="activity-auto-approve">
                         <input type="checkbox" id="auto-allow-{{ proposal._id }}" name="auto_allow_subsequent">
-                        <label for="auto-allow-{{ proposal._id }}"
-                            style="font-size: 0.85rem; color: #555; cursor: pointer;">Automatically allow subsequent
+                        <label for="auto-allow-{{ proposal._id }}">Automatically allow subsequent
                             proposals for this user</label>
                     </div>
 
-                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
-                        <button class="btn"
-                            style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                    <div class="activity-card-actions">
+                        <button class="activity-btn accept"
                             onclick="reviewActivityProposal('{{ proposal._id }}', 'accept', '{{ proposal.note_id }}')">
                             <i class="fas fa-check"></i> Accept Changes
                         </button>
-                        <button class="btn"
-                            style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.4rem;"
+                        <button class="activity-btn reject"
                             onclick="reviewActivityProposal('{{ proposal._id }}', 'reject', '{{ proposal.note_id }}')">
                             <i class="fas fa-times"></i> Reject
                         </button>
@@ -2237,36 +2581,27 @@
         {% endif %}
 
         {% if reviewed_proposals %}
-        <div style="margin-bottom: 2rem;">
-            <h4
-                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                Reviewed Proposals
-            </h4>
-            <div class="proposals-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Reviewed Proposals</h4>
+            <div class="activity-list">
                 {% for proposal in reviewed_proposals %}
-                <div class="proposal-card activity-card"
-                    style="background: white; border: 1px solid #eee; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.03); opacity: 0.92;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 1rem;">
+                <div class="activity-card" style="opacity: 0.88;">
+                    <div class="activity-card-header">
                         <div>
-                            <div
-                                style="font-weight: 600; font-size: 1.05rem; color: #333; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <div class="activity-card-name" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                 <i class="fas fa-check-circle" style="color: #2e7d32;"></i>
-                                <span>{{ proposal.editor_name }}'s proposal is done</span>
+                                {{ proposal.editor_name }}'s proposal is done
                             </div>
-                            <div style="font-size: 0.8rem; color: #888; display: flex; flex-wrap: wrap; gap: 1rem;">
+                            <div class="activity-card-meta">
                                 <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
-                                    proposal.note_id|string|truncate(12) }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
                             </div>
                         </div>
-                        <span
-                            style="background: {{ '#e8f5e9' if proposal.status == 'accepted' else '#f5f5f5' }}; color: {{ '#2e7d32' if proposal.status == 'accepted' else '#757575' }}; font-size: 0.7rem; font-weight: 600; padding: 0.3rem 0.6rem; border-radius: 4px; text-transform: uppercase; border: 1px solid {{ '#c8e6c9' if proposal.status == 'accepted' else '#ddd' }};">Done</span>
+                        <span class="activity-status-tag {{ 'accepted' if proposal.status == 'accepted' else 'done' }}">Done</span>
                     </div>
 
-                    <div
-                        style="background: #fafafa; border-left: 3px solid {{ '#2e7d32' if proposal.status == 'accepted' else '#9e9e9e' }}; padding: 1rem; border-radius: 0 8px 8px 0; margin-bottom: 1rem; font-size: 0.9rem; color: #555;">
-                        <div style="font-weight: 600; margin-bottom: 0.5rem; color: #3e2217;">Review result:</div>
+                    <div class="activity-review-result {{ proposal.status }}">
+                        <div class="activity-content-label">Review result:</div>
                         <div style="font-size: 0.85rem; color: #666;">
                             {% if proposal.status == 'accepted' %}
                             Accepted and applied to the note.
@@ -2276,11 +2611,9 @@
                         </div>
                     </div>
 
-                    <div
-                        style="background: #fdfaf9; border-left: 3px solid #e8a87c; padding: 0.75rem; border-radius: 0 8px 8px 0; font-size: 0.88rem; color: #555;">
-                        <div style="font-weight: 600; margin-bottom: 0.4rem; color: #3e2217;">Proposed content:</div>
-                        <div
-                            style="white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.82rem; max-height: 150px; overflow-y: auto; padding: 0.4rem 0.5rem; background: rgba(255,255,255,0.7); border-radius: 4px;">{{ proposal.proposed_content_plain }}</div>
+                    <div class="activity-content-preview">
+                        <div class="activity-content-label">Proposed content:</div>
+                        <div class="activity-content-body" style="max-height: 150px;">{{ proposal.proposed_content_plain }}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -2289,39 +2622,35 @@
         {% endif %}
 
         {% if auto_approved_activity %}
-        <div>
-            <h4
-                style="font-size: 0.9rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">
-                Recent Auto-Approved Edits
-            </h4>
-            <div class="activity-notifications-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <div class="activity-section">
+            <h4 class="activity-section-heading">Recent Auto-Approved Edits</h4>
+            <div class="activity-list">
                 {% for activity in auto_approved_activity %}
-                <div class="activity-card"
-                    style="background: #f8fbff; border: 1px solid #e1efff; border-radius: 10px; padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <div
-                            style="width: 40px; height: 40px; background: #c2e0ff; color: #007bff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                            <i class="fas fa-check-double"></i>
+                <div class="activity-card">
+                    <div class="activity-auto-row">
+                        <div class="activity-auto-info">
+                            <div class="activity-auto-icon">
+                                <i class="fas fa-check-double"></i>
+                            </div>
+                            <div>
+                                <div class="activity-auto-name">{{ activity.editor_name }} updated your note</div>
+                                <div class="activity-auto-summary">{{ activity.edit_summary or 'Collaborator contribution' }} · {{ activity.created_at|localtime }}</div>
+                            </div>
                         </div>
-                        <div>
-                            <div style="font-weight: 600; font-size: 0.95rem; color: #333;">{{ activity.editor_name }}
-                                updated your note</div>
-                            <div style="font-size: 0.78rem; color: #666;">{{ activity.edit_summary or 'Collaborator
-                                contribution' }} • {{ activity.created_at|localtime }}</div>
-                        </div>
+                        <button onclick="window.openVersionModal('{{ activity.note_id }}')"
+                            class="activity-btn neutral">
+                            View Versions
+                        </button>
                     </div>
-                    <button onclick="window.openVersionModal('{{ activity.note_id }}')" class="btn"
-                        style="padding: 0.4rem 0.8rem; font-size: 0.75rem; border: none; background: white; color: #007bff; border: 1px solid #c2e0ff; border-radius: 6px; cursor: pointer;">
-                        View Versions
-                    </button>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
+
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-check-circle" style="color: #4caf50;"></i>
+            <i class="fas fa-check-circle" style="color: #5a3328;"></i>
             <h3>All caught up!</h3>
             <p>You have no new collaboration activity to review.</p>
         </div>
@@ -2407,7 +2736,7 @@
         </script>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}
-            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}" data-note-id="{{ note._id }}">
+            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}">
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
                     {{ note.content | markdown | safe }}
                 </div>
@@ -2440,6 +2769,11 @@
                         {% if note.update_available %}
                         <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
                             <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
+                        </span>
+                        {% endif %}
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <span class="proposal-badge" title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
+                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }} Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
                         </span>
                         {% endif %}
                     </span>
@@ -2530,6 +2864,12 @@
                             data-id="{{ note._id }}">
                             <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
                         </button>
+                        {% if pending_proposals_map.get(note._id|string) %}
+                        <button type="button" class="proposal-view-btn" title="Review pending proposals"
+                            onclick="document.querySelector('[data-tab=activity]').click(); window.location.hash = 'activity';">
+                            <i class="fas fa-code-branch"></i> Review
+                        </button>
+                        {% endif %}
                         {% set nid_str = note._id|string %}
                         <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form"
@@ -3371,7 +3711,44 @@
             if (badge) {
                 const current = parseInt(badge.textContent || '0');
                 badge.textContent = current + 1;
-                badge.style.display = 'inline-block';
+                badge.style.background = 'var(--primary-color)';
+                badge.style.color = 'white';
+            }
+            // Highlight the note card with proposal badge
+            if (data.note_id) {
+                const noteCard = document.querySelector(`.note-card[data-note-id="${data.note_id}"]`);
+                if (noteCard) {
+                    noteCard.classList.add('has-proposal');
+                    // Add proposal badge to footer if not already present
+                    const dateSpan = noteCard.querySelector('.note-date');
+                    if (dateSpan && !dateSpan.querySelector('.proposal-badge')) {
+                        const pbadge = document.createElement('span');
+                        pbadge.className = 'proposal-badge';
+                        pbadge.title = 'Pending proposal awaiting your review';
+                        pbadge.innerHTML = '<i class="fas fa-code-branch"></i> 1 Proposal';
+                        dateSpan.appendChild(pbadge);
+                    }
+                    // Add Review button to note actions if not already present
+                    const actions = noteCard.querySelector('.note-actions');
+                    if (actions && !actions.querySelector('.proposal-view-btn')) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'proposal-view-btn';
+                        btn.title = 'Review pending proposals';
+                        btn.innerHTML = '<i class="fas fa-code-branch"></i> Review';
+                        btn.onclick = () => {
+                            document.querySelector('[data-tab=activity]').click();
+                            window.location.hash = 'activity';
+                        };
+                        // Insert before the delete form
+                        const deleteForm = actions.querySelector('.delete-note-form');
+                        if (deleteForm) {
+                            actions.insertBefore(btn, deleteForm);
+                        } else {
+                            actions.appendChild(btn);
+                        }
+                    }
+                }
             }
         });
 

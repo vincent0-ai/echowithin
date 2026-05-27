@@ -5,7 +5,7 @@ monkey.patch_all()
 import datetime
 import re
 
-from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, abort
+from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, send_file, abort
 import logging
 import math
 import redis
@@ -2928,6 +2928,20 @@ def search():
 
 
 # ----------------- Admin analytics -----------------
+@app.route('/download/note-app.apk')
+def download_note_app_apk():
+    apk_path = os.path.join(app.static_folder, 'downloads', 'app-debug.apk')
+    if not os.path.exists(apk_path):
+        abort(404)
+    return send_file(
+        apk_path,
+        mimetype='application/vnd.android.package-archive',
+        as_attachment=True,
+        download_name='echowithin-note-app.apk',
+        conditional=True
+    )
+
+
 @app.route('/admin/dashboard')
 @login_required
 @admin_required

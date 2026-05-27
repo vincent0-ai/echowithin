@@ -1901,7 +1901,9 @@ def check_image_for_nsfw(image_path):
         response = client.validate.nsfw({
             'url': image_path  # image_path should be a URL or file_store_key
         })
-        # Response has flat boolean fields: nsfw, nudity, gore
+        # Response has flat boolean fields: nsfw, nudity, gore. Handle both dict and object formats.
+        if isinstance(response, dict):
+            return response.get('nsfw', False)
         return getattr(response, 'nsfw', False)
 
     except Exception as e:
@@ -4160,6 +4162,7 @@ def home():
         total_members = cached_community['total_members']
         total_posts = cached_community['total_posts']
         most_active_member = cached_community['most_active_member']
+        active_now = cached_community.get('active_now', 1)
     else:
         total_members = users_conf.count_documents({'is_confirmed': True})
         total_posts = posts_conf.count_documents({})
@@ -4173,11 +4176,17 @@ def home():
         most_active_result = list(posts_conf.aggregate(most_active_pipeline))
         most_active_member = most_active_result[0] if most_active_result else None
 
+        # Online Now calculation (users active in the last 5 minutes)
+        five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+        active_now = users_conf.count_documents({'last_active': {'$gte': five_minutes_ago}})
+        active_now = max(1, active_now)
+
         # Cache the stats
         community_stats_cache['community_stats'] = {
             'total_members': total_members,
             'total_posts': total_posts,
-            'most_active_member': most_active_member
+            'most_active_member': most_active_member,
+            'active_now': active_now
         }
 
     # --- Hot Posts Calculation (Optimized with Aggregation Pipeline) ---
@@ -4377,7 +4386,8 @@ def home():
                            meta_image=url_for('static', filename='og-image.png', _external=True),
                            total_members=total_members, total_posts=total_posts,
                            most_active_member=most_active_member, hot_posts=hot_posts,
-                           note_count=note_count, user_community_count=user_community_count)
+                           note_count=note_count, user_community_count=user_community_count,
+                           active_now=active_now)
 
 @app.route("/blog")
 def blog():
@@ -8964,19 +8974,18 @@ def merge_conflict_ai():
             "- Return ONLY the merged text of the note. Do not include any intro, explanations, markdown code block wrappers (like ```), or comments."
         )
 
-        api_response = requests.post(
-            'https://api.jigsawstack.com/v1/prompt_engine/direct',
-            json={'prompt': prompt_text},
-            headers={'x-api-key': api_key},
-            timeout=25
-        )
+        try:
+            client = JigsawStack(api_key=api_key)
+            res_data = client.prompt_engine.run_prompt_direct({'prompt': prompt_text})
+        except Exception as sdk_err:
+            app.logger.error(f"JigsawStack SDK run_prompt_direct failed: {sdk_err}")
+            return jsonify({'error': 'AI merging service returned an error. Please resolve manually.'}), 502
 
-        if api_response.status_code == 200:
-            res_data = api_response.json()
-            # Handle standard keys returned by prompt direct
-            merged_text = res_data.get('result') or res_data.get('output')
-            if not merged_text and 'response' in res_data:
-                merged_text = res_data.get('response')
+        if res_data:
+            if isinstance(res_data, dict):
+                merged_text = res_data.get('result') or res_data.get('output') or res_data.get('response')
+            else:
+                merged_text = getattr(res_data, 'result', None) or getattr(res_data, 'output', None) or getattr(res_data, 'response', None)
 
             if merged_text:
                 return jsonify({
@@ -8987,8 +8996,8 @@ def merge_conflict_ai():
             app.logger.warning(f"JigsawStack prompt direct returned empty response: {res_data}")
             return jsonify({'error': 'AI returned an empty response. Please resolve conflicts manually.'}), 500
         else:
-            app.logger.error(f"JigsawStack prompt direct failed with status {api_response.status_code}: {api_response.text}")
-            return jsonify({'error': 'AI merging service returned an error. Please resolve manually.'}), 502
+            app.logger.error("JigsawStack prompt direct returned no response data")
+            return jsonify({'error': 'AI merging service returned an empty response. Please resolve manually.'}), 502
 
     except Exception as e:
         app.logger.error(f"AI merge exception: {e}")

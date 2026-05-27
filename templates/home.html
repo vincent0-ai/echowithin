@@ -103,12 +103,13 @@
                 <strong>{{ total_posts }}</strong>
                 <span>Posts</span>
             </div>
-            {% if most_active_member %}
-            <div class="stat-pill">
-                <strong>{{ most_active_member._id }}</strong>
-                <span>Most Active</span>
+            <div class="stat-pill stat-active-now">
+                <strong>
+                    <span class="active-pulse"></span>
+                    {{ active_now }}
+                </strong>
+                <span>Online Now</span>
             </div>
-            {% endif %}
         </div>
 
         {% if hot_posts %}
@@ -362,6 +363,35 @@
     .stat-pill span {
         font-size: 0.75rem;
         color: #999;
+    }
+
+    .active-pulse {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        background-color: #2ecc71;
+        border-radius: 50%;
+        margin-right: 4px;
+        vertical-align: middle;
+        position: relative;
+        top: -1px;
+        box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+        animation: pulse-green 1.8s infinite;
+    }
+
+    @keyframes pulse-green {
+        0% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 6px rgba(46, 204, 113, 0);
+        }
+        100% {
+            transform: scale(0.95);
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0);
+        }
     }
 
     /* Trending */

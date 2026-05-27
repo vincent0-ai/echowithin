@@ -11928,6 +11928,32 @@ def api_revoke_share(share_id):
     return jsonify({'error': 'Share link not found or unauthorized'}), 404
 
 
+@app.route('/personal_post/toggle_share_auto_approve/<share_id>', methods=['POST'])
+@login_required
+def api_toggle_share_auto_approve(share_id):
+    """Toggles or sets the auto_approve flag for a share link."""
+    share = note_shares_conf.find_one({
+        'share_id': share_id,
+        'owner_id': ObjectId(current_user.id)
+    })
+    if not share:
+        return jsonify({'error': 'Share link not found or unauthorized'}), 404
+    
+    data = request.get_json() or {}
+    new_status = bool(data.get('auto_approve', False))
+    
+    # Premium tier enforcement: auto-approve requires premium
+    user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
+    if new_status and not is_premium(user_doc):
+        return jsonify({'error': 'Auto-approve requires a Premium subscription.', 'upgrade_required': True}), 403
+
+    note_shares_conf.update_one(
+        {'_id': share['_id']},
+        {'$set': {'auto_approve': new_status}}
+    )
+    return jsonify({'success': True, 'auto_approve': new_status})
+
+
 @app.route('/personal_post/shares/<post_id>')
 @login_required
 def api_get_note_shares(post_id):

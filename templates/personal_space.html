@@ -2642,6 +2642,12 @@
                             View Versions
                         </button>
                     </div>
+                    {% if activity.share_id %}
+                    <div class="activity-auto-approve-revert" style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
+                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" checked>
+                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future changes from this link</label>
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -4300,6 +4306,47 @@
             }
         });
 
+        // Toggle Auto-approve setting dynamically from the share modal active link list
+        document.addEventListener('change', async (e) => {
+            const checkbox = e.target.closest('.toggle-auto-approve-checkbox');
+            if (!checkbox) return;
+
+            const shareId = checkbox.dataset.shareId;
+            const isChecked = checkbox.checked;
+            const originalState = !isChecked;
+
+            checkbox.disabled = true;
+            try {
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+                const response = await fetch(`/personal_post/toggle_share_auto_approve/${shareId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ auto_approve: isChecked })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    if (window.showToast) {
+                        window.showToast(isChecked ? 'Auto-approve enabled for this collaborator link.' : 'Collaborator changes now require manual approval.', 'success');
+                    }
+                } else {
+                    alert(result.error || 'Failed to update auto-approve setting.');
+                    checkbox.checked = originalState;
+                }
+            } catch (err) {
+                console.error('Failed to toggle auto-approve:', err);
+                alert('Network error. Please try again.');
+                checkbox.checked = originalState;
+            } finally {
+                checkbox.disabled = false;
+            }
+        });
+
         // 2. Delete Button Click Handler
         document.addEventListener('click', (e) => {
             const deleteBtn = e.target.closest('.delete-note-form .delete-btn');
@@ -4946,10 +4993,9 @@
             // Division: ÷
             text = text.replace(/÷/g, wrap('\\div'));;
 
-            // Restore
+            // Restore protected existing math and code blocks
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
             text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
-
 
             return text;
         }
@@ -5004,19 +5050,23 @@
             // 2. Run auto-detection to convert patterns to $...$ 
             let processedText = autoDetectMath(text);
 
-            // 3. Protect code blocks and extract ALL math patterns
-            const placeholders = [];
+            // 3. Protect code blocks from math processing, then extract math
+            // We use two separate placeholder arrays:
+            //   - codePlaceholders: restored BEFORE marked (so marked can render them)
+            //   - mathPlaceholders: restored AFTER marked+sanitize (already rendered HTML)
+            const codePlaceholders = [];
+            const mathPlaceholders = [];
 
-            // Protect code blocks (triple backticks)
+            // Protect code blocks (triple backticks) from math regex
             processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
-                placeholders.push({ type: 'code', content: match });
-                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                codePlaceholders.push(match);
+                return `%%CODEBLOCK${codePlaceholders.length - 1}%%`;
             });
 
-            // Protect inline code (single backticks)
+            // Protect inline code (single backticks) from math regex
             processedText = processedText.replace(/`[^`]+`/g, (match) => {
-                placeholders.push({ type: 'code', content: match });
-                return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                codePlaceholders.push(match);
+                return `%%CODEBLOCK${codePlaceholders.length - 1}%%`;
             });
 
             // Extract and render block math ($$...$$)
@@ -5024,8 +5074,8 @@
                 try {
                     if (typeof katex !== 'undefined') {
                         const rendered = katex.renderToString(math, { displayMode: true, throwOnError: false });
-                        placeholders.push({ type: 'rendered', content: rendered });
-                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                        mathPlaceholders.push(rendered);
+                        return `%%MATHBLOCK${mathPlaceholders.length - 1}%%`;
                     }
                 } catch (e) { }
                 return match;
@@ -5037,14 +5087,19 @@
                 try {
                     if (typeof katex !== 'undefined') {
                         const rendered = katex.renderToString(math, { displayMode: false, throwOnError: false });
-                        placeholders.push({ type: 'rendered', content: rendered });
-                        return `%%PLACEHOLDER${placeholders.length - 1}%%`;
+                        mathPlaceholders.push(rendered);
+                        return `%%MATHBLOCK${mathPlaceholders.length - 1}%%`;
                     }
                 } catch (e) { }
                 return match;
             });
 
-            // 4. Configure marked with custom table renderer
+            // 4. Restore code blocks BEFORE marked so it can parse them properly
+            processedText = processedText.replace(/%%CODEBLOCK(\d+)%%/g, (match, index) => {
+                return codePlaceholders[parseInt(index)] || match;
+            });
+
+            // 5. Configure marked with custom table renderer and parse
             if (typeof marked !== 'undefined') {
                 const renderer = new marked.Renderer();
 
@@ -5062,15 +5117,14 @@
                 processedText = marked.parse(processedText);
             }
 
-            // 5. Sanitize Markdown HTML BEFORE restoring KaTeX
+            // 6. Sanitize Markdown HTML BEFORE restoring KaTeX
             if (typeof DOMPurify !== 'undefined') {
                 processedText = DOMPurify.sanitize(processedText);
             }
 
-            // 6. Restore ALL placeholders
-            processedText = processedText.replace(/%%PLACEHOLDER(\d+)%%/g, (match, index) => {
-                const item = placeholders[parseInt(index)];
-                return item ? item.content : match;
+            // 7. Restore rendered math placeholders
+            processedText = processedText.replace(/%%MATHBLOCK(\d+)%%/g, (match, index) => {
+                return mathPlaceholders[parseInt(index)] || match;
             });
 
             return processedText;

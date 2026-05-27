@@ -1935,15 +1935,25 @@ def process_image_for_nsfw(post_id, image_url, public_id):
 
         if is_nsfw:
             app.logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging image and updating post.")
-            cloudinary.uploader.add_tag('nsfw', [public_id])
+            try:
+                cloudinary.uploader.add_tag('nsfw', [public_id])
+            except Exception as cl_e:
+                app.logger.error(f"Cloudinary tagging failed: {cl_e}")
             posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'removed_nsfw'}})
         else:
             app.logger.info(f"Image {public_id} for post {post_id} is safe. Updating post status.")
-            posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'safe'}})
+            # Safeguard: Only set to 'safe' if another image in the post hasn't already flagged the status as 'removed_nsfw'
+            posts_conf.update_one(
+                {'_id': ObjectId(post_id), 'image_status': {'$ne': 'removed_nsfw'}},
+                {'$set': {'image_status': 'safe'}}
+            )
     except Exception as e:
         app.logger.error(f"Error during NSFW check job for post {post_id}: {e}")
-        # Fail open: assume safe
-        posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'safe'}})
+        # Safeguard: Fail open to 'safe' only if the post hasn't already been marked as 'removed_nsfw'
+        posts_conf.update_one(
+            {'_id': ObjectId(post_id), 'image_status': {'$ne': 'removed_nsfw'}},
+            {'$set': {'image_status': 'safe'}}
+        )
 
 
 
@@ -5915,16 +5925,17 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
 
         # 4. Trigger subsequent jobs (NSFW check, notifications)
         if image_urls:
-            try:
-                # Check the first image for NSFW content
-                process_image_for_nsfw.queue(post_id_str, image_urls[0], image_public_ids[0])
-                app.logger.info(f"Enqueued NSFW check job for post {post_id_str}")
-            except redis.exceptions.ConnectionError as e:
-                app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check. Error: {e}")
-                with app.app_context():
-                    executor.submit(process_image_for_nsfw, post_id_str, image_urls[0], image_public_ids[0])
-            except Exception as e:
-                app.logger.error(f"Failed to enqueue NSFW job for post {post_id_str}: {e}")
+            # Check all uploaded images for NSFW content
+            for url, pid in zip(image_urls, image_public_ids):
+                try:
+                    process_image_for_nsfw.queue(post_id_str, url, pid)
+                    app.logger.info(f"Enqueued NSFW check job for post {post_id_str} on image {pid}")
+                except redis.exceptions.ConnectionError as e:
+                    app.logger.warning(f"Redis connection failed. Falling back to thread for NSFW check. Error: {e}")
+                    with app.app_context():
+                        executor.submit(process_image_for_nsfw, post_id_str, url, pid)
+                except Exception as e:
+                    app.logger.error(f"Failed to enqueue NSFW job for post {post_id_str} on image {pid}: {e}")
 
         try:
             send_new_post_notifications.queue(post_id_str)
@@ -8917,6 +8928,71 @@ def reindex_my_notes():
     except Exception as e:
         app.logger.error(f'Error reindexing notes for user {current_user.id}: {e}')
         return jsonify({'error': 'Reindex failed'}), 500
+
+
+@app.route('/api/merge/ai', methods=['POST'])
+@limits(calls=20, period=60)
+def merge_conflict_ai():
+    """Uses JigsawStack AI to intelligently resolve merge conflicts between two versions."""
+    try:
+        data = request.get_json() or {}
+        current_content = data.get('current_content', '').strip()
+        incoming_content = data.get('incoming_content', '').strip()
+
+        if not current_content and not incoming_content:
+            return jsonify({'error': 'Both note versions are empty.'}), 400
+
+        try:
+            api_key = get_env_variable('JIGSAW_API_KEY')
+        except Exception:
+            return jsonify({
+                'error': 'JigsawStack AI key is not configured. Please resolve the conflict manually.'
+            }), 400
+
+        # Construct a detailed prompt for direct merging
+        prompt_text = (
+            "You are an expert editor. Resolve a conflict between two versions of a note.\n\n"
+            "Version A (Current Saved Version):\n"
+            f"{current_content}\n\n"
+            "Version B (User's Incoming Version):\n"
+            f"{incoming_content}\n\n"
+            "Intelligently merge these two versions into a single, cohesive note.\n"
+            "Guidelines:\n"
+            "- Keep all unique facts, ideas, and additions from BOTH versions.\n"
+            "- Remove duplicate sentences or paragraphs.\n"
+            "- Ensure the tone is consistent and the narrative flows logically.\n"
+            "- Return ONLY the merged text of the note. Do not include any intro, explanations, markdown code block wrappers (like ```), or comments."
+        )
+
+        api_response = requests.post(
+            'https://api.jigsawstack.com/v1/prompt_engine/direct',
+            json={'prompt': prompt_text},
+            headers={'x-api-key': api_key},
+            timeout=25
+        )
+
+        if api_response.status_code == 200:
+            res_data = api_response.json()
+            # Handle standard keys returned by prompt direct
+            merged_text = res_data.get('result') or res_data.get('output')
+            if not merged_text and 'response' in res_data:
+                merged_text = res_data.get('response')
+
+            if merged_text:
+                return jsonify({
+                    'success': True,
+                    'merged_content': merged_text.strip()
+                })
+
+            app.logger.warning(f"JigsawStack prompt direct returned empty response: {res_data}")
+            return jsonify({'error': 'AI returned an empty response. Please resolve conflicts manually.'}), 500
+        else:
+            app.logger.error(f"JigsawStack prompt direct failed with status {api_response.status_code}: {api_response.text}")
+            return jsonify({'error': 'AI merging service returned an error. Please resolve manually.'}), 502
+
+    except Exception as e:
+        app.logger.error(f"AI merge exception: {e}")
+        return jsonify({'error': 'Failed to connect to the AI merging helper.'}), 500
 
 
 @app.route('/personal_post/edit/<post_id>', methods=['POST'])
@@ -12806,30 +12882,51 @@ def api_suggest_tags():
     # Try JigsawStack Classification API first
     try:
         api_key = get_env_variable('JIGSAW_API_KEY')
-        api_response = requests.post(
-            'https://api.jigsawstack.com/v1/classification',
-            json={
-                'dataset': [{'type': 'text', 'value': clean_text}],
-                'labels': [{'type': 'text', 'value': t} for t in PREDEFINED_TAGS],
-                'multiple_labels': True,
-            },
-            headers={'x-api-key': api_key},
-            timeout=15,
-        )
+        
+        # Split PREDEFINED_TAGS into two batches to respect JigsawStack's limit of 24 labels per request
+        batch1 = PREDEFINED_TAGS[:18]
+        batch2 = PREDEFINED_TAGS[18:]
+        
+        all_tags = []
+        for batch in [batch1, batch2]:
+            api_response = requests.post(
+                'https://api.jigsawstack.com/v1/classification',
+                json={
+                    'dataset': [{'type': 'text', 'value': clean_text}],
+                    'labels': [{'type': 'text', 'value': t} for t in batch],
+                    'multiple_labels': True,
+                },
+                headers={'x-api-key': api_key},
+                timeout=10,
+            )
+            
+            if api_response.status_code == 200:
+                result = api_response.json()
+                predictions = result.get('predictions', [])
+                batch_tags = []
+                if predictions and isinstance(predictions[0], list):
+                    batch_tags = predictions[0]
+                elif predictions and isinstance(predictions[0], str):
+                    batch_tags = predictions
+                
+                # Extract and clean tags from predictions
+                for item in batch_tags:
+                    if isinstance(item, dict) and 'label' in item:
+                        all_tags.append(item['label'])
+                    elif isinstance(item, str):
+                        all_tags.append(item)
+            else:
+                app.logger.info(f'JigsawStack batch classify returned status {api_response.status_code}')
 
-        if api_response.status_code == 200:
-            result = api_response.json()
-            predictions = result.get('predictions', [])
-            tags = []
-            if predictions and isinstance(predictions[0], list):
-                tags = predictions[0][:4]
-            elif predictions and isinstance(predictions[0], str):
-                tags = predictions[:4]
-            if tags:
-                return jsonify({'tags': tags})
+        # Unique and valid predefined tags
+        unique_tags = []
+        for tag in all_tags:
+            if tag and tag not in unique_tags and tag in PREDEFINED_TAGS:
+                unique_tags.append(tag)
 
-        # API returned non-200 (e.g. 402 quota exceeded) — fall through to NLP
-        app.logger.info(f'JigsawStack classify returned {api_response.status_code}, falling back to NLP')
+        if unique_tags:
+            return jsonify({'tags': unique_tags[:4]})
+
     except Exception as e:
         app.logger.warning(f'JigsawStack classify failed, falling back to NLP: {e}')
 

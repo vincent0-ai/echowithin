@@ -3186,22 +3186,54 @@
             </h2>
             <button class="btn-icon" onclick="closeMergeConflictModal()"><i class="fas fa-times"></i></button>
         </div>
-        <p style="font-size: 0.86rem; color: #666; margin: 0 0 0.75rem 0;">Someone else updated this note while you were
-            editing. Review both versions and save a merged result.</p>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+        
+        <!-- Guided Explanation Banner -->
+        <div class="merge-guide-banner" style="background: #fffdf5; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.65rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.82rem; color: #856404; display: flex; align-items: flex-start; gap: 8px;">
+            <i class="fas fa-info-circle" style="margin-top: 2px; font-size: 0.95rem;"></i>
             <div>
-                <label style="font-size:0.78rem; color:#777; font-weight:600;">Current version</label>
-                <textarea id="merge-current-content" readonly
-                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fafafa;"></textarea>
-            </div>
-            <div>
-                <label style="font-size:0.78rem; color:#777; font-weight:600;">Your version</label>
-                <textarea id="merge-incoming-content" readonly
-                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fff8f8;"></textarea>
+                <strong>Confused about conflicts?</strong> Someone else saved edits to this note since you opened it. You can choose to keep only one version, combine both, or use our **AI Smart Merge** to intelligently merge them. You can also manually edit the final result below.
             </div>
         </div>
-        <div style="margin-top:0.7rem;">
-            <label style="font-size:0.78rem; color:#777; font-weight:600;">Suggested merge</label>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+                <label style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Current version (Saved on server)</span>
+                </label>
+                <textarea id="merge-current-content" readonly
+                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fafafa;"></textarea>
+                <button type="button" class="btn btn-sm btn-resolve" onclick="useCurrentVersion()" 
+                    style="margin-top: 0.35rem; padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #c8bfb5; background: #faf8f5; color: #3e2217; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; width: 100%; justify-content: center; font-weight: 500;">
+                    <i class="fas fa-file-import"></i> Keep Current Version
+                </button>
+            </div>
+            <div>
+                <label style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+                    <span>Your version (Your unsaved edits)</span>
+                </label>
+                <textarea id="merge-incoming-content" readonly
+                    style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fff8f8;"></textarea>
+                <button type="button" class="btn btn-sm btn-resolve" onclick="useIncomingVersion()" 
+                    style="margin-top: 0.35rem; padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #f5c2c2; background: #fff5f5; color: #c62828; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; width: 100%; justify-content: center; font-weight: 500;">
+                    <i class="fas fa-file-signature"></i> Keep Your Version
+                </button>
+            </div>
+        </div>
+
+        <div style="margin-top:0.85rem; padding-top:0.75rem; border-top:1px dashed #eee;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
+                <label style="font-size:0.78rem; color:#777; font-weight:600; margin: 0;">Suggested merge result</label>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-sm" onclick="combineBothVersions()" 
+                        style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #c2e0ff; background: #f0f7ff; color: #0056b3; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 500;">
+                        <i class="fas fa-arrows-split-up-and-left" style="transform: rotate(180deg);"></i> Combine Both
+                    </button>
+                    <button type="button" id="ai-merge-btn" class="btn btn-sm" onclick="runAiMerge()" 
+                        style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #dcd0ff; background: #f3f0ff; color: #5f27cd; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
+                        <i class="fas fa-wand-magic-sparkles"></i> ✨ AI Smart Merge
+                    </button>
+                </div>
+            </div>
             <textarea id="merge-preview-content"
                 style="width:100%; min-height:180px; border:1px solid #ccc; border-radius:8px; padding:0.6rem; font-size:0.83rem;"></textarea>
         </div>
@@ -3924,6 +3956,78 @@
             document.body.style.overflow = '';
         };
 
+        window.useCurrentVersion = function() {
+            const currentVal = document.getElementById('merge-current-content').value;
+            const previewEl = document.getElementById('merge-preview-content');
+            if (previewEl) {
+                previewEl.value = currentVal;
+                previewEl.focus();
+            }
+        };
+
+        window.useIncomingVersion = function() {
+            const incomingVal = document.getElementById('merge-incoming-content').value;
+            const previewEl = document.getElementById('merge-preview-content');
+            if (previewEl) {
+                previewEl.value = incomingVal;
+                previewEl.focus();
+            }
+        };
+
+        window.combineBothVersions = function() {
+            const currentVal = document.getElementById('merge-current-content').value;
+            const incomingVal = document.getElementById('merge-incoming-content').value;
+            const previewEl = document.getElementById('merge-preview-content');
+            if (previewEl) {
+                previewEl.value = currentVal + "\n\n" + incomingVal;
+                previewEl.focus();
+            }
+        };
+
+        window.runAiMerge = async function() {
+            const currentVal = document.getElementById('merge-current-content').value;
+            const incomingVal = document.getElementById('merge-incoming-content').value;
+            const previewEl = document.getElementById('merge-preview-content');
+            const aiBtn = document.getElementById('ai-merge-btn');
+            
+            if (!previewEl || !aiBtn) return;
+            
+            const originalHtml = aiBtn.innerHTML;
+            aiBtn.disabled = true;
+            aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Merging...';
+            
+            try {
+                const response = await fetch('/api/merge/ai', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                    },
+                    body: JSON.stringify({
+                        current_content: currentVal,
+                        incoming_content: incomingVal
+                    })
+                });
+                
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    previewEl.value = result.merged_content;
+                    previewEl.focus();
+                    if (typeof notify === 'function') {
+                        notify('AI successfully merged the versions!', 'success');
+                    }
+                } else {
+                    alert(result.error || 'AI merging failed. Please merge manually.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Network error connecting to AI helper. Please merge manually.');
+            } finally {
+                aiBtn.disabled = false;
+                aiBtn.innerHTML = originalHtml;
+            }
+        };
+
         window.openVersionModal = function (noteId) {
             const modal = document.getElementById('version-modal');
             if (modal) {
@@ -4457,6 +4561,14 @@
                     if (saveMergeBtn) {
                         saveMergeBtn.onclick = async () => {
                             const mergedText = (document.getElementById('merge-preview-content') || {}).value || '';
+                            
+                            // Check for unresolved conflict markers
+                            if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
+                                if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
+                                    return;
+                                }
+                            }
+                            
                             const mergeResponse = await fetch(`/personal_post/edit/${noteId}`, {
                                 method: 'POST',
                                 headers: {

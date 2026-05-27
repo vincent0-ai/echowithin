@@ -814,10 +814,10 @@ def _note_decryption_candidates(note, share=None):
 
 def _decrypt_note_record(note, share=None):
     candidates = _note_decryption_candidates(note, share)
-    decrypted = _decrypt_with_candidate_ids(note.get('content', ''), candidates) or decrypt_note(note.get('content', ''), user_id=candidates[0] if candidates else None)
+    decrypted = _decrypt_with_candidate_ids(note.get('content', ''), candidates)
     if decrypted is not None:
         return decrypted
-    return decrypt_note(note.get('content', ''), user_id=candidates[0] if candidates else None)
+    return '[Content unavailable \u2014 decryption error]'
 
 # --- Community Encryption Utilities ---
 
@@ -8464,7 +8464,7 @@ def personal_space():
                 item.get('editor_id'), 
                 current_user.id
             )
-            item['proposed_content_plain'] = _decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or decrypt_note(item.get('proposed_content', ''), user_id=candidates[0] if candidates else None)
+            item['proposed_content_plain'] = _decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable \u2014 decryption error]'
         
         # Fetch original note basic info
         note_info = personal_posts_conf.find_one({'_id': item['note_id']}, {'created_at': 1})
@@ -12272,7 +12272,7 @@ def api_restore_note_version(post_id, version_id):
         {'$set': {
             'content': version.get('content', ''),
             'encrypted': True,
-            'content_owner_id': ObjectId(current_user.id),
+            'content_owner_id': version.get('content_owner_id', ObjectId(current_user.id)),
             'updated_at': now
         }}
     )
@@ -13920,7 +13920,9 @@ def api_save_community_note(note_id):
     
     personal_posts_conf.insert_one({
         'user_id': user_id_obj,
+        'content_owner_id': user_id_obj,
         'content': encrypted,
+        'encrypted': True,
         'reference': f'Saved from community: {comm_name} (by {note.get("author_name", "unknown")})',
         'tags': note.get('tags', []),
         'surprise_theme': note.get('surprise_theme', 'none'),

@@ -3981,6 +3981,11 @@
             previewEl.value = payload.merge_preview || payload.incoming_content || '';
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+
+            const saveBtn = document.getElementById('save-merge-btn');
+            if (saveBtn) {
+                saveBtn.style.display = payload.read_only ? 'none' : 'block';
+            }
         };
 
         window.closeMergeConflictModal = function () {
@@ -4183,12 +4188,24 @@
             if (!row) return;
             const left = row.event_type === 'proposal' ? (row.current_content || '') : (row.compare_base || '');
             const right = row.event_type === 'proposal' ? (row.proposed_content || '') : (row.content || '');
+            const isPending = row.event_type === 'proposal' && row.status === 'pending';
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
             window.closeVersionModal();
             window.openMergeConflictModal({
                 current_content: left,
                 incoming_content: right,
-                merge_preview: row.merge_preview || right
+                merge_preview: row.merge_preview || right,
+                read_only: !isPending
             });
+
+            if (isPending) {
+                window.onSaveMergeConflict = async (mergedText) => {
+                    await window.performProposalDecision(row._id, 'accept', csrfToken, mergedText);
+                    window.closeMergeConflictModal();
+                };
+            }
         };
 
         window.restoreVersion = async function (versionId) {

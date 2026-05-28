@@ -45,22 +45,20 @@ def _get_typesense():
     return _typesense
 
 
-def _build_node_config(api_key=None):
-    node = {
+def _build_node_config():
+    return {
         'host': TYPESENSE_HOST,
         'port': TYPESENSE_PORT,
         'protocol': TYPESENSE_PROTOCOL,
     }
-    if api_key:
-        node['api_key'] = api_key
-    return node
 
 
 def create_typesense_client(api_key=None):
     key = api_key or TYPESENSE_ADMIN_KEY
     ts = _get_typesense()
     return ts.Client({
-        'nodes': [_build_node_config(key)],
+        'api_key': key,
+        'nodes': [_build_node_config()],
         'connection_timeout_seconds': TYPESENSE_CONNECTION_TIMEOUT_SECONDS,
         'healthcheck_interval_seconds': TYPESENSE_HEALTHCHECK_INTERVAL_SECONDS,
     })

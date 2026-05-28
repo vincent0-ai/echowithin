@@ -3211,7 +3211,7 @@ def admin_system_health():
     # --- Typesense ---
     try:
         if ts_client:
-            ts_client.health.retrieve()
+            ts_client_module._check_typesense_health(ts_client)
             posts_docs = 0
             notes_docs = 0
             try:

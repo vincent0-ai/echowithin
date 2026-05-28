@@ -135,6 +135,17 @@ ts_posts = None
 ts_notes = None
 
 
+def _check_typesense_health(client):
+    """Check Typesense health via its REST API. Works across all SDK versions."""
+    import requests
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/health"
+    headers = {'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}
+    resp = requests.get(url, headers=headers, timeout=TYPESENSE_CONNECTION_TIMEOUT_SECONDS)
+    if resp.status_code == 200 and resp.json().get('ok'):
+        return True
+    return False
+
+
 def _init_typesense(max_retries=3):
     global ts_client, ts_posts, ts_notes
 
@@ -146,7 +157,7 @@ def _init_typesense(max_retries=3):
     for attempt in range(max_retries):
         try:
             ts_client = create_typesense_client()
-            ts_client.health.retrieve()
+            _check_typesense_health(ts_client)
             break
         except Exception as e:
             if attempt < max_retries - 1:

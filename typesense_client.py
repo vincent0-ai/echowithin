@@ -136,18 +136,26 @@ ts_notes = None
 
 
 def _check_typesense_health(client):
-    """Check Typesense health via its REST API. Works across all SDK versions."""
+    """Check Typesense health via its REST API. Raises on failure."""
     import requests
     url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/health"
     headers = {'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}
     resp = requests.get(url, headers=headers, timeout=TYPESENSE_CONNECTION_TIMEOUT_SECONDS)
-    if resp.status_code == 200 and resp.json().get('ok'):
-        return True
-    return False
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get('ok'):
+        raise RuntimeError(f'Typesense health check returned non-ok: {data}')
+    logger.info(f'Typesense health OK at {url}')
 
 
 def _init_typesense(max_retries=3):
     global ts_client, ts_posts, ts_notes
+
+    # Wire module logger to root so gunicorn sees it
+    root = logging.getLogger()
+    if not logger.handlers:
+        logger.addHandler(logging.StreamHandler())
+    logger.setLevel(logging.INFO)
 
     if not TYPESENSE_HOST or not TYPESENSE_ADMIN_KEY:
         logger.info('Typesense not configured, skipping initialization')

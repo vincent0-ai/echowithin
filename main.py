@@ -910,7 +910,7 @@ def index_note_to_typesense(note_id: str, decrypted_content=None):
         if not note:
             return False
         doc = _note_to_typesense_doc(note, decrypted_content)
-        _t.ts_notes.documents.upsert(doc)
+        _t._ts_upsert_document('personal_notes', doc)
         return True
     except Exception as e:
         app.logger.error(f'Error indexing note {note_id} to Typesense: {e}')
@@ -922,7 +922,7 @@ def remove_note_from_typesense(note_id: str):
     if not _t.ts_notes:
         return False
     try:
-        _t.ts_notes.documents[str(note_id)].delete()
+        _t._ts_delete_document('personal_notes', str(note_id))
         return True
     except Exception as e:
         app.logger.error(f'Error removing note {note_id} from Typesense: {e}')
@@ -936,7 +936,7 @@ def remove_notes_from_typesense(note_ids: list):
     try:
         for nid in note_ids:
             try:
-                _t.ts_notes.documents[str(nid)].delete()
+                _t._ts_delete_document('personal_notes', str(nid))
             except Exception:
                 pass
         return True
@@ -954,7 +954,7 @@ def reindex_user_notes_to_typesense(user_id: str):
         if not notes:
             return True
         docs = [_note_to_typesense_doc(n) for n in notes]
-        _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
+        _t._ts_import_documents('personal_notes', docs)
         return True
     except Exception as e:
         app.logger.error(f'Error reindexing notes for user {user_id}: {e}')
@@ -984,7 +984,7 @@ def index_post_to_typesense(post_id: str):
         if not post:
             return False
         doc = _post_to_typesense_doc(post)
-        _t.ts_posts.documents.upsert(doc)
+        _t._ts_upsert_document('posts', doc)
         return True
     except Exception as e:
         app.logger.error(f'Error indexing post {post_id} to Typesense: {e}')
@@ -1029,7 +1029,7 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
                 if not raw_docs:
                     break
                 docs = [dict(d) for d in raw_docs]
-                _t.ts_posts.documents.import_(docs, {'action': 'upsert'})
+                _t._ts_import_documents('posts', docs)
                 total_meili += len(docs)
                 offset += len(docs)
                 if len(docs) < batch_size:
@@ -1049,7 +1049,7 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
             docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
             if not docs:
                 break
-            _t.ts_posts.documents.import_([_post_to_typesense_doc(p) for p in docs], {'action': 'upsert'})
+            _t._ts_import_documents('posts', [_post_to_typesense_doc(p) for p in docs])
             total_mongo += len(docs)
             last_id = docs[-1]["_id"]
         app.logger.info(f'Phase 2 complete: reindexed {total_mongo} posts from MongoDB')
@@ -1083,7 +1083,7 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
                 if not raw_docs:
                     break
                 docs = [dict(d) for d in raw_docs]
-                _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
+                _t._ts_import_documents('personal_notes', docs)
                 total_meili += len(docs)
                 offset += len(docs)
                 if len(docs) < batch_size:
@@ -1104,7 +1104,7 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
             if not notes:
                 break
             docs = [_note_to_typesense_doc(n) for n in notes]
-            _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
+            _t._ts_import_documents('personal_notes', docs)
             total_mongo += len(docs)
             last_id = notes[-1]['_id']
         app.logger.info(f'Phase 2 complete: reindexed {total_mongo} notes from MongoDB')
@@ -2830,7 +2830,7 @@ def search():
             elif sort == 'title_desc':
                 search_params['sort_by'] = 'title:desc'
 
-            search_result = _t.ts_posts.documents.search(search_params)
+            search_result = _t._ts_search('posts', search_params)
             total = search_result.get('found', 0)
             hits = search_result.get('hits', [])
             for h in hits:
@@ -6175,7 +6175,7 @@ def view_post(slug):
                 search_query = f"{tags_str} {search_query}"
                 search_params['q'] = search_query
 
-            search_result = _t.ts_posts.documents.search(search_params)
+            search_result = _t._ts_search('posts', search_params)
             hits = search_result.get('hits', [])
             related_posts_raw = [h.get('document', h) for h in hits[:3]]
 
@@ -8134,7 +8134,7 @@ def delete_account(username):
             try:
                 for pid in post_ids:
                     try:
-                        _t.ts_posts.documents[str(pid)].delete()
+                        _t._ts_delete_document('posts', str(pid))
                     except Exception:
                         pass
             except Exception as e:
@@ -8860,7 +8860,7 @@ def search_personal_notes():
             'highlight_end_tag': '</mark>',
         }
 
-        search_result = _t.ts_notes.documents.search(search_params)
+        search_result = _t._ts_search('personal_notes', search_params)
         hits = search_result.get('hits', [])
 
         # Enforce lock gate at the source-of-truth DB layer so locked notes can never leak

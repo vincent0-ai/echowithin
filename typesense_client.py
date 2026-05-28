@@ -56,12 +56,65 @@ def _build_node_config():
 def create_typesense_client(api_key=None):
     key = api_key or TYPESENSE_ADMIN_KEY
     ts = _get_typesense()
+    node = {
+        'host': TYPESENSE_HOST,
+        'port': TYPESENSE_PORT,
+        'protocol': TYPESENSE_PROTOCOL,
+        'api_key': key,
+    }
     return ts.Client({
         'api_key': key,
-        'nodes': [_build_node_config()],
+        'nodes': [node],
         'connection_timeout_seconds': TYPESENSE_CONNECTION_TIMEOUT_SECONDS,
         'healthcheck_interval_seconds': TYPESENSE_HEALTHCHECK_INTERVAL_SECONDS,
     })
+
+
+def _ts_import_documents(collection_name, docs, action='upsert'):
+    """Import documents directly via HTTP, bypassing SDK quirks."""
+    import requests
+    import json
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}/documents/import?action={action}"
+    headers = {
+        'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY,
+        'Content-Type': 'text/plain',
+    }
+    body = '\n'.join(json.dumps(d) for d in docs)
+    resp = requests.post(url, data=body, headers=headers, timeout=30)
+    resp.raise_for_status()
+
+
+def _ts_upsert_document(collection_name, doc):
+    """Upsert a single document via HTTP."""
+    import requests
+    import json
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}/documents?action=upsert"
+    headers = {
+        'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY,
+        'Content-Type': 'application/json',
+    }
+    resp = requests.post(url, json=doc, headers=headers, timeout=10)
+    resp.raise_for_status()
+
+
+def _ts_delete_document(collection_name, doc_id):
+    """Delete a single document via HTTP."""
+    import requests
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}/documents/{doc_id}"
+    headers = {'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}
+    resp = requests.delete(url, headers=headers, timeout=10)
+    if resp.status_code != 404:
+        resp.raise_for_status()
+
+
+def _ts_search(collection_name, params):
+    """Search documents via HTTP. Returns parsed JSON."""
+    import requests
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}/documents/search"
+    headers = {'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}
+    resp = requests.get(url, params=params, headers=headers, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def get_collection_schemas():

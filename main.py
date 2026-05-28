@@ -865,12 +865,9 @@ def decrypt_community_note(ciphertext, community_id):
 
 # --- Typesense setup for fast full-text search ---
 # Import Typesense client module (shared between main.py and api.py)
-import typesense_client as ts_client_module
+import typesense_client as _t
 
-# Typesense globals (from the shared module)
-ts_posts = ts_client_module.ts_posts
-ts_notes = ts_client_module.ts_notes
-ts_client = ts_client_module.ts_client
+# Typesense state — always resolved from _t.<attr> to avoid stale capture at import
 
 
 def _note_to_typesense_doc(note_doc: dict, decrypted_content=None) -> dict:
@@ -906,14 +903,14 @@ def _remove_stale_push_subscription(subscription_doc: dict, platform: str, user_
 
 def index_note_to_typesense(note_id: str, decrypted_content=None):
     """Index a single personal note into Typesense. Safe no-op if not configured."""
-    if not ts_notes:
+    if not _t.ts_notes:
         return False
     try:
         note = personal_posts_conf.find_one({'_id': ObjectId(note_id)})
         if not note:
             return False
         doc = _note_to_typesense_doc(note, decrypted_content)
-        ts_notes.documents.upsert(doc)
+        _t.ts_notes.documents.upsert(doc)
         return True
     except Exception as e:
         app.logger.error(f'Error indexing note {note_id} to Typesense: {e}')
@@ -922,10 +919,10 @@ def index_note_to_typesense(note_id: str, decrypted_content=None):
 
 def remove_note_from_typesense(note_id: str):
     """Remove a personal note from Typesense index."""
-    if not ts_notes:
+    if not _t.ts_notes:
         return False
     try:
-        ts_notes.documents[str(note_id)].delete()
+        _t.ts_notes.documents[str(note_id)].delete()
         return True
     except Exception as e:
         app.logger.error(f'Error removing note {note_id} from Typesense: {e}')
@@ -934,12 +931,12 @@ def remove_note_from_typesense(note_id: str):
 
 def remove_notes_from_typesense(note_ids: list):
     """Remove multiple personal notes from Typesense index."""
-    if not ts_notes or not note_ids:
+    if not _t.ts_notes or not note_ids:
         return False
     try:
         for nid in note_ids:
             try:
-                ts_notes.documents[str(nid)].delete()
+                _t.ts_notes.documents[str(nid)].delete()
             except Exception:
                 pass
         return True
@@ -950,14 +947,14 @@ def remove_notes_from_typesense(note_ids: list):
 
 def reindex_user_notes_to_typesense(user_id: str):
     """Reindex all personal notes for a specific user into Typesense."""
-    if not ts_notes:
+    if not _t.ts_notes:
         return False
     try:
         notes = list(personal_posts_conf.find({'user_id': ObjectId(user_id)}))
         if not notes:
             return True
         docs = [_note_to_typesense_doc(n) for n in notes]
-        ts_notes.documents.import_(docs, {'action': 'upsert'})
+        _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
         return True
     except Exception as e:
         app.logger.error(f'Error reindexing notes for user {user_id}: {e}')
@@ -980,14 +977,14 @@ def _post_to_typesense_doc(post_doc: dict) -> dict:
 
 def index_post_to_typesense(post_id: str):
     """Index a single post into Typesense. Safe no-op if not configured."""
-    if not ts_posts:
+    if not _t.ts_posts:
         return False
     try:
         post = posts_conf.find_one({'_id': ObjectId(post_id)})
         if not post:
             return False
         doc = _post_to_typesense_doc(post)
-        ts_posts.documents.upsert(doc)
+        _t.ts_posts.documents.upsert(doc)
         return True
     except Exception as e:
         app.logger.error(f'Error indexing post {post_id} to Typesense: {e}')
@@ -1013,7 +1010,7 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
     """Reindex all posts into Typesense.
     If Meilisearch is still running, migrates from Meilisearch first,
     then catches up any delta from MongoDB."""
-    if not ts_posts:
+    if not _t.ts_posts:
         raise RuntimeError('Typesense not configured')
 
     meili = _get_meili_for_migration()
@@ -1028,10 +1025,11 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
             offset = 0
             while True:
                 result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                docs = result.results if hasattr(result, 'results') else []
-                if not docs:
+                raw_docs = result.results if hasattr(result, 'results') else []
+                if not raw_docs:
                     break
-                ts_posts.documents.import_(docs, {'action': 'upsert'})
+                docs = [dict(d) for d in raw_docs]
+                _t.ts_posts.documents.import_(docs, {'action': 'upsert'})
                 total_meili += len(docs)
                 offset += len(docs)
                 if len(docs) < batch_size:
@@ -1051,7 +1049,7 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
             docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
             if not docs:
                 break
-            ts_posts.documents.import_([_post_to_typesense_doc(p) for p in docs], {'action': 'upsert'})
+            _t.ts_posts.documents.import_([_post_to_typesense_doc(p) for p in docs], {'action': 'upsert'})
             total_mongo += len(docs)
             last_id = docs[-1]["_id"]
         app.logger.info(f'Phase 2 complete: reindexed {total_mongo} posts from MongoDB')
@@ -1066,7 +1064,7 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
     """Reindex ALL users' personal notes into Typesense.
     If Meilisearch is still running, migrates from Meilisearch first,
     then catches up any delta from MongoDB."""
-    if not ts_notes:
+    if not _t.ts_notes:
         raise RuntimeError('Typesense notes collection not configured')
 
     meili = _get_meili_for_migration()
@@ -1081,10 +1079,11 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
             offset = 0
             while True:
                 result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                docs = result.results if hasattr(result, 'results') else []
-                if not docs:
+                raw_docs = result.results if hasattr(result, 'results') else []
+                if not raw_docs:
                     break
-                ts_notes.documents.import_(docs, {'action': 'upsert'})
+                docs = [dict(d) for d in raw_docs]
+                _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
                 total_meili += len(docs)
                 offset += len(docs)
                 if len(docs) < batch_size:
@@ -1105,7 +1104,7 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
             if not notes:
                 break
             docs = [_note_to_typesense_doc(n) for n in notes]
-            ts_notes.documents.import_(docs, {'action': 'upsert'})
+            _t.ts_notes.documents.import_(docs, {'action': 'upsert'})
             total_mongo += len(docs)
             last_id = notes[-1]['_id']
         app.logger.info(f'Phase 2 complete: reindexed {total_mongo} notes from MongoDB')
@@ -2787,7 +2786,7 @@ def search():
 
     results = []
     total = 0
-    if ts_posts and (query or tags_filter or author_filter or date_from or date_to):
+    if _t.ts_posts and (query or tags_filter or author_filter or date_from or date_to):
         try:
             filter_clauses = []
             if tags_filter:
@@ -2831,7 +2830,7 @@ def search():
             elif sort == 'title_desc':
                 search_params['sort_by'] = 'title:desc'
 
-            search_result = ts_posts.documents.search(search_params)
+            search_result = _t.ts_posts.documents.search(search_params)
             total = search_result.get('found', 0)
             hits = search_result.get('hits', [])
             for h in hits:
@@ -3210,19 +3209,19 @@ def admin_system_health():
 
     # --- Typesense ---
     try:
-        if ts_client:
-            ts_client_module._check_typesense_health(ts_client)
+        if _t.ts_client:
+            _t._check_typesense_health(_t.ts_client)
             posts_docs = 0
             notes_docs = 0
             try:
-                if ts_posts:
-                    posts_stats = ts_posts.retrieve()
+                if _t.ts_posts:
+                    posts_stats = _t.ts_posts.retrieve()
                     posts_docs = posts_stats.get('num_documents', 0)
             except Exception:
                 pass
             try:
-                if ts_notes:
-                    notes_stats = ts_notes.retrieve()
+                if _t.ts_notes:
+                    notes_stats = _t.ts_notes.retrieve()
                     notes_docs = notes_stats.get('num_documents', 0)
             except Exception:
                 pass
@@ -3324,7 +3323,7 @@ def admin_system_health():
 @login_required
 @admin_required
 def admin_reindex_typesense():
-    if not ts_posts:
+    if not _t.ts_posts:
         return jsonify({'error': 'Typesense not configured'}), 500
     try:
         try:
@@ -3352,7 +3351,7 @@ def reindex_typesense_job():
 @login_required
 @admin_required
 def admin_reindex_notes_typesense():
-    if not ts_notes:
+    if not _t.ts_notes:
         return jsonify({'error': 'Typesense notes collection not configured'}), 500
     try:
         total = reindex_all_notes_to_typesense()
@@ -5918,7 +5917,7 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
 
         # Index post into Typesense after media processing so image fields are present
         try:
-            if ts_posts:
+            if _t.ts_posts:
                 index_post_to_typesense(post_id_str)
                 app.logger.info(f"Indexed post {post_id_str} to Typesense after media processing")
         except Exception as e:
@@ -6074,7 +6073,7 @@ def post():
                     app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
                 # If no media, index immediately
                 try:
-                    if ts_posts:
+                    if _t.ts_posts:
                         index_post_to_typesense(post_id_str)
                 except Exception as e:
                     app.logger.debug(f"Typesense index skipped for {post_id_str}: {e}")
@@ -6161,7 +6160,7 @@ def view_post(slug):
 
     if cached_related is not None:
         related_posts = cached_related
-    elif ts_posts:
+    elif _t.ts_posts:
         try:
             search_query = post.get('title', '')
             search_params = {
@@ -6176,7 +6175,7 @@ def view_post(slug):
                 search_query = f"{tags_str} {search_query}"
                 search_params['q'] = search_query
 
-            search_result = ts_posts.documents.search(search_params)
+            search_result = _t.ts_posts.documents.search(search_params)
             hits = search_result.get('hits', [])
             related_posts_raw = [h.get('document', h) for h in hits[:3]]
 
@@ -7190,7 +7189,7 @@ def update_post(post_id):
         )
         # Re-index the post in Typesense to reflect the changes
         try:
-            if ts_posts:
+            if _t.ts_posts:
                 index_post_to_typesense(post_id)
         except Exception as e:
             app.logger.error(f"Failed to re-index post {post_id} after update: {e}")
@@ -8131,11 +8130,11 @@ def delete_account(username):
 
         # Remove posts from Typesense
         post_ids = [p['_id'] for p in user_posts]
-        if post_ids and ts_posts:
+        if post_ids and _t.ts_posts:
             try:
                 for pid in post_ids:
                     try:
-                        ts_posts.documents[str(pid)].delete()
+                        _t.ts_posts.documents[str(pid)].delete()
                     except Exception:
                         pass
             except Exception as e:
@@ -8802,7 +8801,7 @@ def search_personal_notes():
     if not query:
         return jsonify({'results': [], 'total': 0, 'query': ''})
 
-    if not ts_notes:
+    if not _t.ts_notes:
         # Fallback: simple MongoDB text search on decrypted notes
         try:
             notes_raw = list(personal_posts_conf.find({
@@ -8861,7 +8860,7 @@ def search_personal_notes():
             'highlight_end_tag': '</mark>',
         }
 
-        search_result = ts_notes.documents.search(search_params)
+        search_result = _t.ts_notes.documents.search(search_params)
         hits = search_result.get('hits', [])
 
         # Enforce lock gate at the source-of-truth DB layer so locked notes can never leak

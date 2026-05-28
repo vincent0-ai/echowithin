@@ -44,7 +44,7 @@ import difflib
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
-# Typesense replaces Meilisearch — see typesense_client.py for scoped key generation and tenant isolation
+# Typesense full-text search — see typesense_client.py
 from PIL import Image
 from io import BytesIO
 from pywebpush import webpush, WebPushException
@@ -991,69 +991,22 @@ def index_post_to_typesense(post_id: str):
         return False
 
 
-def _get_meili_for_migration():
-    """Return a Meilisearch client if MEILI_URL and MEILI_MASTER_KEY are still configured.
-    Returns None if Meilisearch has been decommissioned."""
-    meili_url = os.environ.get('MEILI_URL', '').strip()
-    meili_key = os.environ.get('MEILI_MASTER_KEY', '').strip()
-    if not meili_url or not meili_key:
-        return None
-    try:
-        from meilisearch import Client as _MeiliClient
-        return _MeiliClient(meili_url, meili_key)
-    except ImportError:
-        app.logger.warning('meilisearch package not installed; skipping migration export')
-        return None
-
-
 def reindex_all_posts_to_typesense(batch_size: int = 1000):
-    """Reindex all posts into Typesense.
-    If Meilisearch is still running, migrates from Meilisearch first,
-    then catches up any delta from MongoDB."""
+    """Reindex all posts into Typesense from MongoDB."""
     if not _t.ts_posts:
         raise RuntimeError('Typesense not configured')
-
-    meili = _get_meili_for_migration()
-    migrated_from_meili = 0
-
-    # ---- Phase 1: Migrate from Meilisearch (one-time) ----
-    if meili:
-        try:
-            app.logger.info('Meilisearch detected — migrating posts from Meilisearch to Typesense')
-            meili_index = meili.index('posts')
-            total_meili = 0
-            offset = 0
-            while True:
-                result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                raw_docs = result.results if hasattr(result, 'results') else []
-                if not raw_docs:
-                    break
-                docs = [dict(d) for d in raw_docs]
-                _t._ts_import_documents('posts', docs)
-                total_meili += len(docs)
-                offset += len(docs)
-                if len(docs) < batch_size:
-                    break
-                app.logger.info(f'Migrated posts from Meilisearch: {total_meili} so far...')
-            migrated_from_meili = total_meili
-            app.logger.info(f'Phase 1 complete: migrated {migrated_from_meili} posts from Meilisearch')
-        except Exception as e:
-            app.logger.error(f'Error migrating posts from Meilisearch: {e}')
-
-    # ---- Phase 2: Reindex from MongoDB (delta after migration + ongoing use) ----
     try:
         last_id = None
-        total_mongo = 0
+        total = 0
         while True:
             query = {} if last_id is None else {"_id": {"$gt": last_id}}
             docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
             if not docs:
                 break
             _t._ts_import_documents('posts', [_post_to_typesense_doc(p) for p in docs])
-            total_mongo += len(docs)
+            total += len(docs)
             last_id = docs[-1]["_id"]
-        app.logger.info(f'Phase 2 complete: reindexed {total_mongo} posts from MongoDB')
-        total = max(migrated_from_meili, total_mongo)
+        app.logger.info(f'Reindexed {total} posts into Typesense')
         return total
     except Exception as e:
         app.logger.error(f'Error during reindex_all_posts_to_typesense: {e}')
@@ -1061,43 +1014,12 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
 
 
 def reindex_all_notes_to_typesense(batch_size: int = 500):
-    """Reindex ALL users' personal notes into Typesense.
-    If Meilisearch is still running, migrates from Meilisearch first,
-    then catches up any delta from MongoDB."""
+    """Reindex ALL users' personal notes into Typesense from MongoDB."""
     if not _t.ts_notes:
         raise RuntimeError('Typesense notes collection not configured')
-
-    meili = _get_meili_for_migration()
-    migrated_from_meili = 0
-
-    # ---- Phase 1: Migrate from Meilisearch (one-time) ----
-    if meili:
-        try:
-            app.logger.info('Meilisearch detected — migrating notes from Meilisearch to Typesense')
-            meili_index = meili.index('personal_notes')
-            total_meili = 0
-            offset = 0
-            while True:
-                result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                raw_docs = result.results if hasattr(result, 'results') else []
-                if not raw_docs:
-                    break
-                docs = [dict(d) for d in raw_docs]
-                _t._ts_import_documents('personal_notes', docs)
-                total_meili += len(docs)
-                offset += len(docs)
-                if len(docs) < batch_size:
-                    break
-                app.logger.info(f'Migrated notes from Meilisearch: {total_meili} so far...')
-            migrated_from_meili = total_meili
-            app.logger.info(f'Phase 1 complete: migrated {migrated_from_meili} notes from Meilisearch')
-        except Exception as e:
-            app.logger.error(f'Error migrating notes from Meilisearch: {e}')
-
-    # ---- Phase 2: Reindex from MongoDB (delta after migration + ongoing use) ----
     try:
         last_id = None
-        total_mongo = 0
+        total = 0
         while True:
             query = {} if last_id is None else {'_id': {'$gt': last_id}}
             notes = list(personal_posts_conf.find(query).sort('_id', 1).limit(batch_size))
@@ -1105,10 +1027,9 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
                 break
             docs = [_note_to_typesense_doc(n) for n in notes]
             _t._ts_import_documents('personal_notes', docs)
-            total_mongo += len(docs)
+            total += len(docs)
             last_id = notes[-1]['_id']
-        app.logger.info(f'Phase 2 complete: reindexed {total_mongo} notes from MongoDB')
-        total = max(migrated_from_meili, total_mongo)
+        app.logger.info(f'Reindexed {total} notes into Typesense')
         return total
     except Exception as e:
         app.logger.error(f'Error during reindex_all_notes_to_typesense: {e}')
@@ -3235,26 +3156,6 @@ def admin_system_health():
     except Exception as e:
         health['typesense'] = {'status': 'error', 'detail': str(e)}
 
-    # --- Meilisearch (migration source) ---
-    meili = _get_meili_for_migration()
-    if meili:
-        try:
-            meili.health()
-            posts_stats = meili.index('posts').get_stats()
-            notes_stats = meili.index('personal_notes').get_stats()
-            posts_docs = posts_stats.number_of_documents if hasattr(posts_stats, 'number_of_documents') else 0
-            notes_docs = notes_stats.number_of_documents if hasattr(notes_stats, 'number_of_documents') else 0
-            health['meilisearch'] = {
-                'status': 'available',
-                'note': 'Run "Reindex Posts" and "Reindex Notes" to migrate to Typesense',
-                'posts_docs': posts_docs,
-                'notes_docs': notes_docs,
-            }
-        except Exception as e:
-            health['meilisearch'] = {'status': 'unreachable', 'detail': str(e)}
-    else:
-        health['meilisearch'] = {'status': 'decommissioned', 'note': 'Not configured — using Typesense directly'}
-
     # --- Redis ---
     try:
         redis_cache.ping()
@@ -3339,7 +3240,7 @@ def admin_reindex_typesense():
 
 @rq.job
 def reindex_typesense_job():
-    """Background job to reindex all posts into Typesense (with Meilisearch migration if available)."""
+    """Background job to reindex all posts into Typesense."""
     try:
         total = reindex_all_posts_to_typesense()
         app.logger.info(f'Typesense posts reindex job finished ({total} docs)')

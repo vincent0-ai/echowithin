@@ -1,5 +1,5 @@
 """
-Typesense client module — replacement for Meilisearch.
+Typesense client module — full-text search backend.
 Implements scoped API key generation for tenant isolation.
 
 Network topology:

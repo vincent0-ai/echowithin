@@ -336,7 +336,7 @@
       const ml = h.meilisearch || {};
       const mlCls = ml.status === 'available' ? 'stale' : (ml.status === 'decommissioned' ? 'healthy' : 'error');
       html += `<div class="health-card ${mlCls}">`;
-      html += `<h4><span class="health-dot"></span> Meilisearch (Lagacy)</h4>`;
+      html += `<h4><span class="health-dot"></span> Meilisearch (Legacy)</h4>`;
       if (ml.status === 'available') {
         html += `<p style="color:#e6a817;"><strong>Migration needed</strong> — ${ml.note || ''}</p>`;
         html += `<p>Posts: <strong>${ml.posts_docs}</strong> | Notes: <strong>${ml.notes_docs}</strong></p>`;

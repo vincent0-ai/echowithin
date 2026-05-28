@@ -331,7 +331,7 @@
                 {% for r_post in related_posts %}
                 <div class="related-post-item" style="margin-bottom: 15px;">
                     <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
-                        {# The title from Meilisearch might contain highlight tags, so it needs to be marked safe #}
+                        {# The title from Typesense might contain highlight tags, so it needs to be marked safe #}
                         <a href="{{ url_for('view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
                     </h4>
                     <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">

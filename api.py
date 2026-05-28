@@ -354,7 +354,7 @@ def api_create_note():
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
     
-    m.index_note_to_meili(str(result.inserted_id), decrypted_content=content)
+    m.index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
     
     return jsonify({'success': True, 'id': str(result.inserted_id)})
 
@@ -419,7 +419,7 @@ def api_edit_note(note_id):
         }}
     )
 
-    m.index_note_to_meili(str(obj_id), decrypted_content=content)
+    m.index_note_to_typesense(str(obj_id), decrypted_content=content)
 
     return jsonify({'success': True, 'id': str(obj_id)})
 
@@ -988,9 +988,9 @@ def api_delete_note(note_id):
     # 3. Cleanup all unlock notifications for target notes
     m.unlock_notifications_conf.delete_many({'note_id': {'$in': target_ids}})
 
-    # 4. Remove from Meilisearch index
+    # 4. Remove from Typesense index
     try:
-        m.remove_notes_from_meili(target_ids)
+        m.remove_notes_from_typesense(target_ids)
     except Exception:
         pass
 
@@ -1165,9 +1165,9 @@ def api_sync_note(note_id):
                 }}
             )
 
-            # Re-index original in Meilisearch
+            # Re-index original in Typesense
             decrypted = m._decrypt_note_record(note)
-            m.index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
+            m.index_note_to_typesense(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
             m.socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
@@ -1210,9 +1210,9 @@ def api_sync_note(note_id):
                 }}
             )
 
-            # Re-index clone in Meilisearch
+            # Re-index clone in Typesense
             decrypted = m._decrypt_note_record(original_note)
-            m.index_note_to_meili(note_id, decrypted_content=decrypted)
+            m.index_note_to_typesense(note_id, decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER
             m.socketio.emit('note_changed', {

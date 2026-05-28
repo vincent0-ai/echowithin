@@ -3215,13 +3215,13 @@ def admin_system_health():
             notes_docs = 0
             try:
                 if _t.ts_posts:
-                    posts_stats = _t.ts_posts.retrieve()
+                    posts_stats = _t._ts_collection_stats('posts')
                     posts_docs = posts_stats.get('num_documents', 0)
             except Exception:
                 pass
             try:
                 if _t.ts_notes:
-                    notes_stats = _t.ts_notes.retrieve()
+                    notes_stats = _t._ts_collection_stats('personal_notes')
                     notes_docs = notes_stats.get('num_documents', 0)
             except Exception:
                 pass

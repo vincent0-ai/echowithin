@@ -117,6 +117,16 @@ def _ts_search(collection_name, params):
     return resp.json()
 
 
+def _ts_collection_stats(collection_name):
+    """Get collection stats via HTTP."""
+    import requests
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections/{collection_name}"
+    headers = {'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}
+    resp = requests.get(url, headers=headers, timeout=10)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def get_collection_schemas():
     return {
         'posts': {
@@ -239,17 +249,30 @@ def _init_typesense(max_retries=3):
         schemas = get_collection_schemas()
         for name, schema in schemas.items():
             try:
-                ts_client.collections[name].retrieve()
+                _ts_collection_stats(name)
             except Exception:
                 try:
-                    ts_client.collections.create(schema)
+                    _ts_create_collection(schema)
                 except Exception as ce:
                     logger.debug(f'create_collection {name} (continuing): {ce}')
-        ts_posts = ts_client.collections['posts']
-        ts_notes = ts_client.collections['personal_notes']
+        ts_posts = 'posts'  # flag that we're initialized
+        ts_notes = 'personal_notes'
         logger.info('Connected to Typesense and configured collections')
     except Exception as e:
         logger.error(f'Failed to configure Typesense collections: {e}')
+
+
+def _ts_create_collection(schema):
+    """Create a Typesense collection via HTTP."""
+    import requests
+    import json
+    url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/collections"
+    headers = {
+        'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY,
+        'Content-Type': 'application/json',
+    }
+    resp = requests.post(url, json=schema, headers=headers, timeout=10)
+    resp.raise_for_status()
 
 
 _init_thread = threading.Thread(target=_init_typesense, daemon=True)

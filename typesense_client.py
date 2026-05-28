@@ -210,6 +210,15 @@ def _check_typesense_health(client):
         raise RuntimeError(f'Typesense health check returned non-ok: {data}')
     logger.info(f'Typesense health OK at {url}')
 
+    # Verify the key works for authenticated endpoints too
+    test_url = f"{TYPESENSE_PROTOCOL}://{TYPESENSE_HOST}:{TYPESENSE_PORT}/keys"
+    try:
+        key_resp = requests.get(test_url, headers={'X-TYPESENSE-API-KEY': TYPESENSE_ADMIN_KEY}, timeout=5)
+        key_resp.raise_for_status()
+        logger.info(f'Typesense API key verified (has access to /keys)')
+    except Exception as e:
+        logger.warning(f'Typesense API key may be incorrect — cannot access /keys: {e}')
+
 
 def _init_typesense(max_retries=3):
     global ts_client, ts_posts, ts_notes

@@ -15,8 +15,13 @@
         <div id="cached-list" style="text-align: left;"></div>
     </div>
 
+    <div id="quick-actions" style="margin: 1.5rem auto; max-width: 400px; display: none;">
+        <a id="my-notes-btn" href="/personal_space" class="btn edit-btn" style="display: block; width: 100%; padding: 1rem; font-size: 1.1rem; font-weight: 600; text-decoration: none; margin-bottom: 0.75rem;">
+            <i class="fas fa-sticky-note"></i> My Notes
+        </a>
+    </div>
 
-    <button onclick="location.reload()" class="btn edit-btn" style="margin-top: 1rem;">
+    <button onclick="location.reload()" class="btn edit-btn" style="margin-top: 0.5rem;">
         <i class="fas fa-sync-alt"></i> Try Again
     </button>
 
@@ -51,14 +56,22 @@
                 if (allKeys.length > 0) {
                     const cachedPagesDiv = document.getElementById('cached-pages');
                     const cachedList = document.getElementById('cached-list');
+                    const quickActions = document.getElementById('quick-actions');
+                    const myNotesBtn = document.getElementById('my-notes-btn');
 
                     // Filter and display cached pages
                     const displayedUrls = new Set();
+                    let hasPersonalSpace = false;
                     let html = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">';
 
                     for (const request of allKeys) {
                         const url = new URL(request.url);
                         const path = url.pathname;
+
+                        // Check if personal_space is cached
+                        if (path === '/personal_space' && !displayedUrls.has(path)) {
+                            hasPersonalSpace = true;
+                        }
 
                         // Skip duplicates, offline page, and non-page resources
                         if (displayedUrls.has(path) || path === '/offline') continue;
@@ -80,6 +93,9 @@
                         } else if (path === '/about') {
                             displayName = 'About';
                             icon = 'fas fa-info-circle';
+                        } else if (path === '/personal_space') {
+                            displayName = 'My Notes';
+                            icon = 'fas fa-sticky-note';
                         } else if (path.startsWith('/post/')) {
                             displayName = path.replace('/post/', '').replace(/-/g, ' ').slice(0, 30);
                             if (displayName.length >= 30) displayName += '...';
@@ -99,6 +115,11 @@
                     if (displayedUrls.size > 0) {
                         cachedList.innerHTML = html;
                         cachedPagesDiv.style.display = 'block';
+                    }
+
+                    // Show prominent My Notes button if personal_space is cached
+                    if (hasPersonalSpace) {
+                        quickActions.style.display = 'block';
                     }
                 }
             } catch (err) {

@@ -8,7 +8,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 
 ### Encrypted Personal Notes
 - End-to-end encrypted personal notes using **Fernet symmetric encryption** with per-user **PBKDF2-HMAC-SHA256** key derivation (480,000 iterations, OWASP 2024).
-- Full-text search over personal notes via Meilisearch.
+- Full-text search over personal notes via Typesense (tenant-isolated scoped keys).
 - Version history with restore, diff previews, and merge conflict handling.
 - Note locking, pinning, tags, and reference fields.
 - Tiered limits: 50 notes / 20K chars (free) → unlimited / 100K chars (premium).
@@ -26,7 +26,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Rich posts with **Markdown** support, image/video uploads, and tag categorization.
 - **Threaded comments** with replies, voting, and reactions (Heart, Wow, Insightful, etc.).
 - Post saving/bookmarking, view tracking, and engagement-based sorting (hot / top / trending).
-- Full-text search with **typo tolerance** (Meilisearch) plus tag, author, and date filters.
+- Full-text search with typo tolerance (Typesense) plus tag, author, and date filters.
 - Auto-generated RSS feed, sitemap_index.xml, and OpenGraph/Twitter meta tags.
 
 ### Communities
@@ -71,7 +71,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - User management: ban, unban, delete accounts, grant/revoke premium.
 - Post management: pin, unpin, force-delete.
 - Announcements and site-wide push broadcast.
-- CSV data export and Meilisearch reindex.
+- CSV data export and Typesense reindex.
 - APK upload with OTA update manifest for the Android app.
 
 ### Security & Safety
@@ -104,7 +104,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 | **Backend Framework** | Python 3.12, Flask 3.1, Gunicorn 23 (gevent WebSocket worker) |
 | **Database** | MongoDB 7 (primary), Redis 7 (caching + task queue) |
 | **Real-time** | Flask-SocketIO 5.3, gevent-websocket |
-| **Search** | Meilisearch (full-text with typo tolerance) |
+| **Search** | Typesense (full-text with typo tolerance, tenant-isolated scoped keys) |
 | **Media** | Cloudinary (images, video, audio) |
 | **Background Jobs** | Flask-RQ2 (RQ 2.6) |
 | **Push Notifications** | pywebpush (VAPID), firebase-admin (FCM) |
@@ -163,7 +163,7 @@ echowithin/
 - Python 3.12+
 - MongoDB instance (Atlas or local)
 - Redis server
-- Meilisearch instance (optional; search works in degraded mode without it)
+- Typesense instance (optional; search works in degraded mode without it)
 
 ### Quickstart
 
@@ -204,7 +204,7 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth2 credentials |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Yes | Cloudinary media storage |
 | `JIGSAW_API_KEY` | Yes | AI content moderation & tag suggestions |
-| `MEILI_URL`, `MEILI_MASTER_KEY` | No | Meilisearch endpoint (search degrades without it) |
+| `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_API_KEY`, `TYPESENSE_SEARCH_KEY` | No | Typesense search engine (search degrades without it) |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web Push notifications |
 | `FIREBASE_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT` | No | FCM native app push |
 | `PAYSTACK_SECRET_KEY` | No | Payment processing |

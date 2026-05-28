@@ -44,7 +44,7 @@ import difflib
 from pythonjsonlogger import jsonlogger
 from requests_oauthlib import OAuth2Session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from meilisearch import Client as MeiliClient
+# Typesense replaces Meilisearch — see typesense_client.py for scoped key generation and tenant isolation
 from PIL import Image
 from io import BytesIO
 from pywebpush import webpush, WebPushException
@@ -863,150 +863,21 @@ def decrypt_community_note(ciphertext, community_id):
         app.logger.error(f"Failed to decrypt community note: {e}")
         return ciphertext
 
-# --- Meilisearch setup for fast full-text search ---
-MEILI_URL = os.environ.get('MEILI_URL', '').strip()
-if MEILI_URL and not MEILI_URL.startswith(('http://', 'https://')):
-    MEILI_URL = f"https://{MEILI_URL}"
-elif MEILI_URL and MEILI_URL.startswith('http://') and 'search.echowithin.xyz' in MEILI_URL:
-    MEILI_URL = MEILI_URL.replace('http://', 'https://')
+# --- Typesense setup for fast full-text search ---
+# Import Typesense client module (shared between main.py and api.py)
+import typesense_client as ts_client_module
 
-MEILI_MASTER_KEY = os.environ.get('MEILI_MASTER_KEY', '').strip()
-meili_client = None
-meili_index = None
-meili_notes_index = None
-
-def _init_meilisearch():
-    """Initialize MeiliSearch with timeout protection so it doesn't block app startup."""
-    global meili_client, meili_index, meili_notes_index
-    if not MEILI_URL or not MEILI_MASTER_KEY:
-        app.logger.info('MeiliSearch not configured, skipping initialization')
-        return
-
-    max_retries = 3
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            meili_client = MeiliClient(MEILI_URL, MEILI_MASTER_KEY)
-            # Try to get or create the index to verify connection
-            meili_client.health()
-            break # Success, exit retry loop
-        except Exception as e:
-            if attempt < max_retries - 1:
-                app.logger.warning(f'MeiliSearch connection attempt {attempt+1} failed: {e}. Retrying in {retry_delay}s...')
-                time.sleep(retry_delay)
-                retry_delay *= 2
-            else:
-                app.logger.error(f'Failed to initialize MeiliSearch client after {max_retries} attempts: {e}')
-                return
-
-    try:
-        # --- Posts index ---
-        try:
-            meili_index = meili_client.get_index('posts')
-        except Exception:
-            try:
-                meili_client.create_index(uid='posts', options={'primaryKey': 'id'})
-            except Exception as ce:
-                app.logger.debug(f'create_index returned error (continuing): {ce}')
-            try:
-                meili_index = meili_client.index('posts')
-            except Exception as ie:
-                app.logger.error(f'Failed to obtain Meili index object: {ie}')
-                meili_index = None
-
-        if meili_index:
-            try:
-                meili_index.update_searchable_attributes(['title', 'content'])
-            except Exception as e:
-                app.logger.debug(f'Failed to update searchable attributes: {e}')
-            try:
-                meili_index.update_filterable_attributes(['id', 'author_username', 'tags', 'created_at'])
-            except Exception as e:
-                app.logger.debug(f'Failed to update filterable attributes: {e}')
-            try:
-                meili_index.update_typo_tolerance({
-                    'enabled': True,
-                    'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
-                })
-            except Exception as e:
-                app.logger.debug(f'Failed to configure typo tolerance: {e}')
-            try:
-                meili_index.update_ranking_rules([
-                    'sort', 'words', 'typo', 'proximity', 'attribute', 'exactness',
-                    'created_at:desc'
-                ])
-            except Exception as e:
-                app.logger.debug(f'Failed to configure ranking rules: {e}')
-            try:
-                meili_index.update_sortable_attributes(['created_at', 'title'])
-            except Exception as e:
-                app.logger.debug(f'Failed to configure sortable attributes: {e}')
-            app.logger.debug('Connected to Meilisearch and configured index `posts`.')
-
-        # --- Personal notes index ---
-        try:
-            try:
-                meili_notes_index = meili_client.get_index('personal_notes')
-            except Exception:
-                try:
-                    meili_client.create_index(uid='personal_notes', options={'primaryKey': 'id'})
-                except Exception:
-                    pass
-                try:
-                    meili_notes_index = meili_client.index('personal_notes')
-                except Exception:
-                    meili_notes_index = None
-
-            if meili_notes_index:
-                try:
-                    meili_notes_index.update_searchable_attributes(['content'])
-                except Exception:
-                    pass
-                try:
-                    meili_notes_index.update_filterable_attributes(['user_id', 'is_locked', 'created_at'])
-                except Exception:
-                    pass
-                try:
-                    meili_notes_index.update_sortable_attributes(['created_at'])
-                except Exception:
-                    pass
-                try:
-                    meili_notes_index.update_typo_tolerance({
-                        'enabled': True,
-                        'minWordSizeForTypos': {'oneTypo': 5, 'twoTypos': 9}
-                    })
-                except Exception:
-                    pass
-                try:
-                    meili_notes_index.update_ranking_rules([
-                        'words', 'typo', 'proximity', 'attribute', 'sort', 'exactness',
-                        'created_at:desc'
-                    ])
-                except Exception:
-                    pass
-                app.logger.debug('Connected to Meilisearch and configured index `personal_notes`.')
-        except Exception as e:
-            app.logger.error(f'Failed to initialize Meilisearch personal_notes index: {e}')
-
-    except Exception as e:
-        app.logger.error(f'Failed to configure Meilisearch indexes: {e}')
-
-# Run MeiliSearch init with background thread
-import threading
-_meili_thread = threading.Thread(target=_init_meilisearch, daemon=True)
-_meili_thread.start()
-_meili_thread.join(timeout=5)
-if _meili_thread.is_alive():
-    app.logger.warning('MeiliSearch initialization timed out after 5s, search may be unavailable but will keep retrying in background')
+# Typesense globals (from the shared module)
+ts_posts = ts_client_module.ts_posts
+ts_notes = ts_client_module.ts_notes
+ts_client = ts_client_module.ts_client
 
 
-def _note_to_meili_doc(note_doc: dict, decrypted_content=None) -> dict:
-    """Convert a MongoDB personal note document to Meilisearch document shape.
+def _note_to_typesense_doc(note_doc: dict, decrypted_content=None) -> dict:
+    """Convert a MongoDB personal note document to Typesense document shape.
     Content is sanitised before indexing to prevent stored-XSS via search highlights."""
     user_id = str(note_doc.get('user_id', ''))
     content = decrypted_content if decrypted_content is not None else decrypt_note(note_doc.get('content', ''), user_id=user_id)
-    # Strip any HTML before indexing — search index should contain only plain text
     content = bleach.clean(content or '', tags=[], strip=True)
     return {
         'id': str(note_doc.get('_id')),
@@ -1033,65 +904,68 @@ def _remove_stale_push_subscription(subscription_doc: dict, platform: str, user_
         app.logger.error(f"Failed to remove stale {platform} push subscription for {user_label}: {exc}")
 
 
-def index_note_to_meili(note_id: str, decrypted_content=None):
-    """Index a single personal note into Meilisearch. Safe no-op if not configured."""
-    if not meili_notes_index:
+def index_note_to_typesense(note_id: str, decrypted_content=None):
+    """Index a single personal note into Typesense. Safe no-op if not configured."""
+    if not ts_notes:
         return False
     try:
         note = personal_posts_conf.find_one({'_id': ObjectId(note_id)})
         if not note:
             return False
-        doc = _note_to_meili_doc(note, decrypted_content)
-        meili_notes_index.add_documents([doc])
+        doc = _note_to_typesense_doc(note, decrypted_content)
+        ts_notes.documents.upsert(doc)
         return True
     except Exception as e:
-        app.logger.error(f'Error indexing note {note_id} to Meili: {e}')
+        app.logger.error(f'Error indexing note {note_id} to Typesense: {e}')
         return False
 
 
-def remove_note_from_meili(note_id: str):
-    """Remove a personal note from Meilisearch index."""
-    if not meili_notes_index:
+def remove_note_from_typesense(note_id: str):
+    """Remove a personal note from Typesense index."""
+    if not ts_notes:
         return False
     try:
-        meili_notes_index.delete_document(note_id)
+        ts_notes.documents[str(note_id)].delete()
         return True
     except Exception as e:
-        app.logger.error(f'Error removing note {note_id} from Meili: {e}')
+        app.logger.error(f'Error removing note {note_id} from Typesense: {e}')
         return False
 
 
-def remove_notes_from_meili(note_ids: list):
-    """Remove multiple personal notes from Meilisearch index."""
-    if not meili_notes_index or not note_ids:
+def remove_notes_from_typesense(note_ids: list):
+    """Remove multiple personal notes from Typesense index."""
+    if not ts_notes or not note_ids:
         return False
     try:
-        str_ids = [str(nid) for nid in note_ids]
-        meili_notes_index.delete_documents(ids=str_ids)
+        for nid in note_ids:
+            try:
+                ts_notes.documents[str(nid)].delete()
+            except Exception:
+                pass
         return True
     except Exception as e:
-        app.logger.error(f'Error removing notes from Meili: {e}')
+        app.logger.error(f'Error removing notes from Typesense: {e}')
         return False
 
 
-def reindex_user_notes_to_meili(user_id: str):
-    """Reindex all personal notes for a specific user into Meilisearch."""
-    if not meili_notes_index:
+def reindex_user_notes_to_typesense(user_id: str):
+    """Reindex all personal notes for a specific user into Typesense."""
+    if not ts_notes:
         return False
     try:
         notes = list(personal_posts_conf.find({'user_id': ObjectId(user_id)}))
         if not notes:
             return True
-        docs = [_note_to_meili_doc(n) for n in notes]
-        meili_notes_index.add_documents(docs, primary_key='id')
+        docs = [_note_to_typesense_doc(n) for n in notes]
+        ts_notes.documents.import_(docs, {'action': 'upsert'})
         return True
     except Exception as e:
         app.logger.error(f'Error reindexing notes for user {user_id}: {e}')
         return False
 
 
-def _post_to_meili_doc(post_doc: dict) -> dict:
-    """Convert a MongoDB post document to Meilisearch document shape."""
+def _post_to_typesense_doc(post_doc: dict) -> dict:
+    """Convert a MongoDB post document to Typesense document shape."""
     return {
         'id': str(post_doc.get('_id')),
         'title': post_doc.get('title', ''),
@@ -1100,66 +974,145 @@ def _post_to_meili_doc(post_doc: dict) -> dict:
         'author_id': str(post_doc.get('author_id')) if post_doc.get('author_id') else None,
         'author_username': post_doc.get('author_username') or post_doc.get('author', ''),
         'tags': post_doc.get('tags', []),
-        # Store created_at as a Unix timestamp for efficient filtering/sorting
         'created_at': int((post_doc.get('created_at') or post_doc.get('timestamp') or datetime.datetime.now(datetime.timezone.utc)).timestamp()),
     }
 
 
-def index_post_to_meili(post_id: str):
-    """Index a single post into Meilisearch. Safe no-op if Meili not configured."""
-    if not meili_index:
+def index_post_to_typesense(post_id: str):
+    """Index a single post into Typesense. Safe no-op if not configured."""
+    if not ts_posts:
         return False
     try:
         post = posts_conf.find_one({'_id': ObjectId(post_id)})
         if not post:
             return False
-        doc = _post_to_meili_doc(post)
-        meili_index.add_documents([doc])
+        doc = _post_to_typesense_doc(post)
+        ts_posts.documents.upsert(doc)
         return True
     except Exception as e:
-        app.logger.error(f'Error indexing post {post_id} to Meili: {e}')
+        app.logger.error(f'Error indexing post {post_id} to Typesense: {e}')
         return False
 
 
-def reindex_all_posts_to_meili(batch_size: int = 1000):
-    """Reindex all posts into Meilisearch in batches."""
-    if not meili_index:
-        raise RuntimeError('Meilisearch not configured')
-    # Atlas tiers disallow noCursorTimeout cursors. Use paginated reads
-    # based on `_id` ranges to avoid long-lived server-side cursors.
+def _get_meili_for_migration():
+    """Return a Meilisearch client if MEILI_URL and MEILI_MASTER_KEY are still configured.
+    Returns None if Meilisearch has been decommissioned."""
+    meili_url = os.environ.get('MEILI_URL', '').strip()
+    meili_key = os.environ.get('MEILI_MASTER_KEY', '').strip()
+    if not meili_url or not meili_key:
+        return None
+    try:
+        from meilisearch import Client as _MeiliClient
+        return _MeiliClient(meili_url, meili_key)
+    except ImportError:
+        app.logger.warning('meilisearch package not installed; skipping migration export')
+        return None
+
+
+def reindex_all_posts_to_typesense(batch_size: int = 1000):
+    """Reindex all posts into Typesense.
+    If Meilisearch is still running, migrates from Meilisearch first,
+    then catches up any delta from MongoDB."""
+    if not ts_posts:
+        raise RuntimeError('Typesense not configured')
+
+    meili = _get_meili_for_migration()
+    migrated_from_meili = 0
+
+    # ---- Phase 1: Migrate from Meilisearch (one-time) ----
+    if meili:
+        try:
+            app.logger.info('Meilisearch detected — migrating posts from Meilisearch to Typesense')
+            meili_index = meili.index('posts')
+            total_meili = 0
+            offset = 0
+            while True:
+                result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
+                docs = result.get('results', [])
+                if not docs:
+                    break
+                ts_posts.documents.import_(docs, {'action': 'upsert'})
+                total_meili += len(docs)
+                offset += len(docs)
+                if len(docs) < batch_size:
+                    break
+                app.logger.info(f'Migrated posts from Meilisearch: {total_meili} so far...')
+            migrated_from_meili = total_meili
+            app.logger.info(f'Phase 1 complete: migrated {migrated_from_meili} posts from Meilisearch')
+        except Exception as e:
+            app.logger.error(f'Error migrating posts from Meilisearch: {e}')
+
+    # ---- Phase 2: Reindex from MongoDB (delta after migration + ongoing use) ----
     try:
         last_id = None
+        total_mongo = 0
         while True:
             query = {} if last_id is None else {"_id": {"$gt": last_id}}
             docs = list(posts_conf.find(query).sort("_id", 1).limit(batch_size))
             if not docs:
                 break
-            meili_index.add_documents([_post_to_meili_doc(p) for p in docs], primary_key='id')
+            ts_posts.documents.import_([_post_to_typesense_doc(p) for p in docs], {'action': 'upsert'})
+            total_mongo += len(docs)
             last_id = docs[-1]["_id"]
+        app.logger.info(f'Phase 2 complete: reindexed {total_mongo} posts from MongoDB')
+        total = max(migrated_from_meili, total_mongo)
+        return total
     except Exception as e:
-        app.logger.error(f'Error during reindex_all_posts_to_meili: {e}')
+        app.logger.error(f'Error during reindex_all_posts_to_typesense: {e}')
         raise
 
-def reindex_all_notes_to_meili(batch_size: int = 500):
-    """Reindex ALL users' personal notes into Meilisearch in batches."""
-    if not meili_notes_index:
-        raise RuntimeError('Meilisearch notes index not configured')
+
+def reindex_all_notes_to_typesense(batch_size: int = 500):
+    """Reindex ALL users' personal notes into Typesense.
+    If Meilisearch is still running, migrates from Meilisearch first,
+    then catches up any delta from MongoDB."""
+    if not ts_notes:
+        raise RuntimeError('Typesense notes collection not configured')
+
+    meili = _get_meili_for_migration()
+    migrated_from_meili = 0
+
+    # ---- Phase 1: Migrate from Meilisearch (one-time) ----
+    if meili:
+        try:
+            app.logger.info('Meilisearch detected — migrating notes from Meilisearch to Typesense')
+            meili_index = meili.index('personal_notes')
+            total_meili = 0
+            offset = 0
+            while True:
+                result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
+                docs = result.get('results', [])
+                if not docs:
+                    break
+                ts_notes.documents.import_(docs, {'action': 'upsert'})
+                total_meili += len(docs)
+                offset += len(docs)
+                if len(docs) < batch_size:
+                    break
+                app.logger.info(f'Migrated notes from Meilisearch: {total_meili} so far...')
+            migrated_from_meili = total_meili
+            app.logger.info(f'Phase 1 complete: migrated {migrated_from_meili} notes from Meilisearch')
+        except Exception as e:
+            app.logger.error(f'Error migrating notes from Meilisearch: {e}')
+
+    # ---- Phase 2: Reindex from MongoDB (delta after migration + ongoing use) ----
     try:
         last_id = None
-        total = 0
+        total_mongo = 0
         while True:
             query = {} if last_id is None else {'_id': {'$gt': last_id}}
             notes = list(personal_posts_conf.find(query).sort('_id', 1).limit(batch_size))
             if not notes:
                 break
-            docs = [_note_to_meili_doc(n) for n in notes]
-            meili_notes_index.add_documents(docs, primary_key='id')
-            total += len(docs)
+            docs = [_note_to_typesense_doc(n) for n in notes]
+            ts_notes.documents.import_(docs, {'action': 'upsert'})
+            total_mongo += len(docs)
             last_id = notes[-1]['_id']
-        app.logger.info(f'Reindexed {total} notes into Meilisearch')
+        app.logger.info(f'Phase 2 complete: reindexed {total_mongo} notes from MongoDB')
+        total = max(migrated_from_meili, total_mongo)
         return total
     except Exception as e:
-        app.logger.error(f'Error during reindex_all_notes_to_meili: {e}')
+        app.logger.error(f'Error during reindex_all_notes_to_typesense: {e}')
         raise
 
 
@@ -2834,78 +2787,73 @@ def search():
 
     results = []
     total = 0
-    if meili_index and (query or tags_filter or author_filter or date_from or date_to):
+    if ts_posts and (query or tags_filter or author_filter or date_from or date_to):
         try:
-            # Build Meilisearch filter expression if any filters provided
-            filter_expr = None
             filter_clauses = []
             if tags_filter:
-                # Filter out empty strings that might come from the form
-                tag_clauses = [f'tags = "{t}"' for t in tags_filter if t]
-                if tag_clauses:
-                    filter_clauses.append('(' + ' OR '.join(tag_clauses) + ')')
-            if author_filter: # Only add filter if author is not an empty string
-                # Sanitise to prevent Meilisearch filter injection
+                tag_terms = [f'tags:={t}' for t in tags_filter if t]
+                if tag_terms:
+                    filter_clauses.append('(' + ' || '.join(tag_terms) + ')')
+            if author_filter:
                 import re as _re
                 _safe_author = _re.sub(r'[^a-zA-Z0-9_\-]', '', author_filter)
-                filter_clauses.append(f'author_username = "{_safe_author}"')
+                filter_clauses.append(f'author_username:={_safe_author}')
             if date_from:
                 try:
-                    # Convert YYYY-MM-DD to start-of-day timestamp
                     dt_from = datetime.datetime.strptime(date_from, '%Y-%m-%d')
-                    filter_clauses.append(f'created_at >= {int(dt_from.timestamp())}')
-                except ValueError: pass # Ignore invalid date formats
+                    filter_clauses.append(f'created_at:>={int(dt_from.timestamp())}')
+                except ValueError: pass
             if date_to:
                 try:
-                    # Convert YYYY-MM-DD to end-of-day timestamp
                     dt_to = datetime.datetime.strptime(date_to, '%Y-%m-%d') + datetime.timedelta(days=1, seconds=-1)
-                    filter_clauses.append(f'created_at <= {int(dt_to.timestamp())}')
-                except ValueError: pass # Ignore invalid date formats
-            if filter_clauses:
-                filter_expr = ' AND '.join(filter_clauses)
+                    filter_clauses.append(f'created_at:<={int(dt_to.timestamp())}')
+                except ValueError: pass
+            filter_expr = ' && '.join(filter_clauses) if filter_clauses else ''
 
             search_params = {
-                'limit': per_page,
-                'offset': (page - 1) * per_page,
-                'attributesToHighlight': ['title', 'content'], # Highlight matches in these fields
-                'attributesToCrop': ['content'], # Create a snippet from the 'content' field
-                'cropLength': 40, # Number of words to keep around the match
-                'cropMarker': '...', # Text to indicate the content is cropped
-                'highlightPreTag': '<span class="highlighted-match">',
-                'highlightPostTag': '</span>'
+                'q': query or '*',
+                'query_by': 'title,content',
+                'per_page': per_page,
+                'page': page,
+                'highlight_full_fields': 'title,content',
+                'highlight_start_tag': '<span class="highlighted-match">',
+                'highlight_end_tag': '</span>',
             }
             if filter_expr:
-                search_params['filter'] = filter_expr
+                search_params['filter_by'] = filter_expr
 
-            # Apply sorting
             if sort == 'newest':
-                search_params['sort'] = ['created_at:desc']
+                search_params['sort_by'] = 'created_at:desc'
             elif sort == 'oldest':
-                search_params['sort'] = ['created_at:asc']
+                search_params['sort_by'] = 'created_at:asc'
             elif sort == 'title_asc':
-                search_params['sort'] = ['title:asc']
+                search_params['sort_by'] = 'title:asc'
             elif sort == 'title_desc':
-                search_params['sort'] = ['title:desc']
-            # 'relevance' is default (no sort param needed)
+                search_params['sort_by'] = 'title:desc'
 
-            search_result = meili_index.search(query, search_params)
-            total = search_result.get('estimatedTotalHits', search_result.get('nbHits', 0))
+            search_result = ts_posts.documents.search(search_params)
+            total = search_result.get('found', 0)
             hits = search_result.get('hits', [])
             for h in hits:
-                # Prefer the highlighted/formatted fields when available
-                formatted = h.get('_formatted', {})
-                title_html = formatted.get('title') or h.get('title')
-                excerpt = formatted.get('content') or h.get('content', '')[:300]
+                doc = h.get('document', h)
+                highlights = h.get('highlights', [])
+                title_html = doc.get('title', '')
+                excerpt = doc.get('content', '')[:300]
+                for hl in highlights:
+                    if hl.get('field') == 'title' and hl.get('snippet'):
+                        title_html = hl['snippet']
+                    if hl.get('field') == 'content' and hl.get('snippet'):
+                        excerpt = hl['snippet']
                 results.append({
-                    'id': h.get('id'),
+                    'id': doc.get('id'),
                     'title': title_html,
-                    'slug': h.get('slug'),
-                    'author': h.get('author_username'),
-                    'created_at': datetime.datetime.fromtimestamp(h.get('created_at'), tz=datetime.timezone.utc) if h.get('created_at') else None,
+                    'slug': doc.get('slug'),
+                    'author': doc.get('author_username'),
+                    'created_at': datetime.datetime.fromtimestamp(doc.get('created_at'), tz=datetime.timezone.utc) if doc.get('created_at') else None,
                     'excerpt': excerpt
                 })
         except Exception as e:
-            app.logger.error(f'Meili search error: {e}')
+            app.logger.error(f'Typesense search error: {e}')
     else:
         # Fallback to simple Mongo search (very limited)
         if query:
@@ -3257,24 +3205,54 @@ def admin_traffic():
 @login_required
 @admin_required
 def admin_system_health():
-    """Return system component health: Meilisearch, Redis, RQ queue, last backup."""
+    """Return system component health: Typesense, Redis, RQ queue, last backup."""
     health = {}
 
-    # --- Meilisearch ---
+    # --- Typesense ---
     try:
-        if meili_client:
-            meili_client.health()
-            posts_stats = meili_index.get_stats() if meili_index else {}
-            notes_stats = meili_notes_index.get_stats() if meili_notes_index else {}
-            health['meilisearch'] = {
+        if ts_client:
+            ts_client.health.retrieve()
+            posts_docs = 0
+            notes_docs = 0
+            try:
+                if ts_posts:
+                    posts_stats = ts_posts.retrieve()
+                    posts_docs = posts_stats.get('num_documents', 0)
+            except Exception:
+                pass
+            try:
+                if ts_notes:
+                    notes_stats = ts_notes.retrieve()
+                    notes_docs = notes_stats.get('num_documents', 0)
+            except Exception:
+                pass
+            health['typesense'] = {
                 'status': 'healthy',
-                'posts_docs': posts_stats.get('numberOfDocuments', 0) if isinstance(posts_stats, dict) else getattr(posts_stats, 'number_of_documents', 0),
-                'notes_docs': notes_stats.get('numberOfDocuments', 0) if isinstance(notes_stats, dict) else getattr(notes_stats, 'number_of_documents', 0),
+                'posts_docs': posts_docs,
+                'notes_docs': notes_docs,
             }
         else:
-            health['meilisearch'] = {'status': 'not_configured'}
+            health['typesense'] = {'status': 'not_configured'}
     except Exception as e:
-        health['meilisearch'] = {'status': 'error', 'detail': str(e)}
+        health['typesense'] = {'status': 'error', 'detail': str(e)}
+
+    # --- Meilisearch (migration source) ---
+    meili = _get_meili_for_migration()
+    if meili:
+        try:
+            meili.health()
+            posts_stats = meili.index('posts').get_stats()
+            notes_stats = meili.index('personal_notes').get_stats()
+            health['meilisearch'] = {
+                'status': 'available',
+                'note': 'Meilisearch is still running — run "Reindex Posts" and "Reindex Notes" to migrate to Typesense',
+                'posts_docs': posts_stats.get('numberOfDocuments', 0),
+                'notes_docs': notes_stats.get('numberOfDocuments', 0),
+            }
+        except Exception as e:
+            health['meilisearch'] = {'status': 'unreachable', 'detail': str(e)}
+    else:
+        health['meilisearch'] = {'status': 'decommissioned', 'note': 'Meilisearch is not configured — using Typesense directly'}
 
     # --- Redis ---
     try:
@@ -3340,20 +3318,18 @@ def admin_system_health():
     return jsonify(health)
 
 
-@app.route('/admin/reindex_meili', methods=['POST'])
+@app.route('/admin/reindex_typesense', methods=['POST'])
 @login_required
 @admin_required
-def admin_reindex_meili():
-    if not meili_index:
-        return jsonify({'error': 'Meilisearch not configured'}), 500
+def admin_reindex_typesense():
+    if not ts_posts:
+        return jsonify({'error': 'Typesense not configured'}), 500
     try:
-        # Enqueue reindex as an RQ background job to avoid blocking the request
         try:
-            reindex_meili_job.queue()
+            reindex_typesense_job.queue()
             return jsonify({'status': 'queued', 'message': 'Reindex queued as background job'})
         except Exception:
-            # Fallback: run synchronously if enqueuing fails
-            reindex_all_posts_to_meili()
+            reindex_all_posts_to_typesense()
             return jsonify({'status': 'completed', 'message': 'Reindex completed (synchronous fallback)'})
     except Exception as e:
         app.logger.error(f'Error reindexing: {e}')
@@ -3361,23 +3337,23 @@ def admin_reindex_meili():
 
 
 @rq.job
-def reindex_meili_job():
-    """Background job to reindex all posts into Meilisearch."""
+def reindex_typesense_job():
+    """Background job to reindex all posts into Typesense (with Meilisearch migration if available)."""
     try:
-        reindex_all_posts_to_meili()
-        app.logger.info('Meilisearch reindex job finished')
+        total = reindex_all_posts_to_typesense()
+        app.logger.info(f'Typesense posts reindex job finished ({total} docs)')
     except Exception as e:
-        app.logger.error(f'Meilisearch reindex job failed: {e}', exc_info=True)
+        app.logger.error(f'Typesense reindex job failed: {e}', exc_info=True)
 
 
-@app.route('/admin/reindex_notes_meili', methods=['POST'])
+@app.route('/admin/reindex_notes_typesense', methods=['POST'])
 @login_required
 @admin_required
-def admin_reindex_notes_meili():
-    if not meili_notes_index:
-        return jsonify({'error': 'Meilisearch notes index not configured'}), 500
+def admin_reindex_notes_typesense():
+    if not ts_notes:
+        return jsonify({'error': 'Typesense notes collection not configured'}), 500
     try:
-        total = reindex_all_notes_to_meili()
+        total = reindex_all_notes_to_typesense()
         return jsonify({'status': 'completed', 'message': f'Reindexed {total} notes'})
     except Exception as e:
         app.logger.error(f'Error reindexing notes: {e}')
@@ -5938,12 +5914,11 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         posts_conf.update_one({'_id': ObjectId(post_id_str)}, {'$set': update_data})
         app.logger.info(f"Successfully processed media and updated post {post_id_str}")
 
-        # Index post into Meilisearch after media processing so image fields are present
+        # Index post into Typesense after media processing so image fields are present
         try:
-            if meili_index:
-                # Index synchronously here (it's quick); if you prefer, enqueue an RQ job instead
-                index_post_to_meili(post_id_str)
-                app.logger.info(f"Indexed post {post_id_str} to Meilisearch after media processing")
+            if ts_posts:
+                index_post_to_typesense(post_id_str)
+                app.logger.info(f"Indexed post {post_id_str} to Typesense after media processing")
         except Exception as e:
             app.logger.error(f"Failed to index post {post_id_str} after media processing: {e}")
 
@@ -6097,10 +6072,10 @@ def post():
                     app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
                 # If no media, index immediately
                 try:
-                    if meili_index:
-                        index_post_to_meili(post_id_str)
+                    if ts_posts:
+                        index_post_to_typesense(post_id_str)
                 except Exception as e:
-                    app.logger.debug(f"Meili index skipped for {post_id_str}: {e}")
+                    app.logger.debug(f"Typesense index skipped for {post_id_str}: {e}")
 
             # --- Send ntfy notification for new post ---
             try:
@@ -6174,7 +6149,7 @@ def view_post(slug):
     post_html = bleach.linkify(post_html, callbacks=[_linkify_target_blank], parse_email=True)
     post['content'] = post_html
 
-    # --- Fetch Related Posts using Meilisearch (with caching) ---
+    # --- Fetch Related Posts using Typesense (with caching) ---
     related_posts = []
     post_id_str = str(post['_id'])
 
@@ -6184,32 +6159,30 @@ def view_post(slug):
 
     if cached_related is not None:
         related_posts = cached_related
-    elif meili_index:
+    elif ts_posts:
         try:
-            # Enhanced Related Posts Logic:
-            # Search for posts with similar tags and title, then filter out the current post.
             search_query = post.get('title', '')
             search_params = {
-                'limit': 4, # Fetch 4 to have a buffer in case the original post is in the results
-                'filter': f'id != {post_id_str}' # Exclude the current post from results
+                'q': search_query or '*',
+                'query_by': 'title,content,tags',
+                'per_page': 4,
+                'filter_by': f'id:!={post_id_str}',
             }
 
-            # If the post has tags, add them to the search query for better relevance.
             if post.get('tags'):
                 tags_str = " ".join(post.get('tags'))
                 search_query = f"{tags_str} {search_query}"
+                search_params['q'] = search_query
 
-            search_result = meili_index.search(search_query, search_params)
+            search_result = ts_posts.documents.search(search_params)
             hits = search_result.get('hits', [])
-            # Since we filtered in the query, we can just take the top 3 hits.
-            related_posts = hits[:3]
+            related_posts_raw = [h.get('document', h) for h in hits[:3]]
 
-            # Convert timestamp back to a datetime object for use in the template.
-            for p in related_posts:
+            for p in related_posts_raw:
                 if p.get('created_at'):
                     p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
+            related_posts = related_posts_raw
 
-            # Cache the results (2 minute TTL)
             related_posts_cache[related_cache_key] = related_posts
         except Exception as e:
             app.logger.error(f"Failed to get similar posts for {post_id_str}: {e}")
@@ -7213,10 +7186,10 @@ def update_post(post_id):
                 'edited_at': datetime.datetime.now(datetime.timezone.utc),
             }}
         )
-        # Re-index the post in Meilisearch to reflect the changes
+        # Re-index the post in Typesense to reflect the changes
         try:
-            if meili_index:
-                index_post_to_meili(post_id)
+            if ts_posts:
+                index_post_to_typesense(post_id)
         except Exception as e:
             app.logger.error(f"Failed to re-index post {post_id} after update: {e}")
         flash("Post updated successfully!", "success")
@@ -8149,18 +8122,22 @@ def delete_account(username):
                 except Exception:
                     pass
 
-        # Remove personal notes from Meilisearch
+        # Remove personal notes from Typesense
         note_ids = [n['_id'] for n in personal_posts_conf.find({'user_id': user_id}, {'_id': 1})]
         if note_ids:
-            remove_notes_from_meili(note_ids)
+            remove_notes_from_typesense(note_ids)
 
-        # Remove posts from Meilisearch
+        # Remove posts from Typesense
         post_ids = [p['_id'] for p in user_posts]
-        if post_ids and meili_index:
+        if post_ids and ts_posts:
             try:
-                meili_index.delete_documents(ids=[str(pid) for pid in post_ids])
+                for pid in post_ids:
+                    try:
+                        ts_posts.documents[str(pid)].delete()
+                    except Exception:
+                        pass
             except Exception as e:
-                app.logger.error(f"Failed to remove posts from Meili for {user_username}: {e}")
+                app.logger.error(f"Failed to remove posts from Typesense for {user_username}: {e}")
 
         # Cascade delete from all collections
         posts_conf.delete_many({'author': user_username})
@@ -8770,8 +8747,8 @@ def create_personal_post():
             'tags': [t.strip() for t in request.form.get('tags', '').split(',') if t.strip()][:10],
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
-        # Index decrypted content to Meilisearch for search
-        index_note_to_meili(str(result.inserted_id), decrypted_content=content)
+        # Index decrypted content to Typesense for search
+        index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
         flash('Personal note added securely.', 'success')
     else:
         flash('Content cannot be empty.', 'danger')
@@ -8807,15 +8784,15 @@ def create_personal_post_json():
         'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
-    # Index decrypted content to Meilisearch for search
-    index_note_to_meili(str(result.inserted_id), decrypted_content=content)
+    # Index decrypted content to Typesense for search
+    index_note_to_typesense(str(result.inserted_id), decrypted_content=content)
     return jsonify({'success': True, 'id': str(result.inserted_id)})
 
 
 @app.route('/personal_post/search')
 @login_required
 def search_personal_notes():
-    """Search personal notes using Meilisearch with phrase match and highlighting."""
+    """Search personal notes using Typesense with highlighting and tenant-isolated scoped keys."""
     query = request.args.get('q', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = min(50, max(1, int(request.args.get('per_page', 20))))
@@ -8823,7 +8800,7 @@ def search_personal_notes():
     if not query:
         return jsonify({'results': [], 'total': 0, 'query': ''})
 
-    if not meili_notes_index:
+    if not ts_notes:
         # Fallback: simple MongoDB text search on decrypted notes
         try:
             notes_raw = list(personal_posts_conf.find({
@@ -8835,7 +8812,6 @@ def search_personal_notes():
             for note in notes_raw:
                 content = _decrypt_note_record(note)
                 if q_lower in content.lower():
-                    # Simple highlight: wrap matches in <mark>
                     import re as re_mod
                     highlighted = re_mod.sub(
                         f'({re_mod.escape(query)})',
@@ -8843,7 +8819,6 @@ def search_personal_notes():
                         content,
                         flags=re_mod.IGNORECASE
                     )
-                    # Crop around first match
                     match_pos = content.lower().find(q_lower)
                     start = max(0, match_pos - 80)
                     end = min(len(content), match_pos + len(query) + 80)
@@ -8873,28 +8848,26 @@ def search_personal_notes():
 
     try:
         search_params = {
-            'limit': per_page,
-            'offset': (page - 1) * per_page,
-            'filter': f'user_id = "{current_user.id}"',
-            'attributesToHighlight': ['content'],
-            'attributesToCrop': ['content'],
-            'cropLength': 40,
-            'cropMarker': '...',
-            'highlightPreTag': '<mark class="search-highlight">',
-            'highlightPostTag': '</mark>',
-            'showMatchesPosition': True,
-            'sort': ['created_at:desc'],
-            'matchingStrategy': 'all'
+            'q': query,
+            'query_by': 'content',
+            'filter_by': f'user_id:={current_user.id}',
+            'per_page': per_page,
+            'page': page,
+            'sort_by': 'created_at:desc',
+            'highlight_full_fields': 'content',
+            'highlight_start_tag': '<mark class="search-highlight">',
+            'highlight_end_tag': '</mark>',
         }
 
-        search_result = meili_notes_index.search(query, search_params)
+        search_result = ts_notes.documents.search(search_params)
         hits = search_result.get('hits', [])
 
         # Enforce lock gate at the source-of-truth DB layer so locked notes can never leak
         # through stale or partially indexed search documents.
         candidate_ids = []
         for h in hits:
-            hid = h.get('id')
+            doc = h.get('document', h)
+            hid = doc.get('id')
             if isinstance(hid, str) and ObjectId.is_valid(hid):
                 candidate_ids.append(ObjectId(hid))
 
@@ -8909,22 +8882,24 @@ def search_personal_notes():
 
         results = []
         for h in hits:
-            hit_id = h.get('id')
+            doc = h.get('document', h)
+            hit_id = doc.get('id')
             if hit_id not in allowed_note_ids:
                 continue
-            formatted = h.get('_formatted', {})
-            content_highlighted = formatted.get('content') or h.get('content', '')
-            snippet = formatted.get('content') or h.get('content', '')[:300]
-            # Get match positions for client-side use
-            matches_position = h.get('_matchesPosition', {})
+            highlights = h.get('highlights', [])
+            content_highlighted = doc.get('content', '')
+            snippet = doc.get('content', '')[:300]
+            for hl in highlights:
+                if hl.get('field') == 'content' and hl.get('snippet'):
+                    content_highlighted = hl['snippet']
+                    snippet = hl['snippet']
             results.append({
-                'id': h.get('id'),
+                'id': doc.get('id'),
                 'content_highlighted': content_highlighted,
                 'snippet': snippet,
                 'created_at': datetime.datetime.fromtimestamp(
-                    h.get('created_at'), tz=datetime.timezone.utc
-                ).isoformat() if h.get('created_at') else None,
-                'matches_position': matches_position
+                    doc.get('created_at'), tz=datetime.timezone.utc
+                ).isoformat() if doc.get('created_at') else None,
             })
         total = len(results)
         return jsonify({
@@ -8933,22 +8908,22 @@ def search_personal_notes():
             'query': query,
             'page': page,
             'per_page': per_page,
-            'processing_time_ms': search_result.get('processingTimeMs', 0)
+            'processing_time_ms': search_result.get('search_time_ms', 0)
         })
     except Exception as e:
-        app.logger.error(f'Meili note search error: {e}')
+        app.logger.error(f'Typesense note search error: {e}')
         return jsonify({'results': [], 'total': 0, 'query': query, 'error': 'Search failed'}), 500
 
 
 @app.route('/personal_post/reindex_notes', methods=['POST'])
 @login_required
 def reindex_my_notes():
-    """Reindex the current user's notes into Meilisearch."""
+    """Reindex the current user's notes into Typesense."""
     try:
-        success = reindex_user_notes_to_meili(current_user.id)
+        success = reindex_user_notes_to_typesense(current_user.id)
         if success:
             return jsonify({'success': True, 'message': 'Notes reindexed successfully'})
-        return jsonify({'error': 'Meilisearch not configured'}), 500
+        return jsonify({'error': 'Typesense not configured'}), 500
     except Exception as e:
         app.logger.error(f'Error reindexing notes for user {current_user.id}: {e}')
         return jsonify({'error': 'Reindex failed'}), 500
@@ -9117,7 +9092,7 @@ def edit_personal_post(post_id):
         )
 
         # Re-index with updated decrypted content
-        index_note_to_meili(post_id, decrypted_content=content)
+        index_note_to_typesense(post_id, decrypted_content=content)
 
         # Broadcast update to other devices/sessions for real-time sync
         socketio.emit('note_changed', {
@@ -9306,9 +9281,9 @@ def sync_personal_post(post_id):
                 }}
             )
 
-            # Re-index original in Meilisearch
+            # Re-index original in Typesense
             decrypted = _decrypt_note_record(note)
-            index_note_to_meili(str(source_note_id), decrypted_content=decrypted)
+            index_note_to_typesense(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
             socketio.emit('note_changed', {'content': decrypted}, room=source_share_id)
@@ -9352,9 +9327,9 @@ def sync_personal_post(post_id):
                 }}
             )
 
-            # Re-index clone in Meilisearch
+            # Re-index clone in Typesense
             decrypted = _decrypt_note_record(original_note)
-            index_note_to_meili(post_id, decrypted_content=decrypted)
+            index_note_to_typesense(post_id, decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER for real-time sync
             socketio.emit('note_changed', {
@@ -9432,8 +9407,8 @@ def delete_personal_post(post_id):
         # 3. Cleanup all unlock notifications for target notes
         unlock_notifications_conf.delete_many({'note_id': {'$in': target_ids}})
 
-        # 4. Remove from Meilisearch index
-        remove_notes_from_meili(target_ids)
+        # 4. Remove from Typesense index
+        remove_notes_from_typesense(target_ids)
 
         # 5. Final: Delete entries from personal_posts_conf
         personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
@@ -12298,7 +12273,7 @@ def api_restore_note_version(post_id, version_id):
         current_user.id
     )
     plain = _decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
-    index_note_to_meili(post_id, decrypted_content=plain)
+    index_note_to_typesense(post_id, decrypted_content=plain)
 
     return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat()})
 
@@ -12420,7 +12395,7 @@ def api_decide_note_proposal(version_id):
             }}
         )
 
-        index_note_to_meili(str(note_id), decrypted_content=final_plain)
+        index_note_to_typesense(str(note_id), decrypted_content=final_plain)
 
         # Notify owner sessions and collaborators in the share room.
         socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))

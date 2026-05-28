@@ -298,7 +298,7 @@
     btn.disabled = true;
     btn.textContent = 'Reindexing...';
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    const res = await fetch('/admin/reindex_meili', {
+    const res = await fetch('/admin/reindex_typesense', {
       method: 'POST',
       headers: { 'X-CSRFToken': csrfToken }
     });
@@ -317,18 +317,33 @@
       const h = await res.json();
       let html = '';
 
-      // Meilisearch
-      const m = h.meilisearch || {};
-      const mCls = m.status === 'healthy' ? 'healthy' : (m.status === 'not_configured' ? 'unknown' : 'error');
-      html += `<div class="health-card ${mCls}">`;
-      html += `<h4><span class="health-dot"></span> Meilisearch</h4>`;
-      if (m.status === 'healthy') {
-        html += `<p>Posts indexed: <strong>${m.posts_docs}</strong></p>`;
-        html += `<p>Notes indexed: <strong>${m.notes_docs}</strong></p>`;
-      } else if (m.status === 'not_configured') {
+      // Typesense
+      const ts = h.typesense || {};
+      const tsCls = ts.status === 'healthy' ? 'healthy' : (ts.status === 'not_configured' ? 'unknown' : 'error');
+      html += `<div class="health-card ${tsCls}">`;
+      html += `<h4><span class="health-dot"></span> Typesense</h4>`;
+      if (ts.status === 'healthy') {
+        html += `<p>Posts indexed: <strong>${ts.posts_docs}</strong></p>`;
+        html += `<p>Notes indexed: <strong>${ts.notes_docs}</strong></p>`;
+      } else if (ts.status === 'not_configured') {
         html += `<p>Not configured</p>`;
       } else {
-        html += `<p>${m.detail || 'Unreachable'}</p>`;
+        html += `<p>${ts.detail || 'Unreachable'}</p>`;
+      }
+      html += '</div>';
+
+      // Meilisearch (migration source)
+      const ml = h.meilisearch || {};
+      const mlCls = ml.status === 'available' ? 'stale' : (ml.status === 'decommissioned' ? 'healthy' : 'error');
+      html += `<div class="health-card ${mlCls}">`;
+      html += `<h4><span class="health-dot"></span> Meilisearch (Lagacy)</h4>`;
+      if (ml.status === 'available') {
+        html += `<p style="color:#e6a817;"><strong>Migration needed</strong> — ${ml.note || ''}</p>`;
+        html += `<p>Posts: <strong>${ml.posts_docs}</strong> | Notes: <strong>${ml.notes_docs}</strong></p>`;
+      } else if (ml.status === 'decommissioned') {
+        html += `<p>${ml.note || 'Decommissioned'}</p>`;
+      } else {
+        html += `<p>${ml.detail || 'Unreachable'}</p>`;
       }
       html += '</div>';
 
@@ -406,7 +421,7 @@
     btn.textContent = 'Reindexing Notes...';
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     try {
-      const res = await fetch('/admin/reindex_notes_meili', {
+      const res = await fetch('/admin/reindex_notes_typesense', {
         method: 'POST',
         headers: { 'X-CSRFToken': csrfToken }
       });

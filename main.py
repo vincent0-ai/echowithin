@@ -1028,7 +1028,7 @@ def reindex_all_posts_to_typesense(batch_size: int = 1000):
             offset = 0
             while True:
                 result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                docs = result.get('results', [])
+                docs = result.results if hasattr(result, 'results') else []
                 if not docs:
                     break
                 ts_posts.documents.import_(docs, {'action': 'upsert'})
@@ -1081,7 +1081,7 @@ def reindex_all_notes_to_typesense(batch_size: int = 500):
             offset = 0
             while True:
                 result = meili_index.get_documents({'limit': batch_size, 'offset': offset})
-                docs = result.get('results', [])
+                docs = result.results if hasattr(result, 'results') else []
                 if not docs:
                     break
                 ts_notes.documents.import_(docs, {'action': 'upsert'})
@@ -3243,16 +3243,18 @@ def admin_system_health():
             meili.health()
             posts_stats = meili.index('posts').get_stats()
             notes_stats = meili.index('personal_notes').get_stats()
+            posts_docs = posts_stats.number_of_documents if hasattr(posts_stats, 'number_of_documents') else 0
+            notes_docs = notes_stats.number_of_documents if hasattr(notes_stats, 'number_of_documents') else 0
             health['meilisearch'] = {
                 'status': 'available',
-                'note': 'Meilisearch is still running — run "Reindex Posts" and "Reindex Notes" to migrate to Typesense',
-                'posts_docs': posts_stats.get('numberOfDocuments', 0),
-                'notes_docs': notes_stats.get('numberOfDocuments', 0),
+                'note': 'Run "Reindex Posts" and "Reindex Notes" to migrate to Typesense',
+                'posts_docs': posts_docs,
+                'notes_docs': notes_docs,
             }
         except Exception as e:
             health['meilisearch'] = {'status': 'unreachable', 'detail': str(e)}
     else:
-        health['meilisearch'] = {'status': 'decommissioned', 'note': 'Meilisearch is not configured — using Typesense directly'}
+        health['meilisearch'] = {'status': 'decommissioned', 'note': 'Not configured — using Typesense directly'}
 
     # --- Redis ---
     try:

@@ -17,6 +17,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from functools import wraps
 from flask_mail import Mail, Message
 from concurrent.futures import ThreadPoolExecutor
+import database
 import os
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -559,6 +560,37 @@ community_reactions_conf.create_index([('note_id', 1), ('user_id', 1)], unique=T
 community_reactions_conf.create_index([('note_id', 1)])
 community_reports_conf.create_index([('community_id', 1), ('status', 1)])
 community_reports_conf.create_index('reporter_id')
+
+# Populate database module globals so other modules can import them
+database.client = client
+database.db = db
+database.users_conf = users_conf
+database.posts_conf = posts_conf
+database.logs_conf = logs_conf
+database.auth_conf = auth_conf
+database.announcements_conf = announcements_conf
+database.comments_conf = comments_conf
+database.personal_posts_conf = personal_posts_conf
+database.note_shares_conf = note_shares_conf
+database.note_versions_conf = note_versions_conf
+database.note_discussions_conf = note_discussions_conf
+database.push_subscriptions_conf = push_subscriptions_conf
+database.fcm_tokens_conf = fcm_tokens_conf
+database.direct_messages_conf = direct_messages_conf
+database.newsletter_conf = newsletter_conf
+database.user_post_views_conf = user_post_views_conf
+database.unlock_notifications_conf = unlock_notifications_conf
+database.weekly_winners_conf = weekly_winners_conf
+database.app_tokens_conf = app_tokens_conf
+database.app_updates_conf = app_updates_conf
+database.communities_conf = communities_conf
+database.community_notes_conf = community_notes_conf
+database.community_reactions_conf = community_reactions_conf
+database.community_reports_conf = community_reports_conf
+database.dm_permissions_conf = dm_permissions_conf
+database.scheduled_messages_conf = scheduled_messages_conf
+database.note_attachments_conf = note_attachments_conf
+database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---
 # v2: Per-user key derivation with increased iterations (OWASP 2024 recommendation).

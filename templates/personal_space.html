@@ -5476,13 +5476,16 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
+            const maxChars = parseInt(noteInput.getAttribute('maxlength')) || 20000;
+            const dangerThreshold = Math.floor(maxChars * 0.9);
+            const warningThreshold = Math.floor(maxChars * 0.75);
             noteInput.addEventListener('input', () => {
                 const len = noteInput.value.length;
                 charCount.textContent = len;
                 charCountContainer.classList.remove('warning', 'danger');
-                if (len > 18000) {
+                if (len > dangerThreshold) {
                     charCountContainer.classList.add('danger');
-                } else if (len > 15000) {
+                } else if (len > warningThreshold) {
                     charCountContainer.classList.add('warning');
                 }
             });

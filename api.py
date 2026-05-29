@@ -334,14 +334,18 @@ def api_create_note():
         return jsonify({'error': 'Content cannot be empty.'}), 400
 
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
-    max_notes = m.get_limit(user_doc, 'max_notes')
-    max_chars = m.get_limit(user_doc, 'max_chars_per_note')
+    # Safety: if DB lookup fails, fall back to current_user's cached tier
+    max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
+    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
     current_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
     
     if current_count >= max_notes:
         return jsonify({'error': f'You have reached the limit of {max_notes} notes. Upgrade to Premium!'}), 403
 
+    raw_len = len(content)
     content = content[:max_chars]
+    if raw_len > max_chars:
+        m.app.logger.warning(f"API note truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
     
     result = m.personal_posts_conf.insert_one({
@@ -380,8 +384,12 @@ def api_edit_note(note_id):
         return jsonify({'error': 'Note not found or unauthorized.'}), 404
 
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
-    max_chars = m.get_limit(user_doc, 'max_chars_per_note')
+    # Safety: if DB lookup fails, fall back to current_user's cached tier
+    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
+    raw_len = len(content)
     content = content[:max_chars]
+    if raw_len > max_chars:
+        m.app.logger.warning(f"API edit truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
 
     # Snapshot for version control
     if note.get('content'):

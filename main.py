@@ -8658,13 +8658,17 @@ def create_personal_post():
     if content and content.strip():
         # --- Premium tier enforcement ---
         user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
-        max_notes = get_limit(user_doc, 'max_notes')
-        max_chars = get_limit(user_doc, 'max_chars_per_note')
+        # Safety: if DB lookup fails, fall back to current_user's cached tier
+        max_notes = get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
+        max_chars = get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
         current_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
         if current_count >= max_notes:
             flash(f'You have reached the limit of {max_notes} notes on your current plan. Upgrade to Premium for unlimited notes!', 'warning')
             return redirect(url_for('personal_space'))
-        content = content.strip()[:max_chars]
+        raw_content = content.strip()
+        content = raw_content[:max_chars]
+        if len(raw_content) > max_chars:
+            app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {len(raw_content)} -> {max_chars} chars")
         # Encrypt the note content before storing
         encrypted_content = encrypt_note(content, user_id=current_user.id)
         result = personal_posts_conf.insert_one({
@@ -8696,13 +8700,17 @@ def create_personal_post_json():
 
     # --- Premium tier enforcement ---
     user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)})
-    max_notes = get_limit(user_doc, 'max_notes')
-    max_chars = get_limit(user_doc, 'max_chars_per_note')
+    # Safety: if DB lookup fails, fall back to current_user's cached tier
+    max_notes = get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
+    max_chars = get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
     current_count = personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
     if current_count >= max_notes:
         return jsonify({'error': f'Note limit reached ({max_notes}). Upgrade to Premium for unlimited notes.', 'upgrade': True}), 403
 
+    raw_len = len(content)
     content = content[:max_chars]
+    if raw_len > max_chars:
+        app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = encrypt_note(content, user_id=current_user.id)
     result = personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
@@ -8957,7 +8965,10 @@ def edit_personal_post(post_id):
 
         # Enforce max length
         max_chars = current_user.get_limit('max_chars_per_note')
+        raw_len = len(content)
         content = content[:max_chars]
+        if raw_len > max_chars:
+            app.logger.warning(f"Edit truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
         obj_id = safe_object_id(post_id)
         if not obj_id:
             return jsonify({'error': 'Invalid note ID'}), 400
@@ -13800,7 +13811,7 @@ def view_shared_community_note(share_id):
                            valentine_photo=note.get('valentine_photo'),
                            valentine_audio=note.get('valentine_audio'),
                            use_typewriter=note.get('use_typewriter', False),
-                           owner_max_chars=TIER_LIMITS['free']['max_chars_per_note'],
+                           owner_max_chars=get_limit(users_conf.find_one({'_id': note.get('author_id')}), 'max_chars_per_note'),
                            note_attachments=[],
                            can_upload_media=False,
                            is_community_note=True,

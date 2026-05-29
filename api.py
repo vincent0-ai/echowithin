@@ -8,13 +8,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # Create the API blueprint
 api_bp = Blueprint('api_v1', __name__)
-
-# To prevent circular dependency errors, all imports from main are done lazily or
-# resolved after the main module finishes loading.
-def get_main_globals():
-    import main
-    return main
-
 # --- Helper functions ---
 def safe_obj_id(val):
     try:
@@ -26,7 +19,7 @@ def safe_obj_id(val):
 
 @api_bp.route('/register', methods=['POST'])
 def api_register():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     email = data.get("email", "").strip().lower()
@@ -81,7 +74,7 @@ def api_register():
 
 @api_bp.route('/confirm/<email>', methods=['POST'])
 def api_confirm(email):
-    m = get_main_globals()
+    import main as m
     email = email.strip().lower()
     data = request.get_json(silent=True) or {}
     confirm_code = data.get("code", "").strip()
@@ -115,7 +108,7 @@ def api_confirm(email):
 
 @api_bp.route('/login', methods=['POST'])
 def api_login():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
@@ -192,7 +185,7 @@ def api_login():
 
 @api_bp.route('/logout', methods=['POST', 'GET'])
 def api_logout():
-    m = get_main_globals()
+    import main as m
     app_token = request.cookies.get('x_app_token') or request.headers.get('Authorization', '').replace('Bearer ', '').strip()
     if app_token:
         m.app_tokens_conf.delete_one({'token': app_token})
@@ -210,7 +203,7 @@ def api_logout():
 @api_bp.route('/notes', methods=['GET'])
 @login_required
 def api_get_notes():
-    m = get_main_globals()
+    import main as m
     try:
         page = max(1, int(request.args.get('page', 1)))
         per_page = min(50, max(1, int(request.args.get('per_page', 20))))
@@ -275,7 +268,7 @@ def api_get_notes():
 @api_bp.route('/notes/<note_id>', methods=['GET'])
 @login_required
 def api_get_note(note_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(note_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID.'}), 400
@@ -324,7 +317,7 @@ def api_get_note(note_id):
 @api_bp.route('/notes/create', methods=['POST'])
 @login_required
 def api_create_note():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     content = data.get('content', '').strip()
     reference = data.get('reference', '').strip()[:200]
@@ -365,7 +358,7 @@ def api_create_note():
 @api_bp.route('/notes/edit/<note_id>', methods=['POST'])
 @login_required
 def api_edit_note(note_id):
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     content = data.get('content', '').strip()
     reference = data.get('reference', '').strip()[:200]
@@ -434,7 +427,7 @@ def api_edit_note(note_id):
 @api_bp.route('/premium/activate', methods=['POST'])
 @login_required
 def api_activate_premium():
-    m = get_main_globals()
+    import main as m
     # Grant premium for 30 days
     new_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
     m.users_conf.update_one(
@@ -452,7 +445,7 @@ def api_activate_premium():
 @api_bp.route('/app_lock/setup', methods=['POST'])
 @login_required
 def api_app_lock_setup():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     pin = data.get('pin', '').strip()
 
@@ -469,7 +462,7 @@ def api_app_lock_setup():
 @api_bp.route('/app_lock/verify', methods=['POST'])
 @login_required
 def api_app_lock_verify():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     pin = data.get('pin', '').strip()
 
@@ -486,7 +479,7 @@ def api_app_lock_verify():
 @api_bp.route('/app_lock/check_status', methods=['GET'])
 @login_required
 def api_app_lock_status():
-    m = get_main_globals()
+    import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     has_pin = bool(user and user.get('app_lock_pin_hash'))
 
@@ -507,7 +500,7 @@ def api_app_lock_status():
 @api_bp.route('/app_lock/remove', methods=['POST'])
 @login_required
 def api_app_lock_remove():
-    m = get_main_globals()
+    import main as m
     m.users_conf.update_one(
         {'_id': ObjectId(current_user.id)},
         {'$unset': {'app_lock_pin_hash': ''}}
@@ -520,7 +513,7 @@ def api_app_lock_remove():
 @api_bp.route('/fcm/register', methods=['POST'])
 @login_required
 def api_register_fcm():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -537,7 +530,7 @@ def api_register_fcm():
 @api_bp.route('/fcm/unregister', methods=['POST'])
 @login_required
 def api_unregister_fcm():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -553,7 +546,7 @@ def api_unregister_fcm():
 @api_bp.route('/notes/shares/<post_id>', methods=['GET'])
 @login_required
 def api_get_note_shares(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -576,7 +569,7 @@ def api_get_note_shares(post_id):
 @api_bp.route('/notes/share/<post_id>', methods=['POST'])
 @login_required
 def api_create_note_share(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -721,7 +714,7 @@ def api_create_note_share(post_id):
 @api_bp.route('/notes/revoke_share/<share_id>', methods=['POST'])
 @login_required
 def api_revoke_note_share(share_id):
-    m = get_main_globals()
+    import main as m
     result = m.note_shares_conf.delete_one({'share_id': share_id, 'owner_id': ObjectId(current_user.id)})
     if result.deleted_count == 0:
         return jsonify({'error': 'Share link not found or unauthorized'}), 404
@@ -733,7 +726,7 @@ def api_revoke_note_share(share_id):
 @api_bp.route('/notes/share/<share_id>/attachments', methods=['GET'])
 @login_required
 def api_get_share_attachments(share_id):
-    m = get_main_globals()
+    import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
         return jsonify({'error': 'Share link not found'}), 404
@@ -758,7 +751,7 @@ def api_get_share_attachments(share_id):
 @api_bp.route('/notes/versions/<post_id>', methods=['GET'])
 @login_required
 def api_get_note_versions(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -780,7 +773,7 @@ def api_get_note_versions(post_id):
 @api_bp.route('/notes/version/restore/<post_id>/<version_id>', methods=['POST'])
 @login_required
 def api_restore_note_version(post_id, version_id):
-    m = get_main_globals()
+    import main as m
     post_obj_id = safe_obj_id(post_id)
     ver_obj_id = safe_obj_id(version_id)
     if not post_obj_id or not ver_obj_id:
@@ -806,7 +799,7 @@ def api_restore_note_version(post_id, version_id):
 @api_bp.route('/notes/proposal/<version_id>/decision', methods=['POST'])
 @login_required
 def api_proposal_decision(version_id):
-    m = get_main_globals()
+    import main as m
     ver_obj_id = safe_obj_id(version_id)
     if not ver_obj_id:
         return jsonify({'error': 'Invalid proposal ID'}), 400
@@ -854,7 +847,7 @@ def api_proposal_decision(version_id):
 def api_app_reauth():
     """Re-authenticate a native app user using a persistent token.
     Accepts token from JSON body, Authorization header, or httpOnly cookie."""
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -896,7 +889,7 @@ def api_app_reauth():
 @api_bp.route('/notes/toggle_lock/<post_id>', methods=['POST'])
 @login_required
 def api_toggle_note_lock(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -916,7 +909,7 @@ def api_toggle_note_lock(post_id):
 @api_bp.route('/notes/proposals', methods=['GET'])
 @login_required
 def api_get_all_proposals():
-    m = get_main_globals()
+    import main as m
     user_notes = list(m.personal_posts_conf.find(
         {'user_id': ObjectId(current_user.id)},
         {'_id': 1, 'content': 1}
@@ -947,7 +940,7 @@ def api_get_all_proposals():
 @api_bp.route('/profile', methods=['GET'])
 @login_required
 def api_profile():
-    m = get_main_globals()
+    import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -968,7 +961,7 @@ def api_profile():
 @api_bp.route('/notes/delete/<note_id>', methods=['POST'])
 @login_required
 def api_delete_note(note_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(note_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID.'}), 400
@@ -1010,7 +1003,7 @@ def api_delete_note(note_id):
 @api_bp.route('/notes/<note_id>/sync', methods=['POST'])
 @login_required
 def api_sync_note(note_id):
-    m = get_main_globals()
+    import main as m
     try:
         obj_id = safe_obj_id(note_id)
         if not obj_id:

@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 import database
 import os
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 from werkzeug.security import generate_password_hash, check_password_hash
 from bson.objectid import ObjectId
 from bson.son import SON
@@ -461,6 +462,15 @@ scheduled_messages_conf.create_index([('sender_id', 1), ('status', 1)])
 note_attachments_conf = db['note_attachments']
 note_attachments_conf.create_index([('note_id', 1), ('created_at', 1)])
 
+# --- Comment Votes ---
+comment_votes_conf = db['comment_votes']
+comment_votes_conf.create_index([('comment_id', 1), ('user_id', 1)], unique=True)
+
+# --- Activities (notifications feed) ---
+activities_conf = db['activities']
+activities_conf.create_index([('user_id', 1), ('created_at', -1)])
+activities_conf.create_index([('user_id', 1), ('is_read', 1)])
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -557,6 +567,8 @@ database.community_reports_conf = community_reports_conf
 database.dm_permissions_conf = dm_permissions_conf
 database.scheduled_messages_conf = scheduled_messages_conf
 database.note_attachments_conf = note_attachments_conf
+database.comment_votes_conf = comment_votes_conf
+database.activities_conf = activities_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---

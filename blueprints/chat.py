@@ -2,9 +2,14 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, json, os, re
-import main as m
+from security import limits
 
-bp = Blueprint('chat_bp', __name__, template_folder='templates')
+def csrf_exempt(view):
+    """Mark view as exempt from CSRF protection."""
+    view._csrf_exempt = True
+    return view
+
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/messages')
@@ -429,7 +434,7 @@ def api_delete_chat(other_user_id):
 
 @bp.route('/api/messages/schedule', methods=['POST'])
 @login_required
-@m.limits(calls=20, period=60)
+@limits(calls=20, period=60)
 def api_schedule_message():
     import main as m
     try:
@@ -625,7 +630,7 @@ def api_schedule_send_now(msg_id):
 
 
 @bp.route('/api/messages/schedule/process', methods=['POST'])
-@m.csrf.exempt
+@csrf_exempt
 def api_process_scheduled_messages():
     import main as m
     auth_header = request.headers.get('X-Scheduler-Secret', '')

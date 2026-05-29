@@ -2,9 +2,14 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, secrets
-import main as m
+from security import limits
 
-bp = Blueprint('notes_bp', __name__, template_folder='templates')
+def csrf_exempt(view):
+    """Mark view as exempt from CSRF protection."""
+    view._csrf_exempt = True
+    return view
+
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/personal_space')
@@ -123,7 +128,7 @@ def personal_space():
                 nid = str(share['note_id'])
                 if nid not in locked_shares_map:
                     locked_shares_map[nid] = []
-                locked_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('sharing_bp.view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
+                locked_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
             for doc in m.personal_posts_conf.aggregate([
                 {'$match': {'source_note_id': {'$in': locked_note_ids}, 'user_id': {'$ne': ObjectId(current_user.id)}}},
                 {'$group': {'_id': '$source_note_id', 'count': {'$sum': 1}}}
@@ -144,7 +149,7 @@ def personal_space():
             nid = str(share['note_id'])
             if nid not in active_shares_map:
                 active_shares_map[nid] = []
-            active_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('sharing_bp.view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
+            active_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
     has_clones_map = {}
@@ -180,7 +185,7 @@ def personal_space():
 
 @bp.route('/api/activity/mark_read', methods=['POST'])
 @login_required
-@m.csrf.exempt
+@csrf_exempt
 def api_mark_activity_read():
     import main as m
     try:
@@ -206,7 +211,7 @@ def create_personal_post():
     content = request.form.get('content', '').strip()
     if not content:
         flash('Content is required.', 'danger')
-        return redirect(url_for('notes_bp.personal_space'))
+        return redirect(url_for('personal_space'))
     encrypted = m.encrypt_note(content)
     note_data = {
         'user_id': ObjectId(current_user.id),
@@ -218,7 +223,7 @@ def create_personal_post():
     }
     result = m.personal_posts_conf.insert_one(note_data)
     m.index_note_to_typesense(str(result.inserted_id))
-    return redirect(url_for('notes_bp.personal_space'))
+    return redirect(url_for('personal_space'))
 
 
 @bp.route('/personal_post/create_json', methods=['POST'])
@@ -310,7 +315,7 @@ def edit_personal_post(post_id):
     content = request.form.get('content', '').strip()
     if not content:
         flash('Content is required.', 'danger')
-        return redirect(url_for('notes_bp.personal_space'))
+        return redirect(url_for('personal_space'))
     encrypted = m.encrypt_note(content)
     m.personal_posts_conf.update_one(
         {'_id': ObjectId(post_id)},
@@ -318,7 +323,7 @@ def edit_personal_post(post_id):
     )
     m.index_note_to_typesense(post_id)
     flash('Note updated.', 'success')
-    return redirect(url_for('notes_bp.personal_space'))
+    return redirect(url_for('personal_space'))
 
 
 @bp.route('/personal_post/sync/<post_id>', methods=['POST'])
@@ -356,14 +361,14 @@ def delete_personal_post(post_id):
     note = m.personal_posts_conf.find_one({'_id': ObjectId(post_id), 'user_id': ObjectId(current_user.id)})
     if not note:
         flash('Note not found.', 'danger')
-        return redirect(url_for('notes_bp.personal_space'))
+        return redirect(url_for('personal_space'))
     m.personal_posts_conf.delete_one({'_id': ObjectId(post_id)})
     m.note_shares_conf.delete_many({'note_id': ObjectId(post_id)})
     m.note_versions_conf.delete_many({'note_id': ObjectId(post_id)})
     m.note_discussions_conf.delete_many({'note_id': ObjectId(post_id)})
     m.remove_note_from_typesense(post_id)
     flash('Note deleted.', 'success')
-    return redirect(url_for('notes_bp.personal_space'))
+    return redirect(url_for('personal_space'))
 
 
 @bp.route('/personal_post/toggle_lock/<post_id>', methods=['POST'])
@@ -451,7 +456,7 @@ def app_lock_check_status():
 
 @bp.route('/api/ai/suggest-tags', methods=['POST'])
 @login_required
-@m.limits(calls=10, period=60)
+@limits(calls=10, period=60)
 def api_suggest_tags():
     import main as m
     data = request.get_json() or {}
@@ -516,6 +521,6 @@ def api_user_suggest():
             'username': candidate.get('username'),
             'bio': candidate.get('bio', ''),
             'profile_image_url': candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png'),
-            'profile_url': url_for('profile_bp.profile', username=candidate.get('username')),
+            'profile_url': url_for('profile', username=candidate.get('username')),
         })
     return jsonify({'suggestions': suggestions})

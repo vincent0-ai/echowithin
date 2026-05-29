@@ -3,9 +3,13 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, os, hashlib, hmac, requests
 from urllib.parse import urljoin
-import main as m
 
-bp = Blueprint('payments_bp', __name__, template_folder='templates')
+def csrf_exempt(view):
+    """Mark view as exempt from CSRF protection."""
+    view._csrf_exempt = True
+    return view
+
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/api/paystack/initialize', methods=['POST'])
@@ -22,7 +26,7 @@ def paystack_initialize():
         return jsonify({'error': 'Payment integration is not configured yet. Please contact support.'}), 500
     url = "https://api.paystack.co/transaction/initialize"
     headers = {"Authorization": f"Bearer {secret_key}", "Content-Type": "application/json"}
-    callback_url = urljoin(request.host_url, url_for('payments_bp.paystack_callback'))
+    callback_url = urljoin(request.host_url, url_for('paystack_callback'))
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     user_email = user_doc.get('email') if user_doc else None
     if not user_email:
@@ -65,11 +69,11 @@ def paystack_callback():
     reference = request.args.get('reference')
     if not reference:
         flash("Invalid payment callback.", "danger")
-        return redirect(url_for('profile_bp.profile_settings', username=current_user.username))
+        return redirect(url_for('profile_settings', username=current_user.username))
     secret_key = os.environ.get('PAYSTACK_SECRET_KEY')
     if not secret_key:
         flash("Payment configuration error.", "danger")
-        return redirect(url_for('profile_bp.profile_settings', username=current_user.username))
+        return redirect(url_for('profile_settings', username=current_user.username))
     url = f"https://api.paystack.co/transaction/verify/{reference}"
     headers = {"Authorization": f"Bearer {secret_key}"}
     try:
@@ -95,11 +99,11 @@ def paystack_callback():
     except Exception as e:
         current_app.logger.error(f"Paystack verify error: {str(e)}")
         flash("An error occurred verifying your payment. Please contact support.", "danger")
-    return redirect(url_for('profile_bp.profile_settings', username=current_user.username))
+    return redirect(url_for('profile_settings', username=current_user.username))
 
 
 @bp.route('/api/paystack/webhook', methods=['POST'])
-@m.csrf.exempt
+@csrf_exempt
 def paystack_webhook():
     import main as m
     secret_key = os.environ.get('PAYSTACK_SECRET_KEY')

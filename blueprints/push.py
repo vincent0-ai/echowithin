@@ -2,9 +2,13 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime
-import main as m
 
-bp = Blueprint('push_bp', __name__, template_folder='templates')
+def csrf_exempt(view):
+    """Mark view as exempt from CSRF protection."""
+    view._csrf_exempt = True
+    return view
+
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/api/fcm/register', methods=['POST'])
@@ -60,7 +64,7 @@ def get_vapid_public_key():
 
 
 @bp.route('/api/push/subscribe', methods=['POST'])
-@m.csrf.exempt
+@csrf_exempt
 @login_required
 def subscribe_push():
     if not m.VAPID_PUBLIC_KEY or not m.VAPID_PRIVATE_KEY:
@@ -109,7 +113,7 @@ def subscribe_push():
 
 
 @bp.route('/api/push/unsubscribe', methods=['POST'])
-@m.csrf.exempt
+@csrf_exempt
 @login_required
 def unsubscribe_push():
     if not m.is_same_origin_request():

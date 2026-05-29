@@ -2,9 +2,9 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, secrets
-import main as m
-
-bp = Blueprint('communities_bp', __name__, template_folder='templates')
+from security import limits
+from config import TIME
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/communities', methods=['GET'])
@@ -31,21 +31,21 @@ def view_community(community_id):
         comm_obj_id = ObjectId(community_id)
     except Exception:
         flash('Invalid community ID.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     community = m.communities_conf.find_one({'_id': comm_obj_id})
     if not community:
         flash('Community not found.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     if community.get('banned'):
         flash('This community has been suspended for violating our community guidelines.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     user_id_obj = ObjectId(current_user.id)
     is_member = user_id_obj in community.get('members', [])
     is_admin = str(community.get('admin_id')) == current_user.id
     is_site_admin = getattr(current_user, 'is_admin', False)
     if not is_member and not is_site_admin and community.get('visibility') == 'private':
         flash('You are not a member of this private community.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     if is_site_admin and not is_member:
         flash('ADMIN INSPECTION: You are viewing this community as a site administrator.', 'info')
     page = request.args.get('page', 1, type=int)
@@ -68,7 +68,7 @@ def view_community(community_id):
 
 @bp.route('/api/community/create', methods=['POST'])
 @login_required
-@m.limits(calls=5, period=3600)
+@limits(calls=5, period=3600)
 def api_create_community():
     import main as m
     name = request.form.get('name', '').strip()
@@ -76,19 +76,19 @@ def api_create_community():
     visibility = request.form.get('visibility', 'private')
     if not name:
         flash('Community name is required.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     if len(name) > 50:
         flash('Name must be 50 characters or less.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     if len(bio) > 200:
         flash('Bio must be 200 characters or less.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     user_id_obj = ObjectId(current_user.id)
     current_count = m.communities_conf.count_documents({'admin_id': user_id_obj})
     max_allowed = current_user.get_limit('max_communities')
     if current_count >= max_allowed:
         flash(f'You have reached your limit of {max_allowed} communities. Upgrade to Premium for more!', 'warning')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     invite_code = secrets.token_urlsafe(12)
     new_community = {
         'name': name, 'bio': bio, 'admin_id': user_id_obj, 'members': [user_id_obj],
@@ -98,7 +98,7 @@ def api_create_community():
     }
     res = m.communities_conf.insert_one(new_community)
     flash(f'Community "{name}" created successfully!', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=str(res.inserted_id)))
+    return redirect(url_for('view_community', community_id=str(res.inserted_id)))
 
 
 @bp.route('/community/join/<invite_code>', methods=['GET'])
@@ -108,14 +108,14 @@ def join_community_link(invite_code):
     community = m.communities_conf.find_one({'invite_code': invite_code})
     if not community:
         flash('Invalid or expired invite link.', 'danger')
-        return redirect(url_for('communities_bp.communities_page'))
+        return redirect(url_for('communities_page'))
     user_id_obj = ObjectId(current_user.id)
     if user_id_obj in community.get('members', []):
         flash('You are already a member of this community.', 'info')
-        return redirect(url_for('communities_bp.view_community', community_id=str(community['_id'])))
+        return redirect(url_for('view_community', community_id=str(community['_id'])))
     m.communities_conf.update_one({'_id': community['_id']}, {'$addToSet': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
     flash(f'Successfully joined {community.get("name")}!', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=str(community['_id'])))
+    return redirect(url_for('view_community', community_id=str(community['_id'])))
 
 
 @bp.route('/api/community/join', methods=['POST'])
@@ -127,8 +127,8 @@ def api_join_community_code():
         invite_code = invite_code.split('community/join/')[-1].strip()
     if not invite_code:
         flash('Please provide an invite code.', 'warning')
-        return redirect(url_for('communities_bp.communities_page'))
-    return redirect(url_for('communities_bp.join_community_link', invite_code=invite_code))
+        return redirect(url_for('communities_page'))
+    return redirect(url_for('join_community_link', invite_code=invite_code))
 
 
 @bp.route('/api/community/<community_id>/join-public', methods=['POST'])
@@ -170,7 +170,7 @@ def api_update_community(community_id):
         update['visibility'] = visibility
     m.communities_conf.update_one({'_id': ObjectId(community_id)}, {'$set': update})
     flash('Community settings updated.', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=community_id))
+    return redirect(url_for('view_community', community_id=community_id))
 
 
 @bp.route('/api/community/<community_id>/regenerate-invite', methods=['POST'])
@@ -184,11 +184,11 @@ def api_regenerate_invite(community_id):
         return jsonify({'error': 'Unauthorized'}), 403
     new_code = secrets.token_urlsafe(12)
     m.communities_conf.update_one({'_id': ObjectId(community_id)}, {'$set': {'invite_code': new_code}})
-    invite_url = url_for('communities_bp.join_community_link', invite_code=new_code, _external=True)
+    invite_url = url_for('join_community_link', invite_code=new_code, _external=True)
     if request.headers.get('X-CSRFToken') or request.is_json:
         return jsonify({'success': True, 'invite_url': invite_url, 'invite_code': new_code})
     flash(f'New invite link generated!', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=community_id))
+    return redirect(url_for('view_community', community_id=community_id))
 
 
 @bp.route('/api/community/<community_id>/leave', methods=['POST'])
@@ -200,7 +200,7 @@ def api_leave_community(community_id):
         return jsonify({'error': 'Community not found'}), 404
     m.communities_conf.update_one({'_id': ObjectId(community_id)}, {'$pull': {'members': ObjectId(current_user.id)}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
     flash('You have left the community.', 'info')
-    return redirect(url_for('communities_bp.communities_page'))
+    return redirect(url_for('communities_page'))
 
 
 @bp.route('/api/community/<community_id>/remove-member', methods=['POST'])
@@ -217,7 +217,7 @@ def api_remove_member(community_id):
         return jsonify({'error': 'Member ID required'}), 400
     m.communities_conf.update_one({'_id': ObjectId(community_id)}, {'$pull': {'members': ObjectId(member_id)}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
     flash('Member removed.', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=community_id))
+    return redirect(url_for('view_community', community_id=community_id))
 
 
 @bp.route('/api/community/<community_id>/note/create', methods=['POST'])
@@ -233,7 +233,7 @@ def api_create_community_note(community_id):
     content = request.form.get('content', '').strip()
     if not content:
         flash('Content is required.', 'danger')
-        return redirect(url_for('communities_bp.view_community', community_id=community_id))
+        return redirect(url_for('view_community', community_id=community_id))
     encrypted = m.encrypt_community_note(content, ObjectId(community_id))
     note = {
         'community_id': ObjectId(community_id), 'author_id': user_id_obj,
@@ -245,7 +245,7 @@ def api_create_community_note(community_id):
     m.community_notes_conf.insert_one(note)
     m.communities_conf.update_one({'_id': ObjectId(community_id)}, {'$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
     flash('Note posted to community!', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=community_id))
+    return redirect(url_for('view_community', community_id=community_id))
 
 
 @bp.route('/api/community/note/<note_id>/react', methods=['POST'])
@@ -291,7 +291,7 @@ def api_delete_community_note(note_id):
     if request.headers.get('X-CSRFToken') or request.is_json:
         return jsonify({'success': True, 'message': 'Note deleted.'})
     flash('Note deleted.', 'success')
-    return redirect(url_for('communities_bp.view_community', community_id=str(note['community_id'])))
+    return redirect(url_for('view_community', community_id=str(note['community_id'])))
 
 
 @bp.route('/share/community-note/<share_id>', methods=['GET'])
@@ -369,4 +369,4 @@ def api_report_community(community_id):
     if request.headers.get('X-CSRFToken') or request.is_json:
         return jsonify({'success': True, 'message': 'Report submitted. Our moderation team will review this community.'})
     flash('Report submitted. Our moderation team will review this community.', 'success')
-    return redirect(url_for('communities_bp.communities_page'))
+    return redirect(url_for('communities_page'))

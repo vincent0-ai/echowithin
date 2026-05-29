@@ -5,14 +5,13 @@ from bson.son import SON
 import datetime, os, json, csv
 from io import StringIO
 from urllib.parse import urljoin
-import main as m
-
-bp = Blueprint('admin_bp', __name__, template_folder='templates')
+from security import admin_required
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route('/admin/dashboard')
 @login_required
-@m.admin_required
+@admin_required
 def admin_dashboard():
     import main as m
     file_manifest = None
@@ -42,7 +41,7 @@ def admin_dashboard():
 
 @bp.route('/admin/upload_apk', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_upload_apk():
     import main as m
     try:
@@ -52,7 +51,7 @@ def admin_upload_apk():
         apk_file = request.files.get('apk_file')
         if not version_code_str or not version_name or not changelog or not apk_file:
             flash("All fields are required!", "danger")
-            return redirect(url_for('admin_bp.admin_dashboard'))
+            return redirect(url_for('admin_dashboard'))
         downloads_dir = os.path.join(current_app.static_folder, 'downloads')
         os.makedirs(downloads_dir, exist_ok=True)
         apk_path = os.path.join(downloads_dir, 'app-debug.apk')
@@ -67,12 +66,12 @@ def admin_upload_apk():
     except Exception as e:
         current_app.logger.error(f"Failed to upload APK and write manifest: {e}")
         flash(f"Error publishing update: {str(e)}", "danger")
-    return redirect(url_for('admin_bp.admin_dashboard'))
+    return redirect(url_for('admin_dashboard'))
 
 
 @bp.route('/admin/metrics')
 @login_required
-@m.admin_required
+@admin_required
 def admin_metrics():
     import main as m
     try:
@@ -101,7 +100,7 @@ def admin_metrics():
 
 @bp.route('/admin/active_users')
 @login_required
-@m.admin_required
+@admin_required
 def admin_active_users():
     import main as m
     try:
@@ -118,7 +117,7 @@ def admin_active_users():
 
 @bp.route('/admin/export_csv')
 @login_required
-@m.admin_required
+@admin_required
 def admin_export_csv():
     import main as m
     metric = request.args.get('metric', 'posts')
@@ -163,7 +162,7 @@ def admin_export_csv():
 
 @bp.route('/admin/traffic')
 @login_required
-@m.admin_required
+@admin_required
 def admin_traffic():
     import main as m
     try:
@@ -181,7 +180,7 @@ def admin_traffic():
 
 @bp.route('/admin/system_health')
 @login_required
-@m.admin_required
+@admin_required
 def admin_system_health():
     import main as m
     health = {}
@@ -249,7 +248,7 @@ def admin_system_health():
 
 @bp.route('/admin/reindex_typesense', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_reindex_typesense():
     import main as m
     if not m._t.ts_posts:
@@ -268,7 +267,7 @@ def admin_reindex_typesense():
 
 @bp.route('/admin/reindex_notes_typesense', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_reindex_notes_typesense():
     import main as m
     if not m._t.ts_notes:
@@ -283,7 +282,7 @@ def admin_reindex_notes_typesense():
 
 @bp.route('/admin/posts')
 @login_required
-@m.admin_required
+@admin_required
 def admin_posts():
     import main as m
     page = request.args.get('page', 1, type=int)
@@ -296,7 +295,7 @@ def admin_posts():
 
 @bp.route('/admin/delete_post/<post_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_delete_post(post_id):
     import main as m
     post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
@@ -306,12 +305,12 @@ def admin_delete_post(post_id):
         flash('Post deleted.', 'success')
     else:
         flash('Post not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_posts'))
+    return redirect(url_for('admin_posts'))
 
 
 @bp.route('/admin/posts/pin/<post_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_pin_post(post_id):
     import main as m
     pinned_count = m.posts_conf.count_documents({'is_pinned': True})
@@ -320,22 +319,22 @@ def admin_pin_post(post_id):
     else:
         m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'is_pinned': True, 'pinned_at': datetime.datetime.now(datetime.timezone.utc)}})
         flash('Post pinned.', 'success')
-    return redirect(url_for('admin_bp.admin_posts'))
+    return redirect(url_for('admin_posts'))
 
 
 @bp.route('/admin/posts/unpin/<post_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_unpin_post(post_id):
     import main as m
     m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$unset': {'is_pinned': '', 'pinned_at': ''}})
     flash('Post unpinned.', 'success')
-    return redirect(url_for('admin_bp.admin_posts'))
+    return redirect(url_for('admin_posts'))
 
 
 @bp.route('/admin/announcements', methods=['GET', 'POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_announcements():
     import main as m
     if request.method == 'POST':
@@ -350,64 +349,64 @@ def admin_announcements():
             flash('Announcement created.', 'success')
         else:
             flash('Title and content required.', 'danger')
-        return redirect(url_for('admin_bp.admin_announcements'))
+        return redirect(url_for('admin_announcements'))
     announcements = list(m.announcements_conf.find({}).sort('created_at', -1))
     return render_template('admin_announcements.html', announcements=announcements)
 
 
 @bp.route('/admin/push/send', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def admin_send_push():
     import main as m
     title = request.form.get('title')
     body = request.form.get('body')
-    url = request.form.get('url', url_for('pages_bp.home', _external=True))
+    url = request.form.get('url', url_for('home', _external=True))
     if not title or not body:
         flash('Title and body are required.', 'danger')
-        return redirect(url_for('admin_bp.admin_announcements'))
+        return redirect(url_for('admin_announcements'))
     try:
         m.send_admin_broadcast_push(title, body, url)
         flash('Broadcast push notification sent!', 'success')
     except Exception as e:
         current_app.logger.error(f"Failed to send broadcast push: {e}")
         flash('Failed to send push notification.', 'danger')
-    return redirect(url_for('admin_bp.admin_announcements'))
+    return redirect(url_for('admin_announcements'))
 
 
 @bp.route('/admin/announcements/pin/<announcement_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def pin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
     flash('Announcement pinned.', 'success')
-    return redirect(url_for('admin_bp.admin_announcements'))
+    return redirect(url_for('admin_announcements'))
 
 
 @bp.route('/admin/announcements/unpin/<announcement_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def unpin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': False}})
     flash('Announcement unpinned.', 'success')
-    return redirect(url_for('admin_bp.admin_announcements'))
+    return redirect(url_for('admin_announcements'))
 
 
 @bp.route('/admin/announcements/delete/<announcement_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def delete_announcement(announcement_id):
     import main as m
     m.announcements_conf.delete_one({'_id': ObjectId(announcement_id)})
     flash('Announcement deleted.', 'success')
-    return redirect(url_for('admin_bp.admin_announcements'))
+    return redirect(url_for('admin_announcements'))
 
 
 @bp.route('/admin/premium_users')
 @login_required
-@m.admin_required
+@admin_required
 def admin_premium_users():
     import main as m
     premium_users = list(m.users_conf.find({'account_tier': 'premium'}).sort('join_date', -1))
@@ -416,7 +415,7 @@ def admin_premium_users():
 
 @bp.route('/admin/premium/grant/<user_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def grant_premium(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
@@ -428,12 +427,12 @@ def grant_premium(user_id):
         flash(f'Premium granted to {user.get("username")} for 365 days.', 'success')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_premium_users'))
+    return redirect(url_for('admin_premium_users'))
 
 
 @bp.route('/admin/premium/revoke/<user_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def revoke_premium(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
@@ -445,12 +444,12 @@ def revoke_premium(user_id):
         flash(f'Premium revoked from {user.get("username")}.', 'info')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_premium_users'))
+    return redirect(url_for('admin_premium_users'))
 
 
 @bp.route('/admin/users')
 @login_required
-@m.admin_required
+@admin_required
 def admin_users():
     import main as m
     page = request.args.get('page', 1, type=int)
@@ -463,7 +462,7 @@ def admin_users():
 
 @bp.route('/admin/users/ban/<user_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def ban_user(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
@@ -473,12 +472,12 @@ def ban_user(user_id):
         flash(f'User {user.get("username")} banned.', 'warning')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_users'))
+    return redirect(url_for('admin_users'))
 
 
 @bp.route('/admin/users/unban/<user_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def unban_user(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
@@ -487,12 +486,12 @@ def unban_user(user_id):
         flash(f'User {user.get("username")} unbanned.', 'success')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_users'))
+    return redirect(url_for('admin_users'))
 
 
 @bp.route('/admin/users/delete/<user_id>', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def delete_user(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
@@ -501,12 +500,12 @@ def delete_user(user_id):
         flash(f'User {user.get("username")} deleted.', 'info')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_bp.admin_users'))
+    return redirect(url_for('admin_users'))
 
 
 @bp.route('/admin/communities')
 @login_required
-@m.admin_required
+@admin_required
 def admin_communities():
     import main as m
     communities = list(m.communities_conf.find({}).sort('created_at', -1))
@@ -519,7 +518,7 @@ def admin_communities():
 
 @bp.route('/api/admin/community/<community_id>/ban', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def api_admin_ban_community(community_id):
     import main as m
     try:
@@ -535,7 +534,7 @@ def api_admin_ban_community(community_id):
 
 @bp.route('/api/admin/community/<community_id>/unban', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def api_admin_unban_community(community_id):
     import main as m
     try:
@@ -551,7 +550,7 @@ def api_admin_unban_community(community_id):
 
 @bp.route('/api/admin/community/<community_id>/delete', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def api_admin_delete_community(community_id):
     import main as m
     try:
@@ -570,7 +569,7 @@ def api_admin_delete_community(community_id):
 
 @bp.route('/api/admin/community/<community_id>/reports', methods=['GET'])
 @login_required
-@m.admin_required
+@admin_required
 def api_admin_community_reports(community_id):
     import main as m
     try:
@@ -583,7 +582,7 @@ def api_admin_community_reports(community_id):
 
 @bp.route('/api/admin/reports/<report_id>/dismiss', methods=['POST'])
 @login_required
-@m.admin_required
+@admin_required
 def api_admin_dismiss_report(report_id):
     import main as m
     try:

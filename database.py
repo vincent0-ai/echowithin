@@ -29,6 +29,8 @@ community_reports_conf = None
 dm_permissions_conf = None
 scheduled_messages_conf = None
 note_attachments_conf = None
+activities_conf = None
+comment_votes_conf = None
 
 # Redis cache — set by main.py at startup
 redis_cache = None

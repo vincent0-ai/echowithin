@@ -3,9 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from bson.son import SON
 import datetime, math, json, random, os, re
-import main as m
-
-bp = Blueprint('blog_bp', __name__, template_folder='templates')
+bp = Blueprint('', __name__, template_folder='templates')
 
 
 @bp.route("/blog")
@@ -223,7 +221,7 @@ def post():
         temp_video_path = None
         if not title or not content:
             flash("Title and content are required.", "danger")
-            return redirect(url_for('pages_bp.create_post'))
+            return redirect(url_for('create_post'))
         slug = m.slugify(title)
         original_slug = slug
         counter = 1
@@ -237,8 +235,8 @@ def post():
         post_id_str = str(result.inserted_id)
         m.index_post_to_typesense(post_id_str)
         m.process_post_media.queue(post_id_str, [], None)
-        return redirect(url_for('blog_bp.view_post', slug=slug))
-    return redirect(url_for('pages_bp.create_post'))
+        return redirect(url_for('view_post', slug=slug))
+    return redirect(url_for('create_post'))
 
 
 @bp.route('/uploads/<filename>')
@@ -356,7 +354,7 @@ def edit_post(post_id):
         abort(404)
     if str(post.get('author_id')) != current_user.id:
         flash("You can only edit your own posts.", "danger")
-        return redirect(url_for('blog_bp.view_post', slug=post.get('slug')))
+        return redirect(url_for('view_post', slug=post.get('slug')))
     return render_template('create_post.html', post=post, active_page='blog', title=f"Editing: {post.get('title')} - EchoWithin", description="Edit your post.")
 
 
@@ -369,7 +367,7 @@ def update_post(post_id):
         abort(404)
     if str(post.get('author_id')) != current_user.id:
         flash("You can only edit your own posts.", "danger")
-        return redirect(url_for('blog_bp.view_post', slug=post.get('slug')))
+        return redirect(url_for('view_post', slug=post.get('slug')))
     title = request.form.get('title', '').strip()
     content = request.form.get('content', '').strip()
     tags = request.form.getlist('tags')
@@ -387,7 +385,7 @@ def update_post(post_id):
     )
     m.index_post_to_typesense(post_id)
     flash('Post updated successfully!', 'success')
-    return redirect(url_for('blog_bp.view_post', slug=new_slug))
+    return redirect(url_for('view_post', slug=new_slug))
 
 
 @bp.route('/delete_post/<post_id>', methods=['POST'])
@@ -403,7 +401,7 @@ def delete_post(post_id):
         m.posts_conf.delete_one({'_id': post['_id']})
         m.comments_conf.delete_many({'post_slug': post.get('slug')})
         flash('Post deleted.', 'success')
-    return redirect(url_for('blog_bp.blog'))
+    return redirect(url_for('blog'))
 
 
 @bp.route('/post/<post_id>/react', methods=['POST'])
@@ -446,7 +444,7 @@ def share_post(post_id):
     if not post:
         return jsonify({'error': 'Post not found'}), 404
     m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'share_count': 1}})
-    share_url = url_for('blog_bp.view_post', slug=post.get('slug'), _external=True)
+    share_url = url_for('view_post', slug=post.get('slug'), _external=True)
     return jsonify({'share_url': share_url})
 
 
@@ -456,4 +454,4 @@ def get_share_data(post_id):
     post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
     if not post:
         return jsonify({'error': 'Post not found'}), 404
-    return jsonify({'title': post.get('title', ''), 'description': post.get('content', '')[:200], 'url': url_for('blog_bp.view_post', slug=post.get('slug'), _external=True)})
+    return jsonify({'title': post.get('title', ''), 'description': post.get('content', '')[:200], 'url': url_for('view_post', slug=post.get('slug'), _external=True)})

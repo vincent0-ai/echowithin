@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2",
+  "versionCode": 4,
+  "versionName": "1.3",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "Flawless scrolling performance, secure offline PIN fallback, beautiful Notesnook design overhaul, rich markdown toolbar, character/word counters, and copy note features."
+  "changelog": "🚀 Ultra-fast navigation using Jetpack Compose saveState/restoreState.\n🔒 Restructured 401 interceptor with a 5-second cooldown to eliminate repeated logout cascades.\n⚡ Boosted load times by splitting initial sync and loading queries off the main thread.\n✨ Completely overhauled Note Version History UI with transparent loading spinner overlays and snackbars."
 }

@@ -6920,33 +6920,34 @@
         window.addEventListener('load', () => {
             setTimeout(() => showStep(0), 1000);
         });
-
-        window.markAllActivityRead = async function (reload = false) {
-            try {
-                const response = await fetch('/api/activity/mark_read', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    document.querySelectorAll('.activity-badge').forEach(b => {
-                        b.textContent = '0';
-                    });
-                    if (reload) {
-                        window.location.reload();
-                    }
-                } else {
-                    alert(data.error || 'Failed to clear notifications.');
-                }
-            } catch (err) {
-                console.error('Failed to mark activity as read:', err);
-                alert('Network error. Please try again.');
-            }
-        };
     })();
+
+    // Clear notifications — defined globally so the button always works
+    window.markAllActivityRead = async function (reload = false) {
+        try {
+            const response = await fetch('/api/activity/mark_read', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await response.json();
+            if (response.ok && data.success) {
+                document.querySelectorAll('.activity-badge').forEach(b => {
+                    b.textContent = '0';
+                });
+                if (reload) {
+                    window.location.reload();
+                }
+            } else {
+                alert(data.error || 'Failed to clear notifications.');
+            }
+        } catch (err) {
+            console.error('Failed to mark activity as read:', err);
+            alert('Network error. Please try again.');
+        }
+    };
 </script>
 
 <!-- Export Note Modal -->

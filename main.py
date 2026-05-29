@@ -644,7 +644,7 @@ def enforce_canonical_domain_and_https():
     host = request.headers.get('X-Forwarded-Host', request.host)
     scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
 
-    canonical_host = "echowithin.xyz"
+    canonical_host = os.environ.get("CANONICAL_HOST", "echowithin.xyz")
     canonical_scheme = "https"
 
     needs_redirect = False

@@ -8425,11 +8425,18 @@ def personal_space():
 
 @app.route('/api/activity/mark_read', methods=['POST'])
 @login_required
+@csrf.exempt
 def api_mark_activity_read():
     """Marks all unread note activity as read for the current user."""
     try:
-        note_versions_conf.update_many(
+        result = note_versions_conf.update_many(
             {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False},
+            {'$set': {'is_read_by_owner': True}}
+        )
+
+        # Also mark documents that lack the field entirely as read
+        note_versions_conf.update_many(
+            {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': {'$exists': False}},
             {'$set': {'is_read_by_owner': True}}
         )
 
@@ -8441,7 +8448,7 @@ def api_mark_activity_read():
             except Exception:
                 pass
 
-        return jsonify({'success': True})
+        return jsonify({'success': True, 'cleared': result.modified_count})
     except Exception as e:
         app.logger.error(f"Error marking activity as read: {e}")
         return jsonify({'error': 'Internal error'}), 500
@@ -8990,7 +8997,8 @@ def edit_personal_post(post_id):
                 'event_type': 'snapshot',
                 'status': 'applied',
                 'edit_summary': edit_summary or 'Edited note',
-                'created_at': datetime.datetime.now(datetime.timezone.utc)
+                'created_at': datetime.datetime.now(datetime.timezone.utc),
+                'is_read_by_owner': True
             })
             # Cap at 50 versions per note
             version_count = note_versions_conf.count_documents({'note_id': obj_id})
@@ -9228,7 +9236,8 @@ def sync_personal_post(post_id):
                     'content': note['content'],
                     'content_owner_id': note.get('content_owner_id', note.get('user_id')),
                     'encrypted': note.get('encrypted', True),
-                    'created_at': now
+                    'created_at': now,
+                    'is_read_by_owner': True
                 })
                 version_count = note_versions_conf.count_documents({'note_id': obj_id})
                 if version_count > 50:
@@ -12175,7 +12184,8 @@ def api_restore_note_version(post_id, version_id):
             'event_type': 'snapshot',
             'status': 'applied',
             'edit_summary': 'Backup before restore',
-            'created_at': now
+            'created_at': now,
+            'is_read_by_owner': True
         })
 
     personal_posts_conf.update_one(
@@ -12293,7 +12303,8 @@ def api_decide_note_proposal(version_id):
             'event_type': 'snapshot',
             'status': 'applied',
             'edit_summary': 'Backup before accepting proposal',
-            'created_at': now
+            'created_at': now,
+            'is_read_by_owner': True
         })
 
         personal_posts_conf.update_one(

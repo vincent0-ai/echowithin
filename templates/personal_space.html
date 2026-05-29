@@ -6927,19 +6927,23 @@
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
+                        'Content-Type': 'application/json'
                     }
                 });
-                if (response.ok) {
-                    // Update badges in UI
+                const data = await response.json();
+                if (response.ok && data.success) {
                     document.querySelectorAll('.activity-badge').forEach(b => {
                         b.textContent = '0';
                     });
                     if (reload) {
                         window.location.reload();
                     }
+                } else {
+                    alert(data.error || 'Failed to clear notifications.');
                 }
             } catch (err) {
                 console.error('Failed to mark activity as read:', err);
+                alert('Network error. Please try again.');
             }
         };
     })();

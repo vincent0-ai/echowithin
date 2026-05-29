@@ -22,3 +22,6 @@ patch_base.py
 fix_*.py
 !fix_template_syntax.py
 skills-lock.json
+.agents/
+echowithin.log
+fix_routes.py

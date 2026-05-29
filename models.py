@@ -5,7 +5,7 @@ from flask import request
 from cachetools import TTLCache
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS
 from database import users_conf, app_tokens_conf, user_loader_cache, redis_cache
-from security import get_user_tier, is_on_trial, get_trial_days_remaining
+from utils import get_user_tier, is_on_trial, get_trial_days_remaining
 
 
 class User(UserMixin):

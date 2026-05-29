@@ -131,14 +131,15 @@ echowithin/
 ├── main.py              # Flask app, routes, config, helpers (monolithic core)
 ├── api.py               # REST API blueprint (/api/v1/*) for mobile/native clients
 ├── wsgi.py              # WSGI entry point
-├── worker.py            # RQ background job worker
-├── scheduler.py         # Cron-style scheduler (log emails, newsletter, backups, etc.)
-├── backup_to_atlas.py   # Incremental MongoDB → Atlas backup sync
-├── weekly_achievements.py  # Weekly leaderboard calculation
-├── process_scheduled_messages.py  # Delivers due scheduled messages
-├── schedule_log_email.py    # Enqueues weekly log email job
-├── send_weekly_newsletter.py # Enqueues weekly newsletter job
-├── cleanup_expired_auth.py   # Removes expired verification codes/tokens
+├── scripts/
+│   ├── worker.py            # RQ background job worker
+│   ├── scheduler.py         # Cron-style scheduler (log emails, newsletter, backups, etc.)
+│   ├── backup_to_atlas.py   # Incremental MongoDB → Atlas backup sync
+│   ├── weekly_achievements.py  # Weekly leaderboard calculation
+│   ├── process_scheduled_messages.py  # Delivers due scheduled messages
+│   ├── schedule_log_email.py    # Enqueues weekly log email job
+│   ├── send_weekly_newsletter.py # Enqueues weekly newsletter job
+│   └── cleanup_expired_auth.py   # Removes expired verification codes/tokens
 ├── fix_template_syntax.py    # Template syntax repair utility
 ├── templates/           # Jinja2 templates (38 files)
 ├── static/              # CSS, JS, service worker, PWA assets

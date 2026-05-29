@@ -8082,6 +8082,20 @@ def delete_account(username):
 # --- Pinning post API is removed ---
 
 
+def _has_active_auto_approve(share_id, editor_id):
+    """Check if a specific editor still has auto-approve enabled on the given share."""
+    if not share_id or not editor_id:
+        return False
+    share = note_shares_conf.find_one({'share_id': share_id}, {'auto_approved_users': 1})
+    if not share:
+        return False
+    auto_approved = share.get('auto_approved_users', [])
+    try:
+        return ObjectId(editor_id) in auto_approved
+    except Exception:
+        return str(editor_id) in [str(uid) for uid in auto_approved]
+
+
 @app.route('/personal_space')
 @login_required
 def personal_space():
@@ -8340,10 +8354,7 @@ def personal_space():
     activity_raw = list(note_versions_conf.find(
         {
             'content_owner_id': ObjectId(current_user.id),
-            '$or': [
-                {'is_read_by_owner': False},
-                {'event_type': 'proposal', 'status': 'pending'}
-            ]
+            'is_read_by_owner': False
         }
     ).sort('created_at', -1))
     
@@ -8399,7 +8410,16 @@ def personal_space():
         activity_notifications=activity_notifications,
         pending_proposals=pending_proposals_list,
         reviewed_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')],
-        auto_approved_activity=[a for a in activity_notifications if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')],
+        auto_approved_activity=[
+            {
+                **a,
+                'has_active_auto_approve': _has_active_auto_approve(
+                    a.get('share_id'), a.get('editor_id')
+                )
+            }
+            for a in activity_notifications
+            if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')
+        ],
         pending_proposals_map=pending_proposals_map
     )
 

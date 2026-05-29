@@ -7,8 +7,15 @@
 {% block content %}
 
 <main>
-    <div class="auth-page-wrapper" style="display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 2rem; width: 100%; max-width: 1000px; margin: 0 auto;">
-        <div class="auth-container" style="flex: 1 1 400px; max-width: 450px;">
+    <div class="auth-page-wrapper">
+        <div class="auth-features-strip">
+            <span class="auth-features-tag">End-to-end encrypted notes</span>
+            <span class="auth-features-tag">Real-time collaboration</span>
+            <span class="auth-features-tag">Version history &amp; rollback</span>
+            <span class="auth-features-tag">Direct messaging</span>
+            <span class="auth-features-tag">Personal blog spaces</span>
+        </div>
+        <div class="auth-container">
         <nav class="auth-tabs">
             <div class="auth-tabs-wrapper">
                 <button class="tab-button {% if form == 'login' %}active{% endif %}"
@@ -119,47 +126,6 @@
         </div>
     </div>
 
-    <div class="auth-features-showcase">
-        <h3 class="auth-features-title"><i class="fas fa-sparkles"></i> Discover EchoWithin</h3>
-        <ul class="auth-features-list">
-            <li class="auth-feature-item">
-                <div class="auth-feature-icon">
-                    <i class="fas fa-lock"></i>
-                </div>
-                <div>
-                    <strong class="auth-feature-label">Secure Notes</strong>
-                    <span class="auth-feature-desc">End-to-end encrypted private notes with Markdown support.</span>
-                </div>
-            </li>
-            <li class="auth-feature-item">
-                <div class="auth-feature-icon">
-                    <i class="fas fa-paper-plane"></i>
-                </div>
-                <div>
-                    <strong class="auth-feature-label">Direct Messaging</strong>
-                    <span class="auth-feature-desc">Real-time DMs with scheduled delivery and reactions.</span>
-                </div>
-            </li>
-            <li class="auth-feature-item">
-                <div class="auth-feature-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div>
-                    <strong class="auth-feature-label">Collaborations</strong>
-                    <span class="auth-feature-desc">Share notes via editable links with real-time presence.</span>
-                </div>
-            </li>
-            <li class="auth-feature-item">
-                <div class="auth-feature-icon">
-                    <i class="fas fa-rss"></i>
-                </div>
-                <div>
-                    <strong class="auth-feature-label">Blog Spaces</strong>
-                    <span class="auth-feature-desc">Personalize your profile with taglines and pinned posts.</span>
-                </div>
-            </li>
-        </ul>
-    </div>
     </div>
 </main>
 

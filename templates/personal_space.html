@@ -2662,7 +2662,7 @@
                     </div>
                     {% if activity.share_id %}
                     <div class="activity-auto-approve-revert" style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
-                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" checked>
+                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" {% if activity.has_active_auto_approve %}checked{% endif %}>
                         <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future changes from this collaborator</label>
                     </div>
                     {% endif %}

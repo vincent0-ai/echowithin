@@ -855,10 +855,44 @@ def view_post(slug):
 @bp.route('/api/posts/<post_id>/view', methods=['POST'])
 def api_record_post_view(post_id):
     import main as m
-    m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
-    view_count = post.get('view_count', 0) if post else 0
-    return jsonify({'success': True, 'view_count': view_count})
+    try:
+        if current_user.is_authenticated:
+            user_identifier = str(current_user.id)
+        else:
+            visitor_id = request.headers.get('X-Visitor-ID') or request.cookies.get('echowithin_visitor_id')
+            user_identifier = f"visitor:{visitor_id}" if visitor_id else f"ip:{request.remote_addr}"
+
+        view_record = m.logs_conf.find_one({
+            'type': 'post_view',
+            'post_id': ObjectId(post_id),
+            'user_identifier': user_identifier,
+        })
+
+        if not view_record:
+            m.logs_conf.insert_one({
+                'type': 'post_view',
+                'post_id': ObjectId(post_id),
+                'user_identifier': user_identifier,
+                'timestamp': datetime.datetime.now(datetime.timezone.utc)
+            })
+            m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
+
+        if current_user.is_authenticated:
+            try:
+                m.user_post_views_conf.update_one(
+                    {'user_id': ObjectId(current_user.id), 'post_id': ObjectId(post_id)},
+                    {'$set': {'last_viewed': datetime.datetime.now(datetime.timezone.utc)}},
+                    upsert=True
+                )
+            except Exception as ev:
+                current_app.logger.error(f"Failed to update per-user view for post {post_id}: {ev}")
+
+        post = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
+        view_count = post.get('view_count', 0) if post else 0
+        return jsonify({'success': True, 'view_count': view_count})
+    except Exception as e:
+        current_app.logger.error(f"Failed to record view for post {post_id}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to record view'}), 500
 
 
 @bp.route('/api/posts/<slug>/comments', methods=['GET', 'POST'])

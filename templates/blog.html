@@ -317,7 +317,7 @@
         function fetchActivePosts() {
             const container = document.getElementById('active-posts');
 
-            fetch('{{ url_for("get_top_posts_json") }}')
+            fetch('{{ url_for("blog.get_top_posts_json") }}')
                 .then(r => r.json())
                 .then(posts => {
                     if (!posts || !posts.length) {
@@ -341,7 +341,7 @@
             const container = document.getElementById('activity-list');
             const controls = document.getElementById('activity-controls');
 
-            fetch('{{ url_for("get_my_commented_posts_json") }}')
+            fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
                     const posts = data.posts || [];
@@ -444,7 +444,7 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
-                fetch('{{ url_for("mark_all_comments_read") }}', {
+                fetch('{{ url_for("blog.mark_all_comments_read") }}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token() }}'
@@ -478,7 +478,7 @@
         // and set up periodic polling
         {% if current_user.is_authenticated %}
         function loadUnreadBadge() {
-            fetch('{{ url_for("get_my_commented_posts_json") }}')
+            fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
                     const badge = document.getElementById('my-commented-badge');

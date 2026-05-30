@@ -409,8 +409,29 @@ def delete_announcement(announcement_id):
 @admin_required
 def admin_premium_users():
     import main as m
-    premium_users = list(m.users_conf.find({'account_tier': 'premium'}).sort('join_date', -1))
-    return render_template('admin_premium.html', premium_users=premium_users)
+    query = request.args.get('query')
+    projection = {'password': 0, 'email_verification_token': 0, 'reset_password_token': 0}
+    if query:
+        users = m.users_conf.find({
+            '$or': [
+                {'username': {'$regex': query, '$options': 'i'}},
+                {'email': {'$regex': query, '$options': 'i'}}
+            ]
+        }, projection).sort('username', 1)
+    else:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        users = m.users_conf.find({
+            '$or': [
+                {'account_tier': 'premium', 'premium_until': {'$gte': now}},
+                {'account_tier': 'premium', 'premium_until': {'$exists': False}},
+                {'account_tier': 'premium', 'premium_until': None}
+            ]
+        }, projection).sort('username', 1)
+    user_list = list(users)
+    for u in user_list:
+        if u.get('premium_until') and u['premium_until'].tzinfo is None:
+            u['premium_until'] = u['premium_until'].replace(tzinfo=datetime.timezone.utc)
+    return render_template('admin_premium_users.html', title='Manage Premium Users', users=user_list, query=query)
 
 
 @bp.route('/admin/premium/grant/<user_id>', methods=['POST'])

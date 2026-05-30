@@ -67,6 +67,7 @@ def get_vapid_public_key():
 @csrf_exempt
 @login_required
 def subscribe_push():
+    import main as m
     if not m.VAPID_PUBLIC_KEY or not m.VAPID_PRIVATE_KEY:
         return jsonify({'error': 'Push notifications not configured'}), 503
     if not m.is_same_origin_request():
@@ -116,6 +117,7 @@ def subscribe_push():
 @csrf_exempt
 @login_required
 def unsubscribe_push():
+    import main as m
     if not m.is_same_origin_request():
         current_app.logger.warning(f"Blocked cross-origin push unsubscribe attempt for user {current_user.username}")
         return jsonify({'error': 'Forbidden'}), 403

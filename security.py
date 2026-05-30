@@ -412,7 +412,7 @@ def admin_required(f):
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_admin:
             flash("You do not have permission to access this page.", "danger")
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('pages.dashboard'))
         # Audit log every admin action
         _get_app().logger.info(
             'ADMIN_ACTION',
@@ -429,14 +429,14 @@ def owner_required(f):
         if not post_id:
             # This case should ideally not be reached if routes are set up correctly
             flash("Post ID is missing.", "danger")
-            return redirect(url_for('home'))
+            return redirect(url_for('pages.home'))
 
-        post = posts_conf.find_one({'_id': ObjectId(post_id)})
+        post = database.posts_conf.find_one({'_id': ObjectId(post_id)})
 
         # Check if post exists and if the current user is the author
         if not post or str(post.get('author_id')) != current_user.id:
             flash("You are not authorized to perform this action.", "danger")
-            return redirect(url_for('blog'))
+            return redirect(url_for('blog.blog'))
 
         return f(*args, **kwargs)
     return decorated_function

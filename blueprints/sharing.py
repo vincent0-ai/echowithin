@@ -481,13 +481,34 @@ def api_get_note_comments(share_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        return jsonify({'error': 'Share not found'}), 404
-    comments = list(m.note_discussions_conf.find({'note_id': share['note_id'], 'parent_id': None}).sort('created_at', 1))
-    return jsonify([{'id': str(c['_id']), 'author_name': c.get('author_name', 'Anonymous'), 'content': c.get('content', ''), 'created_at': c['created_at'].isoformat() if c.get('created_at') else None} for c in comments])
+        return jsonify([]), 404
+    all_comments = list(m.note_discussions_conf.find({'share_id': share_id}).sort('created_at', 1))
+    comment_map = {}
+    roots = []
+    for c in all_comments:
+        c_id = str(c['_id'])
+        comment_map[c_id] = {
+            '_id': c_id,
+            'author_name': c.get('author_name', 'Unknown'),
+            'author_id': str(c.get('author_id', '')),
+            'content': m.decrypt_note(c['content']) if c.get('encrypted', False) else c['content'],
+            'created_at': (c['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat() if c.get('created_at') and c['created_at'].tzinfo is None else c['created_at'].isoformat()) if c.get('created_at') else None,
+            'replies': []
+        }
+    for c in all_comments:
+        c_id = str(c['_id'])
+        p_id = str(c.get('parent_id')) if c.get('parent_id') else None
+        if p_id and p_id in comment_map:
+            comment_map[p_id]['replies'].append(comment_map[c_id])
+        else:
+            roots.append(comment_map[c_id])
+    roots.reverse()
+    return jsonify(roots)
 
 
 @bp.route('/share/note/<share_id>/comments', methods=['POST'])
 @login_required
+@limits(calls=15, period=60)
 def api_post_note_comment(share_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
@@ -497,37 +518,76 @@ def api_post_note_comment(share_id):
     content = data.get('content', '').strip()
     if not content:
         return jsonify({'error': 'Content required'}), 400
+    encrypted = m.encrypt_note(content)
     comment = {
-        'note_id': share['note_id'], 'share_id': share_id,
-        'author_id': ObjectId(current_user.id), 'author_name': current_user.username,
-        'content': content, 'parent_id': None,
+        'share_id': share_id,
+        'note_id': share['note_id'],
+        'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
+        'author_id': ObjectId(current_user.id),
+        'content': encrypted,
+        'encrypted': True,
+        'parent_id': None,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
     result = m.note_discussions_conf.insert_one(comment)
+    
+    m.socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'type': 'comment',
+        'comment': {
+            'id': str(result.inserted_id),
+            'author_name': comment['author_name'],
+            'content': content,
+            'created_at': comment['created_at'].isoformat()
+        }
+    }, room=share_id)
+    
     return jsonify({'success': True, 'id': str(result.inserted_id)}), 201
 
 
 @bp.route('/share/note/<share_id>/comments/<comment_id>/replies', methods=['POST'])
 @login_required
+@limits(calls=15, period=60)
 def api_post_note_reply(share_id, comment_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
         return jsonify({'error': 'Share not found'}), 404
-    parent = m.note_discussions_conf.find_one({'_id': ObjectId(comment_id), 'note_id': share['note_id']})
+    parent_id = m.safe_object_id(comment_id)
+    if not parent_id:
+        return jsonify({'error': 'Invalid comment ID'}), 400
+    parent = m.note_discussions_conf.find_one({'_id': parent_id, 'share_id': share_id})
     if not parent:
         return jsonify({'error': 'Parent comment not found'}), 404
     data = request.get_json() or {}
     content = data.get('content', '').strip()
     if not content:
         return jsonify({'error': 'Content required'}), 400
+    encrypted = m.encrypt_note(content)
     reply = {
-        'note_id': share['note_id'], 'share_id': share_id,
-        'author_id': ObjectId(current_user.id), 'author_name': current_user.username,
-        'content': content, 'parent_id': ObjectId(comment_id),
+        'share_id': share_id,
+        'note_id': share['note_id'],
+        'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
+        'author_id': ObjectId(current_user.id),
+        'content': encrypted,
+        'encrypted': True,
+        'parent_id': parent_id,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     }
     result = m.note_discussions_conf.insert_one(reply)
+    
+    m.socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'type': 'reply',
+        'parent_id': comment_id,
+        'comment': {
+            'id': str(result.inserted_id),
+            'author_name': reply['author_name'],
+            'content': content,
+            'created_at': reply['created_at'].isoformat()
+        }
+    }, room=share_id)
+    
     return jsonify({'success': True, 'id': str(result.inserted_id)}), 201
 
 
@@ -535,10 +595,26 @@ def api_post_note_reply(share_id, comment_id):
 @login_required
 def api_delete_note_comment(share_id, comment_id):
     import main as m
-    comment = m.note_discussions_conf.find_one({'_id': ObjectId(comment_id)})
+    share = m.note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return jsonify({'error': 'Share not found'}), 404
+    target_id = m.safe_object_id(comment_id)
+    if not target_id:
+        return jsonify({'error': 'Invalid comment ID'}), 400
+    comment = m.note_discussions_conf.find_one({'_id': target_id, 'share_id': share_id})
     if not comment:
         return jsonify({'error': 'Comment not found'}), 404
     if str(comment.get('author_id')) != current_user.id:
         return jsonify({'error': 'Unauthorized'}), 403
-    m.note_discussions_conf.delete_one({'_id': ObjectId(comment_id)})
+    m.note_discussions_conf.delete_many({
+        '$or': [
+            {'_id': target_id},
+            {'parent_id': target_id}
+        ]
+    })
+    m.socketio.emit('discussion_updated', {
+        'share_id': share_id,
+        'type': 'delete',
+        'comment_id': comment_id
+    }, room=share_id)
     return jsonify({'success': True})

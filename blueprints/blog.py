@@ -754,6 +754,9 @@ def mark_all_comments_read():
             {'_id': user_id},
             {'$set': {'last_activity_check': leap_marker + datetime.timedelta(milliseconds=1)}}
         )
+        # Invalidate user loader cache so changes take effect immediately
+        cache_key = f"user:{current_user.id}"
+        m.user_loader_cache.pop(cache_key, None)
         return jsonify({'success': True})
     except Exception as e:
         current_app.logger.error(f"Error in mark_all_comments_read: {e}", exc_info=True)

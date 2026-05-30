@@ -124,6 +124,14 @@
         {% endif %}
     </div>
 
+    {% if post.tags %}
+    <div class="post-tags" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 8px; margin-bottom: 8px;">
+        {% for tag in post.tags %}
+        <a href="{{ url_for('blog.all_posts', tag=tag) }}" class="post-tag-badge" style="background: #f0f4f8; color: #1e4e8c; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; text-decoration: none; border: 1px solid #d0e0f0; transition: background 0.2s;">#{{ tag }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     {# --- Timestamp with relative time --- #}
     <div class="post-meta">
         {% if post.edited_at %}

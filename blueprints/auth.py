@@ -36,9 +36,17 @@ def register():
             "username": username,
             "email": email,
             "password": hashed_password,
-            "timestamp": datetime.datetime.now(datetime.timezone.utc)
+            "is_confirmed": False,
+            "join_date": datetime.datetime.now(datetime.timezone.utc),
+            "notification_preference": 'weekly'
         })
-        m.send_code(email)
+        
+        gen_code = str(secrets.randbelow(10**6)).zfill(6)
+        hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+        code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+        m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+        m.send_code(email, gen_code)
+        
         flash("Confirmation email sent. Please confirm your email to log in.", "success")
         return redirect(url_for('auth.confirm', email=email))
     return render_template("auth.html", active_page='register', form='register')
@@ -52,13 +60,23 @@ def confirm(email):
         code = request.form.get("code", "").strip()
         if not code:
             error = "Verification code is required."
-        elif m.auth_conf.find_one({"email": email, "code": code}):
-            m.users_conf.update_one({"email": email}, {"$set": {"is_confirmed": True}})
-            m.auth_conf.delete_one({"email": email, "code": code})
-            flash("Email confirmed! You can now log in.", "success")
-            return redirect(url_for('auth.login'))
         else:
-            error = "Invalid verification code."
+            hashed_obj = m.auth_conf.find_one({'email': email})
+            if not hashed_obj:
+                error = 'No confirmation code found for this email.'
+            else:
+                code_exp = hashed_obj.get('code_expiry')
+                if code_exp and code_exp.tzinfo is None:
+                    code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
+                if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
+                    error = 'This confirmation code has expired.'
+                elif hashed_obj['hashed_code'] == hashlib.sha256(code.encode()).hexdigest():
+                    m.users_conf.update_one({"email": email}, {"$set": {"is_confirmed": True}})
+                    m.auth_conf.delete_one({"email": email})
+                    flash("Email confirmed! You can now log in.", "success")
+                    return redirect(url_for('auth.login'))
+                else:
+                    error = 'Invalid verification code.'
     return render_template("confirm.html", email=email, error=error)
 
 
@@ -77,7 +95,11 @@ def login():
         user_data = m.users_conf.find_one({"$or": [{"email": username}, {"username": username}]})
         if user_data:
             if not user_data.get('is_confirmed'):
-                m.send_code(user_data['email'])
+                gen_code = str(secrets.randbelow(10**6)).zfill(6)
+                hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+                code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+                m.auth_conf.update_one({'email': user_data['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+                m.send_code(user_data['email'], gen_code)
                 flash("Email not confirmed. A new confirmation code has been sent.", "warning")
                 return redirect(url_for('auth.confirm', email=user_data['email']))
             if user_data.get('is_banned'):
@@ -87,6 +109,8 @@ def login():
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
                 m.users_conf.update_one({'_id': user_data['_id']}, {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}})
+                cache_key = f"user:{user_data['_id']}"
+                m.user_loader_cache.pop(cache_key, None)
                 flash('Login successful!', 'success')
                 if next_url and m.is_safe_url(next_url):
                     return redirect(next_url)

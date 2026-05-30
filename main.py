@@ -134,6 +134,18 @@ app.register_blueprint(communities_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(api_bp)
 
+# CSRF exemptions — these routes accept external/API requests without CSRF tokens
+csrf.exempt(api_bp)  # Entire API blueprint (mobile app, external clients)
+# Individual views that receive requests without CSRF tokens (webhooks, mobile, external)
+csrf.exempt(app.view_functions['auth.confirm'])
+csrf.exempt(app.view_functions['auth.app_reauth'])
+csrf.exempt(app.view_functions['push.subscribe_push'])
+csrf.exempt(app.view_functions['push.unsubscribe_push'])
+csrf.exempt(app.view_functions['payments.paystack_webhook'])
+csrf.exempt(app.view_functions['notes.api_mark_activity_read'])
+csrf.exempt(app.view_functions['chat.api_process_scheduled_messages'])
+csrf.exempt(app.view_functions['pages.unsubscribe'])
+
 # Register template filters
 app.add_template_filter(linkify_filter, 'linkify')
 app.add_template_filter(markdown_filter, 'markdown')
@@ -266,6 +278,7 @@ app.config['PREFERRED_URL_SCHEME'] = 'https'
 # Setup the secret key
 app.config["SECRET_KEY"] = get_env_variable('SECRET')
 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # --- Temporary Uploads for Background Processing ---

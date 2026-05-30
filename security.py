@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from ratelimit import limits as _limits_base, RateLimitException
 from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT, get_env_variable, FIREBASE_AVAILABLE
-from database import _user_fernet_cache, _dm_fernet_cache, users_conf, posts_conf, personal_posts_conf, note_shares_conf, redis_cache, weekly_winners_conf, weekly_winners_cache
+import database
 from cachetools import TTLCache
 
 _APP = None
@@ -102,16 +102,16 @@ def build_merge_preview_text(current_text, incoming_text):
 def get_active_achievements(user_id):
     """Returns a list of achievement keys for the given user_id based on latest winners."""
     user_id_str = str(user_id)
-    cached_winners = weekly_winners_cache.get('latest')
+    cached_winners = database.weekly_winners_cache.get('latest')
 
     if cached_winners is None:
-        latest = weekly_winners_conf.find_one(sort=[('week_end', -1)])
+        latest = database.weekly_winners_conf.find_one(sort=[('week_end', -1)])
         if latest:
             cached_winners = latest.get('winners', {})
-            weekly_winners_cache['latest'] = cached_winners
+            database.weekly_winners_cache['latest'] = cached_winners
         else:
             cached_winners = {}
-            weekly_winners_cache['latest'] = {}
+            database.weekly_winners_cache['latest'] = {}
 
     achievements = []
     if cached_winners:
@@ -176,7 +176,7 @@ def get_notes_fernet():
 
 def _get_user_fernet(user_id: str) -> Fernet:
     """Per-user Fernet instance. Derives key from SECRET_KEY + user_id salt."""
-    cached = _user_fernet_cache.get(user_id)
+    cached = database._user_fernet_cache.get(user_id)
     if cached:
         return cached
     secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
@@ -184,7 +184,7 @@ def _get_user_fernet(user_id: str) -> Fernet:
     salt = f'echowithin_notes_v2_{user_id}'.encode()
     key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
     f = Fernet(key)
-    _user_fernet_cache[user_id] = f
+    database._user_fernet_cache[user_id] = f
     return f
 
 
@@ -196,7 +196,7 @@ def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
     uids = sorted([str(user1_id), str(user2_id)])
     conv_id = f"{uids[0]}_{uids[1]}"
 
-    cached = _dm_fernet_cache.get(conv_id)
+    cached = database._dm_fernet_cache.get(conv_id)
     if cached:
         return cached
 
@@ -205,7 +205,7 @@ def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
     salt = f'echowithin_dm_v1_{conv_id}'.encode()
     key = _derive_fernet_key(secret, salt, iterations=_NOTES_KDF_ITERATIONS)
     f = Fernet(key)
-    _dm_fernet_cache[conv_id] = f
+    database._dm_fernet_cache[conv_id] = f
     return f
 
 

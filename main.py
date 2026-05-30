@@ -584,6 +584,7 @@ database.redis_cache = redis_cache
 # --- Typesense setup for fast full-text search ---
 # Import Typesense client module (shared between main.py and api.py)
 import typesense_client as _t
+_t.start_init()
 
 # Typesense state — always resolved from _t.<attr> to avoid stale capture at import
 

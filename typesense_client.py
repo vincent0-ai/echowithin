@@ -284,11 +284,14 @@ def _ts_create_collection(schema):
     resp.raise_for_status()
 
 
-_init_thread = threading.Thread(target=_init_typesense, daemon=True)
-_init_thread.start()
-_init_thread.join(timeout=5)
-if _init_thread.is_alive():
-    logger.warning(
-        'Typesense initialization timed out after 5s; '
-        'search may be unavailable but will keep retrying in background'
-    )
+def start_init():
+    """Deferred initialization — call from main.py after gevent monkey-patching."""
+    _init_thread = threading.Thread(target=_init_typesense, daemon=True)
+    _init_thread.start()
+    _init_thread.join(timeout=5)
+    if _init_thread.is_alive():
+        logger.warning(
+            'Typesense initialization timed out after 5s; '
+            'search may be unavailable but will keep retrying in background'
+        )
+

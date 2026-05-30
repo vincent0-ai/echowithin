@@ -4,7 +4,7 @@ from flask_login import UserMixin, current_user
 from flask import request
 from cachetools import TTLCache
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS
-from database import users_conf, app_tokens_conf, user_loader_cache, redis_cache
+import database
 from utils import get_user_tier, is_on_trial, get_trial_days_remaining
 
 
@@ -56,21 +56,21 @@ def load_user(user_id):
     cache_key = f"user:{user_id}"
 
     # Try cache first
-    cached_user = user_loader_cache.get(cache_key)
+    cached_user = database.user_loader_cache.get(cache_key)
     if cached_user is not None:
         # Return cached User object (or None if cached as missing)
         return cached_user if cached_user != '__none__' else None
 
     # Cache miss - query database
-    user_data = users_conf.find_one({"_id": ObjectId(user_id)})
+    user_data = database.users_conf.find_one({"_id": ObjectId(user_id)})
 
     if user_data:
         user_obj = User(user_data)
-        user_loader_cache[cache_key] = user_obj
+        database.user_loader_cache[cache_key] = user_obj
         return user_obj
     else:
         # Cache the "not found" result too to avoid repeated queries
-        user_loader_cache[cache_key] = '__none__'
+        database.user_loader_cache[cache_key] = '__none__'
         return None
 
 
@@ -109,14 +109,14 @@ def load_user_from_request(req):
 
     print(f"[DEBUG REQ_LOADER] Path: {req.path}. Token found in {token_src}: '{token[:12]}...'", flush=True)
 
-    doc = app_tokens_conf.find_one({'token': token})
+    doc = database.app_tokens_conf.find_one({'token': token})
     if not doc:
         print(f"[DEBUG REQ_LOADER] Token '{token[:12]}...' NOT found in app_tokens collection.", flush=True)
         return None
 
     print(f"[DEBUG REQ_LOADER] Token document found for user_id: {doc.get('user_id')}", flush=True)
 
-    user_data = users_conf.find_one({'_id': doc['user_id']})
+    user_data = database.users_conf.find_one({'_id': doc['user_id']})
     if not user_data:
         print(f"[DEBUG REQ_LOADER] User with ID {doc['user_id']} not found in users collection.", flush=True)
         return None

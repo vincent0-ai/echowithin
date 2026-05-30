@@ -198,7 +198,7 @@ def cleanup_stale_global_state():
                 pass
             note_locks.pop(share_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
-_ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz').split(',')
+_ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz,https://staging.echowithin.xyz').split(',')
 socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)

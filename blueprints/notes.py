@@ -343,7 +343,7 @@ def personal_space():
 
 @bp.route('/api/activity/mark_read', methods=['POST'])
 @login_required
-@csrf.exempt
+@csrf_exempt
 def api_mark_activity_read():
     """Marks all unread note activity as read for the current user."""
     import main as m
@@ -1249,7 +1249,6 @@ def app_lock_relock():
 def app_lock_forgot():
     """Send a 6-digit verification code to the user's email for PIN reset."""
     import main as m
-    import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'email': 1, 'app_lock_pin_hash': 1})
     if not user or not user.get('app_lock_pin_hash'):
         return jsonify({'error': 'No app lock PIN is set on this account'}), 400
@@ -1305,7 +1304,6 @@ def app_lock_forgot():
 @limits(calls=10, period=60)
 def app_lock_reset_verify():
     """Verify the emailed code and set a new APP Lock PIN."""
-    import main as m
     import main as m
     data = request.get_json() or {}
     code = data.get('code', '').strip()

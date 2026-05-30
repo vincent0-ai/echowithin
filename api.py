@@ -756,17 +756,55 @@ def api_get_note_versions(post_id):
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
 
-    versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1))
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    current_plain = m._decrypt_note_record(note)
+    versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
+    note_candidates = m._candidate_user_ids(
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+
     result = []
     for v in versions:
+        event_type = v.get('event_type', 'snapshot')
+        status = v.get('status', 'applied')
+
+        version_candidates = m._candidate_user_ids(
+            v.get('content_owner_id'),
+            v.get('editor_id'),
+            *note_candidates
+        )
+
+        if event_type == 'proposal':
+            base_plain = v.get('base_content_plain')
+            if base_plain is None:
+                base_encrypted = v.get('base_content') or v.get('content', '')
+                base_plain = (m._decrypt_with_candidate_ids(base_encrypted, version_candidates) if base_encrypted else '') or ''
+            proposed_plain = v.get('proposed_content_plain')
+            if proposed_plain is None:
+                proposed_encrypted = v.get('proposed_content', '')
+                proposed_plain = (m._decrypt_with_candidate_ids(proposed_encrypted, version_candidates) if proposed_encrypted else '') or ''
+            decrypted = proposed_plain
+        else:
+            if not v.get('encrypted', True):
+                decrypted = v.get('content', '')
+            else:
+                decrypted = m._decrypt_with_candidate_ids(v.get('content', ''), version_candidates)
+                if decrypted is None:
+                    decrypted = '[Content unavailable — decryption error]'
+
         result.append({
             'version_id': str(v['_id']),
-            'content': m.decrypt_note(v['content'], user_id=current_user.id) if v.get('encrypted', False) else v.get('content', ''),
-            'author_username': v.get('author_username', 'Unknown'),
-            'created_at': v.get('created_at').isoformat() if v.get('created_at') else None,
-            'is_proposal': v.get('is_proposal', False),
-            'status': v.get('status', 'approved'),
-            'review_comment': v.get('review_comment', '')
+            'content': decrypted,
+            'author_username': v.get('editor_name', v.get('author_username', 'Unknown')),
+            'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None,
+            'is_proposal': event_type == 'proposal',
+            'status': 'pending' if status == 'pending' else ('approved' if status == 'accepted' else 'rejected'),
+            'review_comment': v.get('edit_summary', v.get('review_comment', ''))
         })
     return jsonify({'versions': result})
 
@@ -787,13 +825,45 @@ def api_restore_note_version(post_id, version_id):
     if not version:
         return jsonify({'error': 'Version not found'}), 404
 
+    if version.get('event_type', 'snapshot') != 'snapshot':
+        return jsonify({'error': 'Only snapshot versions can be restored'}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if note.get('content'):
+        m.note_versions_conf.insert_one({
+            'note_id': post_obj_id,
+            'share_id': None,
+            'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
+            'editor_id': ObjectId(current_user.id),
+            'content': note.get('content', ''),
+            'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+            'encrypted': True,
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': 'Backup before restore',
+            'created_at': now,
+            'is_read_by_owner': True
+        })
+
     m.personal_posts_conf.update_one(
         {'_id': post_obj_id},
         {'$set': {
-            'content': version['content'],
-            'updated_at': datetime.datetime.now(datetime.timezone.utc)
+            'content': version.get('content', ''),
+            'encrypted': True,
+            'content_owner_id': version.get('content_owner_id', ObjectId(current_user.id)),
+            'updated_at': now
         }}
     )
+
+    restore_candidates = m._candidate_user_ids(
+        version.get('content_owner_id'),
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+    plain = m._decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or m.decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
+    m.index_note_to_typesense(post_id, decrypted_content=plain)
+
     return jsonify({'success': True, 'message': 'Note restored to specified version.'})
 
 @api_bp.route('/notes/proposal/<version_id>/decision', methods=['POST'])
@@ -804,40 +874,62 @@ def api_proposal_decision(version_id):
     if not ver_obj_id:
         return jsonify({'error': 'Invalid proposal ID'}), 400
 
-    version = m.note_versions_conf.find_one({'_id': ver_obj_id, 'is_proposal': True})
-    if not version:
+    proposal = m.note_versions_conf.find_one({'_id': ver_obj_id})
+    if not proposal or proposal.get('event_type') != 'proposal':
         return jsonify({'error': 'Proposal not found'}), 404
 
-    note = m.personal_posts_conf.find_one({'_id': version['note_id'], 'user_id': ObjectId(current_user.id)})
+    note_id = proposal.get('note_id')
+    note = m.personal_posts_conf.find_one({'_id': note_id, 'user_id': ObjectId(current_user.id)})
     if not note:
-        return jsonify({'error': 'Unauthorized to make decisions on this proposal'}), 403
+        return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json(silent=True) or {}
     decision = data.get('decision')  # 'approve' or 'reject'
     comment = data.get('comment', '').strip()
 
-    if decision not in ['approve', 'reject']:
-        return jsonify({'error': 'Decision must be approve or reject.'}), 400
+    if decision not in ['approve', 'accept', 'reject']:
+        return jsonify({'error': 'Decision must be approve/accept or reject.'}), 400
 
-    if decision == 'approve':
-        m.note_versions_conf.update_one(
-            {'_id': ver_obj_id},
-            {'$set': {'status': 'approved', 'review_comment': comment, 'reviewed_at': datetime.datetime.now(datetime.timezone.utc)}}
-        )
+    decision_mapped = 'accept' if decision in ('approve', 'accept') else 'reject'
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if decision_mapped == 'accept':
+        proposed = proposal.get('proposed_content', '')
+        # Encrypt with the note owner's key
+        encrypted = m.encrypt_note(m._decrypt_with_candidate_ids(proposed, m._candidate_user_ids(proposal.get('content_owner_id'), proposal.get('editor_id'), current_user.id)) or proposed, user_id=current_user.id)
+        
         m.personal_posts_conf.update_one(
-            {'_id': version['note_id']},
+            {'_id': note_id},
             {'$set': {
-                'content': version['content'],
-                'updated_at': datetime.datetime.now(datetime.timezone.utc)
+                'content': encrypted,
+                'encrypted': True,
+                'content_owner_id': ObjectId(current_user.id),
+                'updated_at': now
             }}
         )
-    else:
-        m.note_versions_conf.update_one(
-            {'_id': ver_obj_id},
-            {'$set': {'status': 'rejected', 'review_comment': comment, 'reviewed_at': datetime.datetime.now(datetime.timezone.utc)}}
-        )
+        
+        note_candidates = m._candidate_user_ids(note.get('content_owner_id'), note.get('user_id'), current_user.id)
+        version_candidates = m._candidate_user_ids(proposal.get('content_owner_id'), proposal.get('editor_id'), *note_candidates)
+        final_plain = m._decrypt_with_candidate_ids(proposed, version_candidates) or m.decrypt_note(proposed, user_id=str(proposal.get('content_owner_id') or current_user.id))
+        m.index_note_to_typesense(str(note_id), decrypted_content=final_plain)
 
-    return jsonify({'success': True, 'message': f'Proposal successfully {decision}d.'})
+        # Broadcast update
+        try:
+            m.socketio.emit('note_changed', {'content': final_plain}, room=proposal.get('share_id'))
+        except Exception:
+            pass
+
+    m.note_versions_conf.update_one(
+        {'_id': ver_obj_id},
+        {'$set': {
+            'status': 'accepted' if decision_mapped == 'accept' else 'rejected',
+            'review_comment': comment or 'Reviewed proposal',
+            'is_read_by_owner': True,
+            'reviewed_at': now
+        }}
+    )
+
+    return jsonify({'success': True, 'message': f'Proposal successfully {decision_mapped}ed.'})
 
 
 

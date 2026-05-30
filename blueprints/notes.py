@@ -45,7 +45,7 @@ def personal_space():
         posts_map = {post['_id']: post for post in m.posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
         ordered_posts = [posts_map[pid] for pid in paginated_saved_ids if pid in posts_map]
         
-        with app.app_context():
+        with current_app.app_context():
             saved_posts = prepare_posts(ordered_posts)
 
     # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.

@@ -15,37 +15,77 @@ bp = Blueprint('notes', __name__, template_folder='templates')
 @bp.route('/personal_space')
 @login_required
 def personal_space():
+    """Renders the user's personal space with saved posts and personal notes."""
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+
+    # Pagination parameters
     try:
         notes_page = max(1, int(request.args.get('notes_page', 1)))
     except ValueError:
         notes_page = 1
+        
     try:
         saved_page = max(1, int(request.args.get('saved_page', 1)))
     except ValueError:
         saved_page = 1
+
     per_page = 10
+
+    # Fetch saved posts
     saved_post_ids = user.get('saved_posts', [])
     saved_posts = []
     total_saved = len(saved_post_ids)
+    
     if saved_post_ids:
         saved_post_ids = list(reversed(saved_post_ids))
         skip_saved = (saved_page - 1) * per_page
-        paginated_saved_ids = saved_post_ids[skip_saved: skip_saved + per_page]
-        posts_map = {post['_id']: post for post in m.posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
+        paginated_saved_ids = saved_post_ids[skip_saved : skip_saved + per_page]
+        
+        posts_map = {post['_id']: post for post in posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
         ordered_posts = [posts_map[pid] for pid in paginated_saved_ids if pid in posts_map]
-        with current_app.app_context():
-            saved_posts = m.prepare_posts(ordered_posts)
+        
+        with app.app_context():
+            saved_posts = prepare_posts(ordered_posts)
+
+    # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.
     total_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
     skip_notes = (notes_page - 1) * per_page
+
     personal_posts_raw = list(m.personal_posts_conf.aggregate([
         {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}}},
-        {'$lookup': {'from': 'personal_posts', 'localField': 'source_note_id', 'foreignField': '_id', 'as': 'original'}},
-        {'$addFields': {'original_doc': {'$arrayElemAt': ['$original', 0]}}},
-        {'$lookup': {'from': 'users', 'localField': 'original_doc.user_id', 'foreignField': '_id', 'as': 'original_user'}},
-        {'$addFields': {'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}}},
-        {'$addFields': {'_sort_ts': {'$cond': {'if': {'$gt': ['$original_doc', None]}, 'then': {'$max': [{'$ifNull': ['$updated_at', '$created_at']}, {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}]}, 'else': {'$ifNull': ['$updated_at', '$created_at']}}}}},
+        {'$lookup': {
+            'from': 'personal_posts',
+            'localField': 'source_note_id',
+            'foreignField': '_id',
+            'as': 'original'
+        }},
+        {'$addFields': {
+            'original_doc': {'$arrayElemAt': ['$original', 0]}
+        }},
+        {'$lookup': {
+            'from': 'users',
+            'localField': 'original_doc.user_id',
+            'foreignField': '_id',
+            'as': 'original_user'
+        }},
+        {'$addFields': {
+            'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
+        }},
+        {'$addFields': {
+            '_sort_ts': {
+                '$cond': {
+                    'if': {'$gt': ['$original_doc', None]},
+                    'then': {
+                        '$max': [
+                            {'$ifNull': ['$updated_at', '$created_at']},
+                            {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}
+                        ]
+                    },
+                    'else': {'$ifNull': ['$updated_at', '$created_at']}
+                }
+            }
+        }},
         {'$sort': {'_sort_ts': -1, 'created_at': -1}},
         {'$skip': skip_notes},
         {'$limit': per_page}
@@ -53,6 +93,7 @@ def personal_space():
     personal_posts = []
     for note in personal_posts_raw:
         note['content'] = m._decrypt_note_record(note)
+        # Determine if an update is available on the original note
         note['update_available'] = False
         if note.get('source_note_id') and note.get('original_doc'):
             orig = note['original_doc']
@@ -71,14 +112,18 @@ def personal_space():
                     except Exception:
                         note['update_available'] = True
         personal_posts.append(note)
+
+    # --- Locked Notes ---
     has_app_lock = bool(user.get('app_lock_pin_hash'))
+    # Check if unlocked AND not expired (5-minute window)
     unlock_ts = session.get('app_lock_unlocked_at')
     is_unlocked = False
     if unlock_ts and has_app_lock:
         elapsed = (datetime.datetime.now(datetime.timezone.utc) - unlock_ts).total_seconds()
-        if elapsed < 300:
+        if elapsed < 300:  # 5-minute unlock window
             is_unlocked = True
         else:
+            # Auto-expire: clear stale unlock
             session.pop('app_lock_unlocked_at', None)
     locked_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': True})
     locked_notes = []
@@ -87,21 +132,48 @@ def personal_space():
     if is_unlocked and locked_notes_count > 0:
         locked_notes_raw = list(m.personal_posts_conf.aggregate([
             {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': True}},
-            {'$lookup': {'from': 'personal_posts', 'localField': 'source_note_id', 'foreignField': '_id', 'as': 'original'}},
-            {'$addFields': {'original_doc': {'$arrayElemAt': ['$original', 0]}}},
-            {'$lookup': {'from': 'users', 'localField': 'original_doc.user_id', 'foreignField': '_id', 'as': 'original_user'}},
-            {'$addFields': {'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}}},
-            {'$addFields': {'_sort_ts': {'$cond': {'if': {'$gt': ['$original_doc', None]}, 'then': {'$max': [{'$ifNull': ['$updated_at', '$created_at']}, {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}]}, 'else': {'$ifNull': ['$updated_at', '$created_at']}}}}},
+            {'$lookup': {
+                'from': 'personal_posts',
+                'localField': 'source_note_id',
+                'foreignField': '_id',
+                'as': 'original'
+            }},
+            {'$addFields': {
+                'original_doc': {'$arrayElemAt': ['$original', 0]}
+            }},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'original_doc.user_id',
+                'foreignField': '_id',
+                'as': 'original_user'
+            }},
+            {'$addFields': {
+                'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
+            }},
+            {'$addFields': {
+                '_sort_ts': {
+                    '$cond': {
+                        'if': {'$gt': ['$original_doc', None]},
+                        'then': {
+                            '$max': [
+                                {'$ifNull': ['$updated_at', '$created_at']},
+                                {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}
+                            ]
+                        },
+                        'else': {'$ifNull': ['$updated_at', '$created_at']}
+                    }
+                }
+            }},
             {'$sort': {'_sort_ts': -1, 'created_at': -1}},
             {'$limit': 50}
         ]))
-        for note_opts in locked_notes_raw:
-            note_opts['content'] = m._decrypt_note_record(note_opts)
-            note_opts['update_available'] = False
-            if note_opts.get('source_note_id') and note_opts.get('original_doc'):
-                orig = note_opts['original_doc']
+        for note in locked_notes_raw:
+            note['content'] = m._decrypt_note_record(note)
+            note['update_available'] = False
+            if note.get('source_note_id') and note.get('original_doc'):
+                orig = note['original_doc']
                 orig_ts = orig.get('updated_at') or orig.get('created_at')
-                clone_ts = note_opts.get('updated_at') or note_opts.get('created_at')
+                clone_ts = note.get('updated_at') or note.get('created_at')
                 if orig_ts and clone_ts:
                     if orig_ts.tzinfo is None:
                         orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
@@ -110,11 +182,12 @@ def personal_space():
                     if orig_ts > clone_ts:
                         try:
                             orig_decrypted = m._decrypt_note_record(orig)
-                            if note_opts['content'] != orig_decrypted:
-                                note_opts['update_available'] = True
+                            if note['content'] != orig_decrypted:
+                                note['update_available'] = True
                         except Exception:
-                            note_opts['update_available'] = True
-            locked_notes.append(note_opts)
+                            note['update_available'] = True
+            locked_notes.append(note)
+        # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]
         if locked_note_ids:
             now_l = datetime.datetime.now(datetime.timezone.utc)
@@ -128,18 +201,33 @@ def personal_space():
                 nid = str(share['note_id'])
                 if nid not in locked_shares_map:
                     locked_shares_map[nid] = []
-                locked_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('sharing.view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
+                locked_shares_map[nid].append({
+                    'share_id': share['share_id'],
+                    'share_url': url_for('sharing.view_shared_note', share_id=share['share_id'], _external=True),
+                    'permissions': share.get('permissions', 'view'),
+                    'surprise_theme': share.get('surprise_theme', 'none'),
+                    'created_at': share.get('created_at')
+                })
+            # Clones for locked notes
             for doc in m.personal_posts_conf.aggregate([
                 {'$match': {'source_note_id': {'$in': locked_note_ids}, 'user_id': {'$ne': ObjectId(current_user.id)}}},
                 {'$group': {'_id': '$source_note_id', 'count': {'$sum': 1}}}
             ]):
                 locked_clones_map[str(doc['_id'])] = doc['count']
+
+    # Fetch active share links for the notes on this page (skip if no notes)
     now = datetime.datetime.now(datetime.timezone.utc)
     note_ids = [note['_id'] for note in personal_posts]
     active_shares_map = {}
     if note_ids:
-        active_shares_raw = list(m.note_shares_conf.find({'owner_id': ObjectId(current_user.id), 'note_id': {'$in': note_ids}}).sort('created_at', -1))
+        active_shares_raw = list(m.note_shares_conf.find({
+            'owner_id': ObjectId(current_user.id),
+            'note_id': {'$in': note_ids}
+        }).sort('created_at', -1))
+        
+        # Build a map: note_id_str -> list of active share info
         for share in active_shares_raw:
+            # Skip expired links
             if share.get('expires_at'):
                 exp = share['expires_at']
                 if exp.tzinfo is None:
@@ -149,9 +237,19 @@ def personal_space():
             nid = str(share['note_id'])
             if nid not in active_shares_map:
                 active_shares_map[nid] = []
-            active_shares_map[nid].append({'share_id': share['share_id'], 'share_url': url_for('sharing.view_shared_note', share_id=share['share_id'], _external=True), 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share.get('created_at')})
+            share_url = url_for('sharing.view_shared_note', share_id=share['share_id'], _external=True)
+            active_shares_map[nid].append({
+                'share_id': share['share_id'],
+                'share_url': share_url,
+                'permissions': share.get('permissions', 'view'),
+                'surprise_theme': share.get('surprise_theme', 'none'),
+                'created_at': share.get('created_at')
+            })
+
     page_title = "My Personal Space"
     page_description = "Your private collection of saved posts and personal notes."
+
+    # Build a map of note_ids that have clones saved by other users
     has_clones_map = {}
     if note_ids:
         clone_pipeline = [
@@ -160,18 +258,41 @@ def personal_space():
         ]
         for doc in m.personal_posts_conf.aggregate(clone_pipeline):
             has_clones_map[str(doc['_id'])] = doc['count']
+
+    # Pagination metadata
+    import math
     total_notes_pages = math.ceil(total_notes_count / per_page) if per_page else 0
     total_saved_pages = math.ceil(total_saved / per_page) if per_page else 0
+
+    # New users (fewer than 5 notes) see text labels beside action icons
     show_icon_labels = (total_notes_count + locked_notes_count) < 5
-    activity_raw = list(m.note_versions_conf.find({'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False}).sort('created_at', -1))
+
+    # --- Fetch Activity for the User's Notes ---
+    activity_raw = list(m.note_versions_conf.find(
+        {
+            'content_owner_id': ObjectId(current_user.id),
+            'is_read_by_owner': False
+        }
+    ).sort('created_at', -1))
+    
     activity_notifications = []
     for item in activity_raw:
+        # Decrypt necessary fields for the preview if it's a proposal
         if item.get('event_type') == 'proposal':
-            candidates = m._candidate_user_ids(item.get('content_owner_id'), item.get('editor_id'), current_user.id)
-            item['proposed_content_plain'] = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable]'
+            # Use multi-candidate decryption for proposals
+            candidates = m._candidate_user_ids(
+                item.get('content_owner_id'), 
+                item.get('editor_id'), 
+                current_user.id
+            )
+            item['proposed_content_plain'] = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable \u2014 decryption error]'
+        
+        # Fetch original note basic info
         note_info = m.personal_posts_conf.find_one({'_id': item['note_id']}, {'created_at': 1})
         item['original_note_date'] = note_info.get('created_at') if note_info else None
         activity_notifications.append(item)
+
+    # Build a per-note map of pending proposals for badge display on note cards
     pending_proposals_list = [a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') == 'pending']
     pending_proposals_map = {}
     for p in pending_proposals_list:
@@ -180,27 +301,76 @@ def personal_space():
             if nid not in pending_proposals_map:
                 pending_proposals_map[nid] = []
             pending_proposals_map[nid].append(p)
-    return render_template('personal_space.html', saved_posts=saved_posts, personal_posts=personal_posts, active_shares_map=active_shares_map, has_clones_map=has_clones_map, active_page='personal_space', title=page_title, description=page_description, notes_page=notes_page, saved_page=saved_page, total_notes_pages=total_notes_pages, total_saved_pages=total_saved_pages, total_notes_count=total_notes_count, total_saved=total_saved, has_app_lock=has_app_lock, is_unlocked=is_unlocked, locked_notes=locked_notes, locked_notes_count=locked_notes_count, locked_shares_map=locked_shares_map, locked_clones_map=locked_clones_map, show_icon_labels=show_icon_labels, activity_notifications=activity_notifications, pending_proposals=pending_proposals_list, reviewed_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')], auto_approved_activity=[{**a, 'has_active_auto_approve': m._has_active_auto_approve(a.get('share_id'), a.get('editor_id'))} for a in activity_notifications if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')], pending_proposals_map=pending_proposals_map)
+
+    return render_template(
+        'personal_space.html', 
+        saved_posts=saved_posts, 
+        personal_posts=personal_posts, 
+        active_shares_map=active_shares_map, 
+        has_clones_map=has_clones_map, 
+        active_page='personal_space', 
+        title=page_title, 
+        description=page_description,
+        notes_page=notes_page,
+        saved_page=saved_page,
+        total_notes_pages=total_notes_pages,
+        total_saved_pages=total_saved_pages,
+        total_notes_count=total_notes_count,
+        total_saved=total_saved,
+        has_app_lock=has_app_lock,
+        is_unlocked=is_unlocked,
+        locked_notes=locked_notes,
+        locked_notes_count=locked_notes_count,
+        locked_shares_map=locked_shares_map,
+        locked_clones_map=locked_clones_map,
+        show_icon_labels=show_icon_labels,
+        activity_notifications=activity_notifications,
+        pending_proposals=pending_proposals_list,
+        reviewed_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')],
+        auto_approved_activity=[
+            {
+                **a,
+                'has_active_auto_approve': m._has_active_auto_approve(
+                    a.get('share_id'), a.get('editor_id')
+                )
+            }
+            for a in activity_notifications
+            if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')
+        ],
+        pending_proposals_map=pending_proposals_map
+    )
 
 
 @bp.route('/api/activity/mark_read', methods=['POST'])
 @login_required
-@csrf_exempt
+@csrf.exempt
 def api_mark_activity_read():
+    """Marks all unread note activity as read for the current user."""
     import main as m
     try:
         result = m.note_versions_conf.update_many(
             {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': False},
             {'$set': {'is_read_by_owner': True}}
         )
+
+        # Also mark documents that lack the field entirely as read
         m.note_versions_conf.update_many(
             {'content_owner_id': ObjectId(current_user.id), 'is_read_by_owner': {'$exists': False}},
             {'$set': {'is_read_by_owner': True}}
         )
-        return jsonify({'success': True, 'marked_read': result.modified_count})
+
+        # Clear Redis cache keys so that badge counts are recomputed instantly
+        if m.redis_cache:
+            try:
+                m.redis_cache.delete(f"unread_notif_count:{current_user.id}")
+                m.redis_cache.delete(f"badge_counts:{current_user.id}")
+            except Exception:
+                pass
+
+        return jsonify({'success': True, 'cleared': result.modified_count})
     except Exception as e:
-        current_app.logger.error(f"Failed to mark activity read: {e}")
-        return jsonify({'error': 'Failed to mark activity as read'}), 500
+        current_app.logger.error(f"Error marking activity as read: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @bp.route('/personal_post/create', methods=['POST'])
@@ -214,8 +384,8 @@ def create_personal_post():
         # --- Premium tier enforcement ---
         user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
         # Safety: if DB lookup fails, fall back to current_user's cached tier
-        max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
-        max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
+        max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.m.get_limit('max_notes')
+        max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.m.get_limit('max_chars_per_note')
         current_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
         if current_count >= max_notes:
             flash(f'You have reached the limit of {max_notes} notes on your current plan. Upgrade to Premium for unlimited notes!', 'warning')
@@ -257,8 +427,8 @@ def create_personal_post_json():
     # --- Premium tier enforcement ---
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     # Safety: if DB lookup fails, fall back to current_user's cached tier
-    max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
-    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
+    max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.m.get_limit('max_notes')
+    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.m.get_limit('max_chars_per_note')
     current_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
     if current_count >= max_notes:
         return jsonify({'error': f'Note limit reached ({max_notes}). Upgrade to Premium for unlimited notes.', 'upgrade': True}), 403
@@ -287,7 +457,6 @@ def create_personal_post_json():
 def search_personal_notes():
     """Search personal notes using Typesense with highlighting and tenant-isolated scoped keys."""
     import main as m
-    import re as re_mod
     query = request.args.get('q', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = min(50, max(1, int(request.args.get('per_page', 20))))
@@ -295,7 +464,6 @@ def search_personal_notes():
     if not query:
         return jsonify({'results': [], 'total': 0, 'query': ''})
 
-    from typesense_client import _t
     if not _t.ts_notes:
         # Fallback: simple MongoDB text search on decrypted notes
         try:
@@ -308,6 +476,7 @@ def search_personal_notes():
             for note in notes_raw:
                 content = m._decrypt_note_record(note)
                 if q_lower in content.lower():
+                    import m.re as re_mod
                     highlighted = re_mod.sub(
                         f'({re_mod.escape(query)})',
                         r'<mark class="search-highlight">\1</mark>',
@@ -430,8 +599,6 @@ def reindex_my_notes():
 def merge_conflict_ai():
     """Uses JigsawStack AI to intelligently resolve merge conflicts between two versions."""
     import main as m
-    import requests
-    from jigsawstack import JigsawStack
     try:
         data = request.get_json() or {}
         current_content = data.get('current_content', '')
@@ -450,7 +617,7 @@ def merge_conflict_ai():
         incoming_content = incoming_content if incoming_content else "(empty)"
 
         try:
-            api_key = m.get_env_variable('JIGSAW_API_KEY')
+            api_key = get_env_variable('JIGSAW_API_KEY')
         except Exception:
             return jsonify({
                 'error': 'JigsawStack AI key is not configured. Please resolve the conflict manually.'
@@ -518,7 +685,7 @@ def edit_personal_post(post_id):
     """Edits an existing personal note with version control."""
     import main as m
     try:
-        data = request.form or request.get_json() or {}
+        data = request.get_json() or {}
         content = data.get('content', '').strip()
         edit_summary = (data.get('edit_summary') or '').strip()[:180]
         force_overwrite = bool(data.get('force_overwrite', False))
@@ -527,7 +694,7 @@ def edit_personal_post(post_id):
             return jsonify({'error': 'Content cannot be empty'}), 400
 
         # Enforce max length
-        max_chars = current_user.get_limit('max_chars_per_note')
+        max_chars = current_user.m.get_limit('max_chars_per_note')
         raw_len = len(content)
         content = content[:max_chars]
         if raw_len > max_chars:
@@ -607,18 +774,10 @@ def edit_personal_post(post_id):
             'updated_at': now.isoformat()
         }, room=str(current_user.id))
 
-        if request.is_json:
-            return jsonify({'success': True, 'updated_at': now.isoformat()})
-        else:
-            flash('Note updated.', 'success')
-            return redirect(url_for('notes.personal_space'))
+        return jsonify({'success': True, 'updated_at': now.isoformat()})
     except Exception as e:
         current_app.logger.error(f"Error editing personal post {post_id}: {e}")
-        if request.is_json:
-            return jsonify({'error': 'Internal error'}), 500
-        else:
-            flash('Could not update note.', 'danger')
-            return redirect(url_for('notes.personal_space'))
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @bp.route('/personal_post/sync/<post_id>', methods=['POST'])
@@ -640,7 +799,7 @@ def sync_personal_post(post_id):
         source_note_id = note.get('source_note_id')
         source_share_id = note.get('source_share_id')
         if not source_note_id:
-            return jsonify({'error': 'This note is not a saved copy — nothing to sync'}), 400
+            return jsonify({'error': 'This note is not a saved copy ΓÇö nothing to sync'}), 400
 
         # Verify the share still exists and grants edit permission
         if source_share_id:
@@ -683,11 +842,11 @@ def sync_personal_post(post_id):
                 'success': True,
                 'content': decrypted,
                 'direction': 'none',
-                'message': 'Already in sync — no changes found.'
+                'message': 'Already in sync ΓÇö no changes found.'
             })
 
         if clone_modified > original_modified:
-            # --- PUSH: Clone is newer → push clone's content to the original ---
+            # --- PUSH: Clone is newer ΓåÆ push clone's content to the original ---
             
             # SECURITY CHECK: If user is not the owner of the source note and hasn't been auto-approved, create a proposal.
             original_owner_id = str(original_note.get('user_id', ''))
@@ -808,7 +967,7 @@ def sync_personal_post(post_id):
                 'message': 'Your changes have been pushed to the original note.'
             })
         else:
-            # --- PULL: Original is newer → pull original's content to the clone ---
+            # --- PULL: Original is newer ΓåÆ pull original's content to the clone ---
             # Version-snapshot the clone before overwriting
             if note.get('content'):
                 m.note_versions_conf.insert_one({
@@ -901,7 +1060,7 @@ def delete_personal_post(post_id):
                 frontier = next_frontier
             msg_suffix = f"and {max(0, len(target_ids) - 1)} copy/copies deleted for everyone."
         else:
-            # Delete only this specific note (clones remain if they exist)
+            # Delete only this specific note (clones remain if they exists)
             target_ids = [obj_id]
             msg_suffix = "deleted from your space."
 
@@ -925,7 +1084,7 @@ def delete_personal_post(post_id):
         # 4. Remove from Typesense index
         m.remove_notes_from_typesense(target_ids)
 
-        # 5. Final: Delete entries from personal_posts_conf
+        # 5. Final: Delete entries from m.personal_posts_conf
         m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
         flash(f'Personal note {msg_suffix}', 'success')
@@ -933,6 +1092,9 @@ def delete_personal_post(post_id):
         current_app.logger.error(f"Error deleting personal post {post_id} (Mode: {mode}): {e}")
         flash('Could not delete note.', 'danger')
     return redirect(url_for('notes.personal_space'))
+
+
+# ----------------- App Lock & Note Locking -----------------
 
 
 @bp.route('/personal_post/toggle_lock/<post_id>', methods=['POST'])
@@ -956,7 +1118,7 @@ def toggle_note_lock(post_id):
 
         # Verify the user has a PIN set up
         if not user or not user.get('app_lock_pin_hash'):
-            return jsonify({'error': 'You need to set up an App Lock PIN first. Go to Profile Settings → App Lock.'}), 400
+            return jsonify({'error': 'You need to set up an App Lock PIN first. Go to Profile Settings ΓåÆ App Lock.'}), 400
 
         note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
         if not note:
@@ -973,6 +1135,9 @@ def toggle_note_lock(post_id):
     except Exception as e:
         current_app.logger.error(f"Error toggling lock for note {post_id}: {e}")
         return jsonify({'error': 'Internal error'}), 500
+
+
+# ----------------- Note Sharing Endpoints -----------------
 
 
 @bp.route('/api/app_lock/setup', methods=['POST'])
@@ -1057,7 +1222,8 @@ def app_lock_remove():
 @bp.route('/api/app_lock/check_status')
 @login_required
 def app_lock_check_status():
-    """Check if the app lock session is still valid (for visibility change re-checks)."""
+    """Check if the app lock session is still valid (for visibility change m.re-checks)."""
+    import main as m
     unlock_ts = session.get('app_lock_unlocked_at')
     if not unlock_ts:
         return jsonify({'unlocked': False})
@@ -1071,6 +1237,8 @@ def app_lock_check_status():
 @bp.route('/api/app_lock/relock', methods=['POST'])
 @login_required
 def app_lock_relock():
+    """Clear the app lock session state to relock the locked notes tab."""
+    import main as m
     session.pop('app_lock_unlocked_at', None)
     return jsonify({'success': True})
 
@@ -1080,6 +1248,7 @@ def app_lock_relock():
 @limits(calls=5, period=60)
 def app_lock_forgot():
     """Send a 6-digit verification code to the user's email for PIN reset."""
+    import main as m
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'email': 1, 'app_lock_pin_hash': 1})
     if not user or not user.get('app_lock_pin_hash'):
@@ -1137,6 +1306,7 @@ def app_lock_forgot():
 def app_lock_reset_verify():
     """Verify the emailed code and set a new APP Lock PIN."""
     import main as m
+    import main as m
     data = request.get_json() or {}
     code = data.get('code', '').strip()
     new_pin = data.get('new_pin', '').strip()
@@ -1189,13 +1359,13 @@ def app_lock_reset_verify():
 
     return jsonify({'success': True, 'message': 'PIN has been reset successfully.'})
 
+
 @bp.route('/api/ai/suggest-tags', methods=['POST'])
 @login_required
 @limits(calls=10, period=60)
 def api_suggest_tags():
     """Suggest tags for a blog post by classifying content against predefined tags."""
     import main as m
-    import requests
     data = request.get_json() or {}
     title = data.get('title', '').strip()
     content = data.get('content', '').strip()
@@ -1207,9 +1377,9 @@ def api_suggest_tags():
 
     # Try JigsawStack Classification API first
     try:
-        api_key = m.get_env_variable('JIGSAW_API_KEY')
+        api_key = get_env_variable('JIGSAW_API_KEY')
         
-        # Split PREDEFINED_TAGS into two batches to respect JigsawStack's limit of 24 labels per request
+        # Split m.PREDEFINED_TAGS into two batches to respect JigsawStack's limit of 24 labels per request
         batch1 = m.PREDEFINED_TAGS[:18]
         batch2 = m.PREDEFINED_TAGS[18:]
         
@@ -1287,7 +1457,7 @@ def api_user_suggest():
             'username': candidate.get('username'),
             'bio': candidate.get('bio', ''),
             'profile_image_url': candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png'),
-            'profile_url': url_for('profile.profile', username=candidate.get('username')),
+            'profile_url': url_for('profile', username=candidate.get('username')),
         })
 
     return jsonify({'suggestions': suggestions})

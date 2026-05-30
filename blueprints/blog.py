@@ -357,7 +357,14 @@ def api_post_comments(slug):
     if not content:
         return jsonify({'error': 'Content required'}), 400
     comment = {
-        'post_slug': slug, 'author_id': ObjectId(current_user.id), 'author': current_user.username, 'content': content, 'created_at': datetime.datetime.now(datetime.timezone.utc), 'is_deleted': False, 'parent_id': ObjectId(parent_id) if parent_id else None
+        'post_slug': slug,
+        'author_id': ObjectId(current_user.id),
+        'author': current_user.username,
+        'author_username': current_user.username,
+        'content': content,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+        'is_deleted': False,
+        'parent_id': ObjectId(parent_id) if parent_id else None
     }
     result = m.comments_conf.insert_one(comment)
     m.posts_conf.update_one({'slug': slug}, {'$inc': {'comment_count': 1}})
@@ -392,7 +399,7 @@ def api_edit_comment(comment_id):
     if not content:
         return jsonify({'error': 'Content required'}), 400
     m.comments_conf.update_one({'_id': ObjectId(comment_id)}, {'$set': {'content': content, 'edited_at': datetime.datetime.now(datetime.timezone.utc)}})
-    return jsonify({'success': True})
+    return jsonify({'success': True, 'content': content})
 
 
 @bp.route('/api/comments/<comment_id>/vote', methods=['POST'])

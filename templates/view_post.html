@@ -383,7 +383,7 @@
                     %}data-parent="{{ c.parent_id|string }}" {% endif %}
                     style="border-bottom:1px solid #eee; padding: 8px 0;">
                     <div class="comment-meta">
-                        <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username }}{% endif %}</strong>
+                        <strong>{% if c.is_deleted %}Deleted{% else %}{{ c.author_username or c.author }}{% endif %}</strong>
                         {% if c.created_at %}
                         — {{ c.created_at|localtime }}
                         {% endif %}

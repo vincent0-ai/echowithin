@@ -695,7 +695,7 @@ def _serialize_comment(doc, reply_counts=None):
         'id': str(doc.get('_id')),
         'post_slug': doc.get('post_slug'),
         'author_id': str(doc.get('author_id')) if doc.get('author_id') else None,
-        'author_username': doc.get('author_username'),
+        'author_username': doc.get('author_username') or doc.get('author'),
         'content': doc.get('content'),
         'created_at': doc.get('created_at').isoformat() if doc.get('created_at') else None,
         'edited_at': doc.get('edited_at').isoformat() if doc.get('edited_at') else None,

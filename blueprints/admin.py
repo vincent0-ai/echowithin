@@ -528,92 +528,190 @@ def delete_user(user_id):
 @login_required
 @admin_required
 def admin_communities():
+    """Admin page to manage all communities and view reports."""
     import main as m
-    communities = list(m.communities_conf.find({}).sort('created_at', -1))
-    for c in communities:
-        c['member_count'] = len(c.get('members', []))
-        c['note_count'] = m.community_notes_conf.count_documents({'community_id': c['_id']})
-        c['report_count'] = m.community_reports_conf.count_documents({'community_id': c['_id'], 'status': 'pending'})
-    return render_template('admin_communities.html', communities=communities)
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+    skip = (page - 1) * per_page
+    
+    # Get filter
+    filter_type = request.args.get('filter', 'all')  # all, reported, banned
+    query = {}
+    if filter_type == 'reported':
+        # Communities with pending reports
+        reported_ids = m.community_reports_conf.distinct('community_id', {'status': 'pending'})
+        query = {'_id': {'$in': reported_ids}}
+    elif filter_type == 'banned':
+        query = {'banned': True}
+    
+    total = m.communities_conf.count_documents(query)
+    communities_list = list(m.communities_conf.find(query).sort('updated_at', -1).skip(skip).limit(per_page))
+    
+    # Enrich with stats
+    for comm in communities_list:
+        comm['member_count'] = len(comm.get('members', []))
+        comm['note_count'] = m.community_notes_conf.count_documents({'community_id': comm['_id']})
+        comm['pending_reports'] = m.community_reports_conf.count_documents({
+            'community_id': comm['_id'],
+            'status': 'pending'
+        })
+        comm['total_reports'] = m.community_reports_conf.count_documents({'community_id': comm['_id']})
+        # Get admin username
+        admin_user = m.users_conf.find_one({'_id': comm.get('admin_id')}, {'username': 1})
+        comm['admin_username'] = admin_user.get('username', 'Unknown') if admin_user else 'Unknown'
+    
+    total_pending = m.community_reports_conf.count_documents({'status': 'pending'})
+    
+    return render_template('admin_communities.html',
+                          communities=communities_list,
+                          page=page,
+                          total_pages=(total + per_page - 1) // per_page,
+                          total_communities=total,
+                          total_pending_reports=total_pending,
+                          filter_type=filter_type)
 
 
 @bp.route('/api/admin/community/<community_id>/ban', methods=['POST'])
 @login_required
 @admin_required
 def api_admin_ban_community(community_id):
+    """Ban a community — sets banned flag, removes from discover."""
     import main as m
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
         return jsonify({'error': 'Invalid ID'}), 400
+    
     community = m.communities_conf.find_one({'_id': comm_obj_id})
     if not community:
         return jsonify({'error': 'Community not found'}), 404
-    m.communities_conf.update_one({'_id': comm_obj_id}, {'$set': {'banned': True}})
-    return jsonify({'success': True, 'message': f'Community "{community.get("name")}" has been banned.'})
+    
+    m.communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$set': {
+            'banned': True,
+            'banned_at': datetime.datetime.now(datetime.timezone.utc),
+            'banned_by': ObjectId(current_user.id)
+        }}
+    )
+    
+    # Mark all pending reports for this community as reviewed
+    m.community_reports_conf.update_many(
+        {'community_id': comm_obj_id, 'status': 'pending'},
+        {'$set': {
+            'status': 'reviewed',
+            'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+            'reviewed_by': ObjectId(current_user.id)
+        }}
+    )
+    
+    flash(f'Community "{community.get("name")}" has been banned.', 'success')
+    return redirect(url_for('admin.admin_communities'))
 
 
 @bp.route('/api/admin/community/<community_id>/unban', methods=['POST'])
 @login_required
 @admin_required
 def api_admin_unban_community(community_id):
+    """Unban a previously banned community."""
     import main as m
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
         return jsonify({'error': 'Invalid ID'}), 400
-    community = m.communities_conf.find_one({'_id': comm_obj_id})
-    if not community:
-        return jsonify({'error': 'Community not found'}), 404
-    m.communities_conf.update_one({'_id': comm_obj_id}, {'$set': {'banned': False}})
-    return jsonify({'success': True, 'message': f'Community "{community.get("name")}" has been unbanned.'})
+    
+    m.communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$unset': {'banned': '', 'banned_at': '', 'banned_by': ''}}
+    )
+    
+    flash('Community has been unbanned.', 'success')
+    return redirect(url_for('admin.admin_communities'))
 
 
 @bp.route('/api/admin/community/<community_id>/delete', methods=['POST'])
 @login_required
 @admin_required
 def api_admin_delete_community(community_id):
+    """Permanently delete a community and all its data."""
     import main as m
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
         return jsonify({'error': 'Invalid ID'}), 400
+    
     community = m.communities_conf.find_one({'_id': comm_obj_id})
     if not community:
         return jsonify({'error': 'Community not found'}), 404
+    
+    comm_name = community.get('name', 'Unknown')
+    
+    # Delete all community notes
+    note_ids = [n['_id'] for n in m.community_notes_conf.find({'community_id': comm_obj_id}, {'_id': 1})]
+    if note_ids:
+        m.community_reactions_conf.delete_many({'note_id': {'$in': note_ids}})
     m.community_notes_conf.delete_many({'community_id': comm_obj_id})
-    m.community_reactions_conf.delete_many({'community_id': comm_obj_id})
+    
+    # Delete all reports
     m.community_reports_conf.delete_many({'community_id': comm_obj_id})
+    
+    # Delete the community
     m.communities_conf.delete_one({'_id': comm_obj_id})
-    return jsonify({'success': True, 'message': f'Community "{community.get("name")}" has been permanently deleted.'})
+    
+    flash(f'Community "{comm_name}" and all its data has been permanently deleted.', 'success')
+    return redirect(url_for('admin.admin_communities'))
 
 
 @bp.route('/api/admin/community/<community_id>/reports', methods=['GET'])
 @login_required
 @admin_required
 def api_admin_community_reports(community_id):
+    """View all reports for a specific community."""
     import main as m
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
         return jsonify({'error': 'Invalid ID'}), 400
+    
     reports = list(m.community_reports_conf.find({'community_id': comm_obj_id}).sort('created_at', -1))
-    return jsonify({'reports': [{'id': str(r['_id']), 'reporter': r.get('reporter_name', 'Unknown'), 'reason': r.get('reason', ''), 'status': r.get('status', 'pending'), 'created_at': r['created_at'].isoformat() if r.get('created_at') else None} for r in reports]})
+    
+    result = []
+    for r in reports:
+        result.append({
+            'id': str(r['_id']),
+            'reporter_username': r.get('reporter_username', 'Unknown'),
+            'reason': r.get('reason', ''),
+            'details': r.get('details', ''),
+            'status': r.get('status', 'pending'),
+            'created_at': r['created_at'].isoformat() if r.get('created_at') else '',
+            'reviewed_at': r['reviewed_at'].isoformat() if r.get('reviewed_at') else None
+        })
+    
+    return jsonify({'success': True, 'reports': result})
 
 
 @bp.route('/api/admin/reports/<report_id>/dismiss', methods=['POST'])
 @login_required
 @admin_required
 def api_admin_dismiss_report(report_id):
+    """Dismiss a specific community report."""
     import main as m
     try:
         report_obj_id = ObjectId(report_id)
     except Exception:
         return jsonify({'error': 'Invalid ID'}), 400
+    
     result = m.community_reports_conf.update_one(
         {'_id': report_obj_id},
-        {'$set': {'status': 'dismissed', 'reviewed_at': datetime.datetime.now(datetime.timezone.utc), 'reviewed_by': ObjectId(current_user.id)}}
+        {'$set': {
+            'status': 'dismissed',
+            'reviewed_at': datetime.datetime.now(datetime.timezone.utc),
+            'reviewed_by': ObjectId(current_user.id)
+        }}
     )
+    
     if result.modified_count == 0:
         return jsonify({'error': 'Report not found'}), 404
+    
     return jsonify({'success': True, 'message': 'Report dismissed'})
+

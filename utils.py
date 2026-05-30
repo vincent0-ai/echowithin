@@ -596,7 +596,7 @@ def prepare_posts(posts):
     # ---- Step 1: Build canonical URLs and deduplicate them ----
     urls_to_fetch = set()
     for post in posts:
-        post_url = url_for("view_post", slug=post.get("slug"), _external=True)
+        post_url = url_for("blog.view_post", slug=post.get("slug"), _external=True)
         post["url"] = post_url
 
         # Ensure timestamp is timezone-aware

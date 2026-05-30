@@ -315,6 +315,8 @@ VAPID_CLAIMS = {"sub": _vapid_sub}
 #   3. Default file: firebase-service-account.json
 FIREBASE_INITIALIZED = False
 if FIREBASE_AVAILABLE:
+    import firebase_admin
+    from firebase_admin import credentials
     firebase_creds_json = os.environ.get('FIREBASE_CREDENTIALS', '').strip()
     firebase_service_account = os.environ.get('FIREBASE_SERVICE_ACCOUNT', 'firebase-service-account.json')
     

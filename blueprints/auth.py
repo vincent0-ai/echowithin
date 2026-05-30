@@ -41,7 +41,7 @@ def register():
         m.send_code(email)
         flash("Confirmation email sent. Please confirm your email to log in.", "success")
         return redirect(url_for('auth.confirm', email=email))
-    return render_template("register.html", active_page='register')
+    return render_template("auth.html", active_page='register', form='register')
 
 
 @bp.route("/confirm/<email>", methods=['GET', 'POST'])
@@ -92,7 +92,7 @@ def login():
                     return redirect(next_url)
                 return redirect(url_for('pages.home'))
         flash("Invalid username/email or password", "danger")
-    return render_template('login.html', active_page='login')
+    return render_template('auth.html', active_page='login', form='login')
 
 
 @bp.route('/google_login')

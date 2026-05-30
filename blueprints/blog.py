@@ -271,7 +271,9 @@ def view_post(slug):
 def api_record_post_view(post_id):
     import main as m
     m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'view_count': 1}})
-    return jsonify({'success': True})
+    post = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'view_count': 1})
+    view_count = post.get('view_count', 0) if post else 0
+    return jsonify({'success': True, 'view_count': view_count})
 
 
 @bp.route('/api/posts/<slug>/comments', methods=['GET', 'POST'])

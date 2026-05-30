@@ -13,7 +13,7 @@
                 </span>
             </p>
         </div>
-        <a href="{{ url_for('admin_dashboard') }}" style="background: #3e2217; color: white; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; text-decoration: none;">&larr; Dashboard</a>
+        <a href="{{ url_for('admin.admin_dashboard') }}" style="background: #3e2217; color: white; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; text-decoration: none;">&larr; Dashboard</a>
     </div>
 
     <!-- Filter Tabs -->
@@ -83,28 +83,28 @@
                     </td>
                     <td style="padding: 0.65rem 0.75rem;">
                         <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-                            <a href="{{ url_for('view_community', community_id=comm._id) }}" target="_blank" style="background: #3e2217; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px;" title="Inspect Community">
+                            <a href="{{ url_for('communities.view_community', community_id=comm._id) }}" target="_blank" style="background: #3e2217; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px;" title="Inspect Community">
                                 <i class="fas fa-search"></i> Inspect
                             </a>
                             <button onclick="viewReports('{{ comm._id }}', '{{ comm.name | e }}')" style="background: none; border: 1px solid #ddd; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; color: #555;" title="View Reports">
                                 <i class="fas fa-eye"></i>
                             </button>
                             {% if comm.banned %}
-                            <form action="{{ url_for('api_admin_unban_community', community_id=comm._id) }}" method="POST" style="display:inline;">
+                            <form action="{{ url_for('admin.api_admin_unban_community', community_id=comm._id) }}" method="POST" style="display:inline;">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" style="background: #2e7d32; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;" title="Unban">
                                     <i class="fas fa-check"></i> Unban
                                 </button>
                             </form>
                             {% else %}
-                            <form action="{{ url_for('api_admin_ban_community', community_id=comm._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Ban this community? Members will lose access.');">
+                            <form action="{{ url_for('admin.api_admin_ban_community', community_id=comm._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Ban this community? Members will lose access.');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" style="background: #ff9800; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;" title="Ban">
                                     <i class="fas fa-ban"></i> Ban
                                 </button>
                             </form>
                             {% endif %}
-                            <form action="{{ url_for('api_admin_delete_community', community_id=comm._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('PERMANENTLY DELETE this community and ALL its notes? This cannot be undone!');">
+                            <form action="{{ url_for('admin.api_admin_delete_community', community_id=comm._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('PERMANENTLY DELETE this community and ALL its notes? This cannot be undone!');">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" style="background: #c62828; color: white; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;" title="Delete forever">
                                     <i class="fas fa-trash"></i>

@@ -10,7 +10,7 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('auth', __name__, template_folder='templates')
 
 
 @bp.route('/register', methods=['GET', 'POST'])
@@ -24,13 +24,13 @@ def register():
         password = request.form.get("password")
         if not username or not email or not password:
             flash("All fields are required", "danger")
-            return redirect(url_for('register'))
+            return redirect(url_for('auth.register'))
         if len(username) < 2 or len(password) < 6:
             flash("Username must be at least 2 characters and password at least 6 characters.", "danger")
-            return redirect(url_for('register'))
+            return redirect(url_for('auth.register'))
         if m.users_conf.find_one({"$or": [{"email": email}, {"username": username}]}):
             flash("Email or username already exists.", "danger")
-            return redirect(url_for('register'))
+            return redirect(url_for('auth.register'))
         hashed_password = m.generate_password_hash(password)
         m.users_conf.insert_one({
             "username": username,
@@ -40,7 +40,7 @@ def register():
         })
         m.send_code(email)
         flash("Confirmation email sent. Please confirm your email to log in.", "success")
-        return redirect(url_for('confirm', email=email))
+        return redirect(url_for('auth.confirm', email=email))
     return render_template("register.html", active_page='register')
 
 
@@ -56,7 +56,7 @@ def confirm(email):
             m.users_conf.update_one({"email": email}, {"$set": {"is_confirmed": True}})
             m.auth_conf.delete_one({"email": email, "code": code})
             flash("Email confirmed! You can now log in.", "success")
-            return redirect(url_for('login'))
+            return redirect(url_for('auth.login'))
         else:
             error = "Invalid verification code."
     return render_template("confirm.html", email=email, error=error)
@@ -73,16 +73,16 @@ def login():
         remember = request.form.get("remember")
         if not username or not password:
             flash("Username and password required.", "danger")
-            return redirect(url_for('login'))
+            return redirect(url_for('auth.login'))
         user_data = m.users_conf.find_one({"$or": [{"email": username}, {"username": username}]})
         if user_data:
             if not user_data.get('is_confirmed'):
                 m.send_code(user_data['email'])
                 flash("Email not confirmed. A new confirmation code has been sent.", "warning")
-                return redirect(url_for('confirm', email=user_data['email']))
+                return redirect(url_for('auth.confirm', email=user_data['email']))
             if user_data.get('is_banned'):
                 flash("Your account has been suspended.", "danger")
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.login'))
             if m.check_password_hash(user_data['password'], password):
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
@@ -90,7 +90,7 @@ def login():
                 flash('Login successful!', 'success')
                 if next_url and m.is_safe_url(next_url):
                     return redirect(next_url)
-                return redirect(url_for('home'))
+                return redirect(url_for('pages.home'))
         flash("Invalid username/email or password", "danger")
     return render_template('login.html', active_page='login')
 
@@ -104,7 +104,7 @@ def google_login():
     if platform != 'mobile' and 'EchoWithinApp' in request.headers.get('User-Agent', ''):
         platform = 'mobile'
     session['oauth_platform'] = platform
-    google = m.OAuth2Session(m.GOOGLE_CLIENT_ID, scope=scope, redirect_uri=url_for('google_callback', _external=True, _scheme='https'))
+    google = m.OAuth2Session(m.GOOGLE_CLIENT_ID, scope=scope, redirect_uri=url_for('auth.google_callback', _external=True, _scheme='https'))
     authorization_url, state = google.authorization_url('https://accounts.google.com/o/oauth2/auth', prompt='consent')
     session['oauth_state'] = state
     if m.redis_cache:
@@ -155,22 +155,22 @@ def google_callback():
         if platform == 'mobile':
             if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
                 session.pop('oauth_platform', None)
-                return redirect(url_for('home'))
+                return redirect(url_for('pages.home'))
             otlt_token = secrets.token_urlsafe(32)
             if m.redis_cache:
                 try:
                     m.redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(current_user.id))
-                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    https_deep_link = url_for('auth.mobile_auth', token=otlt_token, _external=True, _scheme='https')
                     custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
-                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('home', _external=True))
+                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('pages.home', _external=True))
                 except Exception as e:
                     current_app.logger.error(f"Failed to store OTLT in Redis for authenticated user: {e}")
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     if 'oauth_state' not in session:
         flash("Authentication session expired (session mismatch). Please try logging in again.", "warning")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
     oauth_state = session.get('oauth_state')
-    google = m.OAuth2Session(m.GOOGLE_CLIENT_ID, state=oauth_state, redirect_uri=url_for('google_callback', _external=True, _scheme='https'))
+    google = m.OAuth2Session(m.GOOGLE_CLIENT_ID, state=oauth_state, redirect_uri=url_for('auth.google_callback', _external=True, _scheme='https'))
     try:
         auth_response_url = request.url.replace('http://', 'https://', 1) if request.url.startswith('http://') else request.url
         token = google.fetch_token('https://oauth2.googleapis.com/token', client_secret=m.GOOGLE_CLIENT_SECRET, authorization_response=auth_response_url)
@@ -184,7 +184,7 @@ def google_callback():
             except Exception:
                 pass
         flash("Authentication failed. Please try again.", "danger")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
     session.pop('oauth_state', None)
     if state_from_url and m.redis_cache:
         try:
@@ -202,11 +202,11 @@ def google_callback():
     if user:
         if not user.get('is_confirmed'):
             flash("Your account is not confirmed. Please check your email.", "warning")
-            return redirect(url_for('login'))
+            return redirect(url_for('auth.login'))
         if user.get('is_banned'):
             logout_user()
             flash('Your account has been suspended. Please contact support.', 'danger')
-            return redirect(url_for('login'))
+            return redirect(url_for('auth.login'))
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
         flash(f"Welcome back, {user['username']}!", "success")
@@ -214,20 +214,20 @@ def google_callback():
         if platform == 'mobile':
             if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
                 session.pop('oauth_platform', None)
-                return redirect(url_for('home'))
+                return redirect(url_for('pages.home'))
             otlt_token = secrets.token_urlsafe(32)
             if m.redis_cache:
                 try:
                     m.redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    https_deep_link = url_for('auth.mobile_auth', token=otlt_token, _external=True, _scheme='https')
                     custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
-                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('home', _external=True))
+                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('pages.home', _external=True))
                 except Exception as e:
                     current_app.logger.error(f"Failed to store OTLT in Redis: {e}")
-            return render_template('mobile_redirect.html', deep_link_url="echowithin://open?path=/home", https_deep_link=url_for('home', _external=True, _scheme='https'), fallback_url=url_for('home', _external=True))
+            return render_template('mobile_redirect.html', deep_link_url="echowithin://open?path=/home", https_deep_link=url_for('pages.home', _external=True, _scheme='https'), fallback_url=url_for('pages.home', _external=True))
         next_url = session.pop('oauth_next', None)
         if not next_url or not m.is_safe_url(next_url):
-            next_url = url_for('home')
+            next_url = url_for('pages.home')
         return redirect(next_url)
     else:
         base_username = name.replace(' ', '_').lower()
@@ -262,20 +262,20 @@ def google_callback():
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
             if 'EchoWithinApp' in request.headers.get('User-Agent', ''):
-                return redirect(url_for('home'))
+                return redirect(url_for('pages.home'))
             otlt_token = secrets.token_urlsafe(32)
             if m.redis_cache:
                 try:
                     m.redis_cache.setex(f"mobile_auth:{otlt_token}", 300, str(user['_id']))
-                    https_deep_link = url_for('mobile_auth', token=otlt_token, _external=True, _scheme='https')
+                    https_deep_link = url_for('auth.mobile_auth', token=otlt_token, _external=True, _scheme='https')
                     custom_scheme_url = f"echowithin://open?path=/mobile_auth&token={otlt_token}"
-                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('home', _external=True))
+                    return render_template('mobile_redirect.html', deep_link_url=custom_scheme_url, https_deep_link=https_deep_link, fallback_url=url_for('pages.home', _external=True))
                 except Exception as e:
                     current_app.logger.error(f"Failed to store OTLT in Redis (signup): {e}")
-            return render_template('mobile_redirect.html', deep_link_url="echowithin://open?path=/home", https_deep_link=url_for('home', _external=True, _scheme='https'), fallback_url=url_for('home', _external=True))
+            return render_template('mobile_redirect.html', deep_link_url="echowithin://open?path=/home", https_deep_link=url_for('pages.home', _external=True, _scheme='https'), fallback_url=url_for('pages.home', _external=True))
         next_url = session.pop('oauth_next', None)
         if not next_url or not m.is_safe_url(next_url):
-            next_url = url_for('home')
+            next_url = url_for('pages.home')
         return redirect(next_url)
 
 
@@ -291,7 +291,7 @@ def logout():
     session.pop('oauth_state', None)
     session.pop('oauth_platform', None)
     flash('You have been logged out.', 'info')
-    resp = redirect(url_for('dashboard'))
+    resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
     return resp
 
@@ -315,10 +315,10 @@ def forgot_password():
                 )
                 m.send_reset_code(email, reset_token)
                 flash("We've sent a password reset link to your email. Please check your inbox (and spam folder).", "success")
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.login'))
             else:
                 flash("If an account with that email exists, we've sent you a password reset link.", "info")
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.login'))
         else:
             flash("Please enter your email address.", "danger")
     return render_template('forgot_password.html', active_page='forgot_password')
@@ -335,7 +335,7 @@ def reset_password(token):
         reset_expiry = reset_expiry.replace(tzinfo=datetime.timezone.utc)
     if not auth_record or not reset_expiry or reset_expiry < now_utc:
         flash("Invalid or expired reset token.", "danger")
-        return redirect(url_for('forgot_password'))
+        return redirect(url_for('auth.forgot_password'))
     user_to_update = m.users_conf.find_one({'email': auth_record['email']})
     if request.method == 'POST':
         username = request.form.get('username')
@@ -355,7 +355,7 @@ def reset_password(token):
                 m.posts_conf.update_many({'author_id': user_to_update['_id']}, {'$set': {'author': username}})
                 m.auth_conf.delete_one({'reset_token': hashed_token})
                 flash("Your password has been reset successfully. Please login.", "success")
-                return redirect(url_for('login'))
+                return redirect(url_for('auth.login'))
             else:
                 flash("Passwords do not match.", "danger")
         else:
@@ -369,10 +369,10 @@ def mobile_auth():
     token = request.args.get('token')
     if not token:
         current_app.logger.warning("Mobile auth attempted without token.")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
     if not m.redis_cache:
         current_app.logger.error("Mobile auth failed: Redis not available.")
-        return redirect(url_for('login'))
+        return redirect(url_for('auth.login'))
     try:
         user_id = m.redis_cache.get(f"mobile_auth:{token}")
         if user_id:
@@ -392,7 +392,7 @@ def mobile_auth():
                 })
                 current_app.logger.info(f"Successfully bridged mobile session for user {user['username']} via OTLT.")
                 flash(f"Welcome back to the app, {user['username']}!", "success")
-                resp = redirect(url_for('home'))
+                resp = redirect(url_for('pages.home'))
                 resp.set_cookie('x_app_token', _app_token, max_age=90*24*3600, httponly=True, secure=True, samesite='Lax')
                 return resp
             else:
@@ -402,7 +402,7 @@ def mobile_auth():
     except Exception as e:
         current_app.logger.error(f"Error during mobile auth bridged login: {e}")
     flash("Login session expired. Please try again.", "warning")
-    return redirect(url_for('login'))
+    return redirect(url_for('auth.login'))
 
 
 @bp.route('/api/app_reauth', methods=['POST'])

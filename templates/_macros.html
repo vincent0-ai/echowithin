@@ -47,7 +47,7 @@
     {% elif post.video_filename %}
     <div class="post-media-container">
         <video class="post-video" controls preload="metadata">
-            <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
+            <source src="{{ url_for('blog.uploaded_file', filename=post.video_filename) }}" type="video/mp4">
             Your browser does not support the video tag.
         </video>
     </div>
@@ -81,16 +81,16 @@
     <div class="post-gallery">
         {% for fname in files %}
         <div class="post-gallery-item">
-            <img src="{{ url_for('uploaded_file', filename=fname) }}"
-                data-full-url="{{ url_for('uploaded_file', filename=fname) }}"
+            <img src="{{ url_for('blog.uploaded_file', filename=fname) }}"
+                data-full-url="{{ url_for('blog.uploaded_file', filename=fname) }}"
                 alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" loading="lazy" />
         </div>
         {% endfor %}
     </div>
     {% else %}
     <div class="post-image-container">
-        <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
-            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}" loading="lazy">
+        <img src="{{ url_for('blog.uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
+            class="post-image" data-full-url="{{ url_for('blog.uploaded_file', filename=files[0]) }}" loading="lazy">
     </div>
     {% endif %}
 
@@ -106,8 +106,8 @@
 
     {% elif post.image_filename %}
     <div class="post-image-container">
-        <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}"
-            class="post-image" data-full-url="{{ url_for('uploaded_file', filename=post.image_filename) }}"
+        <img src="{{ url_for('blog.uploaded_file', filename=post.image_filename) }}" alt="Post image for {{ post.title }}"
+            class="post-image" data-full-url="{{ url_for('blog.uploaded_file', filename=post.image_filename) }}"
             loading="lazy">
     </div>
     {% endif %}
@@ -129,9 +129,9 @@
         {% if post.edited_at %}
         Edited <span class="relative-time"
             data-timestamp="{{ post.edited_at.isoformat() if post.edited_at else '' }}">{{ post.edited_at|localtime
-            }}</span> by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}
+            }}</span> by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}
         {% else %}
-        Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %} ·
+        Posted by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %} ·
         <span class="relative-time" data-timestamp="{{ post.timestamp.isoformat() if post.timestamp else '' }}">{{
             post.timestamp|localtime }}</span>
         {% endif %}
@@ -228,9 +228,9 @@
         </a>
 
         {% if current_user.is_authenticated and (post.author_id|string == current_user.id) %}
-        <a href="{{ url_for('edit_post', post_id=post._id, action='edit') }}" class="btn edit-btn">Edit</a>
+        <a href="{{ url_for('blog.edit_post', post_id=post._id, action='edit') }}" class="btn edit-btn">Edit</a>
 
-        <form action="{{ url_for('delete_post', post_id=post._id) }}" method="POST" class="delete-post-form"
+        <form action="{{ url_for('blog.delete_post', post_id=post._id) }}" method="POST" class="delete-post-form"
             style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn delete-btn">Delete</button>

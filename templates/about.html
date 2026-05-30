@@ -51,7 +51,7 @@
             </div>
 
             <div style="text-align: center; margin-top: 15px;">
-                <a href="{{ url_for('download_note_app_apk') }}" download class="install-btn"
+                <a href="{{ url_for('pages.download_note_app_apk') }}" download class="install-btn"
                     style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 12px 28px; border-radius: 30px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(62, 34, 23, 0.25); transition: transform 0.2s, box-shadow 0.2s;">
                     Download Note App APK
                 </a>
@@ -63,7 +63,7 @@
             <h4>Contact the Developer</h4>
             <p>Have a question, suggestion or feedback? Use the form below to send a message directly to the developer.
             </p>
-            <form action="{{ url_for('contact_developer') }}" method="POST" class="contact-form">
+            <form action="{{ url_for('pages.contact_developer') }}" method="POST" class="contact-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="text" name="name" class="form-input" placeholder="Your Name" required>
                 <input type="email" name="email" class="form-input" placeholder="Your Email" required>

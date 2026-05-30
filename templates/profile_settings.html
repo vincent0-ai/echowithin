@@ -8,7 +8,7 @@
 <div class="content-wrapper">
   <h1>Account Settings</h1>
   <div class="settings-panel" style="max-width: 600px; margin: auto;">
-    <form method="POST" action="{{ url_for('profile_settings', username=user.username) }}" enctype="multipart/form-data"
+    <form method="POST" action="{{ url_for('profile.profile_settings', username=user.username) }}" enctype="multipart/form-data"
       class="post-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -144,7 +144,7 @@
       <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
         <button type="submit" class="btn form-button" style="width: auto; padding: 0.5rem 1.5rem;">Save
           Settings</button>
-        <a class="btn" href="{{ url_for('profile', username=user.username) }}"
+        <a class="btn" href="{{ url_for('profile.profile', username=user.username) }}"
           style="background-color: #6c757d; color: white;">Back to Profile</a>
       </div>
 
@@ -283,7 +283,7 @@
         <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem;"> Backup Your Data</h2>
         <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Download a copy of all your data including your
           profile, posts, comments, and personal notes.</p>
-        <form method="POST" action="{{ url_for('export_data', username=user.username) }}">
+        <form method="POST" action="{{ url_for('profile.export_data', username=user.username) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn" style="background-color: #17a2b8; color: white; padding: 0.5rem 1.5rem;">
             Download My Data
@@ -298,7 +298,7 @@
           Delete Account</h2>
         <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Permanently delete your account and all
           associated data. This action <strong>cannot be undone</strong>.</p>
-        <form id="delete-account-form" method="POST" action="{{ url_for('delete_account', username=user.username) }}">
+        <form id="delete-account-form" method="POST" action="{{ url_for('profile.delete_account', username=user.username) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% if not user.get('google_signup') or user.get('password') %}
           <div class="form-group">

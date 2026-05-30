@@ -6,7 +6,7 @@ import datetime, os, json, csv
 from io import StringIO
 from urllib.parse import urljoin
 from security import admin_required
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('admin', __name__, template_folder='templates')
 
 
 @bp.route('/admin/dashboard')
@@ -51,7 +51,7 @@ def admin_upload_apk():
         apk_file = request.files.get('apk_file')
         if not version_code_str or not version_name or not changelog or not apk_file:
             flash("All fields are required!", "danger")
-            return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('admin.admin_dashboard'))
         downloads_dir = os.path.join(current_app.static_folder, 'downloads')
         os.makedirs(downloads_dir, exist_ok=True)
         apk_path = os.path.join(downloads_dir, 'app-debug.apk')
@@ -66,7 +66,7 @@ def admin_upload_apk():
     except Exception as e:
         current_app.logger.error(f"Failed to upload APK and write manifest: {e}")
         flash(f"Error publishing update: {str(e)}", "danger")
-    return redirect(url_for('admin_dashboard'))
+    return redirect(url_for('admin.admin_dashboard'))
 
 
 @bp.route('/admin/metrics')
@@ -305,7 +305,7 @@ def admin_delete_post(post_id):
         flash('Post deleted.', 'success')
     else:
         flash('Post not found.', 'danger')
-    return redirect(url_for('admin_posts'))
+    return redirect(url_for('admin.admin_posts'))
 
 
 @bp.route('/admin/posts/pin/<post_id>', methods=['POST'])
@@ -319,7 +319,7 @@ def admin_pin_post(post_id):
     else:
         m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'is_pinned': True, 'pinned_at': datetime.datetime.now(datetime.timezone.utc)}})
         flash('Post pinned.', 'success')
-    return redirect(url_for('admin_posts'))
+    return redirect(url_for('admin.admin_posts'))
 
 
 @bp.route('/admin/posts/unpin/<post_id>', methods=['POST'])
@@ -329,7 +329,7 @@ def admin_unpin_post(post_id):
     import main as m
     m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$unset': {'is_pinned': '', 'pinned_at': ''}})
     flash('Post unpinned.', 'success')
-    return redirect(url_for('admin_posts'))
+    return redirect(url_for('admin.admin_posts'))
 
 
 @bp.route('/admin/announcements', methods=['GET', 'POST'])
@@ -349,7 +349,7 @@ def admin_announcements():
             flash('Announcement created.', 'success')
         else:
             flash('Title and content required.', 'danger')
-        return redirect(url_for('admin_announcements'))
+        return redirect(url_for('admin.admin_announcements'))
     announcements = list(m.announcements_conf.find({}).sort('created_at', -1))
     return render_template('admin_announcements.html', announcements=announcements)
 
@@ -361,17 +361,17 @@ def admin_send_push():
     import main as m
     title = request.form.get('title')
     body = request.form.get('body')
-    url = request.form.get('url', url_for('home', _external=True))
+    url = request.form.get('url', url_for('pages.home', _external=True))
     if not title or not body:
         flash('Title and body are required.', 'danger')
-        return redirect(url_for('admin_announcements'))
+        return redirect(url_for('admin.admin_announcements'))
     try:
         m.send_admin_broadcast_push(title, body, url)
         flash('Broadcast push notification sent!', 'success')
     except Exception as e:
         current_app.logger.error(f"Failed to send broadcast push: {e}")
         flash('Failed to send push notification.', 'danger')
-    return redirect(url_for('admin_announcements'))
+    return redirect(url_for('admin.admin_announcements'))
 
 
 @bp.route('/admin/announcements/pin/<announcement_id>', methods=['POST'])
@@ -381,7 +381,7 @@ def pin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
     flash('Announcement pinned.', 'success')
-    return redirect(url_for('admin_announcements'))
+    return redirect(url_for('admin.admin_announcements'))
 
 
 @bp.route('/admin/announcements/unpin/<announcement_id>', methods=['POST'])
@@ -391,7 +391,7 @@ def unpin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': False}})
     flash('Announcement unpinned.', 'success')
-    return redirect(url_for('admin_announcements'))
+    return redirect(url_for('admin.admin_announcements'))
 
 
 @bp.route('/admin/announcements/delete/<announcement_id>', methods=['POST'])
@@ -401,7 +401,7 @@ def delete_announcement(announcement_id):
     import main as m
     m.announcements_conf.delete_one({'_id': ObjectId(announcement_id)})
     flash('Announcement deleted.', 'success')
-    return redirect(url_for('admin_announcements'))
+    return redirect(url_for('admin.admin_announcements'))
 
 
 @bp.route('/admin/premium_users')
@@ -427,7 +427,7 @@ def grant_premium(user_id):
         flash(f'Premium granted to {user.get("username")} for 365 days.', 'success')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_premium_users'))
+    return redirect(url_for('admin.admin_premium_users'))
 
 
 @bp.route('/admin/premium/revoke/<user_id>', methods=['POST'])
@@ -444,7 +444,7 @@ def revoke_premium(user_id):
         flash(f'Premium revoked from {user.get("username")}.', 'info')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_premium_users'))
+    return redirect(url_for('admin.admin_premium_users'))
 
 
 @bp.route('/admin/users')
@@ -472,7 +472,7 @@ def ban_user(user_id):
         flash(f'User {user.get("username")} banned.', 'warning')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_users'))
+    return redirect(url_for('admin.admin_users'))
 
 
 @bp.route('/admin/users/unban/<user_id>', methods=['POST'])
@@ -486,7 +486,7 @@ def unban_user(user_id):
         flash(f'User {user.get("username")} unbanned.', 'success')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_users'))
+    return redirect(url_for('admin.admin_users'))
 
 
 @bp.route('/admin/users/delete/<user_id>', methods=['POST'])
@@ -500,7 +500,7 @@ def delete_user(user_id):
         flash(f'User {user.get("username")} deleted.', 'info')
     else:
         flash('User not found.', 'danger')
-    return redirect(url_for('admin_users'))
+    return redirect(url_for('admin.admin_users'))
 
 
 @bp.route('/admin/communities')

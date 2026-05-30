@@ -267,7 +267,7 @@
             </button>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Click <a href="{{ url_for('register') }}">Register</a> and fill in your details, or sign in
+                    Click <a href="{{ url_for('auth.register') }}">Register</a> and fill in your details, or sign in
                     instantly with your Google account. No credit card or payment needed.
                 </div>
             </div>
@@ -298,7 +298,7 @@
             </button>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Click the <strong>+</strong> button or go to <a href="{{ url_for('create_post') }}">Create Post</a>.
+                    Click the <strong>+</strong> button or go to <a href="{{ url_for('pages.create_post') }}">Create Post</a>.
                     Give your post a title, write your content (supports markdown formatting and images), add tags, and
                     publish. Your post will appear on the blog for everyone to read.
                 </div>
@@ -326,7 +326,7 @@
             <div class="faq-answer">
                 <div class="faq-answer-inner">
                     Click the <strong>bookmark icon</strong> <i class="far fa-bookmark"></i> on any post. Saved posts
-                    appear in your <a href="{{ url_for('personal_space') }}">Personal Space</a> under the "Saved Posts"
+                    appear in your <a href="{{ url_for('notes.personal_space') }}">Personal Space</a> under the "Saved Posts"
                     tab.
                 </div>
             </div>
@@ -665,7 +665,7 @@
     <div class="faq-contact">
         <h3><i class="fas fa-envelope" style="margin-right: 0.3rem;"></i> Still have questions?</h3>
         <p>We'd love to hear from you. Send us a message and we'll get back to you.</p>
-        <a href="{{ url_for('about') }}#contact" class="btn">Contact Us</a>
+        <a href="{{ url_for('pages.about') }}#contact" class="btn">Contact Us</a>
     </div>
 
     <script nonce="{{ csp_nonce }}">

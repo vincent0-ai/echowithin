@@ -437,7 +437,7 @@
             <button class="btn-sm" onclick="document.getElementById('reportModal').style.display='flex'" title="Report this community" style="color:#c62828;border-color:#ffcdd2;">
                 <i class="fas fa-flag" style="margin-right:3px;"></i> Report
             </button>
-            <form action="{{ url_for('api_leave_community', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Leave this community?');">
+            <form action="{{ url_for('communities.api_leave_community', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Leave this community?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-sm danger">Leave</button>
             </form>
@@ -448,7 +448,7 @@
     <!-- Note creation -->
     {% if is_member %}
     <div class="create-note-box">
-        <form action="{{ url_for('api_create_community_note', community_id=community._id) }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ url_for('communities.api_create_community_note', community_id=community._id) }}" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <textarea name="content" class="note-textarea" placeholder="Share a thought, note, or question..." required maxlength="{{ current_user.get_limit('max_chars_per_note') }}" oninput="document.getElementById('charCount').textContent=this.value.length"></textarea>
@@ -577,10 +577,10 @@
                 </div>
 
                 <div class="util-actions">
-                    <a href="{{ url_for('view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="util-btn" title="Open note">
+                    <a href="{{ url_for('communities.view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="util-btn" title="Open note">
                         <i class="fas fa-external-link-alt"></i>
                     </a>
-                    <button class="util-btn" onclick="navigator.clipboard.writeText('{{ url_for('view_shared_community_note', share_id=note.share_id, _external=True) }}'); showToast('Link copied!');" title="Copy Link">
+                    <button class="util-btn" onclick="navigator.clipboard.writeText('{{ url_for('communities.view_shared_community_note', share_id=note.share_id, _external=True) }}'); showToast('Link copied!');" title="Copy Link">
                         <i class="fas fa-link"></i>
                     </button>
                     {% if note.author_id|string == current_user.id or is_admin %}
@@ -766,7 +766,7 @@
         <h2 style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Community Settings</h2>
 
         <!-- Edit Community -->
-        <form action="{{ url_for('api_update_community', community_id=community._id) }}" method="POST">
+        <form action="{{ url_for('communities.api_update_community', community_id=community._id) }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="margin-bottom:0.75rem;">
                 <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Name</label>
@@ -790,10 +790,10 @@
         <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
             <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Invite Link</label>
             <div style="display:flex;gap:0.4rem;margin-top:0.25rem;">
-                <input type="text" readonly value="{{ url_for('join_community_link', invite_code=community.invite_code, _external=True) }}" id="inviteLinkInput" style="flex:1;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.78rem;box-sizing:border-box;">
+                <input type="text" readonly value="{{ url_for('communities.join_community_link', invite_code=community.invite_code, _external=True) }}" id="inviteLinkInput" style="flex:1;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.78rem;box-sizing:border-box;">
                 <button onclick="document.getElementById('inviteLinkInput').select();navigator.clipboard.writeText(document.getElementById('inviteLinkInput').value);showToast('Copied!');" style="background:#3e2217;color:white;border:none;padding:0.4rem 0.7rem;border-radius:6px;font-size:0.78rem;cursor:pointer;">Copy</button>
             </div>
-            <form action="{{ url_for('api_regenerate_invite', community_id=community._id) }}" method="POST" style="margin-top:0.4rem;" onsubmit="return confirm('This will invalidate the old invite link. Continue?');">
+            <form action="{{ url_for('communities.api_regenerate_invite', community_id=community._id) }}" method="POST" style="margin-top:0.4rem;" onsubmit="return confirm('This will invalidate the old invite link. Continue?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" style="background:none;border:none;color:#999;font-size:0.75rem;cursor:pointer;text-decoration:underline;">Regenerate link</button>
             </form>
@@ -807,7 +807,7 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f5f5f5;">
                     <span style="font-size:0.82rem;color:#333;">{{ member.username }}{% if member._id == community.admin_id %} <span style="font-size:0.65rem;color:#2e7d32;background:#e8f5e9;padding:0.1rem 0.3rem;border-radius:3px;">Admin</span>{% endif %}</span>
                     {% if member._id != community.admin_id %}
-                    <form action="{{ url_for('api_remove_member', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove {{ member.username }}?');">
+                    <form action="{{ url_for('communities.api_remove_member', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove {{ member.username }}?');">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="member_id" value="{{ member._id }}">
                         <button type="submit" style="background:none;border:none;color:#c62828;font-size:0.72rem;cursor:pointer;">Remove</button>

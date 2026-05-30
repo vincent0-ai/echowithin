@@ -10,7 +10,7 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('pages', __name__, template_folder='templates')
 
 
 @bp.route('/')
@@ -21,7 +21,7 @@ def dashboard():
     page_description = "EchoWithin is a modern platform for secure private notes, collaborative idea sharing, and surprise themed notes with photos and music. Join our community to organize your thoughts and let your voice echo within."
     meta_image = url_for('static', filename='og-image.png', _external=True)
     if current_user.is_authenticated:
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     return render_template("dashboard.html", active_page='dashboard', title=page_title, description=page_description, meta_image=meta_image)
 
 
@@ -258,7 +258,7 @@ def feed():
         items = []
         for p in posts:
             pub_date = p.get('timestamp') or p.get('created_at')
-            items.append({'title': p.get('title'), 'link': url_for('view_post', slug=p.get('slug'), _external=True), 'guid': str(p.get('_id')), 'pubDate': pub_date.strftime('%a, %d %b %Y %H:%M:%S GMT') if pub_date else '', 'description': (p.get('content') or '')[:400]})
+            items.append({'title': p.get('title'), 'link': url_for('blog.view_post', slug=p.get('slug'), _external=True), 'guid': str(p.get('_id')), 'pubDate': pub_date.strftime('%a, %d %b %Y %H:%M:%S GMT') if pub_date else '', 'description': (p.get('content') or '')[:400]})
         return render_template('feed.xml', items=items), 200, {'Content-Type': 'application/rss+xml; charset=utf-8'}
     except Exception as e:
         current_app.logger.error(f'Failed to build RSS feed: {e}')
@@ -320,7 +320,7 @@ def share_target():
     shared_title = request.args.get('title', '')
     shared_text = request.args.get('text', '')
     shared_url = request.args.get('url', '')
-    return redirect(url_for('create_post', shared_title=shared_title, shared_text=shared_text, shared_url=shared_url))
+    return redirect(url_for('pages.create_post', shared_title=shared_title, shared_text=shared_text, shared_url=shared_url))
 
 
 @bp.route('/create_post', methods=['GET'])
@@ -344,7 +344,7 @@ def contact_developer():
         message_body = request.form.get('message')
         if not all([name, sender_email, subject, message_body]):
             flash("Please fill out all fields in the contact form.", "danger")
-            return redirect(url_for('about'))
+            return redirect(url_for('pages.about'))
         try:
             msg = m.Message(subject=f"EchoWithin Contact Form: {subject}", sender=m.get_env_variable('MAIL_USERNAME'), recipients=[m.get_env_variable('MY_EMAIL')])
             msg.reply_to = sender_email
@@ -354,7 +354,7 @@ def contact_developer():
         except Exception as e:
             current_app.logger.error(f"Failed to send contact form email: {e}")
             flash("Sorry, there was an error sending your message. Please try again later.", "danger")
-    return redirect(url_for('about'))
+    return redirect(url_for('pages.about'))
 
 
 @bp.route('/favicon.ico')
@@ -462,7 +462,7 @@ Sitemap: https://echowithin.xyz/sitemap_index.xml
 
 @bp.route('/sitemap.xml')
 def sitemap_legacy_redirect():
-    return redirect(url_for('sitemap_index'), code=301)
+    return redirect(url_for('pages.sitemap_index'), code=301)
 
 
 @bp.route('/unsubscribe/<email>/<token>', methods=['GET', 'POST'])

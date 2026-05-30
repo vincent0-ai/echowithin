@@ -4,7 +4,7 @@ from bson.objectid import ObjectId
 import datetime, math, json, os
 from security import limits
 from config import TIME
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('profile', __name__, template_folder='templates')
 
 
 @bp.route('/profile/<username>')
@@ -13,7 +13,7 @@ def profile(username):
     user = m.users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     user_id = user['_id']
     user_search_query = request.args.get('user_q', '').strip()
     user_search_results = []
@@ -74,7 +74,7 @@ def user_posts_page(username):
     user = m.users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     user_id = user['_id']
     page = request.args.get('page', 1, type=int)
     posts_per_page = 10
@@ -95,11 +95,11 @@ def profile_settings(username):
     import main as m
     if username != current_user.username:
         flash("You are not authorized to access this page.", "danger")
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     user = m.users_conf.find_one({'username': username})
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for('home'))
+        return redirect(url_for('pages.home'))
     if request.method == 'POST':
         update_data = {}
         new_username = request.form.get('username', '').strip()
@@ -107,10 +107,10 @@ def profile_settings(username):
             import re
             if not re.match(r'^[a-zA-Z0-9_]{3,30}$', new_username):
                 flash("Username must be 3-30 characters and contain only letters, numbers, and underscores.", "danger")
-                return redirect(url_for('profile_settings', username=username))
+                return redirect(url_for('profile.profile_settings', username=username))
             if m.users_conf.find_one({'username': new_username}):
                 flash("That username is already taken. Please choose a different one.", "danger")
-                return redirect(url_for('profile_settings', username=username))
+                return redirect(url_for('profile.profile_settings', username=username))
             update_data['username'] = new_username
             m.posts_conf.update_many({'author_id': user['_id']}, {'$set': {'author': new_username}})
         update_data['bio'] = request.form.get('bio', '').strip()
@@ -155,7 +155,7 @@ def profile_settings(username):
                 current_app.logger.error(f"Failed to update settings for {username}: {e}")
                 flash('Failed to update settings. Please try again later.', 'danger')
         redirect_username = update_data.get('username', username)
-        return redirect(url_for('profile_settings', username=redirect_username))
+        return redirect(url_for('profile.profile_settings', username=redirect_username))
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
 
 
@@ -216,12 +216,12 @@ def delete_account(username):
         password = request.form.get('password', '')
         if not password or not m.check_password_hash(user['password'], password):
             flash('Incorrect password. Account deletion cancelled.', 'danger')
-            return redirect(url_for('profile_settings', username=username))
+            return redirect(url_for('profile.profile_settings', username=username))
     else:
         confirm = request.form.get('confirm_delete', '')
         if confirm != 'DELETE':
             flash('Please confirm deletion. Account deletion cancelled.', 'danger')
-            return redirect(url_for('profile_settings', username=username))
+            return redirect(url_for('profile.profile_settings', username=username))
     user_id = user['_id']
     app_token = request.cookies.get('x_app_token')
     if app_token:
@@ -244,6 +244,6 @@ def delete_account(username):
     m.users_conf.delete_one({'_id': user_id})
     m.logout_user()
     flash('Your account has been permanently deleted. We are sorry to see you go.', 'info')
-    resp = redirect(url_for('dashboard'))
+    resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
     return resp

@@ -9,7 +9,7 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('chat', __name__, template_folder='templates')
 
 
 @bp.route('/messages')

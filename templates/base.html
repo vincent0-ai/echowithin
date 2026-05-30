@@ -19,7 +19,7 @@
     {% endblock %}
 
     <!-- RSS Feed Discovery -->
-    <link rel="alternate" type="application/rss+xml" title="EchoWithin - Recent Posts" href="{{ url_for('feed', _external=True) }}" />
+    <link rel="alternate" type="application/rss+xml" title="EchoWithin - Recent Posts" href="{{ url_for('pages.feed', _external=True) }}" />
 
     <!-- SEO: Default meta tags (overridable by child templates) -->
     {% block meta_description %}
@@ -455,7 +455,7 @@
 
         <div class="navbar">
             <div class="nav-left">
-                <a href="{{ url_for('dashboard') }}" class="nav-brand">
+                <a href="{{ url_for('pages.dashboard') }}" class="nav-brand">
                     <img src="{{ url_for('static', filename='logo.png') }}" alt="EchoWithin Logo" class="nav-logo">
                     EchoWithin
                 </a>
@@ -471,8 +471,8 @@
                     Install
                 </button>
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('logout') }}" class="nav-logout-mobile" id="nav-logout-mobile"
-                    onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('logout') }}'; });"
+                <a href="{{ url_for('auth.logout') }}" class="nav-logout-mobile" id="nav-logout-mobile"
+                    onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('auth.logout') }}'; });"
                     style="margin-left: auto; font-size: 1.1rem; opacity: 0.85; text-decoration: none; color: inherit; padding: 6px 10px; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;" aria-label="Logout" title="Logout">
                     <i class="fa-solid fa-right-from-bracket"></i>
                 </a>
@@ -480,24 +480,24 @@
             </div>
             <nav class="nav-links" id="nav-links">
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
-                <a href="{{ url_for('profile', username=current_user.username) }}"
+                <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
+                <a href="{{ url_for('profile.profile', username=current_user.username) }}"
                     class="{{ 'active' if active_page == 'profile' }}">Profile</a>
-                <a href="{{ url_for('personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
+                <a href="{{ url_for('notes.personal_space') }}" class="{{ 'active' if active_page == 'personal_space' }}">
                     Notes</a>
-                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
-                <a href="{{ url_for('messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
+                <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                <a href="{{ url_for('chat.messages_page') }}" class="{{ 'active' if active_page == 'messages' }}" style="position: relative;">
                     Messages
                     <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
                 </a>
-                <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
-                <a href="{{ url_for('logout') }}" class="nav-logout-desktop" onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('logout') }}'; });">Logout</a>
+                <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
+                <a href="{{ url_for('auth.logout') }}" class="nav-logout-desktop" onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('auth.logout') }}'; });">Logout</a>
                 {% else %}
-                <a href="{{ url_for('home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
-                <a href="{{ url_for('login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('home')) }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
-                <a href="{{ url_for('login', next=url_for('personal_space')) }}">Notes</a>
-                <a href="{{ url_for('blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
-                <a href="{{ url_for('about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
+                <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
+                <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.home')) }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
+                <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}">Notes</a>
+                <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
+                <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% endif %}
 
             </nav>
@@ -541,8 +541,8 @@
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-links">
-                    <a href="{{ url_for('home') }}">Home</a> | <a href="{{ url_for('blog') }}">Blog</a> | <a
-                        href="{{ url_for('about') }}">About</a> | <a href="{{ url_for('faq') }}">FAQ</a> | <a href="{{ url_for('terms') }}">Terms</a>
+                    <a href="{{ url_for('pages.home') }}">Home</a> | <a href="{{ url_for('blog.blog') }}">Blog</a> | <a
+                        href="{{ url_for('pages.about') }}">About</a> | <a href="{{ url_for('pages.faq') }}">FAQ</a> | <a href="{{ url_for('pages.terms') }}">Terms</a>
                 </div>
                 <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
             </div>
@@ -562,7 +562,7 @@
         <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
             <button onclick="dismissNativePromo(true)" style="background: none; border: none; color: #7f6e65; font-size: 0.8rem; cursor: pointer; font-weight: 600; padding: 8px 10px; margin-right: auto; text-decoration: underline;">Don't show again</button>
             <button onclick="dismissNativePromo(false)" style="background: none; border: 1px solid rgba(62, 34, 23, 0.3); color: #3e2217; padding: 8px 16px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s;">Later</button>
-            <a href="{{ url_for('about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.3);">
+            <a href="{{ url_for('pages.about') }}#native-app-section" onclick="dismissNativePromo(false)" class="install-btn" style="background: linear-gradient(135deg, #3e2217 0%, #5a3328 100%); color: white; padding: 8px 20px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; box-shadow: 0 2px 8px rgba(62, 34, 23, 0.3);">
                 Download
             </a>
         </div>

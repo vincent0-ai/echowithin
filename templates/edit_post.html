@@ -10,7 +10,7 @@
     <!-- Edit Post Form -->
     <div class="create-post-section" style="padding: 20px;">
         <h3>Edit Post</h3>
-        <form action="{{ url_for('update_post', post_id=post._id) }}" method="POST" class="post-form"
+        <form action="{{ url_for('blog.update_post', post_id=post._id) }}" method="POST" class="post-form"
             id="edit-post-form" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="text" id="title" name="title" class="form-input" placeholder="Post Title"
@@ -104,11 +104,11 @@
                     <img src="{{ post.image_url }}" alt="Current image" class="edit-post-image-preview">
                     {% elif post.image_filenames %}
                     {% for f in post.image_filenames %}
-                    <img src="{{ url_for('uploaded_file', filename=f) }}" alt="Current image {{ loop.index }}"
+                    <img src="{{ url_for('blog.uploaded_file', filename=f) }}" alt="Current image {{ loop.index }}"
                         class="edit-post-image-preview">
                     {% endfor %}
                     {% elif post.image_filename %}
-                    <img src="{{ url_for('uploaded_file', filename=post.image_filename) }}" alt="Current image"
+                    <img src="{{ url_for('blog.uploaded_file', filename=post.image_filename) }}" alt="Current image"
                         class="edit-post-image-preview">
                     {% endif %}
                 </div>
@@ -128,7 +128,7 @@
                 </video>
                 {% else %}
                 <video controls class="edit-post-video-preview">
-                    <source src="{{ url_for('uploaded_file', filename=post.video_filename) }}" type="video/mp4">
+                    <source src="{{ url_for('blog.uploaded_file', filename=post.video_filename) }}" type="video/mp4">
                     Your browser does not support the video tag.
                 </video>
                 {% endif %}

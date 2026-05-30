@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets
 from security import limits
-bp = Blueprint('', __name__, template_folder='templates')
+bp = Blueprint('sharing', __name__, template_folder='templates')
 
 
 @bp.route('/api/share/<share_id>/ping', methods=['POST'])
@@ -119,7 +119,7 @@ def api_create_share(post_id):
         'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
         'use_typewriter': use_typewriter, 'auto_approve': auto_approve
     })
-    share_url = url_for('view_shared_note', share_id=share_id, _external=True)
+    share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
     return jsonify({'success': True, 'share_url': share_url, 'share_id': share_id})
 
 
@@ -146,7 +146,7 @@ def view_shared_note(share_id):
                 flash('Invalid access code.', 'danger')
                 return render_template('shared_note.html', share_id=share_id, requires_code=True)
             session[f'unlocked_{share_id}'] = True
-            return redirect(url_for('view_shared_note', share_id=share_id))
+            return redirect(url_for('sharing.view_shared_note', share_id=share_id))
         if not session.get(f'unlocked_{share_id}'):
             return render_template('shared_note.html', share_id=share_id, requires_code=True)
     note = m.personal_posts_conf.find_one({'_id': share['note_id']})

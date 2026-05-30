@@ -71,17 +71,17 @@
                 {% endif %}
             </div>
             {% if current_user.is_authenticated and current_user.username == user.username %}
-            <a href="{{ url_for('profile_settings', username=user.username) }}" class="btn edit-btn"
+            <a href="{{ url_for('profile.profile_settings', username=user.username) }}" class="btn edit-btn"
                 style="width: 100%; margin-top: 1rem;">
                 <i class="fas fa-cog"></i> Account Settings
             </a>
-            <a href="{{ url_for('personal_space') }}" class="btn"
+            <a href="{{ url_for('notes.personal_space') }}" class="btn"
                 style="width: 100%; margin-top: 0.5rem; background-color: #17a2b8; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px;">
                 Personal Space
             </a>
             {% elif current_user.is_authenticated %}
             {% if dm_status == 'accepted' %}
-            <a href="{{ url_for('messages_page', user_id=user._id) }}" class="btn"
+            <a href="{{ url_for('chat.messages_page', user_id=user._id) }}" class="btn"
                 style="width: 100%; margin-top: 1rem; background-color: #3e2217; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
                 Send Message
             </a>
@@ -133,13 +133,13 @@
             {% endif %}
 
             <div class="profile-user-search">
-                <form method="get" action="{{ url_for('profile', username=user.username) }}"
+                <form method="get" action="{{ url_for('profile.profile', username=user.username) }}"
                     class="profile-user-search-form">
                     <label for="profile-user-search" class="profile-user-search-label">Find a profile</label>
                     <div class="profile-user-search-row profile-user-search-row--autocomplete">
                         <input id="profile-user-search" type="text" name="user_q" value="{{ user_search_query }}"
                             placeholder="Search usernames" autocomplete="off" class="profile-user-search-input"
-                            data-profile-suggest-url="{{ url_for('api_user_suggest') }}"
+                            data-profile-suggest-url="{{ url_for('notes.api_user_suggest') }}"
                             data-profile-exclude="{{ user.username }}">
                         <button type="submit" class="btn profile-user-search-button">Search</button>
                         <div id="profile-user-search-suggestions" class="profile-user-search-suggestions" hidden></div>
@@ -157,7 +157,7 @@
                     <div class="profile-user-search-results-list">
                         {% for profile_user in user_search_results %}
                         <a class="profile-user-search-result"
-                            href="{{ url_for('profile', username=profile_user.username) }}">
+                            href="{{ url_for('profile.profile', username=profile_user.username) }}">
                             <img src="{{ profile_user.profile_image_url if profile_user.profile_image_url else url_for('static', filename='default_avatar.png') }}"
                                 alt="Profile picture for {{ profile_user.username }}"
                                 class="profile-user-search-avatar">
@@ -189,14 +189,14 @@
                         <i class="fas fa-crown" style="font-size: 1rem; color: #3e2217 !important;"></i>
                         <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }} remaining. Enjoying unlimited features!</span>
                     </div>
-                    <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+                    <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
                 </div>
                 {% elif not user_is_premium %}
                 <div style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span>Unlock <strong>note locking, scheduled messages</strong> and more with Premium.</span>
                     </div>
-                    <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
+                    <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium" style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
                 </div>
                 {% endif %}
             {% endif %}
@@ -206,7 +206,7 @@
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
                 <h2 class="section-title" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">Posts by {{ user.username }}</h2>
                 {% if total_posts > 0 %}
-                <a href="{{ url_for('user_posts_page', username=user.username) }}" class="profile-view-all-link">
+                <a href="{{ url_for('profile.user_posts_page', username=user.username) }}" class="profile-view-all-link">
                     View all {{ total_posts }} posts <i class="fas fa-arrow-right" style="font-size: 0.75rem;"></i>
                 </a>
                 {% endif %}
@@ -220,7 +220,7 @@
                     <div class="profile-post-card-body">
                         <div class="profile-post-card-header">
                             <h4 class="profile-post-card-title">
-                                <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                                <a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a>
                             </h4>
 
                         </div>
@@ -267,14 +267,14 @@
                     {% if page > 1 %}
                     <li class="page-item">
                         <a class="page-link"
-                            href="{{ url_for('profile', username=user.username, page=page-1) }}">Previous</a>
+                            href="{{ url_for('profile.profile', username=user.username, page=page-1) }}">Previous</a>
                     </li>
                     {% endif %}
 
                     {% set max_visible = [8, page + 1] | max %}
                     {% for p in range(1, [max_visible + 1, total_pages + 1] | min) %}
                     <li class="page-item {% if p == page %}active{% endif %}">
-                        <a class="page-link" href="{{ url_for('profile', username=user.username, page=p) }}">{{ p }}</a>
+                        <a class="page-link" href="{{ url_for('profile.profile', username=user.username, page=p) }}">{{ p }}</a>
                     </li>
                     {% endfor %}
 
@@ -285,13 +285,13 @@
                         {% if max_visible < total_pages %} <li
                             class="page-item {% if total_pages == page %}active{% endif %}">
                             <a class="page-link"
-                                href="{{ url_for('profile', username=user.username, page=total_pages) }}">{{ total_pages
+                                href="{{ url_for('profile.profile', username=user.username, page=total_pages) }}">{{ total_pages
                                 }}</a>
                             </li>
                             {% endif %}
 
                             {% if page < total_pages %} <li class="page-item"><a class="page-link"
-                                    href="{{ url_for('profile', username=user.username, page=page+1) }}">Next</a></li>
+                                    href="{{ url_for('profile.profile', username=user.username, page=page+1) }}">Next</a></li>
                                 {% endif %}
                 </ul>
             </nav>

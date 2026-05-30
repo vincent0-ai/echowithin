@@ -157,7 +157,7 @@ def send_code(email, gen_code=None, retries=3, delay=2):
 def send_reset_code(email, reset_token=None, retries=3, delay=2):
     reset_url = ""
     try:
-        reset_url = url_for('reset_password', token=reset_token, _external=True)
+        reset_url = url_for('auth.reset_password', token=reset_token, _external=True)
         _get_app().logger.info(f"[DEV DEBUG] Generated password reset link for {email}: {reset_url}")
     except Exception:
         pass
@@ -170,7 +170,7 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
                 recipients=[email]
             )
             if not reset_url:
-                reset_url = url_for('reset_password', token=reset_token, _external=True)
+                reset_url = url_for('auth.reset_password', token=reset_token, _external=True)
             msg.html = render_template("reset_email.html", reset_url=reset_url)
             msg.body = f"""Password Reset Request
 
@@ -204,7 +204,7 @@ def send_new_post_notifications(post_id_str):
         base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
         with _get_app().app_context():
             try:
-                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
+                post_url = url_for('blog.view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
                 post_url = f"{base_url}/post/{post.get('slug')}"
 
@@ -227,7 +227,7 @@ def send_new_post_notifications(post_id_str):
                         secret = _get_app().config["SECRET_KEY"]
                         unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
                         try:
-                            unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                            unsub_url = url_for('pages.unsubscribe', email=recipient_email, token=unsub_token, _external=True)
                         except RuntimeError:
                             unsub_url = f"{base_url}/unsubscribe?email={recipient_email}&token={unsub_token}"
                         
@@ -297,7 +297,7 @@ def send_weekly_newsletter():
             base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
             for post in posts_list:
                 try:
-                    post['url'] = url_for('view_post', slug=post.get('slug'), _external=True)
+                    post['url'] = url_for('blog.view_post', slug=post.get('slug'), _external=True)
                 except RuntimeError:
                     post['url'] = f"{base_url}/post/{post.get('slug')}"
 
@@ -327,7 +327,7 @@ def send_weekly_newsletter():
                     secret = _get_app().config["SECRET_KEY"]
                     unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
                     try:
-                        unsub_url = url_for('unsubscribe', email=recipient_email, token=unsub_token, _external=True)
+                        unsub_url = url_for('pages.unsubscribe', email=recipient_email, token=unsub_token, _external=True)
                     except RuntimeError:
                         unsub_url = f"{base_url}/unsubscribe/{recipient_email}/{unsub_token}"
                     
@@ -542,7 +542,7 @@ def send_push_notifications_for_new_post(post_id_str):
 
         with _get_app().app_context():
             try:
-                post_url = url_for('view_post', slug=post.get('slug'), _external=True)
+                post_url = url_for('blog.view_post', slug=post.get('slug'), _external=True)
             except RuntimeError:
                 base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post.get('slug')}"
@@ -780,7 +780,7 @@ def send_push_notification_for_comment(comment_id_str, post_slug):
         post_url = None
         with _get_app().app_context():
             try:
-                post_url = url_for('view_post', slug=post_slug, _external=True)
+                post_url = url_for('blog.view_post', slug=post_slug, _external=True)
             except RuntimeError:
                 base_url = os.environ.get('FLASK_URL', 'https://echowithin.xyz')
                 post_url = f"{base_url}/post/{post_slug}"

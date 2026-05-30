@@ -209,7 +209,7 @@
                         }}</span>
                 </div>
                 {% if current_user.is_authenticated %}
-                <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST" style="margin: 0;">
+                <form action="{{ url_for('blog.toggle_save_post', post_id=post._id) }}" method="POST" style="margin: 0;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit"
                         style="background: none; border: none; cursor: pointer; color: {% if is_saved %}#d63384{% else %}#6c757d{% endif %}; font-size: 1.2rem; padding: 0;"
@@ -223,9 +223,9 @@
         <div class="post-meta">
             {% if post.edited_at %}
             Edited on {{ post.edited_at|localtime }} by <strong><a
-                    href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong>
+                    href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>
             {% else %}
-            Posted by <strong><a href="{{ url_for('profile', username=post.author) }}">{{ post.author }}</a></strong> on
+            Posted by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong> on
             {{ post.timestamp|localtime }}
             {% endif %}
 
@@ -306,16 +306,16 @@
         <div class="post-gallery">
             {% for fname in files %}
             <div class="post-gallery-item">
-                <img src="{{ url_for('uploaded_file', filename=fname) }}"
-                    data-full-url="{{ url_for('uploaded_file', filename=fname) }}"
+                <img src="{{ url_for('blog.uploaded_file', filename=fname) }}"
+                    data-full-url="{{ url_for('blog.uploaded_file', filename=fname) }}"
                     alt="Image {{ loop.index }} for {{ post.title }}" class="gallery-thumb" loading="lazy" />
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="post-image-container">
-            <img src="{{ url_for('uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
-                class="post-image" data-full-url="{{ url_for('uploaded_file', filename=files[0]) }}" loading="lazy">
+            <img src="{{ url_for('blog.uploaded_file', filename=files[0]) }}" alt="Post image for {{ post.title }}"
+                class="post-image" data-full-url="{{ url_for('blog.uploaded_file', filename=files[0]) }}" loading="lazy">
         </div>
         {% endif %}
         {% endif %}
@@ -332,7 +332,7 @@
                 <div class="related-post-item" style="margin-bottom: 15px;">
                     <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
                         {# The title from Typesense might contain highlight tags, so it needs to be marked safe #}
-                        <a href="{{ url_for('view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
+                        <a href="{{ url_for('blog.view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
                     </h4>
                     <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
                         by {{ r_post.author_username }} on {{ r_post.created_at.strftime('%b %d, %Y') if
@@ -346,12 +346,12 @@
 
         <div style="margin-top: 20px; text-align: center;">
             {% if current_user.is_authenticated %}
-            <a href="{{ url_for('all_posts') }}" class="btn"
+            <a href="{{ url_for('blog.all_posts') }}" class="btn"
                 style="background: var(--primary-color); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; display: inline-block; transition: transform 0.2s;">
                 See more posts
             </a>
             {% else %}
-            <a href="{{ url_for('login', next=url_for('all_posts')) }}" class="btn"
+            <a href="{{ url_for('auth.login', next=url_for('blog.all_posts')) }}" class="btn"
                 style="background: var(--primary-color); color: white; padding: 10px 20px; border-radius: 25px; text-decoration: none; display: inline-block; transition: transform 0.2s;">
                 See more posts
             </a>
@@ -371,7 +371,7 @@
                 <button id="comment-submit" type="submit">Post Comment</button>
             </form>
             {% else %}
-            <p><a href="{{ url_for('login', next=url_for('view_post', slug=post.slug)) }}">Log in</a> to post comments.
+            <p><a href="{{ url_for('auth.login', next=url_for('blog.view_post', slug=post.slug)) }}">Log in</a> to post comments.
             </p>
             {% endif %}
 
@@ -626,7 +626,7 @@
             submitBtn.textContent = 'Posting...';
 
             try {
-                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -789,7 +789,7 @@
                 replyBtn.textContent = 'Posting...';
 
                 try {
-                    const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}', {
+                    const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -910,7 +910,7 @@
             loadMoreBtn.disabled = true;
             const nextPage = currentPage + 1;
             try {
-                const resp = await fetch('{{ url_for('api_post_comments', slug=post.slug) }}?page=' + nextPage + '&per_page=' + perPage);
+                const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}?page=' + nextPage + '&per_page=' + perPage);
                 if (!resp.ok) throw new Error('Failed to load');
                 const data = await resp.json();
                 if (data.comments && data.comments.length) {

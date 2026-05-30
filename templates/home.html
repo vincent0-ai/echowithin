@@ -26,7 +26,7 @@
                 <strong id="home-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Share a
                     surprise note today</strong>
                 <span id="home-share-promo-copy">Pick one private note and turn it into a magic link.</span>
-                <a id="home-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes"
+                <a id="home-share-promo-link" href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes"
                     style="color:#c2185b; font-weight:600; text-decoration:none;">Open note picker →</a>
             </div>
         </div>
@@ -38,19 +38,19 @@
 
     <!-- Quick Actions -->
     <div class="home-quick-actions">
-        <a href="{{ url_for('personal_space') }}" class="quick-action-card qa-primary">
+        <a href="{{ url_for('notes.personal_space') }}" class="quick-action-card qa-primary">
             <strong>New Note</strong>
             <span>Create a private, encrypted note</span>
         </a>
-        <a href="{{ url_for('personal_space') }}?open_share_picker=1#notes" class="quick-action-card">
+        <a href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes" class="quick-action-card">
             <strong>Send Surprise</strong>
             <span>Share a themed note with someone</span>
         </a>
-        <a href="{{ url_for('create_post') }}" class="quick-action-card">
+        <a href="{{ url_for('pages.create_post') }}" class="quick-action-card">
             <strong>Write Blog Post</strong>
             <span>Publish to the community blog</span>
         </a>
-        <a href="{{ url_for('communities_page') }}" class="quick-action-card">
+        <a href="{{ url_for('communities.communities_page') }}" class="quick-action-card">
             <strong>Communities</strong>
             <span>{{ user_community_count }} space{{ 's' if user_community_count != 1 }} joined</span>
         </a>
@@ -60,7 +60,7 @@
     <div class="home-section">
         <div class="home-section-header">
             <h2>Your Notes</h2>
-            <a href="{{ url_for('personal_space') }}" class="home-section-link">Open Notes →</a>
+            <a href="{{ url_for('notes.personal_space') }}" class="home-section-link">Open Notes →</a>
         </div>
         <div class="home-notes-summary">
             <div class="notes-count-display">
@@ -91,7 +91,7 @@
     <div class="home-section">
         <div class="home-section-header">
             <h2>Community Pulse</h2>
-            <a href="{{ url_for('blog') }}" class="home-section-link">Explore Blog →</a>
+            <a href="{{ url_for('blog.blog') }}" class="home-section-link">Explore Blog →</a>
         </div>
 
         <div class="community-stats-row">
@@ -117,7 +117,7 @@
             <h3>Trending</h3>
             <ul>
                 {% for post in hot_posts %}
-                <li><a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a></li>
+                <li><a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a></li>
                 {% endfor %}
             </ul>
         </div>

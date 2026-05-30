@@ -215,7 +215,7 @@ if not app.debug:
 login_manager = LoginManager(app)
 login_manager.user_loader(load_user)
 login_manager.request_loader(load_user_from_request)
-login_manager.login_view = 'login'  # snyk:disable=security-issue
+login_manager.login_view = 'auth.login'  # snyk:disable=security-issue
 
 # Return JSON 401 for API/mobile requests instead of redirecting to the login page
 @login_manager.unauthorized_handler
@@ -230,7 +230,7 @@ def unauthorized_api():
     if is_api:
         return jsonify({'error': 'Authentication required. Please log in.'}), 401
     # Standard web browser flow — redirect to login page
-    return redirect(url_for('login'))
+    return redirect(url_for('auth.login'))
 
 
 # Secure session cookie settings
@@ -618,7 +618,7 @@ def update_last_active():
         if user_doc and user_doc.get('is_banned'):
             logout_user()
             flash('Your account has been suspended. Please contact support.', 'danger')
-            return redirect(url_for('login'))
+            return redirect(url_for('auth.login'))
 
         # Update last active time and set cache to prevent frequent updates
         if user_doc:
@@ -1695,7 +1695,7 @@ def handle_send_dm(data):
                 recipient_id_str,
                 f"New message from {current_user.username}",
                 push_body,
-                url=url_for('messages_page', _external=True),
+                url=url_for('chat.messages_page', _external=True),
                 tag=f'dm-{current_user.id}'
             )
         

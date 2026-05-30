@@ -329,7 +329,7 @@ def _note_decryption_candidates(note, share=None):
         source_note_id = current.get('source_note_id')
         if not source_note_id:
             break
-        current = personal_posts_conf.find_one(
+        current = database.personal_posts_conf.find_one(
             {'_id': source_note_id},
             {'content_owner_id': 1, 'user_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
         )

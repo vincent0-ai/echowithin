@@ -62,10 +62,38 @@ def _get_main():
     return _MAIN
 
 class _RqProxy:
+    """Deferred RQ proxy that avoids circular import with main.py.
+
+    When used as @rq.job, it stores the function at import time without
+    accessing main.rq. The real @rq.job decorator is applied lazily on
+    first call, after main.py has finished initializing.
+    """
     @property
     def job(self):
-        import main
-        return main.rq.job
+        def deferred_decorator(func):
+            _wrapped = [None]  # mutable container for lazy init
+
+            def wrapper(*args, **kwargs):
+                if _wrapped[0] is None:
+                    import main
+                    _wrapped[0] = main.rq.job(func)
+                return _wrapped[0](*args, **kwargs)
+
+            # Preserve function metadata for RQ worker discovery
+            wrapper.__name__ = func.__name__
+            wrapper.__module__ = func.__module__
+            wrapper.__qualname__ = func.__qualname__
+
+            # Expose .queue() for RQ enqueue calls: func.queue(args...)
+            class _QueueProxy:
+                def __call__(self, *args, **kwargs):
+                    import main
+                    real_job = main.rq.job(func)
+                    return real_job.queue(*args, **kwargs)
+
+            wrapper.queue = _QueueProxy()
+            return wrapper
+        return deferred_decorator
 
 rq = _RqProxy()
 

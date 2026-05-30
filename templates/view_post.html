@@ -320,7 +320,7 @@
         {% endif %}
         {% endif %}
 
-        <div class="post-content" style="margin-top: 1rem;">{{ post.content|safe }}</div>
+        <div class="post-content" style="margin-top: 1rem;">{{ post.content|markdown|safe }}</div>
 
         {% if post.tags %}
         <div class="post-tags" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 12px; margin-bottom: 12px;">

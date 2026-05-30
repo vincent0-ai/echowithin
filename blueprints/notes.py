@@ -1075,6 +1075,120 @@ def app_lock_relock():
     return jsonify({'success': True})
 
 
+@bp.route('/api/app_lock/forgot', methods=['POST'])
+@login_required
+@limits(calls=5, period=60)
+def app_lock_forgot():
+    """Send a 6-digit verification code to the user's email for PIN reset."""
+    import main as m
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'email': 1, 'app_lock_pin_hash': 1})
+    if not user or not user.get('app_lock_pin_hash'):
+        return jsonify({'error': 'No app lock PIN is set on this account'}), 400
+    email = user.get('email')
+    if not email:
+        return jsonify({'error': 'No email address associated with this account'}), 400
+
+    # Generate a 6-digit code, hash it, store with 15-minute expiry
+    gen_code = str(secrets.randbelow(10**6)).zfill(6)
+    hashed_code = hashlib.sha256(gen_code.encode()).hexdigest()
+    expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+
+    m.auth_conf.update_one(
+        {'email': email},
+        {'$set': {
+            'pin_reset_code': hashed_code,
+            'pin_reset_expiry': expiry
+        }},
+        upsert=True
+    )
+
+    # Send the code via email using the pin_reset_email template
+    try:
+        from notifications import _get_mail, _get_app
+        from flask_mail import Message as MailMessage
+        from config import get_env_variable
+        sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
+        msg = MailMessage(
+            subject="EchoWithin App Lock PIN Reset",
+            sender=sender,
+            recipients=[email]
+        )
+        msg.html = render_template("pin_reset_email.html", code=gen_code)
+        msg.body = f"Your EchoWithin App Lock PIN reset code is: {gen_code}\n\nThis code expires in 15 minutes. If you didn't request this, please ignore this email."
+        _get_mail().send(msg)
+        current_app.logger.info(f"PIN reset code sent to {email}. DEV CODE: {gen_code}")
+    except Exception as e:
+        current_app.logger.error(f"Failed to send PIN reset email to {email}: {e}")
+        return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500
+
+    # Mask email for display (e.g., u***r@example.com)
+    parts = email.split('@')
+    if len(parts[0]) > 2:
+        masked = parts[0][0] + '***' + parts[0][-1] + '@' + parts[1]
+    else:
+        masked = parts[0][0] + '***@' + parts[1]
+
+    return jsonify({'success': True, 'masked_email': masked, 'message': 'Verification code sent to your email.'})
+
+
+@bp.route('/api/app_lock/reset_verify', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def app_lock_reset_verify():
+    """Verify the emailed code and set a new APP Lock PIN."""
+    import main as m
+    data = request.get_json() or {}
+    code = data.get('code', '').strip()
+    new_pin = data.get('new_pin', '').strip()
+
+    if not code:
+        return jsonify({'error': 'Verification code is required'}), 400
+    if not new_pin or len(new_pin) != 4 or not new_pin.isdigit():
+        return jsonify({'error': 'New PIN must be exactly 4 digits'}), 400
+
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'email': 1, 'app_lock_pin_hash': 1})
+    if not user or not user.get('app_lock_pin_hash'):
+        return jsonify({'error': 'No app lock PIN is set'}), 400
+
+    email = user.get('email')
+    if not email:
+        return jsonify({'error': 'No email on this account'}), 400
+
+    # Look up the stored reset code
+    auth_record = m.auth_conf.find_one({'email': email, 'pin_reset_code': {'$exists': True}})
+    if not auth_record:
+        return jsonify({'error': 'No reset request found. Please request a new code.'}), 400
+
+    # Check expiry
+    expiry = auth_record.get('pin_reset_expiry')
+    if expiry:
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expiry:
+            # Clean up expired code
+            m.auth_conf.update_one({'email': email}, {'$unset': {'pin_reset_code': '', 'pin_reset_expiry': ''}})
+            return jsonify({'error': 'Reset code has expired. Please request a new one.'}), 400
+
+    # Verify the code
+    hashed_input = hashlib.sha256(code.encode()).hexdigest()
+    if hashed_input != auth_record.get('pin_reset_code'):
+        return jsonify({'error': 'Incorrect verification code'}), 403
+
+    # Code is valid — update the PIN
+    new_pin_hash = m.generate_password_hash(new_pin)
+    m.users_conf.update_one(
+        {'_id': ObjectId(current_user.id)},
+        {'$set': {'app_lock_pin_hash': new_pin_hash}}
+    )
+
+    # Clean up the used code
+    m.auth_conf.update_one({'email': email}, {'$unset': {'pin_reset_code': '', 'pin_reset_expiry': ''}})
+
+    # Unlock the session
+    session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
+
+    return jsonify({'success': True, 'message': 'PIN has been reset successfully.'})
+
 @bp.route('/api/ai/suggest-tags', methods=['POST'])
 @login_required
 @limits(calls=10, period=60)

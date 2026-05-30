@@ -1042,6 +1042,25 @@
             background: #2e7d32;
         }
 
+        .reset-code-input {
+            width: 38px;
+            height: 44px;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            outline: none;
+            color: #3e2217;
+            background: #faf7f4;
+            transition: border-color 0.2s;
+        }
+
+        .reset-code-input:focus {
+            border-color: #3e2217;
+            background: #fff;
+        }
+
         @keyframes pinShake {
 
             0%,
@@ -2704,6 +2723,9 @@
             </p>
             <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter
                 PIN</button>
+            <div style="margin-top: 0.75rem;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+            </div>
         </div>
         {% elif locked_notes %}
         <!-- Unlocked: show locked notes with auto-relock timer -->
@@ -3298,7 +3320,62 @@
                 </button>
             </div>
 
+            <div id="pin-forgot-link" style="margin-top: 0.5rem; display: none;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+            </div>
+
             <button onclick="closePinModal()" class="btn edit-btn"
+                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        </div>
+
+        <!-- PIN Reset: Code Entry View -->
+        <div id="pin-reset-code-view" style="display: none; text-align: center;">
+            <h2 style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Verify Identity</h2>
+            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code sent to your email</p>
+            <div id="pin-reset-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 1.2rem;">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="0" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="2" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="3" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="4" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="5" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <button id="pin-reset-submit-code" class="btn" style="width: 100%; background: #3e2217; color: white; border: none; padding: 0.6rem; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;" onclick="submitResetCode()">Verify Code</button>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.75rem;">
+                <a href="#" onclick="event.preventDefault(); cancelPinReset()" style="font-size: 0.82rem; color: #888;">Back</a>
+                <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()" style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
+            </div>
+        </div>
+
+        <!-- PIN Reset: New PIN Entry View -->
+        <div id="pin-reset-newpin-view" style="display: none; text-align: center;">
+            <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN</h2>
+            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new 4-digit PIN</p>
+            <div id="pin-reset-newpin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <div class="pin-dots" id="pin-reset-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            <div class="pin-keypad">
+                <button class="pin-key" onclick="handleResetPinKey('1')">1</button>
+                <button class="pin-key" onclick="handleResetPinKey('2')">2</button>
+                <button class="pin-key" onclick="handleResetPinKey('3')">3</button>
+                <button class="pin-key" onclick="handleResetPinKey('4')">4</button>
+                <button class="pin-key" onclick="handleResetPinKey('5')">5</button>
+                <button class="pin-key" onclick="handleResetPinKey('6')">6</button>
+                <button class="pin-key" onclick="handleResetPinKey('7')">7</button>
+                <button class="pin-key" onclick="handleResetPinKey('8')">8</button>
+                <button class="pin-key" onclick="handleResetPinKey('9')">9</button>
+                <div class="pin-key empty"></div>
+                <button class="pin-key" onclick="handleResetPinKey('0')">0</button>
+                <button class="pin-key backspace" onclick="handleResetPinKey('backspace')">
+                    <i class="fas fa-backspace"></i>
+                </button>
+            </div>
+            <button onclick="cancelPinReset()" class="btn edit-btn"
                 style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
         </div>
     </div>
@@ -3467,6 +3544,18 @@
             desc.textContent = 'Enter your current PIN to disable app lock';
         }
 
+        // Show/hide "Forgot PIN?" link only on verify action
+        const forgotLink = document.getElementById('pin-forgot-link');
+        if (forgotLink) forgotLink.style.display = (action === 'verify') ? 'block' : 'none';
+
+        // Ensure reset views are hidden, normal content is shown
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'block';
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+
         if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -3626,6 +3715,256 @@
             updatePinDots();
         }, 600);
     }
+
+    // --- PIN Reset Flow ---
+    let resetVerifiedCode = '';
+    let resetNewPin = '';
+    let resetStep = 'code'; // 'code', 'newpin', 'confirm'
+
+    window.startPinReset = async function () {
+        // Show a loading state
+        const modal = document.getElementById('pin-modal');
+        if (modal) modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Hide normal PIN view, show code view
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+        if (codeView) codeView.style.display = 'block';
+
+        // Clear code inputs
+        document.querySelectorAll('.reset-code-input').forEach(i => { i.value = ''; });
+        const resetError = document.getElementById('pin-reset-error');
+        if (resetError) resetError.textContent = '';
+        const resetDesc = document.getElementById('pin-reset-desc');
+        if (resetDesc) resetDesc.textContent = 'Sending code to your email...';
+
+        resetVerifiedCode = '';
+        resetNewPin = '';
+        resetStep = 'code';
+
+        try {
+            const resp = await fetch('/api/app_lock/forgot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                if (resetDesc) resetDesc.textContent = 'Enter the 6-digit code sent to ' + (data.masked_email || 'your email');
+                // Focus first input
+                const firstInput = document.querySelector('.reset-code-input[data-idx="0"]');
+                if (firstInput) firstInput.focus();
+            } else {
+                if (resetError) resetError.textContent = data.error || 'Failed to send code';
+            }
+        } catch (e) {
+            if (resetError) resetError.textContent = 'Network error. Please try again.';
+        }
+    };
+
+    window.resendPinResetCode = async function () {
+        const resendLink = document.getElementById('pin-reset-resend');
+        if (resendLink) { resendLink.textContent = 'Sending...'; resendLink.style.pointerEvents = 'none'; }
+        const resetError = document.getElementById('pin-reset-error');
+        if (resetError) resetError.textContent = '';
+        try {
+            const resp = await fetch('/api/app_lock/forgot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                if (resetError) { resetError.style.color = '#2e7d32'; resetError.textContent = 'New code sent!'; }
+                setTimeout(() => { if (resetError) { resetError.style.color = '#d32f2f'; resetError.textContent = ''; } }, 3000);
+            } else {
+                if (resetError) resetError.textContent = data.error || 'Failed to resend';
+            }
+        } catch (e) {
+            if (resetError) resetError.textContent = 'Network error';
+        } finally {
+            if (resendLink) { resendLink.textContent = 'Resend Code'; resendLink.style.pointerEvents = ''; }
+        }
+    };
+
+    window.cancelPinReset = function () {
+        const modal = document.getElementById('pin-modal');
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'block';
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+        closePinModal();
+    };
+
+    window.submitResetCode = async function () {
+        const inputs = document.querySelectorAll('.reset-code-input');
+        let code = '';
+        inputs.forEach(i => code += i.value);
+        const resetError = document.getElementById('pin-reset-error');
+
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            if (resetError) resetError.textContent = 'Please enter the full 6-digit code';
+            return;
+        }
+
+        // Store verified code and move to new PIN step
+        resetVerifiedCode = code;
+        resetStep = 'newpin';
+        resetNewPin = '';
+
+        // Switch views
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'block';
+
+        const title = document.getElementById('pin-reset-newpin-title');
+        const desc = document.getElementById('pin-reset-newpin-desc');
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        if (title) title.textContent = 'New PIN';
+        if (desc) desc.textContent = 'Enter a new 4-digit PIN';
+        if (errorEl) errorEl.textContent = '';
+        updateResetPinDots();
+    };
+
+    function updateResetPinDots() {
+        const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+        dots.forEach((dot, idx) => {
+            dot.classList.toggle('filled', idx < resetNewPin.length);
+            dot.classList.remove('error', 'success');
+        });
+    }
+
+    window.handleResetPinKey = function (key) {
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        if (errorEl) errorEl.textContent = '';
+
+        if (key === 'backspace') {
+            resetNewPin = resetNewPin.slice(0, -1);
+            updateResetPinDots();
+        } else if (resetNewPin.length < 4) {
+            resetNewPin += key;
+            updateResetPinDots();
+            if (resetNewPin.length === 4) {
+                setTimeout(processResetPinStep, 200);
+            }
+        }
+    };
+
+    let resetPendingPin = '';
+
+    async function processResetPinStep() {
+        const title = document.getElementById('pin-reset-newpin-title');
+        const desc = document.getElementById('pin-reset-newpin-desc');
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+
+        if (resetStep === 'newpin') {
+            // Save and ask to confirm
+            resetPendingPin = resetNewPin;
+            resetNewPin = '';
+            resetStep = 'confirm';
+            if (title) title.textContent = 'Confirm PIN';
+            if (desc) desc.textContent = 'Enter the new PIN again to confirm';
+            updateResetPinDots();
+        } else if (resetStep === 'confirm') {
+            if (resetNewPin === resetPendingPin) {
+                // PINs match — submit to server
+                await finalizeResetPin(resetVerifiedCode, resetNewPin);
+            } else {
+                // Mismatch
+                const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+                dots.forEach(d => { d.classList.add('error'); d.classList.remove('filled'); });
+                if (errorEl) errorEl.textContent = 'PINs do not match. Try again.';
+                resetNewPin = '';
+                resetPendingPin = '';
+                resetStep = 'newpin';
+                if (title) title.textContent = 'New PIN';
+                if (desc) desc.textContent = 'Enter a new 4-digit PIN';
+                setTimeout(() => {
+                    dots.forEach(d => d.classList.remove('error'));
+                    updateResetPinDots();
+                }, 600);
+            }
+        }
+    }
+
+    async function finalizeResetPin(code, newPin) {
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        try {
+            const resp = await fetch('/api/app_lock/reset_verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({ code: code, new_pin: newPin })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+                dots.forEach(d => { d.classList.add('success'); d.classList.remove('filled'); });
+                setTimeout(() => {
+                    window.location.hash = 'locked';
+                    window.location.reload();
+                }, 500);
+            } else {
+                if (errorEl) errorEl.textContent = data.error || 'Reset failed';
+                // If code was wrong, go back to code entry
+                if (resp.status === 403 || resp.status === 400) {
+                    resetNewPin = '';
+                    resetPendingPin = '';
+                    resetStep = 'code';
+                    setTimeout(() => {
+                        const codeView = document.getElementById('pin-reset-code-view');
+                        const newpinView = document.getElementById('pin-reset-newpin-view');
+                        if (codeView) codeView.style.display = 'block';
+                        if (newpinView) newpinView.style.display = 'none';
+                        const resetError = document.getElementById('pin-reset-error');
+                        if (resetError) resetError.textContent = data.error || 'Please try again';
+                    }, 600);
+                }
+            }
+        } catch (e) {
+            if (errorEl) errorEl.textContent = 'Network error. Please try again.';
+        }
+    }
+
+    // Wire up code input auto-advance
+    document.addEventListener('DOMContentLoaded', function () {
+        const codeInputs = document.querySelectorAll('.reset-code-input');
+        codeInputs.forEach((input, idx) => {
+            input.addEventListener('input', function (e) {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value && idx < codeInputs.length - 1) {
+                    codeInputs[idx + 1].focus();
+                }
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace' && !this.value && idx > 0) {
+                    codeInputs[idx - 1].focus();
+                }
+            });
+            input.addEventListener('paste', function (e) {
+                e.preventDefault();
+                const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
+                for (let i = 0; i < pasted.length && (idx + i) < codeInputs.length; i++) {
+                    codeInputs[idx + i].value = pasted[i];
+                }
+                const next = Math.min(idx + pasted.length, codeInputs.length - 1);
+                codeInputs[next].focus();
+            });
+        });
+    });
 
     // Toggle Note Lock
     window.toggleNoteLock = async function (noteId) {

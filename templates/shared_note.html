@@ -3387,6 +3387,14 @@
         if (upBtn) upBtn.style.display = 'inline-flex';
     };
 
+    document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+            if (typeof window.cancelSharedVoiceRecording === 'function') {
+                window.cancelSharedVoiceRecording();
+            }
+        }
+    });
+
     window.sendSharedVoiceRecording = function () {
         if (!sharedMediaRecorder || sharedMediaRecorder.state === 'inactive') return;
         _sharedVoiceState = 'sending';

@@ -411,8 +411,16 @@ def api_get_note_shares(post_id):
                 exp = exp.replace(tzinfo=datetime.timezone.utc)
             if now > exp:
                 continue
-        shares.append({'share_id': share['share_id'], 'permissions': share.get('permissions', 'view'), 'surprise_theme': share.get('surprise_theme', 'none'), 'created_at': share['created_at'].isoformat() if share.get('created_at') else None, 'expires_at': share['expires_at'].isoformat() if share.get('expires_at') else None, 'auto_approve': share.get('auto_approve', False)})
-    return jsonify({'shares': shares})
+        shares.append({
+            'share_id': share['share_id'],
+            'permissions': share.get('permissions', 'view'),
+            'surprise_theme': share.get('surprise_theme', 'none'),
+            'created_at': share['created_at'].isoformat() if share.get('created_at') else None,
+            'expires_at': share['expires_at'].isoformat() if share.get('expires_at') else None,
+            'auto_approve': share.get('auto_approve', False),
+            'url': url_for('sharing.view_shared_note', share_id=share['share_id'], _external=True)
+        })
+    return jsonify(shares)
 
 
 @bp.route('/api/share/<share_id>/history')
@@ -431,12 +439,70 @@ def api_get_note_versions(post_id):
     import main as m
     obj_id = m.safe_object_id(post_id)
     if not obj_id:
-        return jsonify({'error': 'Invalid note ID'}), 400
+        return jsonify([]), 400
+
     note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
     if not note:
-        return jsonify({'error': 'Note not found'}), 404
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    current_plain = m._decrypt_note_record(note)
     versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
-    return jsonify(versions)
+    note_candidates = m._candidate_user_ids(
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+
+    result = []
+    for v in versions:
+        event_type = v.get('event_type', 'snapshot')
+        status = v.get('status', 'applied')
+
+        row = {
+            '_id': str(v['_id']),
+            'editor_name': v.get('editor_name', 'Unknown'),
+            'event_type': event_type,
+            'status': status,
+            'edit_summary': v.get('edit_summary', ''),
+            'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None
+        }
+
+        version_candidates = m._candidate_user_ids(
+            v.get('content_owner_id'),
+            v.get('editor_id'),
+            *note_candidates
+        )
+
+        if event_type == 'proposal':
+            base_plain = v.get('base_content_plain')
+            if base_plain is None:
+                base_encrypted = v.get('base_content') or v.get('content', '')
+                base_plain = (m._decrypt_with_candidate_ids(base_encrypted, version_candidates) if base_encrypted else '') or ''
+            proposed_plain = v.get('proposed_content_plain')
+            if proposed_plain is None:
+                proposed_encrypted = v.get('proposed_content', '')
+                proposed_plain = (m._decrypt_with_candidate_ids(proposed_encrypted, version_candidates) if proposed_encrypted else '') or ''
+            row.update({
+                'base_content': base_plain,
+                'proposed_content': proposed_plain,
+                'current_content': current_plain,
+                'diff_text': m.build_unified_diff_text(base_plain, proposed_plain),
+                'can_review': status == 'pending'
+            })
+        else:
+            if not v.get('encrypted', True):
+                decrypted = v.get('content', '')
+            else:
+                decrypted = m._decrypt_with_candidate_ids(v.get('content', ''), version_candidates)
+                if decrypted is None:
+                    decrypted = '[Content unavailable — decryption error]'
+            row.update({
+                'content': decrypted,
+                'can_restore': True
+            })
+
+        result.append(row)
+    return jsonify(result)
 
 
 @bp.route('/personal_post/version/restore/<post_id>/<version_id>', methods=['POST'])

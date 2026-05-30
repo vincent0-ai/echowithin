@@ -708,7 +708,7 @@ def api_create_note_share(post_id):
     return jsonify({
         'success': True,
         'share_id': share_id,
-        'url': url_for('sitemap_legacy_redirect', _external=True) + f'share/note/{share_id}'
+        'url': url_for('sharing.view_shared_note', share_id=share_id, _external=True)
     })
 
 @api_bp.route('/notes/revoke_share/<share_id>', methods=['POST'])

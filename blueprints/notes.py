@@ -46,7 +46,7 @@ def personal_space():
         ordered_posts = [posts_map[pid] for pid in paginated_saved_ids if pid in posts_map]
         
         with current_app.app_context():
-            saved_posts = prepare_posts(ordered_posts)
+            saved_posts = m.prepare_posts(ordered_posts)
 
     # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.
     total_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})

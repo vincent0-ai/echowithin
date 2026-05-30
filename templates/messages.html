@@ -1781,9 +1781,14 @@
                 hideTypingIndicator();
                 appendMessage(data, 'received', false, data.id, data.is_read);
                 scrollToBottom();
+            } else if (data.sender_id === currentUserId && data.recipient_id === activeRecipientId) {
+                appendMessage(data, 'sent', false, data.id, data.is_read);
+                scrollToBottom();
             } else {
                 updateSidebar(data);
-                showToast(`New message from ${data.sender_username}`);
+                if (data.sender_id !== currentUserId) {
+                    showToast(`New message from ${data.sender_username}`);
+                }
             }
         });
 

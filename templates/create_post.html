@@ -256,7 +256,7 @@
                     xhr.addEventListener('load', function () {
                         // Follow the redirect from the server response
                         if (xhr.status >= 200 && xhr.status < 400) {
-                            window.location.href = xhr.responseURL || '{{ url_for("blog") }}';
+                            window.location.href = xhr.responseURL || '{{ url_for("blog.blog") }}';
                         } else {
                             if (submitButton) {
                                 submitButton.disabled = false;

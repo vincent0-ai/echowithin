@@ -308,58 +308,211 @@ def all_posts():
 @bp.route('/api/posts')
 def get_all_posts_json():
     import main as m
-    page = request.args.get('page', 1, type=int)
-    posts_per_page = 10
-    skip = (page - 1) * posts_per_page
-    total = m.posts_conf.count_documents({})
-    posts = list(m.posts_conf.find({}).sort('timestamp', -1).skip(skip).limit(posts_per_page))
-    with current_app.app_context():
-        posts = m.prepare_posts(posts)
-    return jsonify({'posts': [{'_id': str(p['_id']), 'title': p.get('title'), 'slug': p.get('slug'), 'author': p.get('author'), 'timestamp': p.get('timestamp').isoformat() if p.get('timestamp') else None, 'likes_count': p.get('likes_count', 0), 'comment_count': p.get('comment_count', 0)} for p in posts], 'total': total, 'page': page, 'total_pages': math.ceil(total / posts_per_page)})
+    try:
+        # Fetch all posts with necessary fields
+        all_posts = list(m.posts_conf.find({}, {
+            '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 
+            'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 
+            'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 
+            'likes_count': 1, 'share_count': 1, 'reactions': 1, 'is_pinned': 1
+        }))
+        
+        # Convert ObjectId and datetime to strings and add the post URL
+        for post in all_posts:
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            if post.get('timestamp'):
+                # Ensure it's timezone-aware if naive
+                t = post['timestamp']
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=datetime.timezone.utc)
+                # Format to local-like timezone format if needed or original format
+                post['timestamp'] = t.strftime('%b %d, %Y at %I:%M %p')
+            post['url'] = url_for('blog.view_post', slug=post['slug'], _external=True)
+            
+        return jsonify(all_posts)
+    except Exception as e:
+        current_app.logger.error(f"Error in get_all_posts_json: {e}")
+        return jsonify({"error": "Could not retrieve posts"}), 500
 
 
 @bp.route('/api/posts/top-by-comments')
 def get_top_posts_json():
     import main as m
+    import math as math_module
+    
+    # Check Redis cache first (cache for 2 minutes)
+    cache_key = 'top_posts_by_engagement'
+    if m.redis_cache:
+        try:
+            cached = m.redis_cache.get(cache_key)
+            if cached:
+                return jsonify(json.loads(cached))
+        except Exception:
+            pass
+
     try:
-        limit = min(int(request.args.get('limit', 10)), 50)
-    except (ValueError, TypeError):
-        limit = 10
-    pipeline = [
-        {'$match': {'is_deleted': False, 'post_slug': {'$ne': None}}},
-        {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}},
-        {'$sort': {'count': -1}},
-        {'$limit': limit},
-        {'$lookup': {'from': 'posts', 'localField': '_id', 'foreignField': 'slug', 'as': 'post'}},
-        {'$unwind': '$post'},
-        {'$project': {'slug': '$_id', 'count': 1, 'title': '$post.title', '_id': 0}}
-    ]
-    top_posts = list(m.comments_conf.aggregate(pipeline))
-    return jsonify(top_posts)
+        # Use aggregation pipeline for efficient server-side processing
+        pipeline = [
+            # Stage 1: Project only needed fields
+            {'$project': {
+                '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1,
+                'timestamp': 1, 'image_url': 1, 'image_urls': 1, 'image_public_ids': 1,
+                'image_status': 1, 'video_url': 1, 'likes_count': 1,
+                'share_count': 1, 'view_count': 1, 'reactions': 1, 'is_pinned': 1
+            }},
+            # Stage 2: Lookup comment counts
+            {'$lookup': {
+                'from': 'comments',
+                'let': {'slug': '$slug'},
+                'pipeline': [
+                    {'$match': {'$expr': {'$eq': ['$post_slug', '$$slug']}, 'is_deleted': False}},
+                    {'$count': 'count'}
+                ],
+                'as': 'comment_data'
+            }},
+            # Stage 3: Add computed fields
+            {'$addFields': {
+                'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]},
+                'likes_safe': {'$ifNull': ['$likes_count', 0]},
+                'shares_safe': {'$ifNull': ['$share_count', 0]},
+                'views_safe': {'$ifNull': ['$view_count', 0]}
+            }},
+            # Stage 4: Calculate raw engagement score
+            {'$addFields': {
+                'raw_engagement': {
+                    '$add': [
+                        {'$multiply': ['$comment_count', m.ENGAGEMENT_WEIGHTS['comment']]},
+                        {'$multiply': ['$likes_safe', m.ENGAGEMENT_WEIGHTS['reaction']]},
+                        {'$multiply': ['$shares_safe', m.ENGAGEMENT_WEIGHTS['share']]},
+                        {'$multiply': ['$views_safe', m.ENGAGEMENT_WEIGHTS['view']]}
+                    ]
+                }
+            }},
+            # Stage 5: Sort by raw engagement and limit for top candidates
+            {'$sort': {'raw_engagement': -1}},
+            {'$limit': 50},
+            # Stage 6: Remove lookup helper field
+            {'$project': {'comment_data': 0, 'likes_safe': 0, 'shares_safe': 0, 'views_safe': 0}}
+        ]
+
+        posts = list(m.posts_conf.aggregate(pipeline))
+
+        # Apply recency factor in Python (complex time math is cleaner here)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        results = []
+
+        for post in posts:
+            if not post.get('slug'):
+                continue
+
+            comment_count = post.get('comment_count', 0)
+            likes = post.get('likes_count', 0) or 0
+            shares = post.get('share_count', 0) or 0
+            views = post.get('view_count', 0) or 0
+            raw_engagement = post.get('raw_engagement', 0)
+
+            post_time = post.get('timestamp')
+            recency_multiplier = 1.0
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                days_old = (now - post_time).total_seconds() / 86400
+                recency_multiplier = max(0.2, 1.0 - (math_module.log1p(days_old) / 10))
+
+            final_score = raw_engagement * recency_multiplier
+
+            # Format for JSON response
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            post['timestamp'] = post_time.strftime('%b %d, %Y at %I:%M %p') if post_time else None
+            post['url'] = url_for('blog.view_post', slug=post['slug'], _external=True)
+            post['comment_count'] = comment_count
+            post['likes_count'] = likes
+            post['share_count'] = shares
+            post['view_count'] = views
+            post['engagement_score'] = round(final_score, 2)
+
+            post.pop('raw_engagement', None)
+            results.append(post)
+
+        results.sort(key=lambda x: x['engagement_score'], reverse=True)
+        results = results[:20]
+
+        # Batch-enrich with premium status and achievements
+        result_author_ids = list(set(ObjectId(r['author_id']) for r in results if r.get('author_id')))
+        premium_set = set()
+        if result_author_ids:
+            for u in m.users_conf.find({'_id': {'$in': result_author_ids}}, {'account_tier': 1, 'premium_until': 1, 'join_date': 1}):
+                if m.get_user_tier(u) == 'premium':
+                    premium_set.add(str(u['_id']))
+        for r in results:
+            aid = r.get('author_id')
+            r['author_is_premium'] = aid in premium_set if aid else False
+            r['author_achievements'] = m.get_active_achievements(ObjectId(aid)) if aid else []
+
+        if m.redis_cache:
+            try:
+                m.redis_cache.setex(cache_key, 120, json.dumps(results, default=str))
+            except Exception:
+                pass
+
+        return jsonify(results)
+    except Exception as e:
+        current_app.logger.error(f"Error in get_top_posts_json: {e}")
+        return jsonify({'error': 'Could not retrieve top posts'}), 500
 
 
 @bp.route('/api/posts/hot')
 def get_hot_posts_json():
     import main as m
     try:
-        limit = min(int(request.args.get('limit', 10)), 50)
-    except (ValueError, TypeError):
-        limit = 10
-    now = datetime.datetime.now(datetime.timezone.utc)
-    thirty_days_ago = now - datetime.timedelta(days=30)
-    pipeline = [
-        {'$match': {'timestamp': {'$gte': thirty_days_ago}}},
-        {'$lookup': {'from': 'comments', 'let': {'post_slug': '$slug'}, 'pipeline': [{'$match': {'$expr': {'$eq': ['$post_slug', '$$post_slug']}, 'is_deleted': {'$ne': True}}}, {'$count': 'count'}], 'as': 'comment_data'}},
-        {'$addFields': {'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}, 'likes_safe': {'$ifNull': ['$likes_count', 0]}, 'shares_safe': {'$ifNull': ['$share_count', 0]}, 'views_safe': {'$ifNull': ['$view_count', 0]}, 'age_in_hours': {'$divide': [{'$subtract': ["$$NOW", '$timestamp']}, 3600000]}}},
-        {'$addFields': {'engagement_score': {'$multiply': [{'$ln': {'$add': [{'$add': [{'$multiply': ['$comment_count', m.ENGAGEMENT_WEIGHTS['comment']]}, {'$multiply': ['$likes_safe', m.ENGAGEMENT_WEIGHTS['reaction']]}, {'$multiply': ['$shares_safe', m.ENGAGEMENT_WEIGHTS['share']]}, {'$multiply': ['$views_safe', m.ENGAGEMENT_WEIGHTS['view']]}]}, 1]}}, 10]}}},
-        {'$addFields': {'hot_score': {'$divide': [{'$add': ['$engagement_score', 1]}, {'$pow': [{'$add': ['$age_in_hours', 8]}, 1.2]}]}}},
-        {'$sort': {'hot_score': -1}},
-        {'$limit': limit}
-    ]
-    hot_posts = list(m.posts_conf.aggregate(pipeline))
-    with current_app.app_context():
-        hot_posts = m.prepare_posts(hot_posts)
-    return jsonify(hot_posts)
+        # Fetch recent posts to calculate scores on (e.g., last 7 days)
+        seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+        recent_posts = list(m.posts_conf.find(
+            {'created_at': {'$gte': seven_days_ago}},
+            {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'share_count': 1, 'reactions': 1}
+        ))
+
+        # Get comment counts for these posts
+        slugs = [p['slug'] for p in recent_posts if p.get('slug')]
+        comment_counts = {doc['_id']: doc.get('count', 0) for doc in m.comments_conf.aggregate([
+            {'$match': {'post_slug': {'$in': slugs}, 'is_deleted': False}},
+            {'$group': {'_id': '$post_slug', 'count': {'$sum': 1}}}
+        ])}
+
+        # Calculate hot score for each post
+        scored_posts = []
+        for post in recent_posts:
+            if not post.get('slug'):
+                continue
+            comment_count = comment_counts.get(post['slug'], 0)
+            post['hot_score'] = m.calculate_hot_score(post, comment_count)
+            post['comment_count'] = comment_count
+            post['_id'] = str(post['_id'])
+            post['author_id'] = str(post.get('author_id'))
+            
+            # Formatting timestamp
+            post_time = post.get('created_at') or post.get('timestamp')
+            if post_time:
+                if post_time.tzinfo is None:
+                    post_time = post_time.replace(tzinfo=datetime.timezone.utc)
+                post['timestamp'] = post_time.strftime('%b %d, %Y at %I:%M %p')
+            else:
+                post['timestamp'] = None
+                
+            post['url'] = url_for('blog.view_post', slug=post['slug'], _external=True)
+            post['likes_count'] = post.get('likes_count', 0)
+            post['share_count'] = post.get('share_count', 0)
+
+            scored_posts.append(post)
+
+        # Sort by hot score and return top 20
+        scored_posts.sort(key=lambda p: p['hot_score'], reverse=True)
+        return jsonify(scored_posts[:20])
+    except Exception as e:
+        current_app.logger.error(f"Error in get_hot_posts_json: {e}")
+        return jsonify({'error': 'Could not retrieve hot posts'}), 500
 
 
 @bp.route('/api/posts/my-commented')
@@ -797,31 +950,154 @@ def get_post_status(post_id):
 @login_required
 def post():
     import main as m
+    import secrets
+    import redis
+    import urllib.request
+    from werkzeug.utils import secure_filename
+    
     if request.method == "POST":
         title = request.form.get("title")
-        content = request.form.get("content")
+        content = request.form.get("content", '') or ''
         tags = request.form.getlist("tags")
-        image_urls = []
+        images_files = request.files.getlist('images') if request.files else []
+        image_alts = request.form.getlist('image_alts') if request.form else []
+        video_file = request.files.get('video')
+
         temp_image_paths = []
         temp_video_path = None
-        if not title or not content:
-            flash("Title and content are required.", "danger")
-            return redirect(url_for('pages.create_post'))
-        slug = m.slugify(title)
-        original_slug = slug
-        counter = 1
-        while m.posts_conf.find_one({'slug': slug}):
-            slug = f"{original_slug}-{counter}"
-            counter += 1
-        tag_list = [t.strip().lower() for t in tags if t.strip()]
-        result = m.posts_conf.insert_one({
-            'title': title, 'content': content, 'slug': slug, 'author': current_user.username, 'author_id': ObjectId(current_user.id), 'timestamp': datetime.datetime.now(datetime.timezone.utc), 'tags': tag_list, 'image_urls': [], 'image_status': 'none', 'video_status': 'none', 'status': 'processing', 'likes_count': 0, 'share_count': 0, 'view_count': 0
-        })
-        post_id_str = str(result.inserted_id)
-        m.index_post_to_typesense(post_id_str)
-        m.process_post_media.queue(post_id_str, [], None)
-        return redirect(url_for('blog.view_post', slug=slug))
-    return redirect(url_for('pages.create_post'))
+
+        has_media = any(f and f.filename for f in images_files) or (video_file and video_file.filename)
+        if title and (content or has_media):
+            base_slug = m.slugify(title)
+            if not base_slug:
+                base_slug = f"post-{secrets.token_hex(6)}"
+            slug = base_slug
+            counter = 1
+            while m.posts_conf.find_one({'slug': slug}):
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            # Save files temporarily for background processing
+            for img_file in images_files:
+                if img_file and img_file.filename and '.' in img_file.filename and img_file.filename.rsplit('.', 1)[1].lower() in m.ALLOWED_IMAGE_EXTENSIONS:
+                    try:
+                        img_file.stream.seek(0, os.SEEK_END)
+                        img_size = img_file.stream.tell()
+                        img_file.stream.seek(0)
+                        if img_size > m.MAX_IMAGE_SIZE:
+                            continue  # Skip images exceeding 5 MB
+                    except Exception:
+                        pass
+                    filename = secure_filename(f"{secrets.token_hex(8)}-{img_file.filename}")
+                    path = os.path.join(current_app.config['TEMP_UPLOAD_FOLDER'], filename)
+                    img_file.save(path)
+                    temp_image_paths.append(path)
+
+            if video_file and video_file.filename and '.' in video_file.filename and video_file.filename.rsplit('.', 1)[1].lower() in m.ALLOWED_VIDEO_EXTENSIONS:
+                try:
+                    stream = video_file.stream
+                    stream.seek(0, os.SEEK_END)
+                    size = stream.tell()
+                    stream.seek(0)
+                    if size <= m.MAX_VIDEO_SIZE:
+                        filename = secure_filename(f"{secrets.token_hex(8)}-{video_file.filename}")
+                        path = os.path.join(current_app.config['TEMP_UPLOAD_FOLDER'], filename)
+                        video_file.save(path)
+                        temp_video_path = path
+                except Exception:
+                    pass
+
+            normalized_alts = []
+            for i in range(len(images_files)):
+                try:
+                    alt = image_alts[i].strip()
+                except Exception:
+                    alt = ''
+                if not alt:
+                    alt = f"{title} image {i+1}"
+                normalized_alts.append(alt)
+
+            new_post_data = {
+                'author_id': ObjectId(current_user.id),
+                'slug': slug,
+                'title': title,
+                'content': content,
+                'tags': [t.strip().lower() for t in tags if t.strip()],
+                'author': current_user.username,
+                'status': 'processing_media' if temp_image_paths or temp_video_path else 'published',
+                'view_count': 0,
+                'timestamp': datetime.datetime.now(datetime.timezone.utc),
+                'image_alts': normalized_alts,
+            }
+            result = m.posts_conf.insert_one(new_post_data)
+            post_id_str = str(result.inserted_id)
+
+            # Enqueue media processing
+            if temp_image_paths or temp_video_path:
+                try:
+                    m.process_post_media.queue(post_id_str, temp_image_paths, temp_video_path)
+                    current_app.logger.info(f"Enqueued media processing job for post {post_id_str}")
+                except redis.exceptions.ConnectionError as e:
+                    current_app.logger.warning(f"Redis connection failed. Falling back to thread for media processing. Error: {e}")
+                    with current_app.app_context():
+                        m.executor.submit(m.process_post_media, post_id_str, temp_image_paths, temp_video_path)
+                except Exception as e:
+                    current_app.logger.error(f"Failed to process media for post {post_id_str}: {e}")
+                    m.posts_conf.delete_one({'_id': ObjectId(post_id_str)})
+                    flash("Could not create post due to a server issue. Please try again.", "danger")
+                    return redirect(url_for("blog.blog"))
+            else:
+                try:
+                    m.send_new_post_notifications.queue(post_id_str)
+                    current_app.logger.info(f"Enqueued notification job for post {post_id_str}")
+                except redis.exceptions.ConnectionError as e:
+                    current_app.logger.warning(f"Redis connection failed. Falling back to thread for notifications. Error: {e}")
+                    with current_app.app_context():
+                        m.executor.submit(m.send_new_post_notifications, post_id_str)
+                except Exception as e:
+                    current_app.logger.error(f"Failed to enqueue notification job for post {post_id_str}: {e}")
+                
+                try:
+                    if m._t.ts_posts:
+                        m.index_post_to_typesense(post_id_str)
+                except Exception as e:
+                    current_app.logger.debug(f"Typesense index skipped for {post_id_str}: {e}")
+
+            # Send ntfy notification
+            try:
+                ntfy_message = f"\"{title}\" by {current_user.username}"
+                m.send_ntfy_notification.queue(ntfy_message, "New Post Created", "tada")
+            except redis.exceptions.ConnectionError as e:
+                current_app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {e}")
+                with current_app.app_context():
+                    m.executor.submit(m.send_ntfy_notification, ntfy_message, "New Post Created", "tada")
+            except Exception as e:
+                current_app.logger.error(f"Failed to enqueue ntfy notification for new post: {e}")
+
+            # Send web push notifications
+            try:
+                m.send_push_notifications_for_new_post.queue(post_id_str)
+                current_app.logger.info(f"Enqueued push notification job for post {post_id_str}")
+            except redis.exceptions.ConnectionError as e:
+                current_app.logger.warning(f"Redis connection failed. Falling back to thread for push notifications. Error: {e}")
+                with current_app.app_context():
+                    m.executor.submit(m.send_push_notifications_for_new_post, post_id_str)
+            except Exception as e:
+                current_app.logger.error(f"Failed to enqueue push notification for new post: {e}")
+
+            # Clear sitemap cache
+            try:
+                if m.redis_cache:
+                    m.redis_cache.delete('sitemap_index_xml')
+                ping_url = 'https://www.google.com/ping?sitemap=https://echowithin.xyz/sitemap_index.xml'
+                urllib.request.urlopen(ping_url, timeout=5)
+            except Exception as e:
+                current_app.logger.debug(f"Sitemap ping failed (non-critical): {e}")
+
+            flash("Post created successfully!", "success")
+        else:
+            flash("Title is required. Content is also required unless you attach media.", "danger")
+    return redirect(url_for("blog.blog"))
 
 
 @bp.route('/uploads/<filename>')
@@ -833,23 +1109,245 @@ def uploaded_file(filename):
 @bp.route('/post/<slug>')
 def view_post(slug):
     import main as m
+    import markdown
+    import bleach
     post = m.posts_conf.find_one({'slug': slug})
     if not post:
-        abort(404)
-    comments_list = list(m.comments_conf.find({'post_slug': slug, 'is_deleted': {'$ne': True}}).sort('created_at', 1))
-    user_reaction = None
-    is_saved = False
-    is_owner = False
+        flash("Post not found.", "danger")
+        return redirect(url_for('blog.blog'))
+
+    # If current user is the author, update author_last_viewed
     if current_user.is_authenticated:
-        user_id_obj = ObjectId(current_user.id)
-        reaction = m.comments_conf.find_one({'post_slug': slug, 'author_id': user_id_obj, 'reaction_type': {'$exists': True}})
-        if reaction:
-            user_reaction = reaction.get('reaction_type')
-        is_owner = str(post.get('author_id')) == current_user.id
-        user_data = m.users_conf.find_one({'_id': user_id_obj}, {'saved_posts': 1})
-        if user_data and post['_id'] in user_data.get('saved_posts', []):
+        try:
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            # Update author-specific marker if they are the author
+            if str(post.get('author_id')) == current_user.id:
+                m.posts_conf.update_one(
+                    {'_id': post['_id']},
+                    {'$set': {'author_last_viewed': now_utc}}
+                )
+        except Exception as e:
+            current_app.app_context().logger.error(f"Failed to update view tracking for post {slug}: {e}")
+
+    # Convert post content from Markdown to HTML
+    post_html = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
+    # Linkify bare URLs in post content
+    post_html = bleach.linkify(post_html, callbacks=[m._linkify_target_blank], parse_email=True)
+    post['content'] = post_html
+
+    # --- Fetch Related Posts using Typesense (with caching) ---
+    related_posts = []
+    post_id_str = str(post['_id'])
+
+    # Try cache first
+    related_cache_key = f"related_posts:{post_id_str}"
+    cached_related = m.related_posts_cache.get(related_cache_key)
+
+    if cached_related is not None:
+        related_posts = cached_related
+    elif m._t.ts_posts:
+        try:
+            search_query = post.get('title', '')
+            search_params = {
+                'q': search_query or '*',
+                'query_by': 'title,content,tags',
+                'per_page': 4,
+                'filter_by': f'id:!={post_id_str}',
+            }
+
+            if post.get('tags'):
+                tags_str = " ".join(post.get('tags'))
+                search_query = f"{tags_str} {search_query}"
+                search_params['q'] = search_query
+
+            search_result = m._t._ts_search('posts', search_params)
+            hits = search_result.get('hits', [])
+            related_posts_raw = [h.get('document', h) for h in hits[:3]]
+
+            for p in related_posts_raw:
+                if p.get('created_at'):
+                    p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
+            related_posts = related_posts_raw
+
+            m.related_posts_cache[related_cache_key] = related_posts
+        except Exception as e:
+            current_app.logger.error(f"Failed to get similar posts for {post_id_str}: {e}")
+
+    # Add comment count and fetch recent comments
+    try:
+        comment_count = m.comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
+        comment_page = 1
+        per_page = 10
+        comments = list(m.comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((comment_page-1)*per_page).limit(per_page))
+        reply_counts = {}
+        try:
+            pipeline = [
+                {'$match': {'post_slug': slug, 'is_deleted': False, 'parent_id': {'$ne': None}}},
+                {'$group': {'_id': '$parent_id', 'count': {'$sum': 1}}}
+            ]
+            agg = list(m.comments_conf.aggregate(pipeline))
+            for doc in agg:
+                reply_counts[str(doc['_id'])] = doc.get('count', 0)
+        except Exception as e:
+            current_app.logger.debug(f"Failed to compute reply counts for post {slug}: {e}")
+
+        # Ensure that all parent comments are present so replies can be correctly nested in the UI
+        try:
+            processed_comment_ids = set(str(c['_id']) for c in comments)
+            while True:
+                parents_to_fetch = []
+                for c in comments:
+                    parent_id = c.get('parent_id')
+                    if parent_id and str(parent_id) not in processed_comment_ids:
+                        parents_to_fetch.append(parent_id)
+                
+                if not parents_to_fetch:
+                    break
+                
+                new_parents = list(m.comments_conf.find({'_id': {'$in': parents_to_fetch}}))
+                if not new_parents:
+                    break
+                    
+                for p in new_parents:
+                    p_id_str = str(p['_id'])
+                    if p_id_str not in processed_comment_ids:
+                        comments.append(p)
+                        processed_comment_ids.add(p_id_str)
+                
+                comments.sort(key=lambda x: x.get('created_at') or datetime.datetime.min)
+        except Exception as e:
+            current_app.logger.debug(f"Failed to fetch recursive parent comments for post {slug}: {e}")
+        has_more = comment_count > comment_page * per_page
+    except Exception as e:
+        current_app.logger.error(f"Failed to load comments for post {slug}: {e}")
+        comment_count = 0
+        comments = []
+        comment_page = 1
+        per_page = 10
+        has_more = False
+
+    page_title = post.get('title', 'View Post')
+    raw_content_doc = m.posts_conf.find_one({'slug': slug}, {'content': 1})
+    raw_text = raw_content_doc.get('content', '') if raw_content_doc else ''
+    
+    clean_text = re.sub(r'[#*_`\[\]()>~]', '', raw_text)
+    clean_text = clean_text.replace('\n', ' ').replace('\r', ' ')
+    clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+    clean_text = m.clean_xml_text(clean_text)
+    
+    page_description = (clean_text[:155] + '...') if len(clean_text) > 155 else clean_text
+
+    is_saved = False
+    if current_user.is_authenticated:
+        u = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'saved_posts': 1})
+        if u and post['_id'] in u.get('saved_posts', []):
             is_saved = True
-    return render_template('view_post.html', post=post, comments=comments_list, user_reaction=user_reaction, is_saved=is_saved, is_owner=is_owner, title=f"{post['title']} - EchoWithin", description=post.get('content', '')[:200])
+
+        if str(post.get('author_id')) == current_user.id:
+            try:
+                now = datetime.datetime.now(datetime.timezone.utc)
+                latest_p_comment = m.comments_conf.find_one(
+                    {'post_slug': slug, 'author_id': {'$ne': ObjectId(current_user.id)}, 'is_deleted': {'$ne': True}},
+                    projection={'created_at': 1},
+                    sort=[('created_at', -1)]
+                )
+
+                view_marker = now
+                if latest_p_comment and latest_p_comment.get('created_at'):
+                    lp_time = latest_p_comment['created_at']
+                    if lp_time.tzinfo is None: lp_time = lp_time.replace(tzinfo=datetime.timezone.utc)
+                    if lp_time > view_marker:
+                        view_marker = lp_time
+
+                m.posts_conf.update_one(
+                    {'_id': post['_id']},
+                    {'$set': {'author_last_viewed': view_marker}}
+                )
+            except Exception as e:
+                current_app.logger.debug(f"Failed to update author_last_viewed for post {slug}: {e}")
+
+    # Prepare SEO meta fields
+    meta_url = url_for('blog.view_post', slug=slug, _external=True)
+    meta_image = None
+    if post.get('image_urls'):
+        meta_image = post.get('image_urls')[0]
+    elif post.get('image_url'):
+        meta_image = post.get('image_url')
+    elif post.get('video_url'):
+        video_url = post['video_url']
+        if 'res.cloudinary.com' in video_url:
+            thumb_url = video_url.rsplit('.', 1)[0] + '.jpg'
+            thumb_url = thumb_url.replace('/video/upload/', '/video/upload/so_0,w_1200,h_630,c_fill/')
+            meta_image = thumb_url
+        else:
+            meta_image = url_for('static', filename='og-image.png', _external=True)
+
+    # JSON-LD structured data for the post
+    try:
+        jsonld_article = {
+            "@context": "https://schema.org",
+            "@type": "BlogPosting",
+            "mainEntityOfPage": {
+                "@type": "WebPage",
+                "@id": meta_url
+            },
+            "headline": post.get('title', '')[:110],
+            "image": [meta_image] if meta_image else [],
+            "author": {
+                "@type": "Person",
+                "name": post.get('author')
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "EchoWithin",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": url_for('static', filename='logo.png', _external=True)
+                }
+            },
+            "datePublished": post.get('timestamp').isoformat() if post.get('timestamp') else None,
+            "dateModified": (post.get('edited_at') or post.get('timestamp', '')).isoformat() if (post.get('edited_at') or post.get('timestamp')) else None,
+            "url": meta_url,
+            "description": page_description
+        }
+        jsonld_breadcrumb = {
+            "@context": "https://schema.org",
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "Blog",
+                    "item": url_for('blog.blog', _external=True)
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": post.get('title', '')[:60]
+                }
+            ]
+        }
+
+        # Build combined JSON-LD string
+        jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb)
+
+        if post.get('video_url'):
+            video_url = post['video_url']
+            jsonld_video = {
+                "@context": "https://schema.org",
+                "@type": "VideoObject",
+                "name": post.get('title', 'Video'),
+                "description": page_description,
+                "contentUrl": video_url,
+                "uploadDate": post.get('timestamp').isoformat() if post.get('timestamp') else None,
+                "thumbnailUrl": meta_image or url_for('static', filename='og-image.png', _external=True)
+            }
+            jsonld_article["video"] = jsonld_video
+            jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_video)
+    except Exception:
+        jsonld_str = ''
+
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved)
 
 
 @bp.route('/api/posts/<post_id>/view', methods=['POST'])
@@ -1147,45 +1645,211 @@ def edit_post(post_id):
 @login_required
 def update_post(post_id):
     import main as m
+    import secrets
+    import redis
     post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
     if not post:
         abort(404)
     if str(post.get('author_id')) != current_user.id:
         flash("You can only edit your own posts.", "danger")
         return redirect(url_for('blog.view_post', slug=post.get('slug')))
-    title = request.form.get('title', '').strip()
-    content = request.form.get('content', '').strip()
-    tags = request.form.getlist('tags')
-    old_slug = post.get('slug')
-    new_slug = m.slugify(title) if title else old_slug
-    if new_slug != old_slug:
-        counter = 1
-        original_slug = new_slug
-        while m.posts_conf.find_one({'slug': new_slug, '_id': {'$ne': post['_id']}}):
-            new_slug = f"{original_slug}-{counter}"
-            counter += 1
-    m.posts_conf.update_one(
-        {'_id': post['_id']},
-        {'$set': {'title': title, 'content': content, 'slug': new_slug, 'tags': [t.strip().lower() for t in tags if t.strip()], 'edited_at': datetime.datetime.now(datetime.timezone.utc)}}
-    )
-    m.index_post_to_typesense(post_id)
-    flash('Post updated successfully!', 'success')
-    return redirect(url_for('blog.view_post', slug=new_slug))
+
+    title = request.form.get("title")
+    content = request.form.get("content")
+    tags = request.form.getlist("tags")
+    images_files = request.files.getlist('images') if request.files else []
+    video_file = request.files.get('video')
+    
+    image_url = post.get('image_url')
+    image_public_id = post.get('image_public_id')
+    image_urls = post.get('image_urls', [])
+    image_public_ids = post.get('image_public_ids', [])
+    video_url = post.get('video_url')
+    video_public_id = post.get('video_public_id')
+    slug = post.get('slug')
+    image_status = post.get('image_status', 'none')
+    video_status = post.get('video_status', 'none')
+
+    content = content or ''
+    has_existing_media = bool(image_urls) or bool(image_url) or bool(video_url)
+    has_new_media = any(f and f.filename for f in images_files) or (video_file and video_file.filename)
+
+    if title and (content or has_existing_media or has_new_media):
+        if images_files and any(f and f.filename for f in images_files):
+            try:
+                old_publics = []
+                if isinstance(image_public_id, list):
+                    old_publics = image_public_id
+                elif image_public_id:
+                    old_publics = [image_public_id]
+                elif image_public_ids:
+                    old_publics = image_public_ids
+                for pid in old_publics:
+                    try:
+                        m.cloudinary.uploader.destroy(pid)
+                    except Exception:
+                        current_app.logger.debug(f"Failed to delete old Cloudinary image {pid}")
+
+                new_urls = []
+                new_publics = []
+                for img_file in images_files:
+                    if not img_file or not img_file.filename:
+                        continue
+                    if '.' not in img_file.filename:
+                        continue
+                    ext = img_file.filename.rsplit('.', 1)[1].lower()
+                    if ext not in m.ALLOWED_IMAGE_EXTENSIONS:
+                        continue
+                    try:
+                        img_file.stream.seek(0, os.SEEK_END)
+                        img_size = img_file.stream.tell()
+                        img_file.stream.seek(0)
+                        if img_size > m.MAX_IMAGE_SIZE:
+                            continue
+                    except Exception:
+                        pass
+                    upload_result = m.cloudinary.uploader.upload(img_file, folder="echowithin_posts")
+                    url = m.optimize_cloudinary_url(upload_result.get('secure_url'))
+                    pid = upload_result.get('public_id')
+                    if url:
+                        new_urls.append(url)
+                    if pid:
+                        new_publics.append(pid)
+
+                if new_urls:
+                    image_urls = new_urls
+                    image_url = new_urls[0]
+                if new_publics:
+                    image_public_ids = new_publics
+                    image_public_id = new_publics[0]
+                image_status = 'safe'
+                try:
+                    for url, pid in zip(new_urls, new_publics):
+                        m.process_image_for_nsfw.queue(post_id, url, pid)
+                except Exception as e:
+                    current_app.logger.debug(f"Failed to enqueue NSFW checks for updated images: {e}")
+            except Exception as e:
+                try:
+                    message = f"NSFW content detected in post '{post.get('title')}' by {post.get('author')}. Image has been flagged."
+                    m.send_ntfy_notification.queue(message, "NSFW Content Detected", "see_no_evil")
+                except redis.exceptions.ConnectionError as ntfy_e:
+                    current_app.logger.warning(f"Redis connection failed. Falling back to thread for ntfy notification. Error: {ntfy_e}")
+                    with current_app.app_context():
+                        m.executor.submit(m.send_ntfy_notification, message, "NSFW Content Detected", "see_no_evil")
+                except Exception as ntfy_e:
+                    current_app.logger.error(f"Failed to enqueue ntfy notification for NSFW content: {ntfy_e}")
+                current_app.logger.error(f"Cloudinary upload/delete failed during update: {e}")
+
+        if video_file and video_file.filename != '' and '.' in video_file.filename:
+            video_ext = video_file.filename.rsplit('.', 1)[1].lower()
+            if video_ext not in m.ALLOWED_VIDEO_EXTENSIONS:
+                flash('Unsupported video format. Allowed: mp4, webm, ogg, mov', 'danger')
+                return redirect(url_for('blog.view_post', slug=slug))
+            try:
+                stream = video_file.stream
+                stream.seek(0, os.SEEK_END)
+                size = stream.tell()
+                stream.seek(0)
+            except Exception:
+                size = None
+
+            if size is not None and size > m.MAX_VIDEO_SIZE:
+                flash('Video exceeds maximum allowed size of 50 MB.', 'danger')
+                return redirect(url_for('blog.view_post', slug=slug))
+
+            try:
+                if video_public_id:
+                    m.cloudinary.uploader.destroy(video_public_id, resource_type='video')
+                upload_result = m.cloudinary.uploader.upload(
+                    video_file,
+                    resource_type='video',
+                    folder='echowithin_posts',
+                    eager=[{"quality": "auto", "fetch_format": "mp4"}],
+                    eager_async=True
+                )
+                video_url = m.optimize_cloudinary_url(upload_result.get('secure_url'))
+                video_public_id = upload_result.get('public_id')
+                video_status = 'uploaded'
+            except Exception as e:
+                current_app.logger.error(f"Cloudinary video upload/delete failed during update: {e}")
+
+        if title != post.get('title'):
+            base_slug = m.slugify(title)
+            if not base_slug:
+                base_slug = f"post-{secrets.token_hex(6)}"
+            new_slug = base_slug
+            counter = 1
+            while m.posts_conf.find_one({'slug': new_slug, '_id': {'$ne': post['_id']}}):
+                new_slug = f"{base_slug}-{counter}"
+                counter += 1
+            slug = new_slug
+
+        m.posts_conf.update_one(
+            {'_id': ObjectId(post_id)},
+            {'$set': {
+                'title': title,
+                'content': content,
+                'tags': [t.strip().lower() for t in tags if t.strip()],
+                'image_url': image_url,
+                'image_public_id': image_public_id,
+                'image_urls': image_urls,
+                'image_public_ids': image_public_ids,
+                'image_status': image_status,
+                'video_url': video_url,
+                'video_public_id': video_public_id,
+                'video_status': video_status,
+                'slug': slug,
+                'edited_at': datetime.datetime.now(datetime.timezone.utc),
+            }}
+        )
+        try:
+            if m._t.ts_posts:
+                m.index_post_to_typesense(post_id)
+        except Exception as e:
+            current_app.logger.error(f"Failed to re-index post {post_id} after update: {e}")
+        flash("Post updated successfully!", "success")
+        return redirect(url_for('blog.view_post', slug=slug))
+    else:
+        flash("Title and content/media cannot be empty.", "danger")
+    return redirect(url_for('blog.view_post', slug=slug))
 
 
 @bp.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
 def delete_post(post_id):
     import main as m
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
-    if not post:
-        abort(404)
-    if str(post.get('author_id')) != current_user.id:
-        flash("You can only delete your own posts.", "danger")
-    else:
-        m.posts_conf.delete_one({'_id': post['_id']})
-        m.comments_conf.delete_many({'post_slug': post.get('slug')})
-        flash('Post deleted.', 'success')
+    post_to_delete = m.posts_conf.find_one({'_id': ObjectId(post_id)})
+
+    if not post_to_delete or str(post_to_delete.get('author_id')) != current_user.id:
+        flash("You are not authorized to delete this post.", "danger")
+        return redirect(url_for('blog.blog'))
+
+    # Delete the image from Cloudinary if it exists
+    if post_to_delete.get('image_public_id'):
+        try:
+            m.cloudinary.uploader.destroy(post_to_delete['image_public_id'])
+        except Exception as e:
+            current_app.logger.error(f"Failed to delete Cloudinary image {post_to_delete.get('image_public_id')}: {e}")
+
+    # Support multiple images list deletion
+    if post_to_delete.get('image_public_ids'):
+        for pid in post_to_delete['image_public_ids']:
+            try:
+                m.cloudinary.uploader.destroy(pid)
+            except Exception as e:
+                current_app.logger.error(f"Failed to delete Cloudinary image {pid}: {e}")
+
+    # Delete the video from Cloudinary if it exists
+    if post_to_delete.get('video_public_id'):
+        try:
+            m.cloudinary.uploader.destroy(post_to_delete['video_public_id'], resource_type='video')
+        except Exception as e:
+            current_app.logger.error(f"Failed to delete Cloudinary video {post_to_delete.get('video_public_id')}: {e}")
+
+    m.posts_conf.delete_one({'_id': ObjectId(post_id)})
+    m.comments_conf.delete_many({'post_slug': post_to_delete.get('slug')})
+
+    flash('Post deleted successfully.', 'success')
     return redirect(url_for('blog.blog'))
 
 
@@ -1193,50 +1857,184 @@ def delete_post(post_id):
 @login_required
 def toggle_reaction_post(post_id):
     import main as m
-    data = request.get_json() or {}
-    emoji = data.get('emoji', '')
-    existing = m.comments_conf.find_one({'post_id': ObjectId(post_id), 'author_id': ObjectId(current_user.id), 'reaction_type': {'$exists': True}})
-    if existing:
-        if existing.get('reaction_type') == emoji:
-            m.comments_conf.delete_one({'_id': existing['_id']})
-            return jsonify({'action': 'removed'})
+    try:
+        # Support both 'reaction' and 'emoji' keys to be backward-compatible
+        data = request.get_json() or {}
+        reaction_type = data.get('reaction') or data.get('emoji') or 'heart'
+        
+        # Allowed reactions
+        allowed = ['heart', 'wow', 'insightful', 'laugh', 'sad']
+        if reaction_type not in allowed:
+            reaction_type = 'heart'
+
+        post_oid = ObjectId(post_id)
+        post = m.posts_conf.find_one({'_id': post_oid})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+
+        user_id = str(current_user.id)
+
+        # Reactions are stored as a dict: { "heart": [user_id, ...], "wow": [...] }
+        reactions = post.get('reactions', {})
+        if not isinstance(reactions, dict):
+            reactions = {}
+
+        # Find which reaction types this user currently has
+        current_user_reactions = [r for r, users in reactions.items() if user_id in users]
+
+        is_added = False
+        if reaction_type in current_user_reactions:
+            # Toggle OFF: user already has this exact reaction, remove it
+            m.posts_conf.update_one(
+                {'_id': post_oid},
+                {'$pull': {f'reactions.{reaction_type}': user_id}}
+            )
+            is_added = False
         else:
-            m.comments_conf.update_one({'_id': existing['_id']}, {'$set': {'reaction_type': emoji, 'created_at': datetime.datetime.now(datetime.timezone.utc)}})
-            return jsonify({'action': 'changed'})
-    m.comments_conf.insert_one({'post_id': ObjectId(post_id), 'author_id': ObjectId(current_user.id), 'author': current_user.username, 'reaction_type': emoji, 'created_at': datetime.datetime.now(datetime.timezone.utc)})
-    return jsonify({'action': 'added'})
+            # Build a single atomic update: pull from all old reactions + addToSet new one
+            update_ops = {'$addToSet': {f'reactions.{reaction_type}': user_id}}
+            if current_user_reactions:
+                pull_ops = {f'reactions.{old}': user_id for old in current_user_reactions}
+                m.posts_conf.update_one({'_id': post_oid}, {'$pull': pull_ops})
+            # Add new reaction
+            m.posts_conf.update_one({'_id': post_oid}, update_ops)
+            is_added = True
+
+        # Reconcile likes_count from actual reaction data
+        updated_post = m.posts_conf.find_one({'_id': post_oid})
+        new_reactions = updated_post.get('reactions', {})
+        actual_total = sum(len(users) for users in new_reactions.values() if isinstance(users, list))
+        reaction_counts = {r: len(u) for r, u in new_reactions.items() if isinstance(u, list)}
+
+        # Sync likes_count to match reality
+        if updated_post.get('likes_count') != actual_total:
+            m.posts_conf.update_one({'_id': post_oid}, {'$set': {'likes_count': actual_total}})
+
+        # Emit WebSocket event for real-time reaction update
+        m.socketio.emit('post_reacted', {
+            'post_id': post_id,
+            'reaction_counts': reaction_counts,
+            'total_count': actual_total
+        })
+
+        return jsonify({
+            'success': True,
+            'reaction': reaction_type if is_added else None,
+            'reaction_counts': reaction_counts,
+            'total_count': actual_total
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error toggling reaction for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @bp.route('/post/<post_id>/toggle_save', methods=['POST'])
 @login_required
 def toggle_save_post(post_id):
     import main as m
-    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'saved_posts': 1})
-    post_obj_id = ObjectId(post_id)
-    if user and post_obj_id in user.get('saved_posts', []):
-        m.users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$pull': {'saved_posts': post_obj_id}})
-        return jsonify({'saved': False})
-    else:
-        m.users_conf.update_one({'_id': ObjectId(current_user.id)}, {'$addToSet': {'saved_posts': post_obj_id}})
-        return jsonify({'saved': True})
+    try:
+        post_oid = ObjectId(post_id)
+        post = m.posts_conf.find_one({'_id': post_oid})
+        if not post:
+            if request.is_json:
+                return jsonify({'error': 'Post not found'}), 404
+            flash('Post not found.', 'danger')
+            return redirect(url_for('pages.home'))
+
+        user_id = ObjectId(current_user.id)
+        user = m.users_conf.find_one({'_id': user_id})
+        saved_posts = user.get('saved_posts', [])
+
+        is_saved = False
+        if post_oid in saved_posts:
+            m.users_conf.update_one({'_id': user_id}, {'$pull': {'saved_posts': post_oid}})
+            is_saved = False
+        else:
+            m.users_conf.update_one({'_id': user_id}, {'$addToSet': {'saved_posts': post_oid}})
+            is_saved = True
+
+        if request.is_json:
+            return jsonify({'saved': is_saved})
+
+        flash('Post saved!' if is_saved else 'Post removed from saved.', 'success')
+        return redirect(request.referrer or url_for('blog.view_post', slug=post['slug']))
+    except Exception as e:
+        current_app.logger.error(f"Error toggling save for post {post_id}: {e}")
+        if request.is_json:
+            return jsonify({'error': 'Internal error'}), 500
+        flash('An error occurred.', 'danger')
+        return redirect(url_for('pages.home'))
 
 
 @bp.route('/post/<post_id>/share', methods=['POST'])
-@login_required
 def share_post(post_id):
     import main as m
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
-    if not post:
-        return jsonify({'error': 'Post not found'}), 404
-    m.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$inc': {'share_count': 1}})
-    share_url = url_for('blog.view_post', slug=post.get('slug'), _external=True)
-    return jsonify({'share_url': share_url})
+    try:
+        post_oid = ObjectId(post_id)
+        post = m.posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'share_count': 1})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+
+        # Increment share count
+        m.posts_conf.update_one({'_id': post_oid}, {'$inc': {'share_count': 1}})
+
+        # Get updated count
+        updated_post = m.posts_conf.find_one({'_id': post_oid}, {'share_count': 1})
+        share_count = updated_post.get('share_count', 1) if updated_post else 1
+
+        # Generate shareable URL
+        share_url = url_for('blog.view_post', slug=post['slug'], _external=True)
+
+        return jsonify({
+            'success': True,
+            'share_count': share_count,
+            'share_url': share_url,
+            'title': post.get('title', 'Check out this post on EchoWithin')
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error tracking share for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @bp.route('/api/post/<post_id>/share-data')
 def get_share_data(post_id):
     import main as m
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
-    if not post:
-        return jsonify({'error': 'Post not found'}), 404
-    return jsonify({'title': post.get('title', ''), 'description': post.get('content', '')[:200], 'url': url_for('blog.view_post', slug=post.get('slug'), _external=True)})
+    try:
+        post_oid = ObjectId(post_id)
+        post = m.posts_conf.find_one({'_id': post_oid}, {'slug': 1, 'title': 1, 'content': 1, 'share_count': 1})
+        if not post:
+            return jsonify({'error': 'Post not found'}), 404
+
+        share_url = url_for('blog.view_post', slug=post['slug'], _external=True)
+        title = post.get('title', 'Check out this post')
+
+        content = post.get('content', '')
+        # Strip HTML and truncate
+        clean_content = re.sub('<[^<]+?>', '', content)
+        description = clean_content[:150] + '...' if len(clean_content) > 150 else clean_content
+
+        # URL-encode for share links
+        from urllib.parse import quote
+        encoded_url = quote(share_url, safe='')
+        encoded_title = quote(title, safe='')
+        encoded_text = quote(f"{title} - {description}", safe='')
+
+        return jsonify({
+            'share_url': share_url,
+            'title': title,
+            'description': description,
+            'share_count': post.get('share_count', 0),
+            'platforms': {
+                'twitter': f"https://twitter.com/intent/tweet?url={encoded_url}&text={encoded_title}",
+                'facebook': f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}",
+                'linkedin': f"https://www.linkedin.com/sharing/share-offsite/?url={encoded_url}",
+                'whatsapp': f"https://wa.me/?text={encoded_text}%20{encoded_url}",
+                'telegram': f"https://t.me/share/url?url={encoded_url}&text={encoded_title}",
+                'reddit': f"https://reddit.com/submit?url={encoded_url}&title={encoded_title}",
+                'email': f"mailto:?subject={encoded_title}&body={encoded_text}%0A%0A{encoded_url}"
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error getting share data for post {post_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500

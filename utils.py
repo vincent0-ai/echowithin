@@ -925,6 +925,7 @@ def _deliver_scheduled_message(sched_msg):
         payload = {
             'id': str(message_doc['_id']),
             'sender_id': sender_id_str,
+            'recipient_id': recipient_id_str,
             'sender_username': sender_username,
             'content': plain_content,
             'timestamp': message_doc['timestamp'].isoformat().replace('+00:00', 'Z'),
@@ -941,6 +942,7 @@ def _deliver_scheduled_message(sched_msg):
             payload['link_preview'] = plain_link_preview
 
         _get_socketio().emit('new_dm', payload, room=f"user_{recipient_id_str}")
+        _get_socketio().emit('new_dm', payload, room=f"user_{sender_id_str}")
 
         # Push notification
         push_body = "📸 Photo" if sched_msg.get('message_type') == 'image' else (plain_content[:100] + ('...' if len(plain_content) > 100 else ''))

@@ -1677,6 +1677,7 @@ def handle_send_dm(data):
         payload = {
             'id': str(message_doc['_id']),
             'sender_id': sender_id_str,
+            'recipient_id': recipient_id_str,
             'sender_username': current_user.username,
             'content': content,
             'timestamp': message_doc['timestamp'].isoformat(),

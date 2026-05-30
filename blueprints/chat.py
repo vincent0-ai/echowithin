@@ -110,15 +110,23 @@ def api_message_history(other_user_id):
             if lp and isinstance(lp, dict):
                 u1, u2 = str(current_user.id), str(other_id)
                 msg_data['link_preview'] = {'url': m.decrypt_dm(lp.get('url', ''), u1, u2) if lp.get('url', '').startswith('gAAAAA') else lp.get('url', ''), 'title': m.decrypt_dm(lp.get('title', ''), u1, u2) if lp.get('title', '').startswith('gAAAAA') else lp.get('title', ''), 'description': m.decrypt_dm(lp.get('description', ''), u1, u2) if lp.get('description', '').startswith('gAAAAA') else lp.get('description', ''), 'image': m.decrypt_dm(lp.get('image', ''), u1, u2) if lp.get('image', '').startswith('gAAAAA') else lp.get('image', '')}
+        if 'reactions' in msg:
+            msg_data['reactions'] = msg['reactions']
         formatted_messages.append(msg_data)
-    other_status = {'is_online': False, 'last_active': None}
-    if other_user.get('last_active'):
-        la = other_user['last_active']
-        if la.tzinfo is None:
-            la = la.replace(tzinfo=datetime.timezone.utc)
-        other_status['last_active'] = la.isoformat().replace('+00:00', 'Z')
-        other_status['is_online'] = (datetime.datetime.now(datetime.timezone.utc) - la).total_seconds() < 300
-    return jsonify({'messages': formatted_messages, 'other_user': {'username': other_user.get('username'), 'status': other_status}})
+        
+    # Socket alert for real-time double checkmarks
+    m.socketio.emit('messages_read', 
+                  {'reader_id': str(current_user.id), 'sender_id': other_user_id}, 
+                  room=f"user_{other_user_id}")
+                  
+    return jsonify({
+        'messages': formatted_messages,
+        'server_now': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+        'other_user_status': {
+            'username': other_user['username'],
+            'last_active': (other_user.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if other_user.get('last_active') else None
+        }
+    })
 
 
 @bp.route('/api/messages/unread_count')
@@ -126,14 +134,16 @@ def api_message_history(other_user_id):
 def api_unread_dm_count():
     import main as m
     count = m.direct_messages_conf.count_documents({'recipient_id': ObjectId(current_user.id), 'is_read': False})
-    return jsonify({'unread_count': count})
+    return jsonify({'count': count})
 
 
 @bp.route('/api/notifications/badge-counts')
 @login_required
 def get_badge_counts():
     import main as m
-    cache_key = f'badge_counts:{current_user.id}'
+    from blueprints.push import get_unread_notification_count
+    user_id_str = str(current_user.id)
+    cache_key = f"badge_counts:{user_id_str}"
     if m.redis_cache:
         try:
             cached = m.redis_cache.get(cache_key)
@@ -141,80 +151,209 @@ def get_badge_counts():
                 return jsonify(json.loads(cached))
         except Exception:
             pass
-    dm_unread = m.direct_messages_conf.count_documents({'recipient_id': ObjectId(current_user.id), 'is_read': False})
-    pending_requests = m.dm_permissions_conf.count_documents({'target_id': ObjectId(current_user.id), 'status': 'pending'})
-    result = {'dm_unread': dm_unread, 'pending_dm_requests': pending_requests}
+
+    notif_count = 0
+    msg_count = 0
+
+    try:
+        notif_cache_key = f"unread_notif_count:{user_id_str}"
+        notif_from_cache = False
+        if m.redis_cache:
+            try:
+                cached_notif = m.redis_cache.get(notif_cache_key)
+                if cached_notif is not None:
+                    notif_count = int(cached_notif)
+                    notif_from_cache = True
+            except Exception:
+                pass
+
+        if not notif_from_cache:
+            try:
+                resp = get_unread_notification_count()
+                resp_data = resp.get_json()
+                notif_count = resp_data.get('count', 0) if resp_data else 0
+            except Exception:
+                pass
+
+        msg_count = m.direct_messages_conf.count_documents({
+            'recipient_id': ObjectId(user_id_str),
+            'is_read': False
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error computing badge counts: {e}")
+
+    result = {'notif_count': notif_count, 'msg_count': msg_count}
+
     if m.redis_cache:
         try:
             m.redis_cache.setex(cache_key, 30, json.dumps(result))
         except Exception:
             pass
+
     return jsonify(result)
 
 
 @bp.route('/api/messages/request/<target_user_id>', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_send_dm_request(target_user_id):
     import main as m
     try:
-        target_oid = ObjectId(target_user_id)
-    except Exception:
-        return jsonify({'error': 'Invalid user ID'}), 400
-    if str(current_user.id) == target_user_id:
-        return jsonify({'error': 'Cannot send request to yourself'}), 400
-    target_user = m.users_conf.find_one({'_id': target_oid})
-    if not target_user:
-        return jsonify({'error': 'User not found'}), 404
-    if target_user.get('dm_privacy') == 'nobody':
-        return jsonify({'error': 'This user does not accept messages'}), 403
-    existing = m.dm_permissions_conf.find_one({'requester_id': ObjectId(current_user.id), 'target_id': target_oid})
-    if existing:
-        if existing.get('status') == 'accepted':
-            return jsonify({'success': True, 'status': 'accepted'})
-        elif existing.get('status') == 'pending':
-            return jsonify({'success': True, 'status': 'pending'})
-        elif existing.get('status') == 'rejected':
-            return jsonify({'error': 'Your message request was previously declined'}), 403
-    if m.can_dm(str(current_user.id), target_user_id):
-        m.dm_permissions_conf.update_one({'requester_id': ObjectId(current_user.id), 'target_id': target_oid}, {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}, upsert=True)
-        return jsonify({'success': True, 'status': 'accepted'})
-    m.dm_permissions_conf.update_one({'requester_id': ObjectId(current_user.id), 'target_id': target_oid}, {'$set': {'status': 'pending', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}, upsert=True)
-    return jsonify({'success': True, 'status': 'pending'})
+        target_id = ObjectId(target_user_id)
+        sender_id = ObjectId(current_user.id)
+        
+        if str(sender_id) == target_user_id:
+            return jsonify({'error': 'Cannot send request to yourself'}), 400
+        
+        target_user = m.users_conf.find_one({'_id': target_id}, {'username': 1, 'dm_privacy': 1})
+        if not target_user:
+            return jsonify({'error': 'User not found'}), 404
+        
+        if target_user.get('dm_privacy') == 'nobody':
+            return jsonify({'error': 'This user has disabled direct messages.'}), 403
+
+        if m.can_dm(str(sender_id), target_user_id):
+            return jsonify({'status': 'already_accepted', 'redirect': url_for('chat.messages_page', user_id=target_user_id)})
+        
+        existing = m.dm_permissions_conf.find_one({
+            '$or': [
+                {'requester_id': sender_id, 'target_id': target_id},
+                {'requester_id': target_id, 'target_id': sender_id}
+            ]
+        })
+        
+        if existing:
+            if existing['status'] == 'pending':
+                if str(existing['requester_id']) == str(sender_id):
+                    return jsonify({'status': 'pending', 'message': 'Request already sent'})
+                else:
+                    m.dm_permissions_conf.update_one(
+                        {'_id': existing['_id']},
+                        {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+                    )
+                    return jsonify({'status': 'accepted', 'redirect': url_for('chat.messages_page', user_id=target_user_id)})
+            elif existing['status'] == 'accepted':
+                return jsonify({'status': 'already_accepted', 'redirect': url_for('chat.messages_page', user_id=target_user_id)})
+            elif existing['status'] == 'rejected':
+                m.dm_permissions_conf.update_one(
+                    {'_id': existing['_id']},
+                    {'$set': {'status': 'pending', 'requester_id': sender_id, 'target_id': target_id, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+                )
+                m.socketio.emit('dm_request', {
+                    'request_id': str(existing['_id']),
+                    'from_user_id': str(sender_id),
+                    'from_username': current_user.username,
+                    'from_avatar': getattr(current_user, 'profile_image_url', None)
+                }, room=f"user_{target_user_id}")
+                return jsonify({'status': 'pending', 'message': 'Message request sent!'})
+        
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = m.dm_permissions_conf.insert_one({
+            'requester_id': sender_id,
+            'target_id': target_id,
+            'status': 'pending',
+            'created_at': now,
+            'updated_at': now
+        })
+        
+        m.socketio.emit('dm_request', {
+            'request_id': str(result.inserted_id),
+            'from_user_id': str(sender_id),
+            'from_username': current_user.username,
+            'from_avatar': getattr(current_user, 'profile_image_url', None)
+        }, room=f"user_{target_user_id}")
+        
+        m.send_push_notification_to_user(
+            target_user_id,
+            f"{current_user.username} wants to message you",
+            "Tap to view message request",
+            url=url_for('chat.messages_page', _external=True),
+            tag=f'dm-request-{current_user.id}'
+        )
+        
+        return jsonify({'status': 'pending', 'message': 'Message request sent!'})
+    except Exception as e:
+        current_app.logger.error(f"Error sending DM request: {e}")
+        return jsonify({'error': 'Failed to send request'}), 400
 
 
 @bp.route('/api/messages/request/<request_id>/accept', methods=['POST'])
 @login_required
 def api_accept_dm_request(request_id):
     import main as m
-    perm = m.dm_permissions_conf.find_one({'_id': ObjectId(request_id)})
-    if not perm or str(perm.get('target_id')) != current_user.id:
-        return jsonify({'error': 'Not found or unauthorized'}), 404
-    m.dm_permissions_conf.update_one({'_id': ObjectId(request_id)}, {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
-    return jsonify({'success': True})
+    try:
+        req = m.dm_permissions_conf.find_one({'_id': ObjectId(request_id), 'target_id': ObjectId(current_user.id), 'status': 'pending'})
+        if not req:
+            return jsonify({'error': 'Request not found'}), 404
+        
+        m.dm_permissions_conf.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': 'accepted', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        
+        requester_id = str(req['requester_id'])
+        requester = m.users_conf.find_one({'_id': req['requester_id']}, {'username': 1})
+        
+        m.socketio.emit('dm_request_accepted', {
+            'by_user_id': str(current_user.id),
+            'by_username': current_user.username,
+            'accepted_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+        }, room=f"user_{requester_id}")
+        
+        return jsonify({
+            'success': True,
+            'user_id': requester_id, 
+            'username': requester['username'] if requester else 'Unknown',
+            'redirect': url_for('chat.messages_page', user_id=requester_id)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('/api/messages/request/<request_id>/reject', methods=['POST'])
 @login_required
 def api_reject_dm_request(request_id):
     import main as m
-    perm = m.dm_permissions_conf.find_one({'_id': ObjectId(request_id)})
-    if not perm or str(perm.get('target_id')) != current_user.id:
-        return jsonify({'error': 'Not found or unauthorized'}), 404
-    m.dm_permissions_conf.update_one({'_id': ObjectId(request_id)}, {'$set': {'status': 'rejected', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
-    return jsonify({'success': True})
+    try:
+        req = m.dm_permissions_conf.find_one({'_id': ObjectId(request_id), 'target_id': ObjectId(current_user.id), 'status': 'pending'})
+        if not req:
+            return jsonify({'error': 'Request not found'}), 404
+        
+        m.dm_permissions_conf.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': 'rejected', 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('/api/messages/requests')
 @login_required
 def api_list_dm_requests():
     import main as m
-    requests_list = list(m.dm_permissions_conf.find({'target_id': ObjectId(current_user.id), 'status': 'pending'}).sort('updated_at', -1))
-    result = []
-    for req in requests_list:
-        requester = m.users_conf.find_one({'_id': req['requester_id']}, {'username': 1, 'profile_image_url': 1})
-        if requester:
-            result.append({'request_id': str(req['_id']), 'requester_id': str(req['requester_id']), 'username': requester.get('username'), 'profile_image': requester.get('profile_image_url'), 'requested_at': req.get('updated_at', req.get('created_at')).isoformat() if req.get('updated_at') or req.get('created_at') else None})
-    return jsonify({'requests': result})
+    try:
+        requests = list(m.dm_permissions_conf.find({
+            'target_id': ObjectId(current_user.id),
+            'status': 'pending'
+        }).sort('created_at', -1))
+        
+        result = []
+        for req in requests:
+            user = m.users_conf.find_one({'_id': req['requester_id']}, {'username': 1, 'profile_image_url': 1})
+            if user:
+                result.append({
+                    'request_id': str(req['_id']),
+                    'from_user_id': str(req['requester_id']),
+                    'from_username': user['username'],
+                    'from_avatar': user.get('profile_image_url'),
+                    'created_at': req['created_at'].isoformat() + 'Z' if req.get('created_at') and req['created_at'].tzinfo is None else (req['created_at'].isoformat().replace('+00:00', 'Z') if req.get('created_at') else None)
+                })
+        
+        return jsonify({'requests': result})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('/api/messages/dm_status/<target_user_id>')
@@ -222,20 +361,30 @@ def api_list_dm_requests():
 def api_dm_status(target_user_id):
     import main as m
     try:
-        target_oid = ObjectId(target_user_id)
-    except Exception:
-        return jsonify({'error': 'Invalid user ID'}), 400
-    target_user = m.users_conf.find_one({'_id': target_oid}, {'dm_privacy': 1})
-    if not target_user:
-        return jsonify({'error': 'User not found'}), 404
-    if target_user.get('dm_privacy') == 'nobody':
-        return jsonify({'status': 'disabled', 'message': 'This user does not accept direct messages.'})
-    perm = m.dm_permissions_conf.find_one({'requester_id': ObjectId(current_user.id), 'target_id': target_oid})
-    if perm:
-        return jsonify({'status': perm.get('status')})
-    if m.can_dm(str(current_user.id), target_user_id):
-        return jsonify({'status': 'accepted'})
-    return jsonify({'status': 'none'})
+        if str(current_user.id) == target_user_id:
+            return jsonify({'status': 'self'})
+        
+        target_id = ObjectId(target_user_id)
+        sender_id = ObjectId(current_user.id)
+        
+        if m.can_dm(str(sender_id), target_user_id):
+            return jsonify({'status': 'accepted'})
+        
+        pending = m.dm_permissions_conf.find_one({
+            'requester_id': sender_id,
+            'target_id': target_id,
+            'status': 'pending'
+        })
+        if pending:
+            return jsonify({'status': 'pending'})
+        
+        target_user = m.users_conf.find_one({'_id': target_id}, {'dm_privacy': 1})
+        if target_user and target_user.get('dm_privacy') == 'nobody':
+            return jsonify({'status': 'disabled'})
+        
+        return jsonify({'status': 'none'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 
 @bp.route('/api/messages/upload_image', methods=['POST'])
@@ -567,10 +716,10 @@ def api_list_scheduled_messages(other_user_id):
             entry = {
                 'id': str(msg['_id']),
                 'content': content,
-                'scheduled_at': msg['scheduled_at'].isoformat().replace('+00:00', 'Z') if msg.get('scheduled_at') else None,
+                'scheduled_at': msg['scheduled_at'].isoformat() + 'Z' if msg.get('scheduled_at') and msg['scheduled_at'].tzinfo is None else (msg['scheduled_at'].isoformat().replace('+00:00', 'Z') if msg.get('scheduled_at') else None),
                 'status': msg['status'],
                 'message_type': msg.get('message_type', 'text'),
-                'created_at': msg['created_at'].isoformat().replace('+00:00', 'Z') if msg.get('created_at') else None
+                'created_at': msg['created_at'].isoformat() + 'Z' if msg.get('created_at') and msg['created_at'].tzinfo is None else (msg['created_at'].isoformat().replace('+00:00', 'Z') if msg.get('created_at') else None)
             }
             if msg.get('image_url'):
                 raw_img = msg['image_url']

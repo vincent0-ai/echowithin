@@ -42,7 +42,7 @@ def personal_space():
         skip_saved = (saved_page - 1) * per_page
         paginated_saved_ids = saved_post_ids[skip_saved : skip_saved + per_page]
         
-        posts_map = {post['_id']: post for post in posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
+        posts_map = {post['_id']: post for post in m.posts_conf.find({'_id': {'$in': paginated_saved_ids}})}
         ordered_posts = [posts_map[pid] for pid in paginated_saved_ids if pid in posts_map]
         
         with app.app_context():

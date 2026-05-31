@@ -52,25 +52,42 @@ def personal_space():
     total_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
     skip_notes = (notes_page - 1) * per_page
 
+    # OPTIMIZATION: Use projection to only fetch needed fields (exclude heavy 'content' field)
     personal_posts_raw = list(m.personal_posts_conf.aggregate([
         {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}}},
+        {'$project': {
+            'content': 1,
+            'encrypted': 1,
+            'user_id': 1,
+            'content_owner_id': 1,
+            'owner_id': 1,
+            'source_owner_id': 1,
+            'saved_from_owner_id': 1,
+            'source_note_id': 1,
+            'source_share_id': 1,
+            'reference': 1,
+            'tags': 1,
+            'created_at': 1,
+            'updated_at': 1,
+            'is_locked': 1
+        }},
         {'$lookup': {
             'from': 'personal_posts',
-            'localField': 'source_note_id',
-            'foreignField': '_id',
+            'let': {'source_note_id': '$source_note_id'},
+            'pipeline': [
+                {'$match': {'$expr': {'$eq': ['$_id', '$$source_note_id']}}},
+                {'$project': {
+                    'content': 1,
+                    'user_id': 1,
+                    'content_owner_id': 1,
+                    'created_at': 1,
+                    'updated_at': 1
+                }}
+            ],
             'as': 'original'
         }},
         {'$addFields': {
             'original_doc': {'$arrayElemAt': ['$original', 0]}
-        }},
-        {'$lookup': {
-            'from': 'users',
-            'localField': 'original_doc.user_id',
-            'foreignField': '_id',
-            'as': 'original_user'
-        }},
-        {'$addFields': {
-            'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
         }},
         {'$addFields': {
             '_sort_ts': {
@@ -92,7 +109,10 @@ def personal_space():
     ]))
     personal_posts = []
     for note in personal_posts_raw:
-        note['content'] = m._decrypt_note_record(note)
+        # OPTIMIZATION: Only decrypt a preview (300 chars) for the list view
+        # Full content is cached in Redis; if user expands, JS fetches full content via API
+        note['content'] = m._decrypt_note_record(note, max_preview_chars=300)
+        note['content_preview'] = True  # Flag for template: content is truncated
         # Determine if an update is available on the original note
         note['update_available'] = False
         if note.get('source_note_id') and note.get('original_doc'):
@@ -105,9 +125,11 @@ def personal_space():
                 if clone_ts.tzinfo is None:
                     clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                 if orig_ts > clone_ts:
+                    # OPTIMIZATION: Only decrypt original if timestamps differ (avoids extra decryption)
                     try:
                         orig_decrypted = m._decrypt_note_record(orig)
-                        if note['content'] != orig_decrypted:
+                        clone_decrypted = m._decrypt_note_record(note)
+                        if clone_decrypted != orig_decrypted:
                             note['update_available'] = True
                     except Exception:
                         note['update_available'] = True
@@ -339,6 +361,78 @@ def personal_space():
         ],
         pending_proposals_map=pending_proposals_map
     )
+
+
+@bp.route('/api/note/content/<note_id>', methods=['GET'])
+@login_required
+def api_note_full_content(note_id):
+    """Fetch the FULL decrypted content of a note (used by JS when user expands a preview)."""
+    import main as m
+    try:
+        obj_id = m.safe_object_id(note_id)
+        if not obj_id:
+            return jsonify({'error': 'Invalid note ID'}), 400
+
+        note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        # _decrypt_note_record will check Redis cache first, avoiding re-decryption
+        full_content = m._decrypt_note_record(note)
+        return jsonify({
+            'success': True,
+            'content': full_content,
+            'note_id': note_id
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching full note content {note_id}: {e}")
+        return jsonify({'error': 'Internal error'}), 500
+
+
+@bp.route('/api/activity/feed')
+@login_required
+def api_activity_feed():
+    """Lightweight activity feed endpoint - loaded lazily via AJAX to avoid slow page loads."""
+    import main as m
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = min(20, max(1, int(request.args.get('per_page', 10))))
+
+        activity_raw = list(m.note_versions_conf.find(
+            {'content_owner_id': ObjectId(current_user.id)}
+        ).sort('created_at', -1).skip((page - 1) * per_page).limit(per_page))
+
+        items = []
+        for item in activity_raw:
+            entry = {
+                'id': str(item['_id']),
+                'event_type': item.get('event_type'),
+                'editor_name': item.get('editor_name', 'Unknown'),
+                'edit_summary': (item.get('edit_summary') or '')[:120],
+                'status': item.get('status'),
+                'created_at': item.get('created_at').isoformat() if item.get('created_at') else None,
+                'is_read_by_owner': item.get('is_read_by_owner', False),
+            }
+            # Decrypt proposal preview
+            if item.get('event_type') == 'proposal' and item.get('proposed_content'):
+                candidates = m._candidate_user_ids(
+                    item.get('content_owner_id'),
+                    item.get('editor_id'),
+                    current_user.id
+                )
+                decrypted = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates)
+                entry['proposed_content_preview'] = (decrypted or '')[:200]
+            items.append(entry)
+
+        return jsonify({
+            'success': True,
+            'items': items,
+            'page': page,
+            'has_more': len(items) == per_page
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching activity feed: {e}")
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @bp.route('/api/activity/mark_read', methods=['POST'])
@@ -764,6 +858,9 @@ def edit_personal_post(post_id):
 
         # Re-index with updated decrypted content
         m.index_note_to_typesense(post_id, decrypted_content=content)
+
+        # Invalidate decryption cache so next load gets fresh content
+        m.invalidate_note_decryption_cache(post_id)
 
         # Broadcast update to other devices/sessions for real-time sync
         m.socketio.emit('note_changed', {

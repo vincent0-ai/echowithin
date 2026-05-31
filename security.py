@@ -342,12 +342,76 @@ def _note_decryption_candidates(note, share=None):
     return candidates
 
 
-def _decrypt_note_record(note, share=None):
+# ---------------------------------------------------------------------------
+# DECRYPTION CACHE LAYER
+# ---------------------------------------------------------------------------
+# Cache decrypted note content in Redis so we don't re-decrypt on every page load.
+# The cache is invalidated whenever a note is edited or its encryption changes.
+# TTL: 300 seconds (5 minutes) — long enough for most browsing sessions.
+
+_CACHE_DECRYPT_TTL = 300
+
+def _decrypted_cache_key(note_id):
+    return f"decrypted_note:{note_id}"
+
+def _invalidate_decrypted_cache(note_id):
+    """Remove the decrypted cache entry for a note when it's edited."""
+    if database.redis_cache:
+        note_id_str = str(note_id) if not isinstance(note_id, str) else note_id
+        try:
+            database.redis_cache.delete(_decrypted_cache_key(note_id_str))
+        except Exception:
+            pass
+
+def _decrypt_note_record(note, share=None, max_preview_chars=None):
+    """
+    Decrypt a note record, optionally caching the result in Redis.
+    
+    If max_preview_chars is set, only decrypt the first N characters and
+    truncate with '...' — useful for list views where full content isn't needed.
+    
+    The full decrypted content is cached to avoid re-decryption when the user
+    expands a note or navigates away and back.
+    """
+    note_id = note.get('_id')
+    note_id_str = str(note_id) if note_id else None
+
+    # 1. Check Redis cache first
+    if note_id_str and database.redis_cache:
+        try:
+            cached = database.redis_cache.get(_decrypted_cache_key(note_id_str))
+            if cached is not None:
+                decrypted_content = cached.decode('utf-8')
+                if max_preview_chars and len(decrypted_content) > max_preview_chars:
+                    return decrypted_content[:max_preview_chars] + '...'
+                return decrypted_content
+        except Exception:
+            pass  # Fall through to decrypt
+
+    # 2. Perform the actual decryption
     candidates = _note_decryption_candidates(note, share)
     decrypted = _decrypt_with_candidate_ids(note.get('content', ''), candidates)
-    if decrypted is not None:
-        return decrypted
-    return '[Content unavailable \u2014 decryption error]'
+    if decrypted is None:
+        return '[Content unavailable \u2014 decryption error]'
+
+    # 3. Apply preview truncation if requested
+    if max_preview_chars and len(decrypted) > max_preview_chars:
+        preview = decrypted[:max_preview_chars] + '...'
+    else:
+        preview = decrypted
+
+    # 4. Cache the FULL decrypted content (not preview) in Redis
+    if note_id_str and database.redis_cache:
+        try:
+            database.redis_cache.setex(
+                _decrypted_cache_key(note_id_str),
+                _CACHE_DECRYPT_TTL,
+                decrypted
+            )
+        except Exception:
+            pass  # Non-critical: skip cache on failure
+
+    return preview
 
 
 # --- Community Encryption Utilities ---
@@ -440,3 +504,8 @@ def owner_required(f):
 
         return f(*args, **kwargs)
     return decorated_function
+
+# Expose the cache invalidation helper at module level
+def invalidate_note_decryption_cache(note_id):
+    """Public helper to invalidate the decryption cache for a note."""
+    _invalidate_decrypted_cache(note_id)

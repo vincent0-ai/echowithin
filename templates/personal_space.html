@@ -4728,17 +4728,45 @@
 
 
         // 1. Global Delegated Click Handler
-        document.addEventListener('click', (e) => {
+        document.addEventListener('click', async (e) => {
             // Edit Note
             const editBtn = e.target.closest('.edit-note-btn');
             if (editBtn) {
                 const noteId = editBtn.dataset.id;
-                const rawContent = editBtn.dataset.raw;
+                let rawContent = editBtn.dataset.raw;
                 const reference = editBtn.dataset.reference || '';
                 const tagsStr = editBtn.dataset.tags || '[]';
                 const updatedAt = editBtn.dataset.updatedAt || '';
                 let tags = [];
                 try { tags = JSON.parse(tagsStr); } catch (e) { }
+
+                const noteCard = editBtn.closest('.note-card');
+                const contentEl = noteCard ? noteCard.querySelector('.note-content.rendered-note') : null;
+
+                if (contentEl && contentEl.dataset.preview === 'true') {
+                    const icon = editBtn.querySelector('i');
+                    const origClass = icon ? icon.className : '';
+                    if (icon) icon.className = 'fas fa-spinner fa-spin';
+                    editBtn.disabled = true;
+
+                    try {
+                        const res = await fetch(`/api/note/content/${noteId}`);
+                        const data = await res.json();
+                        if (data.success && data.content) {
+                            rawContent = data.content;
+                            contentEl.dataset.raw = data.content;
+                            contentEl.innerHTML = renderMarkdownWithMath(data.content);
+                            contentEl.dataset.preview = 'false';
+                        }
+                    } catch (err) {
+                        console.error('Failed to load full note content for editing:', err);
+                    } finally {
+                        if (icon) icon.className = origClass;
+                        editBtn.disabled = false;
+                    }
+                } else if (contentEl) {
+                    rawContent = contentEl.dataset.raw || rawContent;
+                }
 
                 // Decode HTML entities
                 const tmp = document.createElement('textarea');

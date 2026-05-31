@@ -469,7 +469,7 @@ def api_upload_note_attachment(share_id):
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext in m.ALLOWED_IMAGE_EXTENSIONS:
         file_type = 'image'
-        max_size = MAX_IMAGE_SIZE  # 5 MB
+        max_size = m.MAX_IMAGE_SIZE  # 5 MB
     elif ext in m.ALLOWED_AUDIO_EXTENSIONS:
         file_type = 'audio'
         max_size = 10 * 1024 * 1024  # 10 MB for audio
@@ -1247,9 +1247,23 @@ def api_decide_note_proposal(version_id):
         if action != 'accept':
             return jsonify({'error': 'Invalid action'}), 400
 
+        candidates = m._candidate_user_ids(
+            proposal.get('content_owner_id'),
+            proposal.get('editor_id'),
+            note.get('content_owner_id'),
+            note.get('user_id'),
+            current_user.id
+        )
         current_plain = m._decrypt_note_record(note)
-        base_plain = proposal.get('base_content_plain') or m.decrypt_note(proposal.get('base_content') or proposal.get('content', ''), user_id=current_user.id)
-        proposed_plain = proposal.get('proposed_content_plain') or m.decrypt_note(proposal.get('proposed_content', ''), user_id=current_user.id)
+        base_encrypted = proposal.get('base_content') or proposal.get('content', '')
+        base_plain = proposal.get('base_content_plain') or (
+            m._decrypt_with_candidate_ids(base_encrypted, candidates) if base_encrypted else None
+        ) or m.decrypt_note(base_encrypted, user_id=current_user.id)
+        
+        proposed_encrypted = proposal.get('proposed_content', '')
+        proposed_plain = proposal.get('proposed_content_plain') or (
+            m._decrypt_with_candidate_ids(proposed_encrypted, candidates) if proposed_encrypted else None
+        ) or m.decrypt_note(proposed_encrypted, user_id=current_user.id)
 
         merged_content = (data.get('merged_content') or '').strip()
 
@@ -1359,7 +1373,7 @@ def api_get_note_comments(share_id):
             '_id': c_id,
             'author_name': c.get('author_name', 'Unknown'),
             'author_id': str(c.get('author_id', '')),
-            'content': m.decrypt_note(c['content']) if c.get('encrypted', False) else c['content'],
+            'content': m.decrypt_note(c['content'], user_id=str(c.get('author_id'))) if c.get('encrypted', False) else c['content'],
             'created_at': (c['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat() if c.get('created_at') and c['created_at'].tzinfo is None else c['created_at'].isoformat()) if c.get('created_at') else None,
             'replies': []
         }
@@ -1402,7 +1416,7 @@ def api_post_note_comment(share_id):
         'note_id': share['note_id'],
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
-        'content': m.encrypt_note(content),
+        'content': m.encrypt_note(content, user_id=str(current_user.id)),
         'encrypted': True,
         'parent_id': None,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
@@ -1455,7 +1469,7 @@ def api_post_note_reply(share_id, comment_id):
         'note_id': share['note_id'],
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
-        'content': m.encrypt_note(content),
+        'content': m.encrypt_note(content, user_id=str(current_user.id)),
         'encrypted': True,
         'parent_id': parent_id,
         'created_at': datetime.datetime.now(datetime.timezone.utc)

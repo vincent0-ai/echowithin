@@ -3400,6 +3400,9 @@
         _sharedVoiceState = 'sending';
 
         sharedMediaRecorder.onstop = () => {
+            if (sharedMediaRecorder.stream) {
+                sharedMediaRecorder.stream.getTracks().forEach(t => t.stop());
+            }
             const audioBlob = new Blob(sharedAudioChunks, { type: 'audio/webm' });
             const file = new File([audioBlob], 'voice.webm', { type: 'audio/webm' });
             window.cancelSharedVoiceRecording();

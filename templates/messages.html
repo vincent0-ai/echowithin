@@ -2693,6 +2693,9 @@
             _voiceRecordingState = 'sending';
 
             mediaRecorder.onstop = () => {
+                if (mediaRecorder.stream) {
+                    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+                }
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
                 fd.append('voice', audioBlob, 'voice.webm');

@@ -6644,6 +6644,9 @@
                     </div>
                 `;
             }).join('');
+            if (typeof window.formatDecryptionErrors === 'function') {
+                window.formatDecryptionErrors(container);
+            }
         }
 
         // --- UI Helpers ---

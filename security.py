@@ -356,8 +356,13 @@ def _decrypted_cache_key(note_id):
 
 def _invalidate_decrypted_cache(note_id):
     """Remove the decrypted cache entry for a note when it's edited."""
+    note_id_str = str(note_id) if not isinstance(note_id, str) else note_id
+    try:
+        if note_id_str in database._decrypted_notes_memory_cache:
+            del database._decrypted_notes_memory_cache[note_id_str]
+    except Exception:
+        pass
     if database.redis_cache:
-        note_id_str = str(note_id) if not isinstance(note_id, str) else note_id
         try:
             database.redis_cache.delete(_decrypted_cache_key(note_id_str))
         except Exception:
@@ -365,28 +370,39 @@ def _invalidate_decrypted_cache(note_id):
 
 def _decrypt_note_record(note, share=None, max_preview_chars=None):
     """
-    Decrypt a note record, optionally caching the result in Redis.
+    Decrypt a note record, optionally caching the result in both an in-memory
+    cache and Redis to avoid re-decryption on every page load.
     
     If max_preview_chars is set, only decrypt the first N characters and
     truncate with '...' — useful for list views where full content isn't needed.
-    
-    The full decrypted content is cached to avoid re-decryption when the user
-    expands a note or navigates away and back.
     """
     note_id = note.get('_id')
     note_id_str = str(note_id) if note_id else None
 
-    # 1. Check Redis cache first
-    if note_id_str and database.redis_cache:
+    # 1. Check in-memory and Redis caches
+    decrypted_content = None
+    if note_id_str:
         try:
-            cached = database.redis_cache.get(_decrypted_cache_key(note_id_str))
-            if cached is not None:
-                decrypted_content = cached.decode('utf-8')
-                if max_preview_chars and len(decrypted_content) > max_preview_chars:
-                    return decrypted_content[:max_preview_chars] + '...'
-                return decrypted_content
+            decrypted_content = database._decrypted_notes_memory_cache.get(note_id_str)
         except Exception:
-            pass  # Fall through to decrypt
+            pass
+        
+        if decrypted_content is None and database.redis_cache:
+            try:
+                cached = database.redis_cache.get(_decrypted_cache_key(note_id_str))
+                if cached is not None:
+                    decrypted_content = cached.decode('utf-8')
+                    try:
+                        database._decrypted_notes_memory_cache[note_id_str] = decrypted_content
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+    if decrypted_content is not None:
+        if max_preview_chars and len(decrypted_content) > max_preview_chars:
+            return decrypted_content[:max_preview_chars] + '...'
+        return decrypted_content
 
     # 2. Perform the actual decryption
     candidates = _note_decryption_candidates(note, share)
@@ -394,22 +410,27 @@ def _decrypt_note_record(note, share=None, max_preview_chars=None):
     if decrypted is None:
         return '[Content unavailable \u2014 decryption error]'
 
-    # 3. Apply preview truncation if requested
+    # 3. Cache the FULL decrypted content
+    if note_id_str:
+        try:
+            database._decrypted_notes_memory_cache[note_id_str] = decrypted
+        except Exception:
+            pass
+        if database.redis_cache:
+            try:
+                database.redis_cache.setex(
+                    _decrypted_cache_key(note_id_str),
+                    _CACHE_DECRYPT_TTL,
+                    decrypted
+                )
+            except Exception:
+                pass
+
+    # 4. Apply preview truncation if requested
     if max_preview_chars and len(decrypted) > max_preview_chars:
         preview = decrypted[:max_preview_chars] + '...'
     else:
         preview = decrypted
-
-    # 4. Cache the FULL decrypted content (not preview) in Redis
-    if note_id_str and database.redis_cache:
-        try:
-            database.redis_cache.setex(
-                _decrypted_cache_key(note_id_str),
-                _CACHE_DECRYPT_TTL,
-                decrypted
-            )
-        except Exception:
-            pass  # Non-critical: skip cache on failure
 
     return preview
 

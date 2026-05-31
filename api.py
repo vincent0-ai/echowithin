@@ -1145,14 +1145,15 @@ def api_sync_note(note_id):
         if original_modified.tzinfo is None:
             original_modified = original_modified.replace(tzinfo=datetime.timezone.utc)
 
-        # Check if content is actually different
-        if note.get('content') == original_note.get('content'):
-            decrypted = m._decrypt_note_record(note)
+        # Check if content is actually different by comparing decrypted plaintexts
+        clone_decrypted = m._decrypt_note_record(note)
+        original_decrypted = m._decrypt_note_record(original_note, share)
+        if clone_decrypted == original_decrypted:
             return jsonify({
                 'success': True,
-                'content': decrypted,
+                'content': clone_decrypted,
                 'direction': 'none',
-                'message': 'Already in sync — no changes found.'
+                'message': 'Already in sync.'
             })
 
         if clone_modified > original_modified:

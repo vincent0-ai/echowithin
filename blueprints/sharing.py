@@ -469,7 +469,7 @@ def api_upload_note_attachment(share_id):
     ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
     if ext in m.ALLOWED_IMAGE_EXTENSIONS:
         file_type = 'image'
-        max_size = MAX_IMAGE_SIZE  # 5 MB
+        max_size = m.MAX_IMAGE_SIZE  # 5 MB
     elif ext in m.ALLOWED_AUDIO_EXTENSIONS:
         file_type = 'audio'
         max_size = 10 * 1024 * 1024  # 10 MB for audio

@@ -2307,7 +2307,7 @@
             <div class="note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
-                <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}" {% if note.content_preview %}data-preview="true"{% endif %}>
                     {{ note.content | markdown | safe }}
                 </div>
                 {% if note.reference or note.tags %}
@@ -5664,8 +5664,9 @@
                 if (el.dataset.collapseInit) return;
                 el.dataset.collapseInit = '1';
 
-                // Measure natural height
-                if (el.scrollHeight > COLLAPSE_THRESHOLD + 40) {
+                // Measure height or check if note is a truncated preview
+                const isPreview = el.dataset.preview === 'true';
+                if (el.scrollHeight > COLLAPSE_THRESHOLD + 40 || isPreview) {
                     el.classList.add('note-collapsed');
 
                     // Create toggle button
@@ -5673,9 +5674,27 @@
                     toggleBtn.type = 'button';
                     toggleBtn.className = 'note-toggle-btn';
                     toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show more';
-                    toggleBtn.addEventListener('click', () => {
+                    toggleBtn.addEventListener('click', async () => {
                         const isCollapsed = el.classList.contains('note-collapsed');
                         if (isCollapsed) {
+                            if (el.dataset.preview === 'true') {
+                                toggleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                                try {
+                                    const card = el.closest('.note-card');
+                                    const noteId = card ? card.dataset.noteId : null;
+                                    if (noteId) {
+                                        const res = await fetch(`/api/note/content/${noteId}`);
+                                        const data = await res.json();
+                                        if (data.success && data.content) {
+                                            el.dataset.raw = data.content;
+                                            el.innerHTML = renderMarkdownWithMath(data.content);
+                                            el.dataset.preview = 'false';
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error('Failed to load full note content:', e);
+                                }
+                            }
                             el.classList.remove('note-collapsed');
                             el.classList.add('note-expanded');
                             toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show less';

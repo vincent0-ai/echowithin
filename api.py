@@ -1245,13 +1245,17 @@ def api_sync_note(note_id):
                     for old_ver in oldest:
                         m.note_versions_conf.delete_one({'_id': old_ver['_id']})
 
-            # Push clone content to original
+            # Push clone content to original — re-encrypt with original owner's key
+            # to prevent decryption failures when content_owner_id doesn't match the key.
+            push_decrypted = m._decrypt_note_record(note, share)
+            push_encrypted = m.encrypt_note(push_decrypted, user_id=original_owner_id) if push_decrypted and push_decrypted != '[Content unavailable \u2014 decryption error]' else note.get('content')
+            push_owner_id = ObjectId(original_owner_id) if (push_decrypted and push_decrypted != '[Content unavailable \u2014 decryption error]') else note.get('content_owner_id', note.get('user_id'))
             m.personal_posts_conf.update_one(
                 {'_id': source_note_id},
                 {'$set': {
-                    'content': note.get('content'),
-                    'encrypted': note.get('encrypted', True),
-                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+                    'content': push_encrypted,
+                    'encrypted': True,
+                    'content_owner_id': push_owner_id,
                     'reference': note.get('reference', ''),
                     'tags': note.get('tags', []),
                     'updated_at': now
@@ -1259,7 +1263,7 @@ def api_sync_note(note_id):
             )
 
             # Re-index original in Typesense
-            decrypted = m._decrypt_note_record(note)
+            decrypted = push_decrypted if (push_decrypted and push_decrypted != '[Content unavailable \u2014 decryption error]') else m._decrypt_note_record(note, share)
             m.index_note_to_typesense(str(source_note_id), decrypted_content=decrypted)
 
             # Broadcast update to participants in the share room
@@ -1290,13 +1294,17 @@ def api_sync_note(note_id):
                     for old_ver in oldest:
                         m.note_versions_conf.delete_one({'_id': old_ver['_id']})
 
-            # Pull original content to clone
+            # Pull original content to clone — re-encrypt with clone owner's key
+            # to prevent decryption failures when clone owner differs from original owner.
+            pull_decrypted = m._decrypt_note_record(original_note, share)
+            pull_encrypted = m.encrypt_note(pull_decrypted, user_id=str(current_user.id)) if pull_decrypted and pull_decrypted != '[Content unavailable \u2014 decryption error]' else original_note.get('content')
+            pull_owner_id = ObjectId(current_user.id) if (pull_decrypted and pull_decrypted != '[Content unavailable \u2014 decryption error]') else original_note.get('content_owner_id', original_note.get('user_id'))
             m.personal_posts_conf.update_one(
                 {'_id': obj_id},
                 {'$set': {
-                    'content': original_note.get('content'),
-                    'encrypted': original_note.get('encrypted', True),
-                    'content_owner_id': original_note.get('content_owner_id', original_note.get('user_id')),
+                    'content': pull_encrypted,
+                    'encrypted': True,
+                    'content_owner_id': pull_owner_id,
                     'reference': original_note.get('reference', ''),
                     'tags': original_note.get('tags', []),
                     'updated_at': now
@@ -1304,7 +1312,7 @@ def api_sync_note(note_id):
             )
 
             # Re-index clone in Typesense
-            decrypted = m._decrypt_note_record(original_note)
+            decrypted = pull_decrypted if (pull_decrypted and pull_decrypted != '[Content unavailable \u2014 decryption error]') else m._decrypt_note_record(original_note, share)
             m.index_note_to_typesense(note_id, decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER

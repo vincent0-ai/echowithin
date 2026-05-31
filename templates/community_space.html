@@ -629,6 +629,10 @@
             const raw = note.getAttribute('data-raw');
             if (raw) note.innerHTML = raw.replace(/\n/g, '<br>');
         });
+
+        if (typeof window.formatDecryptionErrors === 'function') {
+            window.formatDecryptionErrors(document.body);
+        }
     });
 
     function randomPick() {

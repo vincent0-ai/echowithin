@@ -132,7 +132,7 @@ app.register_blueprint(sharing_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(communities_bp)
 app.register_blueprint(admin_bp)
-app.register_blueprint(api_bp)
+app.register_blueprint(api_bp, url_prefix='/api/v1')
 
 # CSRF exemptions — these routes accept external/API requests without CSRF tokens
 csrf.exempt(api_bp)  # Entire API blueprint (mobile app, external clients)

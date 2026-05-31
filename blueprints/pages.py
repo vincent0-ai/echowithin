@@ -301,9 +301,12 @@ def download_note_app_apk():
 @bp.route('/static/update-manifest.json')
 def serve_update_manifest():
     import main as m
-    db_manifest = m.app_updates_conf.find_one({'key': 'latest'})
-    if db_manifest:
-        return jsonify({"versionCode": db_manifest.get('versionCode'), "versionName": db_manifest.get('versionName'), "apkUrl": db_manifest.get('apkUrl'), "changelog": db_manifest.get('changelog')})
+    try:
+        db_manifest = m.app_updates_conf.find_one({'key': 'latest'})
+        if db_manifest:
+            return jsonify({"versionCode": db_manifest.get('versionCode'), "versionName": db_manifest.get('versionName'), "apkUrl": db_manifest.get('apkUrl'), "changelog": db_manifest.get('changelog')})
+    except Exception as e:
+        current_app.logger.error(f"Error querying update manifest from DB: {e}")
     manifest_path = os.path.join(current_app.static_folder, 'update-manifest.json')
     if os.path.exists(manifest_path):
         try:

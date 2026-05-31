@@ -4624,7 +4624,7 @@
             noteCard.innerHTML = typeof renderMarkdownWithMath === 'function' ? renderMarkdownWithMath(result.content || '') : (result.content || '');
         }
         if (typeof window.showFlashMessage === 'function') window.showFlashMessage('Version restored successfully.', 'success');
-        window.loadVersionHistory(SHARED_NOTE_ID);
+        window.closeVersionModal();
     };
 
     window.loadOwnerLinks = async function () {

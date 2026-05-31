@@ -4602,7 +4602,7 @@
                 }
             }
             if (typeof window.showFlashMessage === 'function') window.showFlashMessage('Version restored successfully.', 'success');
-            window.loadVersionHistory(window.currentVersionNoteId);
+            window.closeVersionModal();
         };
 
         window.reviewProposal = async function (proposalId, action, index) {

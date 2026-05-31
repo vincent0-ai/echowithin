@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "1.4",
+  "versionCode": 6,
+  "versionName": "1.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🚀 Added Check for Updates feature directly inside Settings screen!\n✨ Preserved tab scroll states during navigation using saveState/restoreState.\n📐 Added LaTeX and math equations block and inline formatting native support!\n🔒 Restructured 401 interceptor with a 5-second cooldown to eliminate repeated logout cascades."
+  "changelog": "🚀 Offline-first rendering and local database CRUD operations bypass network sync to enable immediate, lag-free navigation.\n⚡ Synchronous note loading and list rendering from local db.\n📐 Bundled offline KaTeX + Marked.js for fast, offline mathematical rendering in note details.\n🔒 Keep all local cached notes read-only after logout or 401 session expiration."
 }

@@ -7,6 +7,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 ## Features
 
 ### Encrypted Personal Notes
+
 - End-to-end encrypted personal notes using **Fernet symmetric encryption** with per-user **PBKDF2-HMAC-SHA256** key derivation (480,000 iterations, OWASP 2024).
 - Full-text search over personal notes via Typesense (tenant-isolated scoped keys).
 - Version history with restore, diff previews, and merge conflict handling.
@@ -14,6 +15,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Tiered limits: 50 notes / 20K chars (free) → unlimited / 100K chars (premium).
 
 ### Note Sharing & Real-Time Collaboration
+
 - Share notes with view or edit permissions, optional access codes, and expiry (1h, 1d, 7d).
 - **Surprise themes** (Valentine, Birthday, Anniversary, Celebration) with custom photo and audio uploads.
 - Typewriter-effect reveal for recipients.
@@ -23,6 +25,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Discussion threads and file attachments on shared notes.
 
 ### Community Blogging
+
 - Rich posts with **Markdown** support, image/video uploads, and tag categorization.
 - **Threaded comments** with replies, voting, and reactions (Heart, Wow, Insightful, etc.).
 - Post saving/bookmarking, view tracking, and engagement-based sorting (hot / top / trending).
@@ -30,12 +33,14 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Auto-generated RSS feed, sitemap_index.xml, and OpenGraph/Twitter meta tags.
 
 ### Communities
+
 - Create and join topic-based communities with public or invite-code access.
 - Community notes with surprise themes, reactions, and moderation tools.
 - Reporting system for rule violations.
 - Tiered limits: 1 community (free) → 5 communities (premium).
 
 ### Direct Messaging
+
 - Encrypted 1-on-1 conversations with text, images, and voice notes.
 - Emoji reactions, message editing, deletion, and full conversation deletion.
 - Message **request system** — users approve or reject first contact.
@@ -43,6 +48,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - **Scheduled messages** for delayed delivery (premium feature).
 
 ### Push Notifications
+
 - **Web Push** (PWA) via VAPID for browser notifications on desktop, Android, and iOS.
 - **Firebase Cloud Messaging (FCM)** for native Android app notifications.
 - Notifications for: new posts, comments, replies, message requests, collaboration proposals, and admin announcements.
@@ -50,23 +56,25 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Stale subscription cleanup, iOS Safari-specific handling.
 
 ### Premium Tier — KSH 50/month
-| Feature | Free | Premium |
-|---------|------|---------|
-| Personal notes | 50 | Unlimited |
-| Characters per note | 20,000 | 100,000 |
-| Share links per note | 3 | Unlimited |
-| Surprise notes | 20 | Unlimited |
-| Note locking | No | Yes |
-| Blog space | No | Yes |
-| Scheduled messages | No | Yes |
-| Note media attachments | No | Up to 20 |
-| Version history retention | 7 days | 365 days |
-| Auto-approve collaborations | No | Yes |
-| Communities | 1 | 5 |
+
+| Feature                     | Free   | Premium   |
+| --------------------------- | ------ | --------- |
+| Personal notes              | 50     | Unlimited |
+| Characters per note         | 20,000 | 100,000   |
+| Share links per note        | 3      | Unlimited |
+| Surprise notes              | 20     | Unlimited |
+| Note locking                | No     | Yes       |
+| Blog space                  | No     | Yes       |
+| Scheduled messages          | No     | Yes       |
+| Note media attachments      | No     | Up to 20  |
+| Version history retention   | 7 days | 365 days  |
+| Auto-approve collaborations | No     | Yes       |
+| Communities                 | 1      | 5         |
 
 All new accounts receive a **1-day free trial** of premium features. Payments processed via **Paystack**.
 
 ### Admin Dashboard
+
 - Real-time analytics: posts/day, comments/day, active users, traffic, system health.
 - User management: ban, unban, delete accounts, grant/revoke premium.
 - Post management: pin, unpin, force-delete.
@@ -75,6 +83,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - APK upload with OTA update manifest for the Android app.
 
 ### Security & Safety
+
 - **CSRF protection** via Flask-WTF on all mutating routes.
 - **Rate limiting** on authentication endpoints (15 calls/minute).
 - Honeypot bot detection on registration.
@@ -86,6 +95,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - ProxyFix middleware for correct IP/URL generation behind reverse proxies.
 
 ### PWA & Native App
+
 - Installable on Android and iOS via the browser.
 - Service Worker with offline caching and a dedicated `/offline` fallback page.
 - Web Share Target API support.
@@ -99,28 +109,28 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 
 ## Tech Stack
 
-| Category | Technology |
-|----------|------------|
-| **Backend Framework** | Python 3.12, Flask 3.1, Gunicorn 23 (gevent WebSocket worker) |
-| **Database** | MongoDB 7 (primary), Redis 7 (caching + task queue) |
-| **Real-time** | Flask-SocketIO 5.3, gevent-websocket |
-| **Search** | Typesense (full-text with typo tolerance, tenant-isolated scoped keys) |
-| **Media** | Cloudinary (images, video, audio) |
-| **Background Jobs** | Flask-RQ2 (RQ 2.6) |
-| **Push Notifications** | pywebpush (VAPID), firebase-admin (FCM) |
-| **Email** | Flask-Mail (SMTP) with List-Unsubscribe headers |
-| **Authentication** | Flask-Login, Google OAuth2 (requests-oauthlib) |
-| **Encryption** | Fernet (cryptography 46), PBKDF2-HMAC-SHA256 |
-| **AI / Moderation** | JigsawStack (NSFW detection, tag suggestions) |
-| **Markdown** | Python-Markdown 3.10 + Bleach 6.3 sanitization |
-| **Payments** | Paystack |
-| **Frontend** | Jinja2 templates, vanilla JS, CSS |
-| **PWA** | Service Worker, Web App Manifest, Web Share Target |
-| **Native App** | Capacitor (Android + iOS) with Jetpack Compose UI |
-| **Scheduling** | schedule library + custom scheduler.py |
-| **Deployment** | Docker, CapRover, Render/Heroku Procfile |
-| **Monitoring** | JSON-formatted rotating logs, ntfy push notifications, system health dashboard |
-| **Linting** | Flake8, Pylint, Prospector |
+| Category               | Technology                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| **Backend Framework**  | Python 3.12, Flask 3.1, Gunicorn 23 (gevent WebSocket worker)                  |
+| **Database**           | MongoDB 7 (primary), Redis 7 (caching + task queue)                            |
+| **Real-time**          | Flask-SocketIO 5.3, gevent-websocket                                           |
+| **Search**             | Typesense (full-text with typo tolerance, tenant-isolated scoped keys)         |
+| **Media**              | Cloudinary (images, video, audio)                                              |
+| **Background Jobs**    | Flask-RQ2 (RQ 2.6)                                                             |
+| **Push Notifications** | pywebpush (VAPID), firebase-admin (FCM)                                        |
+| **Email**              | Flask-Mail (SMTP) with List-Unsubscribe headers                                |
+| **Authentication**     | Flask-Login, Google OAuth2 (requests-oauthlib)                                 |
+| **Encryption**         | Fernet (cryptography 46), PBKDF2-HMAC-SHA256                                   |
+| **AI / Moderation**    | JigsawStack (NSFW detection, tag suggestions)                                  |
+| **Markdown**           | Python-Markdown 3.10 + Bleach 6.3 sanitization                                 |
+| **Payments**           | Paystack                                                                       |
+| **Frontend**           | Jinja2 templates, vanilla JS, CSS                                              |
+| **PWA**                | Service Worker, Web App Manifest, Web Share Target                             |
+| **Native App**         | Capacitor (Android + iOS) with Jetpack Compose UI                              |
+| **Scheduling**         | schedule library + custom scheduler.py                                         |
+| **Deployment**         | Docker, CapRover, Render/Heroku Procfile                                       |
+| **Monitoring**         | JSON-formatted rotating logs, ntfy push notifications, system health dashboard |
+| **Linting**            | Flake8, Pylint, Prospector                                                     |
 
 ---
 
@@ -152,6 +162,7 @@ echowithin/
 ```
 
 **Process model** (via Procfile / honcho):
+
 - `web`: Gunicorn with 3 gevent WebSocket workers
 - `worker`: RQ worker for background jobs
 - `scheduler`: Custom scheduler for periodic tasks
@@ -161,6 +172,7 @@ echowithin/
 ## Installation & Setup
 
 ### Prerequisites
+
 - Python 3.12+
 - MongoDB instance (Atlas or local)
 - Redis server
@@ -194,25 +206,25 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 
 ### Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SECRET` | Yes | Flask secret key for sessions, CSRF, and encryption derivation |
-| `MONGODB_CONNECTION` | Yes | MongoDB connection URI |
-| `REDIS_HOST` | Yes | Redis hostname |
-| `REDIS_PORT` | Yes | Redis port |
-| `REDIS_PASSWORD` | Yes | Redis password |
-| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` | Yes | SMTP credentials |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth2 credentials |
-| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Yes | Cloudinary media storage |
-| `JIGSAW_API_KEY` | Yes | AI content moderation & tag suggestions |
-| `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_API_KEY`, `TYPESENSE_SEARCH_KEY` | No | Typesense search engine (search degrades without it) |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | No | Web Push notifications |
-| `FIREBASE_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT` | No | FCM native app push |
-| `PAYSTACK_SECRET_KEY` | No | Payment processing |
-| `NTFY_TOPIC`, `NTFY_USERNAME`, `NTFY_PASSWORD` | No | Admin push notifications via ntfy |
-| `FLASK_URL` | No | Canonical base URL for email links (default: https://echowithin.xyz) |
-| `SESSION_COOKIE_SECURE` | No | Force secure cookies (default: True) |
-| `BYPASS_RATE_LIMIT` | No | Development only — disables rate limiting when FLASK_ENV=development |
+| Variable                                                                        | Required | Description                                                          |
+| ------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------- |
+| `SECRET`                                                                        | Yes      | Flask secret key for sessions, CSRF, and encryption derivation       |
+| `MONGODB_CONNECTION`                                                            | Yes      | MongoDB connection URI                                               |
+| `REDIS_HOST`                                                                    | Yes      | Redis hostname                                                       |
+| `REDIS_PORT`                                                                    | Yes      | Redis port                                                           |
+| `REDIS_PASSWORD`                                                                | Yes      | Redis password                                                       |
+| `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`                    | Yes      | SMTP credentials                                                     |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                      | Yes      | Google OAuth2 credentials                                            |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`          | Yes      | Cloudinary media storage                                             |
+| `JIGSAW_API_KEY`                                                                | Yes      | AI content moderation & tag suggestions                              |
+| `TYPESENSE_HOST`, `TYPESENSE_PORT`, `TYPESENSE_API_KEY`, `TYPESENSE_SEARCH_KEY` | No       | Typesense search engine (search degrades without it)                 |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`                        | No       | Web Push notifications                                               |
+| `FIREBASE_CREDENTIALS` or `FIREBASE_SERVICE_ACCOUNT`                            | No       | FCM native app push                                                  |
+| `PAYSTACK_SECRET_KEY`                                                           | No       | Payment processing                                                   |
+| `NTFY_TOPIC`, `NTFY_USERNAME`, `NTFY_PASSWORD`                                  | No       | Admin push notifications via ntfy                                    |
+| `FLASK_URL`                                                                     | No       | Canonical base URL for email links (default: https://echowithin.xyz) |
+| `SESSION_COOKIE_SECURE`                                                         | No       | Force secure cookies (default: True)                                 |
+| `BYPASS_RATE_LIMIT`                                                             | No       | Development only — disables rate limiting when FLASK_ENV=development |
 
 ---
 
@@ -220,20 +232,20 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 
 A REST API is available at `/api/v1/*` for mobile/native app clients. Key endpoint groups:
 
-| Group | Endpoints |
-|-------|-----------|
-| **Auth** | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth` |
-| **Notes** | `GET /notes`, `GET /notes/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
-| **Note Shares** | `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/revoke_share/<id>` |
-| **Versions** | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>` |
-| **Proposals** | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision` |
-| **Sync** | `POST /notes/<id>/sync` |
-| **Lock** | `POST /notes/toggle_lock/<id>` |
-| **App Lock** | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove` |
-| **FCM** | `POST /fcm/register`, `POST /fcm/unregister` |
-| **Premium** | `POST /premium/activate` |
-| **Profile** | `GET /profile` |
-| **Collaboration** | `GET /notes/share/<share_id>/attachments` |
+| Group             | Endpoints                                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| **Auth**          | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`              |
+| **Notes**         | `GET /notes`, `GET /notes/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
+| **Note Shares**   | `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/revoke_share/<id>`                       |
+| **Versions**      | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                      |
+| **Proposals**     | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                              |
+| **Sync**          | `POST /notes/<id>/sync`                                                                                   |
+| **Lock**          | `POST /notes/toggle_lock/<id>`                                                                            |
+| **App Lock**      | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`    |
+| **FCM**           | `POST /fcm/register`, `POST /fcm/unregister`                                                              |
+| **Premium**       | `POST /premium/activate`                                                                                  |
+| **Profile**       | `GET /profile`                                                                                            |
+| **Collaboration** | `GET /notes/share/<share_id>/attachments`                                                                 |
 
 ---
 

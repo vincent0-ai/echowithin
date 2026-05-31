@@ -384,8 +384,8 @@ def create_personal_post():
         # --- Premium tier enforcement ---
         user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
         # Safety: if DB lookup fails, fall back to current_user's cached tier
-        max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.m.get_limit('max_notes')
-        max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.m.get_limit('max_chars_per_note')
+        max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
+        max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
         current_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
         if current_count >= max_notes:
             flash(f'You have reached the limit of {max_notes} notes on your current plan. Upgrade to Premium for unlimited notes!', 'warning')
@@ -427,8 +427,8 @@ def create_personal_post_json():
     # --- Premium tier enforcement ---
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     # Safety: if DB lookup fails, fall back to current_user's cached tier
-    max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.m.get_limit('max_notes')
-    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.m.get_limit('max_chars_per_note')
+    max_notes = m.get_limit(user_doc, 'max_notes') if user_doc else current_user.get_limit('max_notes')
+    max_chars = m.get_limit(user_doc, 'max_chars_per_note') if user_doc else current_user.get_limit('max_chars_per_note')
     current_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
     if current_count >= max_notes:
         return jsonify({'error': f'Note limit reached ({max_notes}). Upgrade to Premium for unlimited notes.', 'upgrade': True}), 403
@@ -694,7 +694,7 @@ def edit_personal_post(post_id):
             return jsonify({'error': 'Content cannot be empty'}), 400
 
         # Enforce max length
-        max_chars = current_user.m.get_limit('max_chars_per_note')
+        max_chars = current_user.get_limit('max_chars_per_note')
         raw_len = len(content)
         content = content[:max_chars]
         if raw_len > max_chars:

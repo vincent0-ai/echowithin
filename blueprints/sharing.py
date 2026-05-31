@@ -392,7 +392,7 @@ def view_shared_note(share_id):
     # Determine if current user can upload media (premium + edit permission)
     can_upload_media = False
     if current_user.is_authenticated and share['permissions'] == 'edit' and surprise_theme == 'none':
-        can_upload_media = current_user.m.get_limit('note_media_attachments') is True
+        can_upload_media = current_user.get_limit('note_media_attachments') is True
 
     return render_template('shared_note.html', 
                            share_id=share_id, 
@@ -449,12 +449,12 @@ def api_upload_note_attachment(share_id):
         return jsonify({'error': 'Access code required'}), 401
 
     # Premium gate
-    if not current_user.m.get_limit('note_media_attachments'):
+    if not current_user.get_limit('note_media_attachments'):
         return jsonify({'error': 'Note media attachments require Premium', 'upgrade': True}), 403
 
     # Check per-note attachment limit
     note_id = share['note_id']
-    max_attachments = current_user.m.get_limit('max_note_attachments') or 20
+    max_attachments = current_user.get_limit('max_note_attachments') or 20
     existing_count = m.note_attachments_conf.count_documents({'note_id': note_id})
     if existing_count >= max_attachments:
         return jsonify({'error': f'Maximum {max_attachments} attachments per note reached'}), 400
@@ -1264,7 +1264,7 @@ def api_decide_note_proposal(version_id):
                 'diff_text': m.build_unified_diff_text(current_plain, proposed_plain)
             }), 409
 
-        max_chars = current_user.m.get_limit('max_chars_per_note')
+        max_chars = current_user.get_limit('max_chars_per_note')
         final_plain = (merged_content or proposed_plain).strip()[:max_chars]
         final_encrypted = m.encrypt_note(final_plain, user_id=current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)

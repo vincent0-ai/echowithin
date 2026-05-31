@@ -82,9 +82,11 @@ Layer 6 — External Entry
 ## Detailed Module Assignments
 
 ### 1. config.py (~150 lines)
+
 **Purpose:** Environment variables, global constants, app configuration init.
 
 **Symbols assigned:**
+
 - `load_dotenv(override=True)` call
 - `get_env_variable(name)` — helper
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
@@ -108,9 +110,11 @@ Layer 6 — External Entry
 ---
 
 ### 2. database.py (~100 lines)
+
 **Purpose:** MongoDB client, all collection references, Redis cache, thread pool executor.
 
 **Symbols assigned:**
+
 - `client` (MongoClient)
 - `db` (echowithin_db)
 - All 27 collection variables:
@@ -132,9 +136,11 @@ Layer 6 — External Entry
 ---
 
 ### 3. security.py (~250 lines)
+
 **Purpose:** Encryption system (v1/v2/v3 Fernet), rate limiting, security utilities.
 
 **Symbols assigned:**
+
 - Encryption core:
   - `_derive_fernet_key(secret_bytes, salt, iterations)`
   - `_get_notes_encryption_key()` — v1 legacy
@@ -174,11 +180,13 @@ Layer 6 — External Entry
 ---
 
 ### 4. utils.py (~800 lines)
+
 **Purpose:** Template filters, tier/premium helpers, Cloudinary/media helpers, Typesense indexing wrappers, text utilities, achievement helpers, comment helpers, badge helpers, post preparation, caches, socketio shared state, sitemap generation, NLP tag suggestions, DM helpers.
 
 **Symbols assigned:**
 
 Template filters (registered in app.py on the app object):
+
 - `linkify_filter(text)` — `@app.template_filter('linkify')` logic
 - `_linkify_target_blank(attrs, new=False)` — bleach callback
 - `markdown_filter(text)` — `@app.template_filter('markdown')` logic
@@ -209,6 +217,7 @@ Template filters (registered in app.py on the app object):
 - Sitemap generation helpers (if separable from route logic)
 
 Tier/premium helpers:
+
 - `get_user_tier(user_doc)`
 - `get_limit(user_doc, limit_name)`
 - `is_premium(user_doc)`
@@ -216,6 +225,7 @@ Tier/premium helpers:
 - `get_trial_days_remaining(user_doc)`
 
 Typesense indexing wrappers:
+
 - `_note_to_typesense_doc(note_doc, decrypted_content)`
 - `_post_to_typesense_doc(post_doc)`
 - `index_note_to_typesense(note_id, decrypted_content)`
@@ -229,11 +239,13 @@ Typesense indexing wrappers:
 - `_remove_stale_push_subscription(subscription_doc, platform, user_label, reason)`
 
 Caches:
+
 - `_pinned_announcement_cache`, `profile_stats_cache`, `profile_posts_cache`
 - `related_posts_cache`, `post_comment_stats_cache`, `community_stats_cache`
 - `blog_feed_cache`, `user_loader_cache`, `weekly_winners_cache`
 
 SocketIO shared state:
+
 - `active_chat_views` (dict)
 - `active_note_viewers` (dict)
 - `note_locks` (dict)
@@ -246,11 +258,13 @@ SocketIO shared state:
 ---
 
 ### 5. notifications.py (~500 lines)
+
 **Purpose:** Email sending, push notification (Web Push + FCM), push subscription management.
 
 **Symbols assigned:**
 
 Email:
+
 - `send_code(email, gen_code, retries, delay)` — verification code
 - `send_reset_code(email, reset_token, retries, delay)` — password reset
 - `send_new_post_notifications(post_id_str)` — RQ job
@@ -258,6 +272,7 @@ Email:
 - `send_log_email_job()` — RQ job
 
 Push notifications:
+
 - `send_push_notification_to_user(user_id_str, title, body, url, tag, extra_data)` — RQ job
 - `send_admin_broadcast_push(title, body, url)` — RQ job
 - `send_push_notifications_for_new_post(post_id_str)` — RQ job
@@ -266,6 +281,7 @@ Push notifications:
 - `send_fcm_notifications_batch(tokens_list, title, body, url, data)`
 
 Other:
+
 - `send_ntfy_notification(event_type, message, tags)` — RQ job
 - Push subscription routes: `get_vapid_public_key`, `subscribe_push`, `unsubscribe_push`, `push_subscription_status`
 - FCM registration routes: `register_fcm_token`, `unregister_fcm_token`
@@ -278,10 +294,12 @@ Other:
 **Imported by:** app.py, blueprints that trigger notifications (blog, notes, chat, etc.)
 
 Actually, `notifications.py` has a design tension. It has both:
+
 - Pure notification-sending utility functions (used by many blueprints)
 - Route handlers (push subscribe/unsubscribe, FCM register/unregister)
 
 The route handlers are only called via HTTP. They need to be registered as routes. Options:
+
 1. Keep route handlers in notifications.py and register them in app.py
 2. Split route handlers into a separate push blueprint
 3. Move route handlers back into the blueprint that makes most sense (e.g., blog.py or a push.py blueprint)
@@ -291,6 +309,7 @@ I'll go with option 2: create `blueprints/push.py` for push subscription managem
 Wait, there's no `push.py` in my blueprint list. Let me add it. Actually, push subscription routes are small (5 routes) and could go in any existing blueprint. Let me put them in `blueprints/pages.py` since they're not really tied to any specific domain feature. Or better, put them in `blueprints/blog.py` since they relate to post notifications. Actually, they're standalone — let me create `blueprints/push.py`.
 
 Updated blueprints list:
+
 - `blueprints/push.py` — Push subscriptions, FCM registration, VAPID key
 - Remove push-related routes from `notifications.py`
 
@@ -299,6 +318,7 @@ But wait, do I really want 12 blueprint files? The push part is only ~5 routes a
 Actually, the cleanest Flasks approach: put all push-related routes in a small Blueprint inside `notifications.py` itself, then register that blueprint in app.py. But the instructions say "If it does not use Blueprints, do not introduce them" — however, the codebase DOES use Blueprints (api.py). So introducing Blueprints for new modules is fine since it's an existing pattern.
 
 Let me finalize: `notifications.py` will contain:
+
 1. Pure utility functions (send_email, send_push, etc.)
 2. A small Blueprint `push_bp` for the push subscription routes
 
@@ -307,9 +327,11 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 6. models.py (~100 lines)
+
 **Purpose:** User model, user loaders for Flask-Login.
 
 **Symbols assigned:**
+
 - `class User(UserMixin)` with all methods:
   - `__init__`, `is_active` (property), `is_premium` (property)
   - `is_trial` (property), `trial_days_remaining` (property)
@@ -324,9 +346,11 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 7. app.py (~300 lines)
+
 **Purpose:** Create Flask app + SocketIO + Mail + LoginManager + CSRF + RQ, register all hooks/middleware/context_processors/error_handlers, register all blueprints, run block.
 
 **Symbols assigned:**
+
 - `app` (Flask instance)
 - `socketio` (SocketIO instance)
 - `mail` (Mail instance)
@@ -364,6 +388,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 8. blueprints/auth.py (~250 lines)
+
 **Purpose:** All authentication-related routes.
 
 **Routes:**
@@ -387,6 +412,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 9. blueprints/blog.py (~1,500 lines)
+
 **Purpose:** Blog feed, post CRUD, comments, reactions, saves, shares, RSS feed.
 
 **Routes:**
@@ -423,6 +449,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 | `/api/notifications/unread-count` | GET | `get_unread_notification_count` |
 
 **RQ jobs in this module:**
+
 - `process_post_media(post_id_str, temp_image_paths, temp_video_path)` — `@rq.job`
 
 **Template rendering:** `dashboard.html`, `home.html`, `blog.html`, `all_posts.html`, `view_post.html`, `edit_post.html`, `create_post.html`, `feed.xml`
@@ -434,6 +461,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 10. blueprints/notes.py (~1,200 lines)
+
 **Purpose:** Personal notes CRUD, sync, search, personal space, app lock.
 
 **Routes:**
@@ -465,6 +493,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 11. blueprints/sharing.py (~900 lines)
+
 **Purpose:** Note sharing links, shared note viewing, version history, collaborative proposals, note discussions, attachments. Plus socketio events for note collaboration.
 
 **Routes:**
@@ -491,6 +520,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 | `/share/note/<share_id>/comments/<cid>` | DELETE | `api_delete_note_comment` |
 
 **SocketIO event handlers:**
+
 - `join_note`, `leave_note`, `acquire_lock`, `release_lock`, `note_update`, `discussion_new_comment`
 
 **Template rendering:** `shared_note.html`
@@ -502,6 +532,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 12. blueprints/chat.py (~1,200 lines)
+
 **Purpose:** DM inbox, real-time messaging, DM requests, scheduled messages, message search/edit/delete, image/voice upload.
 
 **Routes:**
@@ -530,6 +561,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 | `/api/messages/schedule/process` | POST | `api_process_scheduled_messages` |
 
 **SocketIO event handlers:**
+
 - `join_inbox`, `send_dm`, `viewing_chat`, `leave_chat`, `disconnect`, `typing`, `stop_typing`
 
 **Template rendering:** `messages.html`
@@ -541,6 +573,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 13. blueprints/communities.py (~700 lines)
+
 **Purpose:** Community CRUD, joining, community notes, reactions, reporting.
 
 **Routes:**
@@ -570,6 +603,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 14. blueprints/admin.py (~1,000 lines)
+
 **Purpose:** Admin dashboard, metrics, user management, posts management, announcements, communities admin, system health, reindexing, CSV export, APK upload.
 
 **Routes:**
@@ -608,6 +642,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 | `/api/admin/reports/<rid>/dismiss` | POST | `api_admin_dismiss_report` |
 
 **RQ jobs in this module:**
+
 - `reindex_typesense_job()` — `@rq.job`
 
 **Template rendering:** `admin_dashboard.html`, `admin_posts.html`, `admin_users.html`, `admin_premium_users.html`, `admin_announcements.html`, `admin_communities.html`
@@ -617,6 +652,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 15. blueprints/profile.py (~300 lines)
+
 **Purpose:** Profile view, settings, data export, account deletion.
 
 **Routes:**
@@ -635,6 +671,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 16. blueprints/payments.py (~200 lines)
+
 **Purpose:** Paystack payment processing.
 
 **Routes:**
@@ -649,6 +686,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 17. blueprints/pages.py (~500 lines)
+
 **Purpose:** Static pages, sitemap, robots.txt, contact, newsletter, RSS, favicon, APK download, update manifest, assetlinks, service worker, quote API, user/tag suggestions.
 
 **Routes:**
@@ -683,6 +721,7 @@ This keeps push routes colocated with push utilities, which makes sense.
 ---
 
 ### 18. blueprints/push.py (~120 lines)
+
 **Purpose:** Push notification subscription management (Web Push + FCM).
 
 **Routes:**
@@ -702,33 +741,39 @@ This keeps push routes colocated with push utilities, which makes sense.
 ## Circular Import Risk Analysis
 
 **Risk 1: utils.py → typesense_client.py → utils.py**
+
 - utils.py uses `_t` (typesense client singleton) for indexing functions
 - typesense_client.py is a standalone module with no imports from the project
 - **Resolution:** No risk. typesense_client imports nothing from the project.
 
 **Risk 2: Blueprints → notifications.py → Blueprints**
+
 - Blueprints trigger notifications when posts/comments are created
 - notifications.py is pure utility functions, does not import from blueprints
 - **Resolution:** No risk.
 
 **Risk 3: app.py imports all blueprints; blueprints need app.py imports**
+
 - Blueprints import from shared modules (database, utils, security, etc.), not from app.py
 - app.py only creates the app and registers blueprints
 - **Resolution:** No risk. Blueprints never import from app.py.
 
 **Risk 4: socketio in database.py vs blueprints that use socketio.emit**
+
 - `socketio` object is created in app.py (needs app instance)
 - Blueprints use `socketio.emit()` for real-time events
 - Need to ensure socketio is importable by blueprints
 - **Resolution:** Import socketio from app.py in blueprints. Since app.py registers blueprints AFTER creating socketio, and Python module imports are cached, this works. Alternatively, store socketio on a shared module (e.g., make database.py hold it). Let's put socketio on app.py and import `from app import socketio` in blueprints — this is a common Flask-SocketIO pattern.
 
 Actually, this IS a circular risk: app.py imports blueprints, blueprints import socketio from app.py. Python resolves module-level imports correctly if app.py registers blueprints after socketio is created (not at import time, but at function-call time). In practice:
+
 - `from app import socketio` in a blueprint
 - app.py does `socketio = SocketIO(app)` before `app.register_blueprint(auth_bp)`
 - When the blueprint module is first imported, `app` module is loaded and `socketio` is available
 - **Works fine.**
 
 **Risk 5: api.py (existing blueprint) imports from main via get_main_globals()**
+
 - api.py currently does `def get_main_globals(): import main; return main`
 - After refactoring, api.py needs to import from new shared modules instead
 - **Resolution:** Update api.py imports to use new modules (database, utils, security, models, notifications). Remove the lazy import pattern. This is a breaking change only for api.py, which we control.
@@ -739,9 +784,9 @@ Actually, this IS a circular risk: app.py imports blueprints, blueprints import 
 
 Symbols classified as DEAD after full project scan:
 
-| Line | Symbol | Reason |
-|------|--------|--------|
-| TBD | `fix_template_syntax.py` | Utility script, never imported/called by any production code or scheduler |
+| Line | Symbol                   | Reason                                                                    |
+| ---- | ------------------------ | ------------------------------------------------------------------------- |
+| TBD  | `fix_template_syntax.py` | Utility script, never imported/called by any production code or scheduler |
 
 Additional dead symbols will be identified in Phase 3 after exhaustive cross-reference scan.
 
@@ -749,19 +794,19 @@ Additional dead symbols will be identified in Phase 3 after exhaustive cross-ref
 
 ## Special Care Symbols
 
-| Symbol | Location | Care Needed |
-|--------|----------|-------------|
-| All `@rq.job` functions | main.py | RQ discovers jobs by function reference. Keep original qualified names or ensure RQ is configured to discover from new modules. Functions must remain importable from where RQ worker resolves them. |
-| `get_main_globals()` in api.py | api.py | Must be updated to import from new shared modules directly. This is a DYNAMIC pattern being replaced. |
-| `@socketio.on` handlers | main.py | Must be registered on the same `socketio` instance. After moving to blueprints, use `@socketio.on` importing socketio from app.py. |
-| `@login_manager.user_loader` | main.py | Must be registered on the same `login_manager` instance. Will be registered in app.py using import from models.py. |
-| `@login_manager.request_loader` | main.py | Same as above. |
-| `@app.template_filter` | main.py | Must be registered on the app. Will be done in app.py using imported filter functions from utils.py. |
-| `@app.before_request` / `@app.after_request` | main.py | Must be registered on the app. Will stay in app.py. |
-| `@app.context_processor` | main.py | Must be registered on the app. Will stay in app.py. |
-| `@app.errorhandler` | main.py | Must be registered on the app. Will stay in app.py. |
-| `wsgi.py` | root | `from main import app` → must update to `from app import app` |
-| `scheduler.py` subprocess calls | scripts/ | Paths change from `os.path.dirname(__file__)` — update references when moving to scripts/ folder |
+| Symbol                                       | Location | Care Needed                                                                                                                                                                                          |
+| -------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All `@rq.job` functions                      | main.py  | RQ discovers jobs by function reference. Keep original qualified names or ensure RQ is configured to discover from new modules. Functions must remain importable from where RQ worker resolves them. |
+| `get_main_globals()` in api.py               | api.py   | Must be updated to import from new shared modules directly. This is a DYNAMIC pattern being replaced.                                                                                                |
+| `@socketio.on` handlers                      | main.py  | Must be registered on the same `socketio` instance. After moving to blueprints, use `@socketio.on` importing socketio from app.py.                                                                   |
+| `@login_manager.user_loader`                 | main.py  | Must be registered on the same `login_manager` instance. Will be registered in app.py using import from models.py.                                                                                   |
+| `@login_manager.request_loader`              | main.py  | Same as above.                                                                                                                                                                                       |
+| `@app.template_filter`                       | main.py  | Must be registered on the app. Will be done in app.py using imported filter functions from utils.py.                                                                                                 |
+| `@app.before_request` / `@app.after_request` | main.py  | Must be registered on the app. Will stay in app.py.                                                                                                                                                  |
+| `@app.context_processor`                     | main.py  | Must be registered on the app. Will stay in app.py.                                                                                                                                                  |
+| `@app.errorhandler`                          | main.py  | Must be registered on the app. Will stay in app.py.                                                                                                                                                  |
+| `wsgi.py`                                    | root     | `from main import app` → must update to `from app import app`                                                                                                                                        |
+| `scheduler.py` subprocess calls              | scripts/ | Paths change from `os.path.dirname(__file__)` — update references when moving to scripts/ folder                                                                                                     |
 
 ---
 
@@ -786,31 +831,31 @@ The following standalone scripts will be moved from `echowithin/` root to `echow
 
 ## Line Count Estimates
 
-| Module | Est. Lines |
-|--------|------------|
-| config.py | 150 |
-| database.py | 100 |
-| security.py | 250 |
-| utils.py | 800 |
-| notifications.py | 500 |
-| models.py | 100 |
-| app.py | 300 |
-| blueprints/auth.py | 450 |
-| blueprints/blog.py | 2,000 |
-| blueprints/notes.py | 1,200 |
-| blueprints/sharing.py | 1,200 |
-| blueprints/chat.py | 1,500 |
-| blueprints/communities.py | 800 |
-| blueprints/admin.py | 1,200 |
-| blueprints/profile.py | 400 |
-| blueprints/payments.py | 200 |
-| blueprints/pages.py | 600 |
-| blueprints/push.py | 120 |
-| typesense_client.py | 294 (unchanged) |
-| api.py | 1,200+ (unchanged) |
-| **Total new/extracted** | **~12,364** |
-| **main.py before** | **14,135** |
-| **app.py after** | **~300** |
+| Module                    | Est. Lines         |
+| ------------------------- | ------------------ |
+| config.py                 | 150                |
+| database.py               | 100                |
+| security.py               | 250                |
+| utils.py                  | 800                |
+| notifications.py          | 500                |
+| models.py                 | 100                |
+| app.py                    | 300                |
+| blueprints/auth.py        | 450                |
+| blueprints/blog.py        | 2,000              |
+| blueprints/notes.py       | 1,200              |
+| blueprints/sharing.py     | 1,200              |
+| blueprints/chat.py        | 1,500              |
+| blueprints/communities.py | 800                |
+| blueprints/admin.py       | 1,200              |
+| blueprints/profile.py     | 400                |
+| blueprints/payments.py    | 200                |
+| blueprints/pages.py       | 600                |
+| blueprints/push.py        | 120                |
+| typesense_client.py       | 294 (unchanged)    |
+| api.py                    | 1,200+ (unchanged) |
+| **Total new/extracted**   | **~12,364**        |
+| **main.py before**        | **14,135**         |
+| **app.py after**          | **~300**           |
 
 ---
 

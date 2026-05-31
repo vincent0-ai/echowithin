@@ -7,10 +7,12 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 ## Phase 1.1 — Stack Inventory
 
 ### a. Python Version
+
 - **Python 3.13.13** (from `python --version`)
 - No version-specific patterns beyond standard-library usage
 
 ### b. Web Layer
+
 - **Flask 3.1.2** with `@app.route()` decorator pattern
 - **No Blueprints** used for existing routes (all routes decorated directly on `app`)
 - One exception: `api_bp` (Blueprint `api_v1`) registered at line 14132 under `/api/v1`, defined in `api.py` (1,200+ lines, for mobile/native app REST API)
@@ -20,6 +22,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - ProxyFix middleware for reverse proxy headers (Render)
 
 ### c. Database Layer
+
 - **MongoDB via PyMongo 4.15.4** (`pymongo.MongoClient`)
 - Database: `echowithin_db` (configured via env vars `DB_USERNAME`, `DB_PASSWORD`, `DB_CLUSTER`, `DB_NAME`)
 - **27 collections** tracked (line ~497–547):
@@ -54,6 +57,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **RQ 2.6.0** (Flask-RQ2) for background job queue, with `@rq.job` decorator.
 
 ### d. Authentication
+
 - **Flask-Login 0.6.3** with `UserMixin` class
 - `@login_manager.user_loader` — `load_user` (line 1681) with in-memory TTLCache
 - `@login_manager.request_loader` — `load_user_from_request` (line 1710) for API tokens (`X-App-Token` header, `Authorization: Bearer`, `x_app_token` cookie)
@@ -68,6 +72,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - `@owner_required` decorator (checks post ownership)
 
 ### e. File Handling
+
 - **Cloudinary** for image/video/audio uploads (profile pictures, post media, DM images, voice notes, community note media, valentine/surprise media)
 - **Local file serving**: `/uploads/<filename>` via `send_from_directory`
 - **APK serving**: `/download/note-app.apk` + admin APK upload to `static/downloads/`
@@ -76,6 +81,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **NSFW image detection**: Uses JigsawStack (via `jigsawstack` SDK + raw HTTP API) with background RQ job `process_image_for_nsfw`
 
 ### f. Email / Notifications
+
 - **Flask-Mail 0.10.0** (`Mail`, `Message`)
 - Email functions:
   - `send_code` (verification code)
@@ -87,6 +93,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **Unsubscribe tokens**: per-recipient SHA-256 tokens, RFC 8058 one-click (`List-Unsubscribe` header)
 
 ### g. External Integrations
+
 - **Typesense** — full-text search backend (`typesense_client.py`)
 - **JigsawStack** — AI: NSFW image detection, tag suggestions, note merge conflict resolution
 - **Cloudinary** — image/video hosting
@@ -99,6 +106,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **MongoDB Atlas** — backup target (`backup_to_atlas.py`)
 
 ### h. Background / Async Work
+
 - **RQ** (`Flask-RQ2`) background job queue (Redis-backed):
   - `process_image_for_nsfw` — NSFW image detection
   - `send_new_post_notifications` — email new post to immediate subscribers
@@ -122,6 +130,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **RQ Worker** (`worker.py`) — standalone process for processing RQ queues
 
 ### i. Template Rendering
+
 - **Jinja2** (Flask default, via `render_template`)
 - 42 templates in `templates/` directory
 - **Custom template filters**: `linkify`, `markdown`, `from_timestamp`, `to_iso`, `to_local`, `localtime`
@@ -130,6 +139,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **Macros**: `_macros.html`
 
 ### j. Configuration
+
 - **python-dotenv** — `.env` file loading
 - **Environment variables** (key ones):
   - `SECRET_KEY`, `DB_USERNAME`, `DB_PASSWORD`, `DB_CLUSTER`, `DB_NAME`
@@ -145,11 +155,13 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
   - `SOCKETIO_ALLOWED_ORIGINS`, `SESSION_COOKIE_SECURE`, `CSP_STRICT_NONCES`
 
 ### k. Testing
+
 - `tests/` directory exists but appears **empty** (no test files found)
 - `pytest` not in requirements.txt (no test framework installed)
 - No test infrastructure detected
 
 ### l. Other Patterns
+
 - **Monkey patching**: `gevent.monkey.patch_all()` at top of main.py (line 2–3)
 - **Rate limiting**: `ratelimit` library, wrapped in custom `limits` decorator (with dev bypass via `BYpass_RATE_LIMIT`)
 - **CSRF protection**: Flask-WTF `CSRFProtect` with exempt routes
@@ -170,6 +182,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 ## Phase 1.2 — Symbol Inventory (Summary)
 
 ### Main.py Total Symbols: ~300+
+
 - **~289 function definitions** (including route handlers, helpers, RQ jobs)
 - **2 class definitions**: `RequestIDFilter`, `User(UserMixin)`
 - **~179 route handlers** (`@app.route`)
@@ -181,6 +194,7 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 - **~40 global constants** (`TIER_LIMITS`, `ENGAGEMENT_WEIGHTS`, `ALLOWED_*_EXTENSIONS`, `VAPID_*`, etc.)
 
 ### External Files
+
 - **api.py**: Blueprint `api_v1` with ~25 API endpoints (auth, notes CRUD, app lock, push, sharing, versions, sync, proposals), ~1,200+ lines
 - **typesense_client.py**: Typesense client module, ~294 lines
 - **scheduler.py**: Standalone scheduler process, 135 lines
@@ -200,7 +214,9 @@ Generated: 2026-05-29 | main.py: 14,135 lines | 628,926 bytes
 ## Phase 1.3 — Dependency Graph (High-Level Clusters)
 
 ### Cluster 1: **Core Infrastructure** (bottom layer)
+
 Shared utilities imported by nearly everything:
+
 - MongoDB client + collections
 - Redis cache
 - Typesense client (`_t`)
@@ -211,6 +227,7 @@ Shared utilities imported by nearly everything:
 - Rate limiter wrapper
 
 ### Cluster 2: **Authentication**
+
 - User model (`User(UserMixin)`)
 - `load_user`, `load_user_from_request`
 - Login, register, confirm, logout routes
@@ -220,6 +237,7 @@ Shared utilities imported by nearly everything:
 - App tokens, re-auth
 
 ### Cluster 3: **Encryption**
+
 - `_derive_fernet_key`, `get_notes_fernet`, `_get_user_fernet`, `_get_dm_fernet`
 - `encrypt_note`, `decrypt_note`, `encrypt_dm`, `decrypt_dm`
 - `_decrypt_note_record`, `_decrypt_with_candidate_ids`
@@ -227,6 +245,7 @@ Shared utilities imported by nearly everything:
 - Used by: notes, DMs, community notes
 
 ### Cluster 4: **Notifications**
+
 - `send_code`, `send_reset_code` (email)
 - `send_new_post_notifications`, `send_weekly_newsletter` (email/RQ)
 - `send_push_notification_to_user`, `send_admin_broadcast_push`, `send_push_notifications_for_new_post`
@@ -237,6 +256,7 @@ Shared utilities imported by nearly everything:
 - FCM token registration
 
 ### Cluster 5: **Blog/Posts**
+
 - Post CRUD: `create_post`, `post`, `edit_post`, `update_post`, `delete_post`
 - Post viewing: `view_post`, `blog`, `all_posts`, `dashboard`, `home`
 - Post APIs: `get_all_posts_json`, `get_top_posts_json`, `get_hot_posts_json`, `get_related_posts_json`
@@ -244,11 +264,13 @@ Shared utilities imported by nearly everything:
 - Post feed: `feed.xml` (RSS), `prepare_posts` (enrichment)
 
 ### Cluster 6: **Comments**
+
 - `api_post_comments` (GET/POST)
 - `api_delete_comment`, `api_edit_comment`, `api_vote_comment`
 - `_serialize_comment`, `get_batch_comment_counts`
 
 ### Cluster 7: **Personal Notes**
+
 - CRUD: `create_personal_post`, `create_personal_post_json`, `edit_personal_post`, `delete_personal_post`
 - Sync: `sync_personal_post` (bidirectional push/pull)
 - Search: `search_personal_notes` (Typesense + MongoDB fallback)
@@ -257,6 +279,7 @@ Shared utilities imported by nearly everything:
 - Typesense: `reindex_my_notes`, `index_note_to_typesense`, `remove_note_from_typesense`
 
 ### Cluster 8: **Note Sharing & Collaboration**
+
 - Share CRUD: `api_create_share`, `api_revoke_share`, `api_get_note_shares`, `api_toggle_share_auto_approve`
 - View shared: `view_shared_note`, `view_saved_note`
 - Attachments: `api_upload_note_attachment`, `api_list_note_attachments`, `api_delete_note_attachment`
@@ -268,6 +291,7 @@ Shared utilities imported by nearly everything:
 - AI merge: `merge_conflict_ai`
 
 ### Cluster 9: **Chat / Direct Messages**
+
 - Inbox: `messages_page`, `api_message_history`
 - SocketIO DM: `join_inbox`, `send_dm`, `viewing_chat`, `leave_chat`, `disconnect`, `typing`, `stop_typing`
 - DM CRUD: `api_edit_message`, `api_delete_message`, `api_delete_chat`
@@ -280,6 +304,7 @@ Shared utilities imported by nearly everything:
 - Helpers: `can_dm`, `fetch_link_preview`
 
 ### Cluster 10: **Communities**
+
 - Community CRUD: `api_create_community`, `api_update_community`, `api_regenerate_invite`, `api_leave_community`, `api_remove_member`
 - Joining: `join_community_link`, `api_join_community_code`, `api_join_public_community`
 - View: `communities_page`, `view_community`
@@ -290,6 +315,7 @@ Shared utilities imported by nearly everything:
 - Admin: `admin_communities`, `api_admin_ban_community`, `api_admin_unban_community`, `api_admin_delete_community`, `api_admin_community_reports`, `api_admin_dismiss_report`
 
 ### Cluster 11: **Admin**
+
 - Dashboard: `admin_dashboard`, `admin_metrics`, `admin_traffic`, `admin_system_health`
 - Posts: `admin_posts`, `admin_delete_post`, `admin_pin_post`, `admin_unpin_post`
 - Users: `admin_users`, `ban_user`, `unban_user`, `delete_user`, `admin_active_users`
@@ -300,23 +326,28 @@ Shared utilities imported by nearly everything:
 - Reindex: `admin_reindex_typesense`, `admin_reindex_notes_typesense`, `reindex_typesense_job`, `api_clear_sitemap_cache`
 
 ### Cluster 12: **Profile & Settings**
+
 - Profile view: `profile`, `user_posts_page`
 - Settings: `profile_settings` (username, bio, avatar, notification pref, DM privacy)
 - Export data: `export_data`
 - Delete account: `delete_account`
 
 ### Cluster 13: **Payments (Paystack)**
+
 - `paystack_initialize`, `paystack_callback`, `paystack_webhook`
 
 ### Cluster 14: **Tier/Premium**
+
 - `get_user_tier`, `get_limit`, `is_premium`, `is_on_trial`, `get_trial_days_remaining`
 - `TIER_LIMITS` constant
 
 ### Cluster 15: **Search**
+
 - `search` route (Typesense + MongoDB fallback)
 - Typesense indexing helpers (posts + notes)
 
 ### Cluster 16: **Misc Web Pages**
+
 - Static pages: `offline`, `about`, `terms`, `faq`
 - `contact_developer` (contact form → email)
 - `unsubscribe` (newsletter)
@@ -328,6 +359,7 @@ Shared utilities imported by nearly everything:
 - `favicon`, `mobile_auth`
 
 ### Cluster 17: **Scheduled Scripts** (standalone `.py` files, not in main.py)
+
 - `scheduler.py` — master scheduler process
 - `worker.py` — RQ worker process
 - `process_scheduled_messages.py` — delivers due scheduled DMs
@@ -342,12 +374,14 @@ Shared utilities imported by nearly everything:
 ## Phase 1.4 — Dead Code Analysis
 
 Processing in Phase 3 after full symbol reference scan. Preliminary candidates:
+
 - `fix_template_syntax.py` (utility script, not imported by any production code)
 - Any symbols in main.py found with zero cross-references after full scan
 
 ---
 
 ## Dynamic Symbols (KEEP)
+
 - `get_main_globals()` in `api.py` — dynamic import of main module
 - All `@socketio.on` handlers — registered via decorator on global `socketio` object
 - All `@app.template_filter`, `@app.context_processor`, `@app.before_request`, `@app.after_request`, `@app.errorhandler` — Flask hook registration

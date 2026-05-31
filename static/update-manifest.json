@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2",
+  "versionCode": 6,
+  "versionName": "1.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "Flawless scrolling performance, secure offline PIN fallback, beautiful Notesnook design overhaul, rich markdown toolbar, character/word counters, and copy note features."
+  "changelog": "🚀 Offline-first rendering and local database CRUD operations bypass network sync to enable immediate, lag-free navigation.\n⚡ Synchronous note loading and list rendering from local db.\n📐 Bundled offline KaTeX + Marked.js for fast, offline mathematical rendering in note details.\n🔒 Keep all local cached notes read-only after logout or 401 session expiration."
 }

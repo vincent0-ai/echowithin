@@ -15,7 +15,7 @@
         <p style="font-size: 1.1rem; color: #666; margin-bottom: 2rem;">
             {{ message }}
         </p>
-        <a href="{{ url_for('home') }}" class="btn">Return to EchoWithin</a>
+        <a href="{{ url_for('pages.home') }}" class="btn">Return to EchoWithin</a>
         {% else %}
         <div style="font-size: 3rem; color: #e74c3c; margin-bottom: 1rem;">
             <i class="fas fa-exclamation-triangle"></i>
@@ -24,7 +24,7 @@
         <p style="font-size: 1.1rem; color: #666; margin-bottom: 2rem;">
             {{ message }}
         </p>
-        <a href="{{ url_for('about') }}" class="btn">Contact Support</a>
+        <a href="{{ url_for('pages.about') }}" class="btn">Contact Support</a>
         {% endif %}
     </div>
 </div>

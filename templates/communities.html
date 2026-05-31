@@ -373,7 +373,7 @@
         <strong>Community limit reached.</strong>
         You've created {{ user_max_communities }}/{{ user_max_communities }}.
         {% if not user_is_premium %}
-        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium" style="color: #e65100; font-weight: 600;">Upgrade</a>
+        <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium" style="color: #e65100; font-weight: 600;">Upgrade</a>
         {% endif %}
     </div>
     {% endif %}
@@ -382,7 +382,7 @@
     {% if communities %}
     <div class="section-label">Your Communities</div>
     {% for comm in communities %}
-    <a href="{{ url_for('view_community', community_id=comm._id) }}" class="community-card">
+    <a href="{{ url_for('communities.view_community', community_id=comm._id) }}" class="community-card">
         <div class="comm-info">
             <div class="comm-name">
                 {{ comm.name }}
@@ -422,7 +422,7 @@
         </div>
         <div style="display: flex; align-items: center; gap: 0.75rem;">
             <span style="font-size: 0.75rem; color: #999;">{{ comm.member_count }} members</span>
-            <form action="{{ url_for('api_join_public_community', community_id=comm._id) }}" method="POST" style="margin: 0;">
+            <form action="{{ url_for('communities.api_join_public_community', community_id=comm._id) }}" method="POST" style="margin: 0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-join-inline">Join</button>
             </form>
@@ -438,7 +438,7 @@
         <span class="close-modal" onclick="closeModal('createModal')">&times;</span>
         <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1rem; font-size: 1.1rem;">Create Community</h2>
 
-        <form action="{{ url_for('api_create_community') }}" method="POST">
+        <form action="{{ url_for('communities.api_create_community') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">
@@ -485,7 +485,7 @@
         <span class="close-modal" onclick="closeModal('joinModal')">&times;</span>
         <h2 style="margin-top: 0; color: var(--primary-color, #3e2217); margin-bottom: 1rem; font-size: 1.1rem;">Join Community</h2>
 
-        <form action="{{ url_for('api_join_community_code') }}" method="POST">
+        <form action="{{ url_for('communities.api_join_community_code') }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <div class="form-group">

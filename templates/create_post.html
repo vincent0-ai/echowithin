@@ -19,7 +19,7 @@
         <p>Share your ideas, experiences, and perspectives with the EchoWithin community.</p>
 
         {# CHECK THIS: Ensure 'create_post' matches the function name of your Flask route #}
-        <form id="create-post-form" action="{{ url_for('post') }}" method="POST" enctype="multipart/form-data"
+        <form id="create-post-form" action="{{ url_for('blog.post') }}" method="POST" enctype="multipart/form-data"
             style="margin-top: 2rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -256,7 +256,7 @@
                     xhr.addEventListener('load', function () {
                         // Follow the redirect from the server response
                         if (xhr.status >= 200 && xhr.status < 400) {
-                            window.location.href = xhr.responseURL || '{{ url_for("blog") }}';
+                            window.location.href = xhr.responseURL || '{{ url_for("blog.blog") }}';
                         } else {
                             if (submitButton) {
                                 submitButton.disabled = false;

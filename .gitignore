@@ -19,7 +19,9 @@ locustfile.py
 
 firebase-service-account.json
 patch_base.py
-scripts/
 fix_*.py
 !fix_template_syntax.py
 skills-lock.json
+.agents/
+echowithin.log
+fix_routes.py

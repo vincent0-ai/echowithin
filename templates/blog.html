@@ -35,10 +35,10 @@
                 <strong id="blog-share-promo-title" style="display:block; color:#3e2217; margin-bottom:0.15rem;">Got something meaningful to share?</strong>
                 {% if current_user.is_authenticated %}
                 <span id="blog-share-promo-copy">Create a magical share link from your private notes.</span>
-                <a id="blog-share-promo-link" href="{{ url_for('personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Choose a note →</a>
+                <a id="blog-share-promo-link" href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes" style="color:#c2185b; font-weight:600; text-decoration:none;">Choose a note →</a>
                 {% else %}
                 <span id="blog-share-promo-copy">Log in first, then share a private note as a surprise link.</span>
-                <a id="blog-share-promo-link" href="{{ url_for('login', next=request.path) }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
+                <a id="blog-share-promo-link" href="{{ url_for('auth.login', next=request.path) }}" style="color:#c2185b; font-weight:600; text-decoration:none;">Log in →</a>
                 {% endif %}
             </div>
         </div>
@@ -53,7 +53,7 @@
         <h4>Share your real ideas, experiences, and perspectives.</h4>
 
         <!-- Search Form -->
-        <form action="{{ url_for('blog') }}" method="GET" class="search-form"
+        <form action="{{ url_for('blog.blog') }}" method="GET" class="search-form"
             style="margin-top: 1rem; display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
             <div class="search-input-group" style="display: flex; flex-grow: 1; max-width: 500px;">
                 <input type="text" name="query" class="form-input" placeholder="Search posts..."
@@ -64,7 +64,7 @@
                     Search
                 </button>
             </div>
-            <a href="{{ url_for('search') }}" class="form-button"
+            <a href="{{ url_for('pages.search') }}" class="form-button"
                 style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; color: #fff; background: maroon; border: none;">
                 <i class="fa-solid fa-sliders"></i> Advanced Search
             </a>
@@ -72,11 +72,11 @@
 
         {% if current_user.is_authenticated and current_user.is_admin %}
         <div class="admin-actions">
-            <a href="{{ url_for('admin_posts') }}" class="btn edit-btn">Manage Posts</a>
-            <a href="{{ url_for('admin_users') }}" class="btn edit-btn">Manage Users</a>
-            <a href="{{ url_for('admin_premium_users') }}" class="btn edit-btn" style="background-color: #28a745; color: white; border-color: #28a745;">Manage Premium</a>
-            <a href="{{ url_for('admin_announcements') }}" class="btn edit-btn">Manage Announcements</a>
-            <a href="{{ url_for('admin_dashboard') }}" class="btn edit-btn">
+            <a href="{{ url_for('admin.admin_posts') }}" class="btn edit-btn">Manage Posts</a>
+            <a href="{{ url_for('admin.admin_users') }}" class="btn edit-btn">Manage Users</a>
+            <a href="{{ url_for('admin.admin_premium_users') }}" class="btn edit-btn" style="background-color: #28a745; color: white; border-color: #28a745;">Manage Premium</a>
+            <a href="{{ url_for('admin.admin_announcements') }}" class="btn edit-btn">Manage Announcements</a>
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="btn edit-btn">
                 <i class="fa-solid fa-chart-line"></i> Dashboard
             </a>
         </div>
@@ -84,7 +84,7 @@
 
         {% if current_user.is_authenticated %}
         <div style="margin-top: 1.5rem;">
-            <a href="{{ url_for('create_post') }}" class="btn comment-btn"
+            <a href="{{ url_for('pages.create_post') }}" class="btn comment-btn"
                 style="width: 100%; text-align: center; padding: 0.75rem;">Create a New Post</a>
         </div>
         {% endif %}
@@ -117,13 +117,13 @@
         <ul class="pagination">
             {% if page > 1 %}
             <li class="page-item"><a class="page-link"
-                    href="{{ url_for('blog', page=page-1, query=query) }}">Previous</a></li>
+                    href="{{ url_for('blog.blog', page=page-1, query=query) }}">Previous</a></li>
             {% endif %}
 
             {% set max_visible = [8, page + 1] | max %}
             {% for p in range(1, [max_visible + 1, total_pages + 1] | min) %}
             <li class="page-item {% if p == page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('blog', page=p, query=query) }}">{{ p }}</a>
+                <a class="page-link" href="{{ url_for('blog.blog', page=p, query=query) }}">{{ p }}</a>
             </li>
             {% endfor %}
 
@@ -132,13 +132,13 @@
                 {% endif %}
 
                 {% if max_visible < total_pages %} <li class="page-item {% if total_pages == page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('blog', page=total_pages, query=query) }}">{{ total_pages
+                    <a class="page-link" href="{{ url_for('blog.blog', page=total_pages, query=query) }}">{{ total_pages
                         }}</a>
                     </li>
                     {% endif %}
 
                     {% if page < total_pages %} <li class="page-item"><a class="page-link"
-                            href="{{ url_for('blog', page=page+1, query=query) }}">Next</a></li>
+                            href="{{ url_for('blog.blog', page=page+1, query=query) }}">Next</a></li>
                         {% endif %}
         </ul>
     </nav>
@@ -187,7 +187,7 @@
     </div>
 
     <div style="text-align:center; margin-top:2rem;">
-        <a href="{{ url_for('all_posts') }}" class="btn comment-btn">View All Posts →</a>
+        <a href="{{ url_for('blog.all_posts') }}" class="btn comment-btn">View All Posts →</a>
     </div>
     {% endif %}
 </div>
@@ -317,7 +317,7 @@
         function fetchActivePosts() {
             const container = document.getElementById('active-posts');
 
-            fetch('{{ url_for("get_top_posts_json") }}')
+            fetch('{{ url_for("blog.get_top_posts_json") }}')
                 .then(r => r.json())
                 .then(posts => {
                     if (!posts || !posts.length) {
@@ -341,7 +341,7 @@
             const container = document.getElementById('activity-list');
             const controls = document.getElementById('activity-controls');
 
-            fetch('{{ url_for("get_my_commented_posts_json") }}')
+            fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
                     const posts = data.posts || [];
@@ -444,7 +444,7 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
-                fetch('{{ url_for("mark_all_comments_read") }}', {
+                fetch('{{ url_for("blog.mark_all_comments_read") }}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': '{{ csrf_token() }}'
@@ -478,7 +478,7 @@
         // and set up periodic polling
         {% if current_user.is_authenticated %}
         function loadUnreadBadge() {
-            fetch('{{ url_for("get_my_commented_posts_json") }}')
+            fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
                     const badge = document.getElementById('my-commented-badge');

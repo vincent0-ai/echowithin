@@ -6,7 +6,7 @@
 
 <div class="auth-container">
     <div class="auth-forms">
-        <form class="auth-form active" method="POST" action="{{ url_for('confirm', email=email) }}">
+        <form class="auth-form active" method="POST" action="{{ url_for('auth.confirm', email=email) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <h2 class="form-title">Confirm Your Email</h2>
             <p class="form-description">Please enter the 6-digit confirmation code sent to {{ email }}.</p>

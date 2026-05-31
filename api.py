@@ -8,13 +8,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # Create the API blueprint
 api_bp = Blueprint('api_v1', __name__)
-
-# To prevent circular dependency errors, all imports from main are done lazily or
-# resolved after the main module finishes loading.
-def get_main_globals():
-    import main
-    return main
-
 # --- Helper functions ---
 def safe_obj_id(val):
     try:
@@ -26,7 +19,7 @@ def safe_obj_id(val):
 
 @api_bp.route('/register', methods=['POST'])
 def api_register():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     email = data.get("email", "").strip().lower()
@@ -81,7 +74,7 @@ def api_register():
 
 @api_bp.route('/confirm/<email>', methods=['POST'])
 def api_confirm(email):
-    m = get_main_globals()
+    import main as m
     email = email.strip().lower()
     data = request.get_json(silent=True) or {}
     confirm_code = data.get("code", "").strip()
@@ -115,7 +108,7 @@ def api_confirm(email):
 
 @api_bp.route('/login', methods=['POST'])
 def api_login():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
@@ -192,7 +185,7 @@ def api_login():
 
 @api_bp.route('/logout', methods=['POST', 'GET'])
 def api_logout():
-    m = get_main_globals()
+    import main as m
     app_token = request.cookies.get('x_app_token') or request.headers.get('Authorization', '').replace('Bearer ', '').strip()
     if app_token:
         m.app_tokens_conf.delete_one({'token': app_token})
@@ -210,7 +203,7 @@ def api_logout():
 @api_bp.route('/notes', methods=['GET'])
 @login_required
 def api_get_notes():
-    m = get_main_globals()
+    import main as m
     try:
         page = max(1, int(request.args.get('page', 1)))
         per_page = min(50, max(1, int(request.args.get('per_page', 20))))
@@ -275,7 +268,7 @@ def api_get_notes():
 @api_bp.route('/notes/<note_id>', methods=['GET'])
 @login_required
 def api_get_note(note_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(note_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID.'}), 400
@@ -324,7 +317,7 @@ def api_get_note(note_id):
 @api_bp.route('/notes/create', methods=['POST'])
 @login_required
 def api_create_note():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     content = data.get('content', '').strip()
     reference = data.get('reference', '').strip()[:200]
@@ -365,7 +358,7 @@ def api_create_note():
 @api_bp.route('/notes/edit/<note_id>', methods=['POST'])
 @login_required
 def api_edit_note(note_id):
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     content = data.get('content', '').strip()
     reference = data.get('reference', '').strip()[:200]
@@ -434,7 +427,7 @@ def api_edit_note(note_id):
 @api_bp.route('/premium/activate', methods=['POST'])
 @login_required
 def api_activate_premium():
-    m = get_main_globals()
+    import main as m
     # Grant premium for 30 days
     new_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
     m.users_conf.update_one(
@@ -452,7 +445,7 @@ def api_activate_premium():
 @api_bp.route('/app_lock/setup', methods=['POST'])
 @login_required
 def api_app_lock_setup():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     pin = data.get('pin', '').strip()
 
@@ -469,7 +462,7 @@ def api_app_lock_setup():
 @api_bp.route('/app_lock/verify', methods=['POST'])
 @login_required
 def api_app_lock_verify():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     pin = data.get('pin', '').strip()
 
@@ -486,7 +479,7 @@ def api_app_lock_verify():
 @api_bp.route('/app_lock/check_status', methods=['GET'])
 @login_required
 def api_app_lock_status():
-    m = get_main_globals()
+    import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     has_pin = bool(user and user.get('app_lock_pin_hash'))
 
@@ -507,7 +500,7 @@ def api_app_lock_status():
 @api_bp.route('/app_lock/remove', methods=['POST'])
 @login_required
 def api_app_lock_remove():
-    m = get_main_globals()
+    import main as m
     m.users_conf.update_one(
         {'_id': ObjectId(current_user.id)},
         {'$unset': {'app_lock_pin_hash': ''}}
@@ -520,7 +513,7 @@ def api_app_lock_remove():
 @api_bp.route('/fcm/register', methods=['POST'])
 @login_required
 def api_register_fcm():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -537,7 +530,7 @@ def api_register_fcm():
 @api_bp.route('/fcm/unregister', methods=['POST'])
 @login_required
 def api_unregister_fcm():
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -553,7 +546,7 @@ def api_unregister_fcm():
 @api_bp.route('/notes/shares/<post_id>', methods=['GET'])
 @login_required
 def api_get_note_shares(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -576,7 +569,7 @@ def api_get_note_shares(post_id):
 @api_bp.route('/notes/share/<post_id>', methods=['POST'])
 @login_required
 def api_create_note_share(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -715,13 +708,13 @@ def api_create_note_share(post_id):
     return jsonify({
         'success': True,
         'share_id': share_id,
-        'url': url_for('sitemap_legacy_redirect', _external=True) + f'share/note/{share_id}'
+        'url': url_for('sharing.view_shared_note', share_id=share_id, _external=True)
     })
 
 @api_bp.route('/notes/revoke_share/<share_id>', methods=['POST'])
 @login_required
 def api_revoke_note_share(share_id):
-    m = get_main_globals()
+    import main as m
     result = m.note_shares_conf.delete_one({'share_id': share_id, 'owner_id': ObjectId(current_user.id)})
     if result.deleted_count == 0:
         return jsonify({'error': 'Share link not found or unauthorized'}), 404
@@ -733,7 +726,7 @@ def api_revoke_note_share(share_id):
 @api_bp.route('/notes/share/<share_id>/attachments', methods=['GET'])
 @login_required
 def api_get_share_attachments(share_id):
-    m = get_main_globals()
+    import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
         return jsonify({'error': 'Share link not found'}), 404
@@ -758,29 +751,67 @@ def api_get_share_attachments(share_id):
 @api_bp.route('/notes/versions/<post_id>', methods=['GET'])
 @login_required
 def api_get_note_versions(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
 
-    versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1))
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    current_plain = m._decrypt_note_record(note)
+    versions = list(m.note_versions_conf.find({'note_id': obj_id}).sort('created_at', -1).limit(50))
+    note_candidates = m._candidate_user_ids(
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+
     result = []
     for v in versions:
+        event_type = v.get('event_type', 'snapshot')
+        status = v.get('status', 'applied')
+
+        version_candidates = m._candidate_user_ids(
+            v.get('content_owner_id'),
+            v.get('editor_id'),
+            *note_candidates
+        )
+
+        if event_type == 'proposal':
+            base_plain = v.get('base_content_plain')
+            if base_plain is None:
+                base_encrypted = v.get('base_content') or v.get('content', '')
+                base_plain = (m._decrypt_with_candidate_ids(base_encrypted, version_candidates) if base_encrypted else '') or ''
+            proposed_plain = v.get('proposed_content_plain')
+            if proposed_plain is None:
+                proposed_encrypted = v.get('proposed_content', '')
+                proposed_plain = (m._decrypt_with_candidate_ids(proposed_encrypted, version_candidates) if proposed_encrypted else '') or ''
+            decrypted = proposed_plain
+        else:
+            if not v.get('encrypted', True):
+                decrypted = v.get('content', '')
+            else:
+                decrypted = m._decrypt_with_candidate_ids(v.get('content', ''), version_candidates)
+                if decrypted is None:
+                    decrypted = '[Content unavailable — decryption error]'
+
         result.append({
             'version_id': str(v['_id']),
-            'content': m.decrypt_note(v['content'], user_id=current_user.id) if v.get('encrypted', False) else v.get('content', ''),
-            'author_username': v.get('author_username', 'Unknown'),
-            'created_at': v.get('created_at').isoformat() if v.get('created_at') else None,
-            'is_proposal': v.get('is_proposal', False),
-            'status': v.get('status', 'approved'),
-            'review_comment': v.get('review_comment', '')
+            'content': decrypted,
+            'author_username': v.get('editor_name', v.get('author_username', 'Unknown')),
+            'created_at': v['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if v.get('created_at') else None,
+            'is_proposal': event_type == 'proposal',
+            'status': 'pending' if status == 'pending' else ('approved' if status == 'accepted' else 'rejected'),
+            'review_comment': v.get('edit_summary', v.get('review_comment', ''))
         })
     return jsonify({'versions': result})
 
 @api_bp.route('/notes/version/restore/<post_id>/<version_id>', methods=['POST'])
 @login_required
 def api_restore_note_version(post_id, version_id):
-    m = get_main_globals()
+    import main as m
     post_obj_id = safe_obj_id(post_id)
     ver_obj_id = safe_obj_id(version_id)
     if not post_obj_id or not ver_obj_id:
@@ -794,57 +825,111 @@ def api_restore_note_version(post_id, version_id):
     if not version:
         return jsonify({'error': 'Version not found'}), 404
 
+    if version.get('event_type', 'snapshot') != 'snapshot':
+        return jsonify({'error': 'Only snapshot versions can be restored'}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if note.get('content'):
+        m.note_versions_conf.insert_one({
+            'note_id': post_obj_id,
+            'share_id': None,
+            'editor_name': current_user.username if hasattr(current_user, 'username') else str(current_user.id),
+            'editor_id': ObjectId(current_user.id),
+            'content': note.get('content', ''),
+            'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+            'encrypted': True,
+            'event_type': 'snapshot',
+            'status': 'applied',
+            'edit_summary': 'Backup before restore',
+            'created_at': now,
+            'is_read_by_owner': True
+        })
+
     m.personal_posts_conf.update_one(
         {'_id': post_obj_id},
         {'$set': {
-            'content': version['content'],
-            'updated_at': datetime.datetime.now(datetime.timezone.utc)
+            'content': version.get('content', ''),
+            'encrypted': True,
+            'content_owner_id': version.get('content_owner_id', ObjectId(current_user.id)),
+            'updated_at': now
         }}
     )
+
+    restore_candidates = m._candidate_user_ids(
+        version.get('content_owner_id'),
+        note.get('content_owner_id'),
+        note.get('user_id'),
+        current_user.id
+    )
+    plain = m._decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or m.decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
+    m.index_note_to_typesense(post_id, decrypted_content=plain)
+
     return jsonify({'success': True, 'message': 'Note restored to specified version.'})
 
 @api_bp.route('/notes/proposal/<version_id>/decision', methods=['POST'])
 @login_required
 def api_proposal_decision(version_id):
-    m = get_main_globals()
+    import main as m
     ver_obj_id = safe_obj_id(version_id)
     if not ver_obj_id:
         return jsonify({'error': 'Invalid proposal ID'}), 400
 
-    version = m.note_versions_conf.find_one({'_id': ver_obj_id, 'is_proposal': True})
-    if not version:
+    proposal = m.note_versions_conf.find_one({'_id': ver_obj_id})
+    if not proposal or proposal.get('event_type') != 'proposal':
         return jsonify({'error': 'Proposal not found'}), 404
 
-    note = m.personal_posts_conf.find_one({'_id': version['note_id'], 'user_id': ObjectId(current_user.id)})
+    note_id = proposal.get('note_id')
+    note = m.personal_posts_conf.find_one({'_id': note_id, 'user_id': ObjectId(current_user.id)})
     if not note:
-        return jsonify({'error': 'Unauthorized to make decisions on this proposal'}), 403
+        return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json(silent=True) or {}
     decision = data.get('decision')  # 'approve' or 'reject'
     comment = data.get('comment', '').strip()
 
-    if decision not in ['approve', 'reject']:
-        return jsonify({'error': 'Decision must be approve or reject.'}), 400
+    if decision not in ['approve', 'accept', 'reject']:
+        return jsonify({'error': 'Decision must be approve/accept or reject.'}), 400
 
-    if decision == 'approve':
-        m.note_versions_conf.update_one(
-            {'_id': ver_obj_id},
-            {'$set': {'status': 'approved', 'review_comment': comment, 'reviewed_at': datetime.datetime.now(datetime.timezone.utc)}}
-        )
+    decision_mapped = 'accept' if decision in ('approve', 'accept') else 'reject'
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    if decision_mapped == 'accept':
+        proposed = proposal.get('proposed_content', '')
+        # Encrypt with the note owner's key
+        encrypted = m.encrypt_note(m._decrypt_with_candidate_ids(proposed, m._candidate_user_ids(proposal.get('content_owner_id'), proposal.get('editor_id'), current_user.id)) or proposed, user_id=current_user.id)
+        
         m.personal_posts_conf.update_one(
-            {'_id': version['note_id']},
+            {'_id': note_id},
             {'$set': {
-                'content': version['content'],
-                'updated_at': datetime.datetime.now(datetime.timezone.utc)
+                'content': encrypted,
+                'encrypted': True,
+                'content_owner_id': ObjectId(current_user.id),
+                'updated_at': now
             }}
         )
-    else:
-        m.note_versions_conf.update_one(
-            {'_id': ver_obj_id},
-            {'$set': {'status': 'rejected', 'review_comment': comment, 'reviewed_at': datetime.datetime.now(datetime.timezone.utc)}}
-        )
+        
+        note_candidates = m._candidate_user_ids(note.get('content_owner_id'), note.get('user_id'), current_user.id)
+        version_candidates = m._candidate_user_ids(proposal.get('content_owner_id'), proposal.get('editor_id'), *note_candidates)
+        final_plain = m._decrypt_with_candidate_ids(proposed, version_candidates) or m.decrypt_note(proposed, user_id=str(proposal.get('content_owner_id') or current_user.id))
+        m.index_note_to_typesense(str(note_id), decrypted_content=final_plain)
 
-    return jsonify({'success': True, 'message': f'Proposal successfully {decision}d.'})
+        # Broadcast update
+        try:
+            m.socketio.emit('note_changed', {'content': final_plain}, room=proposal.get('share_id'))
+        except Exception:
+            pass
+
+    m.note_versions_conf.update_one(
+        {'_id': ver_obj_id},
+        {'$set': {
+            'status': 'accepted' if decision_mapped == 'accept' else 'rejected',
+            'review_comment': comment or 'Reviewed proposal',
+            'is_read_by_owner': True,
+            'reviewed_at': now
+        }}
+    )
+
+    return jsonify({'success': True, 'message': f'Proposal successfully {decision_mapped}ed.'})
 
 
 
@@ -854,7 +939,7 @@ def api_proposal_decision(version_id):
 def api_app_reauth():
     """Re-authenticate a native app user using a persistent token.
     Accepts token from JSON body, Authorization header, or httpOnly cookie."""
-    m = get_main_globals()
+    import main as m
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -896,7 +981,7 @@ def api_app_reauth():
 @api_bp.route('/notes/toggle_lock/<post_id>', methods=['POST'])
 @login_required
 def api_toggle_note_lock(post_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(post_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID'}), 400
@@ -916,7 +1001,7 @@ def api_toggle_note_lock(post_id):
 @api_bp.route('/notes/proposals', methods=['GET'])
 @login_required
 def api_get_all_proposals():
-    m = get_main_globals()
+    import main as m
     user_notes = list(m.personal_posts_conf.find(
         {'user_id': ObjectId(current_user.id)},
         {'_id': 1, 'content': 1}
@@ -947,7 +1032,7 @@ def api_get_all_proposals():
 @api_bp.route('/profile', methods=['GET'])
 @login_required
 def api_profile():
-    m = get_main_globals()
+    import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -968,7 +1053,7 @@ def api_profile():
 @api_bp.route('/notes/delete/<note_id>', methods=['POST'])
 @login_required
 def api_delete_note(note_id):
-    m = get_main_globals()
+    import main as m
     obj_id = safe_obj_id(note_id)
     if not obj_id:
         return jsonify({'error': 'Invalid note ID.'}), 400
@@ -1010,7 +1095,7 @@ def api_delete_note(note_id):
 @api_bp.route('/notes/<note_id>/sync', methods=['POST'])
 @login_required
 def api_sync_note(note_id):
-    m = get_main_globals()
+    import main as m
     try:
         obj_id = safe_obj_id(note_id)
         if not obj_id:

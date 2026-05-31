@@ -1042,6 +1042,25 @@
             background: #2e7d32;
         }
 
+        .reset-code-input {
+            width: 38px;
+            height: 44px;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: 700;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            outline: none;
+            color: #3e2217;
+            background: #faf7f4;
+            transition: border-color 0.2s;
+        }
+
+        .reset-code-input:focus {
+            border-color: #3e2217;
+            background: #fff;
+        }
+
         @keyframes pinShake {
 
             0%,
@@ -2028,7 +2047,7 @@
             <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }}
                 remaining. Enjoying unlimited features!</span>
         </div>
-        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
+        <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium"
             style="background: #3e2217; color: white !important; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Subscribe
             — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
@@ -2038,7 +2057,7 @@
         <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span>Unlock <strong>note locking, blog space, scheduled messages</strong> and more with Premium.</span>
         </div>
-        <a href="{{ url_for('profile_settings', username=current_user.username) }}#premium"
+        <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium"
             style="background: #3e2217; color: white; padding: 0.35rem 0.8rem; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 0.8rem; white-space: nowrap;">Upgrade
             — KSH {{ PREMIUM_PRICE_KSH }}/mo</a>
     </div>
@@ -2054,7 +2073,7 @@
             Notes
             <span class="badge">{{ total_notes_count }}</span>
         </button>
-        <button data-tab="communities" role="tab" aria-selected="false" onclick="window.location.href='{{ url_for('communities_page') }}'">
+        <button data-tab="communities" role="tab" aria-selected="false" onclick="window.location.href='{{ url_for('communities.communities_page') }}'">
             Communities
         </button>
         <button data-tab="activity" role="tab" aria-selected="false" id="activity-tab-btn" style="position: relative;">
@@ -2092,7 +2111,7 @@
                 {% endif %}
                 <div class="saved-post-info">
                     <h3 class="saved-post-title">
-                        <a href="{{ url_for('view_post', slug=post.slug) }}">{{ post.title }}</a>
+                        <a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a>
                     </h3>
                     <div class="saved-post-meta">
                         <i class="fas fa-user"></i> {{ post.author }} &bull;
@@ -2102,10 +2121,10 @@
                         {% endif %}
                     </div>
                     <div class="saved-post-actions">
-                        <a href="{{ url_for('view_post', slug=post.slug) }}" class="btn-icon btn-view">
+                        <a href="{{ url_for('blog.view_post', slug=post.slug) }}" class="btn-icon btn-view">
                             Read
                         </a>
-                        <form action="{{ url_for('toggle_save_post', post_id=post._id) }}" method="POST"
+                        <form action="{{ url_for('blog.toggle_save_post', post_id=post._id) }}" method="POST"
                             style="display:inline;" class="unsave-form">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn-icon btn-remove">
@@ -2125,14 +2144,14 @@
                 {% if saved_page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="{{ url_for('personal_space', saved_page=saved_page-1, notes_page=notes_page) }}">Previous</a>
+                        href="{{ url_for('notes.personal_space', saved_page=saved_page-1, notes_page=notes_page) }}">Previous</a>
                 </li>
                 {% endif %}
 
                 {% set max_visible = [8, saved_page + 1] | max %}
                 {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
                 <li class="page-item {% if p == saved_page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('personal_space', saved_page=p, notes_page=notes_page) }}">{{
+                    <a class="page-link" href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page) }}">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2144,14 +2163,14 @@
                     {% if max_visible < total_saved_pages %} <li
                         class="page-item {% if total_saved_pages == saved_page %}active{% endif %}">
                         <a class="page-link"
-                            href="{{ url_for('personal_space', saved_page=total_saved_pages, notes_page=notes_page) }}">{{
+                            href="{{ url_for('notes.personal_space', saved_page=total_saved_pages, notes_page=notes_page) }}">{{
                             total_saved_pages }}</a>
                         </li>
                         {% endif %}
 
                         {% if saved_page < total_saved_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="{{ url_for('personal_space', saved_page=saved_page+1, notes_page=notes_page) }}">Next</a>
+                                href="{{ url_for('notes.personal_space', saved_page=saved_page+1, notes_page=notes_page) }}">Next</a>
                             </li>
                             {% endif %}
             </ul>
@@ -2163,7 +2182,7 @@
             <i class="far fa-bookmark"></i>
             <h3>No saved posts yet</h3>
             <p>Save posts you want to read later by clicking the bookmark icon on any post.</p>
-            <a href="{{ url_for('blog') }}" class="btn comment-btn" style="margin-top: 1rem;">Explore Posts</a>
+            <a href="{{ url_for('blog.blog') }}" class="btn comment-btn" style="margin-top: 1rem;">Explore Posts</a>
         </div>
         {% endif %}
     </div>
@@ -2218,7 +2237,7 @@
         </div>
 
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
-            <form action="{{ url_for('create_personal_post') }}" method="POST" id="create-note-form">
+            <form action="{{ url_for('notes.create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <textarea name="content" id="note-input" placeholder="Write a new note..."
                     maxlength="{{ user_max_chars }}" required style="min-height: 60px;"></textarea>
@@ -2390,7 +2409,7 @@
 
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         {# === SURPRISE NOTE: Copy, Gift view, Share, Lock, Delete === #}
-                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
+                        <a href="{{ url_for('sharing.view_saved_note', note_id=note._id) }}" class="btn-icon"
                             title="View surprise" target="_blank" style="color: #ff4d6d; text-decoration: none;">
                             <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{%
                             endif %}
@@ -2414,7 +2433,7 @@
                             <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
                             endif %}
                         </button>
-                        <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
+                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
                             <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
@@ -2469,7 +2488,7 @@
                         {% endif %}
 
                         {% set nid_str = note._id|string %}
-                        <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
+                        <form action="{{ url_for('notes.delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form"
                             data-has-shares="{{ 'true' if active_shares_map.get(nid_str) else 'false' }}"
                             data-has-clones="{{ 'true' if has_clones_map.get(nid_str) else 'false' }}">
@@ -2491,14 +2510,14 @@
                 {% if notes_page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="{{ url_for('personal_space', notes_page=notes_page-1, saved_page=saved_page) }}">Previous</a>
+                        href="{{ url_for('notes.personal_space', notes_page=notes_page-1, saved_page=saved_page) }}">Previous</a>
                 </li>
                 {% endif %}
 
                 {% set max_visible = [8, notes_page + 1] | max %}
                 {% for p in range(1, [max_visible + 1, total_notes_pages + 1] | min) %}
                 <li class="page-item {% if p == notes_page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('personal_space', notes_page=p, saved_page=saved_page) }}">{{
+                    <a class="page-link" href="{{ url_for('notes.personal_space', notes_page=p, saved_page=saved_page) }}">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2510,14 +2529,14 @@
                     {% if max_visible < total_notes_pages %} <li
                         class="page-item {% if total_notes_pages == notes_page %}active{% endif %}">
                         <a class="page-link"
-                            href="{{ url_for('personal_space', notes_page=total_notes_pages, saved_page=saved_page) }}">{{
+                            href="{{ url_for('notes.personal_space', notes_page=total_notes_pages, saved_page=saved_page) }}">{{
                             total_notes_pages }}</a>
                         </li>
                         {% endif %}
 
                         {% if notes_page < total_notes_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="{{ url_for('personal_space', notes_page=notes_page+1, saved_page=saved_page) }}">Next</a>
+                                href="{{ url_for('notes.personal_space', notes_page=notes_page+1, saved_page=saved_page) }}">Next</a>
                             </li>
                             {% endif %}
             </ul>
@@ -2692,7 +2711,7 @@
             <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
             <div class="setup-hint">
                 You can also set this up in <a
-                    href="{{ url_for('profile_settings', username=current_user.username) }}">Account Settings</a>
+                    href="{{ url_for('profile.profile_settings', username=current_user.username) }}">Account Settings</a>
             </div>
         </div>
         {% elif not is_unlocked %}
@@ -2704,6 +2723,9 @@
             </p>
             <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter
                 PIN</button>
+            <div style="margin-top: 0.75rem;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+            </div>
         </div>
         {% elif locked_notes %}
         <!-- Unlocked: show locked notes with auto-relock timer -->
@@ -2856,14 +2878,14 @@
                             <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
-                        <a href="{{ url_for('view_saved_note', note_id=note._id) }}" class="btn-icon"
+                        <a href="{{ url_for('sharing.view_saved_note', note_id=note._id) }}" class="btn-icon"
                             title="View your saved surprise" target="_blank"
                             style="color: #ff4d6d; text-decoration: none;">
                             <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{% endif %}
                         </a>
                         {% endif %}
                         {% if note.source_note_id and note.source_share_id %}
-                        <a href="{{ url_for('view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
+                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
                             title="View original shared note &amp; discussion" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
                             <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
@@ -2895,7 +2917,7 @@
                         </button>
                         {% endif %}
                         {% set nid_str = note._id|string %}
-                        <form action="{{ url_for('delete_personal_post', post_id=note._id) }}" method="POST"
+                        <form action="{{ url_for('notes.delete_personal_post', post_id=note._id) }}" method="POST"
                             style="display:inline;" class="delete-note-form"
                             data-has-shares="{{ 'true' if locked_shares_map.get(nid_str) else 'false' }}"
                             data-has-clones="{{ 'true' if locked_clones_map.get(nid_str) else 'false' }}">
@@ -3298,7 +3320,62 @@
                 </button>
             </div>
 
+            <div id="pin-forgot-link" style="margin-top: 0.5rem; display: none;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+            </div>
+
             <button onclick="closePinModal()" class="btn edit-btn"
+                style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
+        </div>
+
+        <!-- PIN Reset: Code Entry View -->
+        <div id="pin-reset-code-view" style="display: none; text-align: center;">
+            <h2 style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Verify Identity</h2>
+            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code sent to your email</p>
+            <div id="pin-reset-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 1.2rem;">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="0" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="2" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="3" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="4" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="5" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            </div>
+            <button id="pin-reset-submit-code" class="btn" style="width: 100%; background: #3e2217; color: white; border: none; padding: 0.6rem; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;" onclick="submitResetCode()">Verify Code</button>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.75rem;">
+                <a href="#" onclick="event.preventDefault(); cancelPinReset()" style="font-size: 0.82rem; color: #888;">Back</a>
+                <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()" style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
+            </div>
+        </div>
+
+        <!-- PIN Reset: New PIN Entry View -->
+        <div id="pin-reset-newpin-view" style="display: none; text-align: center;">
+            <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN</h2>
+            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new 4-digit PIN</p>
+            <div id="pin-reset-newpin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <div class="pin-dots" id="pin-reset-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+            <div class="pin-keypad">
+                <button class="pin-key" onclick="handleResetPinKey('1')">1</button>
+                <button class="pin-key" onclick="handleResetPinKey('2')">2</button>
+                <button class="pin-key" onclick="handleResetPinKey('3')">3</button>
+                <button class="pin-key" onclick="handleResetPinKey('4')">4</button>
+                <button class="pin-key" onclick="handleResetPinKey('5')">5</button>
+                <button class="pin-key" onclick="handleResetPinKey('6')">6</button>
+                <button class="pin-key" onclick="handleResetPinKey('7')">7</button>
+                <button class="pin-key" onclick="handleResetPinKey('8')">8</button>
+                <button class="pin-key" onclick="handleResetPinKey('9')">9</button>
+                <div class="pin-key empty"></div>
+                <button class="pin-key" onclick="handleResetPinKey('0')">0</button>
+                <button class="pin-key backspace" onclick="handleResetPinKey('backspace')">
+                    <i class="fas fa-backspace"></i>
+                </button>
+            </div>
+            <button onclick="cancelPinReset()" class="btn edit-btn"
                 style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: #888; font-size: 0.85rem;">Cancel</button>
         </div>
     </div>
@@ -3467,6 +3544,18 @@
             desc.textContent = 'Enter your current PIN to disable app lock';
         }
 
+        // Show/hide "Forgot PIN?" link only on verify action
+        const forgotLink = document.getElementById('pin-forgot-link');
+        if (forgotLink) forgotLink.style.display = (action === 'verify') ? 'block' : 'none';
+
+        // Ensure reset views are hidden, normal content is shown
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'block';
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+
         if (modal) {
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
@@ -3627,6 +3716,256 @@
         }, 600);
     }
 
+    // --- PIN Reset Flow ---
+    let resetVerifiedCode = '';
+    let resetNewPin = '';
+    let resetStep = 'code'; // 'code', 'newpin', 'confirm'
+
+    window.startPinReset = async function () {
+        // Show a loading state
+        const modal = document.getElementById('pin-modal');
+        if (modal) modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+
+        // Hide normal PIN view, show code view
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+        if (codeView) codeView.style.display = 'block';
+
+        // Clear code inputs
+        document.querySelectorAll('.reset-code-input').forEach(i => { i.value = ''; });
+        const resetError = document.getElementById('pin-reset-error');
+        if (resetError) resetError.textContent = '';
+        const resetDesc = document.getElementById('pin-reset-desc');
+        if (resetDesc) resetDesc.textContent = 'Sending code to your email...';
+
+        resetVerifiedCode = '';
+        resetNewPin = '';
+        resetStep = 'code';
+
+        try {
+            const resp = await fetch('/api/app_lock/forgot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                if (resetDesc) resetDesc.textContent = 'Enter the 6-digit code sent to ' + (data.masked_email || 'your email');
+                // Focus first input
+                const firstInput = document.querySelector('.reset-code-input[data-idx="0"]');
+                if (firstInput) firstInput.focus();
+            } else {
+                if (resetError) resetError.textContent = data.error || 'Failed to send code';
+            }
+        } catch (e) {
+            if (resetError) resetError.textContent = 'Network error. Please try again.';
+        }
+    };
+
+    window.resendPinResetCode = async function () {
+        const resendLink = document.getElementById('pin-reset-resend');
+        if (resendLink) { resendLink.textContent = 'Sending...'; resendLink.style.pointerEvents = 'none'; }
+        const resetError = document.getElementById('pin-reset-error');
+        if (resetError) resetError.textContent = '';
+        try {
+            const resp = await fetch('/api/app_lock/forgot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                }
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                if (resetError) { resetError.style.color = '#2e7d32'; resetError.textContent = 'New code sent!'; }
+                setTimeout(() => { if (resetError) { resetError.style.color = '#d32f2f'; resetError.textContent = ''; } }, 3000);
+            } else {
+                if (resetError) resetError.textContent = data.error || 'Failed to resend';
+            }
+        } catch (e) {
+            if (resetError) resetError.textContent = 'Network error';
+        } finally {
+            if (resendLink) { resendLink.textContent = 'Resend Code'; resendLink.style.pointerEvents = ''; }
+        }
+    };
+
+    window.cancelPinReset = function () {
+        const modal = document.getElementById('pin-modal');
+        const pinContent = modal.querySelector('.pin-modal-content');
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (pinContent) pinContent.style.display = 'block';
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'none';
+        closePinModal();
+    };
+
+    window.submitResetCode = async function () {
+        const inputs = document.querySelectorAll('.reset-code-input');
+        let code = '';
+        inputs.forEach(i => code += i.value);
+        const resetError = document.getElementById('pin-reset-error');
+
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            if (resetError) resetError.textContent = 'Please enter the full 6-digit code';
+            return;
+        }
+
+        // Store verified code and move to new PIN step
+        resetVerifiedCode = code;
+        resetStep = 'newpin';
+        resetNewPin = '';
+
+        // Switch views
+        const codeView = document.getElementById('pin-reset-code-view');
+        const newpinView = document.getElementById('pin-reset-newpin-view');
+        if (codeView) codeView.style.display = 'none';
+        if (newpinView) newpinView.style.display = 'block';
+
+        const title = document.getElementById('pin-reset-newpin-title');
+        const desc = document.getElementById('pin-reset-newpin-desc');
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        if (title) title.textContent = 'New PIN';
+        if (desc) desc.textContent = 'Enter a new 4-digit PIN';
+        if (errorEl) errorEl.textContent = '';
+        updateResetPinDots();
+    };
+
+    function updateResetPinDots() {
+        const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+        dots.forEach((dot, idx) => {
+            dot.classList.toggle('filled', idx < resetNewPin.length);
+            dot.classList.remove('error', 'success');
+        });
+    }
+
+    window.handleResetPinKey = function (key) {
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        if (errorEl) errorEl.textContent = '';
+
+        if (key === 'backspace') {
+            resetNewPin = resetNewPin.slice(0, -1);
+            updateResetPinDots();
+        } else if (resetNewPin.length < 4) {
+            resetNewPin += key;
+            updateResetPinDots();
+            if (resetNewPin.length === 4) {
+                setTimeout(processResetPinStep, 200);
+            }
+        }
+    };
+
+    let resetPendingPin = '';
+
+    async function processResetPinStep() {
+        const title = document.getElementById('pin-reset-newpin-title');
+        const desc = document.getElementById('pin-reset-newpin-desc');
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+
+        if (resetStep === 'newpin') {
+            // Save and ask to confirm
+            resetPendingPin = resetNewPin;
+            resetNewPin = '';
+            resetStep = 'confirm';
+            if (title) title.textContent = 'Confirm PIN';
+            if (desc) desc.textContent = 'Enter the new PIN again to confirm';
+            updateResetPinDots();
+        } else if (resetStep === 'confirm') {
+            if (resetNewPin === resetPendingPin) {
+                // PINs match — submit to server
+                await finalizeResetPin(resetVerifiedCode, resetNewPin);
+            } else {
+                // Mismatch
+                const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+                dots.forEach(d => { d.classList.add('error'); d.classList.remove('filled'); });
+                if (errorEl) errorEl.textContent = 'PINs do not match. Try again.';
+                resetNewPin = '';
+                resetPendingPin = '';
+                resetStep = 'newpin';
+                if (title) title.textContent = 'New PIN';
+                if (desc) desc.textContent = 'Enter a new 4-digit PIN';
+                setTimeout(() => {
+                    dots.forEach(d => d.classList.remove('error'));
+                    updateResetPinDots();
+                }, 600);
+            }
+        }
+    }
+
+    async function finalizeResetPin(code, newPin) {
+        const errorEl = document.getElementById('pin-reset-newpin-error');
+        try {
+            const resp = await fetch('/api/app_lock/reset_verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({ code: code, new_pin: newPin })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                const dots = document.querySelectorAll('#pin-reset-dots .pin-dot');
+                dots.forEach(d => { d.classList.add('success'); d.classList.remove('filled'); });
+                setTimeout(() => {
+                    window.location.hash = 'locked';
+                    window.location.reload();
+                }, 500);
+            } else {
+                if (errorEl) errorEl.textContent = data.error || 'Reset failed';
+                // If code was wrong, go back to code entry
+                if (resp.status === 403 || resp.status === 400) {
+                    resetNewPin = '';
+                    resetPendingPin = '';
+                    resetStep = 'code';
+                    setTimeout(() => {
+                        const codeView = document.getElementById('pin-reset-code-view');
+                        const newpinView = document.getElementById('pin-reset-newpin-view');
+                        if (codeView) codeView.style.display = 'block';
+                        if (newpinView) newpinView.style.display = 'none';
+                        const resetError = document.getElementById('pin-reset-error');
+                        if (resetError) resetError.textContent = data.error || 'Please try again';
+                    }, 600);
+                }
+            }
+        } catch (e) {
+            if (errorEl) errorEl.textContent = 'Network error. Please try again.';
+        }
+    }
+
+    // Wire up code input auto-advance
+    document.addEventListener('DOMContentLoaded', function () {
+        const codeInputs = document.querySelectorAll('.reset-code-input');
+        codeInputs.forEach((input, idx) => {
+            input.addEventListener('input', function (e) {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value && idx < codeInputs.length - 1) {
+                    codeInputs[idx + 1].focus();
+                }
+            });
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Backspace' && !this.value && idx > 0) {
+                    codeInputs[idx - 1].focus();
+                }
+            });
+            input.addEventListener('paste', function (e) {
+                e.preventDefault();
+                const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '');
+                for (let i = 0; i < pasted.length && (idx + i) < codeInputs.length; i++) {
+                    codeInputs[idx + i].value = pasted[i];
+                }
+                const next = Math.min(idx + pasted.length, codeInputs.length - 1);
+                codeInputs[next].focus();
+            });
+        });
+    });
+
     // Toggle Note Lock
     window.toggleNoteLock = async function (noteId) {
         try {
@@ -3662,10 +4001,10 @@
                     // Premium feature gate
                     if (typeof window.showCustomConfirm === 'function') {
                         window.showCustomConfirm(data.error + ' Go to settings to upgrade?', confirmed => {
-                            if (confirmed) window.location.href = '{{ url_for("profile_settings", username=current_user.username) }}#premium';
+                            if (confirmed) window.location.href = '{{ url_for("profile.profile_settings", username=current_user.username) }}#premium';
                         });
                     } else if (confirm(data.error + ' Go to settings to upgrade?')) {
-                        window.location.href = '{{ url_for("profile_settings", username=current_user.username) }}#premium';
+                        window.location.href = '{{ url_for("profile.profile_settings", username=current_user.username) }}#premium';
                     }
                 } else if (window.showFlashMessage) {
                     window.showFlashMessage(data.error, 'danger');
@@ -3687,7 +4026,7 @@
         if (typeof window.showCustomConfirm === 'function') {
             window.showCustomConfirm('App Lock protects sensitive notes. You need to set a 4-digit PIN in Settings. Go there now?', confirmed => {
                 if (confirmed) {
-                    window.location.href = "{{ url_for('profile_settings', username=current_user.username) }}";
+                    window.location.href = "{{ url_for('profile.profile_settings', username=current_user.username) }}";
                 }
             });
         }
@@ -4263,7 +4602,7 @@
                 }
             }
             if (typeof window.showFlashMessage === 'function') window.showFlashMessage('Version restored successfully.', 'success');
-            window.loadVersionHistory(window.currentVersionNoteId);
+            window.closeVersionModal();
         };
 
         window.reviewProposal = async function (proposalId, action, index) {

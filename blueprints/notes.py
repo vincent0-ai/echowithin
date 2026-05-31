@@ -551,6 +551,7 @@ def create_personal_post_json():
 def search_personal_notes():
     """Search personal notes using Typesense with highlighting and tenant-isolated scoped keys."""
     import main as m
+    import typesense_client as _t
     query = request.args.get('q', '').strip()
     page = max(1, int(request.args.get('page', 1)))
     per_page = min(50, max(1, int(request.args.get('per_page', 20))))

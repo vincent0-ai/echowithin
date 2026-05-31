@@ -4828,7 +4828,16 @@
             const isChecked = checkbox.checked;
             const originalState = !isChecked;
 
-            checkbox.disabled = true;
+            // Find all checkboxes representing this collaborator on this share link
+            const matchingCheckboxes = document.querySelectorAll(
+                `.toggle-auto-approve-checkbox[data-share-id="${shareId}"][data-editor-id="${editorId}"]`
+            );
+
+            matchingCheckboxes.forEach(cb => {
+                cb.disabled = true;
+                cb.checked = isChecked;
+            });
+
             try {
                 const csrfMeta = document.querySelector('meta[name="csrf-token"]');
                 const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
@@ -4849,14 +4858,20 @@
                     }
                 } else {
                     alert(result.error || 'Failed to update auto-approve setting.');
-                    checkbox.checked = originalState;
+                    matchingCheckboxes.forEach(cb => {
+                        cb.checked = originalState;
+                    });
                 }
             } catch (err) {
                 console.error('Failed to toggle auto-approve:', err);
                 alert('Network error. Please try again.');
-                checkbox.checked = originalState;
+                matchingCheckboxes.forEach(cb => {
+                    cb.checked = originalState;
+                });
             } finally {
-                checkbox.disabled = false;
+                matchingCheckboxes.forEach(cb => {
+                    cb.disabled = false;
+                });
             }
         });
 

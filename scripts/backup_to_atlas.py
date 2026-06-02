@@ -140,16 +140,29 @@ def run_backup():
             atlas_ids = {d['_id'] for d in atlas_coll.find({}, {'_id': 1})}
             stale_ids = list(atlas_ids - local_ids)
             deleted = 0
+            marked = 0
             if stale_ids:
-                atlas_coll.delete_many({'_id': {'$in': stale_ids}})
-                deleted = len(stale_ids)
-                print(f"  {coll_name}: removed {deleted} stale documents")
+                # Mark newly deleted documents in Atlas with '_deleted_at' if not already marked
+                mark_result = atlas_coll.update_many(
+                    {'_id': {'$in': stale_ids}, '_deleted_at': {'$exists': False}},
+                    {'$set': {'_deleted_at': now}}
+                )
+                marked = mark_result.modified_count
+
+                # Purge stale documents in Atlas whose '_deleted_at' is older than 3 days
+                three_days_ago = now - datetime.timedelta(days=3)
+                delete_result = atlas_coll.delete_many(
+                    {'_id': {'$in': stale_ids}, '_deleted_at': {'$lt': three_days_ago}}
+                )
+                deleted = delete_result.deleted_count
+                if marked or deleted:
+                    print(f"  {coll_name}: marked {marked} deleted, removed {deleted} stale documents")
 
             total_synced += synced
             total_deleted += deleted
             total_errors += errors
-            if synced or deleted or errors:
-                print(f"  {coll_name}: {synced} synced, {deleted} deleted, {errors} errors")
+            if synced or marked or deleted or errors:
+                print(f"  {coll_name}: {synced} synced, {marked} marked deleted, {deleted} purged, {errors} errors")
 
         # Save backup timestamp
         meta_coll.replace_one(

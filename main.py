@@ -416,10 +416,6 @@ weekly_winners_cache = TTLCache(maxsize=1, ttl=3600)
 
 
 
-
-
-
-
 # MongoDB connection with connection pooling for better performance
 # maxPoolSize: Maximum number of connections in the pool
 # minPoolSize: Minimum number of connections to maintain
@@ -814,46 +810,6 @@ def inject_template_globals():
     return ctx
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None):
     """Send FCM notification to all registered devices for a user (native app).
     
@@ -993,37 +949,6 @@ def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
 
 
 
-
-
-
-
-
-
-
-
-# ----------------- Search endpoints -----------------
-
-
-# ----------------- Admin analytics -----------------
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @rq.job
 def reindex_typesense_job():
     """Background job to reindex all posts into Typesense."""
@@ -1032,19 +957,6 @@ def reindex_typesense_job():
         app.logger.info(f'Typesense posts reindex job finished ({total} docs)')
     except Exception as e:
         app.logger.error(f'Typesense reindex job failed: {e}', exc_info=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1117,39 +1029,6 @@ def send_ntfy_notification(message, title, tags=""):
             app.logger.error(f"ntfy send failed for topic {ntfy_topic}: status={resp.status_code}, body={resp.text}")
     except Exception as e:
         app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1272,139 +1151,6 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         if temp_video_path and os.path.exists(temp_video_path):
             os.remove(temp_video_path)
         app.logger.info(f"Cleaned up temporary files for post {post_id_str}")
-
-
-
-
-
-
-
-# --- Push Notification Subscription Endpoints ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ---------------- Paystack Integration ----------------
-
-
-
-
-
-
-
-
-
-
-
-# --- Pinning post API is removed ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ----------------- App Lock & Note Locking -----------------
-
-
-
-
-
-
-
-
-
-
-
-
-# ----------------- Note Sharing Endpoints -----------------
-
-
-
-
-
-
-# --- Note Attachment APIs (images & voice notes on collaborative notes) ---
-
-
-
-
-
-
-
-
-
 
 
 # --- WebSocket Real-time collaboration ---
@@ -1747,102 +1493,6 @@ def handle_stop_typing(data):
         }, room=recipient_room)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- DM Request System Endpoints ---
-
-
-
-
-
-
-
-
-
-
-
-# --- Scheduled Messages ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# --- Note Discussion Routes (Login Required) ---
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# =====================================================
-# SEO: Sitemap and Robots.txt
-# =====================================================
-
-
-
-
-
-
 # Handles any possible errors
 
 @app.errorhandler(404)
@@ -1872,44 +1522,4 @@ def internal_server_error(e):
             app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
     except Exception as log_e:
         print(f"CRITICAL: Failed to log 500 error: {log_e}", file=sys.stderr)
-    return render_template("500.html"), 500# ==============================================================================
-# COMMUNITY NOTES API ROUTES
-# ==============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ==============================================================================
-# COMMUNITY REPORTING & ADMIN MODERATION
-# ==============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return render_template("500.html"), 500

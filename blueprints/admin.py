@@ -338,17 +338,16 @@ def admin_unpin_post(post_id):
 def admin_announcements():
     import main as m
     if request.method == 'POST':
-        title = request.form.get('title')
         content = request.form.get('content')
-        if title and content:
+        if content:
             m.announcements_conf.insert_one({
-                'title': title, 'content': content,
+                'content': content,
                 'created_at': datetime.datetime.now(datetime.timezone.utc),
                 'is_pinned': False
             })
             flash('Announcement created.', 'success')
         else:
-            flash('Title and content required.', 'danger')
+            flash('Content required.', 'danger')
         return redirect(url_for('admin.admin_announcements'))
     announcements = list(m.announcements_conf.find({}).sort('created_at', -1))
     return render_template('admin_announcements.html', announcements=announcements)

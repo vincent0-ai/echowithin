@@ -1554,7 +1554,7 @@ def api_user_suggest():
             'username': candidate.get('username'),
             'bio': candidate.get('bio', ''),
             'profile_image_url': candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png'),
-            'profile_url': url_for('profile', username=candidate.get('username')),
+            'profile_url': url_for('profile.profile', username=candidate.get('username')),
         })
 
     return jsonify({'suggestions': suggestions})

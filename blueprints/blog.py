@@ -1638,7 +1638,7 @@ def edit_post(post_id):
     if str(post.get('author_id')) != current_user.id:
         flash("You can only edit your own posts.", "danger")
         return redirect(url_for('blog.view_post', slug=post.get('slug')))
-    return render_template('create_post.html', post=post, active_page='blog', title=f"Editing: {post.get('title')} - EchoWithin", description="Edit your post.")
+    return render_template('edit_post.html', post=post, active_page='blog', title=f"Editing: {post.get('title')} - EchoWithin", description="Edit your post.")
 
 
 @bp.route('/update_post/<post_id>', methods=['POST'])

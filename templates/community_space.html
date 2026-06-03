@@ -445,11 +445,41 @@
         </div>
     </div>
 
+    <!-- Active Challenge Banner -->
+    {% if active_challenge %}
+    <div style="background:#faf5f0;border:1px solid #e8ddd3;border-radius:8px;padding:1rem;margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div>
+                <strong style="color:#3e2217;font-size:0.95rem;">Challenge: {{ active_challenge.title }}</strong>
+                {% if active_challenge.description %}
+                <p style="color:#666;font-size:0.82rem;margin:0.3rem 0 0.5rem;">{{ active_challenge.description }}</p>
+                {% endif %}
+                <div style="display:flex;gap:1rem;font-size:0.75rem;color:#999;">
+                    <span>{{ active_challenge.entry_count }} entr{{ 'y' if active_challenge.entry_count == 1 else 'ies' }}</span>
+                    <span>Ends {{ active_challenge.ends_at|localtime }}</span>
+                </div>
+            </div>
+            {% if is_admin %}
+            <form action="{{ url_for('communities.api_end_challenge', community_id=community._id, challenge_id=active_challenge._id) }}" method="POST" onsubmit="return confirm('End this challenge and pick the winner?');" style="flex-shrink:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn-sm" style="font-size:0.75rem;">End Challenge</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Note creation -->
     {% if is_member %}
     <div class="create-note-box">
         <form action="{{ url_for('communities.api_create_community_note', community_id=community._id) }}" method="POST" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if active_challenge %}
+            <input type="hidden" name="challenge_id" value="{{ active_challenge._id }}">
+            <div style="font-size:0.75rem;color:#3e2217;background:#faf5f0;padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem;border:1px solid #e8ddd3;">
+                Writing for: <strong>{{ active_challenge.title }}</strong>
+            </div>
+            {% endif %}
 
             <textarea name="content" class="note-textarea" placeholder="Share a thought, note, or question..." required maxlength="{{ current_user.get_limit('max_chars_per_note') }}" oninput="document.getElementById('charCount').textContent=this.value.length"></textarea>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.3rem;">
@@ -505,6 +535,11 @@
                             <input type="checkbox" name="use_typewriter" value="true" style="accent-color:#3e2217;"> Typewriter effect
                         </label>
                     </div>
+                    <div class="option-group">
+                        <label style="font-size:0.78rem;display:flex;align-items:center;gap:0.3rem;color:#666;cursor:pointer;">
+                            <input type="checkbox" name="is_anonymous" value="true" style="accent-color:#3e2217;"> Post anonymously
+                        </label>
+                    </div>
                 </div>
 
                 <div class="option-group">
@@ -535,6 +570,13 @@
             <div class="note-stripe" style="background: {{ border_color }};"></div>
 
             <div class="note-author-info">
+                {% if note.is_anonymous %}
+                <div class="author-avatar" style="background:#bbb;font-size:0.65rem;">A</div>
+                <div class="author-meta">
+                    <span class="author-name" style="color:#999;font-style:italic;">Anonymous{% if note.author_id|string == current_user.id %} <span style="font-size:0.65rem;color:#aaa;font-style:normal;">(you)</span>{% endif %}</span>
+                    <span class="note-time">{{ note.created_at|localtime }}</span>
+                </div>
+                {% else %}
                 <div class="author-avatar" style="background: {{ border_color }};">
                     {{ note.author_name[0]|upper }}
                 </div>
@@ -542,7 +584,12 @@
                     <span class="author-name">{{ note.author_name }}</span>
                     <span class="note-time">{{ note.created_at|localtime }}</span>
                 </div>
+                {% endif %}
             </div>
+
+            {% if note.challenge_id %}
+            <div style="font-size:0.68rem;color:#3e2217;background:#faf5f0;padding:0.15rem 0.4rem;border-radius:3px;display:inline-block;margin-bottom:0.4rem;border:1px solid #e8ddd3;">Challenge entry</div>
+            {% endif %}
 
             <div class="note-content {{ 'handwriting' if note.font_style == 'handwriting' else '' }}" data-raw="{{ note.content|e }}">
                 {{ note.content }}
@@ -609,6 +656,26 @@
         {% if page < total_pages %}
         <a href="?page={{ page + 1 }}" class="btn-sm">Next</a>
         {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Past Challenges -->
+    {% if past_challenges %}
+    <div style="margin-top:1.5rem;">
+        <div class="section-label">Past Challenges</div>
+        {% for ch in past_challenges %}
+        <div style="background:white;border:1px solid #eee;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong style="font-size:0.85rem;color:#3e2217;">{{ ch.title }}</strong>
+                <span style="font-size:0.7rem;color:#999;">{{ ch.ended_at|localtime if ch.ended_at }}</span>
+            </div>
+            {% if ch.winner_username %}
+            <div style="font-size:0.78rem;color:#666;margin-top:0.3rem;">Winner: <strong>{{ ch.winner_username }}</strong></div>
+            {% else %}
+            <div style="font-size:0.78rem;color:#999;margin-top:0.3rem;">No entries</div>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 </div>
@@ -820,6 +887,26 @@
                 </div>
                 {% endfor %}
             </div>
+        </div>
+
+        <!-- Challenge Creation -->
+        <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
+            <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Start a Challenge</label>
+            {% if active_challenge %}
+            <p style="font-size:0.78rem;color:#999;margin:0.3rem 0 0;">An active challenge is already running. End it first to start a new one.</p>
+            {% else %}
+            <form action="{{ url_for('communities.api_create_challenge', community_id=community._id) }}" method="POST" style="margin-top:0.4rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="challenge_title" placeholder="e.g. Share a time you overcame fear" maxlength="100" required
+                    style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;margin-bottom:0.4rem;">
+                <textarea name="challenge_desc" placeholder="Describe the prompt (optional)" maxlength="500"
+                    style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;min-height:50px;resize:vertical;font-family:inherit;margin-bottom:0.4rem;"></textarea>
+                <label style="display:block;font-size:0.78rem;color:#666;margin-bottom:0.2rem;">End Date</label>
+                <input type="datetime-local" name="challenge_ends_at" required
+                    style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;margin-bottom:0.5rem;">
+                <button type="submit" style="width:100%;background:#3e2217;color:white;border:none;padding:0.45rem;border-radius:6px;font-weight:600;font-size:0.82rem;cursor:pointer;">Start Challenge</button>
+            </form>
+            {% endif %}
         </div>
     </div>
 </div>

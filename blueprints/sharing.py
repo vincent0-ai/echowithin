@@ -99,77 +99,24 @@ def api_create_share(post_id):
             'upgrade': True
         }), 403
 
-    is_valentine = False
-    surprise_theme = 'none'
-    valentine_photo = None
-    valentine_audio = None
-    use_typewriter = False
-
+    # Parse basic share fields — advanced config (surprise theme, media, time capsule)
+    # is done via the share settings page after creation.
     if request.is_json:
         data = request.get_json() or {}
         permissions = data.get('permissions', 'view')
         expires_in = data.get('expires_in')
         access_code = data.get('access_code')
+        # Backward compat: still accept surprise_theme etc from old clients / API
         surprise_theme = data.get('surprise_theme', 'none')
-        # Backward compatibility for clients still sending is_valentine
-        is_valentine = data.get('is_valentine', False)
-        if is_valentine and surprise_theme == 'none':
-            surprise_theme = 'valentine'
-            
-        valentine_photo = data.get('valentine_photo')
-        valentine_audio = data.get('valentine_audio')
         use_typewriter = data.get('use_typewriter', False)
         auto_approve = data.get('auto_approve', False)
     else:
-        # Handle multipart/form-data
         permissions = request.form.get('permissions', 'view')
         expires_in = request.form.get('expires_in')
         access_code = request.form.get('access_code')
         surprise_theme = request.form.get('surprise_theme', 'none')
-        is_valentine = request.form.get('is_valentine') == 'true'
-        if is_valentine and surprise_theme == 'none':
-            surprise_theme = 'valentine'
         use_typewriter = request.form.get('use_typewriter') == 'true'
         auto_approve = request.form.get('auto_approve') == 'true'
-        
-        # Handle file uploads
-        if surprise_theme != 'none':
-            photo_file = request.files.get('valentine_photo')
-            audio_file = request.files.get('valentine_audio')
-            
-            # --- Premium check for media uploads ---
-            has_media = False
-            if photo_file and photo_file.filename:
-                has_media = True
-            if audio_file and audio_file.filename:
-                has_media = True
-                
-            if has_media and not m.is_premium(user_doc):
-                return jsonify({
-                    'error': 'Uploading custom photos and music to surprise notes is a Premium feature. Upgrade to unlock!',
-                    'upgrade': True
-                }), 403
-
-            if photo_file and photo_file.filename:
-                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
-                if ext in m.ALLOWED_IMAGE_EXTENSIONS:
-                    try:
-                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
-                        valentine_photo = upload_result.get('secure_url')
-                    except Exception as e:
-                        current_app.logger.error(f"Valentine photo upload failed: {e}")
-
-            audio_file = request.files.get('valentine_audio')
-            if audio_file and audio_file.filename:
-                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
-                if ext in m.ALLOWED_AUDIO_EXTENSIONS:
-                    try:
-                        # Ensure we are at the start of the file
-                        audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
-                        valentine_audio = upload_result.get('secure_url')
-                    except Exception as e:
-                        current_app.logger.error(f"Valentine audio upload failed: {e}")
 
     if permissions not in ['view', 'edit']:
         permissions = 'view'
@@ -188,7 +135,7 @@ def api_create_share(post_id):
         expires_at = now + datetime.timedelta(days=7)
 
     share_id = secrets.token_urlsafe(16)
-    
+
     # --- Premium tier enforcement: surprise note limit ---
     if surprise_theme != 'none':
         max_surprise = m.get_limit(user_doc, 'max_surprise_notes')
@@ -204,7 +151,7 @@ def api_create_share(post_id):
 
     # --- Premium tier enforcement: auto-approve requires premium ---
     if auto_approve and not m.is_premium(user_doc):
-        auto_approve = False  # silently downgrade, don't block the share
+        auto_approve = False
 
     m.note_shares_conf.insert_one({
         'share_id': share_id,
@@ -215,12 +162,13 @@ def api_create_share(post_id):
         'expires_at': expires_at,
         'created_at': now,
         'surprise_theme': surprise_theme,
-        'valentine_photo': m.encrypt_note(valentine_photo, user_id=current_user.id) if valentine_photo else None,
-        'valentine_audio': m.encrypt_note(valentine_audio, user_id=current_user.id) if valentine_audio else None,
-        'valentine_photo_hash': hashlib.sha256(valentine_photo.encode()).hexdigest() if valentine_photo else None,
-        'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
+        'valentine_photo': None,
+        'valentine_audio': None,
+        'valentine_photo_hash': None,
+        'valentine_audio_hash': None,
         'use_typewriter': use_typewriter,
-        'auto_approve': auto_approve
+        'auto_approve': auto_approve,
+        'unlock_date': None
     })
 
     share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
@@ -267,6 +215,23 @@ def view_shared_note(share_id):
         
         if not session.get(f'unlocked_{share_id}'):
             return render_template('shared_note.html', share_id=share_id, requires_code=True)
+
+    # Check Time Capsule unlock date
+    unlock_date = share.get('unlock_date')
+    is_owner = current_user.is_authenticated and str(current_user.id) == str(share.get('owner_id', ''))
+    if unlock_date:
+        if unlock_date.tzinfo is None:
+            unlock_date = unlock_date.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) < unlock_date and not is_owner:
+            surprise_theme = share.get('surprise_theme')
+            if not surprise_theme:
+                surprise_theme = 'valentine' if share.get('is_valentine') else 'none'
+            return render_template('shared_note.html',
+                                   share_id=share_id,
+                                   capsule_locked=True,
+                                   unlock_date=unlock_date.isoformat(),
+                                   surprise_theme=surprise_theme,
+                                   is_owner=False)
 
     # Fetch the note
     note = m.personal_posts_conf.find_one({'_id': share['note_id']})
@@ -989,6 +954,152 @@ def api_get_note_shares(post_id):
              s['expires_at'] = s['expires_at'].isoformat()
     
     return jsonify(shares)
+
+
+@bp.route('/share/settings/<share_id>', methods=['GET'])
+@login_required
+def share_settings_page(share_id):
+    """Full-page settings for a share link (owner only)."""
+    import main as m
+    share = m.note_shares_conf.find_one({
+        'share_id': share_id,
+        'owner_id': ObjectId(current_user.id)
+    })
+    if not share:
+        flash('Share link not found or unauthorized.', 'danger')
+        return redirect(url_for('notes.personal_space'))
+
+    # Decrypt media URLs for display
+    valentine_photo = None
+    valentine_audio = None
+    if share.get('valentine_photo'):
+        try:
+            valentine_photo = m.decrypt_note(share['valentine_photo'], user_id=current_user.id)
+        except Exception:
+            pass
+    if share.get('valentine_audio'):
+        try:
+            valentine_audio = m.decrypt_note(share['valentine_audio'], user_id=current_user.id)
+        except Exception:
+            pass
+
+    share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
+
+    # Format unlock_date for datetime-local input
+    unlock_date_str = ''
+    if share.get('unlock_date'):
+        unlock_date_str = share['unlock_date'].strftime('%Y-%m-%dT%H:%M')
+
+    user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    user_is_premium = m.is_premium(user_doc)
+
+    return render_template('share_settings.html',
+                           share=share,
+                           share_url=share_url,
+                           valentine_photo=valentine_photo,
+                           valentine_audio=valentine_audio,
+                           unlock_date_str=unlock_date_str,
+                           user_is_premium=user_is_premium)
+
+
+@bp.route('/api/share/<share_id>/settings', methods=['POST'])
+@login_required
+def api_update_share_settings(share_id):
+    """Update advanced share settings (surprise theme, media, time capsule, etc.)."""
+    import main as m
+    share = m.note_shares_conf.find_one({
+        'share_id': share_id,
+        'owner_id': ObjectId(current_user.id)
+    })
+    if not share:
+        flash('Share link not found or unauthorized.', 'danger')
+        return redirect(url_for('notes.personal_space'))
+
+    user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    update_fields = {}
+
+    # Surprise theme
+    surprise_theme = request.form.get('surprise_theme', share.get('surprise_theme', 'none'))
+    if surprise_theme != share.get('surprise_theme', 'none'):
+        # Premium limit check when setting a surprise theme
+        if surprise_theme != 'none':
+            max_surprise = m.get_limit(user_doc, 'max_surprise_notes')
+            surprise_count = m.note_shares_conf.count_documents({
+                'owner_id': ObjectId(current_user.id),
+                'surprise_theme': {'$ne': 'none', '$exists': True},
+                '_id': {'$ne': share['_id']}  # exclude current share
+            })
+            if surprise_count >= max_surprise:
+                flash(f'Surprise note limit ({max_surprise}) reached. Upgrade to Premium for unlimited.', 'warning')
+                return redirect(url_for('sharing.share_settings_page', share_id=share_id))
+    update_fields['surprise_theme'] = surprise_theme
+
+    # Typewriter
+    update_fields['use_typewriter'] = request.form.get('use_typewriter') == 'true'
+
+    # Auto-approve
+    auto_approve = request.form.get('auto_approve') == 'true'
+    if auto_approve and not m.is_premium(user_doc):
+        auto_approve = False
+    update_fields['auto_approve'] = auto_approve
+
+    # Time Capsule unlock date
+    unlock_date_str = request.form.get('unlock_date', '').strip()
+    if unlock_date_str:
+        try:
+            unlock_date = datetime.datetime.fromisoformat(unlock_date_str).replace(tzinfo=datetime.timezone.utc)
+            update_fields['unlock_date'] = unlock_date
+        except (ValueError, TypeError):
+            flash('Invalid unlock date format.', 'danger')
+            return redirect(url_for('sharing.share_settings_page', share_id=share_id))
+    else:
+        update_fields['unlock_date'] = None
+
+    # Handle media uploads (premium gated)
+    if surprise_theme != 'none':
+        photo_file = request.files.get('valentine_photo')
+        audio_file = request.files.get('valentine_audio')
+
+        has_media = bool((photo_file and photo_file.filename) or (audio_file and audio_file.filename))
+        if has_media and not m.is_premium(user_doc):
+            flash('Uploading photos and music is a Premium feature.', 'warning')
+        else:
+            if photo_file and photo_file.filename:
+                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+                if ext in m.ALLOWED_IMAGE_EXTENSIONS:
+                    try:
+                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
+                        photo_url = upload_result.get('secure_url')
+                        update_fields['valentine_photo'] = m.encrypt_note(photo_url, user_id=current_user.id)
+                        update_fields['valentine_photo_hash'] = hashlib.sha256(photo_url.encode()).hexdigest()
+                    except Exception as e:
+                        current_app.logger.error(f"Share settings photo upload failed: {e}")
+
+            if audio_file and audio_file.filename:
+                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+                if ext in m.ALLOWED_AUDIO_EXTENSIONS:
+                    try:
+                        audio_file.seek(0)
+                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
+                        audio_url = upload_result.get('secure_url')
+                        update_fields['valentine_audio'] = m.encrypt_note(audio_url, user_id=current_user.id)
+                        update_fields['valentine_audio_hash'] = hashlib.sha256(audio_url.encode()).hexdigest()
+                    except Exception as e:
+                        current_app.logger.error(f"Share settings audio upload failed: {e}")
+
+    # Clear media if switching back to standard
+    if surprise_theme == 'none':
+        if share.get('valentine_photo') or share.get('valentine_audio'):
+            m.cleanup_share_media(share)
+        update_fields['valentine_photo'] = None
+        update_fields['valentine_audio'] = None
+        update_fields['valentine_photo_hash'] = None
+        update_fields['valentine_audio_hash'] = None
+        update_fields['use_typewriter'] = False
+
+    m.note_shares_conf.update_one({'_id': share['_id']}, {'$set': update_fields})
+    flash('Share settings updated.', 'success')
+    return redirect(url_for('sharing.share_settings_page', share_id=share_id))
 
 
 @bp.route('/api/share/<share_id>/history')

@@ -58,6 +58,54 @@
                 </div>
             </form>
         </div>
+        {% elif capsule_locked %}
+        <div class="auth-state" style="text-align:center;padding:2rem 1.5rem;">
+            <div style="font-size:2rem;margin-bottom:0.75rem;">⏳</div>
+            <h2 style="color:#3e2217;margin:0 0 0.5rem;">Time Capsule</h2>
+            <p style="color:#666;font-size:0.9rem;margin:0 0 1rem;">This note is locked until:</p>
+            <div id="capsule-target" data-unlock="{{ unlock_date }}"
+                style="font-size:1rem;font-weight:600;color:#3e2217;margin-bottom:1rem;"></div>
+            <div id="capsule-countdown"
+                style="display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;"></div>
+            <p style="font-size:0.78rem;color:#999;margin-top:1.5rem;">The sender has locked this note as a Time Capsule. Check back when the timer reaches zero.</p>
+        </div>
+        <script>
+        (function() {
+            const targetEl = document.getElementById('capsule-target');
+            const countdownEl = document.getElementById('capsule-countdown');
+            if (!targetEl) return;
+            const unlockDate = new Date(targetEl.getAttribute('data-unlock'));
+            targetEl.textContent = unlockDate.toLocaleDateString(undefined, {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            function pad(n) { return String(n).padStart(2, '0'); }
+            function makeUnit(val, label) {
+                return `<div style="text-align:center;">
+                    <div style="font-size:1.5rem;font-weight:700;color:#3e2217;background:#faf5f0;border:1px solid #e8ddd3;border-radius:8px;padding:0.5rem 0.75rem;min-width:50px;">${pad(val)}</div>
+                    <div style="font-size:0.7rem;color:#999;margin-top:0.25rem;">${label}</div>
+                </div>`;
+            }
+
+            function update() {
+                const now = new Date();
+                const diff = unlockDate - now;
+                if (diff <= 0) {
+                    countdownEl.innerHTML = '<div style="font-size:0.95rem;color:#3e2217;font-weight:600;">Unlocked! Refreshing...</div>';
+                    setTimeout(() => location.reload(), 1500);
+                    return;
+                }
+                const days = Math.floor(diff / 86400000);
+                const hrs = Math.floor((diff % 86400000) / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+                countdownEl.innerHTML = makeUnit(days, 'Days') + makeUnit(hrs, 'Hours') + makeUnit(mins, 'Minutes') + makeUnit(secs, 'Seconds');
+            }
+            update();
+            setInterval(update, 1000);
+        })();
+        </script>
         {% else %}
         {% if surprise_theme != 'none' %}
         <div id="valentine-reveal" class="valentine-envelope">

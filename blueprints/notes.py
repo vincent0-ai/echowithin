@@ -134,7 +134,20 @@ def personal_space():
                 if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                     clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                 if orig_ts > clone_ts:
-                    note['update_available'] = True
+                    # Timestamp says original is newer — verify content is actually different
+                    try:
+                        clone_decrypted = m._decrypt_note_record(note)
+                        orig_decrypted = m._decrypt_note_record(orig)
+                        if clone_decrypted != orig_decrypted:
+                            note['update_available'] = True
+                        else:
+                            # Content is the same but timestamps drifted — fix silently
+                            m.personal_posts_conf.update_one(
+                                {'_id': note['_id']},
+                                {'$set': {'updated_at': orig_ts}}
+                            )
+                    except Exception:
+                        note['update_available'] = True
         personal_posts.append(note)
 
     # --- Locked Notes ---
@@ -209,7 +222,18 @@ def personal_space():
                     if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                         clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                     if orig_ts > clone_ts:
-                        note['update_available'] = True
+                        try:
+                            clone_decrypted = m._decrypt_note_record(note)
+                            orig_decrypted = m._decrypt_note_record(orig)
+                            if clone_decrypted != orig_decrypted:
+                                note['update_available'] = True
+                            else:
+                                m.personal_posts_conf.update_one(
+                                    {'_id': note['_id']},
+                                    {'$set': {'updated_at': orig_ts}}
+                                )
+                        except Exception:
+                            note['update_available'] = True
             locked_notes.append(note)
         # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]
@@ -939,6 +963,12 @@ def sync_personal_post(post_id):
         clone_decrypted = m._decrypt_note_record(note)
         original_decrypted = m._decrypt_note_record(original_note, share)
         if clone_decrypted == original_decrypted:
+            # Content matches but timestamps might differ — sync the clone's timestamp
+            # so update_available won't trigger again on the next page load.
+            m.personal_posts_conf.update_one(
+                {'_id': obj_id},
+                {'$set': {'updated_at': now}}
+            )
             return jsonify({
                 'success': True,
                 'content': clone_decrypted,

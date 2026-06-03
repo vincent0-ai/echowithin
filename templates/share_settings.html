@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}<title>Share Settings | EchoWithin</title>{% endblock %}
+
+{% block head_meta %}
+<style>
+    .settings-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 0 1rem 2rem 1rem;
+    }
+
+    .settings-header {
+        margin-bottom: 1.25rem;
+        padding: 1rem 1.25rem;
+        background: #3e2217;
+        border-radius: 12px;
+        color: white;
+    }
+
+    .settings-header h1 {
+        color: white;
+        margin: 0 0 0.25rem 0;
+        font-size: 1.1rem;
+    }
+
+    .settings-header p {
+        color: rgba(255, 255, 255, 0.8);
+        margin: 0;
+        font-size: 0.78rem;
+    }
+
+    .link-box {
+        display: flex;
+        gap: 0.4rem;
+        margin-top: 0.75rem;
+    }
+
+    .link-box input {
+        flex: 1;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid rgba(255,255,255,0.3);
+        border-radius: 6px;
+        font-size: 0.78rem;
+        background: rgba(255,255,255,0.15);
+        color: white;
+        box-sizing: border-box;
+    }
+
+    .link-box button {
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.3);
+        padding: 0.4rem 0.7rem;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        cursor: pointer;
+    }
+
+    .settings-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .settings-card h3 {
+        margin: 0 0 0.75rem 0;
+        font-size: 0.9rem;
+        color: #3e2217;
+        font-weight: 600;
+    }
+
+    .settings-card .info-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82rem;
+        padding: 0.3rem 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+
+    .settings-card .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        color: #999;
+    }
+
+    .info-value {
+        color: #333;
+        font-weight: 500;
+    }
+
+    .form-group {
+        margin-bottom: 0.75rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 0.25rem;
+    }
+
+    .form-group .help-text {
+        font-size: 0.72rem;
+        color: #999;
+        margin-top: 0.15rem;
+    }
+
+    .form-select, .form-input {
+        width: 100%;
+        padding: 0.5rem 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        background: #fff;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .form-select:focus, .form-input:focus {
+        outline: none;
+        border-color: #3e2217;
+    }
+
+    .form-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.82rem;
+        color: #555;
+        cursor: pointer;
+    }
+
+    .form-checkbox input {
+        accent-color: #3e2217;
+        width: 16px;
+        height: 16px;
+    }
+
+    .btn-save {
+        width: 100%;
+        background: #3e2217;
+        color: white;
+        border: none;
+        padding: 0.6rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+    .btn-save:hover {
+        background: #2a160f;
+    }
+
+    .btn-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.82rem;
+        color: #3e2217;
+        text-decoration: none;
+        margin-bottom: 1rem;
+    }
+
+    .btn-back:hover {
+        text-decoration: underline;
+    }
+
+    .premium-tag {
+        font-size: 0.65rem;
+        color: #d32f2f;
+        background: #fdf2f2;
+        padding: 0.1rem 0.35rem;
+        border-radius: 3px;
+        margin-left: 0.3rem;
+    }
+
+    .media-preview {
+        margin-top: 0.4rem;
+        font-size: 0.78rem;
+        color: #666;
+    }
+
+    .capsule-info {
+        background: #faf5f0;
+        border: 1px solid #e8ddd3;
+        border-radius: 6px;
+        padding: 0.6rem 0.75rem;
+        font-size: 0.78rem;
+        color: #666;
+        margin-top: 0.3rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+
+    <a href="{{ url_for('notes.personal_space') }}" class="btn-back">&larr; Back to notes</a>
+
+    <div class="settings-header">
+        <h1>Share Link Settings</h1>
+        <p>Configure how recipients experience this shared note</p>
+        <div class="link-box">
+            <input type="text" value="{{ share_url }}" readonly id="share-link-input" onclick="this.select()">
+            <button onclick="navigator.clipboard.writeText(document.getElementById('share-link-input').value); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 2000);">Copy</button>
+        </div>
+    </div>
+
+    <!-- Link Info (read-only) -->
+    <div class="settings-card">
+        <h3>Link Info</h3>
+        <div class="info-row">
+            <span class="info-label">Permissions</span>
+            <span class="info-value">{{ share.permissions|capitalize }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Created</span>
+            <span class="info-value">{{ share.created_at|localtime }}</span>
+        </div>
+        {% if share.expires_at %}
+        <div class="info-row">
+            <span class="info-label">Expires</span>
+            <span class="info-value">{{ share.expires_at|localtime }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="info-label">Access Code</span>
+            <span class="info-value">{{ 'Set' if share.access_code_hash else 'None' }}</span>
+        </div>
+    </div>
+
+    <!-- Editable settings form -->
+    <form action="{{ url_for('sharing.api_update_share_settings', share_id=share.share_id) }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Share Style -->
+        <div class="settings-card">
+            <h3>Share Style</h3>
+            <div class="form-group">
+                <label for="surprise-theme">Theme</label>
+                <select name="surprise_theme" id="surprise-theme" class="form-select">
+                    <option value="none" {{ 'selected' if share.surprise_theme == 'none' or not share.surprise_theme }}>Standard Note</option>
+                    <option value="valentine" {{ 'selected' if share.surprise_theme == 'valentine' }}>Valentine Surprise</option>
+                    <option value="birthday" {{ 'selected' if share.surprise_theme == 'birthday' }}>Birthday Surprise</option>
+                    <option value="anniversary" {{ 'selected' if share.surprise_theme == 'anniversary' }}>Anniversary Surprise</option>
+                    <option value="celebration" {{ 'selected' if share.surprise_theme == 'celebration' }}>Celebration Surprise</option>
+                </select>
+            </div>
+
+            <div id="surprise-options" style="display: {{ 'block' if share.surprise_theme and share.surprise_theme != 'none' else 'none' }};">
+                <div class="form-group">
+                    <label>
+                        Personal Photo (Optional)
+                        {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                    </label>
+                    <input type="file" name="valentine_photo" accept="image/*" class="form-input"
+                        {% if not user_is_premium %}disabled{% endif %}
+                        style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
+                    {% if valentine_photo %}
+                    <div class="media-preview">Current photo attached</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Background Music (Optional)
+                        {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                    </label>
+                    <input type="file" name="valentine_audio" accept="audio/*" class="form-input"
+                        {% if not user_is_premium %}disabled{% endif %}
+                        style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
+                    {% if valentine_audio %}
+                    <div class="media-preview">Current audio attached</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" name="use_typewriter" value="true"
+                            {{ 'checked' if share.use_typewriter }}>
+                        Typewriter Effect
+                    </label>
+                    <div class="help-text">Text reveals letter by letter for a personal touch</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Capsule -->
+        <div class="settings-card">
+            <h3>Time Capsule</h3>
+            <div class="form-group">
+                <label for="unlock-date">Unlock Date</label>
+                <input type="datetime-local" name="unlock_date" id="unlock-date" class="form-input"
+                    value="{{ unlock_date_str }}">
+                <div class="help-text">Leave empty to make the note available immediately. Set a future date to lock the note until then.</div>
+            </div>
+            {% if unlock_date_str %}
+            <div class="capsule-info">
+                This note is currently locked as a Time Capsule. Recipients will see a countdown timer until the unlock date. You (the owner) can always view the note.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Collaboration -->
+        {% if share.permissions == 'edit' %}
+        <div class="settings-card">
+            <h3>Collaboration</h3>
+            <div class="form-group">
+                <label class="form-checkbox">
+                    <input type="checkbox" name="auto_approve" value="true"
+                        {{ 'checked' if share.auto_approve }}
+                        {% if not user_is_premium %}disabled{% endif %}>
+                    Auto-approve trusted collaborators
+                    {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                </label>
+                <div class="help-text">Bypass proposals and apply edits instantly to your original note</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn-save">Save Settings</button>
+    </form>
+</div>
+
+<script>
+    // Toggle surprise options visibility
+    const themeSelect = document.getElementById('surprise-theme');
+    const surpriseOptions = document.getElementById('surprise-options');
+    if (themeSelect && surpriseOptions) {
+        themeSelect.addEventListener('change', () => {
+            surpriseOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
+        });
+    }
+</script>
+{% endblock %}

@@ -63,7 +63,28 @@ def view_community(community_id):
     if is_admin:
         member_ids = community.get('members', [])
         members = list(m.users_conf.find({'_id': {'$in': member_ids}}, {'username': 1}))
-    return render_template('community_space.html', community=community, notes=raw_notes, is_member=is_member, is_admin=is_admin, members=members, page=page, total_pages=(total_notes + per_page - 1) // per_page)
+
+    # Fetch active challenge (at most one per community)
+    active_challenge = m.community_challenges_conf.find_one({
+        'community_id': comm_obj_id,
+        'status': 'active'
+    })
+    if active_challenge:
+        active_challenge['entry_count'] = m.community_notes_conf.count_documents({
+            'community_id': comm_obj_id,
+            'challenge_id': active_challenge['_id']
+        })
+
+    # Fetch past (completed) challenges
+    past_challenges = list(m.community_challenges_conf.find({
+        'community_id': comm_obj_id,
+        'status': 'completed'
+    }).sort('ended_at', -1).limit(10))
+
+    return render_template('community_space.html', community=community, notes=raw_notes,
+                           is_member=is_member, is_admin=is_admin, members=members,
+                           page=page, total_pages=(total_notes + per_page - 1) // per_page,
+                           active_challenge=active_challenge, past_challenges=past_challenges)
 
 
 @bp.route('/api/community/create', methods=['POST'])
@@ -304,6 +325,23 @@ def api_create_community_note(community_id):
     surprise_theme = request.form.get('surprise_theme', 'none')
     font_style = request.form.get('font_style', 'standard')
     use_typewriter = request.form.get('use_typewriter') == 'true'
+    is_anonymous = request.form.get('is_anonymous') == 'true'
+
+    # Optional: link this note to an active challenge
+    challenge_id = None
+    challenge_id_str = request.form.get('challenge_id', '').strip()
+    if challenge_id_str:
+        try:
+            challenge_obj_id = ObjectId(challenge_id_str)
+            challenge = m.community_challenges_conf.find_one({
+                '_id': challenge_obj_id,
+                'community_id': comm_obj_id,
+                'status': 'active'
+            })
+            if challenge:
+                challenge_id = challenge_obj_id
+        except Exception:
+            pass
     
     # Parse tags
     tags_str = request.form.get('tags', '')
@@ -353,7 +391,8 @@ def api_create_community_note(community_id):
     note_data = {
         'community_id': comm_obj_id,
         'author_id': ObjectId(current_user.id),
-        'author_name': current_user.username,
+        'author_name': 'Anonymous' if is_anonymous else current_user.username,
+        'is_anonymous': is_anonymous,
         'content': encrypted_content,
         'tags': tags[:5],
         'permissions': permissions,
@@ -371,9 +410,45 @@ def api_create_community_note(community_id):
         'updated_at': now,
         'last_activity_at': now
     }
+    if challenge_id:
+        note_data['challenge_id'] = challenge_id
     
     m.community_notes_conf.insert_one(note_data)
     m.communities_conf.update_one({'_id': comm_obj_id}, {'$set': {'updated_at': now}})
+
+    # Notify other community members about the new note (background)
+    try:
+        author_obj_id = ObjectId(current_user.id)
+        member_ids = community.get('members', [])
+        comm_name = community.get('name', 'a community')
+        author_display = 'Someone' if is_anonymous else current_user.username
+        challenge_label = ''
+        if challenge_id:
+            ch = m.community_challenges_conf.find_one({'_id': challenge_id})
+            if ch:
+                challenge_label = f' (Challenge: {ch.get("title", "")})'
+        community_url = url_for('communities.view_community', community_id=community_id, _external=True)
+
+        def _send_community_notifs():
+            for member_id in member_ids:
+                if member_id == author_obj_id:
+                    continue
+                try:
+                    m.send_push_notification_to_user(
+                        str(member_id),
+                        f'New note in {comm_name}',
+                        f'{author_display} posted a note{challenge_label}',
+                        url=community_url,
+                        tag=f'community-note-{community_id}',
+                        extra_data={'type': 'community_note', 'community_id': community_id}
+                    )
+                except Exception:
+                    pass
+
+        m.executor.submit(_send_community_notifs)
+    except Exception as notif_err:
+        current_app.logger.error(f"Community notification error: {notif_err}")
+
     flash('Note added successfully.', 'success')
     return redirect(url_for('communities.view_community', community_id=community_id))
 
@@ -650,6 +725,150 @@ def api_save_community_note(note_id):
     })
     
     return jsonify({'success': True, 'message': 'Note saved to your personal notes!'})
+
+
+@bp.route('/api/community/<community_id>/challenge/create', methods=['POST'])
+@login_required
+@limits(calls=5, period=3600)
+def api_create_challenge(community_id):
+    """Create a writing challenge/prompt (admin only). One active per community."""
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    # Only one active challenge at a time
+    existing = m.community_challenges_conf.find_one({
+        'community_id': comm_obj_id,
+        'status': 'active'
+    })
+    if existing:
+        flash('There is already an active challenge. End it before starting a new one.', 'warning')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    title = request.form.get('challenge_title', '').strip()
+    description = request.form.get('challenge_desc', '').strip()
+    ends_at_str = request.form.get('challenge_ends_at', '').strip()
+
+    if not title or not ends_at_str:
+        flash('Challenge title and end date are required.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    if len(title) > 100:
+        title = title[:100]
+    if len(description) > 500:
+        description = description[:500]
+
+    try:
+        ends_at = datetime.datetime.fromisoformat(ends_at_str).replace(tzinfo=datetime.timezone.utc)
+    except (ValueError, TypeError):
+        flash('Invalid end date format.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if ends_at <= now:
+        flash('End date must be in the future.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    m.community_challenges_conf.insert_one({
+        'community_id': comm_obj_id,
+        'title': title,
+        'description': description,
+        'created_by': ObjectId(current_user.id),
+        'created_by_name': current_user.username,
+        'status': 'active',
+        'created_at': now,
+        'ends_at': ends_at,
+        'winner_note_id': None,
+        'winner_username': None
+    })
+
+    # Notify all members about the new challenge (background)
+    try:
+        admin_obj_id = ObjectId(current_user.id)
+        member_ids = community.get('members', [])
+        comm_name = community.get('name', 'a community')
+        community_url = url_for('communities.view_community', community_id=community_id, _external=True)
+
+        def _send_challenge_notifs():
+            for member_id in member_ids:
+                if member_id == admin_obj_id:
+                    continue
+                try:
+                    m.send_push_notification_to_user(
+                        str(member_id),
+                        f'New Challenge in {comm_name}',
+                        f'"{title}" — join in and share your response!',
+                        url=community_url,
+                        tag=f'community-challenge-{community_id}',
+                        extra_data={'type': 'community_challenge', 'community_id': community_id}
+                    )
+                except Exception:
+                    pass
+
+        m.executor.submit(_send_challenge_notifs)
+    except Exception as notif_err:
+        current_app.logger.error(f"Challenge notification error: {notif_err}")
+
+    flash(f'Challenge "{title}" started!', 'success')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/challenge/<challenge_id>/end', methods=['POST'])
+@login_required
+def api_end_challenge(community_id, challenge_id):
+    """End a challenge and pick the winner (highest reaction_count). Admin only."""
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+        ch_obj_id = ObjectId(challenge_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    challenge = m.community_challenges_conf.find_one({
+        '_id': ch_obj_id,
+        'community_id': comm_obj_id,
+        'status': 'active'
+    })
+    if not challenge:
+        flash('Challenge not found or already ended.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Find the entry with the highest reaction_count
+    winner = m.community_notes_conf.find_one(
+        {'community_id': comm_obj_id, 'challenge_id': ch_obj_id},
+        sort=[('reaction_count', -1)]
+    )
+
+    winner_note_id = winner['_id'] if winner else None
+    winner_username = winner.get('author_name', 'Unknown') if winner else None
+
+    m.community_challenges_conf.update_one(
+        {'_id': ch_obj_id},
+        {'$set': {
+            'status': 'completed',
+            'ended_at': now,
+            'winner_note_id': winner_note_id,
+            'winner_username': winner_username
+        }}
+    )
+
+    if winner:
+        flash(f'Challenge ended! Winner: {winner_username}', 'success')
+    else:
+        flash('Challenge ended. No entries were submitted.', 'info')
+    return redirect(url_for('communities.view_community', community_id=community_id))
 
 
 @bp.route('/api/community/<community_id>/report', methods=['POST'])

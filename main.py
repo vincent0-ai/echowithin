@@ -454,6 +454,7 @@ communities_conf = db['communities']
 community_notes_conf = db['community_notes']
 community_reactions_conf = db['community_reactions']
 community_reports_conf = db['community_reports']
+community_challenges_conf = db['community_challenges']
 
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
@@ -548,6 +549,7 @@ community_reactions_conf.create_index([('note_id', 1), ('user_id', 1)], unique=T
 community_reactions_conf.create_index([('note_id', 1)])
 community_reports_conf.create_index([('community_id', 1), ('status', 1)])
 community_reports_conf.create_index('reporter_id')
+community_challenges_conf.create_index([('community_id', 1), ('status', 1)])
 
 # --- Performance: Additional compound indexes for common query patterns ---
 comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
@@ -582,6 +584,7 @@ database.communities_conf = communities_conf
 database.community_notes_conf = community_notes_conf
 database.community_reactions_conf = community_reactions_conf
 database.community_reports_conf = community_reports_conf
+database.community_challenges_conf = community_challenges_conf
 database.dm_permissions_conf = dm_permissions_conf
 database.scheduled_messages_conf = scheduled_messages_conf
 database.note_attachments_conf = note_attachments_conf

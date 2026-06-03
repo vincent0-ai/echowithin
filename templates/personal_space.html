@@ -3030,20 +3030,6 @@
                 </select>
             </div>
 
-            <div id="auto-approve-container" style="margin-bottom: 1rem; display: none;">
-                <label
-                    style="display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer; background: #f0f7ff; padding: 0.75rem; border-radius: 10px; border: 1px solid #c2e0ff;">
-                    <input type="checkbox" id="share-auto-approve"
-                        style="margin-top: 0.2rem; width: 16px; height: 16px; accent-color: #007bff;">
-                    <div>
-                        <div style="font-weight: 600; font-size: 0.85rem; color: #0056b3;">Auto-approve trusted
-                            collaborators</div>
-                        <div style="font-size: 0.75rem; color: #555;">Bypass proposals and apply edits instantly to your
-                            original note.</div>
-                    </div>
-                </label>
-            </div>
-
             <div style="margin-bottom: 1rem;">
                 <label style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem;">Access Code
                     (Optional)</label>
@@ -3051,64 +3037,9 @@
                     style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd;">
             </div>
 
-            <div style="margin-bottom: 1rem; border-top: 1px solid #eee; padding-top: 1rem;">
-                <label
-                    style="display: block; margin-bottom: 0.3rem; font-weight: 600; font-size: 0.9rem; color: #ff4d6d;">
-                    Share Style
-                </label>
-                <select id="surprise-theme"
-                    style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd; background: #fff;">
-                    <option value="none">Standard Note</option>
-                    <option value="valentine">Valentine Surprise ❤️</option>
-                    <option value="birthday">Birthday Surprise 🎂</option>
-                    <option value="anniversary">Anniversary Surprise 💍</option>
-                    <option value="celebration">Celebration/Generic Surprise 🎉</option>
-                </select>
-
-                <div id="surprise-options"
-                    style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: #fff5f7; border-radius: 12px; border: 1px dashed #ff4d6d;">
-                    <div style="margin-bottom: 0.75rem;">
-                        <label
-                            style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
-                            <i class="fas fa-image"></i> Personal Photo (Optional)
-                            {% if not user_is_premium %}
-                            <span
-                                style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;"
-                                onclick="document.getElementById('upgrade-modal').style.display='flex'">
-                                <i class="fas fa-lock"></i> Premium
-                            </span>
-                            {% endif %}
-                        </label>
-                        <input type="file" id="share-surprise-photo" accept="image/*" {% if not user_is_premium
-                            %}disabled{% endif %}
-                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
-                    </div>
-                    <div>
-                        <label
-                            style="display: block; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 600; color: #666;">
-                            <i class="fas fa-music"></i> Background Music (Optional)
-                            {% if not user_is_premium %}
-                            <span
-                                style="background: #fdf2f2; color: #d32f2f; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 0.5rem; cursor: pointer;"
-                                onclick="document.getElementById('upgrade-modal').style.display='flex'">
-                                <i class="fas fa-lock"></i> Premium
-                            </span>
-                            {% endif %}
-                        </label>
-                        <input type="file" id="share-surprise-audio" accept="audio/*" {% if not user_is_premium
-                            %}disabled{% endif %}
-                            style="width: 100%; padding: 0.4rem; border-radius: 6px; border: 1px solid #ddd; font-size: 0.8rem; background: #fff; {% if not user_is_premium %}opacity: 0.6; cursor: not-allowed;{% endif %}">
-                    </div>
-                    <div style="margin-top: 0.75rem;">
-                        <label
-                            style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: #666; cursor: pointer;">
-                            <input type="checkbox" id="use-typewriter"
-                                style="accent-color: #ff4d6d; width: 16px; height: 16px;">
-                            <i class="fas fa-keyboard"></i> Typewriter Effect
-                        </label>
-                        <small style="color: #999; font-size: 0.75rem; margin-left: 1.6rem; display: block;">Text
-                            reveals letter by letter for a personal touch</small>
-                    </div>
+            <div style="padding: 0.6rem 0.75rem; background: #faf5f0; border: 1px solid #e8ddd3; border-radius: 6px; margin-bottom: 1rem;">
+                <div style="font-size: 0.78rem; color: #666;">
+                    After creating a link, use <strong>Configure</strong> to set surprise themes, time capsules, photos, music, and more.
                 </div>
             </div>
 
@@ -6306,13 +6237,6 @@
                     document.getElementById('share-permissions').value = 'view';
                     document.getElementById('share-expiry').value = 'never';
                     document.getElementById('share-code').value = '';
-                    document.getElementById('surprise-theme').value = 'none';
-                    document.getElementById('share-surprise-photo').value = '';
-                    document.getElementById('share-surprise-audio').value = '';
-                    document.getElementById('use-typewriter').checked = false;
-                    document.getElementById('share-auto-approve').checked = false;
-                    document.getElementById('surprise-options').style.display = 'none';
-                    document.getElementById('auto-approve-container').style.display = 'none';
                     lastShareNoteId = currentShareNoteId;
                 }
 
@@ -6354,12 +6278,15 @@
                             </div>
                             <div class="share-link-meta">
                                 <span>
-                                    <i class="fas fa-${s.permissions === 'edit' ? 'pen' : 'eye'}"></i> ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
+                                    ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
                                     ${s.expires_at ? ' | Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
                                 </span>
-                                <button class="revoke-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" data-share-id="${s.share_id}" title="Revoke">
-                                    <i class="fas fa-trash-alt"></i> Revoke
-                                </button>
+                                <span style="display:flex;gap:0.4rem;align-items:center;">
+                                    <a href="/share/settings/${s.share_id}" style="color:#3e2217;font-size:0.78rem;text-decoration:none;font-weight:600;">Configure</a>
+                                    <button class="revoke-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" data-share-id="${s.share_id}" title="Revoke">
+                                        Revoke
+                                    </button>
+                                </span>
                             </div>
                         </div>
                     `).join('');
@@ -6372,23 +6299,7 @@
             }
         }
 
-        // Surprise theme toggle listener
-        const themeSelect = document.getElementById('surprise-theme');
-        const themeOptions = document.getElementById('surprise-options');
-        const permissionsSelect = document.getElementById('share-permissions');
-        const autoApproveContainer = document.getElementById('auto-approve-container');
-
-        if (themeSelect && themeOptions) {
-            themeSelect.addEventListener('change', () => {
-                themeOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
-            });
-        }
-
-        if (permissionsSelect && autoApproveContainer) {
-            permissionsSelect.addEventListener('change', () => {
-                autoApproveContainer.style.display = permissionsSelect.value === 'edit' ? 'block' : 'none';
-            });
-        }
+        // (Surprise theme and auto-approve are now on the share settings page)
 
         const generateBtn = document.getElementById('generate-share-link');
         if (generateBtn) {
@@ -6396,9 +6307,6 @@
                 const permissions = document.getElementById('share-permissions').value;
                 const expires_in = document.getElementById('share-expiry').value;
                 const access_code = document.getElementById('share-code').value;
-                const surprise_theme = document.getElementById('surprise-theme').value;
-                const valentine_photo = document.getElementById('share-surprise-photo').files[0];
-                const valentine_audio = document.getElementById('share-surprise-audio').files[0];
 
                 const progressArea = document.getElementById('share-upload-progress');
                 const progressBar = document.getElementById('share-progress-bar');
@@ -6415,11 +6323,6 @@
                     formData.append('permissions', permissions);
                     formData.append('expires_in', expires_in);
                     formData.append('access_code', access_code);
-                    formData.append('surprise_theme', surprise_theme);
-                    formData.append('use_typewriter', document.getElementById('use-typewriter').checked ? 'true' : 'false');
-                    formData.append('auto_approve', document.getElementById('share-auto-approve').checked ? 'true' : 'false');
-                    if (valentine_photo) formData.append('valentine_photo', valentine_photo);
-                    if (valentine_audio) formData.append('valentine_audio', valentine_audio);
 
                     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
                     const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';

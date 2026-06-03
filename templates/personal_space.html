@@ -2987,15 +2987,6 @@
                         </div>
                     </div>
                 </button>
-                <button type="button" class="share-mode-btn" data-mode="surprise"
-                    style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
-                    <span style="font-size: 1.5rem;">🎁</span>
-                    <div>
-                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Send a Surprise</div>
-                        <div style="font-size: 0.75rem; color: #888;">Birthday, anniversary, or celebration with music &
-                            photos</div>
-                    </div>
-                </button>
             </div>
             <button type="button" id="show-all-share-options"
                 style="background: none; border: none; color: #999; font-size: 0.75rem; cursor: pointer; margin-top: 0.5rem; padding: 0;">Show
@@ -6272,20 +6263,19 @@
                         <div class="share-link-item">
                             <div class="share-link-url">
                                 <input type="text" value="${s.url}" readonly onclick="this.select()">
-                                <button class="btn-icon copy-btn" data-copy-text="${s.url}" title="Copy Link">
-                                    <i class="far fa-copy"></i>
+                                <button class="btn-icon copy-btn" data-copy-text="${s.url}" title="Copy Link" style="font-size:0.72rem;display:flex;align-items:center;gap:3px;">
+                                    <i class="far fa-copy"></i> Copy
                                 </button>
                             </div>
-                            <div class="share-link-meta">
-                                <span>
+                            <div class="share-link-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;">
+                                <span style="font-size:0.75rem;color:#888;">
                                     ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
-                                    ${s.expires_at ? ' | Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
+                                    ${s.expires_at ? ' · Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
                                 </span>
-                                <span style="display:flex;gap:0.4rem;align-items:center;">
-                                    <a href="/share/settings/${s.share_id}" style="color:#3e2217;font-size:0.78rem;text-decoration:none;font-weight:600;">Configure</a>
-                                    <button class="revoke-btn" style="color: #d9534f; background:none; border:none; padding:5px; font-size:0.8rem; cursor:pointer;" data-share-id="${s.share_id}" title="Revoke">
-                                        Revoke
-                                    </button>
+                                <span style="display:flex;gap:0.5rem;align-items:center;font-size:0.72rem;">
+                                    <a href="${s.url}" target="_blank" style="color:#3e2217;text-decoration:none;">Open</a>
+                                    <a href="/share/settings/${s.share_id}" style="color:#3e2217;text-decoration:none;font-weight:600;">Configure</a>
+                                    <button class="revoke-btn" style="color:#d9534f;background:none;border:none;padding:0;font-size:0.72rem;cursor:pointer;" data-share-id="${s.share_id}">Revoke</button>
                                 </span>
                             </div>
                         </div>
@@ -6942,8 +6932,6 @@
         const showAllBtn = document.getElementById('show-all-share-options');
         const permSelect = document.getElementById('share-permissions');
         const expirySelect = document.getElementById('share-expiry');
-        const themeSelect = document.getElementById('surprise-theme');
-        const surpriseOpts = document.getElementById('surprise-options');
 
         if (!modeSelector || !shareConfig) return;
 
@@ -6962,20 +6950,11 @@
             btn.addEventListener('click', () => {
                 const mode = btn.dataset.mode;
                 if (mode === 'simple') {
-                    permSelect.value = 'view';
-                    expirySelect.value = 'never';
-                    themeSelect.value = 'none';
-                    if (surpriseOpts) surpriseOpts.style.display = 'none';
+                    if (permSelect) permSelect.value = 'view';
+                    if (expirySelect) expirySelect.value = 'never';
                 } else if (mode === 'collaborate') {
-                    permSelect.value = 'edit';
-                    expirySelect.value = 'never';
-                    themeSelect.value = 'none';
-                    if (surpriseOpts) surpriseOpts.style.display = 'none';
-                } else if (mode === 'surprise') {
-                    permSelect.value = 'view';
-                    expirySelect.value = 'never';
-                    themeSelect.value = 'birthday';
-                    if (surpriseOpts) surpriseOpts.style.display = 'block';
+                    if (permSelect) permSelect.value = 'edit';
+                    if (expirySelect) expirySelect.value = 'never';
                 }
                 showConfig();
             });

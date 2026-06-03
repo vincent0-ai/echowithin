@@ -188,6 +188,15 @@ def _get_user_fernet(user_id: str) -> Fernet:
     return f
 
 
+def warm_user_fernet(user_id: str):
+    """Pre-derive and cache the Fernet key for a user.
+    
+    Call on login to avoid the ~200ms PBKDF2 cold-derivation cost
+    when the user first navigates to /personal_space.
+    """
+    _get_user_fernet(str(user_id))
+
+
 # -- v3 per-conversation DM key derivation & caching --
 
 def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
@@ -326,13 +335,18 @@ def _note_decryption_candidates(note, share=None):
         add_value(current.get('owner_id'))
         add_value(current.get('source_owner_id'))
         add_value(current.get('saved_from_owner_id'))
-        source_note_id = current.get('source_note_id')
-        if not source_note_id:
-            break
-        current = database.personal_posts_conf.find_one(
-            {'_id': source_note_id},
-            {'content_owner_id': 1, 'user_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
-        )
+        # OPTIMIZATION: Use pre-fetched original_doc if available (avoids DB round-trip)
+        prefetched = current.get('original_doc')
+        if prefetched:
+            current = prefetched
+        else:
+            source_note_id = current.get('source_note_id')
+            if not source_note_id:
+                break
+            current = database.personal_posts_conf.find_one(
+                {'_id': source_note_id},
+                {'content_owner_id': 1, 'user_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
+            )
         depth += 1
 
     if share:

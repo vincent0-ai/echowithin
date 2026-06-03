@@ -74,12 +74,24 @@ document.addEventListener('DOMContentLoaded', convertToLocalTime);
 
 // Also run after any dynamic content loads (for AJAX-loaded posts)
 if (typeof MutationObserver !== 'undefined') {
+    let _convertTimer = null;
     const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.addedNodes.length) {
-                convertToLocalTime();
+        // Only schedule conversion if new nodes actually contain time elements
+        let hasTimeNodes = false;
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === 1 && (node.matches?.('time.local-time') ||
+                    node.querySelector?.('time.local-time'))) {
+                    hasTimeNodes = true;
+                    break;
+                }
             }
-        });
+            if (hasTimeNodes) break;
+        }
+        if (hasTimeNodes) {
+            clearTimeout(_convertTimer);
+            _convertTimer = setTimeout(convertToLocalTime, 50);
+        }
     });
     
     // Start observing once DOM is ready

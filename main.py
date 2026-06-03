@@ -549,6 +549,13 @@ community_reactions_conf.create_index([('note_id', 1)])
 community_reports_conf.create_index([('community_id', 1), ('status', 1)])
 community_reports_conf.create_index('reporter_id')
 
+# --- Performance: Additional compound indexes for common query patterns ---
+comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
+comments_conf.create_index([('parent_id', 1), ('author_id', 1)])
+posts_conf.create_index([('is_pinned', 1), ('pinned_at', -1)])
+unlock_notifications_conf.create_index([('owner_id', 1), ('unlocked_at', -1)])
+note_shares_conf.create_index('share_id', unique=True, sparse=True)
+
 # Populate database module globals so other modules can import them
 database.client = client
 database.db = db
@@ -605,6 +612,10 @@ _t.start_init()
 @app.before_request
 def update_last_active():
     """Update a user's last active timestamp with debouncing (every 5 minutes) to reduce DB load."""
+    # Skip high-frequency polling endpoints — they don't represent meaningful user activity
+    if request.path.startswith(('/api/messages/unread_count', '/api/notifications/badge-counts',
+                                '/socket.io/', '/static/', '/favicon.ico')):
+        return
     if current_user.is_authenticated:
         user_id = current_user.id
         cache_key = f"last_active:{user_id}"
@@ -732,6 +743,15 @@ def add_security_headers(response):
     noindex_paths = ('/admin', '/api', '/logout', '/login', '/register', '/dashboard', '/messages', '/personal_space', '/shared/', '/search', '/profile_settings', '/reset_password', '/create_post', '/edit_post')
     if getattr(request, 'path', '').startswith(noindex_paths):
         response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+
+    # --- Static asset caching ---
+    if request.path.startswith('/static/'):
+        # Immutable assets (fonts, logos, images) — cache for 1 year
+        if any(request.path.endswith(ext) for ext in ('.woff', '.woff2', '.ttf', '.eot', '.png', '.ico', '.svg')):
+            response.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        else:
+            # CSS/JS — cache for 1 hour, revalidate after
+            response.headers['Cache-Control'] = 'public, max-age=3600, must-revalidate'
 
     return response
 

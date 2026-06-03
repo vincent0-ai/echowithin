@@ -24,6 +24,14 @@ def messages_page():
         {'$sort': {'timestamp': -1}}
     ]
     contacts_raw = list(m.direct_messages_conf.aggregate(pipeline))
+    # OPTIMIZATION: Batch-fetch all contact user docs in one query
+    # instead of individual find_one() per contact
+    _contact_ids = [c['_id'] for c in contacts_raw]
+    _contact_users_map = {}
+    if _contact_ids:
+        for u in m.users_conf.find({'_id': {'$in': _contact_ids}}, {'username': 1, 'profile_image_url': 1, 'last_active': 1}):
+            _contact_users_map[u['_id']] = u
+
     contacts = []
     contact_user_ids = set()
     five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
@@ -36,7 +44,7 @@ def messages_page():
             is_online = last_active >= five_minutes_ago
         return {'user_id': str(user_info['_id']), 'username': user_info['username'], 'profile_image': user_info.get('profile_image_url'), 'last_message': last_msg, 'timestamp': timestamp, 'unread_count': unread_count, 'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None, 'is_online': is_online}
     for c in contacts_raw:
-        user_info = m.users_conf.find_one({'_id': c['_id']}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
+        user_info = _contact_users_map.get(c['_id'])
         if user_info:
             last_msg = c.get('last_message', '')
             if last_msg and last_msg.startswith('gAAAAA'):

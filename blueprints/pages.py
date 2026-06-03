@@ -39,7 +39,8 @@ def home():
         active_now = cached_community.get('active_now', 1)
     else:
         total_members = m.users_conf.count_documents({'is_confirmed': True})
-        total_posts = m.posts_conf.count_documents({})
+        # OPTIMIZATION: Use estimated_document_count for posts (O(1) metadata lookup vs O(N) scan)
+        total_posts = m.posts_conf.estimated_document_count()
         most_active_pipeline = [
             {"$group": {"_id": "$author", "post_count": {"$sum": 1}}},
             {"$sort": {"post_count": -1}},

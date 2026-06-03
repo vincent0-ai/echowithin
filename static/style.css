@@ -1,5 +1,4 @@
-/* Import Google Font */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+/* Google Fonts loaded via <link> in base.html for parallel download (no @import waterfall) */
 
 :root {
     --primary-color: #3e2217;

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os
-from security import limits
+from security import limits, warm_user_fernet
 from config import TIME
 
 def csrf_exempt(view):
@@ -108,6 +108,7 @@ def login():
             if m.check_password_hash(user_data['password'], password):
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
+                warm_user_fernet(str(user_data['_id']))  # Pre-derive Fernet key for notes
                 m.users_conf.update_one({'_id': user_data['_id']}, {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}})
                 cache_key = f"user:{user_data['_id']}"
                 m.user_loader_cache.pop(cache_key, None)
@@ -233,6 +234,7 @@ def google_callback():
             return redirect(url_for('auth.login'))
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
+        warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
         flash(f"Welcome back, {user['username']}!", "success")
         platform = session.get('oauth_platform')
         if platform == 'mobile':
@@ -282,6 +284,7 @@ def google_callback():
         user = m.users_conf.find_one({'email': email})
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
+        warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
         flash(f"Account created successfully! Welcome, {username}!", "success")
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
@@ -408,6 +411,7 @@ def mobile_auth():
             if user:
                 user_obj = m.User(user)
                 login_user(user_obj, remember=True)
+                warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
                 _app_token = secrets.token_urlsafe(48)
                 m.app_tokens_conf.insert_one({
                     'token': _app_token,
@@ -452,4 +456,5 @@ def app_reauth():
         return jsonify({'error': 'Account suspended'}), 403
     user_obj = m.User(user)
     login_user(user_obj, remember=True)
+    warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
     return jsonify({'success': True, 'username': user['username']})

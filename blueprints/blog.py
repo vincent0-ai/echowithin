@@ -646,16 +646,27 @@ def get_my_commented_posts_json():
             limit=20
         ))
         
+        # OPTIMIZATION: Batch-fetch all user docs and note docs for unlock notifications
+        # instead of individual find_one() calls per notification
+        _unlock_user_ids = list(set(ObjectId(n['unlocked_by']) for n in unlock_notifs if n.get('unlocked_by')))
+        _unlock_users_map = {}
+        if _unlock_user_ids:
+            for u in m.users_conf.find({'_id': {'$in': _unlock_user_ids}}, {'username': 1}):
+                _unlock_users_map[str(u['_id'])] = u.get('username', 'Someone')
+
+        _unlock_note_ids = list(set(n['note_id'] for n in unlock_notifs if n.get('note_id')))
+        _unlock_notes_map = {}
+        if _unlock_note_ids:
+            for n in m.personal_posts_conf.find(
+                {'_id': {'$in': _unlock_note_ids}},
+                {'reference': 1, 'content': 1, 'user_id': 1, 'content_owner_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
+            ):
+                _unlock_notes_map[n['_id']] = n
+
         unlock_activities = []
         for notif in unlock_notifs:
-            u_name = notif.get('unlocked_by_name', 'Someone')
             u_id = notif.get('unlocked_by')
-            if u_id:
-                try:
-                    v_user = m.users_conf.find_one({'_id': ObjectId(u_id)}, {'username': 1})
-                    if v_user and v_user.get('username'):
-                        u_name = v_user['username']
-                except: pass
+            u_name = _unlock_users_map.get(str(u_id), notif.get('unlocked_by_name', 'Someone')) if u_id else notif.get('unlocked_by_name', 'Someone')
 
             unlock_activities.append({
                 '_id': notif['_id'],
@@ -664,6 +675,7 @@ def get_my_commented_posts_json():
                 'latest_activity': notif['unlocked_at'],
                 'share_id': notif.get('share_id'),
                 'unlocked_by_name': u_name,
+                'unlocked_by': u_id,
                 'surprise_theme': notif.get('surprise_theme', 'none'),
                 'is_read': notif.get('is_read', False),
                 'unlocked_at': notif['unlocked_at']
@@ -715,12 +727,12 @@ def get_my_commented_posts_json():
                 theme_label = theme_labels.get(theme, 'Surprise')
                 
                 u_name = post.get('unlocked_by_name', 'Someone')
-                u_id = post.get('unlocked_by') # unlock_activities dict has the ID if we include it
+                u_id = post.get('unlocked_by')
                 
-                # Fetch original note title if possible
+                # Use batch-fetched note data instead of individual queries
                 note_title = "Shared note"
                 if post.get('note_id'):
-                    note = m.personal_posts_conf.find_one({'_id': post['note_id']})
+                    note = _unlock_notes_map.get(post['note_id'])
                     if note:
                         ref = note.get('reference', '').strip()
                         if ref:
@@ -740,8 +752,6 @@ def get_my_commented_posts_json():
                 else:
                     title_text = f"{theme_label} surprise unlocked"
                     content_text = f"{u_name} opened your {theme_label} surprise note"
-                
-                # For processed post data, let's just ensure we have the name
                 
                 post_data = {
                     '_id': str(post['_id']),

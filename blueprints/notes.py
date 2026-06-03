@@ -109,10 +109,17 @@ def personal_space():
     ]))
     personal_posts = []
     for note in personal_posts_raw:
-        # OPTIMIZATION: Only decrypt a preview (300 chars) for the list view
-        # Full content is cached in Redis; if user expands, JS fetches full content via API
-        note['content'] = m._decrypt_note_record(note, max_preview_chars=300)
-        note['content_preview'] = True  # Flag for template: content is truncated
+        # OPTIMIZATION: Use the reference/title field as display text when available
+        # This avoids expensive PBKDF2 decryption entirely for titled notes
+        ref = (note.get('reference') or '').strip()
+        if ref:
+            note['content'] = ref
+            note['content_preview'] = True
+        else:
+            # Only decrypt for notes without a title — truncate to 300 chars
+            note['content'] = m._decrypt_note_record(note, max_preview_chars=300)
+            note['content_preview'] = True
+
         # Determine if an update is available on the original note
         note['update_available'] = False
         if note.get('source_note_id') and note.get('original_doc'):
@@ -120,19 +127,14 @@ def personal_space():
             orig_ts = orig.get('updated_at') or orig.get('created_at')
             clone_ts = note.get('updated_at') or note.get('created_at')
             if orig_ts and clone_ts:
-                if orig_ts.tzinfo is None:
+                if hasattr(orig_ts, 'tzinfo') and orig_ts.tzinfo is None:
                     orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
-                if clone_ts.tzinfo is None:
+                if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                     clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                 if orig_ts > clone_ts:
-                    # OPTIMIZATION: Only decrypt original if timestamps differ (avoids extra decryption)
-                    try:
-                        orig_decrypted = m._decrypt_note_record(orig)
-                        clone_decrypted = m._decrypt_note_record(note)
-                        if clone_decrypted != orig_decrypted:
-                            note['update_available'] = True
-                    except Exception:
-                        note['update_available'] = True
+                    # Timestamp proves original was updated after clone — mark as available
+                    # Skip expensive content comparison; user sees diff on click
+                    note['update_available'] = True
         personal_posts.append(note)
 
     # --- Locked Notes ---
@@ -190,24 +192,24 @@ def personal_space():
             {'$limit': 50}
         ]))
         for note in locked_notes_raw:
-            note['content'] = m._decrypt_note_record(note)
+            # OPTIMIZATION: Use reference field when available to skip decryption
+            ref = (note.get('reference') or '').strip()
+            if ref:
+                note['content'] = ref
+            else:
+                note['content'] = m._decrypt_note_record(note)
             note['update_available'] = False
             if note.get('source_note_id') and note.get('original_doc'):
                 orig = note['original_doc']
                 orig_ts = orig.get('updated_at') or orig.get('created_at')
                 clone_ts = note.get('updated_at') or note.get('created_at')
                 if orig_ts and clone_ts:
-                    if orig_ts.tzinfo is None:
+                    if hasattr(orig_ts, 'tzinfo') and orig_ts.tzinfo is None:
                         orig_ts = orig_ts.replace(tzinfo=datetime.timezone.utc)
-                    if clone_ts.tzinfo is None:
+                    if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                         clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                     if orig_ts > clone_ts:
-                        try:
-                            orig_decrypted = m._decrypt_note_record(orig)
-                            if note['content'] != orig_decrypted:
-                                note['update_available'] = True
-                        except Exception:
-                            note['update_available'] = True
+                        note['update_available'] = True
             locked_notes.append(note)
         # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]

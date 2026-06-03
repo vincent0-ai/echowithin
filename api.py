@@ -314,6 +314,40 @@ def api_get_note(note_id):
         'updated_at': note.get('updated_at').replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if note.get('updated_at') else None
     })
 
+@api_bp.route('/notes/previews', methods=['POST'])
+@login_required
+def api_get_note_previews():
+    """Batch-decrypt note previews (first 300 chars) for lazy-loading on the notes list page."""
+    import main as m
+    data = request.get_json(silent=True) or {}
+    note_ids = data.get('ids', [])
+    if not note_ids or len(note_ids) > 50:
+        return jsonify({'error': 'Provide 1-50 note IDs.'}), 400
+
+    obj_ids = []
+    for nid in note_ids:
+        oid = safe_obj_id(nid)
+        if oid:
+            obj_ids.append(oid)
+
+    if not obj_ids:
+        return jsonify({'previews': {}})
+
+    notes = list(m.personal_posts_conf.find({
+        '_id': {'$in': obj_ids},
+        'user_id': ObjectId(current_user.id)
+    }))
+
+    previews = {}
+    for note in notes:
+        try:
+            preview = m._decrypt_note_record(note, max_preview_chars=300)
+        except Exception:
+            preview = ''
+        previews[str(note['_id'])] = preview or ''
+
+    return jsonify({'previews': previews})
+
 @api_bp.route('/notes/create', methods=['POST'])
 @login_required
 def api_create_note():

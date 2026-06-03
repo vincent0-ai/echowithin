@@ -109,16 +109,18 @@ def personal_space():
     ]))
     personal_posts = []
     for note in personal_posts_raw:
-        # OPTIMIZATION: Use the reference/title field as display text when available
-        # This avoids expensive PBKDF2 decryption entirely for titled notes
+        # OPTIMIZATION: Defer decryption to the client via lazy-loading.
+        # Use the reference field if available; otherwise set content to empty
+        # and let JS fetch the preview via /api/v1/notes/previews after page load.
         ref = (note.get('reference') or '').strip()
         if ref:
             note['content'] = ref
             note['content_preview'] = True
+            note['lazy_content'] = False
         else:
-            # Only decrypt for notes without a title — truncate to 300 chars
-            note['content'] = m._decrypt_note_record(note, max_preview_chars=300)
+            note['content'] = ''
             note['content_preview'] = True
+            note['lazy_content'] = True  # Flag: JS will fetch this note's preview
 
         # Determine if an update is available on the original note
         note['update_available'] = False
@@ -132,8 +134,6 @@ def personal_space():
                 if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                     clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                 if orig_ts > clone_ts:
-                    # Timestamp proves original was updated after clone — mark as available
-                    # Skip expensive content comparison; user sees diff on click
                     note['update_available'] = True
         personal_posts.append(note)
 

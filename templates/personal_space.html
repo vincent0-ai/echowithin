@@ -2014,6 +2014,11 @@
             border-left: 3px solid #4caf50;
             opacity: 0.85;
         }
+
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 
     <!-- Header with stats -->
@@ -2307,8 +2312,16 @@
             <div class="note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
-                <div class="note-content rendered-note" data-raw="{{ note.content | e }}" {% if note.content_preview %}data-preview="true"{% endif %}>
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}" {% if note.content_preview %}data-preview="true"{% endif %} {% if note.lazy_content %}data-lazy="true"{% endif %}>
+                    {% if note.lazy_content %}
+                    <div class="note-shimmer" style="display:flex;flex-direction:column;gap:6px;padding:4px 0;">
+                        <div style="height:12px;width:90%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
+                        <div style="height:12px;width:70%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
+                        <div style="height:12px;width:45%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
+                    </div>
+                    {% else %}
                     {{ note.content | markdown | safe }}
+                    {% endif %}
                 </div>
                 {% if note.reference or note.tags %}
                 <div class="note-metadata-display"
@@ -7573,5 +7586,75 @@
             });
         }
     });
+
+    // --- Lazy-load note previews ---
+    // Collect all notes marked with data-lazy="true" and fetch their previews in one batch
+    (function() {
+        const lazyNodes = document.querySelectorAll('.note-content[data-lazy="true"]');
+        if (!lazyNodes.length) return;
+
+        const noteIds = [];
+        const nodeMap = {};
+        lazyNodes.forEach(node => {
+            const card = node.closest('.note-card');
+            if (card) {
+                const noteId = card.getAttribute('data-note-id');
+                if (noteId) {
+                    noteIds.push(noteId);
+                    nodeMap[noteId] = { contentEl: node, card: card };
+                }
+            }
+        });
+
+        if (!noteIds.length) return;
+
+        fetch('/api/v1/notes/previews', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: noteIds })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.previews) return;
+            for (const [noteId, preview] of Object.entries(data.previews)) {
+                const entry = nodeMap[noteId];
+                if (!entry) continue;
+                const el = entry.contentEl;
+                const card = entry.card;
+                // Update content
+                el.setAttribute('data-raw', preview);
+                el.removeAttribute('data-lazy');
+                // Render markdown if the helper exists
+                if (window.renderMarkdownContent) {
+                    el.innerHTML = window.renderMarkdownContent(preview);
+                } else {
+                    // Fallback: show plain text truncated
+                    el.textContent = preview.substring(0, 300);
+                }
+                // Update copy button data
+                const copyBtn = card.querySelector('.copy-btn[data-copy-text]');
+                if (copyBtn && !copyBtn.getAttribute('data-copy-text')) {
+                    copyBtn.setAttribute('data-copy-text', preview);
+                }
+                // Update edit button data-raw
+                const editBtn = card.querySelector('.edit-note-btn[data-raw]');
+                if (editBtn && !editBtn.getAttribute('data-raw')) {
+                    editBtn.setAttribute('data-raw', preview);
+                }
+            }
+            // Re-run formatDecryptionErrors if available
+            if (window.formatDecryptionErrors) {
+                window.formatDecryptionErrors(document.getElementById('notes-list-container'));
+            }
+        })
+        .catch(err => {
+            console.warn('Note preview fetch failed:', err);
+            // Remove shimmers on error — show empty rather than infinite loading
+            lazyNodes.forEach(node => {
+                const shimmer = node.querySelector('.note-shimmer');
+                if (shimmer) shimmer.remove();
+            });
+        });
+    })();
 </script>
 {% endblock %}

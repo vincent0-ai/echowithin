@@ -945,15 +945,22 @@ def api_get_note_shares(post_id):
         return jsonify([])
     
     shares = list(m.note_shares_conf.find({'note_id': obj_id, 'owner_id': ObjectId(current_user.id)}))
+    result = []
     for s in shares:
-        s['_id'] = str(s['_id'])
-        s['note_id'] = str(s['note_id'])
-        s['owner_id'] = str(s['owner_id'])
-        s['url'] = url_for('sharing.view_shared_note', share_id=s['share_id'], _external=True)
-        if s.get('expires_at'):
-             s['expires_at'] = s['expires_at'].isoformat()
+        result.append({
+            '_id': str(s['_id']),
+            'share_id': s.get('share_id', ''),
+            'note_id': str(s.get('note_id', '')),
+            'owner_id': str(s.get('owner_id', '')),
+            'permissions': s.get('permissions', 'view'),
+            'url': url_for('sharing.view_shared_note', share_id=s.get('share_id', ''), _external=True),
+            'expires_at': s['expires_at'].isoformat() if s.get('expires_at') else None,
+            'created_at': s['created_at'].isoformat() if s.get('created_at') else None,
+            'surprise_theme': s.get('surprise_theme', 'none'),
+            'unlock_date': s['unlock_date'].isoformat() if s.get('unlock_date') else None,
+        })
     
-    return jsonify(shares)
+    return jsonify(result)
 
 
 @bp.route('/share/settings/<share_id>', methods=['GET'])

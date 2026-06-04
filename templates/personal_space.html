@@ -7469,8 +7469,63 @@
         }
     });
 
-    // --- Lazy-load note previews ---
-    // Collect all notes marked with data-lazy="true" and fetch their previews in one batch
+    // --- IndexedDB Note Cache for Offline Support ---
+    const NoteCache = {
+        DB_NAME: 'echowithin_notes',
+        DB_VERSION: 1,
+        STORE: 'previews',
+        _db: null,
+
+        open() {
+            if (this._db) return Promise.resolve(this._db);
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(this.STORE)) {
+                        db.createObjectStore(this.STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
+                req.onerror = () => reject(req.error);
+            });
+        },
+
+        async putMany(entries) {
+            // entries: [{id, content, ts}]
+            try {
+                const db = await this.open();
+                const tx = db.transaction(this.STORE, 'readwrite');
+                const store = tx.objectStore(this.STORE);
+                for (const entry of entries) {
+                    store.put(entry);
+                }
+                return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+            } catch (e) { console.warn('NoteCache putMany failed:', e); }
+        },
+
+        async getMany(ids) {
+            // Returns {id: content} map
+            try {
+                const db = await this.open();
+                const tx = db.transaction(this.STORE, 'readonly');
+                const store = tx.objectStore(this.STORE);
+                const results = {};
+                const promises = ids.map(id => new Promise((resolve) => {
+                    const req = store.get(id);
+                    req.onsuccess = () => {
+                        if (req.result) results[id] = req.result.content;
+                        resolve();
+                    };
+                    req.onerror = () => resolve();
+                }));
+                await Promise.all(promises);
+                return results;
+            } catch (e) { console.warn('NoteCache getMany failed:', e); return {}; }
+        }
+    };
+
+    // --- Lazy-load note previews with IndexedDB offline fallback ---
     (function() {
         const lazyNodes = document.querySelectorAll('.note-content[data-lazy="true"]');
         if (!lazyNodes.length) return;
@@ -7490,6 +7545,36 @@
 
         if (!noteIds.length) return;
 
+        function renderPreview(noteId, preview) {
+            const entry = nodeMap[noteId];
+            if (!entry) return;
+            const el = entry.contentEl;
+            const card = entry.card;
+            el.setAttribute('data-raw', preview);
+            el.removeAttribute('data-lazy');
+            if (window.renderMarkdownContent) {
+                el.innerHTML = window.renderMarkdownContent(preview);
+            } else {
+                el.textContent = preview.substring(0, 300);
+            }
+            const copyBtn = card.querySelector('.copy-btn[data-copy-text]');
+            if (copyBtn && !copyBtn.getAttribute('data-copy-text')) {
+                copyBtn.setAttribute('data-copy-text', preview);
+            }
+            const editBtn = card.querySelector('.edit-note-btn[data-raw]');
+            if (editBtn && !editBtn.getAttribute('data-raw')) {
+                editBtn.setAttribute('data-raw', preview);
+            }
+        }
+
+        function removeShimmers() {
+            lazyNodes.forEach(node => {
+                const shimmer = node.querySelector('.note-shimmer');
+                if (shimmer) shimmer.remove();
+            });
+        }
+
+        // Try API first, fall back to IndexedDB
         fetch('/api/v1/notes/previews', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -7498,44 +7583,47 @@
         .then(r => r.json())
         .then(data => {
             if (!data.previews) return;
+            const cacheEntries = [];
             for (const [noteId, preview] of Object.entries(data.previews)) {
-                const entry = nodeMap[noteId];
-                if (!entry) continue;
-                const el = entry.contentEl;
-                const card = entry.card;
-                // Update content
-                el.setAttribute('data-raw', preview);
-                el.removeAttribute('data-lazy');
-                // Render markdown if the helper exists
-                if (window.renderMarkdownContent) {
-                    el.innerHTML = window.renderMarkdownContent(preview);
-                } else {
-                    // Fallback: show plain text truncated
-                    el.textContent = preview.substring(0, 300);
-                }
-                // Update copy button data
-                const copyBtn = card.querySelector('.copy-btn[data-copy-text]');
-                if (copyBtn && !copyBtn.getAttribute('data-copy-text')) {
-                    copyBtn.setAttribute('data-copy-text', preview);
-                }
-                // Update edit button data-raw
-                const editBtn = card.querySelector('.edit-note-btn[data-raw]');
-                if (editBtn && !editBtn.getAttribute('data-raw')) {
-                    editBtn.setAttribute('data-raw', preview);
-                }
+                renderPreview(noteId, preview);
+                cacheEntries.push({ id: noteId, content: preview, ts: Date.now() });
             }
-            // Re-run formatDecryptionErrors if available
+            // Save to IndexedDB for offline use
+            if (cacheEntries.length) {
+                NoteCache.putMany(cacheEntries);
+            }
             if (window.formatDecryptionErrors) {
                 window.formatDecryptionErrors(document.getElementById('notes-list-container'));
             }
         })
-        .catch(err => {
-            console.warn('Note preview fetch failed:', err);
-            // Remove shimmers on error — show empty rather than infinite loading
-            lazyNodes.forEach(node => {
-                const shimmer = node.querySelector('.note-shimmer');
-                if (shimmer) shimmer.remove();
-            });
+        .catch(async (err) => {
+            console.warn('Note preview fetch failed, trying offline cache:', err);
+            removeShimmers();
+            try {
+                const cached = await NoteCache.getMany(noteIds);
+                let foundAny = false;
+                for (const noteId of noteIds) {
+                    if (cached[noteId]) {
+                        renderPreview(noteId, cached[noteId]);
+                        foundAny = true;
+                    } else {
+                        const entry = nodeMap[noteId];
+                        if (entry && !entry.contentEl.textContent.trim()) {
+                            entry.contentEl.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
+                        }
+                    }
+                }
+                if (foundAny && window.formatDecryptionErrors) {
+                    window.formatDecryptionErrors(document.getElementById('notes-list-container'));
+                }
+            } catch (dbErr) {
+                console.warn('IndexedDB fallback also failed:', dbErr);
+                lazyNodes.forEach(node => {
+                    if (!node.textContent.trim()) {
+                        node.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
+                    }
+                });
+            }
         });
     })();
 </script>

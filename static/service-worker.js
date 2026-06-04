@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v23';
-const STATIC_CACHE = 'echowithin-static-v23';
-const PAGES_CACHE = 'echowithin-pages-v23';
-const POSTS_CACHE = 'echowithin-posts-v23';
-const API_CACHE = 'echowithin-api-v23';
+const CACHE_NAME = 'echowithin-v24';
+const STATIC_CACHE = 'echowithin-static-v24';
+const PAGES_CACHE = 'echowithin-pages-v24';
+const POSTS_CACHE = 'echowithin-posts-v24';
+const API_CACHE = 'echowithin-api-v24';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -125,31 +125,28 @@ self.addEventListener('fetch', event => {
 
   // API requests: Network-first with cache fallback for note data
   // This enables full offline browsing of notes even when the page HTML isn't cached
-  if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
-    const isNotesApi = url.pathname.startsWith('/api/notes');
-    if (isNotesApi) {
-      event.respondWith(
-        fetch(request)
-          .then(response => {
-            if (response && response.status === 200) {
-              const respClone = response.clone();
-              caches.open(API_CACHE).then(cache => {
-                cache.put(request, respClone);
-              });
-            }
-            return response;
-          })
-          .catch(() => {
-            return caches.match(request).then(cachedResponse => {
-              if (cachedResponse) return cachedResponse;
-              return new Response(JSON.stringify({ error: 'You are offline' }), {
-                status: 503,
-                headers: { 'Content-Type': 'application/json' }
-              });
+  if (url.origin === location.origin && (url.pathname.startsWith('/api/notes') || url.pathname.startsWith('/api/v1/notes'))) {
+    event.respondWith(
+      fetch(request.clone())
+        .then(response => {
+          if (response && response.status === 200) {
+            const respClone = response.clone();
+            caches.open(API_CACHE).then(cache => {
+              cache.put(request, respClone);
             });
-          })
-      );
-    }
+          }
+          return response;
+        })
+        .catch(() => {
+          return caches.match(request).then(cachedResponse => {
+            if (cachedResponse) return cachedResponse;
+            return new Response(JSON.stringify({ error: 'You are offline' }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          });
+        })
+    );
     return;
   }
 

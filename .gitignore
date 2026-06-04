@@ -25,3 +25,5 @@ skills-lock.json
 .agents/
 echowithin.log
 fix_routes.py
+/.idea/
+/.agents/

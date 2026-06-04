@@ -2245,7 +2245,7 @@
             <form action="{{ url_for('notes.create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <textarea name="content" id="note-input" placeholder="Write a new note..."
-                    maxlength="{{ user_max_chars }}" required style="min-height: 60px;"></textarea>
+                    {% if not user_is_premium %}maxlength="{{ user_max_chars }}"{% endif %} required style="min-height: 60px;"></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
                         style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
@@ -3113,7 +3113,7 @@
             </h2>
             <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
         </div>
-        <textarea id="edit-note-content" class="edit-note-textarea" maxlength="{{ user_max_chars }}"
+        <textarea id="edit-note-content" class="edit-note-textarea" {% if not user_is_premium %}maxlength="{{ user_max_chars }}"{% endif %}
             placeholder="Edit your note..."></textarea>
         <div style="margin-top: 0.6rem;">
             <input type="text" id="edit-note-summary" maxlength="180"
@@ -5812,7 +5812,7 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = parseInt(noteInput.getAttribute('maxlength')) || 20000;
+            const maxChars = {{ user_max_chars }};
             const dangerThreshold = Math.floor(maxChars * 0.9);
             const warningThreshold = Math.floor(maxChars * 0.75);
             noteInput.addEventListener('input', () => {

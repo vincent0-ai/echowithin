@@ -317,7 +317,7 @@ def api_get_note(note_id):
 @api_bp.route('/notes/previews', methods=['POST'])
 @login_required
 def api_get_note_previews():
-    """Batch-decrypt note previews (first 300 chars) for lazy-loading on the notes list page."""
+    """Batch-decrypt note content for lazy-loading on the notes list page."""
     import main as m
     data = request.get_json(silent=True) or {}
     note_ids = data.get('ids', [])
@@ -341,10 +341,10 @@ def api_get_note_previews():
     previews = {}
     for note in notes:
         try:
-            preview = m._decrypt_note_record(note, max_preview_chars=300)
+            content = m._decrypt_note_record(note)
         except Exception:
-            preview = ''
-        previews[str(note['_id'])] = preview or ''
+            content = ''
+        previews[str(note['_id'])] = content or ''
 
     return jsonify({'previews': previews})
 

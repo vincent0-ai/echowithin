@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v24';
-const STATIC_CACHE = 'echowithin-static-v24';
-const PAGES_CACHE = 'echowithin-pages-v24';
-const POSTS_CACHE = 'echowithin-posts-v24';
-const API_CACHE = 'echowithin-api-v24';
+const CACHE_NAME = 'echowithin-v25';
+const STATIC_CACHE = 'echowithin-static-v25';
+const PAGES_CACHE = 'echowithin-pages-v25';
+const POSTS_CACHE = 'echowithin-posts-v25';
+const API_CACHE = 'echowithin-api-v25';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [

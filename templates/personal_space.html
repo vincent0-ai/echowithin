@@ -219,7 +219,7 @@
             background: white;
             border-radius: 12px;
             padding: 1rem;
-            margin-bottom: 0.6rem;
+            margin-bottom: 0.4rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
             border-left: 4px solid var(--primary-color);
             position: relative;
@@ -587,9 +587,17 @@
         }
 
         @keyframes pulse-orange {
-            0% { box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(230, 81, 0, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(230, 81, 0, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(230, 81, 0, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(230, 81, 0, 0);
+            }
         }
 
         .note-card.update-available {
@@ -636,9 +644,17 @@
         }
 
         @keyframes pulse-proposal {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
         .proposal-view-btn {
@@ -1363,7 +1379,7 @@
             resize: none;
             font-size: 1.15rem;
             padding: 1.5rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
 
         .close-fullscreen-btn {
@@ -1371,7 +1387,7 @@
             position: absolute;
             top: 1.5rem;
             right: 2rem;
-            background: rgba(0,0,0,0.05);
+            background: rgba(0, 0, 0, 0.05);
             border: none;
             width: 40px;
             height: 40px;
@@ -1386,7 +1402,7 @@
         }
 
         .close-fullscreen-btn:hover {
-            background: rgba(0,0,0,0.1);
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .create-note-card.fullscreen-active .close-fullscreen-btn {
@@ -2016,8 +2032,13 @@
         }
 
         @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+            0% {
+                background-position: 200% 0;
+            }
+
+            100% {
+                background-position: -200% 0;
+            }
         }
     </style>
 
@@ -2049,7 +2070,8 @@
         style="background: linear-gradient(135deg, #f5f0eb 0%, #e8ddd3 100%); color: #3e2217 !important; padding: 0.75rem 1rem; border-radius: 10px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; font-size: 0.88rem; border: 1px solid #d4c5b5; box-shadow: 0 4px 12px rgba(62, 34, 23, 0.05);">
         <div style="display: flex; align-items: center; gap: 0.5rem; color: #3e2217 !important;">
             <i class="fas fa-crown" style="font-size: 1rem; color: #3e2217 !important;"></i>
-            <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{ 's' if trial_days_remaining != 1 }}
+            <span style="color: #3e2217 !important;"><strong>Premium Trial</strong> — {{ trial_days_remaining }} day{{
+                's' if trial_days_remaining != 1 }}
                 remaining. Enjoying unlimited features!</span>
         </div>
         <a href="{{ url_for('profile.profile_settings', username=current_user.username) }}#premium"
@@ -2078,7 +2100,8 @@
             Notes
             <span class="badge">{{ total_notes_count }}</span>
         </button>
-        <button data-tab="communities" role="tab" aria-selected="false" onclick="window.location.href='{{ url_for('communities.communities_page') }}'">
+        <button data-tab="communities" role="tab" aria-selected="false"
+            onclick="window.location.href='{{ url_for('communities.communities_page') }}'">
             Communities
         </button>
         <button data-tab="activity" role="tab" aria-selected="false" id="activity-tab-btn" style="position: relative;">
@@ -2156,7 +2179,8 @@
                 {% set max_visible = [8, saved_page + 1] | max %}
                 {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
                 <li class="page-item {% if p == saved_page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page) }}">{{
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page) }}">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2244,8 +2268,8 @@
         <div class="create-note-card" style="padding: 1rem; margin-bottom: 1rem;">
             <form action="{{ url_for('notes.create_personal_post') }}" method="POST" id="create-note-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <textarea name="content" id="note-input" placeholder="Write a new note..."
-                    {% if not user_is_premium %}maxlength="{{ user_max_chars }}"{% endif %} required style="min-height: 60px;"></textarea>
+                <textarea name="content" id="note-input" placeholder="Write a new note..." {% if not user_is_premium
+                    %}maxlength="{{ user_max_chars }}" {% endif %} required style="min-height: 60px;"></textarea>
                 <div style="margin-top: 0.5rem;">
                     <button type="button" id="toggle-metadata-create"
                         style="background: none; border: none; color: #3e2217; font-size: 0.75rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;">
@@ -2309,15 +2333,23 @@
 
         <div class="personal-notes-list" id="notes-list-container">
             {% for note in personal_posts %}
-            <div class="note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}" {% if note.source_note_id
+            <div class="note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}"
+                data-note-id="{{ note._id }}" {% if note.source_note_id
                 %}data-source-note-id="{{ note.source_note_id }}" {% endif %} {% if note.source_share_id
                 %}data-source-share-id="{{ note.source_share_id }}" {% endif %}>
-                <div class="note-content rendered-note" data-raw="{{ note.content | e }}" {% if note.content_preview %}data-preview="true"{% endif %} {% if note.lazy_content %}data-lazy="true"{% endif %}>
+                <div class="note-content rendered-note" data-raw="{{ note.content | e }}" {% if note.content_preview
+                    %}data-preview="true" {% endif %} {% if note.lazy_content %}data-lazy="true" {% endif %}>
                     {% if note.lazy_content %}
                     <div class="note-shimmer" style="display:flex;flex-direction:column;gap:6px;padding:4px 0;">
-                        <div style="height:12px;width:90%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
-                        <div style="height:12px;width:70%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
-                        <div style="height:12px;width:45%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;"></div>
+                        <div
+                            style="height:12px;width:90%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;">
+                        </div>
+                        <div
+                            style="height:12px;width:70%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;">
+                        </div>
+                        <div
+                            style="height:12px;width:45%;background:linear-gradient(90deg,#f0eae4 25%,#e8ddd3 50%,#f0eae4 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;border-radius:4px;">
+                        </div>
                     </div>
                     {% else %}
                     {{ note.content | markdown | safe }}
@@ -2357,13 +2389,18 @@
                         </span>
                         {% endif %}
                         {% if note.update_available %}
-                        <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
-                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
+                        <span class="update-badge"
+                            title="The original author has updated this note. Click Sync to pull updates."
+                            style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i>
+                            Update available
                         </span>
                         {% endif %}
                         {% if pending_proposals_map.get(note._id|string) %}
-                        <span class="proposal-badge" title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
-                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }} Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
+                        <span class="proposal-badge"
+                            title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
+                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }}
+                            Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
                         </span>
                         {% endif %}
                     </span>
@@ -2416,8 +2453,10 @@
                             <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{%
                             endif %}
                         </button>
-                        <button type="button" class="btn-icon export-note-btn" title="Export note" data-id="{{ note._id }}">
-                            <i class="fas fa-download"></i>{% if show_icon_labels %}<span class="action-label">Export</span>{% endif %}
+                        <button type="button" class="btn-icon export-note-btn" title="Export note"
+                            data-id="{{ note._id }}">
+                            <i class="fas fa-download"></i>{% if show_icon_labels %}<span
+                                class="action-label">Export</span>{% endif %}
                         </button>
 
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
@@ -2446,16 +2485,22 @@
                             <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
                             endif %}
                         </button>
-                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
-                            title="View original shared note" target="_blank"
+                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}"
+                            class="btn-icon" title="View original shared note" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
-                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
+                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Original</span>{% endif %}
                         </a>
-                        <button type="button" class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}" title="Sync with original"
-                            data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt" {% if note.update_available %}style="color: #e65100; font-weight: bold;"{% endif %}></i>
+                        <button type="button"
+                            class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}"
+                            title="Sync with original" data-id="{{ note._id }}"
+                            data-source-share-id="{{ note.source_share_id }}">
+                            <i class="fas fa-sync-alt" {% if note.update_available
+                                %}style="color: #e65100; font-weight: bold;" {% endif %}></i>
                             {% if show_icon_labels or note.update_available %}
-                            <span class="action-label" {% if note.update_available %}style="color: #e65100; font-weight: 600;"{% endif %}>{{ 'Sync Now' if note.update_available else 'Sync' }}</span>
+                            <span class="action-label" {% if note.update_available
+                                %}style="color: #e65100; font-weight: 600;" {% endif %}>{{ 'Sync Now' if
+                                note.update_available else 'Sync' }}</span>
                             {% endif %}
                         </button>
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
@@ -2507,7 +2552,8 @@
                             data-has-clones="{{ 'true' if has_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="button" class="delete-btn" title="Delete note">
-                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span class="action-label">Delete</span>{% endif %}
+                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span
+                                    class="action-label">Delete</span>{% endif %}
                             </button>
                         </form>
                     </div>
@@ -2530,7 +2576,8 @@
                 {% set max_visible = [8, notes_page + 1] | max %}
                 {% for p in range(1, [max_visible + 1, total_notes_pages + 1] | min) %}
                 <li class="page-item {% if p == notes_page %}active{% endif %}">
-                    <a class="page-link" href="{{ url_for('notes.personal_space', notes_page=p, saved_page=saved_page) }}">{{
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', notes_page=p, saved_page=saved_page) }}">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2597,7 +2644,8 @@
                             </div>
                             <div class="activity-card-meta">
                                 <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
                             </div>
                         </div>
                         <span class="activity-status-tag pending">Awaiting Review</span>
@@ -2638,16 +2686,19 @@
                 <div class="activity-card" style="opacity: 0.88;">
                     <div class="activity-card-header">
                         <div>
-                            <div class="activity-card-name" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                            <div class="activity-card-name"
+                                style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                 <i class="fas fa-check-circle" style="color: #2e7d32;"></i>
                                 {{ proposal.editor_name }}'s proposal is done
                             </div>
                             <div class="activity-card-meta">
                                 <span><i class="fas fa-clock"></i> {{ proposal.created_at|localtime }}</span>
-                                <span><i class="fas fa-sticky-note"></i> Note ID: {{ proposal.note_id|string|truncate(12) }}</span>
+                                <span><i class="fas fa-sticky-note"></i> Note ID: {{
+                                    proposal.note_id|string|truncate(12) }}</span>
                             </div>
                         </div>
-                        <span class="activity-status-tag {{ 'accepted' if proposal.status == 'accepted' else 'done' }}">Done</span>
+                        <span
+                            class="activity-status-tag {{ 'accepted' if proposal.status == 'accepted' else 'done' }}">Done</span>
                     </div>
 
                     <div class="activity-review-result {{ proposal.status }}">
@@ -2663,7 +2714,8 @@
 
                     <div class="activity-content-preview">
                         <div class="activity-content-label">Proposed content:</div>
-                        <div class="activity-content-body" style="max-height: 150px;">{{ proposal.proposed_content_plain }}</div>
+                        <div class="activity-content-body" style="max-height: 150px;">{{ proposal.proposed_content_plain
+                            }}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -2684,7 +2736,8 @@
                             </div>
                             <div>
                                 <div class="activity-auto-name">{{ activity.editor_name }} updated your note</div>
-                                <div class="activity-auto-summary">{{ activity.edit_summary or 'Collaborator contribution' }} · {{ activity.created_at|localtime }}</div>
+                                <div class="activity-auto-summary">{{ activity.edit_summary or 'Collaborator
+                                    contribution' }} · {{ activity.created_at|localtime }}</div>
                             </div>
                         </div>
                         <button onclick="window.openVersionModal('{{ activity.note_id }}')"
@@ -2693,9 +2746,13 @@
                         </button>
                     </div>
                     {% if activity.share_id %}
-                    <div class="activity-auto-approve-revert" style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
-                        <input type="checkbox" class="toggle-auto-approve-checkbox" data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" {% if activity.has_active_auto_approve %}checked{% endif %}>
-                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future changes from this collaborator</label>
+                    <div class="activity-auto-approve-revert"
+                        style="margin-top: 10px; border-top: 1px dashed #f2e7e3; padding-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 0.8rem;">
+                        <input type="checkbox" class="toggle-auto-approve-checkbox"
+                            data-share-id="{{ activity.share_id }}" data-editor-id="{{ activity.editor_id }}" {% if
+                            activity.has_active_auto_approve %}checked{% endif %}>
+                        <label style="cursor: pointer; color: #5a3328; font-weight: 500;">Automatically approve future
+                            changes from this collaborator</label>
                     </div>
                     {% endif %}
                 </div>
@@ -2724,7 +2781,8 @@
             <button type="button" class="unlock-btn" onclick="openPinSetupFromGate()">Set Up PIN</button>
             <div class="setup-hint">
                 You can also set this up in <a
-                    href="{{ url_for('profile.profile_settings', username=current_user.username) }}">Account Settings</a>
+                    href="{{ url_for('profile.profile_settings', username=current_user.username) }}">Account
+                    Settings</a>
             </div>
         </div>
         {% elif not is_unlocked %}
@@ -2737,7 +2795,8 @@
             <button type="button" class="unlock-btn" onclick="openPinModal('verify')"><i class="fas fa-key"></i> Enter
                 PIN</button>
             <div style="margin-top: 0.75rem;">
-                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+                <a href="#" onclick="event.preventDefault(); startPinReset()"
+                    style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
             </div>
         </div>
         {% elif locked_notes %}
@@ -2795,7 +2854,8 @@
         </script>
         <div class="personal-notes-list" id="locked-notes-container">
             {% for note in locked_notes %}
-            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}" data-note-id="{{ note._id }}">
+            <div class="locked-note-card note-card {% if note.update_available %}update-available{% endif %}{% if pending_proposals_map.get(note._id|string) %} has-proposal{% endif %}"
+                data-note-id="{{ note._id }}">
                 <div class="note-content rendered-note" data-raw="{{ note.content | e }}">
                     {{ note.content | markdown | safe }}
                 </div>
@@ -2826,13 +2886,18 @@
                             <i class="fas fa-lock" style="font-size: 0.55rem;"></i> Locked
                         </span>
                         {% if note.update_available %}
-                        <span class="update-badge" title="The original author has updated this note. Click Sync to pull updates." style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
-                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i> Update available
+                        <span class="update-badge"
+                            title="The original author has updated this note. Click Sync to pull updates."
+                            style="background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; margin-left: 0.3rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <i class="fas fa-exclamation-circle" style="animation: pulse-orange 2s infinite;"></i>
+                            Update available
                         </span>
                         {% endif %}
                         {% if pending_proposals_map.get(note._id|string) %}
-                        <span class="proposal-badge" title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
-                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }} Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
+                        <span class="proposal-badge"
+                            title="{{ pending_proposals_map[note._id|string]|length }} pending proposal(s) awaiting your review">
+                            <i class="fas fa-code-branch"></i> {{ pending_proposals_map[note._id|string]|length }}
+                            Proposal{{ 's' if pending_proposals_map[note._id|string]|length > 1 }}
                         </span>
                         {% endif %}
                     </span>
@@ -2882,46 +2947,58 @@
                     {% endif %}
                     <div class="note-actions">
                         <button type="button" class="copy-btn" title="Copy note" data-copy-text="{{ note.content }}">
-                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{% endif %}
+                            <i class="far fa-copy"></i>{% if show_icon_labels %}<span class="action-label">Copy</span>{%
+                            endif %}
                         </button>
                         <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="{{ note._id }}"
                             data-raw="{{ note.content | e }}" data-reference="{{ note.reference or '' }}"
                             data-tags='{{ (note.tags or []) | tojson | safe }}'
                             data-updated-at="{{ (note.updated_at or note.created_at).isoformat() if (note.updated_at or note.created_at) else '' }}">
-                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{% endif %}
+                            <i class="fas fa-pen"></i>{% if show_icon_labels %}<span class="action-label">Edit</span>{%
+                            endif %}
                         </button>
                         {% if note.surprise_theme and note.surprise_theme != 'none' %}
                         <a href="{{ url_for('sharing.view_saved_note', note_id=note._id) }}" class="btn-icon"
                             title="View your saved surprise" target="_blank"
                             style="color: #ff4d6d; text-decoration: none;">
-                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{% endif %}
+                            <i class="fas fa-gift"></i>{% if show_icon_labels %}<span class="action-label">View</span>{%
+                            endif %}
                         </a>
                         {% endif %}
                         {% if note.source_note_id and note.source_share_id %}
-                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}" class="btn-icon"
-                            title="View original shared note &amp; discussion" target="_blank"
+                        <a href="{{ url_for('sharing.view_shared_note', share_id=note.source_share_id) }}"
+                            class="btn-icon" title="View original shared note &amp; discussion" target="_blank"
                             style="color: #7b1fa2; text-decoration: none;">
-                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span class="action-label">Original</span>{% endif %}
+                            <i class="fas fa-external-link-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Original</span>{% endif %}
                         </a>
-                        <button type="button" class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}" title="Sync with original"
-                            data-id="{{ note._id }}" data-source-share-id="{{ note.source_share_id }}">
-                            <i class="fas fa-sync-alt" {% if note.update_available %}style="color: #e65100; font-weight: bold;"{% endif %}></i>
+                        <button type="button"
+                            class="btn-icon sync-note-btn {% if note.update_available %}update-pending-btn{% endif %}"
+                            title="Sync with original" data-id="{{ note._id }}"
+                            data-source-share-id="{{ note.source_share_id }}">
+                            <i class="fas fa-sync-alt" {% if note.update_available
+                                %}style="color: #e65100; font-weight: bold;" {% endif %}></i>
                             {% if show_icon_labels or note.update_available %}
-                            <span class="action-label" {% if note.update_available %}style="color: #e65100; font-weight: 600;"{% endif %}>{{ 'Sync Now' if note.update_available else 'Sync' }}</span>
+                            <span class="action-label" {% if note.update_available
+                                %}style="color: #e65100; font-weight: 600;" {% endif %}>{{ 'Sync Now' if
+                                note.update_available else 'Sync' }}</span>
                             {% endif %}
                         </button>
                         {% endif %}
                         <button type="button" class="btn-icon share-note-btn" title="Share note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span class="action-label">Share</span>{% endif %}
+                            <i class="fas fa-share-alt"></i>{% if show_icon_labels %}<span
+                                class="action-label">Share</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon lock-note-btn is-locked" title="Unlock note"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-lock-open"></i>{% if show_icon_labels %}<span class="action-label">Unlock</span>{% endif %}
+                            <i class="fas fa-lock-open"></i>{% if show_icon_labels %}<span
+                                class="action-label">Unlock</span>{% endif %}
                         </button>
                         <button type="button" class="btn-icon version-history-btn" title="Version history"
                             data-id="{{ note._id }}">
-                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span class="action-label">History</span>{% endif %}
+                            <i class="fas fa-clock-rotate-left"></i>{% if show_icon_labels %}<span
+                                class="action-label">History</span>{% endif %}
                         </button>
                         {% if pending_proposals_map.get(note._id|string) %}
                         <button type="button" class="proposal-view-btn" title="Review pending proposals"
@@ -2936,7 +3013,8 @@
                             data-has-clones="{{ 'true' if locked_clones_map.get(nid_str) else 'false' }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="button" class="delete-btn" title="Delete note">
-                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span class="action-label">Delete</span>{% endif %}
+                                <i class="far fa-trash-alt"></i>{% if show_icon_labels %}<span
+                                    class="action-label">Delete</span>{% endif %}
                             </button>
                         </form>
                     </div>
@@ -3028,9 +3106,11 @@
                     style="width: 100%; padding: 0.6rem; border-radius: 8px; border: 1px solid #ddd;">
             </div>
 
-            <div style="padding: 0.6rem 0.75rem; background: #faf5f0; border: 1px solid #e8ddd3; border-radius: 6px; margin-bottom: 1rem;">
+            <div
+                style="padding: 0.6rem 0.75rem; background: #faf5f0; border: 1px solid #e8ddd3; border-radius: 6px; margin-bottom: 1rem;">
                 <div style="font-size: 0.78rem; color: #666;">
-                    After creating a link, use <strong>Configure</strong> to set surprise themes, time capsules, photos, music, and more.
+                    After creating a link, use <strong>Configure</strong> to set surprise themes, time capsules, photos,
+                    music, and more.
                 </div>
             </div>
 
@@ -3092,20 +3172,24 @@
                 </button>
             </div>
             <div class="note-preview-edit" id="note-preview-edit">
-                <textarea id="note-preview-edit-textarea" placeholder="Edit your note..." aria-label="Note content"></textarea>
+                <textarea id="note-preview-edit-textarea" placeholder="Edit your note..."
+                    aria-label="Note content"></textarea>
                 <div class="note-preview-edit-row">
                     <input type="text" id="note-preview-edit-reference" placeholder="Reference (optional)">
                     <input type="text" id="note-preview-edit-tags" placeholder="Tags (comma separated)">
                 </div>
                 <div class="note-preview-edit-row">
-                    <input type="text" id="note-preview-edit-summary" placeholder="Edit summary (optional)" maxlength="180">
+                    <input type="text" id="note-preview-edit-summary" placeholder="Edit summary (optional)"
+                        maxlength="180">
                     <span class="note-preview-edit-status" id="note-preview-edit-status"></span>
                 </div>
                 <div class="note-preview-edit-actions">
-                    <button type="button" class="note-preview-edit-btn" id="note-preview-edit-cancel" aria-label="Cancel edit">
+                    <button type="button" class="note-preview-edit-btn" id="note-preview-edit-cancel"
+                        aria-label="Cancel edit">
                         <i class="fas fa-times"></i> Cancel
                     </button>
-                    <button type="button" class="note-preview-edit-btn primary" id="note-preview-edit-save" aria-label="Save note">
+                    <button type="button" class="note-preview-edit-btn primary" id="note-preview-edit-save"
+                        aria-label="Save note">
                         <i class="fas fa-save"></i> Save
                     </button>
                 </div>
@@ -3113,25 +3197,32 @@
             <div class="note-preview-content" id="note-preview-content"></div>
         </div>
         <div class="note-preview-actions" id="note-preview-actions">
-            <button type="button" class="note-preview-action primary" data-action="edit" title="Edit note" aria-label="Edit note">
+            <button type="button" class="note-preview-action primary" data-action="edit" title="Edit note"
+                aria-label="Edit note">
                 <i class="fas fa-pen"></i><span>Edit</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="copy" title="Copy note" aria-label="Copy note">
+            <button type="button" class="note-preview-action" data-action="copy" title="Copy note"
+                aria-label="Copy note">
                 <i class="far fa-copy"></i><span>Copy</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="share" title="Share note" aria-label="Share note">
+            <button type="button" class="note-preview-action" data-action="share" title="Share note"
+                aria-label="Share note">
                 <i class="fas fa-share-alt"></i><span>Share</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="lock" title="Toggle lock" aria-label="Toggle lock">
+            <button type="button" class="note-preview-action" data-action="lock" title="Toggle lock"
+                aria-label="Toggle lock">
                 <i class="fas fa-lock"></i><span>Lock</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="history" title="Version history" aria-label="Version history">
+            <button type="button" class="note-preview-action" data-action="history" title="Version history"
+                aria-label="Version history">
                 <i class="fas fa-clock-rotate-left"></i><span>History</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="export" title="Export note" aria-label="Export note">
+            <button type="button" class="note-preview-action" data-action="export" title="Export note"
+                aria-label="Export note">
                 <i class="fas fa-download"></i><span>Export</span>
             </button>
-            <button type="button" class="note-preview-action danger" data-action="delete" title="Delete note" aria-label="Delete note">
+            <button type="button" class="note-preview-action danger" data-action="delete" title="Delete note"
+                aria-label="Delete note">
                 <i class="far fa-trash-alt"></i><span>Delete</span>
             </button>
         </div>
@@ -3173,8 +3264,8 @@
             </h2>
             <button class="btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
         </div>
-        <textarea id="edit-note-content" class="edit-note-textarea" {% if not user_is_premium %}maxlength="{{ user_max_chars }}"{% endif %}
-            placeholder="Edit your note..."></textarea>
+        <textarea id="edit-note-content" class="edit-note-textarea" {% if not user_is_premium
+            %}maxlength="{{ user_max_chars }}" {% endif %} placeholder="Edit your note..."></textarea>
         <div style="margin-top: 0.6rem;">
             <input type="text" id="edit-note-summary" maxlength="180"
                 placeholder="Edit summary (optional, e.g. clarified section 2)"
@@ -3221,34 +3312,39 @@
             </h2>
             <button class="btn-icon" onclick="closeMergeConflictModal()"><i class="fas fa-times"></i></button>
         </div>
-        
+
         <!-- Guided Explanation Banner -->
-        <div class="merge-guide-banner" style="background: #fffdf5; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.65rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.82rem; color: #856404; display: flex; align-items: flex-start; gap: 8px;">
+        <div class="merge-guide-banner"
+            style="background: #fffdf5; border: 1px solid #ffeeba; border-radius: 8px; padding: 0.65rem 0.85rem; margin-bottom: 0.75rem; font-size: 0.82rem; color: #856404; display: flex; align-items: flex-start; gap: 8px;">
             <i class="fas fa-info-circle" style="margin-top: 2px; font-size: 0.95rem;"></i>
             <div>
-                <strong>Confused about conflicts?</strong> Someone else saved edits to this note since you opened it. You can choose to keep only one version, combine both, or use our **AI Smart Merge** to intelligently merge them. You can also manually edit the final result below.
+                <strong>Confused about conflicts?</strong> Someone else saved edits to this note since you opened it.
+                You can choose to keep only one version, combine both, or use our **AI Smart Merge** to intelligently
+                merge them. You can also manually edit the final result below.
             </div>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
             <div>
-                <label style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+                <label
+                    style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
                     <span>Current version (Saved on server)</span>
                 </label>
                 <textarea id="merge-current-content" readonly
                     style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fafafa;"></textarea>
-                <button type="button" class="btn btn-sm btn-resolve" onclick="useCurrentVersion()" 
+                <button type="button" class="btn btn-sm btn-resolve" onclick="useCurrentVersion()"
                     style="margin-top: 0.35rem; padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #c8bfb5; background: #faf8f5; color: #3e2217; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; width: 100%; justify-content: center; font-weight: 500;">
                     <i class="fas fa-file-import"></i> Keep Current Version
                 </button>
             </div>
             <div>
-                <label style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+                <label
+                    style="font-size:0.78rem; color:#777; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
                     <span>Your version (Your unsaved edits)</span>
                 </label>
                 <textarea id="merge-incoming-content" readonly
                     style="width:100%; min-height:160px; border:1px solid #ddd; border-radius:8px; padding:0.6rem; font-size:0.82rem; background:#fff8f8;"></textarea>
-                <button type="button" class="btn btn-sm btn-resolve" onclick="useIncomingVersion()" 
+                <button type="button" class="btn btn-sm btn-resolve" onclick="useIncomingVersion()"
                     style="margin-top: 0.35rem; padding: 0.35rem 0.6rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #f5c2c2; background: #fff5f5; color: #c62828; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; width: 100%; justify-content: center; font-weight: 500;">
                     <i class="fas fa-file-signature"></i> Keep Your Version
                 </button>
@@ -3256,14 +3352,15 @@
         </div>
 
         <div style="margin-top:0.85rem; padding-top:0.75rem; border-top:1px dashed #eee;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; flex-wrap: wrap; gap: 0.5rem;">
                 <label style="font-size:0.78rem; color:#777; font-weight:600; margin: 0;">Suggested merge result</label>
                 <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                    <button type="button" class="btn btn-sm" onclick="combineBothVersions()" 
+                    <button type="button" class="btn btn-sm" onclick="combineBothVersions()"
                         style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #c2e0ff; background: #f0f7ff; color: #0056b3; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 500;">
                         <i class="fas fa-arrows-split-up-and-left" style="transform: rotate(180deg);"></i> Combine Both
                     </button>
-                    <button type="button" id="ai-merge-btn" class="btn btn-sm" onclick="runAiMerge()" 
+                    <button type="button" id="ai-merge-btn" class="btn btn-sm" onclick="runAiMerge()"
                         style="padding: 0.35rem 0.65rem; font-size: 0.75rem; border-radius: 6px; border: 1px solid #dcd0ff; background: #f3f0ff; color: #5f27cd; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-weight: 600;">
                         <i class="fas fa-wand-magic-sparkles"></i> ✨ AI Smart Merge
                     </button>
@@ -3274,7 +3371,9 @@
         </div>
         <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:0.85rem;">
             <button type="button" class="btn edit-btn" onclick="closeMergeConflictModal()">Cancel</button>
-            <button type="button" id="save-merge-btn" class="btn comment-btn" onclick="if (typeof window.handleSaveMergeClick === 'function') window.handleSaveMergeClick(this)"> Save Merged Note</button>
+            <button type="button" id="save-merge-btn" class="btn comment-btn"
+                onclick="if (typeof window.handleSaveMergeClick === 'function') window.handleSaveMergeClick(this)"> Save
+                Merged Note</button>
         </div>
     </div>
 </div>
@@ -3316,7 +3415,8 @@
             </div>
 
             <div id="pin-forgot-link" style="margin-top: 0.5rem; display: none;">
-                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
+                <a href="#" onclick="event.preventDefault(); startPinReset()"
+                    style="font-size: 0.82rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
             </div>
 
             <button onclick="closePinModal()" class="btn edit-btn"
@@ -3326,28 +3426,43 @@
         <!-- PIN Reset: Code Entry View -->
         <div id="pin-reset-code-view" style="display: none; text-align: center;">
             <h2 style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">Verify Identity</h2>
-            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code sent to your email</p>
-            <div id="pin-reset-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <p id="pin-reset-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter the 6-digit code
+                sent to your email</p>
+            <div id="pin-reset-error"
+                style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
             <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 1.2rem;">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="0" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="2" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="3" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="4" inputmode="numeric" pattern="[0-9]" autocomplete="off">
-                <input type="text" maxlength="1" class="reset-code-input" data-idx="5" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="0" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="1" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="2" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="3" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="4" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
+                <input type="text" maxlength="1" class="reset-code-input" data-idx="5" inputmode="numeric"
+                    pattern="[0-9]" autocomplete="off">
             </div>
-            <button id="pin-reset-submit-code" class="btn" style="width: 100%; background: #3e2217; color: white; border: none; padding: 0.6rem; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;" onclick="submitResetCode()">Verify Code</button>
+            <button id="pin-reset-submit-code" class="btn"
+                style="width: 100%; background: #3e2217; color: white; border: none; padding: 0.6rem; border-radius: 10px; font-weight: 600; font-size: 0.95rem; cursor: pointer;"
+                onclick="submitResetCode()">Verify Code</button>
             <div style="display: flex; justify-content: space-between; margin-top: 0.75rem;">
-                <a href="#" onclick="event.preventDefault(); cancelPinReset()" style="font-size: 0.82rem; color: #888;">Back</a>
-                <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()" style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
+                <a href="#" onclick="event.preventDefault(); cancelPinReset()"
+                    style="font-size: 0.82rem; color: #888;">Back</a>
+                <a href="#" id="pin-reset-resend" onclick="event.preventDefault(); resendPinResetCode()"
+                    style="font-size: 0.82rem; color: #3e2217; font-weight: 600;">Resend Code</a>
             </div>
         </div>
 
         <!-- PIN Reset: New PIN Entry View -->
         <div id="pin-reset-newpin-view" style="display: none; text-align: center;">
-            <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN</h2>
-            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new 4-digit PIN</p>
-            <div id="pin-reset-newpin-error" style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
+            <h2 id="pin-reset-newpin-title" style="margin: 0 0 0.5rem 0; color: #3e2217; font-size: 1.3rem;">New PIN
+            </h2>
+            <p id="pin-reset-newpin-desc" style="margin: 0 0 1rem 0; color: #888; font-size: 0.85rem;">Enter a new
+                4-digit PIN</p>
+            <div id="pin-reset-newpin-error"
+                style="color: #d32f2f; font-size: 0.85rem; min-height: 1.2rem; margin-bottom: 0.5rem;"></div>
             <div class="pin-dots" id="pin-reset-dots">
                 <div class="pin-dot"></div>
                 <div class="pin-dot"></div>
@@ -3534,6 +3649,7 @@
         display: flex;
         flex-direction: column;
         min-width: 0;
+        min-height: 0;
         background: #ffffff;
     }
 
@@ -3678,19 +3794,28 @@
     .note-preview-edit {
         display: none;
         flex-direction: column;
-        gap: 0.55rem;
-        padding: 0.6rem 0.9rem 0.8rem;
+        gap: 0.5rem;
+        padding: 0.55rem 0.9rem 0.7rem;
         border-bottom: 1px solid #eee;
         background: #fffaf2;
     }
     .note-preview-edit.active {
         display: flex;
+        /* Fill the body height so the textarea can grow to fill the rest
+           of the available space and the metadata inputs are pushed to
+           the bottom of the edit form. */
+        flex: 1 1 auto;
+        min-height: 0;
     }
+
     .note-preview-edit textarea {
         width: 100%;
-        min-height: 180px;
-        max-height: 38vh;
-        resize: vertical;
+        /* Grow to fill the available height between the header and the
+           bottom metadata row. The min-height keeps the editor usable on
+           tiny viewports. */
+        flex: 1 1 auto;
+        min-height: 240px;
+        resize: none;
         padding: 0.6rem 0.7rem;
         border: 1px solid #e3d9cf;
         border-radius: 8px;
@@ -3700,17 +3825,23 @@
         background: #fff;
         font-family: inherit;
     }
+
     .note-preview-edit textarea:focus {
         outline: none;
         border-color: #b8854a;
         box-shadow: 0 0 0 2px rgba(184, 133, 74, 0.15);
     }
+
     .note-preview-edit-row {
         display: flex;
         gap: 0.45rem;
         align-items: center;
         flex-wrap: wrap;
+        /* Keep the metadata inputs visible at the bottom of the form
+           even when the textarea grows tall. */
+        flex: 0 0 auto;
     }
+
     .note-preview-edit-row input[type="text"] {
         flex: 1;
         min-width: 0;
@@ -3720,11 +3851,14 @@
         font-size: 0.78rem;
         background: #fff;
     }
+
     .note-preview-edit-actions {
         display: flex;
         gap: 0.4rem;
         justify-content: flex-end;
+        flex: 0 0 auto;
     }
+
     .note-preview-edit-btn {
         padding: 0.35rem 0.75rem;
         border-radius: 6px;
@@ -3738,14 +3872,26 @@
         align-items: center;
         gap: 4px;
     }
-    .note-preview-edit-btn:hover { background: #fdf5ec; }
+
+    .note-preview-edit-btn:hover {
+        background: #fdf5ec;
+    }
+
     .note-preview-edit-btn.primary {
         background: #3e2217;
         color: #fff;
         border-color: #3e2217;
     }
-    .note-preview-edit-btn.primary:hover { background: #5a3422; }
-    .note-preview-edit-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+    .note-preview-edit-btn.primary:hover {
+        background: #5a3422;
+    }
+
+    .note-preview-edit-btn[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
     .note-preview-edit-status {
         font-size: 0.7rem;
         color: #888;
@@ -3758,6 +3904,7 @@
             border-radius: 0;
             max-height: 100vh;
         }
+
         .note-preview-actions {
             width: 100%;
             flex-direction: row;
@@ -3769,21 +3916,26 @@
             gap: 0.25rem;
             overflow-x: auto;
         }
+
         .note-preview-action {
             width: 38px;
             height: 38px;
             font-size: 0;
             flex: 0 0 auto;
         }
+
         .note-preview-action i {
             font-size: 0.85rem;
         }
+
         .note-preview-action span {
             display: none;
         }
+
         .note-preview-header h2 {
             font-size: 0.82rem;
         }
+
         .note-preview-content {
             padding: 0.85rem 1rem 1.5rem;
             font-size: 0.9rem;
@@ -3796,6 +3948,7 @@
         width: min(92vw, 880px);
         max-height: 92vh;
     }
+
     #edit-note-modal .edit-note-textarea {
         min-height: 320px;
         font-size: 1.02rem;
@@ -4602,25 +4755,25 @@
 
         window.onSaveMergeConflict = null;
 
-        window.handleSaveMergeClick = async function(btn) {
+        window.handleSaveMergeClick = async function (btn) {
             if (!window.onSaveMergeConflict) {
                 console.warn("No save handler defined for merge conflict.");
                 return;
             }
             const previewEl = document.getElementById('merge-preview-content');
             const mergedText = previewEl ? previewEl.value : '';
-            
+
             // Check for unresolved conflict markers
             if (mergedText.includes('<<<<<<< CURRENT') || mergedText.includes('=======') || mergedText.includes('>>>>>>> INCOMING')) {
                 if (!confirm('⚠️ Warning: The merged note still contains raw conflict markers (<<<<<<< CURRENT, =======, or >>>>>>> INCOMING). Are you sure you want to save it with these markers?')) {
                     return;
                 }
             }
-            
+
             const originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-            
+
             try {
                 await window.onSaveMergeConflict(mergedText);
             } catch (e) {
@@ -4661,7 +4814,7 @@
             window.onSaveMergeConflict = null;
         };
 
-        window.useCurrentVersion = function() {
+        window.useCurrentVersion = function () {
             const currentVal = document.getElementById('merge-current-content').value;
             const previewEl = document.getElementById('merge-preview-content');
             if (previewEl) {
@@ -4670,7 +4823,7 @@
             }
         };
 
-        window.useIncomingVersion = function() {
+        window.useIncomingVersion = function () {
             const incomingVal = document.getElementById('merge-incoming-content').value;
             const previewEl = document.getElementById('merge-preview-content');
             if (previewEl) {
@@ -4679,7 +4832,7 @@
             }
         };
 
-        window.combineBothVersions = function() {
+        window.combineBothVersions = function () {
             const currentVal = document.getElementById('merge-current-content').value;
             const incomingVal = document.getElementById('merge-incoming-content').value;
             const previewEl = document.getElementById('merge-preview-content');
@@ -4689,18 +4842,18 @@
             }
         };
 
-        window.runAiMerge = async function() {
+        window.runAiMerge = async function () {
             const currentVal = document.getElementById('merge-current-content').value;
             const incomingVal = document.getElementById('merge-incoming-content').value;
             const previewEl = document.getElementById('merge-preview-content');
             const aiBtn = document.getElementById('ai-merge-btn');
-            
+
             if (!previewEl || !aiBtn) return;
-            
+
             const originalHtml = aiBtn.innerHTML;
             aiBtn.disabled = true;
             aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Merging...';
-            
+
             try {
                 const response = await fetch('/api/merge/ai', {
                     method: 'POST',
@@ -4713,7 +4866,7 @@
                         incoming_content: incomingVal
                     })
                 });
-                
+
                 const result = await response.json();
                 if (response.ok && result.success) {
                     previewEl.value = result.merged_content;
@@ -5337,7 +5490,7 @@
                                 force_overwrite: true
                             })
                         });
-                        
+
                         const mergeResult = await mergeResponse.json();
                         if (mergeResult.success) {
                             window.closeMergeConflictModal();
@@ -5439,7 +5592,7 @@
                         noteCard.classList.remove('update-available');
                         const updateBadge = noteCard.querySelector('.update-badge');
                         if (updateBadge) updateBadge.remove();
-                        
+
                         // Revert sync button custom class/styles
                         btn.classList.remove('update-pending-btn');
                         const syncActionLabel = btn.querySelector('.action-label');
@@ -6202,165 +6355,166 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = {{ user_max_chars }};
-            const dangerThreshold = Math.floor(maxChars * 0.9);
-            const warningThreshold = Math.floor(maxChars * 0.75);
-            noteInput.addEventListener('input', () => {
-                const len = noteInput.value.length;
-                charCount.textContent = len;
-                charCountContainer.classList.remove('warning', 'danger');
-                if (len > dangerThreshold) {
-                    charCountContainer.classList.add('danger');
-                } else if (len > warningThreshold) {
-                    charCountContainer.classList.add('warning');
-                }
-            });
-        }
+            const maxChars = {{ user_max_chars }
+        };
+        const dangerThreshold = Math.floor(maxChars * 0.9);
+        const warningThreshold = Math.floor(maxChars * 0.75);
+        noteInput.addEventListener('input', () => {
+            const len = noteInput.value.length;
+            charCount.textContent = len;
+            charCountContainer.classList.remove('warning', 'danger');
+            if (len > dangerThreshold) {
+                charCountContainer.classList.add('danger');
+            } else if (len > warningThreshold) {
+                charCountContainer.classList.add('warning');
+            }
+        });
+    }
 
         // Live preview toggle
         const previewToggle = document.getElementById('preview-toggle');
-        const previewContainer = document.getElementById('note-preview');
-        const previewContent = document.getElementById('preview-content');
+    const previewContainer = document.getElementById('note-preview');
+    const previewContent = document.getElementById('preview-content');
 
-        if (previewToggle && previewContainer && noteInput) {
-            previewToggle.addEventListener('change', () => {
-                previewContainer.classList.toggle('active', previewToggle.checked);
-                if (previewToggle.checked) updatePreview();
-            });
+    if (previewToggle && previewContainer && noteInput) {
+        previewToggle.addEventListener('change', () => {
+            previewContainer.classList.toggle('active', previewToggle.checked);
+            if (previewToggle.checked) updatePreview();
+        });
 
-            let previewTimeout;
-            noteInput.addEventListener('input', () => {
-                if (previewToggle.checked) {
-                    clearTimeout(previewTimeout);
-                    previewTimeout = setTimeout(updatePreview, 300);
-                }
-            });
+        let previewTimeout;
+        noteInput.addEventListener('input', () => {
+            if (previewToggle.checked) {
+                clearTimeout(previewTimeout);
+                previewTimeout = setTimeout(updatePreview, 300);
+            }
+        });
 
-            function updatePreview() {
-                const text = noteInput.value;
-                if (text.trim()) {
-                    previewContent.innerHTML = renderMarkdownWithMath(text);
+        function updatePreview() {
+            const text = noteInput.value;
+            if (text.trim()) {
+                previewContent.innerHTML = renderMarkdownWithMath(text);
+            } else {
+                previewContent.innerHTML = '<span style="color: #999; font-style: italic;">Preview will appear here...</span>';
+            }
+        }
+    }
+
+    // Search saved posts
+    const searchInput = document.getElementById('saved-search');
+    const savedPosts = document.querySelectorAll('.saved-post-card');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase().trim();
+            savedPosts.forEach(card => {
+                const title = card.dataset.title || '';
+                const author = card.dataset.author || '';
+                if (title.includes(query) || author.includes(query)) {
+                    card.style.display = '';
                 } else {
-                    previewContent.innerHTML = '<span style="color: #999; font-style: italic;">Preview will appear here...</span>';
+                    card.style.display = 'none';
                 }
-            }
-        }
-
-        // Search saved posts
-        const searchInput = document.getElementById('saved-search');
-        const savedPosts = document.querySelectorAll('.saved-post-card');
-
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                const query = searchInput.value.toLowerCase().trim();
-                savedPosts.forEach(card => {
-                    const title = card.dataset.title || '';
-                    const author = card.dataset.author || '';
-                    if (title.includes(query) || author.includes(query)) {
-                        card.style.display = '';
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
             });
+        });
+    }
+
+    // --- Note Search with Typesense ---
+    const noteSearchInput = document.getElementById('note-search-input');
+    const noteSearchClear = document.getElementById('note-search-clear');
+    const noteSearchStatus = document.getElementById('note-search-status');
+    const noteSearchStatusText = document.getElementById('note-search-status-text');
+    const noteSearchStats = document.getElementById('note-search-stats');
+    const searchResultsContainer = document.getElementById('search-results-container');
+    const notesListContainer = document.getElementById('notes-list-container');
+
+    let searchDebounceTimer = null;
+    let searchAbortController = null;
+    let isSearchActive = false;
+
+    function resetSearchResults() {
+        if (noteSearchClear) noteSearchClear.classList.remove('visible');
+        if (noteSearchStatus) noteSearchStatus.classList.remove('visible');
+        if (searchResultsContainer) {
+            searchResultsContainer.classList.remove('visible');
+            searchResultsContainer.innerHTML = '';
         }
+        if (notesListContainer) notesListContainer.style.display = '';
+        isSearchActive = false;
+        // Remove any active match highlights
+        document.querySelectorAll('.note-card.search-active-match').forEach(
+            c => c.classList.remove('search-active-match')
+        );
+    }
 
-        // --- Note Search with Typesense ---
-        const noteSearchInput = document.getElementById('note-search-input');
-        const noteSearchClear = document.getElementById('note-search-clear');
-        const noteSearchStatus = document.getElementById('note-search-status');
-        const noteSearchStatusText = document.getElementById('note-search-status-text');
-        const noteSearchStats = document.getElementById('note-search-stats');
-        const searchResultsContainer = document.getElementById('search-results-container');
-        const notesListContainer = document.getElementById('notes-list-container');
+    function clearNoteSearch() {
+        if (noteSearchInput) noteSearchInput.value = '';
+        resetSearchResults();
+    }
 
-        let searchDebounceTimer = null;
-        let searchAbortController = null;
-        let isSearchActive = false;
-
-        function resetSearchResults() {
-            if (noteSearchClear) noteSearchClear.classList.remove('visible');
-            if (noteSearchStatus) noteSearchStatus.classList.remove('visible');
-            if (searchResultsContainer) {
-                searchResultsContainer.classList.remove('visible');
-                searchResultsContainer.innerHTML = '';
-            }
-            if (notesListContainer) notesListContainer.style.display = '';
-            isSearchActive = false;
-            // Remove any active match highlights
-            document.querySelectorAll('.note-card.search-active-match').forEach(
-                c => c.classList.remove('search-active-match')
-            );
-        }
-
-        function clearNoteSearch() {
-            if (noteSearchInput) noteSearchInput.value = '';
+    async function performNoteSearch(query) {
+        if (!query || query.length < 2) {
             resetSearchResults();
+            if (noteSearchClear && query) noteSearchClear.classList.add('visible');
+            return;
         }
 
-        async function performNoteSearch(query) {
-            if (!query || query.length < 2) {
-                resetSearchResults();
-                if (noteSearchClear && query) noteSearchClear.classList.add('visible');
-                return;
-            }
+        // Cancel previous request
+        if (searchAbortController) searchAbortController.abort();
+        searchAbortController = new AbortController();
 
-            // Cancel previous request
-            if (searchAbortController) searchAbortController.abort();
-            searchAbortController = new AbortController();
+        // Show loading state
+        isSearchActive = true;
+        if (noteSearchStatus) {
+            noteSearchStatusText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+            noteSearchStats.textContent = '';
+            noteSearchStatus.classList.add('visible');
+        }
+        if (notesListContainer) notesListContainer.style.display = 'none';
 
-            // Show loading state
-            isSearchActive = true;
+        try {
+            const resp = await fetch(`/personal_post/search?q=${encodeURIComponent(query)}`, {
+                signal: searchAbortController.signal
+            });
+            const data = await resp.json();
+
+            if (!isSearchActive) return; // User cleared search while request was in-flight
+
+            const total = data.total || 0;
+            const results = data.results || [];
+            const processingTime = data.processing_time_ms;
+
+            // Update status
             if (noteSearchStatus) {
-                noteSearchStatusText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
-                noteSearchStats.textContent = '';
+                noteSearchStatusText.textContent = total === 0
+                    ? `No notes found for "${query}"`
+                    : `${total} note${total !== 1 ? 's' : ''} found`;
+                noteSearchStats.textContent = processingTime !== undefined
+                    ? `${processingTime}ms`
+                    : '';
                 noteSearchStatus.classList.add('visible');
             }
-            if (notesListContainer) notesListContainer.style.display = 'none';
 
-            try {
-                const resp = await fetch(`/personal_post/search?q=${encodeURIComponent(query)}`, {
-                    signal: searchAbortController.signal
-                });
-                const data = await resp.json();
-
-                if (!isSearchActive) return; // User cleared search while request was in-flight
-
-                const total = data.total || 0;
-                const results = data.results || [];
-                const processingTime = data.processing_time_ms;
-
-                // Update status
-                if (noteSearchStatus) {
-                    noteSearchStatusText.textContent = total === 0
-                        ? `No notes found for "${query}"`
-                        : `${total} note${total !== 1 ? 's' : ''} found`;
-                    noteSearchStats.textContent = processingTime !== undefined
-                        ? `${processingTime}ms`
-                        : '';
-                    noteSearchStatus.classList.add('visible');
-                }
-
-                if (searchResultsContainer) {
-                    if (results.length === 0) {
-                        searchResultsContainer.innerHTML = `
+            if (searchResultsContainer) {
+                if (results.length === 0) {
+                    searchResultsContainer.innerHTML = `
                                 <div style="text-align: center; padding: 2rem 1rem; color: #888;">
                                     <i class="fas fa-search" style="font-size: 2rem; opacity: 0.3; margin-bottom: 0.75rem; display: block;"></i>
                                     <p style="margin: 0;">No notes match <strong>"${query.replace(/</g, '&lt;')}"</strong></p>
                                     <p style="font-size: 0.8rem; margin-top: 0.5rem; color: #aaa;">Try different keywords or use <code>"quotes"</code> for exact phrases</p>
                                 </div>
                             `;
-                    } else {
-                        searchResultsContainer.innerHTML = results.map(r => {
-                            const dateStr = r.created_at
-                                ? new Date(r.created_at).toLocaleDateString(undefined, {
-                                    year: 'numeric', month: 'short', day: 'numeric',
-                                    hour: '2-digit', minute: '2-digit'
-                                })
-                                : '';
-                            // Use snippet (cropped + highlighted)
-                            const snippet = r.snippet || r.content_highlighted || '';
-                            return `
+                } else {
+                    searchResultsContainer.innerHTML = results.map(r => {
+                        const dateStr = r.created_at
+                            ? new Date(r.created_at).toLocaleDateString(undefined, {
+                                year: 'numeric', month: 'short', day: 'numeric',
+                                hour: '2-digit', minute: '2-digit'
+                            })
+                            : '';
+                        // Use snippet (cropped + highlighted)
+                        const snippet = r.snippet || r.content_highlighted || '';
+                        return `
                                     <div class="search-result-card" data-note-id="${r.id}" onclick="window.scrollToNote('${r.id}')">
                                         <div class="search-result-snippet">${snippet}</div>
                                         <div class="search-result-meta">
@@ -6369,247 +6523,247 @@
                                         </div>
                                     </div>
                                 `;
-                        }).join('');
-                    }
-                    searchResultsContainer.classList.add('visible');
+                    }).join('');
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') return; // Cancelled — a new search is in progress
-                console.error('Note search error:', err);
-                if (noteSearchStatus) {
-                    noteSearchStatusText.textContent = 'Search failed. Please try again.';
-                    noteSearchStatus.classList.add('visible');
-                }
+                searchResultsContainer.classList.add('visible');
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') return; // Cancelled — a new search is in progress
+            console.error('Note search error:', err);
+            if (noteSearchStatus) {
+                noteSearchStatusText.textContent = 'Search failed. Please try again.';
+                noteSearchStatus.classList.add('visible');
             }
         }
+    }
 
-        // Scroll to & highlight a note card from search results
-        window.scrollToNote = function (noteId) {
-            // Show the notes list temporarily
-            if (notesListContainer) notesListContainer.style.display = '';
-            if (searchResultsContainer) searchResultsContainer.classList.remove('visible');
+    // Scroll to & highlight a note card from search results
+    window.scrollToNote = function (noteId) {
+        // Show the notes list temporarily
+        if (notesListContainer) notesListContainer.style.display = '';
+        if (searchResultsContainer) searchResultsContainer.classList.remove('visible');
 
-            const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-            if (noteCard) {
-                // Remove previous highlights
-                document.querySelectorAll('.note-card.search-active-match').forEach(
-                    c => c.classList.remove('search-active-match')
-                );
-                noteCard.classList.add('search-active-match');
-                noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+        if (noteCard) {
+            // Remove previous highlights
+            document.querySelectorAll('.note-card.search-active-match').forEach(
+                c => c.classList.remove('search-active-match')
+            );
+            noteCard.classList.add('search-active-match');
+            noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
+
+    if (noteSearchInput) {
+        noteSearchInput.addEventListener('input', () => {
+            const val = noteSearchInput.value.trim();
+            if (noteSearchClear) {
+                noteSearchClear.classList.toggle('visible', val.length > 0);
             }
-        };
+            clearTimeout(searchDebounceTimer);
+            if (val.length < 2) {
+                resetSearchResults();
+                if (val.length > 0 && noteSearchClear) noteSearchClear.classList.add('visible');
+                return;
+            }
+            searchDebounceTimer = setTimeout(() => performNoteSearch(val), 300);
+        });
 
-        if (noteSearchInput) {
-            noteSearchInput.addEventListener('input', () => {
-                const val = noteSearchInput.value.trim();
-                if (noteSearchClear) {
-                    noteSearchClear.classList.toggle('visible', val.length > 0);
-                }
-                clearTimeout(searchDebounceTimer);
-                if (val.length < 2) {
-                    resetSearchResults();
-                    if (val.length > 0 && noteSearchClear) noteSearchClear.classList.add('visible');
-                    return;
-                }
-                searchDebounceTimer = setTimeout(() => performNoteSearch(val), 300);
-            });
-
-            // Handle Enter key for immediate search
-            noteSearchInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    clearTimeout(searchDebounceTimer);
-                    const val = noteSearchInput.value.trim();
-                    if (val.length >= 2) performNoteSearch(val);
-                }
-                if (e.key === 'Escape') {
-                    clearNoteSearch();
-                    noteSearchInput.blur();
-                }
-            });
-        }
-
-        if (noteSearchClear) {
-            noteSearchClear.addEventListener('click', () => {
-                clearNoteSearch();
-                if (noteSearchInput) noteSearchInput.focus();
-            });
-        }
-
-        // (Global click handler moved to top-level IIFE for performance)
-
-        // (Delete logic moved to top-level IIFE)
-
-        // Confirm unsave for posts
-        document.querySelectorAll('.unsave-form').forEach(form => {
-            form.addEventListener('submit', (e) => {
+        // Handle Enter key for immediate search
+        noteSearchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
                 e.preventDefault();
-                if (typeof window.showCustomConfirm === 'function') {
-                    window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
-                        if (confirmed) form.submit();
-                    });
-                } else if (confirm('Remove this post from your saved list?')) {
-                    form.submit();
-                }
-            });
+                clearTimeout(searchDebounceTimer);
+                const val = noteSearchInput.value.trim();
+                if (val.length >= 2) performNoteSearch(val);
+            }
+            if (e.key === 'Escape') {
+                clearNoteSearch();
+                noteSearchInput.blur();
+            }
         });
+    }
 
-        // Double-submit prevention is now handled in the offline sync form intercept
+    if (noteSearchClear) {
+        noteSearchClear.addEventListener('click', () => {
+            clearNoteSearch();
+            if (noteSearchInput) noteSearchInput.focus();
+        });
+    }
 
-        // --- Edit Note Modal Bindings ---
-        const editTextarea = document.getElementById('edit-note-content');
-        const editCharCount = document.getElementById('edit-char-count');
-        const saveEditBtn = document.getElementById('save-edit-btn');
+    // (Global click handler moved to top-level IIFE for performance)
 
-        if (editTextarea && editCharCount) {
-            editTextarea.addEventListener('input', () => {
-                editCharCount.textContent = editTextarea.value.length;
+    // (Delete logic moved to top-level IIFE)
+
+    // Confirm unsave for posts
+    document.querySelectorAll('.unsave-form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (typeof window.showCustomConfirm === 'function') {
+                window.showCustomConfirm('Remove this post from your saved list?', confirmed => {
+                    if (confirmed) form.submit();
+                });
+            } else if (confirm('Remove this post from your saved list?')) {
+                form.submit();
+            }
+        });
+    });
+
+    // Double-submit prevention is now handled in the offline sync form intercept
+
+    // --- Edit Note Modal Bindings ---
+    const editTextarea = document.getElementById('edit-note-content');
+    const editCharCount = document.getElementById('edit-char-count');
+    const saveEditBtn = document.getElementById('save-edit-btn');
+
+    if (editTextarea && editCharCount) {
+        editTextarea.addEventListener('input', () => {
+            editCharCount.textContent = editTextarea.value.length;
+        });
+    }
+
+    if (saveEditBtn) {
+        saveEditBtn.addEventListener('click', () => {
+            if (typeof window.saveNoteEdit === 'function') window.saveNoteEdit();
+        });
+    }
+
+    // --- Note Sharing Logic ---
+    let currentShareNoteId = null;
+    let lastShareNoteId = null;
+
+    function openShareModalForNote(noteId) {
+        if (!noteId) return;
+        currentShareNoteId = noteId;
+        console.log('Opening share modal for note:', currentShareNoteId);
+        openShareModal();
+        loadExistingShares(currentShareNoteId);
+    }
+
+    // Global event delegation for note actions
+    document.addEventListener('click', (e) => {
+        // Share button
+        const shareBtn = e.target.closest('.share-note-btn');
+        if (shareBtn) {
+            const noteId = shareBtn.dataset.id;
+            const shareId = shareBtn.dataset.shareId; // For "Shared with me" section if we use it
+            if (shareId) {
+                window.shareNote(shareId);
+            } else {
+                openShareModalForNote(noteId);
+            }
+            return;
+        }
+
+        // Lock button
+        const lockBtn = e.target.closest('.lock-note-btn');
+        if (lockBtn) {
+            toggleNoteLock(lockBtn.dataset.id);
+            return;
+        }
+    });
+
+    window.shareNote = function (shareId) {
+        const url = window.location.origin + '/share/note/' + shareId;
+        if (navigator.share) {
+            navigator.share({
+                title: 'EchoWithin Shared Note',
+                url: url
+            }).catch(err => console.log('Error sharing:', err));
+        } else {
+            navigator.clipboard.writeText(url).then(() => {
+                if (window.showToast) showToast('Link copied to clipboard!');
+                else alert('Link copied to clipboard!');
             });
         }
+    };
 
-        if (saveEditBtn) {
-            saveEditBtn.addEventListener('click', () => {
-                if (typeof window.saveNoteEdit === 'function') window.saveNoteEdit();
-            });
-        }
+    // Promo CTA: let user choose which note to share first.
+    const pickerModal = document.getElementById('share-note-picker-modal');
+    const pickerList = document.getElementById('share-note-picker-list');
+    const pickerEmpty = document.getElementById('share-note-picker-empty');
 
-        // --- Note Sharing Logic ---
-        let currentShareNoteId = null;
-        let lastShareNoteId = null;
+    window.openShareNotePicker = function () {
+        if (!pickerModal || !pickerList || !pickerEmpty) return;
 
-        function openShareModalForNote(noteId) {
-            if (!noteId) return;
-            currentShareNoteId = noteId;
-            console.log('Opening share modal for note:', currentShareNoteId);
-            openShareModal();
-            loadExistingShares(currentShareNoteId);
-        }
+        const noteCards = Array.from(document.querySelectorAll('.note-card[data-note-id]'));
+        pickerList.innerHTML = '';
 
-        // Global event delegation for note actions
-        document.addEventListener('click', (e) => {
-            // Share button
-            const shareBtn = e.target.closest('.share-note-btn');
-            if (shareBtn) {
-                const noteId = shareBtn.dataset.id;
-                const shareId = shareBtn.dataset.shareId; // For "Shared with me" section if we use it
-                if (shareId) {
-                    window.shareNote(shareId);
+        if (!noteCards.length) {
+            pickerEmpty.style.display = 'block';
+            pickerList.style.display = 'none';
+        } else {
+            pickerEmpty.style.display = 'none';
+            pickerList.style.display = 'flex';
+
+            const buildPreviewFromText = (text) => {
+                const decoded = document.createElement('textarea');
+                decoded.innerHTML = text || '';
+                const plain = (decoded.value || '').replace(/\s+/g, ' ').trim();
+                if (!plain) return null;
+                return plain.length > 90 ? plain.substring(0, 90) + '…' : plain;
+            };
+
+            // First pass: build rows from data-raw/textContent. For lazy notes whose
+            // data-raw hasn't been populated yet, mark the row as "loading" and
+            // refresh it once the preview fetch completes below.
+            const loadingRows = [];
+            noteCards.forEach(card => {
+                const noteId = card.dataset.noteId;
+                const contentEl = card.querySelector('.note-content.rendered-note');
+                let raw = contentEl ? (contentEl.dataset.raw || '') : '';
+                if (!raw && contentEl) {
+                    // Fall back to textContent when data-raw wasn't set (some notes
+                    // are rendered server-side without a data-raw attribute).
+                    raw = contentEl.textContent || '';
+                }
+                const isLazy = contentEl && contentEl.getAttribute('data-lazy') === 'true';
+                let preview = buildPreviewFromText(raw);
+
+                const row = document.createElement('div');
+                row.className = 'share-picker-item';
+                row.dataset.noteId = noteId;
+                const previewEl = document.createElement('div');
+                previewEl.className = 'share-picker-preview';
+                if (preview) {
+                    previewEl.textContent = preview;
+                } else if (isLazy) {
+                    previewEl.textContent = 'Loading…';
+                    previewEl.style.color = '#999';
+                    previewEl.style.fontStyle = 'italic';
+                    loadingRows.push({ row, previewEl, noteId, card });
                 } else {
-                    openShareModalForNote(noteId);
+                    // Notes have no separate title field, so always show a
+                    // non-empty preview by displaying the first line of the
+                    // rendered note content, or a generic "Empty note" label
+                    // for genuinely blank notes.
+                    const fallback = (contentEl && contentEl.textContent || '')
+                        .replace(/\s+/g, ' ').trim();
+                    previewEl.textContent = fallback
+                        ? (fallback.length > 90 ? fallback.substring(0, 90) + '…' : fallback)
+                        : 'Empty note';
                 }
-                return;
-            }
 
-            // Lock button
-            const lockBtn = e.target.closest('.lock-note-btn');
-            if (lockBtn) {
-                toggleNoteLock(lockBtn.dataset.id);
-                return;
-            }
-        });
+                const buttonEl = document.createElement('button');
+                buttonEl.type = 'button';
+                buttonEl.className = 'share-picker-btn';
+                buttonEl.dataset.noteId = noteId;
+                buttonEl.textContent = 'Share';
 
-        window.shareNote = function (shareId) {
-            const url = window.location.origin + '/share/note/' + shareId;
-            if (navigator.share) {
-                navigator.share({
-                    title: 'EchoWithin Shared Note',
-                    url: url
-                }).catch(err => console.log('Error sharing:', err));
-            } else {
-                navigator.clipboard.writeText(url).then(() => {
-                    if (window.showToast) showToast('Link copied to clipboard!');
-                    else alert('Link copied to clipboard!');
-                });
-            }
-        };
+                row.appendChild(previewEl);
+                row.appendChild(buttonEl);
+                pickerList.appendChild(row);
+            });
 
-        // Promo CTA: let user choose which note to share first.
-        const pickerModal = document.getElementById('share-note-picker-modal');
-        const pickerList = document.getElementById('share-note-picker-list');
-        const pickerEmpty = document.getElementById('share-note-picker-empty');
-
-        window.openShareNotePicker = function () {
-            if (!pickerModal || !pickerList || !pickerEmpty) return;
-
-            const noteCards = Array.from(document.querySelectorAll('.note-card[data-note-id]'));
-            pickerList.innerHTML = '';
-
-            if (!noteCards.length) {
-                pickerEmpty.style.display = 'block';
-                pickerList.style.display = 'none';
-            } else {
-                pickerEmpty.style.display = 'none';
-                pickerList.style.display = 'flex';
-
-                const buildPreviewFromText = (text) => {
-                    const decoded = document.createElement('textarea');
-                    decoded.innerHTML = text || '';
-                    const plain = (decoded.value || '').replace(/\s+/g, ' ').trim();
-                    if (!plain) return null;
-                    return plain.length > 90 ? plain.substring(0, 90) + '…' : plain;
-                };
-
-                // First pass: build rows from data-raw/textContent. For lazy notes whose
-                // data-raw hasn't been populated yet, mark the row as "loading" and
-                // refresh it once the preview fetch completes below.
-                const loadingRows = [];
-                noteCards.forEach(card => {
-                    const noteId = card.dataset.noteId;
-                    const contentEl = card.querySelector('.note-content.rendered-note');
-                    let raw = contentEl ? (contentEl.dataset.raw || '') : '';
-                    if (!raw && contentEl) {
-                        // Fall back to textContent when data-raw wasn't set (some notes
-                        // are rendered server-side without a data-raw attribute).
-                        raw = contentEl.textContent || '';
-                    }
-                    const isLazy = contentEl && contentEl.getAttribute('data-lazy') === 'true';
-                    let preview = buildPreviewFromText(raw);
-
-                    const row = document.createElement('div');
-                    row.className = 'share-picker-item';
-                    row.dataset.noteId = noteId;
-                    const previewEl = document.createElement('div');
-                    previewEl.className = 'share-picker-preview';
-                    if (preview) {
-                        previewEl.textContent = preview;
-                    } else if (isLazy) {
-                        previewEl.textContent = 'Loading…';
-                        previewEl.style.color = '#999';
-                        previewEl.style.fontStyle = 'italic';
-                        loadingRows.push({ row, previewEl, noteId, card });
-                    } else {
-                        // Notes have no separate title field, so always show a
-                        // non-empty preview by displaying the first line of the
-                        // rendered note content, or a generic "Empty note" label
-                        // for genuinely blank notes.
-                        const fallback = (contentEl && contentEl.textContent || '')
-                            .replace(/\s+/g, ' ').trim();
-                        previewEl.textContent = fallback
-                            ? (fallback.length > 90 ? fallback.substring(0, 90) + '…' : fallback)
-                            : 'Empty note';
-                    }
-
-                    const buttonEl = document.createElement('button');
-                    buttonEl.type = 'button';
-                    buttonEl.className = 'share-picker-btn';
-                    buttonEl.dataset.noteId = noteId;
-                    buttonEl.textContent = 'Share';
-
-                    row.appendChild(previewEl);
-                    row.appendChild(buttonEl);
-                    pickerList.appendChild(row);
-                });
-
-                // If any rows are waiting for the lazy preview, kick off the same
-                // batched endpoint the page uses and update those rows when ready.
-                if (loadingRows.length) {
-                    const loadingIds = loadingRows.map(r => r.noteId);
-                    fetch('/api/v1/notes/previews', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ids: loadingIds })
-                    })
+            // If any rows are waiting for the lazy preview, kick off the same
+            // batched endpoint the page uses and update those rows when ready.
+            if (loadingRows.length) {
+                const loadingIds = loadingRows.map(r => r.noteId);
+                fetch('/api/v1/notes/previews', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: loadingIds })
+                })
                     .then(r => r.json())
                     .then(data => {
                         const previews = (data && data.previews) || {};
@@ -6643,95 +6797,95 @@
                             previewEl.style.fontStyle = 'italic';
                         });
                     });
-                }
             }
+        }
 
-            pickerModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        };
+        pickerModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    };
 
-        window.closeShareNotePicker = function () {
-            if (!pickerModal) return;
-            pickerModal.style.display = 'none';
-            document.body.style.overflow = '';
-            // Allow the deep-link picker to trigger again next time a CTA is clicked.
+    window.closeShareNotePicker = function () {
+        if (!pickerModal) return;
+        pickerModal.style.display = 'none';
+        document.body.style.overflow = '';
+        // Allow the deep-link picker to trigger again next time a CTA is clicked.
+        try { window.sessionStorage.removeItem('echowithin_share_picker_opened'); } catch (e) { /* ignore */ }
+    };
+
+    if (pickerList) {
+        pickerList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.share-picker-btn');
+            if (!btn) return;
+            const noteId = btn.dataset.noteId;
+            window.closeShareNotePicker();
+            // Reset the deep-link guard so the next CTA click can open the picker
+            // again from scratch.
             try { window.sessionStorage.removeItem('echowithin_share_picker_opened'); } catch (e) { /* ignore */ }
-        };
+            openShareModalForNote(noteId);
+        });
+    }
 
-        if (pickerList) {
-            pickerList.addEventListener('click', (e) => {
-                const btn = e.target.closest('.share-picker-btn');
-                if (!btn) return;
-                const noteId = btn.dataset.noteId;
-                window.closeShareNotePicker();
-                // Reset the deep-link guard so the next CTA click can open the picker
-                // again from scratch.
-                try { window.sessionStorage.removeItem('echowithin_share_picker_opened'); } catch (e) { /* ignore */ }
-                openShareModalForNote(noteId);
-            });
-        }
+    const promoCta = document.getElementById('share-promo-cta');
+    if (promoCta) {
+        promoCta.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.openShareNotePicker();
+        });
+    }
 
-        const promoCta = document.getElementById('share-promo-cta');
-        if (promoCta) {
-            promoCta.addEventListener('click', (e) => {
-                e.preventDefault();
-                window.openShareNotePicker();
-            });
-        }
+    const promoDismiss = document.getElementById('share-promo-dismiss');
+    if (promoDismiss) {
+        promoDismiss.addEventListener('click', () => {
+            const promoCard = document.getElementById('share-promo-card');
+            if (promoCard) promoCard.style.display = 'none';
+        });
+    }
 
-        const promoDismiss = document.getElementById('share-promo-dismiss');
-        if (promoDismiss) {
-            promoDismiss.addEventListener('click', () => {
-                const promoCard = document.getElementById('share-promo-card');
-                if (promoCard) promoCard.style.display = 'none';
-            });
-        }
+    // Listeners handled via event delegation above
 
-        // Listeners handled via event delegation above
+    function openShareModal() {
+        const modal = document.getElementById('share-modal');
+        if (modal) {
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
 
-        function openShareModal() {
-            const modal = document.getElementById('share-modal');
-            if (modal) {
-                modal.style.display = 'flex';
-                document.body.style.overflow = 'hidden';
-
-                // Reset fields ONLY if opening a different note
-                if (currentShareNoteId !== lastShareNoteId) {
-                    document.getElementById('share-permissions').value = 'view';
-                    document.getElementById('share-expiry').value = 'never';
-                    document.getElementById('share-code').value = '';
-                    lastShareNoteId = currentShareNoteId;
-                }
-
-                document.addEventListener('keydown', handleShareModalEsc);
+            // Reset fields ONLY if opening a different note
+            if (currentShareNoteId !== lastShareNoteId) {
+                document.getElementById('share-permissions').value = 'view';
+                document.getElementById('share-expiry').value = 'never';
+                document.getElementById('share-code').value = '';
+                lastShareNoteId = currentShareNoteId;
             }
+
+            document.addEventListener('keydown', handleShareModalEsc);
         }
+    }
 
-        window.closeShareModal = function () {
-            const modal = document.getElementById('share-modal');
-            if (modal) {
-                modal.style.display = 'none';
-                document.body.style.overflow = '';
-                document.removeEventListener('keydown', handleShareModalEsc);
-            }
-        };
-
-        function handleShareModalEsc(e) {
-            if (e.key === 'Escape') closeShareModal();
+    window.closeShareModal = function () {
+        const modal = document.getElementById('share-modal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+            document.removeEventListener('keydown', handleShareModalEsc);
         }
+    };
 
-        async function loadExistingShares(noteId) {
-            const list = document.getElementById('share-links-list');
-            const container = document.getElementById('active-shares-container');
-            if (!list || !container) return;
+    function handleShareModalEsc(e) {
+        if (e.key === 'Escape') closeShareModal();
+    }
 
-            try {
-                const response = await fetch(`/personal_post/shares/${noteId}`);
-                const shares = await response.json();
+    async function loadExistingShares(noteId) {
+        const list = document.getElementById('share-links-list');
+        const container = document.getElementById('active-shares-container');
+        if (!list || !container) return;
 
-                if (shares.length > 0) {
-                    container.style.display = 'block';
-                    list.innerHTML = shares.map(s => `
+        try {
+            const response = await fetch(`/personal_post/shares/${noteId}`);
+            const shares = await response.json();
+
+            if (shares.length > 0) {
+                container.style.display = 'block';
+                list.innerHTML = shares.map(s => `
                         <div class="share-link-item">
                             <div class="share-link-url">
                                 <input type="text" value="${s.url}" readonly onclick="this.select()">
@@ -6752,545 +6906,545 @@
                             </div>
                         </div>
                     `).join('');
-                } else {
-                    container.style.display = 'none';
-                    list.innerHTML = '';
-                }
-            } catch (e) {
-                console.error('Error loading shares:', e);
+            } else {
+                container.style.display = 'none';
+                list.innerHTML = '';
             }
+        } catch (e) {
+            console.error('Error loading shares:', e);
         }
+    }
 
-        // (Surprise theme and auto-approve are now on the share settings page)
+    // (Surprise theme and auto-approve are now on the share settings page)
 
-        const generateBtn = document.getElementById('generate-share-link');
-        if (generateBtn) {
-            generateBtn.addEventListener('click', async () => {
-                const permissions = document.getElementById('share-permissions').value;
-                const expires_in = document.getElementById('share-expiry').value;
-                const access_code = document.getElementById('share-code').value;
+    const generateBtn = document.getElementById('generate-share-link');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', async () => {
+            const permissions = document.getElementById('share-permissions').value;
+            const expires_in = document.getElementById('share-expiry').value;
+            const access_code = document.getElementById('share-code').value;
 
-                const progressArea = document.getElementById('share-upload-progress');
-                const progressBar = document.getElementById('share-progress-bar');
-                const progressText = document.getElementById('share-progress-text');
+            const progressArea = document.getElementById('share-upload-progress');
+            const progressBar = document.getElementById('share-progress-bar');
+            const progressText = document.getElementById('share-progress-text');
 
-                console.log('Generating share link for:', currentShareNoteId);
+            console.log('Generating share link for:', currentShareNoteId);
 
-                generateBtn.disabled = true;
-                const originalText = generateBtn.textContent;
-                generateBtn.textContent = 'Generating...';
+            generateBtn.disabled = true;
+            const originalText = generateBtn.textContent;
+            generateBtn.textContent = 'Generating...';
 
-                try {
-                    const formData = new FormData();
-                    formData.append('permissions', permissions);
-                    formData.append('expires_in', expires_in);
-                    formData.append('access_code', access_code);
+            try {
+                const formData = new FormData();
+                formData.append('permissions', permissions);
+                formData.append('expires_in', expires_in);
+                formData.append('access_code', access_code);
 
-                    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-                    const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+                const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+                const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
-                    if (progressArea) progressArea.style.display = 'block';
+                if (progressArea) progressArea.style.display = 'block';
 
-                    const xhr = new XMLHttpRequest();
-                    xhr.open('POST', `/personal_post/share/${currentShareNoteId}`, true);
-                    xhr.setRequestHeader('X-CSRFToken', csrfToken);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `/personal_post/share/${currentShareNoteId}`, true);
+                xhr.setRequestHeader('X-CSRFToken', csrfToken);
 
-                    xhr.upload.onprogress = (e) => {
-                        if (e.lengthComputable) {
-                            const percent = Math.round((e.loaded / e.total) * 100);
-                            if (progressBar) progressBar.style.width = percent + '%';
-                            if (progressText) progressText.textContent = `Uploading: ${percent}%`;
-                        }
-                    };
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        if (progressBar) progressBar.style.width = percent + '%';
+                        if (progressText) progressText.textContent = `Uploading: ${percent}%`;
+                    }
+                };
 
-                    xhr.onload = function () {
-                        generateBtn.disabled = false;
-                        generateBtn.textContent = originalText;
-                        if (progressArea) progressArea.style.display = 'none';
-
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            const result = JSON.parse(xhr.responseText);
-                            if (result.success) {
-                                loadExistingShares(currentShareNoteId);
-                                document.getElementById('share-code').value = '';
-                                if (progressBar) progressBar.style.width = '0%';
-                            } else {
-                                alert('Error: ' + (result.error || 'Unknown error'));
-                            }
-                        } else {
-                            alert('Server error: ' + xhr.status);
-                        }
-                    };
-
-                    xhr.onerror = function () {
-                        generateBtn.disabled = false;
-                        generateBtn.textContent = originalText;
-                        if (progressArea) progressArea.style.display = 'none';
-                        alert('Network error. Try again.');
-                    };
-
-                    xhr.send(formData);
-
-                } catch (e) {
-                    console.error('Error during share generation:', e);
+                xhr.onload = function () {
                     generateBtn.disabled = false;
                     generateBtn.textContent = originalText;
                     if (progressArea) progressArea.style.display = 'none';
-                    alert('An error occurred. Please try again.');
-                }
-            });
-        }
 
-
-
-        window.copyShareUrl = function (text, btn) {
-            // Unify legacy call path
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text).then(() => showCopyFeedback(btn));
-            } else {
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                showCopyFeedback(btn);
-            }
-        };
-
-        function showCopyFeedback(btn) {
-            if (!btn) return;
-            const icon = btn.querySelector('i');
-            if (icon) {
-                const originalClass = icon.className;
-                icon.className = 'fas fa-check';
-                setTimeout(() => { icon.className = originalClass; }, 1500);
-            }
-        }
-
-        // ========== Fullscreen Note Preview ==========
-        // The notes list now uses an "open in a focused fullscreen view" flow
-        // for the "See more" affordance on long notes. The view is a
-        // single-screen reader that mirrors the editor's fullscreen feel
-        // while keeping the action buttons docked on the right (vertical).
-        // Edit, Share, Lock, History, Export and Delete all work from this
-        // view. Edit is done inline (the preview pane is large enough), while
-        // the other actions delegate to the existing handlers — the preview
-        // is closed first so the modal opens cleanly above it.
-        const notePreviewOverlay = document.getElementById('note-preview-overlay');
-        const notePreviewCloseBtn = document.getElementById('note-preview-close');
-        const notePreviewTitleEl = document.getElementById('note-preview-title');
-        const notePreviewMetaEl = document.getElementById('note-preview-meta');
-        const notePreviewContentEl = document.getElementById('note-preview-content');
-        const notePreviewActionsEl = document.getElementById('note-preview-actions');
-        const notePreviewEditEl = document.getElementById('note-preview-edit');
-        const notePreviewEditTextarea = document.getElementById('note-preview-edit-textarea');
-        const notePreviewEditReference = document.getElementById('note-preview-edit-reference');
-        const notePreviewEditTags = document.getElementById('note-preview-edit-tags');
-        const notePreviewEditSummary = document.getElementById('note-preview-edit-summary');
-        const notePreviewEditStatus = document.getElementById('note-preview-edit-status');
-        const notePreviewEditSaveBtn = document.getElementById('note-preview-edit-save');
-        const notePreviewEditCancelBtn = document.getElementById('note-preview-edit-cancel');
-        let activePreviewNoteId = null;
-        let activePreviewCard = null;
-        let activePreviewBaseUpdatedAt = '';
-        let previewEditMode = false;
-
-        function readCardMetadata(card) {
-            if (!card) return { reference: '', tags: [], updatedAt: '' };
-            const reference = card.querySelector('.note-ref-display')
-                ? card.querySelector('.note-ref-display').textContent.trim() : '';
-            const tags = Array.from(card.querySelectorAll('.note-tag-badge'))
-                .map(el => el.textContent.trim())
-                .filter(Boolean);
-            const updatedAt = card.querySelector('.note-date')
-                ? card.querySelector('.note-date').textContent.trim() : '';
-            return { reference, tags, updatedAt };
-        }
-
-        function getNoteRawContent(card) {
-            if (!card) return '';
-            const contentEl = card.querySelector('.note-content.rendered-note');
-            if (!contentEl) return '';
-            // data-raw is the source of truth (set during lazy-load).
-            return contentEl.getAttribute('data-raw') || contentEl.textContent || '';
-        }
-
-        function htmlEscape(str) {
-            return (str || '').replace(/[&<>"']/g, c => ({
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-            })[c]);
-        }
-
-        function renderPreviewBody(raw, reference, tags) {
-            let html = '';
-            if (raw && raw.trim()) {
-                try {
-                    html = window.renderMarkdownWithMath
-                        ? window.renderMarkdownWithMath(raw)
-                        : htmlEscape(raw);
-                } catch (e) {
-                    html = htmlEscape(raw);
-                }
-            } else {
-                html = '<p style="color:#888;font-style:italic;">No content.</p>';
-            }
-
-            let headerExtras = '';
-            if (reference) {
-                headerExtras += `<span class="reference-line">${htmlEscape(reference)}</span>`;
-            }
-            if (tags.length) {
-                headerExtras += tags.map(t =>
-                    `<span class="reference-line" style="background:#eef5ff;border-color:#cfdcef;color:#1e3a5f;">#${htmlEscape(t)}</span>`
-                ).join(' ');
-            }
-            return headerExtras + html;
-        }
-
-        function setPreviewActionsVisibility(card) {
-            const hide = (action, hidden) => {
-                const btn = notePreviewActionsEl && notePreviewActionsEl.querySelector(`[data-action="${action}"]`);
-                if (btn) btn.style.display = hidden ? 'none' : '';
-            };
-            const isSurprise = !!card.querySelector('.surprise-badge, [data-surprise="true"]');
-            hide('history', isSurprise);
-            hide('lock', isSurprise);
-        }
-
-        function setPreviewLockIcon(card) {
-            const lockBtn = notePreviewActionsEl && notePreviewActionsEl.querySelector('[data-action="lock"]');
-            if (!lockBtn) return;
-            const isLocked = !!(card.dataset.isLocked === 'true' || card.classList.contains('locked'));
-            lockBtn.querySelector('i').className = isLocked ? 'fas fa-lock-open' : 'fas fa-lock';
-            const label = lockBtn.querySelector('span');
-            if (label) label.textContent = isLocked ? 'Unlock' : 'Lock';
-        }
-
-        window.openNoteFullscreenPreview = async function (noteId) {
-            if (!notePreviewOverlay || !notePreviewContentEl) return;
-            const card = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
-            if (!card) return;
-
-            activePreviewNoteId = noteId;
-            activePreviewCard = card;
-            const { reference, tags, updatedAt } = readCardMetadata(card);
-            const raw = getNoteRawContent(card);
-
-            const firstLine = (raw || '').split('\n').find(l => l.trim()) || '';
-            const decoded = (function () {
-                const t = document.createElement('textarea');
-                t.innerHTML = firstLine;
-                return t.value || '';
-            })();
-            const titleText = decoded.replace(/^#+\s*/, '').trim() || 'Note';
-            const subtitleParts = [];
-            if (updatedAt) subtitleParts.push(updatedAt);
-            if (tags.length) subtitleParts.push(tags.map(t => '#' + t).join(' '));
-
-            if (notePreviewTitleEl) notePreviewTitleEl.textContent = titleText.length > 80
-                ? titleText.substring(0, 80) + '…' : titleText;
-            if (notePreviewMetaEl) notePreviewMetaEl.textContent = subtitleParts.join(' · ');
-
-            notePreviewContentEl.innerHTML = renderPreviewBody(raw, reference, tags);
-            notePreviewContentEl.scrollTop = 0;
-
-            // Capture the updated_at for edit conflict detection.
-            const editBtnEl = card.querySelector('.edit-note-btn');
-            activePreviewBaseUpdatedAt = editBtnEl ? (editBtnEl.dataset.updatedAt || '') : '';
-
-            setPreviewLockIcon(card);
-            setPreviewActionsVisibility(card);
-
-            // Make sure the inline editor starts in read-only mode every time
-            // a note is opened.
-            exitInlineEditMode(false);
-
-            notePreviewOverlay.classList.add('active');
-            notePreviewOverlay.setAttribute('aria-hidden', 'false');
-            document.body.style.overflow = 'hidden';
-        };
-
-        function enterInlineEditMode() {
-            if (!activePreviewCard || !notePreviewEditEl) return;
-            const raw = getNoteRawContent(activePreviewCard);
-            const { reference, tags } = readCardMetadata(activePreviewCard);
-            if (notePreviewEditTextarea) notePreviewEditTextarea.value = raw;
-            if (notePreviewEditReference) notePreviewEditReference.value = reference || '';
-            if (notePreviewEditTags) notePreviewEditTags.value = Array.isArray(tags) ? tags.join(', ') : '';
-            if (notePreviewEditSummary) notePreviewEditSummary.value = '';
-            if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
-            if (notePreviewEditSaveBtn) notePreviewEditSaveBtn.disabled = false;
-            notePreviewEditEl.classList.add('active');
-            notePreviewContentEl.style.display = 'none';
-            previewEditMode = true;
-            setTimeout(() => {
-                if (notePreviewEditTextarea) {
-                    notePreviewEditTextarea.focus();
-                    notePreviewEditTextarea.setSelectionRange(
-                        notePreviewEditTextarea.value.length,
-                        notePreviewEditTextarea.value.length
-                    );
-                }
-            }, 50);
-        }
-
-        function exitInlineEditMode(restoreScroll) {
-            if (!notePreviewEditEl) return;
-            notePreviewEditEl.classList.remove('active');
-            if (notePreviewContentEl) notePreviewContentEl.style.display = '';
-            previewEditMode = false;
-            if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
-            if (restoreScroll && notePreviewContentEl) {
-                notePreviewContentEl.scrollTop = 0;
-            }
-        }
-
-        async function handleInlineEditSave() {
-            if (!activePreviewNoteId || !activePreviewCard) return;
-            const content = (notePreviewEditTextarea ? notePreviewEditTextarea.value : '').trim();
-            if (!content) {
-                if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Content cannot be empty.';
-                return;
-            }
-            const reference = notePreviewEditReference ? notePreviewEditReference.value.trim() : '';
-            const tags = notePreviewEditTags
-                ? notePreviewEditTags.value.split(',').map(t => t.trim()).filter(Boolean)
-                : [];
-            const editSummary = notePreviewEditSummary ? notePreviewEditSummary.value.trim() : '';
-
-            if (notePreviewEditSaveBtn) {
-                notePreviewEditSaveBtn.disabled = true;
-                notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving';
-            }
-            if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Saving…';
-
-            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
-            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-
-            try {
-                const response = await fetch(`/personal_post/edit/${activePreviewNoteId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({
-                        content: content,
-                        reference: reference,
-                        tags: tags,
-                        edit_summary: editSummary,
-                        base_updated_at: activePreviewBaseUpdatedAt,
-                        force_overwrite: false
-                    })
-                });
-                const result = await response.json();
-                if (result.success) {
-                    // Sync the underlying card so subsequent opens show fresh data.
-                    const noteCard = activePreviewCard;
-                    const contentEl = noteCard.querySelector('.note-content.rendered-note');
-                    if (contentEl) {
-                        contentEl.setAttribute('data-raw', content);
-                        contentEl.innerHTML = window.renderMarkdownWithMath
-                            ? window.renderMarkdownWithMath(content)
-                            : htmlEscape(content);
-                    }
-                    const editBtnEl = noteCard.querySelector('.edit-note-btn');
-                    if (editBtnEl) {
-                        const tmp = document.createElement('textarea');
-                        tmp.textContent = content;
-                        editBtnEl.dataset.raw = tmp.innerHTML;
-                        if (result.updated_at) {
-                            editBtnEl.dataset.updatedAt = result.updated_at;
-                            activePreviewBaseUpdatedAt = result.updated_at;
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        const result = JSON.parse(xhr.responseText);
+                        if (result.success) {
+                            loadExistingShares(currentShareNoteId);
+                            document.getElementById('share-code').value = '';
+                            if (progressBar) progressBar.style.width = '0%';
+                        } else {
+                            alert('Error: ' + (result.error || 'Unknown error'));
                         }
-                        editBtnEl.dataset.reference = reference;
-                        editBtnEl.dataset.tags = JSON.stringify(tags);
+                    } else {
+                        alert('Server error: ' + xhr.status);
                     }
-                    const copyBtnEl = noteCard.querySelector('.copy-btn');
-                    if (copyBtnEl) copyBtnEl.dataset.copyText = content;
-                    const dateEl = noteCard.querySelector('.note-date');
-                    if (dateEl) {
-                        const sourceIcon = dateEl.querySelector('i');
-                        const sourceBadge = dateEl.querySelector('.source-badge');
-                        dateEl.innerHTML = '';
-                        if (sourceIcon) dateEl.appendChild(sourceIcon);
-                        dateEl.appendChild(document.createTextNode(' Edited just now'));
-                        if (sourceBadge) dateEl.appendChild(sourceBadge);
-                    }
-                    const notesList = document.getElementById('notes-list-container');
-                    if (notesList && noteCard.parentElement === notesList) {
-                        notesList.prepend(noteCard);
-                        noteCard.style.animation = 'featureTipsFade 0.4s ease-out';
-                    }
+                };
 
-                    // Re-render the preview with the saved content and exit edit mode.
-                    const { reference: refAfter, tags: tagsAfter } = readCardMetadata(noteCard);
-                    notePreviewContentEl.innerHTML = renderPreviewBody(content, refAfter, tagsAfter);
-                    exitInlineEditMode(true);
-                    if (typeof window.showToast === 'function') {
-                        window.showToast('Note updated');
-                    }
-                } else if (response.status === 409 && result.error === 'conflict') {
-                    if (notePreviewEditStatus) {
-                        notePreviewEditStatus.textContent = 'Conflict detected — opening merge view…';
-                    }
-                    if (typeof window.openEditModal === 'function') {
-                        // Fall back to the full edit modal which has the merge flow.
-                        window.openEditModal(
-                            activePreviewNoteId,
-                            content,
-                            reference,
-                            tags,
-                            activePreviewBaseUpdatedAt
-                        );
-                    }
-                } else {
-                    if (notePreviewEditStatus) {
-                        notePreviewEditStatus.textContent = result.error || 'Failed to save changes.';
-                    }
-                }
-            } catch (err) {
-                console.error('Inline edit save failed:', err);
-                if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Network error while saving.';
-            } finally {
-                if (notePreviewEditSaveBtn) {
-                    notePreviewEditSaveBtn.disabled = false;
-                    notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
-                }
-            }
-        }
+                xhr.onerror = function () {
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = originalText;
+                    if (progressArea) progressArea.style.display = 'none';
+                    alert('Network error. Try again.');
+                };
 
-        if (notePreviewEditSaveBtn) {
-            notePreviewEditSaveBtn.addEventListener('click', handleInlineEditSave);
-        }
-        if (notePreviewEditCancelBtn) {
-            notePreviewEditCancelBtn.addEventListener('click', () => exitInlineEditMode(false));
-        }
+                xhr.send(formData);
 
-        window.closeNoteFullscreenPreview = function () {
-            if (!notePreviewOverlay) return;
-            exitInlineEditMode(false);
-            notePreviewOverlay.classList.remove('active');
-            notePreviewOverlay.setAttribute('aria-hidden', 'true');
-            // Only restore scrolling if no other modal is open.
-            const shareOpen = document.getElementById('share-modal') && document.getElementById('share-modal').style.display === 'flex';
-            const editOpen = document.getElementById('edit-note-modal') && document.getElementById('edit-note-modal').style.display === 'flex';
-            const pickerOpen = document.getElementById('share-note-picker-modal') && document.getElementById('share-note-picker-modal').style.display === 'flex';
-            if (!shareOpen && !editOpen && !pickerOpen) {
-                document.body.style.overflow = '';
-            }
-            activePreviewNoteId = null;
-            activePreviewCard = null;
-            activePreviewBaseUpdatedAt = '';
-        };
-
-        if (notePreviewCloseBtn) {
-            notePreviewCloseBtn.addEventListener('click', window.closeNoteFullscreenPreview);
-        }
-
-        if (notePreviewOverlay) {
-            notePreviewOverlay.addEventListener('click', (e) => {
-                if (e.target === notePreviewOverlay) {
-                    window.closeNoteFullscreenPreview();
-                }
-            });
-        }
-
-        document.addEventListener('keydown', (e) => {
-            if (!notePreviewOverlay || !notePreviewOverlay.classList.contains('active')) return;
-            if (e.key === 'Escape' && !previewEditMode) {
-                window.closeNoteFullscreenPreview();
-            } else if (e.key === 'Escape' && previewEditMode) {
-                // Inside the inline editor, Escape cancels the edit (mirrors
-                // typical editor behavior) rather than closing the preview.
-                e.stopPropagation();
-                exitInlineEditMode(false);
-            } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && previewEditMode) {
-                e.preventDefault();
-                handleInlineEditSave();
+            } catch (e) {
+                console.error('Error during share generation:', e);
+                generateBtn.disabled = false;
+                generateBtn.textContent = originalText;
+                if (progressArea) progressArea.style.display = 'none';
+                alert('An error occurred. Please try again.');
             }
         });
+    }
 
-        if (notePreviewActionsEl) {
-            notePreviewActionsEl.addEventListener('click', (e) => {
-                const btn = e.target.closest('.note-preview-action');
-                if (!btn) return;
-                const action = btn.dataset.action;
-                const noteId = activePreviewNoteId;
-                const card = activePreviewCard;
-                if (!noteId || !card) return;
 
-                if (action === 'edit') {
-                    // Edit inline within the preview instead of opening the
-                    // separate edit modal. The preview pane is large enough
-                    // and avoids z-index stacking issues.
-                    enterInlineEditMode();
-                    return;
-                }
 
-                if (action === 'copy') {
-                    const raw = getNoteRawContent(card);
-                    if (!raw) return;
-                    const decoded = (function () {
-                        const t = document.createElement('textarea');
-                        t.innerHTML = raw;
-                        return t.value || '';
-                    })();
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(decoded).then(() => {
-                            if (typeof window.showToast === 'function') {
-                                window.showToast('Note copied to clipboard');
-                            }
-                        });
-                    } else {
-                        const tmp = document.createElement('textarea');
-                        tmp.value = decoded;
-                        document.body.appendChild(tmp);
-                        tmp.select();
-                        try { document.execCommand('copy'); } catch (e) { /* ignore */ }
-                        document.body.removeChild(tmp);
-                    }
-                    return;
-                }
-
-                if (action === 'share') {
-                    // Close the preview before opening the share modal so it
-                    // doesn't sit behind the modal surface.
-                    window.closeNoteFullscreenPreview();
-                    openShareModalForNote(noteId);
-                    return;
-                }
-
-                if (action === 'lock') {
-                    if (typeof window.toggleNoteLock === 'function') {
-                        window.toggleNoteLock(noteId);
-                    }
-                    return;
-                }
-
-                if (action === 'history') {
-                    window.closeNoteFullscreenPreview();
-                    const versionBtn = card.querySelector('.version-history-btn');
-                    if (versionBtn) versionBtn.click();
-                    return;
-                }
-
-                if (action === 'export') {
-                    window.closeNoteFullscreenPreview();
-                    const exportBtn = card.querySelector('.export-note-btn');
-                    if (exportBtn) exportBtn.click();
-                    return;
-                }
-
-                if (action === 'delete') {
-                    window.closeNoteFullscreenPreview();
-                    const deleteBtn = card.querySelector('.delete-btn');
-                    if (deleteBtn) deleteBtn.click();
-                    return;
-                }
-            });
+    window.copyShareUrl = function (text, btn) {
+        // Unify legacy call path
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => showCopyFeedback(btn));
+        } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showCopyFeedback(btn);
         }
+    };
+
+    function showCopyFeedback(btn) {
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        if (icon) {
+            const originalClass = icon.className;
+            icon.className = 'fas fa-check';
+            setTimeout(() => { icon.className = originalClass; }, 1500);
+        }
+    }
+
+    // ========== Fullscreen Note Preview ==========
+    // The notes list now uses an "open in a focused fullscreen view" flow
+    // for the "See more" affordance on long notes. The view is a
+    // single-screen reader that mirrors the editor's fullscreen feel
+    // while keeping the action buttons docked on the right (vertical).
+    // Edit, Share, Lock, History, Export and Delete all work from this
+    // view. Edit is done inline (the preview pane is large enough), while
+    // the other actions delegate to the existing handlers — the preview
+    // is closed first so the modal opens cleanly above it.
+    const notePreviewOverlay = document.getElementById('note-preview-overlay');
+    const notePreviewCloseBtn = document.getElementById('note-preview-close');
+    const notePreviewTitleEl = document.getElementById('note-preview-title');
+    const notePreviewMetaEl = document.getElementById('note-preview-meta');
+    const notePreviewContentEl = document.getElementById('note-preview-content');
+    const notePreviewActionsEl = document.getElementById('note-preview-actions');
+    const notePreviewEditEl = document.getElementById('note-preview-edit');
+    const notePreviewEditTextarea = document.getElementById('note-preview-edit-textarea');
+    const notePreviewEditReference = document.getElementById('note-preview-edit-reference');
+    const notePreviewEditTags = document.getElementById('note-preview-edit-tags');
+    const notePreviewEditSummary = document.getElementById('note-preview-edit-summary');
+    const notePreviewEditStatus = document.getElementById('note-preview-edit-status');
+    const notePreviewEditSaveBtn = document.getElementById('note-preview-edit-save');
+    const notePreviewEditCancelBtn = document.getElementById('note-preview-edit-cancel');
+    let activePreviewNoteId = null;
+    let activePreviewCard = null;
+    let activePreviewBaseUpdatedAt = '';
+    let previewEditMode = false;
+
+    function readCardMetadata(card) {
+        if (!card) return { reference: '', tags: [], updatedAt: '' };
+        const reference = card.querySelector('.note-ref-display')
+            ? card.querySelector('.note-ref-display').textContent.trim() : '';
+        const tags = Array.from(card.querySelectorAll('.note-tag-badge'))
+            .map(el => el.textContent.trim())
+            .filter(Boolean);
+        const updatedAt = card.querySelector('.note-date')
+            ? card.querySelector('.note-date').textContent.trim() : '';
+        return { reference, tags, updatedAt };
+    }
+
+    function getNoteRawContent(card) {
+        if (!card) return '';
+        const contentEl = card.querySelector('.note-content.rendered-note');
+        if (!contentEl) return '';
+        // data-raw is the source of truth (set during lazy-load).
+        return contentEl.getAttribute('data-raw') || contentEl.textContent || '';
+    }
+
+    function htmlEscape(str) {
+        return (str || '').replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[c]);
+    }
+
+    function renderPreviewBody(raw, reference, tags) {
+        let html = '';
+        if (raw && raw.trim()) {
+            try {
+                html = window.renderMarkdownWithMath
+                    ? window.renderMarkdownWithMath(raw)
+                    : htmlEscape(raw);
+            } catch (e) {
+                html = htmlEscape(raw);
+            }
+        } else {
+            html = '<p style="color:#888;font-style:italic;">No content.</p>';
+        }
+
+        let headerExtras = '';
+        if (reference) {
+            headerExtras += `<span class="reference-line">${htmlEscape(reference)}</span>`;
+        }
+        if (tags.length) {
+            headerExtras += tags.map(t =>
+                `<span class="reference-line" style="background:#eef5ff;border-color:#cfdcef;color:#1e3a5f;">#${htmlEscape(t)}</span>`
+            ).join(' ');
+        }
+        return headerExtras + html;
+    }
+
+    function setPreviewActionsVisibility(card) {
+        const hide = (action, hidden) => {
+            const btn = notePreviewActionsEl && notePreviewActionsEl.querySelector(`[data-action="${action}"]`);
+            if (btn) btn.style.display = hidden ? 'none' : '';
+        };
+        const isSurprise = !!card.querySelector('.surprise-badge, [data-surprise="true"]');
+        hide('history', isSurprise);
+        hide('lock', isSurprise);
+    }
+
+    function setPreviewLockIcon(card) {
+        const lockBtn = notePreviewActionsEl && notePreviewActionsEl.querySelector('[data-action="lock"]');
+        if (!lockBtn) return;
+        const isLocked = !!(card.dataset.isLocked === 'true' || card.classList.contains('locked'));
+        lockBtn.querySelector('i').className = isLocked ? 'fas fa-lock-open' : 'fas fa-lock';
+        const label = lockBtn.querySelector('span');
+        if (label) label.textContent = isLocked ? 'Unlock' : 'Lock';
+    }
+
+    window.openNoteFullscreenPreview = async function (noteId) {
+        if (!notePreviewOverlay || !notePreviewContentEl) return;
+        const card = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+        if (!card) return;
+
+        activePreviewNoteId = noteId;
+        activePreviewCard = card;
+        const { reference, tags, updatedAt } = readCardMetadata(card);
+        const raw = getNoteRawContent(card);
+
+        const firstLine = (raw || '').split('\n').find(l => l.trim()) || '';
+        const decoded = (function () {
+            const t = document.createElement('textarea');
+            t.innerHTML = firstLine;
+            return t.value || '';
+        })();
+        const titleText = decoded.replace(/^#+\s*/, '').trim() || 'Note';
+        const subtitleParts = [];
+        if (updatedAt) subtitleParts.push(updatedAt);
+        if (tags.length) subtitleParts.push(tags.map(t => '#' + t).join(' '));
+
+        if (notePreviewTitleEl) notePreviewTitleEl.textContent = titleText.length > 80
+            ? titleText.substring(0, 80) + '…' : titleText;
+        if (notePreviewMetaEl) notePreviewMetaEl.textContent = subtitleParts.join(' · ');
+
+        notePreviewContentEl.innerHTML = renderPreviewBody(raw, reference, tags);
+        notePreviewContentEl.scrollTop = 0;
+
+        // Capture the updated_at for edit conflict detection.
+        const editBtnEl = card.querySelector('.edit-note-btn');
+        activePreviewBaseUpdatedAt = editBtnEl ? (editBtnEl.dataset.updatedAt || '') : '';
+
+        setPreviewLockIcon(card);
+        setPreviewActionsVisibility(card);
+
+        // Make sure the inline editor starts in read-only mode every time
+        // a note is opened.
+        exitInlineEditMode(false);
+
+        notePreviewOverlay.classList.add('active');
+        notePreviewOverlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    };
+
+    function enterInlineEditMode() {
+        if (!activePreviewCard || !notePreviewEditEl) return;
+        const raw = getNoteRawContent(activePreviewCard);
+        const { reference, tags } = readCardMetadata(activePreviewCard);
+        if (notePreviewEditTextarea) notePreviewEditTextarea.value = raw;
+        if (notePreviewEditReference) notePreviewEditReference.value = reference || '';
+        if (notePreviewEditTags) notePreviewEditTags.value = Array.isArray(tags) ? tags.join(', ') : '';
+        if (notePreviewEditSummary) notePreviewEditSummary.value = '';
+        if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
+        if (notePreviewEditSaveBtn) notePreviewEditSaveBtn.disabled = false;
+        notePreviewEditEl.classList.add('active');
+        notePreviewContentEl.style.display = 'none';
+        previewEditMode = true;
+        setTimeout(() => {
+            if (notePreviewEditTextarea) {
+                notePreviewEditTextarea.focus();
+                notePreviewEditTextarea.setSelectionRange(
+                    notePreviewEditTextarea.value.length,
+                    notePreviewEditTextarea.value.length
+                );
+            }
+        }, 50);
+    }
+
+    function exitInlineEditMode(restoreScroll) {
+        if (!notePreviewEditEl) return;
+        notePreviewEditEl.classList.remove('active');
+        if (notePreviewContentEl) notePreviewContentEl.style.display = '';
+        previewEditMode = false;
+        if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
+        if (restoreScroll && notePreviewContentEl) {
+            notePreviewContentEl.scrollTop = 0;
+        }
+    }
+
+    async function handleInlineEditSave() {
+        if (!activePreviewNoteId || !activePreviewCard) return;
+        const content = (notePreviewEditTextarea ? notePreviewEditTextarea.value : '').trim();
+        if (!content) {
+            if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Content cannot be empty.';
+            return;
+        }
+        const reference = notePreviewEditReference ? notePreviewEditReference.value.trim() : '';
+        const tags = notePreviewEditTags
+            ? notePreviewEditTags.value.split(',').map(t => t.trim()).filter(Boolean)
+            : [];
+        const editSummary = notePreviewEditSummary ? notePreviewEditSummary.value.trim() : '';
+
+        if (notePreviewEditSaveBtn) {
+            notePreviewEditSaveBtn.disabled = true;
+            notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving';
+        }
+        if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Saving…';
+
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+        try {
+            const response = await fetch(`/personal_post/edit/${activePreviewNoteId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    content: content,
+                    reference: reference,
+                    tags: tags,
+                    edit_summary: editSummary,
+                    base_updated_at: activePreviewBaseUpdatedAt,
+                    force_overwrite: false
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                // Sync the underlying card so subsequent opens show fresh data.
+                const noteCard = activePreviewCard;
+                const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                if (contentEl) {
+                    contentEl.setAttribute('data-raw', content);
+                    contentEl.innerHTML = window.renderMarkdownWithMath
+                        ? window.renderMarkdownWithMath(content)
+                        : htmlEscape(content);
+                }
+                const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                if (editBtnEl) {
+                    const tmp = document.createElement('textarea');
+                    tmp.textContent = content;
+                    editBtnEl.dataset.raw = tmp.innerHTML;
+                    if (result.updated_at) {
+                        editBtnEl.dataset.updatedAt = result.updated_at;
+                        activePreviewBaseUpdatedAt = result.updated_at;
+                    }
+                    editBtnEl.dataset.reference = reference;
+                    editBtnEl.dataset.tags = JSON.stringify(tags);
+                }
+                const copyBtnEl = noteCard.querySelector('.copy-btn');
+                if (copyBtnEl) copyBtnEl.dataset.copyText = content;
+                const dateEl = noteCard.querySelector('.note-date');
+                if (dateEl) {
+                    const sourceIcon = dateEl.querySelector('i');
+                    const sourceBadge = dateEl.querySelector('.source-badge');
+                    dateEl.innerHTML = '';
+                    if (sourceIcon) dateEl.appendChild(sourceIcon);
+                    dateEl.appendChild(document.createTextNode(' Edited just now'));
+                    if (sourceBadge) dateEl.appendChild(sourceBadge);
+                }
+                const notesList = document.getElementById('notes-list-container');
+                if (notesList && noteCard.parentElement === notesList) {
+                    notesList.prepend(noteCard);
+                    noteCard.style.animation = 'featureTipsFade 0.4s ease-out';
+                }
+
+                // Re-render the preview with the saved content and exit edit mode.
+                const { reference: refAfter, tags: tagsAfter } = readCardMetadata(noteCard);
+                notePreviewContentEl.innerHTML = renderPreviewBody(content, refAfter, tagsAfter);
+                exitInlineEditMode(true);
+                if (typeof window.showToast === 'function') {
+                    window.showToast('Note updated');
+                }
+            } else if (response.status === 409 && result.error === 'conflict') {
+                if (notePreviewEditStatus) {
+                    notePreviewEditStatus.textContent = 'Conflict detected — opening merge view…';
+                }
+                if (typeof window.openEditModal === 'function') {
+                    // Fall back to the full edit modal which has the merge flow.
+                    window.openEditModal(
+                        activePreviewNoteId,
+                        content,
+                        reference,
+                        tags,
+                        activePreviewBaseUpdatedAt
+                    );
+                }
+            } else {
+                if (notePreviewEditStatus) {
+                    notePreviewEditStatus.textContent = result.error || 'Failed to save changes.';
+                }
+            }
+        } catch (err) {
+            console.error('Inline edit save failed:', err);
+            if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Network error while saving.';
+        } finally {
+            if (notePreviewEditSaveBtn) {
+                notePreviewEditSaveBtn.disabled = false;
+                notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+            }
+        }
+    }
+
+    if (notePreviewEditSaveBtn) {
+        notePreviewEditSaveBtn.addEventListener('click', handleInlineEditSave);
+    }
+    if (notePreviewEditCancelBtn) {
+        notePreviewEditCancelBtn.addEventListener('click', () => exitInlineEditMode(false));
+    }
+
+    window.closeNoteFullscreenPreview = function () {
+        if (!notePreviewOverlay) return;
+        exitInlineEditMode(false);
+        notePreviewOverlay.classList.remove('active');
+        notePreviewOverlay.setAttribute('aria-hidden', 'true');
+        // Only restore scrolling if no other modal is open.
+        const shareOpen = document.getElementById('share-modal') && document.getElementById('share-modal').style.display === 'flex';
+        const editOpen = document.getElementById('edit-note-modal') && document.getElementById('edit-note-modal').style.display === 'flex';
+        const pickerOpen = document.getElementById('share-note-picker-modal') && document.getElementById('share-note-picker-modal').style.display === 'flex';
+        if (!shareOpen && !editOpen && !pickerOpen) {
+            document.body.style.overflow = '';
+        }
+        activePreviewNoteId = null;
+        activePreviewCard = null;
+        activePreviewBaseUpdatedAt = '';
+    };
+
+    if (notePreviewCloseBtn) {
+        notePreviewCloseBtn.addEventListener('click', window.closeNoteFullscreenPreview);
+    }
+
+    if (notePreviewOverlay) {
+        notePreviewOverlay.addEventListener('click', (e) => {
+            if (e.target === notePreviewOverlay) {
+                window.closeNoteFullscreenPreview();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (!notePreviewOverlay || !notePreviewOverlay.classList.contains('active')) return;
+        if (e.key === 'Escape' && !previewEditMode) {
+            window.closeNoteFullscreenPreview();
+        } else if (e.key === 'Escape' && previewEditMode) {
+            // Inside the inline editor, Escape cancels the edit (mirrors
+            // typical editor behavior) rather than closing the preview.
+            e.stopPropagation();
+            exitInlineEditMode(false);
+        } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && previewEditMode) {
+            e.preventDefault();
+            handleInlineEditSave();
+        }
+    });
+
+    if (notePreviewActionsEl) {
+        notePreviewActionsEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('.note-preview-action');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const noteId = activePreviewNoteId;
+            const card = activePreviewCard;
+            if (!noteId || !card) return;
+
+            if (action === 'edit') {
+                // Edit inline within the preview instead of opening the
+                // separate edit modal. The preview pane is large enough
+                // and avoids z-index stacking issues.
+                enterInlineEditMode();
+                return;
+            }
+
+            if (action === 'copy') {
+                const raw = getNoteRawContent(card);
+                if (!raw) return;
+                const decoded = (function () {
+                    const t = document.createElement('textarea');
+                    t.innerHTML = raw;
+                    return t.value || '';
+                })();
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(decoded).then(() => {
+                        if (typeof window.showToast === 'function') {
+                            window.showToast('Note copied to clipboard');
+                        }
+                    });
+                } else {
+                    const tmp = document.createElement('textarea');
+                    tmp.value = decoded;
+                    document.body.appendChild(tmp);
+                    tmp.select();
+                    try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+                    document.body.removeChild(tmp);
+                }
+                return;
+            }
+
+            if (action === 'share') {
+                // Close the preview before opening the share modal so it
+                // doesn't sit behind the modal surface.
+                window.closeNoteFullscreenPreview();
+                openShareModalForNote(noteId);
+                return;
+            }
+
+            if (action === 'lock') {
+                if (typeof window.toggleNoteLock === 'function') {
+                    window.toggleNoteLock(noteId);
+                }
+                return;
+            }
+
+            if (action === 'history') {
+                window.closeNoteFullscreenPreview();
+                const versionBtn = card.querySelector('.version-history-btn');
+                if (versionBtn) versionBtn.click();
+                return;
+            }
+
+            if (action === 'export') {
+                window.closeNoteFullscreenPreview();
+                const exportBtn = card.querySelector('.export-note-btn');
+                if (exportBtn) exportBtn.click();
+                return;
+            }
+
+            if (action === 'delete') {
+                window.closeNoteFullscreenPreview();
+                const deleteBtn = card.querySelector('.delete-btn');
+                if (deleteBtn) deleteBtn.click();
+                return;
+            }
+        });
+    }
 
         // (Version history logic moved to top-level IIFE)
     });
@@ -7710,7 +7864,7 @@
             if (document.querySelectorAll('.note-card[data-note-id]:not(.pending-note)').length > 0) {
                 const domNotes = extractNotesFromDOM();
                 if (domNotes.length) {
-                    clearCachedNotes().catch(() => {});
+                    clearCachedNotes().catch(() => { });
                     saveNotesToCache(domNotes);
                 }
             }
@@ -8149,16 +8303,19 @@
 </script>
 
 <!-- Export Note Modal -->
-<div id="export-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeExportModal()" style="display:none;">
+<div id="export-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeExportModal()"
+    style="display:none;">
     <div class="custom-modal" style="max-width: 380px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="color: #3e2217; margin: 0; font-size: 1.05rem;"><i class="fas fa-download"></i> Export Note</h3>
-            <button class="btn-icon" onclick="closeExportModal()" style="color: #999;"><i class="fas fa-times"></i></button>
+            <button class="btn-icon" onclick="closeExportModal()" style="color: #999;"><i
+                    class="fas fa-times"></i></button>
         </div>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
             <button onclick="exportNote('txt')" class="btn"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
-                <i class="fas fa-file-alt" style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
+                <i class="fas fa-file-alt"
+                    style="font-size: 1.2rem; color: #8b6f5e; width: 24px; text-align: center;"></i>
                 <div>
                     <div style="font-weight: 600;">Plain Text</div>
                     <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .txt file</div>
@@ -8166,17 +8323,24 @@
             </button>
             <button onclick="exportNote('pdf')" class="btn"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
-                <i class="fas fa-file-pdf" style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
+                <i class="fas fa-file-pdf"
+                    style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
                 <div>
-                    <div style="font-weight: 600;">PDF Document{% if not user_is_premium %} <span style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{% endif %}</div>
-                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Formatted with markdown styling</div>
+                    <div style="font-weight: 600;">PDF Document{% if not user_is_premium %} <span
+                            style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{%
+                        endif %}</div>
+                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Formatted with markdown styling
+                    </div>
                 </div>
             </button>
             <button onclick="exportNote('docx')" class="btn"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
-                <i class="fas fa-file-word" style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
+                <i class="fas fa-file-word"
+                    style="font-size: 1.2rem; color: #2b579a; width: 24px; text-align: center;"></i>
                 <div>
-                    <div style="font-weight: 600;">Word Document{% if not user_is_premium %} <span style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{% endif %}</div>
+                    <div style="font-weight: 600;">Word Document{% if not user_is_premium %} <span
+                            style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{%
+                        endif %}</div>
                     <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .docx file</div>
                 </div>
             </button>
@@ -8186,151 +8350,152 @@
 
 <script nonce="{{ csp_nonce }}">
     // ====== Note Export Logic ======
-    (function() {
+    (function () {
         let exportNoteId = null;
-        const isPremium = {{ 'true' if user_is_premium else 'false' }};
+        const isPremium = {{ 'true' if user_is_premium else 'false' }
+    };
 
-        // Open export modal
-        document.body.addEventListener('click', function(e) {
-            const btn = e.target.closest('.export-note-btn');
-            if (!btn) return;
-            exportNoteId = btn.dataset.id;
-            document.getElementById('export-note-modal').style.display = 'flex';
-        });
+    // Open export modal
+    document.body.addEventListener('click', function (e) {
+        const btn = e.target.closest('.export-note-btn');
+        if (!btn) return;
+        exportNoteId = btn.dataset.id;
+        document.getElementById('export-note-modal').style.display = 'flex';
+    });
 
-        window.closeExportModal = function() {
-            document.getElementById('export-note-modal').style.display = 'none';
-            exportNoteId = null;
-        };
+    window.closeExportModal = function () {
+        document.getElementById('export-note-modal').style.display = 'none';
+        exportNoteId = null;
+    };
 
-        window.exportNote = function(format) {
-            if (!exportNoteId) return;
+    window.exportNote = function (format) {
+        if (!exportNoteId) return;
 
-            // Premium gate for PDF and DOCX
-            if ((format === 'pdf' || format === 'docx') && !isPremium) {
-                if (window.showCustomAlert) {
-                    window.showCustomAlert('PDF and DOCX export is a Premium feature. Upgrade to unlock formatted exports.', 'warning');
-                } else {
-                    alert('PDF and DOCX export is a Premium feature.');
-                }
-                return;
-            }
-
-            // Get the note content from the DOM
-            const noteCard = document.querySelector(`.note-card[data-note-id="${exportNoteId}"], .locked-note-card[data-note-id="${exportNoteId}"]`);
-            if (!noteCard) return;
-
-            const rawEl = noteCard.querySelector('.rendered-note');
-            const rawContent = rawEl ? rawEl.dataset.raw : '';
-            const renderedContent = rawEl ? rawEl.innerHTML : '';
-            const noteRef = noteCard.querySelector('.note-ref-display');
-            const reference = noteRef ? noteRef.textContent.trim() : '';
-
-            // Generate a filename from first line of content
-            const firstLine = rawContent.split('\n')[0].replace(/[#*_\[\]()]/g, '').trim().substring(0, 40) || 'note';
-            const safeName = firstLine.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') || 'note';
-
-            if (format === 'txt') {
-                exportAsTxt(rawContent, reference, safeName);
-            } else if (format === 'pdf') {
-                exportAsPdf(renderedContent, reference, safeName);
-            } else if (format === 'docx') {
-                exportAsDocx(rawContent, renderedContent, reference, safeName);
-            }
-
-            closeExportModal();
-        };
-
-        function exportAsTxt(content, reference, filename) {
-            let text = content;
-            if (reference) text = reference + '\n\n' + text;
-            text += '\n\n---\nExported from EchoWithin';
-
-            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-            downloadBlob(blob, filename + '.txt');
-        }
-
-        function exportAsPdf(html, reference, filename) {
-            // Load html2pdf.js dynamically if not already loaded
-            if (typeof html2pdf === 'undefined') {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                script.onload = function() { generatePdf(html, reference, filename); };
-                script.onerror = function() {
-                    if (window.showCustomAlert) window.showCustomAlert('Failed to load PDF library. Please try again.', 'danger');
-                };
-                document.head.appendChild(script);
+        // Premium gate for PDF and DOCX
+        if ((format === 'pdf' || format === 'docx') && !isPremium) {
+            if (window.showCustomAlert) {
+                window.showCustomAlert('PDF and DOCX export is a Premium feature. Upgrade to unlock formatted exports.', 'warning');
             } else {
-                generatePdf(html, reference, filename);
+                alert('PDF and DOCX export is a Premium feature.');
             }
+            return;
         }
 
-        function generatePdf(html, reference, filename) {
-            const container = document.createElement('div');
-            container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px; position: fixed; left: -9999px; top: 0; z-index: -1; background: white;';
+        // Get the note content from the DOM
+        const noteCard = document.querySelector(`.note-card[data-note-id="${exportNoteId}"], .locked-note-card[data-note-id="${exportNoteId}"]`);
+        if (!noteCard) return;
 
-            let content = '';
-            if (reference) {
-                content += '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
-            }
-            content += html;
-            content += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
-            container.innerHTML = content;
+        const rawEl = noteCard.querySelector('.rendered-note');
+        const rawContent = rawEl ? rawEl.dataset.raw : '';
+        const renderedContent = rawEl ? rawEl.innerHTML : '';
+        const noteRef = noteCard.querySelector('.note-ref-display');
+        const reference = noteRef ? noteRef.textContent.trim() : '';
 
-            // Must be in DOM for html2canvas to render
-            document.body.appendChild(container);
+        // Generate a filename from first line of content
+        const firstLine = rawContent.split('\n')[0].replace(/[#*_\[\]()]/g, '').trim().substring(0, 40) || 'note';
+        const safeName = firstLine.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_') || 'note';
 
-            const opt = {
-                margin: [15, 15, 15, 15],
-                filename: filename + '.pdf',
-                image: { type: 'jpeg', quality: 0.95 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        if (format === 'txt') {
+            exportAsTxt(rawContent, reference, safeName);
+        } else if (format === 'pdf') {
+            exportAsPdf(renderedContent, reference, safeName);
+        } else if (format === 'docx') {
+            exportAsDocx(rawContent, renderedContent, reference, safeName);
+        }
+
+        closeExportModal();
+    };
+
+    function exportAsTxt(content, reference, filename) {
+        let text = content;
+        if (reference) text = reference + '\n\n' + text;
+        text += '\n\n---\nExported from EchoWithin';
+
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        downloadBlob(blob, filename + '.txt');
+    }
+
+    function exportAsPdf(html, reference, filename) {
+        // Load html2pdf.js dynamically if not already loaded
+        if (typeof html2pdf === 'undefined') {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            script.onload = function () { generatePdf(html, reference, filename); };
+            script.onerror = function () {
+                if (window.showCustomAlert) window.showCustomAlert('Failed to load PDF library. Please try again.', 'danger');
             };
-
-            html2pdf().set(opt).from(container).save().then(function() {
-                document.body.removeChild(container);
-            });
+            document.head.appendChild(script);
+        } else {
+            generatePdf(html, reference, filename);
         }
+    }
 
-        function exportAsDocx(rawContent, html, reference, filename) {
-            // Build a simple HTML-based DOCX (using HTML-in-DOCX trick)
-            let docHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">';
-            docHtml += '<head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}h3{font-size:12pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;font-size:10pt;}pre{background:#f5f5f5;padding:10px;font-family:Consolas,monospace;font-size:10pt;}</style></head><body>';
-            if (reference) {
-                docHtml += '<p style="color:#666;font-size:9pt;border-bottom:1px solid #eee;padding-bottom:6px;">' + escapeHtml(reference) + '</p>';
-            }
-            docHtml += html;
-            docHtml += '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p>';
-            docHtml += '</body></html>';
+    function generatePdf(html, reference, filename) {
+        const container = document.createElement('div');
+        container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px; position: fixed; left: -9999px; top: 0; z-index: -1; background: white;';
 
-            const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword' });
-            downloadBlob(blob, filename + '.doc');
+        let content = '';
+        if (reference) {
+            content += '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
         }
+        content += html;
+        content += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
+        container.innerHTML = content;
 
-        function escapeHtml(str) {
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        }
+        // Must be in DOM for html2canvas to render
+        document.body.appendChild(container);
 
-        function downloadBlob(blob, filename) {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(function() {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
+        const opt = {
+            margin: [15, 15, 15, 15],
+            filename: filename + '.pdf',
+            image: { type: 'jpeg', quality: 0.95 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(container).save().then(function () {
+            document.body.removeChild(container);
+        });
+    }
+
+    function exportAsDocx(rawContent, html, reference, filename) {
+        // Build a simple HTML-based DOCX (using HTML-in-DOCX trick)
+        let docHtml = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">';
+        docHtml += '<head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}h3{font-size:12pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;font-size:10pt;}pre{background:#f5f5f5;padding:10px;font-family:Consolas,monospace;font-size:10pt;}</style></head><body>';
+        if (reference) {
+            docHtml += '<p style="color:#666;font-size:9pt;border-bottom:1px solid #eee;padding-bottom:6px;">' + escapeHtml(reference) + '</p>';
         }
-    })();
+        docHtml += html;
+        docHtml += '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p>';
+        docHtml += '</body></html>';
+
+        const blob = new Blob(['\ufeff' + docHtml], { type: 'application/msword' });
+        downloadBlob(blob, filename + '.doc');
+    }
+
+    function escapeHtml(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    }
+    }) ();
 
     // ====== Fullscreen Note Creation ======
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const noteInput = document.getElementById('note-input');
         const createNoteCard = document.querySelector('.create-note-card');
-        
+
         if (noteInput && createNoteCard) {
             const closeBtn = document.createElement('button');
             closeBtn.className = 'close-fullscreen-btn';
@@ -8357,7 +8522,7 @@
             noteInput.addEventListener('focus', openFullscreen);
             closeBtn.addEventListener('click', closeFullscreen);
 
-            document.addEventListener('keydown', function(e) {
+            document.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape' && createNoteCard.classList.contains('fullscreen-active')) {
                     closeFullscreen();
                 }
@@ -8422,7 +8587,7 @@
     };
 
     // --- Lazy-load note previews with IndexedDB offline fallback ---
-    (function() {
+    (function () {
         const lazyNodes = document.querySelectorAll('.note-content[data-lazy="true"]');
         if (!lazyNodes.length) return;
 
@@ -8476,51 +8641,51 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: noteIds })
         })
-        .then(r => r.json())
-        .then(data => {
-            if (!data.previews) return;
-            const cacheEntries = [];
-            for (const [noteId, preview] of Object.entries(data.previews)) {
-                renderPreview(noteId, preview);
-                cacheEntries.push({ id: noteId, content: preview, ts: Date.now() });
-            }
-            // Save to IndexedDB for offline use
-            if (cacheEntries.length) {
-                NoteCache.putMany(cacheEntries);
-            }
-            if (window.formatDecryptionErrors) {
-                window.formatDecryptionErrors(document.getElementById('notes-list-container'));
-            }
-        })
-        .catch(async (err) => {
-            console.warn('Note preview fetch failed, trying offline cache:', err);
-            removeShimmers();
-            try {
-                const cached = await NoteCache.getMany(noteIds);
-                let foundAny = false;
-                for (const noteId of noteIds) {
-                    if (cached[noteId]) {
-                        renderPreview(noteId, cached[noteId]);
-                        foundAny = true;
-                    } else {
-                        const entry = nodeMap[noteId];
-                        if (entry && !entry.contentEl.textContent.trim()) {
-                            entry.contentEl.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
-                        }
-                    }
+            .then(r => r.json())
+            .then(data => {
+                if (!data.previews) return;
+                const cacheEntries = [];
+                for (const [noteId, preview] of Object.entries(data.previews)) {
+                    renderPreview(noteId, preview);
+                    cacheEntries.push({ id: noteId, content: preview, ts: Date.now() });
                 }
-                if (foundAny && window.formatDecryptionErrors) {
+                // Save to IndexedDB for offline use
+                if (cacheEntries.length) {
+                    NoteCache.putMany(cacheEntries);
+                }
+                if (window.formatDecryptionErrors) {
                     window.formatDecryptionErrors(document.getElementById('notes-list-container'));
                 }
-            } catch (dbErr) {
-                console.warn('IndexedDB fallback also failed:', dbErr);
-                lazyNodes.forEach(node => {
-                    if (!node.textContent.trim()) {
-                        node.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
+            })
+            .catch(async (err) => {
+                console.warn('Note preview fetch failed, trying offline cache:', err);
+                removeShimmers();
+                try {
+                    const cached = await NoteCache.getMany(noteIds);
+                    let foundAny = false;
+                    for (const noteId of noteIds) {
+                        if (cached[noteId]) {
+                            renderPreview(noteId, cached[noteId]);
+                            foundAny = true;
+                        } else {
+                            const entry = nodeMap[noteId];
+                            if (entry && !entry.contentEl.textContent.trim()) {
+                                entry.contentEl.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">This note has not been cached yet. View it online first to enable offline access.</div>';
+                            }
+                        }
                     }
-                });
-            }
-        });
+                    if (foundAny && window.formatDecryptionErrors) {
+                        window.formatDecryptionErrors(document.getElementById('notes-list-container'));
+                    }
+                } catch (dbErr) {
+                    console.warn('IndexedDB fallback also failed:', dbErr);
+                    lazyNodes.forEach(node => {
+                        if (!node.textContent.trim()) {
+                            node.innerHTML = '<div style="color:#999;font-size:0.82rem;padding:0.5rem 0;font-style:italic;">Content unavailable offline.</div>';
+                        }
+                    });
+                }
+            });
     })();
 </script>
 {% endblock %}

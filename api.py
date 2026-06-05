@@ -1309,6 +1309,136 @@ def api_delete_note(note_id):
 
     return jsonify({'success': True, 'message': 'Note deleted successfully.'})
 
+@api_bp.route('/notes/dedup', methods=['POST'])
+@login_required
+def api_dedup_notes():
+    """
+    One-shot duplicate-note cleanup. Earlier Android builds (pre-v1.7.1)
+    could re-push already-synced notes as new CREATEs when the local sync
+    flag got reset on logout, which left the user with two copies of the
+    same note. This endpoint groups the user's notes by their decrypted
+    content and, for each group of 2+, keeps the OLDEST and deletes the
+    rest (plus their shares / versions / Typesense entries).
+
+    Query params:
+        confirm=true   Actually perform the deletions. Without this flag the
+                       endpoint runs in dry-run mode and just returns the
+                       groups that *would* be removed.
+    """
+    import main as m
+
+    confirm = (request.args.get('confirm', '').lower() == 'true')
+    user_id = ObjectId(current_user.id)
+
+    # 1. Fetch all notes owned by the current user
+    user_notes = list(m.personal_posts_conf.find({'user_id': user_id}))
+    if not user_notes:
+        return jsonify({'success': True, 'removed_count': 0, 'kept_count': 0, 'groups': []})
+
+    # 2. Decrypt + normalize content for grouping
+    def normalize(text):
+        if not text:
+            return ''
+        # collapse all whitespace, strip, lowercase — so trivial differences
+        # (trailing newlines, double spaces) don't spawn false "duplicates"
+        return ' '.join(text.split()).strip().lower()
+
+    decrypted = {}
+    for n in user_notes:
+        raw = n.get('content', '')
+        plain = raw
+        if n.get('encrypted'):
+            try:
+                plain = m.decrypt_note(raw, user_id=str(user_id))
+            except Exception:
+                # If we can't decrypt, skip this note from dedup — better
+                # safe than accidentally deleting an unreadable note.
+                continue
+        decrypted[n['_id']] = (normalize(plain), plain)
+
+    # 3. Group by normalized content
+    groups_by_key = {}
+    for nid, (key, _) in decrypted.items():
+        groups_by_key.setdefault(key, []).append(nid)
+
+    # Build a lookup from note id to its full document (used by the sort
+    # below to compare created_at). Defined BEFORE the loop so the lambda
+    # can close over it.
+    user_notes_by_id = {n['_id']: n for n in user_notes}
+
+    # 4. For each group with 2+ notes, keep oldest, mark rest for deletion
+    groups_summary = []
+    ids_to_delete = []
+    epoch_floor = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    for key, ids in groups_by_key.items():
+        if len(ids) < 2:
+            continue
+        # Sort by created_at ascending — oldest is index 0
+        sorted_ids = sorted(
+            ids,
+            key=lambda i: user_notes_by_id[i].get('created_at') or epoch_floor
+        )
+        kept_id = sorted_ids[0]
+        removed_ids = sorted_ids[1:]
+        groups_summary.append({
+            'kept_id': str(kept_id),
+            'removed_ids': [str(i) for i in removed_ids],
+            'removed_count': len(removed_ids)
+        })
+        ids_to_delete.extend(removed_ids)
+
+    if not confirm:
+        return jsonify({
+            'success': True,
+            'dry_run': True,
+            'removed_count': len(ids_to_delete),
+            'kept_count': len(groups_summary),
+            'groups': groups_summary
+        })
+
+    if not ids_to_delete:
+        return jsonify({
+            'success': True,
+            'removed_count': 0,
+            'kept_count': 0,
+            'groups': []
+        })
+
+    # 5. Cleanup shares / versions / unlock-notifications / Typesense /
+    # personal_posts_conf for the marked duplicates — same housekeeping the
+    # normal delete endpoint does.
+    shares = m.note_shares_conf.find({'note_id': {'$in': ids_to_delete}})
+    for share in shares:
+        m.cleanup_share_media(share)
+        m.note_shares_conf.delete_one({'_id': share['_id']})
+
+    target_posts = m.personal_posts_conf.find({'_id': {'$in': ids_to_delete}})
+    for post in target_posts:
+        m.cleanup_post_media(post)
+
+    m.note_versions_conf.delete_many({'note_id': {'$in': ids_to_delete}})
+    m.unlock_notifications_conf.delete_many({'note_id': {'$in': ids_to_delete}})
+
+    try:
+        m.remove_notes_from_typesense(ids_to_delete)
+    except Exception:
+        pass
+
+    m.personal_posts_conf.delete_many({'_id': {'$in': ids_to_delete}})
+
+    m.app.logger.info(
+        f"Dedup for user {current_user.username}: removed {len(ids_to_delete)} duplicates "
+        f"across {len(groups_summary)} groups"
+    )
+
+    return jsonify({
+        'success': True,
+        'removed_count': len(ids_to_delete),
+        'kept_count': len(groups_summary),
+        'groups': groups_summary
+    })
+
+
 @api_bp.route('/notes/<note_id>/sync', methods=['POST'])
 @login_required
 def api_sync_note(note_id):

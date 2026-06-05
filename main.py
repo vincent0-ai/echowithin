@@ -3,6 +3,7 @@ from gevent import monkey
 monkey.patch_all()
 
 import datetime
+import hashlib
 import re
 
 from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, send_file, abort
@@ -237,7 +238,11 @@ def unauthorized_api():
             or request.headers.get('X-App-Token')
             or request.path.startswith('/api/'))
     
-    print(f"[DEBUG UNAUTHORIZED] Path: {request.path}, is_json: {request.is_json}, X-App-Token header present: {request.headers.get('X-App-Token') is not None}, is_api: {is_api}", flush=True)
+    # PRIVACY: gate the raw-path debug print to non-production environments.
+    # The path itself can include secret share_ids (e.g. /share/<token>) and other
+    # sensitive identifiers — never echo it into production logs.
+    if app.debug:
+        print(f"[DEBUG UNAUTHORIZED] Path: {request.path}, is_json: {request.is_json}, X-App-Token header present: {request.headers.get('X-App-Token') is not None}, is_api: {is_api}", flush=True)
     
     if is_api:
         return jsonify({'error': 'Authentication required. Please log in.'}), 401
@@ -1204,7 +1209,9 @@ def handle_join_note(data):
         if lock_info:
             emit('lock_status', lock_info, room=request.sid)
             
-        app.logger.info(f"User {user_name} joined note room: {share_id}")
+        # PRIVACY: share_id IS the secret link — never log it in plaintext.
+        share_fp = hashlib.sha256(str(share_id).encode('utf-8')).hexdigest()[:10]
+        app.logger.info(f"User {user_name} joined note room: fp={share_fp}")
 
 @socketio.on('leave_note')
 def handle_leave_note(data):
@@ -1223,7 +1230,9 @@ def handle_leave_note(data):
             note_locks.pop(share_id, None)
             emit('lock_released', {'share_id': share_id}, room=share_id)
             
-        app.logger.info(f"User left note room: {share_id}")
+        # PRIVACY: share_id IS the secret link — never log it in plaintext.
+        share_fp = hashlib.sha256(str(share_id).encode('utf-8')).hexdigest()[:10]
+        app.logger.info(f"User left note room: fp={share_fp}")
 
 @socketio.on('acquire_lock')
 def handle_acquire_lock(data):
@@ -1287,7 +1296,9 @@ def handle_join_inbox():
     """Each user joins their own private room for real-time DM delivery."""
     user_room = f"user_{current_user.id}"
     join_room(user_room)
-    app.logger.info(f"User {current_user.username} joined private inbox room: {user_room}")
+    # PRIVACY: user_room embeds the user's ObjectId. Keep this at DEBUG to avoid
+    # leaking PII (username + internal id mapping) in production logs.
+    app.logger.debug(f"User {current_user.username} joined private inbox room")
 
 
 

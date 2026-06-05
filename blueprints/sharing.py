@@ -289,7 +289,10 @@ def view_shared_note(share_id):
                     'surprise_theme': surprise_theme,
                     'is_read': False
                 })
-                current_app.logger.info(f"Recorded access history for share {share_id} by {visitor_name}")
+                # PRIVACY: share_id IS the secret link — never log it in plaintext.
+                # Use a short, non-reversible fingerprint for log correlation instead.
+                share_fp = hashlib.sha256(share_id.encode('utf-8')).hexdigest()[:10]
+                current_app.logger.info(f"Recorded access history for share fp={share_fp} by {visitor_name}")
                 session[notif_id_key] = str(res.inserted_id)
                 session[f'notified_{share_id}'] = True # Backward compatibility
             elif current_user.is_authenticated:
@@ -1161,7 +1164,9 @@ def api_get_share_history(share_id):
             })
         return jsonify(result)
     except Exception as e:
-        current_app.logger.error(f"Error fetching share history for {share_id}: {e}")
+        # PRIVACY: share_id IS the secret link — never log it in plaintext.
+        share_fp = hashlib.sha256(str(share_id).encode('utf-8')).hexdigest()[:10]
+        current_app.logger.error(f"Error fetching share history for fp={share_fp}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 

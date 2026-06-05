@@ -1,4 +1,5 @@
 import datetime
+import os
 from bson.objectid import ObjectId
 from flask_login import UserMixin, current_user
 from flask import request
@@ -6,6 +7,14 @@ from cachetools import TTLCache
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS
 import database
 from utils import get_user_tier, is_on_trial, get_trial_days_remaining
+
+# PRIVACY: REQ_LOADER debug prints leak request paths, partial tokens, internal
+# user IDs and usernames. Default OFF in production; opt in with the env var
+# ECHOWITHIN_REQ_LOADER_DEBUG=1 (or FLASK_DEBUG=1) for local development.
+_REQ_LOADER_DEBUG = (
+    os.environ.get('ECHOWITHIN_REQ_LOADER_DEBUG', '').lower() in ('1', 'true', 'yes')
+    or os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+)
 
 
 class User(UserMixin):
@@ -104,26 +113,36 @@ def load_user_from_request(req):
     if not token:
         # Don't log normal web requests that have no tokens
         if req.path.startswith('/api/') and req.path != '/api/messages/schedule/process':
-            print(f"[DEBUG REQ_LOADER] Path: {req.path}. No token found in headers or cookies.", flush=True)
+            # PRIVACY: gate all REQ_LOADER prints behind an explicit dev flag.
+            # These prints leak request paths, partial tokens, internal user IDs,
+            # and usernames — never run them in production.
+            if _REQ_LOADER_DEBUG:
+                print(f"[DEBUG REQ_LOADER] Path: {req.path}. No token found in headers or cookies.", flush=True)
         return None
 
-    print(f"[DEBUG REQ_LOADER] Path: {req.path}. Token found in {token_src}: '{token[:12]}...'", flush=True)
+    if _REQ_LOADER_DEBUG:
+        print(f"[DEBUG REQ_LOADER] Path: {req.path}. Token found in {token_src}: '{token[:12]}...'", flush=True)
 
     doc = database.app_tokens_conf.find_one({'token': token})
     if not doc:
-        print(f"[DEBUG REQ_LOADER] Token '{token[:12]}...' NOT found in app_tokens collection.", flush=True)
+        if _REQ_LOADER_DEBUG:
+            print(f"[DEBUG REQ_LOADER] Token '{token[:12]}...' NOT found in app_tokens collection.", flush=True)
         return None
 
-    print(f"[DEBUG REQ_LOADER] Token document found for user_id: {doc.get('user_id')}", flush=True)
+    if _REQ_LOADER_DEBUG:
+        print(f"[DEBUG REQ_LOADER] Token document found for user_id: {doc.get('user_id')}", flush=True)
 
     user_data = database.users_conf.find_one({'_id': doc['user_id']})
     if not user_data:
-        print(f"[DEBUG REQ_LOADER] User with ID {doc['user_id']} not found in users collection.", flush=True)
+        if _REQ_LOADER_DEBUG:
+            print(f"[DEBUG REQ_LOADER] User with ID {doc['user_id']} not found in users collection.", flush=True)
         return None
 
     if user_data.get('is_banned'):
-        print(f"[DEBUG REQ_LOADER] User '{user_data.get('username')}' is banned.", flush=True)
+        if _REQ_LOADER_DEBUG:
+            print(f"[DEBUG REQ_LOADER] User '{user_data.get('username')}' is banned.", flush=True)
         return None
 
-    print(f"[DEBUG REQ_LOADER] User authenticated successfully: '{user_data.get('username')}'", flush=True)
+    if _REQ_LOADER_DEBUG:
+        print(f"[DEBUG REQ_LOADER] User authenticated successfully: '{user_data.get('username')}'", flush=True)
     return User(user_data)

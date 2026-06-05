@@ -590,40 +590,44 @@
         </div>
         {% endif %}
 
-        <!-- Marketing CTA for Unauthenticated Users -->
+        <!-- Marketing CTA for Unauthenticated Users — calm, dismissible, one-tap "Create your own" -->
         {% if not current_user.is_authenticated %}
         <div class="marketing-cta-section" id="marketing-cta">
             <div class="cta-grid">
-                <!-- Primary CTA — contextual to note type -->
-                <div class="cta-card cta-primary">
+                <div class="cta-card cta-primary" id="cta-card">
+                    <button type="button" class="cta-dismiss-btn" id="dismiss-cta" aria-label="Dismiss"
+                        title="Hide this for 30 days">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                     <div class="cta-content">
                         {% if surprise_theme == 'birthday' %}
-                        <h3 class="cta-heading">Want to surprise someone on their birthday?</h3>
-                        <p class="cta-text">Create a magical birthday note just like this one — with animations, photos,
-                            music, and a beautiful reveal effect. Make their day unforgettable.</p>
+                        <h3 class="cta-heading">Surprise someone on their birthday</h3>
+                        <p class="cta-text">A birthday note with photos, music, and an envelope reveal.</p>
                         {% elif surprise_theme == 'anniversary' %}
                         <h3 class="cta-heading">Celebrate your love story</h3>
-                        <p class="cta-text">Create a heartfelt anniversary surprise with custom photos, romantic music,
-                            and
-                            a stunning envelope reveal. Your partner will love it.</p>
+                        <p class="cta-text">An anniversary note with photos, music, and a heartfelt reveal.</p>
                         {% elif surprise_theme == 'celebration' %}
                         <h3 class="cta-heading">Got something to celebrate?</h3>
-                        <p class="cta-text">Craft a stunning celebration note to share the joy — with confetti
-                            animations,
-                            photos, and music. Perfect for graduations, promotions, or any milestone.</p>
+                        <p class="cta-text">A celebration note with confetti, photos, and music.</p>
                         {% elif surprise_theme != 'none' %}
                         <h3 class="cta-heading">Express your love beautifully</h3>
-                        <p class="cta-text">Create a beautiful surprise note with custom photos, romantic music, and a
-                            heartfelt message wrapped in an interactive envelope reveal.</p>
+                        <p class="cta-text">A surprise note with photos, music, and an interactive reveal.</p>
                         {% else %}
                         <h3 class="cta-heading">Create your own notes like this</h3>
-                        <p class="cta-text">Write, organize, and share beautiful notes with markdown formatting,
-                            real-time
-                            collaboration, and secure encryption.</p>
+                        <p class="cta-text">Write, share, and surprise — with markdown, collaboration, and end-to-end
+                            encryption.</p>
                         {% endif %}
-                        <a href="{{ url_for('auth.login', next=request.path) }}" class="cta-button cta-button-primary" id="cta-join-btn">
-                            Get Started Free
-                        </a>
+                        <div class="cta-chips" aria-hidden="true">
+                            <span class="cta-chip">Markdown</span>
+                            <span class="cta-chip">End-to-end encrypted</span>
+                            <span class="cta-chip">Free to start</span>
+                        </div>
+                        <div class="cta-actions">
+                            <a href="{{ url_for('auth.register', next=request.path) }}"
+                                class="cta-button cta-button-primary" id="cta-join-btn">Create your own</a>
+                            <a href="{{ url_for('auth.login', next=request.path) }}"
+                                class="cta-link-secondary">Already have an account? Sign in</a>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2390,10 +2394,10 @@
     }
 
     .marketing-cta-section {
-        margin-top: 3rem;
+        margin-top: 1.75rem;
         padding: 0 1rem;
-        animation: ctaSlideUp 0.7s ease-out both;
-        animation-delay: 1.5s;
+        animation: ctaSlideUp 0.6s ease-out both;
+        animation-delay: 0.6s;
     }
 
     .cta-grid {
@@ -2405,67 +2409,124 @@
 
     .cta-card {
         position: relative;
-        background: #fff;
-        border: 1px solid rgba(62, 34, 23, 0.08);
-        border-radius: 18px;
+        background: #fdfaf8;
+        border: 1px solid #f0e6dc;
+        border-top: 3px solid var(--primary-color);
+        border-radius: 12px;
         overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        box-shadow: 0 4px 15px rgba(62, 34, 23, 0.05);
+        transition: box-shadow 0.2s ease;
     }
 
     .cta-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 35px rgba(62, 34, 23, 0.12);
+        box-shadow: 0 6px 18px rgba(62, 34, 23, 0.08);
     }
 
     .cta-primary {
-        background: linear-gradient(135deg, #fff 0%, #fdfaf8 100%);
-        border-top: 5px solid var(--primary-color);
+        /* No new gradients — keep flat with the platform's cream tone. */
+        background: #fdfaf8;
+    }
+
+    .cta-dismiss-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: #aaa;
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 50%;
+        transition: background 0.2s, color 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cta-dismiss-btn:hover {
+        background: rgba(62, 34, 23, 0.08);
+        color: #3e2217;
     }
 
     .cta-content {
         position: relative;
         z-index: 1;
-        padding: 2rem;
+        padding: 1.25rem 1.5rem 1.5rem;
     }
 
     .cta-heading {
-        font-size: 1.3rem;
-        font-weight: 800;
+        font-size: 1.05rem;
+        font-weight: 700;
         color: var(--primary-dark-color);
-        margin: 0 0 0.75rem 0;
-        line-height: 1.3;
+        margin: 0 0 0.35rem 0;
+        line-height: 1.35;
     }
 
     .cta-text {
-        font-size: 0.95rem;
+        font-size: 0.88rem;
         color: #555;
-        line-height: 1.6;
-        margin: 0 0 1.5rem 0;
+        line-height: 1.5;
+        margin: 0 0 0.85rem 0;
+    }
+
+    .cta-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1rem;
+    }
+
+    .cta-chip {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #7a5d52;
+        background: #f0e6dc;
+        padding: 0.2rem 0.55rem;
+        border-radius: 10px;
+        white-space: nowrap;
+    }
+
+    .cta-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.85rem;
     }
 
     .cta-button {
         display: inline-flex;
         align-items: center;
         gap: 0.6rem;
-        padding: 0.8rem 1.75rem;
-        border-radius: 12px;
+        padding: 0.6rem 1.25rem;
+        border-radius: 8px;
         font-weight: 700;
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         text-decoration: none;
-        transition: all 0.3s ease;
+        transition: background 0.2s ease;
         border: none;
     }
 
     .cta-button-primary {
         background: var(--primary-color);
         color: white;
-        box-shadow: 0 5px 15px rgba(62, 34, 23, 0.25);
     }
 
     .cta-button-primary:hover {
         background: var(--primary-dark-color);
-        transform: scale(1.02);
+    }
+
+    .cta-link-secondary {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: #7a5d52;
+        text-decoration: none;
+    }
+
+    .cta-link-secondary:hover {
+        color: var(--primary-color);
+        text-decoration: underline;
     }
 
     .cta-button-secondary {
@@ -2548,12 +2609,20 @@
         }
 
         .cta-content {
-            padding: 1.5rem;
+            padding: 1.1rem 1.25rem 1.25rem;
         }
 
-        .cta-button {
+        .cta-actions {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.5rem;
+        }
+
+        .cta-button,
+        .cta-link-secondary {
             width: 100%;
             justify-content: center;
+            text-align: center;
         }
     }
 </style>
@@ -2584,6 +2653,34 @@
                         localStorage.setItem('ew_shared_note_tips_dismissed', '1');
                     });
                 }
+            }
+        })();
+
+        // --- Marketing CTA Dismiss (respects a 30-day cooldown so it doesn't nag) ---
+        (function () {
+            const ctaSection = document.getElementById('marketing-cta');
+            const dismissBtn = document.getElementById('dismiss-cta');
+            if (!ctaSection) return;
+
+            const DISMISS_KEY = 'ew_shared_note_cta_dismissed_at';
+            const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+            const dismissedAt = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
+            if (dismissedAt && (Date.now() - dismissedAt) < COOLDOWN_MS) {
+                ctaSection.style.display = 'none';
+                return;
+            }
+
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', function () {
+                    ctaSection.style.transition = 'opacity 0.25s, max-height 0.3s, margin 0.3s, padding 0.3s';
+                    ctaSection.style.overflow = 'hidden';
+                    ctaSection.style.opacity = '0';
+                    ctaSection.style.maxHeight = '0';
+                    ctaSection.style.margin = '0';
+                    ctaSection.style.padding = '0';
+                    setTimeout(function () { ctaSection.style.display = 'none'; }, 300);
+                    localStorage.setItem(DISMISS_KEY, String(Date.now()));
+                });
             }
         })();
 

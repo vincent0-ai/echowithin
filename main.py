@@ -34,7 +34,8 @@ from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
     encrypt_note, decrypt_note, _candidate_user_ids,
     _decrypt_with_candidate_ids, _note_decryption_candidates,
     _decrypt_note_record, _get_community_fernet,
-    encrypt_community_note, decrypt_community_note)
+    encrypt_community_note, decrypt_community_note,
+    invalidate_note_decryption_cache)
 from utils import (linkify_filter, _linkify_target_blank, markdown_filter,
     from_timestamp_filter, to_iso_filter, to_local_filter, localtime_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,

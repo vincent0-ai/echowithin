@@ -3083,7 +3083,7 @@
     <div class="note-preview-shell" role="dialog" aria-label="Note preview">
         <div class="note-preview-body">
             <div class="note-preview-header">
-                <div>
+                <div style="min-width:0; flex:1;">
                     <h2 id="note-preview-title">Note</h2>
                     <div class="note-preview-header-meta" id="note-preview-meta"></div>
                 </div>
@@ -3091,28 +3091,47 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
+            <div class="note-preview-edit" id="note-preview-edit">
+                <textarea id="note-preview-edit-textarea" placeholder="Edit your note..." aria-label="Note content"></textarea>
+                <div class="note-preview-edit-row">
+                    <input type="text" id="note-preview-edit-reference" placeholder="Reference (optional)">
+                    <input type="text" id="note-preview-edit-tags" placeholder="Tags (comma separated)">
+                </div>
+                <div class="note-preview-edit-row">
+                    <input type="text" id="note-preview-edit-summary" placeholder="Edit summary (optional)" maxlength="180">
+                    <span class="note-preview-edit-status" id="note-preview-edit-status"></span>
+                </div>
+                <div class="note-preview-edit-actions">
+                    <button type="button" class="note-preview-edit-btn" id="note-preview-edit-cancel" aria-label="Cancel edit">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                    <button type="button" class="note-preview-edit-btn primary" id="note-preview-edit-save" aria-label="Save note">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                </div>
+            </div>
             <div class="note-preview-content" id="note-preview-content"></div>
         </div>
         <div class="note-preview-actions" id="note-preview-actions">
-            <button type="button" class="note-preview-action primary" data-action="edit" title="Edit note">
+            <button type="button" class="note-preview-action primary" data-action="edit" title="Edit note" aria-label="Edit note">
                 <i class="fas fa-pen"></i><span>Edit</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="copy" title="Copy note">
+            <button type="button" class="note-preview-action" data-action="copy" title="Copy note" aria-label="Copy note">
                 <i class="far fa-copy"></i><span>Copy</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="share" title="Share note">
+            <button type="button" class="note-preview-action" data-action="share" title="Share note" aria-label="Share note">
                 <i class="fas fa-share-alt"></i><span>Share</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="lock" title="Toggle lock">
+            <button type="button" class="note-preview-action" data-action="lock" title="Toggle lock" aria-label="Toggle lock">
                 <i class="fas fa-lock"></i><span>Lock</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="history" title="Version history">
+            <button type="button" class="note-preview-action" data-action="history" title="Version history" aria-label="Version history">
                 <i class="fas fa-clock-rotate-left"></i><span>History</span>
             </button>
-            <button type="button" class="note-preview-action" data-action="export" title="Export note">
+            <button type="button" class="note-preview-action" data-action="export" title="Export note" aria-label="Export note">
                 <i class="fas fa-download"></i><span>Export</span>
             </button>
-            <button type="button" class="note-preview-action danger" data-action="delete" title="Delete note">
+            <button type="button" class="note-preview-action danger" data-action="delete" title="Delete note" aria-label="Delete note">
                 <i class="far fa-trash-alt"></i><span>Delete</span>
             </button>
         </div>
@@ -3522,8 +3541,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
-        padding: 0.85rem 1.25rem;
+        gap: 0.6rem;
+        padding: 0.6rem 0.9rem;
         border-bottom: 1px solid #eee;
         background: #fdfaf6;
     }
@@ -3531,21 +3550,29 @@
     .note-preview-header h2 {
         margin: 0;
         color: #3e2217;
-        font-size: 1.05rem;
+        font-size: 0.88rem;
         font-weight: 600;
+        line-height: 1.25;
+        max-height: 2.5em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
     }
 
     .note-preview-header-meta {
-        font-size: 0.78rem;
+        font-size: 0.7rem;
         color: #888;
+        margin-top: 1px;
     }
 
     .note-preview-content {
         flex: 1;
         overflow-y: auto;
-        padding: 1.5rem 1.75rem 2.5rem;
-        font-size: 1rem;
-        line-height: 1.65;
+        padding: 1.1rem 1.4rem 2rem;
+        font-size: 0.95rem;
+        line-height: 1.6;
         color: #2a2a2a;
     }
 
@@ -3555,32 +3582,33 @@
 
     .note-preview-content .reference-line {
         display: inline-block;
-        margin-bottom: 0.85rem;
-        font-size: 0.8rem;
+        margin-bottom: 0.6rem;
+        margin-right: 0.3rem;
+        font-size: 0.72rem;
         color: #3e2217;
         background: #fdf5ec;
         border: 1px solid #f0e0c8;
-        padding: 0.15rem 0.55rem;
+        padding: 0.1rem 0.5rem;
         border-radius: 999px;
         font-weight: 600;
     }
 
     .note-preview-actions {
-        width: 88px;
+        width: 64px;
         background: #fafafa;
         border-left: 1px solid #eee;
-        padding: 1rem 0.5rem;
+        padding: 0.6rem 0.35rem;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0.45rem;
+        gap: 0.3rem;
         overflow-y: auto;
     }
 
     .note-preview-action {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
         border: 1px solid #e3d9cf;
         background: #fff;
         color: #3e2217;
@@ -3588,21 +3616,27 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 4px;
-        font-size: 0.65rem;
+        gap: 2px;
+        font-size: 0.55rem;
         font-weight: 600;
         cursor: pointer;
+        padding: 0;
         transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
     }
 
     .note-preview-action i {
-        font-size: 1.1rem;
+        font-size: 0.9rem;
+        line-height: 1;
+    }
+
+    .note-preview-action span {
+        line-height: 1;
     }
 
     .note-preview-action:hover {
         background: #fdf5ec;
         transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(62, 34, 23, 0.08);
+        box-shadow: 0 3px 8px rgba(62, 34, 23, 0.08);
     }
 
     .note-preview-action.danger {
@@ -3627,16 +3661,94 @@
         background: none;
         border: none;
         color: #777;
-        font-size: 1.4rem;
-        width: 36px;
-        height: 36px;
+        font-size: 1.15rem;
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
         cursor: pointer;
         transition: background 0.2s;
+        flex-shrink: 0;
     }
 
     .note-preview-close:hover {
         background: rgba(0, 0, 0, 0.06);
+    }
+
+    /* Inline edit mode inside the preview */
+    .note-preview-edit {
+        display: none;
+        flex-direction: column;
+        gap: 0.55rem;
+        padding: 0.6rem 0.9rem 0.8rem;
+        border-bottom: 1px solid #eee;
+        background: #fffaf2;
+    }
+    .note-preview-edit.active {
+        display: flex;
+    }
+    .note-preview-edit textarea {
+        width: 100%;
+        min-height: 180px;
+        max-height: 38vh;
+        resize: vertical;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid #e3d9cf;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        color: #2a2a2a;
+        background: #fff;
+        font-family: inherit;
+    }
+    .note-preview-edit textarea:focus {
+        outline: none;
+        border-color: #b8854a;
+        box-shadow: 0 0 0 2px rgba(184, 133, 74, 0.15);
+    }
+    .note-preview-edit-row {
+        display: flex;
+        gap: 0.45rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .note-preview-edit-row input[type="text"] {
+        flex: 1;
+        min-width: 0;
+        padding: 0.4rem 0.55rem;
+        border: 1px solid #e3d9cf;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        background: #fff;
+    }
+    .note-preview-edit-actions {
+        display: flex;
+        gap: 0.4rem;
+        justify-content: flex-end;
+    }
+    .note-preview-edit-btn {
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        border: 1px solid #e3d9cf;
+        background: #fff;
+        color: #3e2217;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .note-preview-edit-btn:hover { background: #fdf5ec; }
+    .note-preview-edit-btn.primary {
+        background: #3e2217;
+        color: #fff;
+        border-color: #3e2217;
+    }
+    .note-preview-edit-btn.primary:hover { background: #5a3422; }
+    .note-preview-edit-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .note-preview-edit-status {
+        font-size: 0.7rem;
+        color: #888;
     }
 
     @media (max-width: 720px) {
@@ -3649,15 +3761,32 @@
         .note-preview-actions {
             width: 100%;
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
             border-left: none;
             border-top: 1px solid #eee;
-            padding: 0.6rem;
-            justify-content: center;
+            padding: 0.4rem 0.5rem;
+            justify-content: space-between;
+            gap: 0.25rem;
+            overflow-x: auto;
         }
         .note-preview-action {
-            width: 56px;
-            height: 56px;
+            width: 38px;
+            height: 38px;
+            font-size: 0;
+            flex: 0 0 auto;
+        }
+        .note-preview-action i {
+            font-size: 0.85rem;
+        }
+        .note-preview-action span {
+            display: none;
+        }
+        .note-preview-header h2 {
+            font-size: 0.82rem;
+        }
+        .note-preview-content {
+            padding: 0.85rem 1rem 1.5rem;
+            font-size: 0.9rem;
         }
     }
 
@@ -6745,18 +6874,30 @@
         // single-screen reader that mirrors the editor's fullscreen feel
         // while keeping the action buttons docked on the right (vertical).
         // Edit, Share, Lock, History, Export and Delete all work from this
-        // view by delegating to the existing handlers.
+        // view. Edit is done inline (the preview pane is large enough), while
+        // the other actions delegate to the existing handlers — the preview
+        // is closed first so the modal opens cleanly above it.
         const notePreviewOverlay = document.getElementById('note-preview-overlay');
         const notePreviewCloseBtn = document.getElementById('note-preview-close');
         const notePreviewTitleEl = document.getElementById('note-preview-title');
         const notePreviewMetaEl = document.getElementById('note-preview-meta');
         const notePreviewContentEl = document.getElementById('note-preview-content');
         const notePreviewActionsEl = document.getElementById('note-preview-actions');
+        const notePreviewEditEl = document.getElementById('note-preview-edit');
+        const notePreviewEditTextarea = document.getElementById('note-preview-edit-textarea');
+        const notePreviewEditReference = document.getElementById('note-preview-edit-reference');
+        const notePreviewEditTags = document.getElementById('note-preview-edit-tags');
+        const notePreviewEditSummary = document.getElementById('note-preview-edit-summary');
+        const notePreviewEditStatus = document.getElementById('note-preview-edit-status');
+        const notePreviewEditSaveBtn = document.getElementById('note-preview-edit-save');
+        const notePreviewEditCancelBtn = document.getElementById('note-preview-edit-cancel');
         let activePreviewNoteId = null;
         let activePreviewCard = null;
+        let activePreviewBaseUpdatedAt = '';
+        let previewEditMode = false;
 
         function readCardMetadata(card) {
-            if (!card) return { reference: '', tags: [], updatedAt: '', isLocked: false };
+            if (!card) return { reference: '', tags: [], updatedAt: '' };
             const reference = card.querySelector('.note-ref-display')
                 ? card.querySelector('.note-ref-display').textContent.trim() : '';
             const tags = Array.from(card.querySelectorAll('.note-tag-badge'))
@@ -6764,7 +6905,7 @@
                 .filter(Boolean);
             const updatedAt = card.querySelector('.note-date')
                 ? card.querySelector('.note-date').textContent.trim() : '';
-            return { reference, tags, updatedAt, isLocked: false };
+            return { reference, tags, updatedAt };
         }
 
         function getNoteRawContent(card) {
@@ -6773,6 +6914,57 @@
             if (!contentEl) return '';
             // data-raw is the source of truth (set during lazy-load).
             return contentEl.getAttribute('data-raw') || contentEl.textContent || '';
+        }
+
+        function htmlEscape(str) {
+            return (str || '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        function renderPreviewBody(raw, reference, tags) {
+            let html = '';
+            if (raw && raw.trim()) {
+                try {
+                    html = window.renderMarkdownWithMath
+                        ? window.renderMarkdownWithMath(raw)
+                        : htmlEscape(raw);
+                } catch (e) {
+                    html = htmlEscape(raw);
+                }
+            } else {
+                html = '<p style="color:#888;font-style:italic;">No content.</p>';
+            }
+
+            let headerExtras = '';
+            if (reference) {
+                headerExtras += `<span class="reference-line">${htmlEscape(reference)}</span>`;
+            }
+            if (tags.length) {
+                headerExtras += tags.map(t =>
+                    `<span class="reference-line" style="background:#eef5ff;border-color:#cfdcef;color:#1e3a5f;">#${htmlEscape(t)}</span>`
+                ).join(' ');
+            }
+            return headerExtras + html;
+        }
+
+        function setPreviewActionsVisibility(card) {
+            const hide = (action, hidden) => {
+                const btn = notePreviewActionsEl && notePreviewActionsEl.querySelector(`[data-action="${action}"]`);
+                if (btn) btn.style.display = hidden ? 'none' : '';
+            };
+            const isSurprise = !!card.querySelector('.surprise-badge, [data-surprise="true"]');
+            hide('history', isSurprise);
+            hide('lock', isSurprise);
+        }
+
+        function setPreviewLockIcon(card) {
+            const lockBtn = notePreviewActionsEl && notePreviewActionsEl.querySelector('[data-action="lock"]');
+            if (!lockBtn) return;
+            const isLocked = !!(card.dataset.isLocked === 'true' || card.classList.contains('locked'));
+            lockBtn.querySelector('i').className = isLocked ? 'fas fa-lock-open' : 'fas fa-lock';
+            const label = lockBtn.querySelector('span');
+            if (label) label.textContent = isLocked ? 'Unlock' : 'Lock';
         }
 
         window.openNoteFullscreenPreview = async function (noteId) {
@@ -6785,9 +6977,6 @@
             const { reference, tags, updatedAt } = readCardMetadata(card);
             const raw = getNoteRawContent(card);
 
-            // Title fallback: the platform never requires a title, so show the
-            // first line of the note (or a clean placeholder) to keep the
-            // header meaningful.
             const firstLine = (raw || '').split('\n').find(l => l.trim()) || '';
             const decoded = (function () {
                 const t = document.createElement('textarea');
@@ -6803,62 +6992,185 @@
                 ? titleText.substring(0, 80) + '…' : titleText;
             if (notePreviewMetaEl) notePreviewMetaEl.textContent = subtitleParts.join(' · ');
 
-            // Render the content with the existing markdown pipeline.
-            let html = '';
-            if (raw && raw.trim()) {
-                try {
-                    html = window.renderMarkdownWithMath
-                        ? window.renderMarkdownWithMath(raw)
-                        : raw.replace(/</g, '&lt;');
-                } catch (e) {
-                    html = raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                }
-            } else {
-                html = '<p style="color:#888;font-style:italic;">No content.</p>';
-            }
-
-            let headerExtras = '';
-            if (reference) {
-                const safeRef = reference.replace(/</g, '&lt;');
-                headerExtras += `<span class="reference-line">${safeRef}</span>`;
-            }
-            if (tags.length) {
-                headerExtras += tags.map(t =>
-                    `<span class="reference-line" style="background:#eef5ff;border-color:#cfdcef;color:#1e3a5f;">#${t.replace(/</g, '&lt;')}</span>`
-                ).join(' ');
-            }
-
-            notePreviewContentEl.innerHTML = headerExtras + html;
+            notePreviewContentEl.innerHTML = renderPreviewBody(raw, reference, tags);
             notePreviewContentEl.scrollTop = 0;
 
-            // Toggle the lock action icon to match the current note state.
-            const lockBtn = notePreviewActionsEl && notePreviewActionsEl.querySelector('[data-action="lock"]');
-            if (lockBtn) {
-                const isLocked = !!(card.dataset.isLocked === 'true' || card.classList.contains('locked'));
-                lockBtn.querySelector('i').className = isLocked
-                    ? 'fas fa-lock-open'
-                    : 'fas fa-lock';
-                lockBtn.querySelector('span').textContent = isLocked ? 'Unlock' : 'Lock';
-            }
+            // Capture the updated_at for edit conflict detection.
+            const editBtnEl = card.querySelector('.edit-note-btn');
+            activePreviewBaseUpdatedAt = editBtnEl ? (editBtnEl.dataset.updatedAt || '') : '';
 
-            // Hide unsupported actions for surprise / saved-copy notes so the
-            // preview matches what the user can actually do from the card.
-            const isSurprise = !!card.querySelector('.surprise-badge, [data-surprise="true"]');
-            const isSavedCopy = !!(card.dataset.sourceShareId);
-            const hide = (action, hidden) => {
-                const btn = notePreviewActionsEl && notePreviewActionsEl.querySelector(`[data-action="${action}"]`);
-                if (btn) btn.style.display = hidden ? 'none' : '';
-            };
-            hide('history', isSurprise);
-            hide('lock', isSurprise);
+            setPreviewLockIcon(card);
+            setPreviewActionsVisibility(card);
+
+            // Make sure the inline editor starts in read-only mode every time
+            // a note is opened.
+            exitInlineEditMode(false);
 
             notePreviewOverlay.classList.add('active');
             notePreviewOverlay.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
         };
 
+        function enterInlineEditMode() {
+            if (!activePreviewCard || !notePreviewEditEl) return;
+            const raw = getNoteRawContent(activePreviewCard);
+            const { reference, tags } = readCardMetadata(activePreviewCard);
+            if (notePreviewEditTextarea) notePreviewEditTextarea.value = raw;
+            if (notePreviewEditReference) notePreviewEditReference.value = reference || '';
+            if (notePreviewEditTags) notePreviewEditTags.value = Array.isArray(tags) ? tags.join(', ') : '';
+            if (notePreviewEditSummary) notePreviewEditSummary.value = '';
+            if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
+            if (notePreviewEditSaveBtn) notePreviewEditSaveBtn.disabled = false;
+            notePreviewEditEl.classList.add('active');
+            notePreviewContentEl.style.display = 'none';
+            previewEditMode = true;
+            setTimeout(() => {
+                if (notePreviewEditTextarea) {
+                    notePreviewEditTextarea.focus();
+                    notePreviewEditTextarea.setSelectionRange(
+                        notePreviewEditTextarea.value.length,
+                        notePreviewEditTextarea.value.length
+                    );
+                }
+            }, 50);
+        }
+
+        function exitInlineEditMode(restoreScroll) {
+            if (!notePreviewEditEl) return;
+            notePreviewEditEl.classList.remove('active');
+            if (notePreviewContentEl) notePreviewContentEl.style.display = '';
+            previewEditMode = false;
+            if (notePreviewEditStatus) notePreviewEditStatus.textContent = '';
+            if (restoreScroll && notePreviewContentEl) {
+                notePreviewContentEl.scrollTop = 0;
+            }
+        }
+
+        async function handleInlineEditSave() {
+            if (!activePreviewNoteId || !activePreviewCard) return;
+            const content = (notePreviewEditTextarea ? notePreviewEditTextarea.value : '').trim();
+            if (!content) {
+                if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Content cannot be empty.';
+                return;
+            }
+            const reference = notePreviewEditReference ? notePreviewEditReference.value.trim() : '';
+            const tags = notePreviewEditTags
+                ? notePreviewEditTags.value.split(',').map(t => t.trim()).filter(Boolean)
+                : [];
+            const editSummary = notePreviewEditSummary ? notePreviewEditSummary.value.trim() : '';
+
+            if (notePreviewEditSaveBtn) {
+                notePreviewEditSaveBtn.disabled = true;
+                notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving';
+            }
+            if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Saving…';
+
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+            try {
+                const response = await fetch(`/personal_post/edit/${activePreviewNoteId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        content: content,
+                        reference: reference,
+                        tags: tags,
+                        edit_summary: editSummary,
+                        base_updated_at: activePreviewBaseUpdatedAt,
+                        force_overwrite: false
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    // Sync the underlying card so subsequent opens show fresh data.
+                    const noteCard = activePreviewCard;
+                    const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                    if (contentEl) {
+                        contentEl.setAttribute('data-raw', content);
+                        contentEl.innerHTML = window.renderMarkdownWithMath
+                            ? window.renderMarkdownWithMath(content)
+                            : htmlEscape(content);
+                    }
+                    const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                    if (editBtnEl) {
+                        const tmp = document.createElement('textarea');
+                        tmp.textContent = content;
+                        editBtnEl.dataset.raw = tmp.innerHTML;
+                        if (result.updated_at) {
+                            editBtnEl.dataset.updatedAt = result.updated_at;
+                            activePreviewBaseUpdatedAt = result.updated_at;
+                        }
+                        editBtnEl.dataset.reference = reference;
+                        editBtnEl.dataset.tags = JSON.stringify(tags);
+                    }
+                    const copyBtnEl = noteCard.querySelector('.copy-btn');
+                    if (copyBtnEl) copyBtnEl.dataset.copyText = content;
+                    const dateEl = noteCard.querySelector('.note-date');
+                    if (dateEl) {
+                        const sourceIcon = dateEl.querySelector('i');
+                        const sourceBadge = dateEl.querySelector('.source-badge');
+                        dateEl.innerHTML = '';
+                        if (sourceIcon) dateEl.appendChild(sourceIcon);
+                        dateEl.appendChild(document.createTextNode(' Edited just now'));
+                        if (sourceBadge) dateEl.appendChild(sourceBadge);
+                    }
+                    const notesList = document.getElementById('notes-list-container');
+                    if (notesList && noteCard.parentElement === notesList) {
+                        notesList.prepend(noteCard);
+                        noteCard.style.animation = 'featureTipsFade 0.4s ease-out';
+                    }
+
+                    // Re-render the preview with the saved content and exit edit mode.
+                    const { reference: refAfter, tags: tagsAfter } = readCardMetadata(noteCard);
+                    notePreviewContentEl.innerHTML = renderPreviewBody(content, refAfter, tagsAfter);
+                    exitInlineEditMode(true);
+                    if (typeof window.showToast === 'function') {
+                        window.showToast('Note updated');
+                    }
+                } else if (response.status === 409 && result.error === 'conflict') {
+                    if (notePreviewEditStatus) {
+                        notePreviewEditStatus.textContent = 'Conflict detected — opening merge view…';
+                    }
+                    if (typeof window.openEditModal === 'function') {
+                        // Fall back to the full edit modal which has the merge flow.
+                        window.openEditModal(
+                            activePreviewNoteId,
+                            content,
+                            reference,
+                            tags,
+                            activePreviewBaseUpdatedAt
+                        );
+                    }
+                } else {
+                    if (notePreviewEditStatus) {
+                        notePreviewEditStatus.textContent = result.error || 'Failed to save changes.';
+                    }
+                }
+            } catch (err) {
+                console.error('Inline edit save failed:', err);
+                if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Network error while saving.';
+            } finally {
+                if (notePreviewEditSaveBtn) {
+                    notePreviewEditSaveBtn.disabled = false;
+                    notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+                }
+            }
+        }
+
+        if (notePreviewEditSaveBtn) {
+            notePreviewEditSaveBtn.addEventListener('click', handleInlineEditSave);
+        }
+        if (notePreviewEditCancelBtn) {
+            notePreviewEditCancelBtn.addEventListener('click', () => exitInlineEditMode(false));
+        }
+
         window.closeNoteFullscreenPreview = function () {
             if (!notePreviewOverlay) return;
+            exitInlineEditMode(false);
             notePreviewOverlay.classList.remove('active');
             notePreviewOverlay.setAttribute('aria-hidden', 'true');
             // Only restore scrolling if no other modal is open.
@@ -6870,6 +7182,7 @@
             }
             activePreviewNoteId = null;
             activePreviewCard = null;
+            activePreviewBaseUpdatedAt = '';
         };
 
         if (notePreviewCloseBtn) {
@@ -6885,8 +7198,17 @@
         }
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && notePreviewOverlay && notePreviewOverlay.classList.contains('active')) {
+            if (!notePreviewOverlay || !notePreviewOverlay.classList.contains('active')) return;
+            if (e.key === 'Escape' && !previewEditMode) {
                 window.closeNoteFullscreenPreview();
+            } else if (e.key === 'Escape' && previewEditMode) {
+                // Inside the inline editor, Escape cancels the edit (mirrors
+                // typical editor behavior) rather than closing the preview.
+                e.stopPropagation();
+                exitInlineEditMode(false);
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && previewEditMode) {
+                e.preventDefault();
+                handleInlineEditSave();
             }
         });
 
@@ -6900,26 +7222,10 @@
                 if (!noteId || !card) return;
 
                 if (action === 'edit') {
-                    // Trigger the same edit flow the small button uses.
-                    const editBtn = card.querySelector('.edit-note-btn');
-                    if (editBtn) {
-                        editBtn.click();
-                    } else {
-                        // Locked / read-only note: still open the edit modal so the
-                        // user can compose a new revision against the original.
-                        const raw = getNoteRawContent(card);
-                        const reference = card.querySelector('.edit-note-btn')
-                            ? (card.querySelector('.edit-note-btn').dataset.reference || '') : '';
-                        const tagsStr = card.querySelector('.edit-note-btn')
-                            ? (card.querySelector('.edit-note-btn').dataset.tags || '[]') : '[]';
-                        const updatedAt = card.querySelector('.edit-note-btn')
-                            ? (card.querySelector('.edit-note-btn').dataset.updatedAt || '') : '';
-                        let tags = [];
-                        try { tags = JSON.parse(tagsStr); } catch (e) { /* ignore */ }
-                        if (typeof window.openEditModal === 'function') {
-                            window.openEditModal(noteId, raw, reference, tags, updatedAt);
-                        }
-                    }
+                    // Edit inline within the preview instead of opening the
+                    // separate edit modal. The preview pane is large enough
+                    // and avoids z-index stacking issues.
+                    enterInlineEditMode();
                     return;
                 }
 
@@ -6949,6 +7255,8 @@
                 }
 
                 if (action === 'share') {
+                    // Close the preview before opening the share modal so it
+                    // doesn't sit behind the modal surface.
                     window.closeNoteFullscreenPreview();
                     openShareModalForNote(noteId);
                     return;
@@ -6962,18 +7270,21 @@
                 }
 
                 if (action === 'history') {
+                    window.closeNoteFullscreenPreview();
                     const versionBtn = card.querySelector('.version-history-btn');
                     if (versionBtn) versionBtn.click();
                     return;
                 }
 
                 if (action === 'export') {
+                    window.closeNoteFullscreenPreview();
                     const exportBtn = card.querySelector('.export-note-btn');
                     if (exportBtn) exportBtn.click();
                     return;
                 }
 
                 if (action === 'delete') {
+                    window.closeNoteFullscreenPreview();
                     const deleteBtn = card.querySelector('.delete-btn');
                     if (deleteBtn) deleteBtn.click();
                     return;

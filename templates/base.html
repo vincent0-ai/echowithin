@@ -84,7 +84,10 @@
             /* Hidden by default */
             justify-content: center;
             align-items: center;
-            z-index: 1000;
+            /* Higher than the note preview overlay (1100) so version history,
+               share, delete, etc. always render above the fullscreen preview
+               when triggered from the preview's action toolbar. */
+            z-index: 1200;
         }
 
         .custom-modal {

@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.6",
+  "versionCode": 8,
+  "versionName": "1.7",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🚀 Fixed the 'problem while parsing the package' error during updates by using external cache directories and updating FileProvider paths.\n⚡ Improved local DB querying and background syncing performance."
+  "changelog": "🔒 Fixed the 'wrong PIN logs me out of the app' bug — the server now returns success:false on bad PIN instead of a 401, which used to trip the app's global 401 interceptor and silently sign the user out.\n🔗 Shared Links tab is back: the server now exposes a single /api/v1/notes/shares endpoint that lists every active share you own, so the tab no longer silently misses shares for notes that are not currently in the local cache.\n✅ 'Mark all as read' in the Activity tab now works end-to-end: new /api/posts/mark-all-read and /api/activity/mark_read endpoints, plus an in-line spinner so the tap is never silently dropped.\n🧭 Note detail action bar reorganised — Edit / Copy / Share / Lock are now the always-visible bottom row; Sync, History, and Delete moved to a less-crowded inline row above the content.\n📶 Offline-first overhaul — a sliding 'You're offline' banner, 'Synced 5m ago' indicator, and an auto-sync the moment connectivity comes back. Pending changes are counted from the local DB so the banner can say 'N changes will sync when you reconnect'."
 }

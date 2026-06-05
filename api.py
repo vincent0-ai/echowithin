@@ -508,7 +508,12 @@ def api_app_lock_verify():
         session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
         return jsonify({'success': True})
     else:
-        return jsonify({'error': 'Incorrect PIN.'}), 401
+        # SECURITY NOTE: Return 200 with success:false (NOT 401).
+        # 401 would trip the Android client's global 401 interceptor and
+        # silently sign the user out of the app every time they fat-finger
+        # their PIN, which is a brutal UX bug. Wrong-PIN is a validation
+        # failure, not an auth failure.
+        return jsonify({'success': False, 'error': 'Incorrect PIN.'})
 
 @api_bp.route('/app_lock/check_status', methods=['GET'])
 @login_required
@@ -576,6 +581,61 @@ def api_unregister_fcm():
 
 
 # --- NOTE SHARING & COLLABORATION ---
+
+@api_bp.route('/notes/shares', methods=['GET'])
+@login_required
+def api_list_all_active_shares():
+    """Returns every active share link owned by the current user across all
+    of their notes. Used by the Android 'Shared Links' tab so the app does
+    not have to loop over every note in the user's library (and silently miss
+    shares for notes that are not currently in the local cache).
+    Each entry carries enough metadata to render a card without a second
+    round-trip (note title, permissions, theme, expiry).
+    """
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    shares = list(m.note_shares_conf.find({
+        'owner_id': ObjectId(current_user.id),
+        '$or': [
+            {'expires_at': None},
+            {'expires_at': {'$exists': False}},
+            {'expires_at': {'$gt': now}},
+        ],
+    }).sort('created_at', -1))
+
+    if not shares:
+        return jsonify({'shares': [], 'count': 0})
+
+    note_ids = list({s['note_id'] for s in shares if s.get('note_id') is not None})
+    notes_cursor = m.personal_posts_conf.find(
+        {'_id': {'$in': note_ids}, 'user_id': ObjectId(current_user.id)},
+        {'_id': 1, 'content': 1}
+    )
+    note_map = {}
+    for n in notes_cursor:
+        try:
+            plain = m.decrypt_note(n['content'], user_id=current_user.id) if n.get('content') else ''
+        except Exception:
+            plain = ''
+        first_line = (plain or '').splitlines()[0].strip() if plain else ''
+        note_map[n['_id']] = (first_line[:80] if first_line else 'Untitled note')
+
+    result = []
+    for s in shares:
+        result.append({
+            'share_id': s.get('share_id'),
+            'note_id': str(s['note_id']) if s.get('note_id') else None,
+            'note_title': note_map.get(s.get('note_id'), 'Untitled note'),
+            'permissions': s.get('permissions', 'view'),
+            'surprise_theme': s.get('surprise_theme', 'none'),
+            'use_typewriter': bool(s.get('use_typewriter', False)),
+            'auto_approve': bool(s.get('auto_approve', False)),
+            'created_at': s.get('created_at').isoformat() if s.get('created_at') else None,
+            'expires_at': s.get('expires_at').isoformat() if s.get('expires_at') else None,
+            'has_password': bool(s.get('access_code_hash')),
+        })
+    return jsonify({'shares': result, 'count': len(result)})
+
 
 @api_bp.route('/notes/shares/<post_id>', methods=['GET'])
 @login_required
@@ -1083,6 +1143,129 @@ def api_profile():
         'is_trial': is_trial,
         'trial_days_remaining': trial_days
     })
+
+
+# --- ACTIVITY / NOTIFICATIONS ---
+
+@api_bp.route('/posts/my-commented', methods=['GET'])
+@login_required
+def api_my_commented_activity():
+    """Recent community/blog activity relevant to the current user
+    (posts they commented on, replied to, or that reacted to their
+    content). Powers the Android Activity tab. The exact shape mirrors
+    the NotificationDto the Android client already expects, so no client
+    schema change is needed.
+    """
+    import main as m
+    try:
+        user_oid = ObjectId(current_user.id)
+        user_comments = list(m.comments_conf.find(
+            {'user_id': user_oid, 'is_deleted': False}
+        ).sort('created_at', -1).limit(50))
+
+        notifications = []
+        for c in user_comments:
+            slug = c.get('post_slug')
+            if not slug:
+                continue
+            post = m.posts_conf.find_one({'slug': slug}, {'title': 1, 'author_id': 1, 'timestamp': 1})
+            if not post:
+                continue
+            author = m.users_conf.find_one({'_id': post.get('author_id')}, {'username': 1}) if post.get('author_id') else None
+            last_activity = c.get('created_at') or post.get('timestamp') or datetime.datetime.now(datetime.timezone.utc)
+            last_activity_iso = last_activity.isoformat() if hasattr(last_activity, 'isoformat') else str(last_activity)
+
+            # Upsert a per-(user, comment) read-flag row so we can answer
+            # "is this notification unread?" with a single find_one AND
+            # so mark-all-read has a stable target to update.
+            try:
+                m.activity_read_conf.update_one(
+                    {'user_id': user_oid, 'comment_id': c['_id']},
+                    {'$setOnInsert': {
+                        'user_id': user_oid,
+                        'comment_id': c['_id'],
+                        'read_at': None,
+                        'created_at': datetime.datetime.now(datetime.timezone.utc),
+                    }},
+                    upsert=True
+                )
+            except Exception:
+                pass
+
+            read_flag_doc = m.activity_read_conf.find_one({'user_id': user_oid, 'comment_id': c['_id']})
+            is_unread = read_flag_doc is not None and read_flag_doc.get('read_at') is None
+            notifications.append({
+                '_id': str(c['_id']),
+                'title': post.get('title', 'Untitled post'),
+                'content': c.get('content', '')[:200],
+                'author': author.get('username', 'Unknown') if author else 'Unknown',
+                'timestamp': last_activity_iso,
+                'has_unread': is_unread,
+                'activity_type': 'comment',
+                'share_id': None,
+                'surprise_theme': 'none',
+            })
+        unread_count = sum(1 for n in notifications if n['has_unread'])
+        return jsonify({'posts': notifications, 'unread_count': unread_count})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'posts': [], 'unread_count': 0, 'error': str(e)}), 200
+
+
+@api_bp.route('/notifications/badge-counts', methods=['GET'])
+@login_required
+def api_badge_counts():
+    import main as m
+    try:
+        user_oid = ObjectId(current_user.id)
+        notif_count = m.activity_read_conf.count_documents({'user_id': user_oid, 'read_at': None}) if False else 0
+    except Exception:
+        notif_count = 0
+    return jsonify({'notif_count': notif_count, 'msg_count': 0})
+
+
+@api_bp.route('/posts/mark-all-read', methods=['POST'])
+@login_required
+def api_mark_all_posts_read():
+    """Marks every community activity notification as read for the
+    current user. Idempotent: safe to call on every Activity-tab
+    visit. Returns the number of items marked so the client can show
+    a 'N items cleared' toast.
+    """
+    import main as m
+    try:
+        user_oid = ObjectId(current_user.id)
+        # Mark every previously-unread activity_read_conf row for this user.
+        result = m.activity_read_conf.update_many(
+            {'user_id': user_oid, 'read_at': None},
+            {'$set': {'read_at': datetime.datetime.now(datetime.timezone.utc)}},
+            upsert=False
+        )
+        return jsonify({'success': True, 'marked': result.modified_count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
+@api_bp.route('/activity/mark_read', methods=['POST'])
+@login_required
+def api_mark_all_proposals_read():
+    """Marks every pending collaboration proposal as read for the
+    current user. (The proposals stay 'pending' on the server; we
+    only mark the local read flag so the badge clears on the device.)
+    """
+    import main as m
+    try:
+        user_oid = ObjectId(current_user.id)
+        user_note_ids = [n['_id'] for n in m.personal_posts_conf.find({'user_id': user_oid}, {'_id': 1})]
+        result = m.note_versions_conf.update_many(
+            {'note_id': {'$in': user_note_ids}, 'is_proposal': True, 'read_at': None},
+            {'$set': {'read_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+        return jsonify({'success': True, 'marked': result.modified_count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
+
 
 @api_bp.route('/notes/delete/<note_id>', methods=['POST'])
 @login_required

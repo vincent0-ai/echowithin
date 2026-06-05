@@ -489,6 +489,15 @@ activities_conf = db['activities']
 activities_conf.create_index([('user_id', 1), ('created_at', -1)])
 activities_conf.create_index([('user_id', 1), ('is_read', 1)])
 
+# --- Activity read-state (used by the Android 'mark all as read' button) ---
+# One row per (user, comment) or (user, note_version) that the device has
+# marked as read. `read_at` is null while the row is unacknowledged so
+# `update_many({'read_at': None}, {'$set': {'read_at': now}})` can flip them
+# in a single round-trip.
+activity_read_conf = db['activity_read']
+activity_read_conf.create_index([('user_id', 1), ('comment_id', 1)], unique=True, sparse=True)
+activity_read_conf.create_index([('user_id', 1), ('read_at', 1)])
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -596,6 +605,7 @@ database.scheduled_messages_conf = scheduled_messages_conf
 database.note_attachments_conf = note_attachments_conf
 database.comment_votes_conf = comment_votes_conf
 database.activities_conf = activities_conf
+database.activity_read_conf = activity_read_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---

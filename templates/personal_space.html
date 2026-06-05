@@ -6355,21 +6355,20 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = {{ user_max_chars }
-        };
-        const dangerThreshold = Math.floor(maxChars * 0.9);
-        const warningThreshold = Math.floor(maxChars * 0.75);
-        noteInput.addEventListener('input', () => {
-            const len = noteInput.value.length;
-            charCount.textContent = len;
-            charCountContainer.classList.remove('warning', 'danger');
-            if (len > dangerThreshold) {
-                charCountContainer.classList.add('danger');
-            } else if (len > warningThreshold) {
-                charCountContainer.classList.add('warning');
-            }
-        });
-    }
+            const maxChars = {{ user_max_chars }};
+            const dangerThreshold = Math.floor(maxChars * 0.9);
+            const warningThreshold = Math.floor(maxChars * 0.75);
+            noteInput.addEventListener('input', () => {
+                const len = noteInput.value.length;
+                charCount.textContent = len;
+                charCountContainer.classList.remove('warning', 'danger');
+                if (len > dangerThreshold) {
+                    charCountContainer.classList.add('danger');
+                } else if (len > warningThreshold) {
+                    charCountContainer.classList.add('warning');
+                }
+            });
+        }
 
         // Live preview toggle
         const previewToggle = document.getElementById('preview-toggle');
@@ -8352,8 +8351,7 @@
     // ====== Note Export Logic ======
     (function () {
         let exportNoteId = null;
-        const isPremium = {{ 'true' if user_is_premium else 'false' }
-    };
+        const isPremium = {{ 'true' if user_is_premium else 'false' }};
 
     // Open export modal
     document.body.addEventListener('click', function (e) {

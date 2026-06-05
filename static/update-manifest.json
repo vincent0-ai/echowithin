@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5",
+  "versionCode": 7,
+  "versionName": "1.6",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🚀 Offline-first rendering and local database CRUD operations bypass network sync to enable immediate, lag-free navigation.\n⚡ Synchronous note loading and list rendering from local db.\n📐 Bundled offline KaTeX + Marked.js for fast, offline mathematical rendering in note details.\n🔒 Keep all local cached notes read-only after logout or 401 session expiration."
+  "changelog": "🚀 Fixed the 'problem while parsing the package' error during updates by using external cache directories and updating FileProvider paths.\n⚡ Improved local DB querying and background syncing performance."
 }

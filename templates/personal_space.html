@@ -3078,6 +3078,47 @@
     </div>
 </div>
 
+<!-- Fullscreen Note Preview -->
+<div id="note-preview-overlay" class="note-preview-overlay" aria-hidden="true">
+    <div class="note-preview-shell" role="dialog" aria-label="Note preview">
+        <div class="note-preview-body">
+            <div class="note-preview-header">
+                <div>
+                    <h2 id="note-preview-title">Note</h2>
+                    <div class="note-preview-header-meta" id="note-preview-meta"></div>
+                </div>
+                <button type="button" class="note-preview-close" id="note-preview-close" aria-label="Close preview">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="note-preview-content" id="note-preview-content"></div>
+        </div>
+        <div class="note-preview-actions" id="note-preview-actions">
+            <button type="button" class="note-preview-action primary" data-action="edit" title="Edit note">
+                <i class="fas fa-pen"></i><span>Edit</span>
+            </button>
+            <button type="button" class="note-preview-action" data-action="copy" title="Copy note">
+                <i class="far fa-copy"></i><span>Copy</span>
+            </button>
+            <button type="button" class="note-preview-action" data-action="share" title="Share note">
+                <i class="fas fa-share-alt"></i><span>Share</span>
+            </button>
+            <button type="button" class="note-preview-action" data-action="lock" title="Toggle lock">
+                <i class="fas fa-lock"></i><span>Lock</span>
+            </button>
+            <button type="button" class="note-preview-action" data-action="history" title="Version history">
+                <i class="fas fa-clock-rotate-left"></i><span>History</span>
+            </button>
+            <button type="button" class="note-preview-action" data-action="export" title="Export note">
+                <i class="fas fa-download"></i><span>Export</span>
+            </button>
+            <button type="button" class="note-preview-action danger" data-action="delete" title="Delete note">
+                <i class="far fa-trash-alt"></i><span>Delete</span>
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- Note Deletion Mode Modal -->
 <div id="delete-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeDeleteModal()">
     <div class="custom-modal" style="max-width: 450px; text-align: left;">
@@ -3106,7 +3147,7 @@
 
 <!-- Edit Note Modal -->
 <div id="edit-note-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeEditModal()">
-    <div class="custom-modal" style="max-width: 600px; text-align: left;">
+    <div class="custom-modal" style="max-width: 880px; width: min(92vw, 880px); text-align: left;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h2 style="margin: 0; color: #3e2217; font-size: 1.25rem;">
                 <i class="fas fa-pen"></i> Edit Note
@@ -3436,6 +3477,200 @@
         text-align: center;
         color: #999;
         padding: 2rem;
+    }
+
+    /* Fullscreen note preview — mirrors the editor's fullscreen feel while
+       putting action buttons on the right side vertically, like a focused
+       reading/inspection view. */
+    .note-preview-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: none;
+        justify-content: center;
+        align-items: stretch;
+        z-index: 1100;
+    }
+
+    .note-preview-overlay.active {
+        display: flex;
+    }
+
+    .note-preview-shell {
+        background: #fafafa;
+        width: 100%;
+        max-width: 1280px;
+        margin: 1.5rem auto;
+        border-radius: 14px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0;
+        overflow: hidden;
+        min-height: 0;
+        max-height: calc(100vh - 3rem);
+    }
+
+    .note-preview-body {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #ffffff;
+    }
+
+    .note-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem 1.25rem;
+        border-bottom: 1px solid #eee;
+        background: #fdfaf6;
+    }
+
+    .note-preview-header h2 {
+        margin: 0;
+        color: #3e2217;
+        font-size: 1.05rem;
+        font-weight: 600;
+    }
+
+    .note-preview-header-meta {
+        font-size: 0.78rem;
+        color: #888;
+    }
+
+    .note-preview-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem 1.75rem 2.5rem;
+        font-size: 1rem;
+        line-height: 1.65;
+        color: #2a2a2a;
+    }
+
+    .note-preview-content .note-content {
+        margin-bottom: 0;
+    }
+
+    .note-preview-content .reference-line {
+        display: inline-block;
+        margin-bottom: 0.85rem;
+        font-size: 0.8rem;
+        color: #3e2217;
+        background: #fdf5ec;
+        border: 1px solid #f0e0c8;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-weight: 600;
+    }
+
+    .note-preview-actions {
+        width: 88px;
+        background: #fafafa;
+        border-left: 1px solid #eee;
+        padding: 1rem 0.5rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.45rem;
+        overflow-y: auto;
+    }
+
+    .note-preview-action {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        border: 1px solid #e3d9cf;
+        background: #fff;
+        color: #3e2217;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+    }
+
+    .note-preview-action i {
+        font-size: 1.1rem;
+    }
+
+    .note-preview-action:hover {
+        background: #fdf5ec;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(62, 34, 23, 0.08);
+    }
+
+    .note-preview-action.danger {
+        color: #c62828;
+        border-color: #ffcdd2;
+    }
+
+    .note-preview-action.danger:hover {
+        background: #ffebee;
+    }
+
+    .note-preview-action.primary {
+        color: #3e2217;
+        background: #fdf5ec;
+    }
+
+    .note-preview-action.primary:hover {
+        background: #f8e8d2;
+    }
+
+    .note-preview-close {
+        background: none;
+        border: none;
+        color: #777;
+        font-size: 1.4rem;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .note-preview-close:hover {
+        background: rgba(0, 0, 0, 0.06);
+    }
+
+    @media (max-width: 720px) {
+        .note-preview-shell {
+            grid-template-columns: minmax(0, 1fr);
+            margin: 0;
+            border-radius: 0;
+            max-height: 100vh;
+        }
+        .note-preview-actions {
+            width: 100%;
+            flex-direction: row;
+            flex-wrap: wrap;
+            border-left: none;
+            border-top: 1px solid #eee;
+            padding: 0.6rem;
+            justify-content: center;
+        }
+        .note-preview-action {
+            width: 56px;
+            height: 56px;
+        }
+    }
+
+    /* Larger edit modal — feels less cramped when the user is editing long notes. */
+    #edit-note-modal .custom-modal {
+        max-width: 880px;
+        width: min(92vw, 880px);
+        max-height: 92vh;
+    }
+    #edit-note-modal .edit-note-textarea {
+        min-height: 320px;
+        font-size: 1.02rem;
+        line-height: 1.65;
     }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -4186,6 +4421,15 @@
                 }
                 modal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
+                // Resize the textarea to fill the larger modal so long notes are
+                // easy to edit without a tiny scroll surface.
+                requestAnimationFrame(() => {
+                    const modalContent = modal.querySelector('.custom-modal');
+                    if (modalContent) {
+                        const available = Math.max(320, modalContent.clientHeight - 220);
+                        textarea.style.minHeight = available + 'px';
+                    }
+                });
                 textarea.focus();
                 document.addEventListener('keydown', window.handleEditModalEsc);
             }
@@ -5622,6 +5866,10 @@
             return processedText;
         }
 
+        // Expose to other handlers (e.g. the fullscreen note preview) that
+        // may run after this closure has been parsed.
+        window.renderMarkdownWithMath = renderMarkdownWithMath;
+
         // Render all saved notes on page load
         function renderAllNotes() {
             document.querySelectorAll('.rendered-note').forEach(el => {
@@ -5647,42 +5895,38 @@
                 if (el.scrollHeight > COLLAPSE_THRESHOLD + 40 || isPreview) {
                     el.classList.add('note-collapsed');
 
-                    // Create toggle button
+                    // Create toggle button — clicking it now opens the dedicated
+                    // fullscreen note preview so the user gets an editor-like
+                    // reading surface with vertical action buttons on the right.
                     const toggleBtn = document.createElement('button');
                     toggleBtn.type = 'button';
                     toggleBtn.className = 'note-toggle-btn';
-                    toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show more';
+                    toggleBtn.innerHTML = '<i class="fas fa-expand"></i> See more';
                     toggleBtn.addEventListener('click', async () => {
-                        const isCollapsed = el.classList.contains('note-collapsed');
-                        if (isCollapsed) {
-                            if (el.dataset.preview === 'true') {
-                                toggleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-                                try {
-                                    const card = el.closest('.note-card');
-                                    const noteId = card ? card.dataset.noteId : null;
-                                    if (noteId) {
-                                        const res = await fetch(`/api/note/content/${noteId}`);
-                                        const data = await res.json();
-                                        if (data.success && data.content) {
-                                            el.dataset.raw = data.content;
-                                            el.innerHTML = renderMarkdownWithMath(data.content);
-                                            el.dataset.preview = 'false';
-                                        }
+                        const card = el.closest('.note-card');
+                        const noteId = card ? card.dataset.noteId : null;
+                        if (!noteId) return;
+
+                        if (el.dataset.preview === 'true') {
+                            toggleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                            try {
+                                const res = await fetch(`/api/note/content/${noteId}`);
+                                const data = await res.json();
+                                if (data.success && data.content) {
+                                    el.dataset.raw = data.content;
+                                    el.removeAttribute('data-preview');
+                                    if (window.renderMarkdownWithMath) {
+                                        el.innerHTML = window.renderMarkdownWithMath(data.content);
                                     }
-                                } catch (e) {
-                                    console.error('Failed to load full note content:', e);
                                 }
+                            } catch (e) {
+                                console.error('Failed to load full note content:', e);
                             }
-                            el.classList.remove('note-collapsed');
-                            el.classList.add('note-expanded');
-                            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show less';
-                        } else {
-                            el.classList.remove('note-expanded');
-                            el.classList.add('note-collapsed');
-                            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i> Show more';
-                            // Scroll the card back into view
-                            const card = el.closest('.note-card');
-                            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            toggleBtn.innerHTML = '<i class="fas fa-expand"></i> See more';
+                        }
+
+                        if (typeof window.openNoteFullscreenPreview === 'function') {
+                            window.openNoteFullscreenPreview(noteId);
                         }
                     });
 
@@ -5783,14 +6027,31 @@
         }
 
         // Deep-link support from other pages: open picker immediately.
+        // Only trigger once per browser session to avoid re-opening on every page reload
+        // when the user did not pick a note.
         const openSharePickerRequested = new URLSearchParams(window.location.search).get('open_share_picker') === '1';
         if (openSharePickerRequested) {
-            switchToTab('notes');
-            setTimeout(() => {
-                if (typeof window.openShareNotePicker === 'function') {
-                    window.openShareNotePicker();
-                }
-            }, 120);
+            // Strip the param from the URL right away so reloading the page won't keep
+            // triggering the picker.
+            try {
+                const cleaned = window.location.pathname + window.location.hash;
+                window.history.replaceState({}, document.title, cleaned);
+            } catch (e) { /* ignore */ }
+
+            // Use a sessionStorage flag so the picker only opens once per session.
+            const SESSION_KEY = 'echowithin_share_picker_opened';
+            let alreadyOpened = false;
+            try { alreadyOpened = window.sessionStorage.getItem(SESSION_KEY) === '1'; } catch (e) { /* ignore */ }
+
+            if (!alreadyOpened) {
+                try { window.sessionStorage.setItem(SESSION_KEY, '1'); } catch (e) { /* ignore */ }
+                switchToTab('notes');
+                setTimeout(() => {
+                    if (typeof window.openShareNotePicker === 'function') {
+                        window.openShareNotePicker();
+                    }
+                }, 220);
+            }
         }
 
         // Quick create note button
@@ -6152,20 +6413,53 @@
                 pickerEmpty.style.display = 'none';
                 pickerList.style.display = 'flex';
 
+                const buildPreviewFromText = (text) => {
+                    const decoded = document.createElement('textarea');
+                    decoded.innerHTML = text || '';
+                    const plain = (decoded.value || '').replace(/\s+/g, ' ').trim();
+                    if (!plain) return null;
+                    return plain.length > 90 ? plain.substring(0, 90) + '…' : plain;
+                };
+
+                // First pass: build rows from data-raw/textContent. For lazy notes whose
+                // data-raw hasn't been populated yet, mark the row as "loading" and
+                // refresh it once the preview fetch completes below.
+                const loadingRows = [];
                 noteCards.forEach(card => {
                     const noteId = card.dataset.noteId;
                     const contentEl = card.querySelector('.note-content.rendered-note');
-                    const raw = contentEl ? (contentEl.dataset.raw || contentEl.textContent || '') : '';
-                    const decoded = document.createElement('textarea');
-                    decoded.innerHTML = raw;
-                    const plain = (decoded.value || '').replace(/\s+/g, ' ').trim();
-                    const preview = plain || 'Untitled note';
+                    let raw = contentEl ? (contentEl.dataset.raw || '') : '';
+                    if (!raw && contentEl) {
+                        // Fall back to textContent when data-raw wasn't set (some notes
+                        // are rendered server-side without a data-raw attribute).
+                        raw = contentEl.textContent || '';
+                    }
+                    const isLazy = contentEl && contentEl.getAttribute('data-lazy') === 'true';
+                    let preview = buildPreviewFromText(raw);
 
                     const row = document.createElement('div');
                     row.className = 'share-picker-item';
+                    row.dataset.noteId = noteId;
                     const previewEl = document.createElement('div');
                     previewEl.className = 'share-picker-preview';
-                    previewEl.textContent = preview;
+                    if (preview) {
+                        previewEl.textContent = preview;
+                    } else if (isLazy) {
+                        previewEl.textContent = 'Loading…';
+                        previewEl.style.color = '#999';
+                        previewEl.style.fontStyle = 'italic';
+                        loadingRows.push({ row, previewEl, noteId, card });
+                    } else {
+                        // Notes have no separate title field, so always show a
+                        // non-empty preview by displaying the first line of the
+                        // rendered note content, or a generic "Empty note" label
+                        // for genuinely blank notes.
+                        const fallback = (contentEl && contentEl.textContent || '')
+                            .replace(/\s+/g, ' ').trim();
+                        previewEl.textContent = fallback
+                            ? (fallback.length > 90 ? fallback.substring(0, 90) + '…' : fallback)
+                            : 'Empty note';
+                    }
 
                     const buttonEl = document.createElement('button');
                     buttonEl.type = 'button';
@@ -6177,6 +6471,50 @@
                     row.appendChild(buttonEl);
                     pickerList.appendChild(row);
                 });
+
+                // If any rows are waiting for the lazy preview, kick off the same
+                // batched endpoint the page uses and update those rows when ready.
+                if (loadingRows.length) {
+                    const loadingIds = loadingRows.map(r => r.noteId);
+                    fetch('/api/v1/notes/previews', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: loadingIds })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        const previews = (data && data.previews) || {};
+                        loadingRows.forEach(({ previewEl, noteId, card }) => {
+                            const text = previews[noteId] || '';
+                            const fresh = buildPreviewFromText(text);
+                            if (fresh) {
+                                previewEl.textContent = fresh;
+                                previewEl.style.color = '';
+                                previewEl.style.fontStyle = '';
+                            } else {
+                                // Genuinely empty note — show a clean label rather
+                                // than a misleading "Untitled note".
+                                previewEl.textContent = 'Empty note';
+                                previewEl.style.color = '#999';
+                                previewEl.style.fontStyle = 'italic';
+                            }
+                            // Also persist the resolved preview back onto the card so
+                            // future re-opens of the picker don't reload from the API.
+                            const contentEl = card.querySelector('.note-content.rendered-note');
+                            if (contentEl) {
+                                contentEl.setAttribute('data-raw', text);
+                                contentEl.removeAttribute('data-lazy');
+                            }
+                        });
+                    })
+                    .catch(() => {
+                        loadingRows.forEach(({ previewEl }) => {
+                            previewEl.textContent = 'Preview unavailable';
+                            previewEl.style.color = '#999';
+                            previewEl.style.fontStyle = 'italic';
+                        });
+                    });
+                }
             }
 
             pickerModal.style.display = 'flex';
@@ -6187,6 +6525,8 @@
             if (!pickerModal) return;
             pickerModal.style.display = 'none';
             document.body.style.overflow = '';
+            // Allow the deep-link picker to trigger again next time a CTA is clicked.
+            try { window.sessionStorage.removeItem('echowithin_share_picker_opened'); } catch (e) { /* ignore */ }
         };
 
         if (pickerList) {
@@ -6195,6 +6535,9 @@
                 if (!btn) return;
                 const noteId = btn.dataset.noteId;
                 window.closeShareNotePicker();
+                // Reset the deep-link guard so the next CTA click can open the picker
+                // again from scratch.
+                try { window.sessionStorage.removeItem('echowithin_share_picker_opened'); } catch (e) { /* ignore */ }
                 openShareModalForNote(noteId);
             });
         }
@@ -6394,6 +6737,248 @@
                 icon.className = 'fas fa-check';
                 setTimeout(() => { icon.className = originalClass; }, 1500);
             }
+        }
+
+        // ========== Fullscreen Note Preview ==========
+        // The notes list now uses an "open in a focused fullscreen view" flow
+        // for the "See more" affordance on long notes. The view is a
+        // single-screen reader that mirrors the editor's fullscreen feel
+        // while keeping the action buttons docked on the right (vertical).
+        // Edit, Share, Lock, History, Export and Delete all work from this
+        // view by delegating to the existing handlers.
+        const notePreviewOverlay = document.getElementById('note-preview-overlay');
+        const notePreviewCloseBtn = document.getElementById('note-preview-close');
+        const notePreviewTitleEl = document.getElementById('note-preview-title');
+        const notePreviewMetaEl = document.getElementById('note-preview-meta');
+        const notePreviewContentEl = document.getElementById('note-preview-content');
+        const notePreviewActionsEl = document.getElementById('note-preview-actions');
+        let activePreviewNoteId = null;
+        let activePreviewCard = null;
+
+        function readCardMetadata(card) {
+            if (!card) return { reference: '', tags: [], updatedAt: '', isLocked: false };
+            const reference = card.querySelector('.note-ref-display')
+                ? card.querySelector('.note-ref-display').textContent.trim() : '';
+            const tags = Array.from(card.querySelectorAll('.note-tag-badge'))
+                .map(el => el.textContent.trim())
+                .filter(Boolean);
+            const updatedAt = card.querySelector('.note-date')
+                ? card.querySelector('.note-date').textContent.trim() : '';
+            return { reference, tags, updatedAt, isLocked: false };
+        }
+
+        function getNoteRawContent(card) {
+            if (!card) return '';
+            const contentEl = card.querySelector('.note-content.rendered-note');
+            if (!contentEl) return '';
+            // data-raw is the source of truth (set during lazy-load).
+            return contentEl.getAttribute('data-raw') || contentEl.textContent || '';
+        }
+
+        window.openNoteFullscreenPreview = async function (noteId) {
+            if (!notePreviewOverlay || !notePreviewContentEl) return;
+            const card = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+            if (!card) return;
+
+            activePreviewNoteId = noteId;
+            activePreviewCard = card;
+            const { reference, tags, updatedAt } = readCardMetadata(card);
+            const raw = getNoteRawContent(card);
+
+            // Title fallback: the platform never requires a title, so show the
+            // first line of the note (or a clean placeholder) to keep the
+            // header meaningful.
+            const firstLine = (raw || '').split('\n').find(l => l.trim()) || '';
+            const decoded = (function () {
+                const t = document.createElement('textarea');
+                t.innerHTML = firstLine;
+                return t.value || '';
+            })();
+            const titleText = decoded.replace(/^#+\s*/, '').trim() || 'Note';
+            const subtitleParts = [];
+            if (updatedAt) subtitleParts.push(updatedAt);
+            if (tags.length) subtitleParts.push(tags.map(t => '#' + t).join(' '));
+
+            if (notePreviewTitleEl) notePreviewTitleEl.textContent = titleText.length > 80
+                ? titleText.substring(0, 80) + '…' : titleText;
+            if (notePreviewMetaEl) notePreviewMetaEl.textContent = subtitleParts.join(' · ');
+
+            // Render the content with the existing markdown pipeline.
+            let html = '';
+            if (raw && raw.trim()) {
+                try {
+                    html = window.renderMarkdownWithMath
+                        ? window.renderMarkdownWithMath(raw)
+                        : raw.replace(/</g, '&lt;');
+                } catch (e) {
+                    html = raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+            } else {
+                html = '<p style="color:#888;font-style:italic;">No content.</p>';
+            }
+
+            let headerExtras = '';
+            if (reference) {
+                const safeRef = reference.replace(/</g, '&lt;');
+                headerExtras += `<span class="reference-line">${safeRef}</span>`;
+            }
+            if (tags.length) {
+                headerExtras += tags.map(t =>
+                    `<span class="reference-line" style="background:#eef5ff;border-color:#cfdcef;color:#1e3a5f;">#${t.replace(/</g, '&lt;')}</span>`
+                ).join(' ');
+            }
+
+            notePreviewContentEl.innerHTML = headerExtras + html;
+            notePreviewContentEl.scrollTop = 0;
+
+            // Toggle the lock action icon to match the current note state.
+            const lockBtn = notePreviewActionsEl && notePreviewActionsEl.querySelector('[data-action="lock"]');
+            if (lockBtn) {
+                const isLocked = !!(card.dataset.isLocked === 'true' || card.classList.contains('locked'));
+                lockBtn.querySelector('i').className = isLocked
+                    ? 'fas fa-lock-open'
+                    : 'fas fa-lock';
+                lockBtn.querySelector('span').textContent = isLocked ? 'Unlock' : 'Lock';
+            }
+
+            // Hide unsupported actions for surprise / saved-copy notes so the
+            // preview matches what the user can actually do from the card.
+            const isSurprise = !!card.querySelector('.surprise-badge, [data-surprise="true"]');
+            const isSavedCopy = !!(card.dataset.sourceShareId);
+            const hide = (action, hidden) => {
+                const btn = notePreviewActionsEl && notePreviewActionsEl.querySelector(`[data-action="${action}"]`);
+                if (btn) btn.style.display = hidden ? 'none' : '';
+            };
+            hide('history', isSurprise);
+            hide('lock', isSurprise);
+
+            notePreviewOverlay.classList.add('active');
+            notePreviewOverlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeNoteFullscreenPreview = function () {
+            if (!notePreviewOverlay) return;
+            notePreviewOverlay.classList.remove('active');
+            notePreviewOverlay.setAttribute('aria-hidden', 'true');
+            // Only restore scrolling if no other modal is open.
+            const shareOpen = document.getElementById('share-modal') && document.getElementById('share-modal').style.display === 'flex';
+            const editOpen = document.getElementById('edit-note-modal') && document.getElementById('edit-note-modal').style.display === 'flex';
+            const pickerOpen = document.getElementById('share-note-picker-modal') && document.getElementById('share-note-picker-modal').style.display === 'flex';
+            if (!shareOpen && !editOpen && !pickerOpen) {
+                document.body.style.overflow = '';
+            }
+            activePreviewNoteId = null;
+            activePreviewCard = null;
+        };
+
+        if (notePreviewCloseBtn) {
+            notePreviewCloseBtn.addEventListener('click', window.closeNoteFullscreenPreview);
+        }
+
+        if (notePreviewOverlay) {
+            notePreviewOverlay.addEventListener('click', (e) => {
+                if (e.target === notePreviewOverlay) {
+                    window.closeNoteFullscreenPreview();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && notePreviewOverlay && notePreviewOverlay.classList.contains('active')) {
+                window.closeNoteFullscreenPreview();
+            }
+        });
+
+        if (notePreviewActionsEl) {
+            notePreviewActionsEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('.note-preview-action');
+                if (!btn) return;
+                const action = btn.dataset.action;
+                const noteId = activePreviewNoteId;
+                const card = activePreviewCard;
+                if (!noteId || !card) return;
+
+                if (action === 'edit') {
+                    // Trigger the same edit flow the small button uses.
+                    const editBtn = card.querySelector('.edit-note-btn');
+                    if (editBtn) {
+                        editBtn.click();
+                    } else {
+                        // Locked / read-only note: still open the edit modal so the
+                        // user can compose a new revision against the original.
+                        const raw = getNoteRawContent(card);
+                        const reference = card.querySelector('.edit-note-btn')
+                            ? (card.querySelector('.edit-note-btn').dataset.reference || '') : '';
+                        const tagsStr = card.querySelector('.edit-note-btn')
+                            ? (card.querySelector('.edit-note-btn').dataset.tags || '[]') : '[]';
+                        const updatedAt = card.querySelector('.edit-note-btn')
+                            ? (card.querySelector('.edit-note-btn').dataset.updatedAt || '') : '';
+                        let tags = [];
+                        try { tags = JSON.parse(tagsStr); } catch (e) { /* ignore */ }
+                        if (typeof window.openEditModal === 'function') {
+                            window.openEditModal(noteId, raw, reference, tags, updatedAt);
+                        }
+                    }
+                    return;
+                }
+
+                if (action === 'copy') {
+                    const raw = getNoteRawContent(card);
+                    if (!raw) return;
+                    const decoded = (function () {
+                        const t = document.createElement('textarea');
+                        t.innerHTML = raw;
+                        return t.value || '';
+                    })();
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(decoded).then(() => {
+                            if (typeof window.showToast === 'function') {
+                                window.showToast('Note copied to clipboard');
+                            }
+                        });
+                    } else {
+                        const tmp = document.createElement('textarea');
+                        tmp.value = decoded;
+                        document.body.appendChild(tmp);
+                        tmp.select();
+                        try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+                        document.body.removeChild(tmp);
+                    }
+                    return;
+                }
+
+                if (action === 'share') {
+                    window.closeNoteFullscreenPreview();
+                    openShareModalForNote(noteId);
+                    return;
+                }
+
+                if (action === 'lock') {
+                    if (typeof window.toggleNoteLock === 'function') {
+                        window.toggleNoteLock(noteId);
+                    }
+                    return;
+                }
+
+                if (action === 'history') {
+                    const versionBtn = card.querySelector('.version-history-btn');
+                    if (versionBtn) versionBtn.click();
+                    return;
+                }
+
+                if (action === 'export') {
+                    const exportBtn = card.querySelector('.export-note-btn');
+                    if (exportBtn) exportBtn.click();
+                    return;
+                }
+
+                if (action === 'delete') {
+                    const deleteBtn = card.querySelector('.delete-btn');
+                    if (deleteBtn) deleteBtn.click();
+                    return;
+                }
+            });
         }
 
         // (Version history logic moved to top-level IIFE)

@@ -609,9 +609,10 @@ def api_list_all_active_shares():
     note_ids = list({s['note_id'] for s in shares if s.get('note_id') is not None})
     notes_cursor = m.personal_posts_conf.find(
         {'_id': {'$in': note_ids}, 'user_id': ObjectId(current_user.id)},
-        {'_id': 1, 'content': 1}
+        {'_id': 1, 'content': 1, 'is_locked': 1}
     )
     note_map = {}
+    note_lock_map = {}
     for n in notes_cursor:
         try:
             plain = m.decrypt_note(n['content'], user_id=current_user.id) if n.get('content') else ''
@@ -619,6 +620,7 @@ def api_list_all_active_shares():
             plain = ''
         first_line = (plain or '').splitlines()[0].strip() if plain else ''
         note_map[n['_id']] = (first_line[:80] if first_line else 'Untitled note')
+        note_lock_map[n['_id']] = bool(n.get('is_locked', False))
 
     result = []
     for s in shares:
@@ -626,6 +628,7 @@ def api_list_all_active_shares():
             'share_id': s.get('share_id'),
             'note_id': str(s['note_id']) if s.get('note_id') else None,
             'note_title': note_map.get(s.get('note_id'), 'Untitled note'),
+            'is_locked': note_lock_map.get(s.get('note_id'), False),
             'permissions': s.get('permissions', 'view'),
             'surprise_theme': s.get('surprise_theme', 'none'),
             'use_typewriter': bool(s.get('use_typewriter', False)),

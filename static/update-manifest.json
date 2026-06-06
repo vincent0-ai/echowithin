@@ -1,6 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.7.1",
+  "versionCode": 10,
+  "versionName": "1.7.2",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🩹 Fixed duplicate-notes bug: the offline sync loop was re-pushing already-synced notes as new creates whenever the local sync flag was reset on logout. The dispatcher now keys off the note's ID prefix (local_* vs server UUID) so genuine pending creates still go through and stale rows are simply refreshed from the server on the next pull.\n🧹 One-shot dedup on the server: a new /api/v1/notes/dedup endpoint groups your notes by decrypted content and, on confirm, removes the duplicates while keeping the oldest copy of each. The app calls it after every successful sync — if nothing is duplicated, the call is a no-op and you won't see a toast; if duplicates were found, you'll see 'Cleaned up N duplicate notes from a previous sync'.\n🔘 Sticky bar buttons in the note detail screen no longer collapse: each of the four primary actions (Edit / Copy / Share / Lock) now has equal weight in the row, a single-line label, and a smaller, sharper icon — no more 'L / o / c / k' stacked vertically."
+  "changelog": "🔐 Locked notes are now hidden from search — mirrors the web platform's behavior so sensitive content can never leak through search snippets. The server-side /personal_post/search endpoint already filtered locked notes; the Android client now also filters them in the offline-search fallback AND in the result list as a belt-and-braces defence. The empty-state copy tells the user to unlock notes in the Locked tab.\n🆎 Shared Links tab gets a Gmail-style first-character avatar (and a small lock badge in the bottom-right corner when the note is locked on the website). Each note is now visually distinct and easy to scan, even on a long list. The server's /api/v1/notes/shares endpoint now also returns is_locked so the avatar lock badge stays correct even when the note is not in the local cache."
 }
+

@@ -2415,32 +2415,38 @@
                             active_shares_map[note_id_str]|length > 1 }}
                         </button>
                         <div class="share-dropdown"
-                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.5rem; min-width: 260px; z-index: 100;">
+                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.35rem; min-width: 240px; z-index: 100;">
                             {% for share in active_shares_map[note_id_str] %}
                             <div class="share-link-item"
-                                style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem; border-radius: 8px; background: #f9f9f9; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                                style="display: flex; align-items: center; gap: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 6px; background: #f9f9f9; margin-bottom: 0.2rem; font-size: 0.66rem;">
                                 <span
-                                    style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555;">
+                                    style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; display: inline-flex; align-items: center; gap: 3px;">
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888; margin-right: 2px;"
+                                        style="color: #888;"
                                         title="{{ share.permissions }} access"></i>
-                                    {{ share.share_url[-20:] }}
+                                    <span style="overflow: hidden; text-overflow: ellipsis;">{{
+                                        share.share_url[-8:] }}</span>
                                 </span>
                                 <a href="{{ share.share_url }}" target="_blank" rel="noopener noreferrer"
                                     title="Open link"
-                                    style="background: #2e7d32; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 3px;">
+                                    style="background: #2e7d32; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.58rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; line-height: 1;">
                                     <i class="fas fa-external-link-alt"></i> Open
+                                </a>
+                                <a href="/share/settings/{{ share.share_id }}" rel="noopener"
+                                    title="Configure link — surprise theme, time capsule, photos, auto-approve"
+                                    style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.58rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; line-height: 1;">
+                                    <i class="fas fa-cog"></i> Config
                                 </a>
                                 <button type="button" class="copy-btn" data-copy-text="{{ share.share_url }}"
                                     title="Copy link"
-                                    style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+                                    style="background: #3e2217; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.58rem; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; line-height: 1;">
                                     <i class="far fa-copy"></i> Copy
                                 </button>
                                 <button type="button" class="revoke-btn" data-share-id="{{ share.share_id }}"
                                     title="Revoke link"
-                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; display: inline-flex; align-items: center; gap: 3px;">
+                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.58rem; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; line-height: 1;">
                                     <i class="fas fa-times"></i> Revoke
                                 </button>
                             </div>
@@ -2912,32 +2918,38 @@
                             locked_shares_map[note_id_str]|length > 1 }}
                         </button>
                         <div class="share-dropdown"
-                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.5rem; min-width: 260px; z-index: 100;">
+                            style="display: none; position: absolute; top: 100%; right: 0; margin-top: 0.4rem; background: white; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); padding: 0.35rem; min-width: 220px; z-index: 100;">
                             {% for share in locked_shares_map[note_id_str] %}
                             <div class="share-link-item"
-                                style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem; border-radius: 8px; background: #f9f9f9; margin-bottom: 0.3rem; font-size: 0.78rem;">
+                                style="display: flex; align-items: center; gap: 0.25rem; padding: 0.3rem 0.4rem; border-radius: 6px; background: #f9f9f9; margin-bottom: 0.2rem; font-size: 0.66rem;">
                                 <span
-                                    style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555;">
+                                    style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; display: inline-flex; align-items: center; gap: 3px;">
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888; margin-right: 2px;"
+                                        style="color: #888;"
                                         title="{{ share.permissions }} access"></i>
-                                    {{ share.share_url[-20:] }}
+                                    <span style="overflow: hidden; text-overflow: ellipsis;">{{
+                                        share.share_url[-8:] }}</span>
                                 </span>
                                 <a href="{{ share.share_url }}" target="_blank" rel="noopener noreferrer"
                                     title="Open link"
-                                    style="background: #2e7d32; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;">
+                                    style="background: #2e7d32; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; line-height: 1;">
                                     <i class="fas fa-external-link-alt"></i>
+                                </a>
+                                <a href="/share/settings/{{ share.share_id }}" rel="noopener"
+                                    title="Configure link — surprise theme, time capsule, photos, auto-approve"
+                                    style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; line-height: 1;">
+                                    <i class="fas fa-cog"></i>
                                 </a>
                                 <button type="button" class="copy-btn" data-copy-text="{{ share.share_url }}"
                                     title="Copy link"
-                                    style="background: #3e2217; color: white; border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
+                                    style="background: #3e2217; color: white; border: none; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; display: inline-flex; align-items: center; line-height: 1;">
                                     <i class="far fa-copy"></i>
                                 </button>
                                 <button type="button" class="revoke-btn" data-share-id="{{ share.share_id }}"
                                     title="Revoke link"
-                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.7rem; cursor: pointer;">
+                                    style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; display: inline-flex; align-items: center; line-height: 1;">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>

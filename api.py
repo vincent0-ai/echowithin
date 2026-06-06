@@ -539,7 +539,30 @@ def api_app_lock_status():
 @api_bp.route('/app_lock/remove', methods=['POST'])
 @login_required
 def api_app_lock_remove():
+    """Remove the app-lock PIN. Requires the current PIN to be supplied
+    and re-verified before any state is changed — see SECURITY below.
+    """
     import main as m
+    data = request.get_json(silent=True) or {}
+    pin = data.get('pin', '').strip()
+
+    if not pin or not pin.isdigit() or len(pin) != 4:
+        return jsonify({'success': False, 'error': 'PIN must be exactly 4 digits.'}), 400
+
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
+    if not user or not user.get('app_lock_pin_hash'):
+        return jsonify({'success': False, 'error': 'No PIN setup found.'}), 404
+
+    # SECURITY: Re-verify the current PIN server-side before unsetting the
+    # hash. The previous version of this endpoint accepted a bare POST and
+    # removed protection without proving possession of the PIN, which
+    # meant anyone with the app open (e.g. a borrowed device left signed
+    # in) could disable the lock. Returns 200 with success:false on a bad
+    # PIN (NOT 401) so the Android client's global 401 interceptor does
+    # not sign the user out of the app on a fat-finger.
+    if not check_password_hash(user['app_lock_pin_hash'], pin):
+        return jsonify({'success': False, 'error': 'Incorrect PIN.'})
+
     m.users_conf.update_one(
         {'_id': ObjectId(current_user.id)},
         {'$unset': {'app_lock_pin_hash': ''}}

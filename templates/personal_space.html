@@ -3069,7 +3069,7 @@
                     style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 2px solid #eee; border-radius: 10px; background: white; cursor: pointer; text-align: left; transition: all 0.2s;">
                     <span style="font-size: 1.5rem;">⚙️</span>
                     <div>
-                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Or advanced select</div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #333;">Advanced Options</div>
                         <div style="font-size: 0.75rem; color: #888;">Set permissions, expiry, and access code manually
                         </div>
                     </div>
@@ -3805,6 +3805,7 @@
         border-bottom: 1px solid #eee;
         background: #fffaf2;
     }
+
     .note-preview-edit.active {
         display: flex;
         /* Fill the body height so the textarea can grow to fill the rest
@@ -6361,20 +6362,21 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = {{ user_max_chars }};
-            const dangerThreshold = Math.floor(maxChars * 0.9);
-            const warningThreshold = Math.floor(maxChars * 0.75);
-            noteInput.addEventListener('input', () => {
-                const len = noteInput.value.length;
-                charCount.textContent = len;
-                charCountContainer.classList.remove('warning', 'danger');
-                if (len > dangerThreshold) {
-                    charCountContainer.classList.add('danger');
-                } else if (len > warningThreshold) {
-                    charCountContainer.classList.add('warning');
-                }
-            });
-        }
+            const maxChars = {{ user_max_chars }
+        };
+        const dangerThreshold = Math.floor(maxChars * 0.9);
+        const warningThreshold = Math.floor(maxChars * 0.75);
+        noteInput.addEventListener('input', () => {
+            const len = noteInput.value.length;
+            charCount.textContent = len;
+            charCountContainer.classList.remove('warning', 'danger');
+            if (len > dangerThreshold) {
+                charCountContainer.classList.add('danger');
+            } else if (len > warningThreshold) {
+                charCountContainer.classList.add('warning');
+            }
+        });
+    }
 
         // Live preview toggle
         const previewToggle = document.getElementById('preview-toggle');
@@ -8357,7 +8359,8 @@
     // ====== Note Export Logic ======
     (function () {
         let exportNoteId = null;
-        const isPremium = {{ 'true' if user_is_premium else 'false' }};
+        const isPremium = {{ 'true' if user_is_premium else 'false' }
+    };
 
     // Open export modal
     document.body.addEventListener('click', function (e) {

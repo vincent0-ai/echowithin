@@ -686,6 +686,60 @@ def api_get_note_shares(post_id):
         })
     return jsonify({'shares': result})
 
+
+@api_bp.route('/notes/share/<share_id>/auto_approve', methods=['POST'])
+@login_required
+def api_toggle_share_auto_approve(share_id):
+    """v1 mirror of the legacy
+    /personal_post/toggle_share_auto_approve/<share_id> endpoint.
+    Flips the link-wide auto_approve flag on a share, or (with
+    editor_id in the body) adds/removes a specific collaborator from
+    the share's auto_approved_users list. Returns 200 with the new
+    value so the client can update its UI without a refetch.
+    """
+    import main as m
+    share = m.note_shares_conf.find_one({
+        'share_id': share_id,
+        'owner_id': ObjectId(current_user.id)
+    })
+    if not share:
+        return jsonify({'error': 'Share link not found or unauthorized'}), 404
+
+    data = request.get_json(silent=True) or {}
+    new_status = bool(data.get('auto_approve', False))
+    editor_id_raw = data.get('editor_id')
+
+    # Premium tier enforcement: auto-approve is a premium feature on the
+    # web (sharing.py:915-918). Mirror it here so the app can't bypass
+    # the limit. is_premium falls through to a free-tier check if the
+    # user has no doc (shouldn't happen for an authenticated request,
+    # but we don't want to 500).
+    user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    if new_status and not m.is_premium(user_doc):
+        return jsonify({'error': 'Auto-approve requires a Premium subscription.', 'upgrade_required': True}), 403
+
+    if editor_id_raw:
+        editor_oid = safe_obj_id(editor_id_raw)
+        if not editor_oid:
+            return jsonify({'error': 'Invalid editor_id'}), 400
+        if new_status:
+            m.note_shares_conf.update_one(
+                {'_id': share['_id']},
+                {'$addToSet': {'auto_approved_users': editor_oid}}
+            )
+        else:
+            m.note_shares_conf.update_one(
+                {'_id': share['_id']},
+                {'$pull': {'auto_approved_users': editor_oid}}
+            )
+    else:
+        m.note_shares_conf.update_one(
+            {'_id': share['_id']},
+            {'$set': {'auto_approve': new_status}}
+        )
+    return jsonify({'success': True, 'auto_approve': new_status})
+
+
 @api_bp.route('/notes/share/<post_id>', methods=['POST'])
 @login_required
 def api_create_note_share(post_id):
@@ -1005,13 +1059,32 @@ def api_proposal_decision(version_id):
 
     data = request.get_json(silent=True) or {}
     decision = data.get('decision')  # 'approve' or 'reject'
-    comment = data.get('comment', '').strip()
+    comment = data.get('comment', '').strip()[:180]
+    auto_approve_subsequent = bool(data.get('auto_approve_subsequent', False))
 
     if decision not in ['approve', 'accept', 'reject']:
         return jsonify({'error': 'Decision must be approve/accept or reject.'}), 400
 
     decision_mapped = 'accept' if decision in ('approve', 'accept') else 'reject'
     now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Parity with the legacy /personal_post/proposal/<id>/decision
+    # (sharing.py:1337-1341): if the owner is accepting AND asking to
+    # auto-approve this editor for future proposals, add the editor to
+    # the share's auto_approved_users list. This is a no-op for shares
+    # that don't exist (legacy / standalone notes), so it's safe to
+    # always run when the flag is on.
+    if decision_mapped == 'accept' and auto_approve_subsequent:
+        share_id = proposal.get('share_id')
+        editor_id = proposal.get('editor_id')
+        if share_id and editor_id:
+            try:
+                m.note_shares_conf.update_one(
+                    {'share_id': share_id},
+                    {'$addToSet': {'auto_approved_users': ObjectId(editor_id)}}
+                )
+            except Exception:
+                pass
 
     if decision_mapped == 'accept':
         proposed = proposal.get('proposed_content', '')

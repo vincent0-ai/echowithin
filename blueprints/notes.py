@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, secrets
 from security import limits
+from config import get_env_variable
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -1405,7 +1406,6 @@ def app_lock_forgot():
     try:
         from notifications import _get_mail, _get_app
         from flask_mail import Message as MailMessage
-        from config import get_env_variable
         sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
         msg = MailMessage(
             subject="EchoWithin App Lock PIN Reset",

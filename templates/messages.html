@@ -1553,11 +1553,8 @@
             document.querySelectorAll('.contact-time[data-timestamp]').forEach(el => {
                 let iso = el.getAttribute('data-timestamp');
                 if (!iso) return;
-                // Ensure UTC interpretation — server timestamps are always UTC
-                if (!iso.endsWith('Z') && !iso.includes('+') && !iso.includes('-', 10)) {
-                    iso += 'Z';
-                }
-                const date = new Date(iso);
+                const date = window.parseServerTime(iso);
+                if (!date) return;
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 const yesterday = new Date(today.getTime() - 86400000);
@@ -2042,7 +2039,7 @@
                 });
                 scrollToBottom();
                 if (data.other_user_status) {
-                    const serverNow = data.server_now ? new Date(data.server_now) : new Date();
+                    const serverNow = data.server_now ? (window.parseServerTime(data.server_now) || new Date()) : new Date();
                     updateUserStatus(data.other_user_status.last_active, serverNow);
                 }
             });
@@ -2079,7 +2076,7 @@
             if (resolvedId && renderedMessageIds.has(resolvedId)) return;
 
             const timestamp = msgData.timestamp || new Date().toISOString();
-            const messageDate = new Date(timestamp);
+            const messageDate = window.parseServerTime(timestamp) || new Date();
             const dateString = messageDate.toDateString();
 
             if (dateString !== lastMessageDate) {
@@ -2449,7 +2446,7 @@
 
             let item = document.querySelector(`.contact-item[data-user-id="${userId}"]`);
             const timeLabel = timestampIso
-                ? new Date(timestampIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                ? (window.parseServerTime(timestampIso) || new Date()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             if (!item) {
@@ -2491,7 +2488,7 @@
         }
 
         function appendSystemMessage(text, timestampIso) {
-            const date = timestampIso ? new Date(timestampIso) : new Date();
+            const date = timestampIso ? (window.parseServerTime(timestampIso) || new Date()) : new Date();
             const timestamp = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             chatHistory.insertAdjacentHTML('beforeend', `
                 <div style="align-self:center; background:#f5ebe7; color:#3e2217; padding:0.45rem 0.8rem; border-radius:999px; font-size:0.78rem; margin:0.4rem 0; max-width:90%; text-align:center;">
@@ -2507,8 +2504,9 @@
 
             // ServerNow is UTC from Python isoformat()
             // lastActiveStr is UTC from Python isoformat()
-            const now = serverNow ? new Date(serverNow) : new Date();
-            const active = new Date(lastActiveStr);
+            const now = serverNow ? (window.parseServerTime(serverNow) || new Date()) : new Date();
+            const active = window.parseServerTime(lastActiveStr);
+            if (!active) { el.textContent = 'Offline'; return; }
 
             // Get UTC millisecond values
             const diffMs = Math.max(0, now.getTime() - active.getTime());
@@ -3219,7 +3217,7 @@
                 list.innerHTML = '';
 
                 msgs.forEach(m => {
-                    const schedTime = new Date(m.scheduled_at);
+                    const schedTime = window.parseServerTime(m.scheduled_at) || new Date();
                     const timeStr = schedTime.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
                     const preview = m.message_type === 'image' ? '📸 Photo' : (m.content || '').substring(0, 50);
                     list.insertAdjacentHTML('beforeend', `

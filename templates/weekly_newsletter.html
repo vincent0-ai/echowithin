@@ -116,7 +116,7 @@
                                         <!-- Meta -->
                                         <p class="post-meta-text" style="margin: 0 0 12px; font-family: 'Poppins', Arial, sans-serif; font-size: 12px; color: #999; font-weight: 400;">
                                             By {{ post.author or post.author_username or 'Anonymous' }}
-                                            {% if post.timestamp %} &bull; {{ post.timestamp.strftime('%B %d, %Y') }}{% endif %}
+                                            {% if post.timestamp %} &bull; {{ post.timestamp|localtime('%B %d, %Y') }}{% endif %}
                                         </p>
 
                                         <!-- Excerpt -->

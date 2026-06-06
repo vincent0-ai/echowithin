@@ -136,11 +136,11 @@
     <div class="post-meta">
         {% if post.edited_at %}
         Edited <span class="relative-time"
-            data-timestamp="{{ post.edited_at.isoformat() if post.edited_at else '' }}">{{ post.edited_at|localtime
+            data-timestamp="{{ (post.edited_at.isoformat() + 'Z').replace('+00:00Z', 'Z') if post.edited_at else '' }}">{{ post.edited_at|localtime
             }}</span> by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %}
         {% else %}
         Posted by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>{% if post.author_is_premium %}<span class="premium-crown" title="Premium member"><i class="fas fa-crown"></i></span>{% endif %} ·
-        <span class="relative-time" data-timestamp="{{ post.timestamp.isoformat() if post.timestamp else '' }}">{{
+        <span class="relative-time" data-timestamp="{{ (post.timestamp.isoformat() + 'Z').replace('+00:00Z', 'Z') if post.timestamp else '' }}">{{
             post.timestamp|localtime }}</span>
         {% endif %}
 

@@ -1305,7 +1305,9 @@
         function getRelativeTime(dateString) {
             if (!dateString) return '';
 
-            const date = new Date(dateString);
+            // Normalize naive server ISO strings to UTC (see parseServerTime in script.js)
+            const date = (window.parseServerTime ? window.parseServerTime(dateString) : new Date(dateString));
+            if (!date || isNaN(date.getTime())) return '';
             const now = new Date();
             const diffMs = now - date;
             const diffSecs = Math.floor(diffMs / 1000);

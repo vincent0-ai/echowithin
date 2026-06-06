@@ -33,7 +33,7 @@
                         <p style="font-size: 0.85rem;">
                             <span style="background: linear-gradient(135deg, #f5af19, #f12711); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">Premium</span>
                             {% if user.get('premium_until') %}
-                                <span style="color: #888; margin-left: 0.5rem;">Expires: {{ user.premium_until.strftime('%Y-%m-%d') }}</span>
+                                <span style="color: #888; margin-left: 0.5rem;">Expires: {{ user.premium_until|localtime('%Y-%m-%d') }}</span>
                             {% else %}
                                 <span style="color: #28a745; margin-left: 0.5rem;">Indefinite</span>
                             {% endif %}

@@ -456,14 +456,22 @@ def cleanup_post_media(post):
 
 def localtime_filter(dt, fmt='%b %d, %Y at %I:%M %p'):
     """Render a <time> element with an ISO datetime for client-side
-    conversion. The visible fallback text is the UTC-formatted time.
-    The browser's JS will convert this to the user's local timezone."""
+    conversion. The fallback text (before JS runs / for no-JS clients /
+    inside emails) is the UTC-formatted time with an explicit ' UTC' suffix
+    so users never see an ambiguous timestamp that *looks* like local time
+    but is actually server time. The browser's JS will replace this with
+    the user's local timezone via the `time.local-time` converter."""
     try:
         if isinstance(dt, datetime.datetime):
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=datetime.timezone.utc)
-            iso = dt.isoformat()
+            # Use 'Z' instead of '+00:00' so JavaScript Date parsing is unambiguous
+            iso = dt.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
             fallback = dt.astimezone(datetime.timezone.utc).strftime(fmt)
+            # Only add ' UTC' suffix when the format includes a time component
+            # (avoids "Jan 2026 UTC" on month-only formats like %B %Y).
+            if any(tok in fmt for tok in ('%H', '%I', '%M', '%S', '%p', '%X')):
+                fallback = f"{fallback} UTC"
             return Markup(f"<time class=\"local-time\" datetime=\"{iso}\">{fallback}</time>")
         return str(dt)
     except (ValueError, TypeError, AttributeError):

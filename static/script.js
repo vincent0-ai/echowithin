@@ -33,6 +33,26 @@
 })();
 
 // ==================== Local Timezone Conversion ====================
+// Server timestamps from MongoDB are persisted as naive UTC. Python's
+// .isoformat() on a naive datetime renders without a 'Z' / '+00:00' suffix,
+// so the browser's `new Date(iso)` constructor interprets the string in the
+// *local* timezone — producing a visible offset of `(localOffset - 0)` hours.
+// This helper guarantees the string is always parsed as UTC by appending a
+// 'Z' when no timezone designator is present. Use this for ANY datetime that
+// originated from the server (REST, socketio, data-timestamp attribute).
+function parseServerTime(iso) {
+    if (!iso) return null;
+    if (iso instanceof Date) return iso;
+    let s = String(iso).trim();
+    if (!s) return null;
+    // Already has a timezone designator (Z, +hh:mm, -hh:mm after the time part)?
+    var hasTz = /[zZ]$/.test(s) || /[+\-]\d{2}:?\d{2}$/.test(s);
+    if (!hasTz) s += 'Z';
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+}
+window.parseServerTime = parseServerTime;
+
 // Convert all timestamps to user's local timezone
 function convertToLocalTime() {
     const timeElements = document.querySelectorAll('time.local-time');
@@ -45,8 +65,8 @@ function convertToLocalTime() {
         if (!isoString) return;
         
         try {
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) return; // Invalid date
+            const date = parseServerTime(isoString);
+            if (!date) return; // Invalid date
             
             // Format options for display
             const options = {

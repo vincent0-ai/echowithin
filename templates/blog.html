@@ -368,7 +368,7 @@
                             const badgeText = p.surprise_theme === 'none' ? 'Note accessed!' : 'Surprise opened!';
                             const unreadBadge = p.has_unread ?
                                 `<span class="unread-indicator" style="background-color: #ff4d6d">${badgeText}</span>` : '';
-                            const timeAgo = p.unlocked_at ? new Date(p.unlocked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
+                            const timeAgo = p.unlocked_at ? (window.parseServerTime(p.unlocked_at) || new Date(0)).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '';
                             html += `<div class="post-wrapper ${unreadClass}">${unreadBadge}
                                 <div class="post-item" style="position: relative;">
                                     <h3><a href="${p.url}" class="activity-link surprise-activity-link">${p.title}</a></h3>
@@ -636,7 +636,7 @@
             </div>
             <div class="post-content-rendered">${previewContent}</div>
             ${post.edited_at
-                    ? `<div class="post-meta">Edited on ${new Date(post.edited_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
+                    ? `<div class="post-meta">Edited on ${(window.parseServerTime(post.edited_at) || new Date(0)).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}</div>`
                     : `<div class="post-meta">Posted by <strong><a href="/profile/${post.author}">${post.author}</a></strong>${premiumBadgeHtml} on ${post.timestamp} ${achievementsHtml}</div>`
                 }
             <div class="post-actions">

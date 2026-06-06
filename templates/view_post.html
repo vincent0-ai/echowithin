@@ -343,8 +343,8 @@
                         <a href="{{ url_for('blog.view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
                     </h4>
                     <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
-                        by {{ r_post.author_username }} on {{ r_post.created_at.strftime('%b %d, %Y') if
-                        r_post.created_at and r_post.created_at.strftime else '' }}
+                        by {{ r_post.author_username }} on {{ r_post.created_at|localtime('%b %d, %Y') if
+                        r_post.created_at else '' }}
                     </div>
                 </div>
                 {% endfor %}
@@ -523,7 +523,7 @@
         const meta = document.createElement('div');
         meta.className = 'comment-meta';
         const authorUsername = comment.is_deleted ? 'Deleted' : (comment.author_username || 'User');
-        const date = comment.created_at ? ` — ${new Date(comment.created_at).toLocaleString()}` : '';
+        const date = comment.created_at ? ` — ${(window.parseServerTime(comment.created_at) || new Date(0)).toLocaleString()}` : '';
         meta.innerHTML = `<strong>${authorUsername}</strong>${date}`;
 
         const body = document.createElement('div');

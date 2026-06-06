@@ -4945,7 +4945,7 @@
                 }
 
                 list.innerHTML = versions.map((v, i) => {
-                    const ts = v.created_at ? new Date(v.created_at).toLocaleString() : 'Unknown';
+                    const ts = v.created_at ? (window.parseServerTime(v.created_at) || new Date(0)).toLocaleString() : 'Unknown';
                     const isProposal = v.event_type === 'proposal';
                     const isPending = v.status === 'pending';
                     const previewSource = isProposal ? (v.proposed_content || '') : (v.content || '');
@@ -6525,7 +6525,7 @@
                 } else {
                     searchResultsContainer.innerHTML = results.map(r => {
                         const dateStr = r.created_at
-                            ? new Date(r.created_at).toLocaleDateString(undefined, {
+                            ? (window.parseServerTime(r.created_at) || new Date(0)).toLocaleDateString(undefined, {
                                 year: 'numeric', month: 'short', day: 'numeric',
                                 hour: '2-digit', minute: '2-digit'
                             })
@@ -6914,7 +6914,7 @@
                             <div class="share-link-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.3rem;">
                                 <span style="font-size:0.75rem;color:#888;">
                                     ${s.permissions.charAt(0).toUpperCase() + s.permissions.slice(1)}
-                                    ${s.expires_at ? ' · Exp: ' + new Date(s.expires_at).toLocaleDateString() : ''}
+                                    ${s.expires_at ? ' · Exp: ' + (window.parseServerTime(s.expires_at) || new Date(0)).toLocaleDateString() : ''}
                                 </span>
                                 <span style="display:flex;gap:0.5rem;align-items:center;font-size:0.72rem;">
                                     <a href="${s.url}" target="_blank" style="color:#3e2217;text-decoration:none;">Open</a>
@@ -7720,7 +7720,7 @@
             pendingContainer.innerHTML = notes.map(n => {
                 const escaped = (n.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const preview = escaped.substring(0, 300) + (escaped.length > 300 ? '...' : '');
-                const ts = new Date(n.created_at).toLocaleString();
+                const ts = (window.parseServerTime(n.created_at) || new Date()).toLocaleString();
                 return `
                     <div class="note-card pending-note">
                         <div class="note-content"><pre style="white-space:pre-wrap;margin:0;font-family:inherit;">${preview}</pre></div>

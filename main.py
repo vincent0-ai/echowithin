@@ -455,6 +455,65 @@ weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 app_updates_conf = db['app_updates']
 
+# Sync update manifest between DB and static file on startup
+# Keeps the latest version (by versionCode) in both places
+def sync_update_manifest():
+    try:
+        import json
+        import os
+
+        # 1. Load DB manifest
+        db_manifest = app_updates_conf.find_one({'key': 'latest'}) or {}
+        db_code = db_manifest.get('versionCode', 0)
+
+        # 2. Load static file manifest
+        static_path = os.path.join(app.static_folder, 'update-manifest.json')
+        static_code = 0
+        static_manifest = {}
+        if os.path.exists(static_path):
+            try:
+                with open(static_path, 'r', encoding='utf-8') as f:
+                    static_manifest = json.load(f)
+                static_code = static_manifest.get('versionCode', 0)
+            except Exception as e:
+                app.logger.warning(f"Failed to read static update manifest: {e}")
+
+        # 3. Compare and sync to latest
+        if static_code > db_code:
+            # Static is newer -> write to DB
+            if static_manifest:
+                app_updates_conf.update_one(
+                    {'key': 'latest'},
+                    {'$set': {
+                        'versionCode': static_manifest.get('versionCode'),
+                        'versionName': static_manifest.get('versionName'),
+                        'apkUrl': static_manifest.get('apkUrl'),
+                        'changelog': static_manifest.get('changelog', '')
+                    }},
+                    upsert=True
+                )
+                app.logger.info(f"Update manifest synced: static v{static_manifest.get('versionName')} (code {static_code}) -> DB")
+        elif db_code > static_code:
+            # DB is newer -> write to static file
+            if db_manifest:
+                try:
+                    with open(static_path, 'w', encoding='utf-8') as f:
+                        json.dump({
+                            'versionCode': db_manifest.get('versionCode'),
+                            'versionName': db_manifest.get('versionName'),
+                            'apkUrl': db_manifest.get('apkUrl'),
+                            'changelog': db_manifest.get('changelog', '')
+                        }, f, indent=2)
+                    app.logger.info(f"Update manifest synced: DB v{db_manifest.get('versionName')} (code {db_code}) -> static")
+                except Exception as e:
+                    app.logger.warning(f"Failed to write static update manifest: {e}")
+        elif db_code > 0:
+            app.logger.info(f"Update manifest in sync: v{db_manifest.get('versionName')} (code {db_code})")
+    except Exception as e:
+        app.logger.warning(f"Update manifest sync failed: {e}")
+
+sync_update_manifest()
+
 # --- Community Notes Collections ---
 communities_conf = db['communities']
 community_notes_conf = db['community_notes']

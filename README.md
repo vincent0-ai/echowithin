@@ -17,7 +17,8 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 ### Note Sharing & Real-Time Collaboration
 
 - Share notes with view or edit permissions, optional access codes, and expiry (1h, 1d, 7d).
-- **Surprise themes** (Valentine, Birthday, Anniversary, Celebration) with custom photo and audio uploads.
+- Per-share **auto-approve** toggle (premium) — collaborators are auto-approved on subsequent edits.
+- **Surprise themes** (Valentine, Birthday, Anniversary, Celebration) with custom photo and audio uploads, configurable via a dedicated share settings page.
 - Typewriter-effect reveal for recipients.
 - Real-time collaboration via **Socket.IO**: live co-editing, edit locks, presence tracking ("Studying Now").
 - Merge proposal system: collaborators propose changes, owners review, accept, or reject.
@@ -36,6 +37,8 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 
 - Create and join topic-based communities with public or invite-code access.
 - Community notes with surprise themes, reactions, and moderation tools.
+- **Community challenges** — admins create time-bound writing prompts; members submit notes linked to the challenge; winner picked by reaction count.
+- **Anonymous posting** — post community notes without revealing your identity.
 - Reporting system for rule violations.
 - Tiered limits: 1 community (free) → 5 communities (premium).
 
@@ -70,6 +73,7 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 | Version history retention   | 7 days | 365 days  |
 | Auto-approve collaborations | No     | Yes       |
 | Communities                 | 1      | 5         |
+| Voice messages              | Yes    | Yes       |
 
 All new accounts receive a **1-day free trial** of premium features. Payments processed via **Paystack**.
 
@@ -78,9 +82,10 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - Real-time analytics: posts/day, comments/day, active users, traffic, system health.
 - User management: ban, unban, delete accounts, grant/revoke premium.
 - Post management: pin, unpin, force-delete.
+- Community management: review reports, manage members.
 - Announcements and site-wide push broadcast.
 - CSV data export and Typesense reindex.
-- APK upload with OTA update manifest for the Android app.
+- APK upload with OTA update manifest for the Android app (auto-synced on startup).
 
 ### Security & Safety
 
@@ -101,9 +106,11 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - Web Share Target API support.
 - **Capacitor**-wrapped native Android app with:
   - Persistent auth tokens (90-day httpOnly cookies).
-  - App Lock: optional 4-digit PIN with 5-minute unlock session.
+  - App Lock: optional 4-digit PIN with 5-minute unlock session, PIN-gated removal, email-based recovery.
   - Bidirectional offline sync for personal notes.
+  - Offline-first architecture: local SQLite database, smart sync dispatcher, periodic auto-sync (30-min interval).
   - Deep linking via Android App Links.
+  - OTA update manifest for in-app updates.
 
 ---
 
@@ -111,7 +118,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 
 | Category               | Technology                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------ |
-| **Backend Framework**  | Python 3.12, Flask 3.1, Gunicorn 23 (gevent WebSocket worker)                  |
+| **Backend Framework**  | Python 3.12, Flask 3.1 (blueprints), Gunicorn 23 (gevent WebSocket worker)                  |
 | **Database**           | MongoDB 7 (primary), Redis 7 (caching + task queue)                            |
 | **Real-time**          | Flask-SocketIO 5.3, gevent-websocket                                           |
 | **Search**             | Typesense (full-text with typo tolerance, tenant-isolated scoped keys)         |
@@ -138,9 +145,25 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 
 ```
 echowithin/
-├── main.py              # Flask app, routes, config, helpers (monolithic core)
+├── main.py              # Flask app init, config, MongoDB setup, helpers
 ├── api.py               # REST API blueprint (/api/v1/*) for mobile/native clients
+├── blueprints/
+│   ├── auth.py              # Registration, login, logout, Google OAuth, password reset
+│   ├── pages.py             # Home, search, feed, offline, about, terms, FAQ, RSS
+│   ├── blog.py              # Blog posts, comments, reactions, views, saves
+│   ├── notes.py             # Personal space, note CRUD, search, merge, app lock
+│   ├── sharing.py           # Shared notes, attachments, proposals, version history
+│   ├── chat.py              # Direct messages, scheduled messages, reactions
+│   ├── communities.py       # Communities, notes, challenges, reports
+│   ├── admin.py             # Admin dashboard, user/post management, APK upload
+│   ├── payments.py          # Paystack webhook, premium activation
+│   ├── profile.py           # User profile, settings, data export
+│   └── push.py              # Web Push subscribe/unsubscribe
 ├── wsgi.py              # WSGI entry point
+├── config.py            # Environment variables, tier limits, feature flags
+├── database.py          # MongoDB collection references
+├── models.py            # User model, helpers
+├── utils.py             # Shared utilities (encryption, media cleanup, timezone)
 ├── scripts/
 │   ├── worker.py            # RQ background job worker
 │   ├── scheduler.py         # Cron-style scheduler (log emails, newsletter, backups, etc.)
@@ -150,8 +173,7 @@ echowithin/
 │   ├── schedule_log_email.py    # Enqueues weekly log email job
 │   ├── send_weekly_newsletter.py # Enqueues weekly newsletter job
 │   └── cleanup_expired_auth.py   # Removes expired verification codes/tokens
-├── fix_template_syntax.py    # Template syntax repair utility
-├── templates/           # Jinja2 templates (38 files)
+├── templates/           # Jinja2 templates (44 files)
 ├── static/              # CSS, JS, service worker, PWA assets
 ├── mobile-app/          # Capacitor native app wrapper + Android/iOS configs
 ├── requirements.txt     # Python dependencies
@@ -232,20 +254,23 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 
 A REST API is available at `/api/v1/*` for mobile/native app clients. Key endpoint groups:
 
-| Group             | Endpoints                                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| **Auth**          | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`              |
-| **Notes**         | `GET /notes`, `GET /notes/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
-| **Note Shares**   | `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/revoke_share/<id>`                       |
-| **Versions**      | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                      |
-| **Proposals**     | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                              |
-| **Sync**          | `POST /notes/<id>/sync`                                                                                   |
-| **Lock**          | `POST /notes/toggle_lock/<id>`                                                                            |
-| **App Lock**      | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`    |
-| **FCM**           | `POST /fcm/register`, `POST /fcm/unregister`                                                              |
-| **Premium**       | `POST /premium/activate`                                                                                  |
-| **Profile**       | `GET /profile`                                                                                            |
-| **Collaboration** | `GET /notes/share/<share_id>/attachments`                                                                 |
+| Group             | Endpoints                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Auth**          | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`                           |
+| **Notes**         | `GET /notes`, `GET /notes/<id>`, `GET /notes/content/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
+| **Note Shares**   | `GET /notes/shares`, `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/share/<id>/auto_approve`, `POST /notes/revoke_share/<id>` |
+| **Note Previews** | `POST /notes/previews`                                                                                                 |
+| **Note Dedup**    | `POST /notes/dedup`                                                                                                    |
+| **Versions**      | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                                   |
+| **Proposals**     | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                                           |
+| **Sync**          | `POST /notes/<id>/sync`                                                                                                |
+| **Lock**          | `POST /notes/toggle_lock/<id>`                                                                                         |
+| **App Lock**      | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`                |
+| **Activity**      | `GET /posts/my-commented`, `POST /posts/mark-all-read`, `POST /activity/mark_read`, `GET /notifications/badge-counts`  |
+| **FCM**           | `POST /fcm/register`, `POST /fcm/unregister`                                                                           |
+| **Premium**       | `POST /premium/activate`                                                                                               |
+| **Profile**       | `GET /profile`                                                                                                         |
+| **Collaboration** | `GET /notes/share/<id>/attachments`                                                                                    |
 
 ---
 

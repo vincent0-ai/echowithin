@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "1.7.7",
+  "versionCode": 16,
+  "versionName": "1.7.8",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔐 Fixed logout loop — app no longer logs you out on transient network errors.\n📱 Offline mode fully usable: create, edit, search, lock notes without an account.\n🔄 Token auto-refresh prevents session expiry during use.\n🗑️ Local notes preserved on logout/session expiry.\n👁️ Offline users see only relevant tabs (Notes, Locked).\n☁️ Offline notes backup prompt — one-tap backup when you sign in.\n🔄 Manifest auto-sync on server startup — latest version always served."
+  "changelog": "🐛 Update dialog no longer reappears after dismissal for the same version.\n🔒 Offline privacy info shown as a one-time dialog when entering offline mode.\n☁️ Backup prompt only appears when you actually have offline notes to back up.\n🔄 Automatic sync now runs periodically (every 30 min) instead of on every reconnect.\n📱 Welcome screen now scrolls on smaller devices."
 }

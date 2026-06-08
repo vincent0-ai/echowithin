@@ -228,4 +228,14 @@ If the logic requires some further modification note at the end.
 **Verification:** `compileDebugKotlin` BUILD SUCCESSFUL. All 7 modified Android files compile without errors.
 **Privacy Note:** No new data exposure. All changes are client-side UI and local SharedPreferences. The dismissed update version code and offline privacy shown flag are stored locally on the device only.
 
+### Model: opencode/minimax-m3-free
+**Date:** 2026-06-08
+**Changes:**
+- **README updates for both web and Android repos** — Investigated the entire platform to identify removed, edited, and added features. Key findings: (1) "Send a Surprise" button was removed from share config in personal_space.html (surprise themes still exist on shared notes), (2) Community challenges and anonymous posting were added, (3) Share settings page with auto-approve toggle was added, (4) 5 new API endpoints (note previews, dedup, auto_approve, activity feed, badge counts) were undocumented, (5) Voice messages are free for all tiers, (6) Codebase was refactored from monolithic main.py into 11 blueprints.
+- **Web README (echowithin)** — Updated architecture section to show blueprint structure, added community challenges/anonymous posting to features, added voice messages to premium table, documented new API endpoints, expanded PWA section with offline-first architecture details.
+- **Android README (noteapp)** — Updated from v1.0 feature list to v1.7.8: added offline-first architecture, note sharing/locking/version history, App Lock with PIN-gated removal, FCM push notifications, in-app OTA updates, premium tier display, guest/offline mode, sync mode preference. Updated API endpoints from v0 to v1.
+**Files touched:** `README.md` (web), `README.md` (Android), this `AGENTS.md`.
+**Verification:** Both repos pushed to GitHub. `git diff --stat` confirms only README.md changed in each repo.
+**Privacy Note:** Documentation-only changes. No code, no new endpoints, no data exposure.
+
 

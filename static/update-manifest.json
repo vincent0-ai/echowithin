@@ -1,6 +1,6 @@
 {
-  "versionCode": 16,
-  "versionName": "1.7.8",
+  "versionCode": 17,
+  "versionName": "1.7.9",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🐛 Update dialog no longer reappears after dismissal for the same version.\n🔒 Offline privacy info shown as a one-time dialog when entering offline mode.\n☁️ Backup prompt only appears when you actually have offline notes to back up.\n🔄 Automatic sync now runs periodically (every 30 min) instead of on every reconnect.\n📱 Welcome screen now scrolls on smaller devices."
+  "changelog": "🔄 Auto-sync now runs every 5 minutes instead of on every reconnect.\n🚀 No more 'Synced with the server' toast at startup before login.\n🔒 Fixed offline mode redirect loop — 'Continue Offline' no longer bounces back to Welcome.\n📱 Welcome screen scrolls on smaller devices."
 }

@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "1.7.4",
+  "versionCode": 13,
+  "versionName": "1.7.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "💬 Reviewing proposals is now richer: Approve and Decline both open a small dialog where you can leave an optional comment for the contributor.\n🤝 Trusted collaborators? When approving a proposal, tick the new \"Auto-approve this user for future proposals\" box and their next edits on the same share will go through without needing your review.\n⚙️ Auto-approve is also now editable per share — flip the switch right on the share card (premium feature, same as on the website)."
+  "changelog": "🔐 Fixed logout loop — app no longer logs you out on transient network errors.\n📱 Offline mode fully usable: create, edit, search, lock notes without an account.\n🔄 Token auto-refresh prevents session expiry during use.\n🗑️ Local notes preserved on logout/session expiry.\n👁️ Offline users see only relevant tabs (Notes, Locked)."
 }

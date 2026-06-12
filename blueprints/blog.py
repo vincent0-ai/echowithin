@@ -398,7 +398,7 @@ def get_top_posts_json():
 
         posts = list(m.posts_conf.aggregate(pipeline))
 
-        # Apply recency factor in Python (complex time math is cleaner here)
+        # Apply log dampening + time decay (like home page hot posts)
         now = datetime.datetime.now(datetime.timezone.utc)
         results = []
 
@@ -413,14 +413,21 @@ def get_top_posts_json():
             raw_engagement = post.get('raw_engagement', 0)
 
             post_time = post.get('timestamp')
-            recency_multiplier = 1.0
             if post_time:
                 if post_time.tzinfo is None:
                     post_time = post_time.replace(tzinfo=datetime.timezone.utc)
-                days_old = (now - post_time).total_seconds() / 86400
-                recency_multiplier = max(0.2, 1.0 - (math_module.log1p(days_old) / 10))
+                age_hours = (now - post_time).total_seconds() / 3600
+            else:
+                age_hours = 0
 
-            final_score = raw_engagement * recency_multiplier
+            # Log dampening on engagement (prevents early high-engagement posts from dominating)
+            engagement_score = math_module.log1p(raw_engagement) * 10
+            # Time decay denominator: (age_hours + 8)^1.2 - score drops as post ages
+            time_decay = math_module.pow(age_hours + 8, 1.2)
+            # Recency boost for very new posts
+            recency_boost = 1.5 if age_hours < 2 else (1.2 if age_hours < 6 else 1.0)
+
+            final_score = recency_boost * (engagement_score + 1) / time_decay
 
             # Format for JSON response
             post['_id'] = str(post['_id'])

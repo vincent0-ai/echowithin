@@ -87,6 +87,106 @@ def view_community(community_id):
                            active_challenge=active_challenge, past_challenges=past_challenges)
 
 
+
+@bp.route('/api/communities/mine')
+@login_required
+def api_my_communities():
+    """Returns a lightweight list of communities the current user is a member of."""
+    import main as m
+    try:
+        user_id = ObjectId(current_user.id)
+        communities = list(m.communities_conf.find(
+            {'members': user_id},
+            {'name': 1, 'members': 1, 'admin_id': 1}
+        ).sort('updated_at', -1))
+        result = []
+        for comm in communities:
+            result.append({
+                'id': str(comm['_id']),
+                'name': comm.get('name', 'Unnamed'),
+                'member_count': len(comm.get('members', [])),
+                'is_admin': str(comm.get('admin_id')) == str(current_user.id)
+            })
+        return jsonify({'success': True, 'communities': result})
+    except Exception as e:
+        current_app.logger.error(f"Error fetching user communities: {e}")
+        return jsonify({'error': 'Failed to load communities'}), 500
+
+
+@bp.route('/api/personal_post/<post_id>/share-to-community', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_share_note_to_community(post_id):
+    """Cross-posts a personal note to a community as a new community note."""
+    import main as m
+    try:
+        data = request.get_json() or {}
+        community_id_str = data.get('community_id')
+        if not community_id_str:
+            return jsonify({'error': 'Missing community_id'}), 400
+
+        obj_id = m.safe_object_id(post_id)
+        comm_id = m.safe_object_id(community_id_str)
+        if not obj_id or not comm_id:
+            return jsonify({'error': 'Invalid ID'}), 400
+
+        # Verify note ownership
+        note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+        if not note:
+            return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+        # Verify community membership
+        community = m.communities_conf.find_one({'_id': comm_id})
+        if not community:
+            return jsonify({'error': 'Community not found'}), 404
+        if ObjectId(current_user.id) not in community.get('members', []):
+            return jsonify({'error': 'You are not a member of this community'}), 403
+
+        # Decrypt the personal note
+        decrypted_content = m._decrypt_note_record(note)
+        if not decrypted_content or not decrypted_content.strip():
+            return jsonify({'error': 'Cannot share an empty note'}), 400
+
+        # Encrypt with community key
+        encrypted_content = m.encrypt_community_note(decrypted_content, comm_id)
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        share_id = secrets.token_urlsafe(16)
+
+        community_note = {
+            'community_id': comm_id,
+            'author_id': ObjectId(current_user.id),
+            'author_name': current_user.username,
+            'is_anonymous': False,
+            'content': encrypted_content,
+            'tags': note.get('tags', [])[:5],
+            'permissions': 'view',
+            'surprise_theme': 'none',
+            'font_style': 'standard',
+            'share_id': share_id,
+            'use_typewriter': False,
+            'reactions': {'heart': 0, 'fire': 0, 'laugh': 0, 'wow': 0, 'pray': 0},
+            'reaction_count': 0,
+            'view_count': 0,
+            'score': 10.0,
+            'created_at': now,
+            'updated_at': now,
+            'last_activity_at': now,
+            'source_personal_note_id': obj_id
+        }
+
+        m.community_notes_conf.insert_one(community_note)
+        m.communities_conf.update_one({'_id': comm_id}, {'$set': {'updated_at': now}})
+
+        return jsonify({
+            'success': True,
+            'message': f'Note shared to {community.get("name", "the community")}!'
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error sharing note to community: {e}")
+        return jsonify({'error': 'Failed to share note'}), 500
+
+
 @bp.route('/api/community/create', methods=['POST'])
 @login_required
 @limits(calls=5, period=3600)

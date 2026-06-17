@@ -884,6 +884,32 @@ def edit_personal_post(post_id):
             }}
         )
 
+        # --- Free-tier share link content-change enforcement ---
+        # Increment content_changes counter on all active shares for this note.
+        # Free users are capped at 3 content changes per link.
+        try:
+            user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+            is_premium = m.is_premium(user_doc) if user_doc else False
+            active_shares = list(m.note_shares_conf.find({'note_id': obj_id}))
+            for share in active_shares:
+                new_count = share.get('content_changes', 0) + 1
+                update_fields = {'content_changes': new_count}
+                if not is_premium and new_count > 3:
+                    update_fields['deactivated'] = True
+                    update_fields['deactivated_reason'] = 'content_change_limit'
+                m.note_shares_conf.update_one(
+                    {'_id': share['_id']},
+                    {'$set': update_fields}
+                )
+            # Warn user if any links were deactivated
+            deactivated_count = sum(1 for s in active_shares if not is_premium and s.get('content_changes', 0) + 1 > 3 and not s.get('deactivated'))
+            warn_msg = None
+            if deactivated_count > 0:
+                warn_msg = f'{deactivated_count} share link(s) deactivated — free accounts can change shared content up to 3 times per link. Upgrade to Premium for unlimited changes.'
+        except Exception as share_err:
+            current_app.logger.error(f"Error enforcing share content-change limit: {share_err}")
+            warn_msg = None
+
         # Re-index with updated decrypted content
         m.index_note_to_typesense(post_id, decrypted_content=content)
 
@@ -899,7 +925,10 @@ def edit_personal_post(post_id):
             'updated_at': now.isoformat()
         }, room=str(current_user.id))
 
-        return jsonify({'success': True, 'updated_at': now.isoformat()})
+        result = {'success': True, 'updated_at': now.isoformat()}
+        if warn_msg:
+            result['warning'] = warn_msg
+        return jsonify(result)
     except Exception as e:
         current_app.logger.error(f"Error editing personal post {post_id}: {e}")
         return jsonify({'error': 'Internal error'}), 500

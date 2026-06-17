@@ -1596,6 +1596,29 @@ def handle_stop_typing(data):
             'sender_id': str(current_user.id)
         }, room=recipient_room)
 
+@socketio.on('recording_audio')
+@login_required
+def handle_recording_audio(data):
+    """Broadcasts that the current user is recording a voice note."""
+    recipient_id = data.get('recipient_id')
+    if recipient_id:
+        recipient_room = f"user_{str(recipient_id)}"
+        emit('recording_audio', {
+            'sender_id': str(current_user.id),
+            'username': current_user.username
+        }, room=recipient_room)
+
+@socketio.on('stop_recording')
+@login_required
+def handle_stop_recording(data):
+    """Broadcasts that the user stopped recording."""
+    recipient_id = data.get('recipient_id')
+    if recipient_id:
+        recipient_room = f"user_{str(recipient_id)}"
+        emit('stop_recording', {
+            'sender_id': str(current_user.id)
+        }, room=recipient_room)
+
 
 # Handles any possible errors
 

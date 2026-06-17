@@ -201,6 +201,10 @@ def view_shared_note(share_id):
             m.note_shares_conf.delete_one({'_id': share['_id']})
             return render_template('shared_note.html', expired=True)
 
+    # Check if link was deactivated (e.g., free-tier content-change limit exceeded)
+    if share.get('deactivated'):
+        return render_template('shared_note.html', expired=True), 410
+
     # Check access code
     requires_code = bool(share.get('access_code_hash'))
     if requires_code:

@@ -338,5 +338,75 @@
             surpriseOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
         });
     }
+
+    // --- Async form submission with progress bar ---
+    (function () {
+        const form = document.querySelector('.settings-container form');
+        const saveBtn = form ? form.querySelector('.btn-save') : null;
+        if (!form || !saveBtn) return;
+
+        // Create progress bar elements
+        const progressWrap = document.createElement('div');
+        progressWrap.style.cssText = 'display:none; margin-top:0.5rem;';
+        const progressBar = document.createElement('div');
+        progressBar.style.cssText = 'height:6px; background:#eee; border-radius:3px; overflow:hidden;';
+        const progressFill = document.createElement('div');
+        progressFill.style.cssText = 'width:0%; height:100%; background:#3e2217; transition:width 0.3s;';
+        const progressText = document.createElement('div');
+        progressText.style.cssText = 'font-size:0.75rem; color:#666; margin-top:0.25rem; text-align:center;';
+        progressText.textContent = 'Uploading: 0%';
+        progressBar.appendChild(progressFill);
+        progressWrap.appendChild(progressBar);
+        progressWrap.appendChild(progressText);
+        saveBtn.insertAdjacentElement('afterend', progressWrap);
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            // Disable button and show progress
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            saveBtn.style.opacity = '0.6';
+            progressWrap.style.display = 'block';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Uploading: 0%';
+
+            const fd = new FormData(form);
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.addEventListener('progress', function (ev) {
+                if (ev.lengthComputable) {
+                    const pct = Math.round((ev.loaded / ev.total) * 100);
+                    progressFill.style.width = pct + '%';
+                    progressText.textContent = pct < 100 ? ('Uploading: ' + pct + '%') : 'Processing...';
+                }
+            });
+
+            xhr.addEventListener('load', function () {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Saved!';
+                    saveBtn.textContent = 'Saved!';
+                    // Reload after a short delay to show success
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    progressText.textContent = 'Error saving. Please try again.';
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Settings';
+                    saveBtn.style.opacity = '1';
+                }
+            });
+
+            xhr.addEventListener('error', function () {
+                progressText.textContent = 'Network error. Please try again.';
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Settings';
+                saveBtn.style.opacity = '1';
+            });
+
+            xhr.open(form.method, form.action, true);
+            xhr.send(fd);
+        });
+    })();
 </script>
 {% endblock %}

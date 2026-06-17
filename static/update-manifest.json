@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "1.7.9",
+  "versionCode": 18,
+  "versionName": "1.8.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔄 Auto-sync now runs every 5 minutes instead of on every reconnect.\n🚀 No more 'Synced with the server' toast at startup before login.\n🔒 Fixed offline mode redirect loop — 'Continue Offline' no longer bounces back to Welcome.\n📱 Welcome screen scrolls on smaller devices."
+  "changelog": "🔒 Correct PIN now unlocks locked notes offline; PIN no longer wiped on logout.\n📵 Fixed offline loop — 'Continue Offline' no longer bounces back to Welcome, and no sync at startup while offline.\n🗑️ Logging out now removes your account's notes from the device while keeping your offline notes safe.\n✨ Smoother scrolling & navigation — no more redundant syncs when moving between screens."
 }

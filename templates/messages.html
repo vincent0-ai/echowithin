@@ -273,8 +273,8 @@
                             onchange="handleImageSelection(event)">
 
                         <div style="flex: 1; position: relative;">
-                            <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off"
-                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none;">
+                            <textarea id="message-input" placeholder="Type a message..." autocomplete="off" rows="1"
+                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none; resize: none; overflow-y: hidden; max-height: 120px; line-height: 1.4; font-family: inherit; box-sizing: border-box;"></textarea>
                         </div>
 
                         <!-- Voice Message Button -->
@@ -365,8 +365,14 @@
         word-wrap: break-word;
         overflow-wrap: anywhere;
         word-break: break-word;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
         margin-bottom: 1px;
+        animation: msgAppear 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes msgAppear {
+        from { opacity: 0; transform: translateY(8px) scale(0.97); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     .message-sent {
@@ -1625,12 +1631,46 @@
             return div.innerHTML;
         }
 
+        function truncateUrl(url, maxLen) {
+            maxLen = maxLen || 45;
+            if (url.length <= maxLen) return url;
+            // Show domain + first part ... last part
+            try {
+                const u = new URL(url);
+                const domain = u.hostname;
+                const path = u.pathname + u.search + u.hash;
+                if (path.length <= 1) return url.substring(0, maxLen) + '…';
+                const budget = maxLen - domain.length - 12; // "https://" + "…"
+                if (budget <= 8) return url.substring(0, maxLen) + '…';
+                return u.protocol + '//' + domain + path.substring(0, budget) + '…';
+            } catch(e) {
+                return url.substring(0, maxLen) + '…';
+            }
+        }
+
         function formatMessageText(text) {
             if (!text) return '';
-            // SECURITY: Escape HTML entities first to prevent XSS
+            // Extract URLs BEFORE escaping so HTML entities don't corrupt URLs
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const urls = [];
+            let idx = 0;
+            text = text.replace(urlRegex, (url) => {
+                const placeholder = `__URL_PLACEHOLDER_${idx}__`;
+                urls.push(url);
+                idx++;
+                return placeholder;
+            });
+            // SECURITY: Now escape HTML entities on the non-URL text
             text = escapeHtml(text);
-            // Basic linkification
-            text = linkifyText(text);
+            // Restore URLs as proper <a> tags with truncated display text
+            urls.forEach((url, i) => {
+                const safeUrl = escapeHtml(url);
+                const displayUrl = escapeHtml(truncateUrl(url));
+                text = text.replace(
+                    `__URL_PLACEHOLDER_${i}__`,
+                    `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${displayUrl}</a>`
+                );
+            });
             // Bold: *text*
             text = text.replace(/\*(.*?)\*/g, '<span class="fmt-bold">$1</span>');
             // Italic: _text_
@@ -1638,13 +1678,6 @@
             // Code: `text`
             text = text.replace(/`(.*?)`/g, '<span class="fmt-code">$1</span>');
             return text;
-        }
-
-        function linkifyText(text) {
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            return text.replace(urlRegex, (url) => {
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${url}</a>`;
-            });
         }
 
         function hideTypingIndicator() {
@@ -1921,7 +1954,8 @@
                 bubble.setAttribute('data-id', data.id);
                 bubble.removeAttribute('data-temp');
                 renderedMessageIds.add(data.id);
-                addMessageActions(bubble, data.id);
+                const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
+                addMessageActions(bubble, data.id, inferredType);
             }
         });
 
@@ -2043,6 +2077,9 @@
 
                 // Reset form
                 messageInput.value = '';
+                // Reset textarea height after send
+                messageInput.style.height = 'auto';
+                messageInput.style.overflowY = 'hidden';
                 cancelReply();
                 cancelImageUpload();
                 document.getElementById('send-btn').style.opacity = '1';
@@ -2051,15 +2088,30 @@
             };
         }
 
-        // --- Typing indicator: emit events on input ---
+        // --- Typing indicator + auto-expand textarea ---
         if (messageInput) {
+            // Auto-expand textarea as user types
+            function autoExpandInput() {
+                messageInput.style.height = 'auto';
+                messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+                // Show/hide scrollbar when at max height
+                messageInput.style.overflowY = messageInput.scrollHeight > 120 ? 'auto' : 'hidden';
+            }
             messageInput.addEventListener('input', function () {
+                autoExpandInput();
                 if (!activeRecipientId) return;
                 socket.emit('typing', { recipient_id: activeRecipientId });
                 clearTimeout(typingTimeout);
                 typingTimeout = setTimeout(() => {
                     socket.emit('stop_typing', { recipient_id: activeRecipientId });
                 }, 2000);
+            });
+            // Enter to send, Shift+Enter for newline
+            messageInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+                }
             });
         }
 
@@ -2267,6 +2319,9 @@
             newBubble.addEventListener('touchstart', (e) => startPressTimer(e, resolvedId, type), { passive: true });
             newBubble.addEventListener('touchend', cancelPressTimer, { passive: true });
             newBubble.addEventListener('touchmove', cancelPressTimer, { passive: true });
+
+            // Swipe-to-reply (touch devices)
+            setupSwipeToReply(newBubble, resolvedId, type);
         }
 
         window.scrollToMessage = function (msgId) {
@@ -2408,6 +2463,8 @@
 
         function addMessageActions(bubble, msgId, type) {
             if (bubble.querySelector('.message-actions')) return;
+            // Infer type from bubble class if not passed (fixes missing edit/delete on confirmed messages)
+            if (!type) type = bubble.classList.contains('message-sent') ? 'sent' : 'received';
             const isSent = type === 'sent';
 
             // Get sender name for reply
@@ -3408,6 +3465,92 @@
             }
         }
 
+        // --- Swipe-to-Reply (Touch Devices) ---
+        function setupSwipeToReply(bubble, msgId, type) {
+            if (!msgId || !('ontouchstart' in window)) return;
+            let startX = 0, startY = 0, swiping = false, swipeDir = 0;
+            const THRESHOLD = 60;
+
+            bubble.addEventListener('touchstart', function (e) {
+                const touch = e.touches[0];
+                startX = touch.clientX;
+                startY = touch.clientY;
+                swiping = false;
+                swipeDir = 0;
+            }, { passive: true });
+
+            bubble.addEventListener('touchmove', function (e) {
+                if (!startX) return;
+                const touch = e.touches[0];
+                const dx = touch.clientX - startX;
+                const dy = touch.clientY - startY;
+
+                // Only allow horizontal swipe (ignore vertical scroll)
+                if (Math.abs(dy) > Math.abs(dx) && !swiping) return;
+
+                // Determine allowed direction: received -> swipe right, sent -> swipe left
+                const isSent = type === 'sent';
+                const allowedDir = isSent ? -1 : 1;
+                const effectiveDx = dx * allowedDir;
+
+                if (effectiveDx > 10) {
+                    swiping = true;
+                    const clamped = Math.min(effectiveDx, THRESHOLD + 20);
+                    const translate = clamped * allowedDir;
+                    bubble.style.transform = `translateX(${translate}px)`;
+                    bubble.style.transition = 'none';
+
+                    // Show/update reply hint indicator
+                    let hint = bubble.querySelector('.swipe-reply-hint');
+                    if (!hint) {
+                        hint = document.createElement('div');
+                        hint.className = 'swipe-reply-hint';
+                        hint.innerHTML = '<i class="fas fa-reply"></i>';
+                        hint.style.cssText = `position: absolute; top: 50%; transform: translateY(-50%); ${isSent ? 'right: calc(100% + 6px)' : 'left: calc(100% + 6px)'}; width: 28px; height: 28px; border-radius: 50%; background: #f5ebe7; color: #3e2217; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; opacity: 0; transition: opacity 0.15s;`;
+                        bubble.appendChild(hint);
+                    }
+                    hint.style.opacity = effectiveDx >= THRESHOLD ? '1' : '0.4';
+                }
+            }, { passive: true });
+
+            bubble.addEventListener('touchend', function (e) {
+                if (!swiping) { startX = 0; return; }
+                const touch = e.changedTouches[0];
+                const dx = touch.clientX - startX;
+                const isSent = type === 'sent';
+                const allowedDir = isSent ? -1 : 1;
+                const effectiveDx = dx * allowedDir;
+
+                // Spring back
+                bubble.style.transition = 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)';
+                bubble.style.transform = '';
+
+                // Remove hint
+                const hint = bubble.querySelector('.swipe-reply-hint');
+                if (hint) setTimeout(() => hint.remove(), 250);
+
+                if (effectiveDx >= THRESHOLD) {
+                    // Cancel long press timer if active
+                    cancelPressTimer();
+                    // Trigger reply
+                    const contentNode = bubble.querySelector('.message-content') || bubble.querySelector('.chat-image') || bubble.querySelector('.audio-player');
+                    let previewText = '';
+                    if (contentNode) {
+                        if (contentNode.tagName === 'IMG') previewText = '📸 Photo';
+                        else if (contentNode.classList.contains('audio-player')) previewText = '🎤 Voice Message';
+                        else previewText = contentNode.textContent.substring(0, 50);
+                    }
+                    const senderName = isSent ? 'You' : (document.getElementById('active-chat-username').textContent || 'User');
+                    replyToMessage(msgId, previewText, false, senderName);
+                    // Haptic feedback if available
+                    if (navigator.vibrate) navigator.vibrate(20);
+                }
+
+                startX = 0;
+                swiping = false;
+            }, { passive: true });
+        }
+
         // Load scheduled messages logic removed (consolidated into loadChat)
     });
 </script>
@@ -3422,6 +3565,17 @@
             opacity: 1;
             transform: translateX(-50%) translateY(0);
         }
+    }
+
+    /* Textarea focus style */
+    #message-input:focus {
+        border-color: #3e2217 !important;
+        box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.1);
+    }
+
+    /* Swipe reply hint */
+    .swipe-reply-hint {
+        pointer-events: none;
     }
 </style>
 {% endblock %}

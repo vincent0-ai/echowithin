@@ -90,6 +90,15 @@ def personal_space():
         {'$addFields': {
             'original_doc': {'$arrayElemAt': ['$original', 0]}
         }},
+        {'$lookup': {
+            'from': 'users',
+            'localField': 'original_doc.user_id',
+            'foreignField': '_id',
+            'as': 'original_user'
+        }},
+        {'$addFields': {
+            'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
+        }},
         {'$addFields': {
             '_sort_ts': {
                 '$cond': {

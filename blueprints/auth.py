@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os
-from security import limits, warm_user_fernet
+from security import limits, warm_user_fernet, generate_user_envelope_keys
 from config import TIME
 
 def csrf_exempt(view):
@@ -32,13 +32,15 @@ def register():
             flash("Email or username already exists.", "danger")
             return redirect(url_for('auth.register'))
         hashed_password = m.generate_password_hash(password)
+        envelope_keys = generate_user_envelope_keys()
         m.users_conf.insert_one({
             "username": username,
             "email": email,
             "password": hashed_password,
             "is_confirmed": False,
             "join_date": datetime.datetime.now(datetime.timezone.utc),
-            "notification_preference": 'weekly'
+            "notification_preference": 'weekly',
+            **envelope_keys
         })
         
         gen_code = str(secrets.randbelow(10**6)).zfill(6)
@@ -262,6 +264,7 @@ def google_callback():
         while m.users_conf.find_one({'username': username}):
             username = f"{base_username}{counter}"
             counter += 1
+        envelope_keys = generate_user_envelope_keys()
         m.users_conf.insert_one({
             'username': username,
             'email': email,
@@ -270,7 +273,8 @@ def google_callback():
             'is_admin': False,
             'join_date': datetime.datetime.now(datetime.timezone.utc),
             'notification_preference': 'weekly',
-            'google_signup': True
+            'google_signup': True,
+            **envelope_keys
         })
         try:
             ntfy_message = f"User '{username}' has registered via Google."

@@ -133,6 +133,9 @@ def personal_space():
             note['lazy_content'] = True  # Flag: JS will fetch this note's preview
 
         # Determine if an update is available on the original note
+        # PERF: Use timestamp-only comparison instead of decrypting both notes.
+        # A rare false-positive (same content, different timestamp) is harmless —
+        # the user clicks 'update' and sees no diff.
         note['update_available'] = False
         if note.get('source_note_id') and note.get('original_doc'):
             orig = note['original_doc']
@@ -144,20 +147,7 @@ def personal_space():
                 if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                     clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                 if orig_ts > clone_ts:
-                    # Timestamp says original is newer — verify content is actually different
-                    try:
-                        clone_decrypted = m._decrypt_note_record(note)
-                        orig_decrypted = m._decrypt_note_record(orig)
-                        if clone_decrypted != orig_decrypted:
-                            note['update_available'] = True
-                        else:
-                            # Content is the same but timestamps drifted — fix silently
-                            m.personal_posts_conf.update_one(
-                                {'_id': note['_id']},
-                                {'$set': {'updated_at': orig_ts}}
-                            )
-                    except Exception:
-                        note['update_available'] = True
+                    note['update_available'] = True
         personal_posts.append(note)
 
     # --- Locked Notes ---
@@ -232,18 +222,7 @@ def personal_space():
                     if hasattr(clone_ts, 'tzinfo') and clone_ts.tzinfo is None:
                         clone_ts = clone_ts.replace(tzinfo=datetime.timezone.utc)
                     if orig_ts > clone_ts:
-                        try:
-                            clone_decrypted = m._decrypt_note_record(note)
-                            orig_decrypted = m._decrypt_note_record(orig)
-                            if clone_decrypted != orig_decrypted:
-                                note['update_available'] = True
-                            else:
-                                m.personal_posts_conf.update_one(
-                                    {'_id': note['_id']},
-                                    {'$set': {'updated_at': orig_ts}}
-                                )
-                        except Exception:
-                            note['update_available'] = True
+                        note['update_available'] = True
             locked_notes.append(note)
         # Fetch shares for locked notes
         locked_note_ids = [n['_id'] for n in locked_notes]

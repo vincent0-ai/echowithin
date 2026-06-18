@@ -35,7 +35,9 @@ from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
     _decrypt_with_candidate_ids, _note_decryption_candidates,
     _decrypt_note_record, _get_community_fernet,
     encrypt_community_note, decrypt_community_note,
-    invalidate_note_decryption_cache)
+    invalidate_note_decryption_cache,
+    generate_user_envelope_keys, generate_conversation_envelope_keys,
+    _get_user_fernet_v3, _get_dm_fernet_v3, _encrypt_dek, _decrypt_dek)
 from utils import (linkify_filter, _linkify_target_blank, markdown_filter,
     from_timestamp_filter, to_iso_filter, to_local_filter, localtime_filter,
     optimize_cloudinary_url, extract_cloudinary_public_id,
@@ -172,6 +174,18 @@ def set_request_id():
 @app.before_request
 def set_csp_nonce():
     g.csp_nonce = secrets.token_hex(16)
+
+@app.before_request
+def start_request_timer():
+    g._request_start = time.time()
+
+@app.after_request
+def log_request_time(response):
+    elapsed = (time.time() - getattr(g, '_request_start', time.time())) * 1000
+    if elapsed > 500:
+        app.logger.warning(f"SLOW REQUEST: {request.method} {request.path} -> {elapsed:.0f}ms")
+    response.headers['X-Response-Time'] = f"{elapsed:.0f}ms"
+    return response
 
 # --- Periodic global state cleanup ---
 _last_state_cleanup = {'at': 0}
@@ -411,8 +425,8 @@ related_posts_cache = TTLCache(maxsize=128, ttl=120)
 post_comment_stats_cache = TTLCache(maxsize=256, ttl=30)
 # Community stats cache for home page (60 second TTL)
 community_stats_cache = TTLCache(maxsize=1, ttl=60)
-# Blog feed cache (15 second TTL - short to maintain freshness/randomness)
-blog_feed_cache = TTLCache(maxsize=1, ttl=15)
+# Blog feed cache (60 second TTL - balanced freshness/performance)
+blog_feed_cache = TTLCache(maxsize=1, ttl=60)
 # User loader cache - CRITICAL for performance (30 second TTL)
 # This caches user objects to avoid DB query on every single request
 user_loader_cache = TTLCache(maxsize=512, ttl=30)
@@ -838,40 +852,53 @@ def add_security_headers(response):
 
 @app.context_processor
 def inject_pinned_announcement():
-    """Makes the pinned announcement available to all templates (cached for 60s)."""
+    """Makes the pinned announcement available to all templates (cached for 60s).
+    
+    PERF: Check in-memory cache FIRST (zero-latency, per-process) before Redis.
+    This saves ~1ms per request by avoiding a Redis round-trip when the cache is warm.
+    """
     cache_key = 'pinned_announcement'
 
-    # Try Redis cache first
+    # Try in-memory cache FIRST (zero-latency)
+    cached_val = _pinned_announcement_cache.get(cache_key)
+    if cached_val is not None:
+        # We store a sentinel '__none__' for "no announcement" to distinguish from cache miss
+        return dict(pinned_announcement=None if cached_val == '__none__' else cached_val)
+
+    # Try Redis cache second
     if redis_cache:
         try:
             cached = redis_cache.get(cache_key)
             if cached:
-                if cached == '__none__':
+                if cached == b'__none__' or cached == '__none__':
+                    _pinned_announcement_cache[cache_key] = '__none__'
                     return dict(pinned_announcement=None)
-                return dict(pinned_announcement=json.loads(cached))
+                parsed = json.loads(cached)
+                _pinned_announcement_cache[cache_key] = parsed
+                return dict(pinned_announcement=parsed)
         except Exception:
             pass
 
-    # Try in-memory cache
-    if cache_key in _pinned_announcement_cache:
-        return dict(pinned_announcement=_pinned_announcement_cache[cache_key])
-
-    # Fetch from DB
+    # Fetch from DB (cache miss on both levels)
     pinned_announcement = announcements_conf.find_one({'is_pinned': True})
 
-    # Cache the result
-    if redis_cache:
-        try:
-            if pinned_announcement:
-                # Convert ObjectId to string for JSON serialization
-                cache_doc = {k: str(v) if isinstance(v, ObjectId) else v for k, v in pinned_announcement.items()}
+    # Cache the result in both layers
+    if pinned_announcement:
+        cache_doc = {k: str(v) if isinstance(v, ObjectId) else v for k, v in pinned_announcement.items()}
+        _pinned_announcement_cache[cache_key] = cache_doc
+        if redis_cache:
+            try:
                 redis_cache.setex(cache_key, 60, json.dumps(cache_doc, default=str))
-            else:
+            except Exception:
+                pass
+    else:
+        _pinned_announcement_cache[cache_key] = '__none__'
+        if redis_cache:
+            try:
                 redis_cache.setex(cache_key, 60, '__none__')
-        except Exception:
-            pass
+            except Exception:
+                pass
 
-    _pinned_announcement_cache[cache_key] = pinned_announcement
     return dict(pinned_announcement=pinned_announcement)
 
 ## Remark42 removed: internal comments will be used instead.

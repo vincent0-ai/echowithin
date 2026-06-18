@@ -136,17 +136,57 @@ def home():
             try_add_post(post_doc)
         return mixed_posts[:max_posts]
     fresh_posts = []
-    try:
-        recent_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
-        recent_posts_cursor = m.posts_conf.find({'timestamp': {'$gte': recent_cutoff}}).sort('timestamp', -1).limit(10)
-        with current_app.app_context():
-            fresh_posts = m.prepare_posts(list(recent_posts_cursor))
-    except Exception as e:
-        current_app.logger.debug(f"Failed to load fresh homepage posts: {e}")
+    fresh_cache_key = 'home_fresh_posts'
+    if m.redis_cache:
+        try:
+            cached_fresh = m.redis_cache.get(fresh_cache_key)
+            if cached_fresh:
+                fresh_posts = json.loads(cached_fresh)
+        except Exception:
+            pass
+    if not fresh_posts:
+        try:
+            recent_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
+            recent_posts_cursor = m.posts_conf.find({'timestamp': {'$gte': recent_cutoff}}).sort('timestamp', -1).limit(10)
+            with current_app.app_context():
+                fresh_posts = m.prepare_posts(list(recent_posts_cursor))
+            if m.redis_cache and fresh_posts:
+                try:
+                    m.redis_cache.setex(fresh_cache_key, 30, json.dumps(fresh_posts, default=str))
+                except Exception:
+                    pass
+        except Exception as e:
+            current_app.logger.debug(f"Failed to load fresh homepage posts: {e}")
     hot_posts = _mix_home_posts(hot_posts, fresh_posts)
     user_oid = ObjectId(current_user.id)
-    note_count = m.personal_posts_conf.count_documents({'user_id': user_oid})
-    user_community_count = m.communities_conf.count_documents({'members': user_oid})
+    user_id_str = str(current_user.id)
+    # PERF: Cache per-user counts in Redis (60s TTL) to avoid count_documents on every load
+    note_count = None
+    user_community_count = None
+    if m.redis_cache:
+        try:
+            cached_nc = m.redis_cache.get(f'home_note_count:{user_id_str}')
+            cached_cc = m.redis_cache.get(f'home_community_count:{user_id_str}')
+            if cached_nc is not None:
+                note_count = int(cached_nc)
+            if cached_cc is not None:
+                user_community_count = int(cached_cc)
+        except Exception:
+            pass
+    if note_count is None:
+        note_count = m.personal_posts_conf.count_documents({'user_id': user_oid})
+        if m.redis_cache:
+            try:
+                m.redis_cache.setex(f'home_note_count:{user_id_str}', 60, str(note_count))
+            except Exception:
+                pass
+    if user_community_count is None:
+        user_community_count = m.communities_conf.count_documents({'members': user_oid})
+        if m.redis_cache:
+            try:
+                m.redis_cache.setex(f'home_community_count:{user_id_str}', 60, str(user_community_count))
+            except Exception:
+                pass
     return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description, meta_image=url_for('static', filename='og-image.png', _external=True), total_members=total_members, total_posts=total_posts, most_active_member=most_active_member, hot_posts=hot_posts, note_count=note_count, user_community_count=user_community_count, active_now=active_now)
 
 

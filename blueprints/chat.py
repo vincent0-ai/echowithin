@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, json, os, re
-from security import limits
+from security import limits, generate_conversation_envelope_keys
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -256,12 +256,14 @@ def api_send_dm_request(target_user_id):
                 return jsonify({'status': 'pending', 'message': 'Message request sent!'})
         
         now = datetime.datetime.now(datetime.timezone.utc)
+        conv_envelope = generate_conversation_envelope_keys()
         result = m.dm_permissions_conf.insert_one({
             'requester_id': sender_id,
             'target_id': target_id,
             'status': 'pending',
             'created_at': now,
-            'updated_at': now
+            'updated_at': now,
+            **conv_envelope
         })
         
         m.socketio.emit('dm_request', {

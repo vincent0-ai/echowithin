@@ -5,6 +5,7 @@ import datetime
 import difflib
 import os
 import re
+import secrets as _secrets
 from functools import wraps
 from urllib.parse import urlparse, urljoin
 
@@ -193,11 +194,171 @@ def warm_user_fernet(user_id: str):
     
     Call on login to avoid the ~200ms PBKDF2 cold-derivation cost
     when the user first navigates to /personal_space.
+    Also warms the v3 key if the user has been migrated.
     """
     _get_user_fernet(str(user_id))
+    # Also warm v3 if available (no-op if user hasn't been migrated)
+    try:
+        _get_user_fernet_v3(str(user_id))
+    except Exception:
+        pass
 
 
-# -- v3 per-conversation DM key derivation & caching --
+# ---------------------------------------------------------------------------
+# v3 ENVELOPE ENCRYPTION
+# ---------------------------------------------------------------------------
+# Each user gets a random DEK (Data Encryption Key) encrypted by a KEK
+# (Key Encryption Key) derived from SECRET_KEY. The encrypted DEK and a
+# random salt are stored in the user document.
+#
+# Threat model improvement:
+#   - DB breach alone → attacker gets encrypted DEKs, no plaintext
+#   - SECRET_KEY leak alone → attacker needs the DB to get encrypted DEKs
+#   - Both together → still need both pieces (vs today: SECRET_KEY alone)
+#
+# The KEK is derived from SECRET_KEY with a fixed namespace salt.
+# The DEK is a random 32-byte key, never derived from SECRET_KEY.
+# A random 32-byte salt per user adds uniqueness to the derived Fernet key.
+# ---------------------------------------------------------------------------
+
+_KEK_CACHE = {}  # module-level singleton cache for KEK Fernet
+
+
+def _get_kek() -> Fernet:
+    """Master Key Encryption Key — derived from SECRET_KEY with a fixed namespace salt.
+    
+    This is used ONLY to wrap/unwrap user DEKs, never to encrypt content directly.
+    """
+    if 'instance' in _KEK_CACHE:
+        return _KEK_CACHE['instance']
+    secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
+    key = _derive_fernet_key(secret, b'echowithin_kek_v1', _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    _KEK_CACHE['instance'] = f
+    return f
+
+
+def generate_user_envelope_keys() -> dict:
+    """Generate a random DEK + salt for a new user.
+    
+    Returns a dict ready to be merged into the user document:
+        {
+            'encryption_key_enc': str,   # DEK encrypted by KEK (Fernet token)
+            'encryption_salt': str,      # random salt, base64-encoded
+            'encryption_version': 3
+        }
+    """
+    dek_raw = _secrets.token_bytes(32)
+    salt_raw = _secrets.token_bytes(32)
+    encrypted_dek = _get_kek().encrypt(dek_raw).decode('utf-8')
+    return {
+        'encryption_key_enc': encrypted_dek,
+        'encryption_salt': base64.urlsafe_b64encode(salt_raw).decode('utf-8'),
+        'encryption_version': 3
+    }
+
+
+def _decrypt_dek(encrypted_dek: str) -> bytes:
+    """Decrypt a user's DEK from the stored Fernet token."""
+    return _get_kek().decrypt(encrypted_dek.encode('utf-8'))
+
+
+def _encrypt_dek(dek_raw: bytes) -> str:
+    """Encrypt a DEK with the current KEK for storage."""
+    return _get_kek().encrypt(dek_raw).decode('utf-8')
+
+
+def _get_user_fernet_v3(user_id: str):
+    """v3 per-user Fernet using envelope encryption.
+    
+    The key is derived from the user's random DEK + random salt.
+    Both are stored (DEK encrypted) in the user document.
+    Returns None if the user hasn't been migrated to v3 yet.
+    """
+    cached = database._user_fernet_v3_cache.get(user_id)
+    if cached is not None:
+        return cached if cached != '__none__' else None
+
+    user_doc = database.users_conf.find_one(
+        {'_id': ObjectId(user_id)},
+        {'encryption_key_enc': 1, 'encryption_salt': 1, 'encryption_version': 1}
+    )
+    if not user_doc or not user_doc.get('encryption_key_enc'):
+        database._user_fernet_v3_cache[user_id] = '__none__'
+        return None
+
+    try:
+        dek_raw = _decrypt_dek(user_doc['encryption_key_enc'])
+        salt = base64.urlsafe_b64decode(user_doc['encryption_salt'])
+        key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
+        f = Fernet(key)
+        database._user_fernet_v3_cache[user_id] = f
+        return f
+    except Exception as e:
+        _get_app().logger.error(f"Failed to derive v3 Fernet for user {user_id}: {e}")
+        database._user_fernet_v3_cache[user_id] = '__none__'
+        return None
+
+
+# -- v3 DM envelope encryption --
+
+def generate_conversation_envelope_keys() -> dict:
+    """Generate a random DEK for a new DM conversation.
+    
+    Returns a dict to be merged into the dm_permissions document:
+        {
+            'conversation_key_enc': str,  # conversation DEK encrypted by KEK
+            'dm_encryption_version': 3
+        }
+    """
+    dek_raw = _secrets.token_bytes(32)
+    encrypted_dek = _get_kek().encrypt(dek_raw).decode('utf-8')
+    return {
+        'conversation_key_enc': encrypted_dek,
+        'dm_encryption_version': 3
+    }
+
+
+def _get_dm_fernet_v3(user1_id: str, user2_id: str):
+    """v3 DM Fernet using envelope encryption.
+    
+    Looks up the conversation's encrypted DEK from dm_permissions.
+    Returns None if the conversation hasn't been migrated to v3.
+    """
+    uids = sorted([str(user1_id), str(user2_id)])
+    conv_id = f"{uids[0]}_{uids[1]}"
+
+    cached = database._dm_fernet_v3_cache.get(conv_id)
+    if cached is not None:
+        return cached if cached != '__none__' else None
+
+    # Find the dm_permissions doc for this conversation
+    perm_doc = database.dm_permissions_conf.find_one(
+        {
+            '$or': [
+                {'requester_id': ObjectId(uids[0]), 'target_id': ObjectId(uids[1])},
+                {'requester_id': ObjectId(uids[1]), 'target_id': ObjectId(uids[0])}
+            ]
+        },
+        {'conversation_key_enc': 1, 'dm_encryption_version': 1}
+    )
+    if not perm_doc or not perm_doc.get('conversation_key_enc'):
+        database._dm_fernet_v3_cache[conv_id] = '__none__'
+        return None
+
+    try:
+        dek_raw = _decrypt_dek(perm_doc['conversation_key_enc'])
+        # Use a deterministic salt from the conversation ID for the Fernet key derivation
+        salt = f'echowithin_dm_v3_{conv_id}'.encode()
+        key = _derive_fernet_key(dek_raw, salt, _NOTES_KDF_ITERATIONS)
+        f = Fernet(key)
+        database._dm_fernet_v3_cache[conv_id] = f
+        return f
+    except Exception as e:
+        _get_app().logger.error(f"Failed to derive v3 DM Fernet for conversation {conv_id}: {e}")
+        database._dm_fernet_v3_cache[conv_id] = '__none__'
+        return None
+
 
 def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
     """Derives a unique Fernet key for a conversation between two users."""
@@ -221,16 +382,28 @@ def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
 def encrypt_dm(content, user1_id, user2_id):
     if not content: return content
     try:
+        # Try v3 (envelope encryption) first
+        f_v3 = _get_dm_fernet_v3(user1_id, user2_id)
+        if f_v3:
+            return f_v3.encrypt(content.encode('utf-8')).decode('utf-8')
+        # Fall back to v2
         f = _get_dm_fernet(user1_id, user2_id)
         return f.encrypt(content.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"DM Encryption error: {e}")
-        return content # Fallback (should be avoided in production if strict)
+        raise  # Never silently fall back to plaintext
 
 
 def decrypt_dm(encrypted_content, user1_id, user2_id):
     if not encrypted_content: return encrypted_content
-    # Try DM specific key
+    # Try v3 first (envelope encryption)
+    f_v3 = _get_dm_fernet_v3(user1_id, user2_id)
+    if f_v3:
+        try:
+            return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            pass  # Fall through to v2
+    # Try v2 DM-specific key
     try:
         f = _get_dm_fernet(user1_id, user2_id)
         return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
@@ -240,11 +413,16 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
 
 
 def encrypt_note(content, user_id=None):
-    """Encrypts note content. Uses per-user key (v2) when user_id is provided."""
+    """Encrypts note content. Uses v3 envelope key if available, else v2 per-user key."""
     if not content:
         return content
     try:
         if user_id:
+            # Try v3 (envelope encryption) first
+            f_v3 = _get_user_fernet_v3(str(user_id))
+            if f_v3:
+                return f_v3.encrypt(content.encode('utf-8')).decode('utf-8')
+            # Fall back to v2
             f = _get_user_fernet(str(user_id))
         else:
             f = get_notes_fernet()
@@ -256,10 +434,18 @@ def encrypt_note(content, user_id=None):
 
 
 def decrypt_note(encrypted_content, user_id=None):
-    """Decrypts note content. Tries per-user v2 key first, then v1 global key."""
+    """Decrypts note content. Tries v3 → v2 → v1 in order (backward-compatible)."""
     if not encrypted_content or encrypted_content == '[Content unavailable \u2014 decryption error]':
         return encrypted_content
-    # Try v2 per-user key first
+    # Try v3 first (envelope encryption)
+    if user_id:
+        f_v3 = _get_user_fernet_v3(str(user_id))
+        if f_v3:
+            try:
+                return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+            except Exception:
+                pass  # Fall through to v2
+    # Try v2 per-user key
     if user_id:
         try:
             f = _get_user_fernet(str(user_id))
@@ -451,35 +637,51 @@ def _decrypt_note_record(note, share=None, max_preview_chars=None):
 
 # --- Community Encryption Utilities ---
 
-def _get_community_fernet(community_id):
+# Community encryption version:
+#   v1: 100,000 iterations (legacy)
+#   v2: 480,000 iterations (OWASP 2024)
+
+def _get_community_fernet(community_id, iterations=None):
     """
     Derive a community-specific encryption key based on the community ID.
     This ensures that community notes are encrypted but all members can read them.
     """
     community_id_str = str(community_id)
-    # Use PBKDF2 to derive a strong key from the global secret and community ID
+    iters = iterations or _NOTES_KDF_ITERATIONS  # Default to 480K (v2)
+    cache_key = f"{community_id_str}_i{iters}"
+    
+    # Check cache
+    cached = database._community_fernet_v2_cache.get(cache_key)
+    if cached:
+        return cached
+    
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=community_id_str.encode('utf-8'),
-        iterations=100000
+        iterations=iters
     )
-    # We use a static key here derived from the application secret key
-    # In a real enterprise app, we might store a separate community key
     base_secret = _get_app().secret_key.encode('utf-8') if isinstance(_get_app().secret_key, str) else _get_app().secret_key
     key = base64.urlsafe_b64encode(kdf.derive(base_secret))
-    return Fernet(key)
+    f = Fernet(key)
+    database._community_fernet_v2_cache[cache_key] = f
+    return f
+
+
+def _get_community_fernet_legacy(community_id):
+    """Legacy community Fernet with 100K iterations (for decrypting old notes)."""
+    return _get_community_fernet(community_id, iterations=100000)
 
 
 def encrypt_community_note(plaintext, community_id):
     if not plaintext:
         return plaintext
     try:
-        f = _get_community_fernet(community_id)
+        f = _get_community_fernet(community_id)  # Uses 480K iterations (v2)
         return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"Failed to encrypt community note: {e}")
-        return plaintext
+        raise  # Never silently fall back to plaintext
 
 
 def decrypt_community_note(ciphertext, community_id):
@@ -489,8 +691,15 @@ def decrypt_community_note(ciphertext, community_id):
         # Check if it's actually a Fernet token (starts with gAAAAA...)
         if not (isinstance(ciphertext, str) and ciphertext.startswith('gAAAAA')):
             return ciphertext
-        f = _get_community_fernet(community_id)
-        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        # Try v2 (480K iterations) first
+        try:
+            f = _get_community_fernet(community_id)
+            return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+        except Exception:
+            pass
+        # Fall back to v1 (100K iterations) for legacy community notes
+        f_legacy = _get_community_fernet_legacy(community_id)
+        return f_legacy.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
     except Exception as e:
         _get_app().logger.error(f"Failed to decrypt community note: {e}")
         return ciphertext

@@ -53,6 +53,10 @@ weekly_winners_cache = TTLCache(maxsize=1, ttl=3600)
 _user_fernet_cache = TTLCache(maxsize=512, ttl=3600)
 _dm_fernet_cache = TTLCache(maxsize=512, ttl=3600)
 _decrypted_notes_memory_cache = TTLCache(maxsize=1024, ttl=300)
+# v3 envelope encryption caches
+_user_fernet_v3_cache = TTLCache(maxsize=512, ttl=3600)
+_dm_fernet_v3_cache = TTLCache(maxsize=512, ttl=3600)
+_community_fernet_v2_cache = TTLCache(maxsize=128, ttl=3600)
 
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 active_chat_views = {}

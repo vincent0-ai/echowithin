@@ -27,3 +27,6 @@ echowithin.log
 fix_routes.py
 /.idea/
 /.agents/
+*.txt
+*_test.py
+AGENTS.md

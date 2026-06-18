@@ -1842,11 +1842,13 @@
         }
 
         // Rejoin server-side rooms after reconnects so realtime delivery stays reliable.
+        // IMPORTANT: Use sync (append-only) instead of full reload to avoid clearing
+        // the chat when a friend comes online and triggers a socket reconnect.
         socket.on('connect', () => {
             socket.emit('join_inbox');
             if (activeRecipientId) {
                 socket.emit('viewing_chat', { partner_id: activeRecipientId });
-                loadChatHistory(activeRecipientId);
+                syncActiveChatHistory();
                 startChatSync();
             }
         });
@@ -2106,13 +2108,8 @@
                     socket.emit('stop_typing', { recipient_id: activeRecipientId });
                 }, 2000);
             });
-            // Enter to send, Shift+Enter for newline
-            messageInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-                }
-            });
+            // Enter inserts a newline (default textarea behavior).
+            // Sending is done exclusively via the Send button.
         }
 
         window.loadChat = function (userId, username, element) {

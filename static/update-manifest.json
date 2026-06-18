@@ -2,5 +2,5 @@
   "versionCode": 18,
   "versionName": "1.8.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔒 Correct PIN now unlocks locked notes offline; PIN no longer wiped on logout.\n📵 Fixed offline loop — 'Continue Offline' no longer bounces back to Welcome, and no sync at startup while offline.\n🗑️ Logging out now removes your account's notes from the device while keeping your offline notes safe.\n✨ Smoother scrolling & navigation — no more redundant syncs when moving between screens."
+  "changelog": "🛑 Fixed app crash on startup — AppLock check no longer makes network call without auth token.\n📱 Note detail screen now full-screen edge-to-edge — removed Card chrome, padding, and outline.\n🔒 Correct PIN still unlocks locked notes offline; PIN no longer wiped on logout.\n📵 Offline loop fixed — 'Continue Offline' no longer bounces back to Welcome.\n🗑️ Logging out removes account notes while keeping offline notes safe.\n✨ Smoother scrolling & navigation — no redundant syncs between screens."
 }

@@ -486,11 +486,21 @@ def _decrypt_with_candidate_ids(encrypted_content, candidate_user_ids):
     if not encrypted_content:
         return encrypted_content
     for candidate_user_id in candidate_user_ids:
+        uid_str = str(candidate_user_id)
+        # Try v3 (envelope encryption) first
         try:
-            f = _get_user_fernet(str(candidate_user_id))
+            f_v3 = _get_user_fernet_v3(uid_str)
+            if f_v3:
+                return f_v3.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+        except Exception:
+            pass
+        # Try v2 (deterministic PBKDF2)
+        try:
+            f = _get_user_fernet(uid_str)
             return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
         except Exception:
             continue
+    # Try v1 global key
     try:
         return get_notes_fernet().decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
     except Exception:

@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "1.8.0",
+  "versionCode": 19,
+  "versionName": "1.8.1",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🛑 Fixed app crash on startup — AppLock check no longer makes network call without auth token.\n📱 Note detail screen now full-screen edge-to-edge — removed Card chrome, padding, and outline.\n🖊️ Editor Preview tab also full-screen — removed Card outline and reduced padding.\n🔒 Correct PIN still unlocks locked notes offline; PIN no longer wiped on logout.\n📵 Offline loop fixed — 'Continue Offline' no longer bounces back to Welcome.\n🗑️ Logging out removes account notes while keeping offline notes safe.\n✨ Smoother scrolling & navigation — no redundant syncs between screens."
+  "changelog": "📋 Gated version history badges so they only show for proposals; Approve/Decline buttons only show on pending proposals.\n📝 Note Editor now clean and borderless, maximizing typing space. Collapsed tags/reference fields into an expandable details panel.\n🔄 Fixed sync race condition that caused local updates to temporarily revert after a sync.\n📥 Added ability to import and export notes (single or batch) from Markdown with YAML frontmatter, plain text, or ZIP archives."
 }

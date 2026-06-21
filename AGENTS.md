@@ -250,3 +250,15 @@ If the logic requires some further modification note at the end.
 **Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/presentation/EchoWithinApp.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/repository/ImportExportHelper.kt` (NEW), `app/src/main/java/com/example/echowithin/presentation/navigation/AppNavGraph.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteEditorScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `app/src/test/java/com/example/echowithin/VersionHistoryTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
 **Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully. Tested all changes locally.
 **Privacy Note:** Imported/exported files use local storage SAF file pickers and do not share any data with third parties. Notes remain encrypted end-to-end where applicable.
+### Model: Antigravity (Advanced Coding Agent)
+**Date:** 2026-06-21
+**Changes:**
+- **Sync Duplication & ID Collision Fix (NotesRepository.kt)**:
+  - Wrapped `syncNotesInternal()` inside a `syncMutex.withLock { ... }` block to ensure that concurrent sync invocations are serialized, preventing the creation of duplicate notes on the server during simultaneous sync triggers.
+  - Replaced the timestamp-based local ID suffix with `java.util.UUID.randomUUID().toString()` in `createNote()`, ensuring 100% uniqueness of temporary offline note IDs and preventing local database overwriting during fast-loop imports.
+- **Unit Testing (SyncDuplicationTest.kt)**:
+  - Wrote JVM unit tests using reflection/mocking to verify unique local ID generation and serialization of concurrent sync executions under the mutex.
+- **Pushed v1.8.2 APK**: Updated `versionCode 19 -> 20` and `versionName 1.8.1 -> 1.8.2`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json` with the changelog.
+**Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/test/java/com/example/echowithin/SyncDuplicationTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
+**Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully.
+**Privacy Note:** The UUID generation runs entirely locally on the client and does not share any new data or permissions.

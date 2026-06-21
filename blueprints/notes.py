@@ -10,6 +10,81 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
+
+def _find_note_page(m, user_id, note_id, per_page=10):
+    """Find the pagination page number for a given note ID."""
+    try:
+        obj_id = ObjectId(note_id)
+    except Exception:
+        return 1
+
+    # Use the same aggregation pipeline as the main query to get consistent sorting
+    pipeline = [
+        {'$match': {'user_id': ObjectId(user_id), 'is_locked': {'$ne': True}}},
+        {'$project': {
+            'content': 1,
+            'encrypted': 1,
+            'user_id': 1,
+            'content_owner_id': 1,
+            'owner_id': 1,
+            'source_owner_id': 1,
+            'saved_from_owner_id': 1,
+            'source_note_id': 1,
+            'source_share_id': 1,
+            'reference': 1,
+            'tags': 1,
+            'created_at': 1,
+            'updated_at': 1,
+            'is_locked': 1
+        }},
+        {'$lookup': {
+            'from': 'personal_posts',
+            'let': {'source_note_id': '$source_note_id'},
+            'pipeline': [
+                {'$match': {'$expr': {'$eq': ['$_id', '$$source_note_id']}}},
+                {'$project': {
+                    'content': 1,
+                    'user_id': 1,
+                    'content_owner_id': 1,
+                    'created_at': 1,
+                    'updated_at': 1
+                }}
+            ],
+            'as': 'original'
+        }},
+        {'$addFields': {
+            'original_doc': {'$arrayElemAt': ['$original', 0]}
+        }},
+        {'$addFields': {
+            '_sort_ts': {
+                '$cond': {
+                    'if': {'$gt': ['$original_doc', None]},
+                    'then': {
+                        '$max': [
+                            {'$ifNull': ['$updated_at', '$created_at']},
+                            {'$ifNull': ['$original_doc.updated_at', '$original_doc.created_at']}
+                        ]
+                    },
+                    'else': {'$ifNull': ['$updated_at', '$created_at']}
+                }
+            }
+        }},
+        {'$sort': {'_sort_ts': -1, 'created_at': -1}},
+        {'$project': {'_id': 1}},
+        {'$group': {'_id': None, 'ids': {'$push': '$_id'}}}
+    ]
+    
+    result = list(m.personal_posts_conf.aggregate(pipeline))
+    if not result:
+        return 1
+    
+    ids = result[0].get('ids', [])
+    for i, nid in enumerate(ids):
+        if str(nid) == str(obj_id):
+            return max(1, (i // per_page) + 1)
+    
+    return 1
+
 bp = Blueprint('notes', __name__, template_folder='templates')
 
 
@@ -19,6 +94,11 @@ def personal_space():
     """Renders the user's personal space with saved posts and personal notes."""
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+
+    # Handle note_id parameter to jump to a specific note
+    target_note_id = request.args.get('note_id')
+    if target_note_id and not ObjectId.is_valid(target_note_id):
+        target_note_id = None
 
     # Pagination parameters
     try:
@@ -30,6 +110,10 @@ def personal_space():
         saved_page = max(1, int(request.args.get('saved_page', 1)))
     except ValueError:
         saved_page = 1
+
+    # If target_note_id is provided, calculate which page it's on
+    if target_note_id:
+        notes_page = _find_note_page(m, current_user.id, target_note_id, per_page=10)
 
     per_page = 10
 
@@ -339,32 +423,31 @@ def personal_space():
                 pending_proposals_map[nid] = []
             pending_proposals_map[nid].append(p)
 
-    return render_template(
-        'personal_space.html', 
-        saved_posts=saved_posts, 
-        personal_posts=personal_posts, 
-        active_shares_map=active_shares_map, 
-        has_clones_map=has_clones_map, 
-        active_page='personal_space', 
-        title=page_title, 
-        description=page_description,
-        notes_page=notes_page,
-        saved_page=saved_page,
-        total_notes_pages=total_notes_pages,
-        total_saved_pages=total_saved_pages,
-        total_notes_count=total_notes_count,
-        total_saved=total_saved,
-        has_app_lock=has_app_lock,
-        is_unlocked=is_unlocked,
-        locked_notes=locked_notes,
-        locked_notes_count=locked_notes_count,
-        locked_shares_map=locked_shares_map,
-        locked_clones_map=locked_clones_map,
-        show_icon_labels=show_icon_labels,
-        activity_notifications=activity_notifications,
-        pending_proposals=pending_proposals_list,
-        reviewed_proposals=[a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')],
-        auto_approved_activity=[
+    render_kwargs = {
+        'saved_posts': saved_posts,
+        'personal_posts': personal_posts,
+        'active_shares_map': active_shares_map,
+        'has_clones_map': has_clones_map,
+        'active_page': 'personal_space',
+        'title': page_title,
+        'description': page_description,
+        'notes_page': notes_page,
+        'saved_page': saved_page,
+        'total_notes_pages': total_notes_pages,
+        'total_saved_pages': total_saved_pages,
+        'total_notes_count': total_notes_count,
+        'total_saved': total_saved,
+        'has_app_lock': has_app_lock,
+        'is_unlocked': is_unlocked,
+        'locked_notes': locked_notes,
+        'locked_notes_count': locked_notes_count,
+        'locked_shares_map': locked_shares_map,
+        'locked_clones_map': locked_clones_map,
+        'show_icon_labels': show_icon_labels,
+        'activity_notifications': activity_notifications,
+        'pending_proposals': pending_proposals_list,
+        'reviewed_proposals': [a for a in activity_notifications if a.get('event_type') == 'proposal' and a.get('status') in ('accepted', 'rejected')],
+        'auto_approved_activity': [
             {
                 **a,
                 'has_active_auto_approve': m._has_active_auto_approve(
@@ -374,8 +457,12 @@ def personal_space():
             for a in activity_notifications
             if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')
         ],
-        pending_proposals_map=pending_proposals_map
-    )
+        'pending_proposals_map': pending_proposals_map
+    }
+    if target_note_id:
+        render_kwargs['target_note_id'] = target_note_id
+
+    return render_template('personal_space.html', **render_kwargs)
 
 
 @bp.route('/api/note/content/<note_id>', methods=['GET'])

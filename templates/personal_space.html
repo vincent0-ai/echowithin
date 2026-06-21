@@ -6586,6 +6586,13 @@
             );
             noteCard.classList.add('search-active-match');
             noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            // Note not found on current page - navigate to the page containing this note
+            const url = new URL(window.location.href);
+            url.searchParams.set('note_id', noteId);
+            // Keep the current saved_page if on saved tab, otherwise reset to first page
+            url.searchParams.set('notes_page', '1'); // Will be corrected by server
+            window.location.href = url.toString();
         }
     };
 
@@ -6625,6 +6632,22 @@
             if (noteSearchInput) noteSearchInput.focus();
         });
     }
+
+    // Scroll to target note on page load (from search results or external links)
+    {% if target_note_id %}
+    document.addEventListener('DOMContentLoaded', function () {
+        const targetNoteId = '{{ target_note_id }}';
+        const noteCard = document.querySelector(`.note-card[data-note-id="${targetNoteId}"]`);
+        if (noteCard) {
+            // Remove previous highlights
+            document.querySelectorAll('.note-card.search-active-match').forEach(
+                c => c.classList.remove('search-active-match')
+            );
+            noteCard.classList.add('search-active-match');
+            noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
+    {% endif %}
 
     // (Global click handler moved to top-level IIFE for performance)
 

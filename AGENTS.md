@@ -262,3 +262,25 @@ If the logic requires some further modification note at the end.
 **Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/test/java/com/example/echowithin/SyncDuplicationTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
 **Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully.
 **Privacy Note:** The UUID generation runs entirely locally on the client and does not share any new data or permissions.
+
+### Model: Antigravity (Advanced Coding Agent)
+**Date:** 2026-06-21
+**Changes (v1.8.4):**
+- **Sync Pagination & Local Deletion Fix (`NotesRepository.kt`, `api.py`)**:
+  - Implemented pagination looping in `syncNotesInternal()` on the client to fetch all server notes page-by-page (using `has_more` metadata) instead of only page 1, preventing local deletion of notes beyond the first 50 notes.
+  - Increased `per_page` maximum clamp on the backend notes endpoint from 50 to 100 to reduce network roundtrips.
+  - Aborts the pull/delete phase of sync immediately if a page fetch fails, preventing accidental local deletion of notes.
+- **Pin Note Feature (`HomeScreen.kt`, `NoteDetailScreen.kt`, `NotesRepository.kt`, `NotesViewModel.kt`, `NoteDatabaseHelper.kt`, `api.py`)**:
+  - Added a backend endpoint `/notes/toggle_pin/<post_id>` to toggle a note's pin status in MongoDB.
+  - Added repository methods, View Model support, and offline-to-online sync integration for note pins.
+  - Updated SQLite database querying to sort notes by `is_pinned DESC, updated_at DESC`.
+  - Added top-level Pin toggle icon button in the details screen TopAppBar and a push-pin badge indicator to notes in the home list.
+- **Relocation of Action Buttons (`NoteDetailScreen.kt`)**:
+  - Relocated the "Versions" and "Delete" buttons from the scrollable note body to the sticky bottom Row of actions. Reduced action button text size to `10.sp` and icon size to `12.dp` to fit all 6 actions in a single compact row.
+  - Moved "Sync with original" action to the TopAppBar dropdown menu.
+- **Line Spacing Bug Fix (`NoteDetailScreen.kt`)**:
+  - Resolved duplicate line spaces in markdown rendering by removing the duplicate `append("
+")` inside the empty-line check of `renderMarkdown()`.
+- **Pushed v1.8.4 APK**: Updated `versionCode 20 -> 22` and `versionName 1.8.2 -> 1.8.4`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json`.
+**Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `echowithin/api.py`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
+**Verification:** Gradle unit tests and APK compilation both passed successfully.

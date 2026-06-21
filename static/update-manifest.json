@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "1.8.2",
+  "versionCode": 22,
+  "versionName": "1.8.4",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔄 Resolved a sync race condition/duplication issue where offline imported notes synced twice. Wrapped sync notes execution in a mutex lock and replaced timestamp-based local IDs with UUIDs."
+  "changelog": "🔄 Fixed sync pagination issue where notes (and locked notes) beyond the first page were not fetched and got deleted locally. The app now loops through all pages during sync to fetch all notes."
 }

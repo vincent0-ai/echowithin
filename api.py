@@ -206,7 +206,7 @@ def api_get_notes():
     import main as m
     try:
         page = max(1, int(request.args.get('page', 1)))
-        per_page = min(50, max(1, int(request.args.get('per_page', 20))))
+        per_page = min(100, max(1, int(request.args.get('per_page', 20))))
     except ValueError:
         page = 1
         per_page = 20

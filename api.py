@@ -1191,6 +1191,26 @@ def api_toggle_note_lock(post_id):
     return jsonify({'success': True, 'is_locked': new_locked})
 
 
+@api_bp.route('/notes/toggle_pin/<post_id>', methods=['POST'])
+@login_required
+def api_toggle_note_pin(post_id):
+    import main as m
+    obj_id = safe_obj_id(post_id)
+    if not obj_id:
+        return jsonify({'error': 'Invalid note ID'}), 400
+
+    note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
+    if not note:
+        return jsonify({'error': 'Note not found or unauthorized'}), 404
+
+    new_pinned = not note.get('is_pinned', False)
+    m.personal_posts_conf.update_one(
+        {'_id': obj_id},
+        {'$set': {'is_pinned': new_pinned}}
+    )
+    return jsonify({'success': True, 'is_pinned': new_pinned})
+
+
 @api_bp.route('/notes/proposals', methods=['GET'])
 @login_required
 def api_get_all_proposals():

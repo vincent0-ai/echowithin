@@ -6637,18 +6637,27 @@
     {% if target_note_id %}
     document.addEventListener('DOMContentLoaded', function () {
         const targetNoteId = '{{ target_note_id }}';
+        let attempts = 0;
+        const maxAttempts = 100; // 10 seconds at 100ms intervals
         
-        function scrollToTargetNote() {
+        function tryScrollToNote() {
+            attempts++;
             const noteCard = document.querySelector(`.note-card[data-note-id="${targetNoteId}"]`);
-            if (!noteCard) return false;
             
-            const noteContent = noteCard.querySelector('.note-content[data-lazy="true"]');
-            if (noteContent) {
-                // Note is still lazy-loading, wait for it
-                return 'waiting';
+            if (!noteCard) {
+                // Note card not in DOM yet
+                if (attempts < maxAttempts) return false;
+                return 'timeout';
             }
             
-            // Note is ready, scroll and highlight
+            const noteContent = noteCard.querySelector('.note-content');
+            if (noteContent && noteContent.hasAttribute('data-lazy')) {
+                // Still lazy-loading
+                if (attempts < maxAttempts) return false;
+                return 'timeout';
+            }
+            
+            // Note is ready - scroll and highlight
             document.querySelectorAll('.note-card.search-active-match').forEach(
                 c => c.classList.remove('search-active-match')
             );
@@ -6657,35 +6666,16 @@
             return true;
         }
         
-        // Try immediately
-        const result = scrollToTargetNote();
-        if (result === true) return;
-        
-        // If note is lazy-loading, wait for preview fetch to complete
-        if (result === 'waiting') {
-            const checkInterval = setInterval(() => {
-                if (scrollToTargetNote() === true) {
-                    clearInterval(checkInterval);
+        // Poll until success or timeout
+        const interval = setInterval(() => {
+            const result = tryScrollToNote();
+            if (result === true || result === 'timeout') {
+                clearInterval(interval);
+                if (result === 'timeout') {
+                    console.warn('Timeout waiting for note:', targetNoteId);
                 }
-            }, 100);
-            
-            // Fallback: stop checking after 5 seconds
-            setTimeout(() => clearInterval(checkInterval), 5000);
-        } else {
-            // Note not found in DOM yet, use MutationObserver to wait for it
-            const observer = new MutationObserver(() => {
-                if (scrollToTargetNote() === true) {
-                    observer.disconnect();
-                }
-            });
-            observer.observe(document.getElementById('notes-list-container'), {
-                childList: true,
-                subtree: true
-            });
-            
-            // Fallback: stop observing after 5 seconds
-            setTimeout(() => observer.disconnect(), 5000);
-        }
+            }
+        }, 100);
     });
     {% endif %}
 

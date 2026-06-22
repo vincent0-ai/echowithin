@@ -1,6 +1,6 @@
 {
-  "versionCode": 22,
-  "versionName": "1.8.4",
+  "versionCode": 23,
+  "versionName": "1.8.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔄 Fixed sync pagination issue where notes (and locked notes) beyond the first page were not fetched and got deleted locally. The app now loops through all pages during sync to fetch all notes."
+  "changelog": "🔄 Fixed backslash escape rendering issue where unnecessary backslashes (e.g. \\*, \\_, \\[, etc.) were displayed in note details and list previews, particularly affecting imported notes."
 }

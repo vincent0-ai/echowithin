@@ -284,3 +284,13 @@ If the logic requires some further modification note at the end.
 - **Pushed v1.8.4 APK**: Updated `versionCode 20 -> 22` and `versionName 1.8.2 -> 1.8.4`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json`.
 **Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `echowithin/api.py`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
 **Verification:** Gradle unit tests and APK compilation both passed successfully.
+
+### Model: Antigravity (Advanced Coding Agent)
+**Date:** 2026-06-22
+**Changes (v1.8.5):**
+- **Backslash Escape Formatting Fix (`NoteDetailScreen.kt`, `HomeScreen.kt`, `SearchScreen.kt`)**:
+  - Implemented backslash escape character support in the custom Compose markdown parser (`renderMarkdown`), so backslash-escaped characters (like `\*`, `\_`, `\[`, etc.) in imported notes render cleanly as literal characters without displaying the leading backslash.
+  - Added a `stripBackslashEscapes` helper to `stripMarkdown()` in both the Home screen and Search screen, ensuring that note list previews and search result snippets do not display raw backslash characters before formatting elements.
+- **Pushed v1.8.5 APK**: Updated `versionCode 22 -> 23` and `versionName 1.8.4 -> 1.8.5`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json`.
+**Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/SearchScreen.kt`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
+**Verification:** `./gradlew.bat testDebugUnitTest` passed and APK compiled successfully.

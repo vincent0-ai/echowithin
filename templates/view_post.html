@@ -27,7 +27,7 @@
 {% if meta_image %}
 <meta property="og:image" content="{{ meta_image }}" />
 {% else %}
-<meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}" />
+<meta property="og:image" content="{{ url_for('static', filename='logo-512.png', _external=True) }}" />
 {% endif %}
 {% endblock %}
 
@@ -37,7 +37,7 @@
 <meta name="twitter:image" content="{{ meta_image }}" />
 {% else %}
 <meta name="twitter:card" content="summary" />
-<meta name="twitter:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}" />
+<meta name="twitter:image" content="{{ url_for('static', filename='logo-512.png', _external=True) }}" />
 {% endif %}
 <meta name="twitter:title" content="{{ title }}" />
 <meta name="twitter:description" content="{{ description }}" />

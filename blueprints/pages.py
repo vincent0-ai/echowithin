@@ -20,7 +20,7 @@ def dashboard():
     import main as m
     page_title = "EchoWithin - Secure Notes, Collaboration & Community"
     page_description = "EchoWithin is a modern platform for secure private notes, collaborative idea sharing, and surprise themed notes with photos and music. Join our community to organize your thoughts and let your voice echo within."
-    meta_image = url_for('static', filename='og-image.png', _external=True)
+    meta_image = url_for('static', filename='logo-512.png', _external=True)
     if current_user.is_authenticated:
         return redirect(url_for('pages.home'))
     return render_template("dashboard.html", active_page='dashboard', title=page_title, description=page_description, meta_image=meta_image)
@@ -187,7 +187,7 @@ def home():
                 m.redis_cache.setex(f'home_community_count:{user_id_str}', 60, str(user_community_count))
             except Exception:
                 pass
-    return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description, meta_image=url_for('static', filename='og-image.png', _external=True), total_members=total_members, total_posts=total_posts, most_active_member=most_active_member, hot_posts=hot_posts, note_count=note_count, user_community_count=user_community_count, active_now=active_now)
+    return render_template("home.html", username=current_user.username, active_page='home', title=page_title, description=page_description, meta_image=url_for('static', filename='logo-512.png', _external=True), total_members=total_members, total_posts=total_posts, most_active_member=most_active_member, hot_posts=hot_posts, note_count=note_count, user_community_count=user_community_count, active_now=active_now)
 
 
 @bp.route('/search')

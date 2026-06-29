@@ -1297,7 +1297,9 @@ def view_post(slug):
             thumb_url = thumb_url.replace('/video/upload/', '/video/upload/so_0,w_1200,h_630,c_fill/')
             meta_image = thumb_url
         else:
-            meta_image = url_for('static', filename='og-image.png', _external=True)
+            meta_image = url_for('static', filename='logo-512.png', _external=True)
+    else:
+        meta_image = url_for('static', filename='logo-512.png', _external=True)
 
     # JSON-LD structured data for the post
     try:
@@ -1357,7 +1359,7 @@ def view_post(slug):
                 "description": page_description,
                 "contentUrl": video_url,
                 "uploadDate": post.get('timestamp').isoformat() if post.get('timestamp') else None,
-                "thumbnailUrl": meta_image or url_for('static', filename='og-image.png', _external=True)
+                "thumbnailUrl": meta_image or url_for('static', filename='logo-512.png', _external=True)
             }
             jsonld_article["video"] = jsonld_video
             jsonld_str = json.dumps(jsonld_article) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_breadcrumb) + '</script>\n<script type="application/ld+json">' + json.dumps(jsonld_video)

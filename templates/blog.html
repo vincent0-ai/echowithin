@@ -70,6 +70,14 @@
             </a>
         </form>
 
+        {% if current_user.is_authenticated and current_user.is_admin %}
+        <div class="admin-actions">
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="btn edit-btn">
+                <i class="fa-solid fa-chart-line"></i> Dashboard
+            </a>
+        </div>
+        {% endif %}
+
         {% if current_user.is_authenticated %}
         <div style="margin-top: 1.5rem;">
             <a href="{{ url_for('pages.create_post') }}" class="btn comment-btn"

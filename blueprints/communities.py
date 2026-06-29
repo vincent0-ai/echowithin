@@ -1038,7 +1038,7 @@ def api_create_poll(community_id):
     if not question or not options_raw:
         flash('Poll question and options are required.', 'danger')
         return redirect(url_for('communities.view_community', community_id=community_id))
-    options_list = [o.strip() for o in options_raw.split(',') if o.strip()]
+    options_list = [o.strip() for o in options_raw.replace('\r\n', '\n').replace('\r', '\n').replace('\n', ',').split(',') if o.strip()]
     if len(options_list) < 2:
         flash('Provide at least 2 options, separated by commas.', 'danger')
         return redirect(url_for('communities.view_community', community_id=community_id))
@@ -1059,7 +1059,7 @@ def api_create_poll(community_id):
             ends_at = None
     m.community_polls_conf.insert_one({
         'community_id': comm_obj_id,
-        'creator_id': ObjectId(current.user.id),
+        'creator_id': ObjectId(current_user.id),
         'question': question,
         'options': [{'text': o, 'votes': 0} for o in options_list],
         'status': 'active',

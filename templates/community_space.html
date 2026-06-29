@@ -1256,11 +1256,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="margin-bottom:0.75rem;">
                 <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Question</label>
-                <input type="text" name="question" maxlength="200" required placeholder="What do you want to ask?" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+                <textarea name="question" maxlength="200" required placeholder="What do you want to ask?" rows="2" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
             </div>
             <div style="margin-bottom:0.75rem;">
-                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Options (one per line, at least 2)</label>
-                <textarea name="options" rows="4" required placeholder="Option A&#10;Option B&#10;Option C" style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Options (one per line or comma-separated, at least 2)</label>
+                <textarea name="options" rows="4" required placeholder="Option A, Option B, Option C&#10;or&#10;Option A&#10;Option B&#10;Option C" style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
             </div>
             <div style="margin-bottom:0.75rem;">
                 <label style="display:block;font-size:0.78rem;color:#666;margin-bottom:0.2rem;">Expires (optional)</label>

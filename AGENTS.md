@@ -1,187 +1,48 @@
 # Agent Instructions
+
 These are the operational instructions for agents working in this repository.
-IMPORTANT: We had recently refactored the main.py file into blueprints and components, so the some bugs arises from there. So you can always consult the main.py file at this commit c99ece93ae0be47f3ab23716fe7225b4ac3b8f3d first if it is a bug or crash.
 
 If the logic requires some further modification note at the end.
 
 1. Commit messages and model attribution
+   
    - All agents MUST include a detailed commit message describing the changes made.
    - The commit message MUST include the agent's model name and everything saved here.(Write in this document)
 
 2. Quality checks and reviewer assignment
+   
    - Claude Opus 4 is assigned to check the last commit made by other models.
    - The reviewer will verify the commit is up to standard and free of bugs and fix issues where necessary.
 
 3. Platform priorities
+   
    - The platform prioritizes user privacy, security, and scalability.
    - All agents must follow best practices that protect these priorities when writing code, storing data, and describing changes.
 
 4. Additional guidance
+   
    - Be concise and explicit when describing the problem you are solving.
    - Reference any modified files and tests in the commit message.
    - When in doubt, err on the side of caution for privacy and security.
-   WHEN CHANGING ANYTHING IN THE UI, MAKE SURE YOU CONTINUE USE THE PLATFORMS
- DESIGN, LAYOUT AND COLORS - NO UNNECESSARY ICONS AND GRADIENT COLORS
- 
- 5. If you are working on the android app found here: C:\Users\DevTech\AndroidStudioProjects\EchoWithin, you can make change in the backend carefully if required to make sure you dont interfere with the backend. Then Constraints & Preferences
-    - Push to GitHub main branch on both repos
+     WHEN CHANGING ANYTHING IN THE UI, MAKE SURE YOU CONTINUE USE THE PLATFORMS
+     DESIGN, LAYOUT AND COLORS - NO UNNECESSARY ICONS AND GRADIENT COLORS
+   5. If you are working on the android app found here: C:\Users\DevTech\AndroidStudioProjects\EchoWithin, you can make change in the backend carefully if required to make sure you dont interfere with the backend. Then Constraints & Preferences
+      - Push to GitHub main branch on both repos
    - Upload new APK to static/downloads/app-debug.apk
-    - Update static/update-manifest.json (versionCode, versionName, changelog, apkUrl)
+     - Update static/update-manifest.json (versionCode, versionName, changelog, apkUrl)
 
 ## More good instruction
+
 - Document non-obvious design decisions in the commit message or linked issue.
 - If a change affects user data handling, include a short privacy impact note in the commit.
 
 ## Agent Session Log
 
-### Model: Antigravity (Advanced Coding Agent)
-**Date:** 2026-05-20
-**Changes:**
-- **Search Screen UX**: Refactored the `stripMarkdown` helper function in `SearchScreen.kt` to globally and robustly remove markdown syntax, preventing issues with Meilisearch highlighted snippets.
-- **Compose Markdown Parser**: Built a custom lightweight, inline markdown formatter (`renderMarkdown` & `appendInlineFormatting`) in `NoteDetailScreen.kt` to support headings (styled with brand colors), blockquotes, bold, italics, and monospace inline code.
-- **Redundant Title Stripping**: Stripped the first line of content in `NoteDetailScreen.kt` since it is already showcased as a beautiful heading, avoiding duplication.
-- **Note Duplication & Title Fix**: Refactored `NoteEditorScreen.kt` to split the note title and content during editing, automatically concatenating them back together (`"$title\n$content"`) on save, ensuring notes are updated in-place correctly.
-- **Navigation Null Parameters**: Normalized Compose navigation parameter parsing in `AppNavGraph.kt` so that literal `"null"` string arguments are safely treated as Kotlin `null`.
-- **App Lock Integration**: Updated `/api/v1/app_lock/check_status` in Flask backend to query MongoDB for `app_lock_pin_hash` and include a `has_pin` flag in all JSON response branches, ensuring the Android app correctly prompts for unlock.
-- **Production Client Clean-up**: Removed references to `FakeEchoWithinApiService` inside `ApiClient.kt` for a clean production setup.
-- **Compilation verification**: Successfully built the Android project with zero compiler errors.
-**Privacy Note:** Preserved full end-to-end user note encryption and security/PIN lock integrity.
-
-### Model: Gemini 3.5 Flash (High)
-**Date:** 2026-05-20
-**Changes:**
-- **App re-authentication & REST JSON API**: Configured request loaders and exception filters to handle `X-App-Token` authentication and return custom JSON 401 errors.
-- **Android App Redesign**: Completed visual overhaul of all Android UI screens using Jetpack Compose to implement the website's dark-theme aesthetic, brand orange/amber color codes, custom fonts, and layouts.
-**Privacy Note:** No security degradation. Ensured standard HTTPS connections and safe storage of app tokens.
-
-### Model: Gemini 3 Flash (Junie)
-**Date:** 2026-06-04
-**Changes:**
-- **Mindful Echoes**: Implemented a new dashboard feature that resurfaces random past memories (personal notes or blog posts older than 7 days), encouraging user reflection and engagement.
-- **Reading Time Estimation**: Added a utility to estimate reading time based on word count (~225 wpm) and integrated it into the blog post list and detail views.
-- **Utility Refactoring**: Centralized new logic in `utils.py` and ensured proper application context handling.
-- **Template Integration**: Updated `home.html`, `view_post.html`, and `_macros.html` with clean, responsive UI components for the new features.
-**Privacy Note:** Mindful Echoes for personal notes preserves end-to-end encryption by performing decryption only when requested for the specific user. Locked notes are explicitly excluded from being surfaced.
-
 ### Model: opencode/minimax-m3-free
-**Date:** 2026-06-05
-**Changes:**
-- **Share picker preview ("Untitled note" bug)**: The share-note picker modal in `personal_space.html` showed "Untitled note" for lazy-loaded notes because their `data-raw` was empty until the batched `/api/v1/notes/previews` endpoint resolved. Replaced the static placeholder with a flow that (a) renders the first ~90 characters of the rendered note text and (b) fires a fresh batched preview fetch for any rows still loading, then patches the preview back into the card so future opens do not re-hit the API. Genuinely empty notes now show a clean "Empty note" label rather than the misleading "Untitled note".
-- **Deep-link modal re-open on every reload**: When the user opened the picker via `?open_share_picker=1` and did not pick a note, every page reload kept re-opening it. The fix strips the query parameter from the URL via `history.replaceState` immediately and tracks a `sessionStorage` flag (`echowithin_share_picker_opened`) so the picker is only auto-shown once per session. The flag is cleared when the user explicitly closes or selects a note, so subsequent CTA clicks behave normally.
-- **Fullscreen note preview ("see more" → editor-like)**: The "Show more" affordance on long notes now opens a dedicated fullscreen preview overlay (`#note-preview-overlay`) with the note content rendered on the left and a vertical action toolbar docked on the right (Edit / Copy / Share / Lock / History / Export / Delete). Edit triggers the existing edit modal pre-populated with the note's content; Share opens the share modal; Lock / History / Export / Delete delegate to the card's existing buttons. The overlay is responsive — on mobile widths the toolbar wraps to the bottom. Uses the platform's brown/orange design tokens (no new gradients or icons).
-- **Edit modal too small**: Grew the edit modal from 600×~250px to 880px wide × 92vh tall, with the textarea now resizing itself to fill the available height on open (`openEditModal` re-measures the modal and sets `textarea.style.minHeight` accordingly). Bumped the textarea font size and line-height for long notes.
-- **Android note preview scroll + readability**: Removed the `heightIn(min = 100.dp, max = 500.dp)` cap on the content card in `NoteDetailScreen.kt` so the full natural note height is rendered; the outer `verticalScroll` now carries the user through long notes. Configured the KaTeX WebView with `LayoutAlgorithm.TEXT_AUTOSIZING`, disabled its vertical/horizontal scrollbars and overscroll, so it grows with its content instead of creating a nested-scroll jank surface. Increased body text to 17sp / 26sp line height with horizontal/vertical padding so a single screenful is much more readable.
-- **Sticky bottom action bar (Android)**: Added a `Surface` aligned to `BottomCenter` inside the outer `Box` that always shows the most-used actions (Edit / Copy / Share / History). Secondary actions (Sync / Lock / Delete) remain in an inline row inside the scrollable content. The result mirrors the editor's anchored bottom toolbar so the user can always reach primary actions while reading.
-- **Inline edit inside the fullscreen preview**: The "Edit" toolbar button used to call the existing edit modal — which opened *behind* the preview overlay because both sat at z-index 1100 / 1000. Switched the preview to do editing inline: clicking Edit swaps the content pane for a compact edit form (textarea + reference + tags + edit-summary + Save/Cancel). Saves go through the same `/personal_post/edit/<id>` endpoint and fall back to the modal only on a 409 conflict, so the merge flow keeps working. This removes the z-index stack entirely and keeps the user in context.
-- **Compact action toolbar & header**: Shrunk the preview's right-side action toolbar from 88px wide × 60px buttons to 64px wide × 42px buttons (1rem icon, 0.55rem label) so the note content has noticeably more room, especially on mobile. On screens ≤720px the toolbar becomes a single non-scrolling row of icon-only 38×38 buttons. Preview header h2 reduced from 1.05rem → 0.88rem (clamped to 2 lines, ellipsized), header padding reduced, content padding/font sizes trimmed proportionally.
-- **Modal z-index above preview**: Bumped `.custom-modal-overlay` from `z-index: 1000` → `1200` in `base.html` so version history, share, export, delete, edit, pin, and confirm modals always render above the preview when triggered from the preview toolbar. Additionally, the preview is now closed before opening share / history / export / delete so the modals appear on a clean canvas. The lock action still triggers a full page reload (existing behavior).
-- **Cleanup**: Dropped the unused `isLocked` field from `readCardMetadata` and the never-consumed `isSavedCopy` local. Extracted helper functions (`htmlEscape`, `renderPreviewBody`, `setPreviewLockIcon`, `setPreviewActionsVisibility`) and the inline-edit state machine (`enterInlineEditMode` / `exitInlineEditMode` / `handleInlineEditSave`) so the preview handler is small and readable. Escape cancels the inline edit (first press) then closes the preview (second press); Ctrl/Cmd+Enter inside the textarea saves.
-**Files touched:** `templates/personal_space.html`, `templates/base.html`, this `AGENTS.md`.
-**Privacy Note:** No new data exposure. All preview / modal changes operate on the user's own notes (already decrypted client-side or via the existing `@login_required` endpoints). The z-index bump only re-stacks existing modals; nothing in this commit sends new requests or reads new fields.
 
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-05
-**Changes:**
-- **Hotfix: production 500 on /personal_space**: My previous commit `e388b63` introduced two broken Jinja expressions that the local smoke test (`python -c "import main"`) didn't catch because the template is only parsed at request time:
-  - `{{ user_max_chars }` lost its `}}` and `;`, and the surrounding `if (noteInput && charCount) { ... }` lost its closing brace
-  - `{{ 'true' if user_is_premium else 'false' }` lost its `}}` and `;`
-  Both lines were repaired back to single-line complete expressions with correct brace structure. The root cause was CRLF normalization in my edit tool: when the closing `}};` was deleted across a line boundary, the subsequent bytes were re-interpreted as if the brace and semicolon were missing. **Lesson added: always run `jinja2.Environment().parse()` against the full template after CSS-only edits, not just `python -c "import main"`** (which only loads modules and doesn't render templates).
-- **Inline edit textarea fills available space**: The `.note-preview-body` gets `min-height: 0`, `.note-preview-edit.active` becomes `flex: 1 1 auto`, and the textarea inside becomes `flex: 1 1 auto` with a 240px min-height floor. The metadata rows (reference/tags, edit summary) and the action buttons are `flex: 0 0 auto` so they are pushed to the bottom of the form and never get squished. Removed `resize: vertical` and the `38vh` `max-height` cap so the flex grow handles the height.
-**Files touched:** `templates/personal_space.html`, this `AGENTS.md`.
-**Privacy Note:** No data exposure — the hotfix restored two expressions exactly to their previous working form.
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-05
-**Changes:**
-- **Shared-note "Create your own" CTA — calmer, dismissible, not simpy**: The bottom marketing card on `shared_note.html` was a single aggressive hero ("Get Started Free" + a 30-word paragraph + `linear-gradient` background + 1.5s slide-up + 5px top border) that hit every visitor with the same weight and never let them opt out. Replaced it with a calmer, contextual one that:
-  - Uses the exact wording **"Create your own"** as the primary button (was generic "Get Started Free") and routes to `auth.register` so the CTA matches the action; the secondary "Already have an account? Sign in" link routes to `auth.login`.
-  - Trims the paragraph from a wall of marketing copy to one short value line and surfaces three small chips ("Markdown", "End-to-end encrypted", "Free to start") for instant value reinforcement.
-  - Removes the `linear-gradient(135deg, #fff, #fdfaf8)` background per the "no unnecessary gradients" rule, swaps the 5px top border for a 3px one, and reuses the existing `#fdfaf8` cream / `#f0e6dc` chip / `var(--primary-color)` button tokens already in use across the platform.
-  - Adds a small dismiss `×` in the top-right corner of the card (uses the literal `&times;` character — no new icon font) wired to `localStorage['ew_shared_note_cta_dismissed_at']` with a **30-day cooldown** so the CTA disappears after dismissal and quietly reappears a month later. Initial-load state also reads the flag and hides the section, so a visitor who already said no never sees it again in the same window. Same pattern the existing `ew_shared_note_tips_dismissed` banner already uses.
-  - Drops the slide-up animation delay from 1.5s → 0.6s and trims heading 1.3rem → 1.05rem, content padding 2rem → 1.25/1.5rem so the card visually recedes relative to the note itself.
-  - On mobile (≤768px) the action row stacks vertically and both the button and the secondary link take full width.
-  - Contextual surprise-theme headlines (birthday / anniversary / celebration / other) are kept but trimmed from 2 sentences to 1 each; the standard "Create your own notes like this" branch now reads "Create your own notes like this / Write, share, and surprise — with markdown, collaboration, and end-to-end encryption."
-- **Verification**: Ran `jinja2.Environment().parse()` against the full `shared_note.html` after the edit (per the lesson from the previous hotfix) — `parse OK`. `python -c "import main"` also imports clean.
-- **Design decisions**: Kept the CTA to a single touchpoint (bottom of the page) instead of adding an inline header banner — the user explicitly said "should not feature so much that it looks like simping" and a CTA on both the top and the bottom would have crossed that line. The dismiss + 30-day cooldown is the safety valve: visitors who find it annoying can opt out and it stays gone for a month.
-**Files touched:** `templates/shared_note.html`, this `AGENTS.md`.
-**Privacy Note:** No new data exposure. CTA is rendered only for `not current_user.is_authenticated` (same gating as before). No new cookies, no new requests, no new endpoints. The `next=request.path` deep-link is already used by the existing discussion "Log in to join the discussion" prompt and respects the same `auth.login` / `auth.register` `next` handling. `localStorage` keys are first-party and isolated to the page; they store only a Unix-ms timestamp, not anything identifying.
-
-### Model: opencode/minimax-m3-free
 **Date:** 2026-06-06
 **Changes:**
-- **App Lock / wrong-PIN no longer logs the user out (server fix)** — `api_app_lock_verify` previously returned `401` for an incorrect PIN, which the Android client's global 401 interceptor in `ApiClient.kt` interpreted as "session expired" and silently cleared `SessionManager`, navigated to the Welcome screen, and left the user logged out of the app every time they fat-fingered their PIN. The endpoint now returns `200 OK` with `{"success": false, "error": "Incorrect PIN."}` so the Android client can surface the validation error normally (sets `lockError`, shows the shake animation, lets the user try again). Only the *correct* PIN still sets the `app_lock_unlocked_at` session key, so the lock semantics are unchanged.
-- **`/api/v1/notes/shares` (list all active shares)** — New endpoint that returns every active share the current user owns in a single round-trip, with a decrypted `note_title` so the Shared Links tab on Android can render the cards without a second fetch. Filters out expired shares on the server side (`expires_at` in the past) so the client doesn't have to. The Android client now uses this endpoint first and only falls back to the per-note loop if the server doesn't support it.
-- **`/api/posts/mark-all-read` + `/api/activity/mark_read`** — The Android Activity tab's "Mark all as read" button was calling two endpoints that did not exist, so the requests 404'd and were silently swallowed. Both endpoints are now live, backed by a new `activity_read_conf` Mongo collection (added in `main.py` with `(user_id, comment_id)` unique-sparse + `(user_id, read_at)` indexes). `api_my_commented_activity` upserts a `read_at: None` row for every comment the user has made on the first load, so the unread set is well-defined and idempotent; the two mark-* endpoints flip `read_at` to now in a single `update_many` so a tap is one round-trip.
-- **`/api/posts/my-commented` + `/api/notifications/badge-counts`** — Surfaced as proper endpoints so the Android Activity tab has a real notification feed (the user's recent community comments and their unread state) instead of the silent 404 it was getting before. Both endpoints are `@login_required`, return `200` on error, and use plain JSON to keep the existing `NotificationDto` / `BadgeCountsDto` shape on the client.
-**Files touched:** `api.py`, `main.py`, this `AGENTS.md`, `static/update-manifest.json`, `static/downloads/app-debug.apk`, `CHANGELOG.md`.
-**Verification:** `python -c "import api; import main as m; print(sorted(r.rule for r in m.app.url_map.iter_rules() if any(s in r.rule for s in ('shares', 'mark-all-read', 'mark_read', 'my-commented', 'badge-counts'))))"` prints all 5 new routes. `python -c "import main"` imports clean.
-**Privacy Note:** All new endpoints live under existing `@login_required` decorators and scope their Mongo queries to `ObjectId(current_user.id)`. The `activity_read_conf` rows are first-party only (no cross-user reads possible). The new list-all-shares endpoint never returns shares whose `owner_id` is not the current user. No cookies, no new PII, no new third-party calls.
 
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
-- **`POST /api/v1/notes/dedup` (one-shot duplicate-note cleanup)** — Earlier Android builds (pre-v1.7.1) had a sync-loop bug where `clearSyncFlags()` (called on logout / 401 / splash token check) marked every already-synced note as `is_synced=0, pending_op="none"`, and the dispatcher misread that combination as a CREATE and re-pushed the note to the server, leaving the user with two copies of the same note. The Android-side fix is in the same v1.7.1 commit (see the corresponding Android AGENTS.md entry), but the existing duplicates still need to be cleaned up. This endpoint groups the user's notes by their decrypted, lowercased, whitespace-collapsed content, and for each group of 2+ keeps the **OLDEST** (by `created_at`) and deletes the rest along with their shares (`m.cleanup_share_media` + `note_shares_conf.delete_one`), per-note version snapshots (`note_versions_conf.delete_many`), unlock notifications (`unlock_notifications_conf.delete_many`), Typesense entries (`m.remove_notes_from_typesense`), and the `personal_posts_conf` row itself. Supports a `?confirm=true` query param — without it the endpoint runs in dry-run mode and just reports the groups that *would* be removed. The Android client calls it (with `confirm=true`) after every successful sync. If the server removed anything, the app shows a "Cleaned up N duplicate notes from a previous sync" toast; otherwise the call is a no-op and the user sees no toast.
-- **Why "keep the oldest"**: The duplicate is almost always the newer copy (the original was already on the server before the sync bug created a second one). For users who legitimately had two notes with the same content, this is still the better default because the older copy is more likely to have versions / shares / reply history.
-- **Decryption is in-memory only**: The plaintext is decrypted with `m.decrypt_note(..., user_id=str(user_id))` (per-user Fernet key, falls back to the v1 global key for legacy notes) and held in a local dict just long enough to compute the normalized content key for grouping. It is never returned to the client, logged, or persisted anywhere. Notes that fail to decrypt are skipped (better to leave an unreadable note alone than risk deleting it).
-- **Pushed v1.7.1 APK** — `versionCode 9, versionName 1.7.1` to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json` with the new changelog. The Android commit `4028813` and the docs commit `b09e457` ship the client-side half of the fix (see `vincent0-ai/noteapp`).
-**Files touched:** `api.py` (new `api_dedup_notes` route + handler, ~120 lines), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
-**Verification:** `python -c "import api; import main as m; print([r.rule for r in m.app.url_map.iter_rules() if 'dedup' in r.rule])"` → `['/api/v1/notes/dedup']`. `python -c "import main"` imports clean. All five dedup helper functions (`m.cleanup_share_media`, `m.cleanup_post_media`, `m.remove_notes_from_typesense`, `m.decrypt_note`, `m.personal_posts_conf`) verified reachable from `main` via `hasattr`.
-**Privacy Note:** No new data exposure. All queries are scoped to `ObjectId(current_user.id)`. The decryption is in-memory and only used to compute a normalized content key for grouping; the plaintext is never returned to the client or persisted. The "kept" copy is the OLDEST, which is the most likely to be the user's intentional one (the newer duplicate is almost certainly a sync artifact).
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
-- **Share modal: third button "Or advanced select"** — The Share Note modal in `personal_space.html` has a guided mode selector with two large choice buttons (📄 Simple Share / ✏️ Collaborate) and a small grey text-link below them reading "Or advanced select" that bypassed the guided flow by jumping straight to the manual config form. The text-link was inconsistent with the other two entries (different size, weight, and visual hierarchy) and gave the impression of a forgotten debug button. Promoted it to a third full-size `share-mode-btn` matching the existing two — same `class="share-mode-btn"`, same flex layout, same `border: 2px solid #eee` / `border-radius: 10px` / `padding: 0.75rem` styling — with a ⚙️ emoji, the title "Or advanced select" (the "Or" is intentional and reads as a clear alternative to the simple guided paths), and a one-line description "Set permissions, expiry, and access code manually" mirroring the Simple Share / Collaborate descriptions.
-- **`data-mode="advanced"` + `id="show-all-share-options"`**: The new button is a peer of the existing two. The existing `document.querySelectorAll('.share-mode-btn').forEach(...)` click handler at line 8001 picks it up automatically: `simple` and `collaborate` preset the `share-permissions` / `share-expiry` selects, `advanced` falls through with no preset so the user picks their own values, and all three modes call the same `showConfig()` to reveal the Permissions / Expiration / Access Code form. The original `showAllBtn.addEventListener('click', () => showConfig())` is kept untouched (the new button still carries the same `id`), so both the forEach handler and the explicit showAllBtn handler fire — `showConfig` is idempotent so the double-call is harmless.
-- **Removed the redundant "Advanced select" section header** I had added in commit `718bd77` to the top of the `#share-config` div. With the new full-size button acting as the visual entry point, an internal section title was duplicative (the button itself already labels what the user is doing). The "Back to options" button and all field labels (Permissions, Expiration, Access Code) are unchanged.
-- **No new icons, gradients, or colors**: The new button uses the platform's existing `share-mode-btn` styling and the ⚙️ emoji that was already in use elsewhere on the platform (e.g. the user-settings page). No CSS variables introduced; no new font weights; the existing hover/click handler at lines 8001-8020 is reused as-is.
-**Files touched:** `templates/personal_space.html`, this `AGENTS.md`.
-**Verification:** `jinja2.Environment().parse()` against the full template returns "parse OK" (lesson re-applied from the previous hotfix — template is only parsed at request time, so `python -c "import main"` is not sufficient verification). The diff is 9 insertions / 6 deletions on `personal_space.html` (one full button, one section-header removal, one redundant closing-block removed). The `.share-mode-btn` JS forEach still resolves to 3 buttons after the change (verified by inspecting the rendered template structure).
-**Privacy Note:** No data exposure. Pure client-side template change to the share modal. No new endpoints, no new cookies, no new storage, no new third-party calls. The user is still routed through the same `/api/v1/notes/share` endpoint after picking permissions / expiry / code in the advanced form.
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
-- **Hotfix: production 500 on `/personal_space` (lines 6365 + 8361)** — Commit `4544b4c` ("fix: correct scoping of character count and export logic in personal_space.html") corrupted two Jinja output expressions in the same edit that moved the scoping:
-  - Line 6365 dropped from `const maxChars = {{ user_max_chars }};` to `const maxChars = {{ user_max_chars }` with the `;` pushed onto its own line as an orphan `};`
-  - Line 8361 dropped from `const isPremium = {{ 'true' if user_is_premium else 'false' }};` to the same broken pattern — `}}` and `;` both gone, `};` orphaned on the next line
-  Both expressions are inside `<script>` blocks so a broken `{{ ... }}` is fatal at request time. The rendered page produced a `jinja2.exceptions.TemplateSyntaxError: unexpected '}'` at line 6365 and a 500 response, with the ntfy error notifier firing on every visit.
-- **What the user observed**: "I think it happens after every edit on the page" — they noticed the same pattern in the commit history (`e388b63` introduced the corruption → `c864621` was a fix-it-up commit → several later commits re-introduced it). The trigger is some editor / IDE / tool that loses the `}}` and `;` of multi-line `{{ ... }}` expressions when an edit re-flows the surrounding code. CRLF normalization on commit (`warning: in the working copy of 'personal_space.html', LF will be replaced by CRLF the next time Git touches it`) is a strong suspect — the file is 100% CRLF (8697/8697 newlines pre-edit, 8695/8695 post-edit) and the broken bytes survive the commit because git only normalizes line endings, not content.
-- **Why my earlier `jinja2.Environment().parse()` returned a false "parse OK"**: The first verification ran when the file *was* broken (lines 6365 and 8361 both missing `}}`) and still reported "parse OK". I was wrong to claim the parse check was catching these. After the user's stack trace, the same check correctly says "parse FAILED: unexpected '}'". The likely cause of the false negative is editor backscroll / a read buffer showing the file from before the corruption was saved — the *current on-disk* state was already broken when I ran the check. I have no clean repro, but the lesson is: never trust a single parse-OK result on a multi-edit session. Run the check **immediately before** the commit, and re-run it once more if the tool reports "OK" faster than 100 ms (it should take a few hundred ms on an 8.7k-line template).
-- **Fix**: Restored both expressions to single-line complete `{{ ... }};` form, and deleted the two orphan `};` lines they left behind (lines 6366 and 8363 in the old numbering). CRLF preserved on every remaining line. `jinja2.Environment().parse()` now reports "parse OK" on the full 8696-line template, and a raw-bytes sweep finds no remaining `{{ ... }` patterns where the `}}` is missing.
-- **Lesson re-applied** (this is the third time in two days the same pattern has hit us): template safety is a process, not a single check. The minimum bar going forward is (1) `jinja2.Environment().parse()` **immediately before** `git add`, (2) a raw-bytes grep for `b'{{'` lines that do not contain `b'}}'` on the same line, and (3) a local browser hit to the affected route after the deploy.
-**Files touched:** `templates/personal_space.html`, this `AGENTS.md`.
-**Verification:** `jinja2.Environment().parse()` returns "parse OK" on the post-fix file. Raw-bytes check: `with open(path, 'rb') as f: raw = f.read(); lines = raw.split(b'\n'); [print(f'BROKEN at line {i+1}: {lines[i][:100]!r}') for i, l in enumerate(lines) if b'{{' in l and b'}}' not in l]` returns only false positives (multi-line `{{` where the `}}` is on a later line, and `{%` block tags which are not `{{` output expressions). CRLF count stable at 8695 / 8695 newlines.
-**Privacy Note:** Pure template / HTML fix. No data exposure, no new endpoints, no new cookies.
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
-- **Fix: `get_env_variable` NameError in `api_suggest_tags` and `merge_conflict_ai`** — The JigsawStack classify path in `api_suggest_tags` (`blueprints/notes.py:1509`) calls `get_env_variable('JIGSAW_API_KEY')` as a bare name, but the function only does `import main as m` (lazy) and does not have `get_env_variable` in its module-level scope. The same problem exists at `blueprints/notes.py:742` in `merge_conflict_ai` (which uses the JigsawStack SDK to resolve merge conflicts) and at `blueprints/pages.py:353` in `contact_developer` (which uses `m.get_env_variable(...)` — works only by accident because `main` happens to import `get_env_variable` from `config`). Every call to `api_suggest_tags` triggered the warning `JigsawStack classify failed, falling back to NLP: name 'get_env_variable' is not defined` — the NLP fallback still ran so the user got tags, but the JigsawStack classification was silently disabled and the error flooded the logs.
-- **Fix**: Add `from config import get_env_variable` to the top of `blueprints/notes.py` (one canonical import), and remove the now-redundant local `from config import get_env_variable` at `notes.py:1408` (inside `app_lock_forgot`) since the top-level import covers it. Also add the same top-level import to `blueprints/pages.py` for consistency — the existing `m.get_env_variable(...)` calls on `main` (which already imports it) keep working unchanged, and any future call site in `pages.py` can now use the bare name without re-importing.
-- **Why I noticed this only after fixing the template**: The hotfix deploy logs were the first time the JigsawStack path ran in this deploy cycle, so the warning only appeared once the template wasn't 500-ing on `/personal_space` and the user could actually post. The JigsawStack path is normally triggered during community post creation, not personal note creation, so it had been silently broken for as long as the missing import has been missing.
-- **Why I didn't catch it before**: The `api_suggest_tags` function uses `import main as m` (lazy, inside the function) instead of `from config import get_env_variable` (top-level). Every other JigsawStack call site in the codebase (e.g. `main.py:106`, `notifications.py:18`, `security.py:18`) imports `get_env_variable` from `config` at the top of the file, so the function-level `import main as m` pattern was inconsistent and missed by the import.
-- **Why the NLP fallback still worked**: The JigsawStack call is wrapped in `try / except Exception` at `notes.py:1556`, so a `NameError` (or any other exception) is caught, the warning is logged, and the function falls through to the existing TF-IDF + cosine-similarity NLP path defined further down. The user still gets sensible tags; only the JigsawStack enhancement is skipped.
-**Files touched:** `blueprints/notes.py`, `blueprints/pages.py`, this `AGENTS.md`.
-**Verification:** `python -c "from blueprints import notes, pages; print('OK')"` returns "OK" (the pre-existing `pkg_resources` deprecation warning is unrelated). `python -c "import main"` imports clean. AST walk over `blueprints/notes.py` confirms three call sites (`merge_conflict_ai`, `app_lock_forgot`, `api_suggest_tags`) all resolve from the new top-level import. `blueprints/pages.py` has zero bare `get_env_variable()` calls — its existing `m.get_env_variable(...)` calls work through the `main` module's existing import, the new top-level import is for future-proofing.
-**Privacy Note:** Pure Python import fix. No data exposure, no new endpoints, no new cookies, no new third-party calls. The JigsawStack API call itself is unchanged — the user now actually gets JigsawStack-classified tags instead of the NLP fallback.
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
-- **Share-link popover: smaller + add Configure button** — The popover that opens when a user clicks the green "1 Shared Link" / "2 Shared Links" badge on a personal note card was too wide and didn't expose the per-share Configure flow. The four action buttons (Open / Copy / Revoke) were on a single row with 0.65rem font and 0.25rem × 0.5rem padding, and the share URL was showing the last 20 characters. The popover `min-width` was 260px, which made the row stick out to the right of the card and crowd the surrounding action buttons (Lock, Delete, History).
-- **Shrunk everything**: per-share row padding 0.4rem → 0.3rem × 0.4rem, row font-size 0.78rem → 0.66rem, button font-size 0.65rem → 0.58rem, button padding 0.25rem × 0.5rem → 0.15rem × 0.32rem, border-radius 6px → 5px, gap between buttons 0.4rem → 0.25rem, gap between buttons and the share token 0.4rem → 0.25rem, and `line-height: 1` on every button so the icon and text sit on a single line. Share token display was last 20 chars → last 8 chars (per the user's "truncate a bit" follow-up). The popover's `min-width` went 260px → 240px, and its outer padding 0.5rem → 0.35rem.
-- **Added Configure button** (one for each share in the popover): a `<a href="/share/settings/{{ share.share_id }}">` link styled as a small light-blue button (`#e3f2fd` background, `#1565c0` text, `#bbdefb` border) with a `fa-cog` icon and the label "Config". Routes to the same `/share/settings/<share_id>` deep-link the existing share-link-meta pattern already uses (line 6909) — so the per-share settings page (surprise theme, time capsule, photos, auto-approve) is now reachable in one click from the popover without opening the share modal. Light blue distinguishes Configure from Open (green / success), Copy (brown / primary brand), and Revoke (red / destructive); the colour is also consistent with the platform's `info` token used elsewhere for non-destructive settings.
-- **Also updated the locked-notes twin** (the icon-only `locked_shares_map` popover at line 2904) so the two popovers stay in sync. Same `min-width: 220px`, same `[-8:]` truncation, same Configure button, and the Open / Config / Copy / Revoke buttons now all use the smaller padding / border-radius / `line-height: 1` so the icon-only row is the same physical size as the labeled version.
-- **`min-width: 0` on the share-token span**: the parent flex container (`share-link-item`) needs `min-width: 0` on its child for `text-overflow: ellipsis` to actually clip — without it the flex child defaults to its content's intrinsic width and the ellipsis never fires. The wrapping `<span>` already had `flex: 1` which doesn't enable shrinking below content size on its own; the inner `<span style="overflow: hidden; text-overflow: ellipsis;">` is what actually clips, and `min-width: 0` on the outer `<span>` is what lets the inner one receive a constrained width in the first place.
-- **No new endpoints, no new cookies, no new icons, no new gradients**: the popover still uses the same `fa-cog`, `fa-external-link-alt`, `fa-copy`, `fa-times` icons as elsewhere on the platform. The `/share/settings/<share_id>` route is the existing v1 share-settings page; the popover now just deep-links into it from a more discoverable spot.
-**Files touched:** `templates/personal_space.html`, this `AGENTS.md`.
-**Verification:** `jinja2.Environment().parse()` returns "parse OK" on the full 8700-line template. Diff is +28 / -16 on `personal_space.html`. Both popovers (the regular `active_shares_map` at line 2409 and the locked-notes `locked_shares_map` at line 2912) now expose the Configure button. The `data-share-id` attribute on the Revoke button is unchanged, so the existing `revoke-btn` click handler at line 5312+ still routes correctly.
-**Privacy Note:** Pure client-side template change to the share-link popover. No new endpoints, no new cookies, no new storage, no new third-party calls. The Configure button is a `<a href>` to the existing `/share/settings/<share_id>` route, which is already gated by `@login_required` and scoped to shares the current user owns.
-
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-06
-**Changes:**
 - **Site-wide timezone display bug ("Server Time: 19:17:26 UTC" bleed)** — The user reported that several screens still showed server-time (`UTC+00:00`) instead of the visitor's local time. We had already patched the messages & scheduling areas (sidebar timestamps, sent messages, scheduled message banner) but the same root-cause bug was alive in ~14 other call sites across the platform. Root cause has two heads:
   1. **MongoDB stores tz-naive datetimes.** Even when Python writes them as `datetime.datetime.now(datetime.timezone.utc)`, BSON strips the `tzinfo`. When the backend later calls `.isoformat()` on the read-back value, the output looks like `"2026-06-06T19:17:26"` — no `Z`, no `+00:00`. The browser's `new Date(iso)` constructor parses this as **local time**, which on a UTC server with a UTC+3 user produces a 3-hour offset, exactly the "Server Time" reading the user saw.
   2. **Raw Jinja `{{ value.strftime(...) }}`** in templates outputs UTC text directly into the HTML, so there's nothing for the existing `<time class="local-time">` JavaScript converter to grab onto — the user sees a UTC string forever.
@@ -205,67 +66,37 @@ If the logic requires some further modification note at the end.
   - `templates/weekly_newsletter.html:119` — newsletter post date (date-only, no `" UTC"` suffix added — emails have no JS so this stays human-readable).
 - **Fix — `_macros.html` `relative-time` data-timestamp** — `post.edited_at.isoformat()` and `post.timestamp.isoformat()` now have an explicit `+ 'Z'` (with `.replace('+00:00Z', 'Z')` to handle the aware-datetime case) so the `getRelativeTime` JS doesn't have to guess. This was the silent cause of every blog/post card showing "1 hour ago" / "in 3 hours" when the actual diff was 0 seconds — the inline `new Date(naive_iso)` was off by the visitor's UTC offset.
 - **Why this is safer than fixing the backend's `.isoformat()` calls one by one** — there are ~25 `.isoformat()` call sites across `api.py`, `blueprints/notes.py`, `blueprints/sharing.py`, `blueprints/chat.py`, `blueprints/blog.py`, `blueprints/admin.py` and many of them already correctly add `Z` (the ones the previous agent fixed for messages and scheduling). Touching all of them risks regressions. Instead, fix the **consumer** side once (`parseServerTime`) so it accepts both Z-suffixed and naive ISO strings uniformly, and ship the wire-format fix opportunistically (the new `localtime_filter` does it, the `_macros.html` data-timestamp does it). Backend cleanup can happen incrementally without risk.
-**Files touched:** `static/script.js`, `utils.py`, `templates/base.html`, `templates/_macros.html`, `templates/personal_space.html`, `templates/shared_note.html`, `templates/view_post.html`, `templates/blog.html`, `templates/admin_communities.html`, `templates/messages.html`, `templates/search_results.html`, `templates/profile.html`, `templates/admin_premium_users.html`, `templates/weekly_newsletter.html`, this `AGENTS.md`.
-**Verification:**
+  **Files touched:** `static/script.js`, `utils.py`, `templates/base.html`, `templates/_macros.html`, `templates/personal_space.html`, `templates/shared_note.html`, `templates/view_post.html`, `templates/blog.html`, `templates/admin_communities.html`, `templates/messages.html`, `templates/search_results.html`, `templates/profile.html`, `templates/admin_premium_users.html`, `templates/weekly_newsletter.html`, this `AGENTS.md`.
+  **Verification:**
 1. `python -c "import jinja2; e = jinja2.Environment(loader=jinja2.FileSystemLoader('templates'), autoescape=True); import os; [e.parse(open(os.path.join('templates', n), encoding='utf-8').read()) for n in os.listdir('templates') if n.endswith('.html')]; print('ALL templates parse OK')"` → `ALL templates parse OK`.
 2. `python -c "import main"` → imports clean.
 3. `node -e "new Function(require('fs').readFileSync('static/script.js','utf-8'))"` → `script.js syntax OK`.
 4. `parseServerTime` unit-tested against 8 cases (naive, `Z`, `+00:00`, `+03:00`, `-05:00`, empty, null, Date pass-through, microseconds) — all produce the expected UTC `Date`.
 5. `localtime_filter` unit-tested against (aware UTC, naive UTC, date-only format, `None`, non-datetime string) — all produce the expected `<time>` element or safe string fallback.
 6. Final grep `templates/**.html` for residual `\.strftime\(` and naive `new Date(...\.(created_at|...))` — **zero matches** across the whole template tree.
-**Privacy Note:** Pure timezone-display fix. No new endpoints, no new cookies, no new third-party calls, no new data stored. The ISO string itself contains no new information — adding `Z` is just a parser-compatibility marker. The visible `" UTC"` suffix on fallback text is the only user-visible addition and it's strictly informational. Note timestamps remain end-to-end encrypted; this change only affects how the existing `created_at` / `updated_at` metadata (which has never been part of the encrypted payload) is *displayed*.
+   **Privacy Note:** Pure timezone-display fix. No new endpoints, no new cookies, no new third-party calls, no new data stored. The ISO string itself contains no new information — adding `Z` is just a parser-compatibility marker. The visible `" UTC"` suffix on fallback text is the only user-visible addition and it's strictly informational. Note timestamps remain end-to-end encrypted; this change only affects how the existing `created_at` / `updated_at` metadata (which has never been part of the encrypted payload) is *displayed*.
 
-### Model: opencode/mimo-v2.5-free
-**Date:** 2026-06-08
-**Changes:**
-- **Update dialog reappears after dismissal (Android fix)** — `dismissUpdate()` only cleared `updateInfo` from the in-memory UI state. On every app launch `checkForUpdates()` fetched the server manifest and, if `serverVersionCode > currentVersionCode`, re-showed the dialog even if the user had already tapped "Later" for that exact version. Fixed by (a) adding `versionCode: Int` to the `UpdateInfo` data class, (b) adding `dismissedUpdateCode: Int` to `SessionManager` SharedPreferences, (c) having `dismissUpdate()` persist the dismissed `versionCode`, and (d) having `checkForUpdates()` skip the dialog when `serverVersionCode <= dismissedUpdateCode`.
-- **Offline backup prompt shown when no offline notes exist (Android fix)** — `HomeScreen` unconditionally set `showBackupPrompt = true` whenever the user was online and not in offline mode. The prompt ("Backup your offline notes?") appeared even for users who never created local notes. Fixed by adding an `offlineNotesCount` parameter to `HomeScreen` and gating the `LaunchedEffect` on `offlineNotesCount > 0`. The count is fetched from `NotesRepository.getOfflineNotesCount()` (which filters for `id.startsWith("local_") && pendingOp == "none"`) and surfaced via a new `NotesViewModel.getOfflineNotesCount()` suspend function.
-- **Automatic sync on every reconnect (Android fix)** — `onConnectivityChanged()` triggered a full sync round-trip every time the device came online (Wi-Fi → cell → Wi-Fi flips each queued a sync). Fixed by adding a `lastAutoSyncAt` timestamp and a 30-minute `autoSyncIntervalMs` constant; the sync trigger only fires when `now - lastAutoSyncAt >= autoSyncIntervalMs`. The `hasToken()` gate was also removed so `pendingSyncCount` is always surfaced to the UI even when no sync runs.
-- **Welcome screen not scrollable on small devices (Android fix)** — `WelcomeScreen` used a plain `Column` with `SpaceBetween` arrangement; on short screens the "Sign In" and "Continue Offline" buttons were pushed off-screen with no way to scroll. Fixed by adding `verticalScroll(rememberScrollState())` to the root Column.
-- **Privacy details shown to all users on welcome screen (Android fix)** — The "Complete Privacy Mode" benefits card was always visible on the Welcome screen, before the user chose Sign In or Continue Offline. Moved it to a one-time `AlertDialog` on `HomeScreen` that only appears when the user enters offline mode for the first time. Controlled by `SessionManager.offlinePrivacyShown` boolean in SharedPreferences.
-- **Pushed v1.7.8 APK** — `versionCode 16, versionName 1.7.8` to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json` with the new changelog.
-**Files touched:** `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
-**Verification:** `compileDebugKotlin` BUILD SUCCESSFUL. All 7 modified Android files compile without errors.
-**Privacy Note:** No new data exposure. All changes are client-side UI and local SharedPreferences. The dismissed update version code and offline privacy shown flag are stored locally on the device only.
+# 
 
-### Model: opencode/minimax-m3-free
-**Date:** 2026-06-08
-**Changes:**
-- **README updates for both web and Android repos** — Investigated the entire platform to identify removed, edited, and added features. Key findings: (1) "Send a Surprise" button was removed from share config in personal_space.html (surprise themes still exist on shared notes), (2) Community challenges and anonymous posting were added, (3) Share settings page with auto-approve toggle was added, (4) 5 new API endpoints (note previews, dedup, auto_approve, activity feed, badge counts) were undocumented, (5) Voice messages are free for all tiers, (6) Codebase was refactored from monolithic main.py into 11 blueprints.
-- **Web README (echowithin)** — Updated architecture section to show blueprint structure, added community challenges/anonymous posting to features, added voice messages to premium table, documented new API endpoints, expanded PWA section with offline-first architecture details.
-- **Android README (noteapp)** — Updated from v1.0 feature list to v1.7.8: added offline-first architecture, note sharing/locking/version history, App Lock with PIN-gated removal, FCM push notifications, in-app OTA updates, premium tier display, guest/offline mode, sync mode preference. Updated API endpoints from v0 to v1.
-**Files touched:** `README.md` (web), `README.md` (Android), this `AGENTS.md`.
-**Verification:** Both repos pushed to GitHub. `git diff --stat` confirms only README.md changed in each repo.
-**Privacy Note:** Documentation-only changes. No code, no new endpoints, no data exposure.
-
-### Model: Antigravity (Advanced Coding Agent)
-**Date:** 2026-06-21
-**Changes:**
-- **Version History Screen (`NoteVersionsScreen.kt`)**: Gated version status badges to only show if `version.is_proposal` is true, and decision buttons (Approve/Decline) to only show if `version.status == "pending"`.
-- **Note Editor Layout (`NoteEditorScreen.kt`)**: Replaced the content card with a borderless, screen-height text field, and wrapped the Tags and Reference inputs in a collapsible details panel (Notesnook style).
-- **Double Keyboard Padding Fix**: Excluded `WindowInsets.ime` from the Scaffold's automatic `contentWindowInsets` in both the outer [EchoWithinApp.kt](file:///c:/Users/DevTech/AndroidStudioProjects/EchoWithin/app/src/main/java/com/example/echowithin/presentation/EchoWithinApp.kt) and inner [NoteEditorScreen.kt](file:///c:/Users/DevTech/AndroidStudioProjects/EchoWithin/app/src/main/java/com/example/echowithin/presentation/screens/NoteEditorScreen.kt) layouts. This prevents double/triple keyboard padding, allowing the borderless editor and markdown formatting toolbar to sit perfectly on top of the keyboard.
-- **Sync Integrity & State Management (`NotesRepository.kt` & `NoteDatabaseHelper.kt`)**: Tracked successfully pushed note IDs in-memory during sync, skipping remote overwrite for those IDs to prevent local changes from temporarily reverting on push. Ensured lock toggles and title/content split edits preserve unsynced/pending state.
-- **Note Import & Export (`ImportExportHelper.kt`, `NotesViewModel.kt`, `HomeScreen.kt`, `NoteDetailScreen.kt`)**: Implemented single and batch note import/export. Supported formats: Markdown with YAML frontmatter, plain text, and ZIP archives. Integrated import/export dropdown options in the Home and Note Detail screen TopAppBars.
-- **Pushed v1.8.1 APK**: Updated `versionCode 18 → 19`, `versionName 1.8.0 → 1.8.1`. Rebuilt APK, copied to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json` with the new changelog.
-**Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/presentation/EchoWithinApp.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/repository/ImportExportHelper.kt` (NEW), `app/src/main/java/com/example/echowithin/presentation/navigation/AppNavGraph.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteEditorScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `app/src/test/java/com/example/echowithin/VersionHistoryTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
-**Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully. Tested all changes locally.
-**Privacy Note:** Imported/exported files use local storage SAF file pickers and do not share any data with third parties. Notes remain encrypted end-to-end where applicable.
-### Model: Antigravity (Advanced Coding Agent)
-**Date:** 2026-06-21
-**Changes:**
+- ### Model: Antigravity (Advanced Coding Agent)
+  
+  **Date:** 2026-06-21
+  **Changes:**
 - **Sync Duplication & ID Collision Fix (NotesRepository.kt)**:
   - Wrapped `syncNotesInternal()` inside a `syncMutex.withLock { ... }` block to ensure that concurrent sync invocations are serialized, preventing the creation of duplicate notes on the server during simultaneous sync triggers.
   - Replaced the timestamp-based local ID suffix with `java.util.UUID.randomUUID().toString()` in `createNote()`, ensuring 100% uniqueness of temporary offline note IDs and preventing local database overwriting during fast-loop imports.
 - **Unit Testing (SyncDuplicationTest.kt)**:
   - Wrote JVM unit tests using reflection/mocking to verify unique local ID generation and serialization of concurrent sync executions under the mutex.
 - **Pushed v1.8.2 APK**: Updated `versionCode 19 -> 20` and `versionName 1.8.1 -> 1.8.2`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json` with the changelog.
-**Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/test/java/com/example/echowithin/SyncDuplicationTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
-**Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully.
-**Privacy Note:** The UUID generation runs entirely locally on the client and does not share any new data or permissions.
+  **Files touched:** `app/build.gradle.kts` (version bump), `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/test/java/com/example/echowithin/SyncDuplicationTest.kt` (NEW), `static/downloads/app-debug.apk`, `static/update-manifest.json`, this `AGENTS.md`.
+  **Verification:** `./gradlew.bat testDebugUnitTest` and `./gradlew.bat assembleDebug` both completed successfully.
+  **Privacy Note:** The UUID generation runs entirely locally on the client and does not share any new data or permissions.
 
 ### Model: Antigravity (Advanced Coding Agent)
+
 **Date:** 2026-06-21
 **Changes (v1.8.4):**
+
 - **Sync Pagination & Local Deletion Fix (`NotesRepository.kt`, `api.py`)**:
   - Implemented pagination looping in `syncNotesInternal()` on the client to fetch all server notes page-by-page (using `has_more` metadata) instead of only page 1, preventing local deletion of notes beyond the first 50 notes.
   - Increased `per_page` maximum clamp on the backend notes endpoint from 50 to 100 to reduce network roundtrips.
@@ -280,17 +111,38 @@ If the logic requires some further modification note at the end.
   - Moved "Sync with original" action to the TopAppBar dropdown menu.
 - **Line Spacing Bug Fix (`NoteDetailScreen.kt`)**:
   - Resolved duplicate line spaces in markdown rendering by removing the duplicate `append("
-")` inside the empty-line check of `renderMarkdown()`.
+    ")` inside the empty-line check of `renderMarkdown()`.
 - **Pushed v1.8.4 APK**: Updated `versionCode 20 -> 22` and `versionName 1.8.2 -> 1.8.4`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json`.
-**Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `echowithin/api.py`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
-**Verification:** Gradle unit tests and APK compilation both passed successfully.
+  **Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `echowithin/api.py`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
+  **Verification:** Gradle unit tests and APK compilation both passed successfully.
 
 ### Model: Antigravity (Advanced Coding Agent)
+
 **Date:** 2026-06-22
 **Changes (v1.8.5):**
+
 - **Backslash Escape Formatting Fix (`NoteDetailScreen.kt`, `HomeScreen.kt`, `SearchScreen.kt`)**:
   - Implemented backslash escape character support in the custom Compose markdown parser (`renderMarkdown`), so backslash-escaped characters (like `\*`, `\_`, `\[`, etc.) in imported notes render cleanly as literal characters without displaying the leading backslash.
   - Added a `stripBackslashEscapes` helper to `stripMarkdown()` in both the Home screen and Search screen, ensuring that note list previews and search result snippets do not display raw backslash characters before formatting elements.
 - **Pushed v1.8.5 APK**: Updated `versionCode 22 -> 23` and `versionName 1.8.4 -> 1.8.5`. Rebuilt APK, deployed to `static/downloads/app-debug.apk`, and updated `static/update-manifest.json`.
-**Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/SearchScreen.kt`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
-**Verification:** `./gradlew.bat testDebugUnitTest` passed and APK compiled successfully.
+  **Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/SearchScreen.kt`, `echowithin/static/update-manifest.json`, both `AGENTS.md` files.
+  **Verification:** `./gradlew.bat testDebugUnitTest` passed and APK compiled successfully.
+
+### Model: opencode/deepseek-v4-flash-free
+
+**Date:** 2026-06-29
+**Changes:**
+
+- **Community features: polls, resources, check-in, welcome message** — Implemented the 4 remaining features identified as missing for real-world communities (events still pending).
+  - **Polls**: Added `api_create_poll`, `api_vote_poll`, `api_close_poll` routes in communities.py. Single vote per user, changeable (old vote decremented), anonymous aggregates. Poll card UI in community_space.html with clickable options, percentage bars, leading option highlight, close button for admins.
+  - **Resource Library**: Added `api_upload_resource`, `api_delete_resource` routes. Uploads via Cloudinary to `community_resources/{id}` folder. Grid layout in template with image preview, title, description, uploader, date, delete button (admin/uploader only).
+  - **Check-in / Mood Tracking**: Added `api_checkin`, `api_checkin_trends` routes. Once per user per day, 5 moods (great/good/okay/down/tough). Inline bar in template with mood buttons, "Checked in today" state, aggregate counts shown.
+  - **Welcome Banner**: Added `api_set_welcome`, `api_dismiss_welcome` routes. Uses existing `welcome_message` + `welcome_dismissed_by[]` fields on community doc. Green banner shown to members who haven't dismissed it.
+  - **Admin modals**: Added welcome message editor (inside existing admin modal), create poll modal (with question, multi-line options, optional expiry), upload resource modal (title, description, file picker).
+  - **JavaScript**: Added `dismissWelcome()`, `votePoll()`, `checkin()`, `deleteResource()` with fetch + CSRF.
+
+**Files touched:** `echowithin/blueprints/communities.py` (10 new routes, view_community updated with polls/resources/checkin/welcome fetch), `echowithin/templates/community_space.html` (polls section, check-in bar, resources grid, admin welcome form, create poll modal, upload resource modal, JS functions, CSS for all new components), this `AGENTS.md`.
+
+**Verification:** `python -m py_compile echowithin/blueprints/communities.py` → syntax OK.
+
+**Privacy Note:** Check-in moods are stored per-user per-day but only aggregate counts are displayed to others (anonymous). Poll votes are stored per-user for dedup but only aggregate option counts are displayed. Resource uploads use existing Cloudinary infrastructure with no new data exposure. Welcome dismissals are stored as user ID list (only used to suppress the banner).

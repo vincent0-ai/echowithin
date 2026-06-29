@@ -81,10 +81,60 @@ def view_community(community_id):
         'status': 'completed'
     }).sort('ended_at', -1).limit(10))
 
+    # Fetch active polls
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    active_polls = list(m.community_polls_conf.find({
+        'community_id': comm_obj_id,
+        'status': 'active'
+    }).sort('created_at', -1))
+    for poll in active_polls:
+        total_votes = sum(o.get('votes', 0) for o in poll.get('options', []))
+        poll['total_votes'] = total_votes
+        user_vote = m.community_poll_votes_conf.find_one({
+            'poll_id': poll['_id'],
+            'user_id': user_id_obj
+        })
+        poll['user_vote_index'] = user_vote['option_index'] if user_vote else None
+        if user_vote:
+            poll['user_voted'] = True
+        else:
+            poll['user_voted'] = False
+
+    # Fetch resources
+    resources = list(m.community_resources_conf.find({
+        'community_id': comm_obj_id
+    }).sort('created_at', -1).limit(50))
+
+    # Check-in: did user check in today?
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    user_checkin_today = m.community_checkins_conf.find_one({
+        'community_id': comm_obj_id,
+        'user_id': user_id_obj,
+        'created_at': {'$gte': today_start}
+    })
+
+    # Check-in trends (last 7 days)
+    last_7_days = now_utc - datetime.timedelta(days=7)
+    checkin_pipeline = [
+        {'$match': {'community_id': comm_obj_id, 'created_at': {'$gte': last_7_days}}},
+        {'$group': {'_id': '$mood', 'count': {'$sum': 1}}}
+    ]
+    checkin_results = list(m.community_checkins_conf.aggregate(checkin_pipeline))
+    mood_counts = {'great': 0, 'good': 0, 'okay': 0, 'down': 0, 'tough': 0}
+    for r in checkin_results:
+        mood_counts[r['_id']] = r['count']
+
+    # Welcome message visibility
+    welcome_message = community.get('welcome_message', '')
+    show_welcome = bool(welcome_message and user_id_obj not in community.get('welcome_dismissed_by', []))
+
     return render_template('community_space.html', community=community, notes=raw_notes,
                            is_member=is_member, is_admin=is_admin, members=members,
                            page=page, total_pages=(total_notes + per_page - 1) // per_page,
-                           active_challenge=active_challenge, past_challenges=past_challenges)
+                           active_challenge=active_challenge, past_challenges=past_challenges,
+                           active_polls=active_polls, resources=resources,
+                           user_checkin_today=user_checkin_today, mood_counts=mood_counts,
+                           welcome_message=welcome_message, show_welcome=show_welcome)
 
 
 
@@ -969,6 +1019,298 @@ def api_end_challenge(community_id, challenge_id):
     else:
         flash('Challenge ended. No entries were submitted.', 'info')
     return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/poll/create', methods=['POST'])
+@login_required
+@limits(calls=5, period=3600)
+def api_create_poll(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    question = request.form.get('question', '').strip()
+    options_raw = request.form.get('options', '').strip()
+    if not question or not options_raw:
+        flash('Poll question and options are required.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+    options_list = [o.strip() for o in options_raw.split(',') if o.strip()]
+    if len(options_list) < 2:
+        flash('Provide at least 2 options, separated by commas.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+    if len(options_list) > 10:
+        flash('Maximum 10 options allowed.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+    if len(question) > 200:
+        question = question[:200]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ends_at_str = request.form.get('ends_at', '').strip()
+    ends_at = None
+    if ends_at_str:
+        try:
+            ends_at = datetime.datetime.fromisoformat(ends_at_str).replace(tzinfo=datetime.timezone.utc)
+            if ends_at <= now:
+                ends_at = None
+        except (ValueError, TypeError):
+            ends_at = None
+    m.community_polls_conf.insert_one({
+        'community_id': comm_obj_id,
+        'creator_id': ObjectId(current.user.id),
+        'question': question,
+        'options': [{'text': o, 'votes': 0} for o in options_list],
+        'status': 'active',
+        'ends_at': ends_at,
+        'created_at': now
+    })
+    flash('Poll created!', 'success')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/poll/<poll_id>/vote', methods=['POST'])
+@login_required
+def api_vote_poll(community_id, poll_id):
+    import main as m
+    try:
+        poll_obj_id = ObjectId(poll_id)
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    data = request.get_json() if request.is_json else request.form
+    option_idx = data.get('option_index')
+    if option_idx is None:
+        return jsonify({'error': 'Missing option_index'}), 400
+    try:
+        option_idx = int(option_idx)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid option_index'}), 400
+    poll = m.community_polls_conf.find_one({'_id': poll_obj_id, 'community_id': comm_obj_id, 'status': 'active'})
+    if not poll:
+        return jsonify({'error': 'Poll not found or closed'}), 404
+    if option_idx < 0 or option_idx >= len(poll.get('options', [])):
+        return jsonify({'error': 'Invalid option'}), 400
+    existing = m.community_poll_votes_conf.find_one({'poll_id': poll_obj_id, 'user_id': ObjectId(current_user.id)})
+    if existing:
+        # Remove previous vote from old option count
+        old_idx = existing.get('option_index')
+        old_opts = poll.get('options', [])
+        if 0 <= old_idx < len(old_opts):
+            m.community_polls_conf.update_one(
+                {'_id': poll_obj_id},
+                {'$inc': {f'options.{old_idx}.votes': -1}}
+            )
+        m.community_poll_votes_conf.update_one(
+            {'_id': existing['_id']},
+            {'$set': {'option_index': option_idx, 'voted_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+    else:
+        m.community_poll_votes_conf.insert_one({
+            'poll_id': poll_obj_id,
+            'user_id': ObjectId(current_user.id),
+            'option_index': option_idx,
+            'voted_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+    m.community_polls_conf.update_one(
+        {'_id': poll_obj_id},
+        {'$inc': {f'options.{option_idx}.votes': 1}}
+    )
+    return jsonify({'success': True})
+
+
+@bp.route('/api/community/<community_id>/poll/<poll_id>/close', methods=['POST'])
+@login_required
+def api_close_poll(community_id, poll_id):
+    import main as m
+    try:
+        poll_obj_id = ObjectId(poll_id)
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    m.community_polls_conf.update_one(
+        {'_id': poll_obj_id, 'community_id': comm_obj_id},
+        {'$set': {'status': 'closed'}}
+    )
+    flash('Poll closed.', 'success')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/resource/upload', methods=['POST'])
+@login_required
+@limits(calls=10, period=3600)
+def api_upload_resource(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or ObjectId(current_user.id) not in community.get('members', []):
+        return jsonify({'error': 'Unauthorized'}), 403
+    title = request.form.get('title', '').strip()
+    if not title or len(title) > 100:
+        return jsonify({'error': 'Title is required (max 100 chars)'}), 400
+    uploaded_file = request.files.get('file')
+    if not uploaded_file:
+        flash('Please select a file to upload.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+    desc = request.form.get('description', '').strip()[:200]
+    import cloudinary.uploader
+    import cloudinary
+    try:
+        result = cloudinary.uploader.upload(uploaded_file, resource_type='auto', folder=f'community_resources/{community_id}')
+        file_url = result.get('secure_url', '')
+        public_id = result.get('public_id', '')
+        resource_type = result.get('resource_type', 'image')
+    except Exception as e:
+        current_app.logger.error(f"Resource upload error: {e}")
+        flash('Upload failed. Please try again.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    m.community_resources_conf.insert_one({
+        'community_id': comm_obj_id,
+        'uploader_id': ObjectId(current_user.id),
+        'uploader_name': current_user.username,
+        'title': title,
+        'description': desc,
+        'file_url': file_url,
+        'public_id': public_id,
+        'resource_type': resource_type,
+        'file_name': uploaded_file.filename,
+        'created_at': now
+    })
+    flash(f'"{title}" uploaded to resources!', 'success')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/resource/<resource_id>/delete', methods=['POST'])
+@login_required
+def api_delete_resource(community_id, resource_id):
+    import main as m
+    try:
+        res_obj_id = ObjectId(resource_id)
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    resource = m.community_resources_conf.find_one({'_id': res_obj_id, 'community_id': comm_obj_id})
+    if not resource:
+        return jsonify({'error': 'Resource not found'}), 404
+    is_admin = community and str(community.get('admin_id')) == current_user.id
+    is_uploader = str(resource.get('uploader_id')) == current_user.id
+    if not is_admin and not is_uploader:
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        import cloudinary.uploader
+        if resource.get('public_id'):
+            cloudinary.uploader.destroy(resource['public_id'])
+    except Exception:
+        pass
+    m.community_resources_conf.delete_one({'_id': res_obj_id})
+    return jsonify({'success': True})
+
+
+@bp.route('/api/community/<community_id>/checkin', methods=['POST'])
+@login_required
+@limits(calls=1, period=3600)
+def api_checkin(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or ObjectId(current_user.id) not in community.get('members', []):
+        return jsonify({'error': 'Unauthorized'}), 403
+    data = request.get_json() if request.is_json else request.form
+    mood = data.get('mood', '').strip()
+    valid_moods = ['great', 'good', 'okay', 'down', 'tough']
+    if mood not in valid_moods:
+        return jsonify({'error': 'Invalid mood'}), 400
+    # One check-in per member per day
+    today_start = datetime.datetime.now(datetime.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    existing_today = m.community_checkins_conf.find_one({
+        'community_id': comm_obj_id,
+        'user_id': ObjectId(current_user.id),
+        'created_at': {'$gte': today_start}
+    })
+    if existing_today:
+        return jsonify({'error': 'You already checked in today'}), 429
+    m.community_checkins_conf.insert_one({
+        'community_id': comm_obj_id,
+        'user_id': ObjectId(current_user.id),
+        'mood': mood,
+        'created_at': datetime.datetime.now(datetime.timezone.utc)
+    })
+    return jsonify({'success': True, 'mood': mood})
+
+
+@bp.route('/api/community/<community_id>/checkin/trends', methods=['GET'])
+@login_required
+def api_checkin_trends(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or ObjectId(current_user.id) not in community.get('members', []):
+        return jsonify({'error': 'Unauthorized'}), 403
+    last_7_days = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    pipeline = [
+        {'$match': {'community_id': comm_obj_id, 'created_at': {'$gte': last_7_days}}},
+        {'$group': {'_id': '$mood', 'count': {'$sum': 1}}}
+    ]
+    results = list(m.community_checkins_conf.aggregate(pipeline))
+    moods = {m: 0 for m in ['great', 'good', 'okay', 'down', 'tough']}
+    for r in results:
+        moods[r['_id']] = r['count']
+    total = sum(moods.values())
+    return jsonify({'success': True, 'moods': moods, 'total': total})
+
+
+@bp.route('/api/community/<community_id>/welcome', methods=['POST'])
+@login_required
+def api_set_welcome(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community or str(community.get('admin_id')) != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+    message = request.form.get('message', '').strip()
+    if not message:
+        return jsonify({'error': 'Message is required'}), 400
+    if len(message) > 1000:
+        message = message[:1000]
+    m.communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$set': {'welcome_message': message}}
+    )
+    flash('Welcome message updated!', 'success')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+@bp.route('/api/community/<community_id>/welcome/dismiss', methods=['POST'])
+@login_required
+def api_dismiss_welcome(community_id):
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid ID'}), 400
+    m.communities_conf.update_one(
+        {'_id': comm_obj_id},
+        {'$addToSet': {'welcome_dismissed_by': ObjectId(current_user.id)}}
+    )
+    return jsonify({'success': True})
 
 
 @bp.route('/api/community/<community_id>/report', methods=['POST'])

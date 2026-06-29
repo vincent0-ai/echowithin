@@ -396,11 +396,182 @@
         padding-bottom: 0.35rem;
         border-bottom: 1px solid #f0f0f0;
     }
+
+    /* Welcome Banner */
+    .welcome-banner {
+        background: #e8f5e9;
+        border: 1px solid #c8e6c9;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .welcome-banner strong { color: #2e7d32; font-size: 0.9rem; display: block; margin-bottom: 0.25rem; }
+    .welcome-banner p { color: #555; font-size: 0.82rem; margin: 0; line-height: 1.4; }
+    .welcome-banner button {
+        background: #2e7d32;
+        color: white;
+        border: none;
+        padding: 0.35rem 0.75rem;
+        border-radius: 5px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .welcome-banner button:hover { background: #1b5e20; }
+
+    /* Polls */
+    .poll-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .poll-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .poll-header strong { font-size: 0.88rem; color: #333; }
+    .poll-header span { font-size: 0.72rem; color: #999; }
+    .poll-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.5rem;
+        margin-bottom: 0.3rem;
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid #eee;
+        transition: background 0.2s;
+    }
+    .poll-option:hover { background: #fafafa; }
+    .poll-option.voted { border-color: #3e2217; background: #fdfaf8; }
+    .poll-bar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background: #f0e6dc;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+        z-index: 0;
+    }
+    .poll-bar.leading { background: #e8a87c; }
+    .poll-option-text, .poll-option-count {
+        position: relative;
+        z-index: 1;
+        font-size: 0.82rem;
+    }
+    .poll-option-text { flex: 1; color: #333; }
+    .poll-option-count { color: #888; min-width: 1.5rem; text-align: right; }
+    .poll-closed { font-size: 0.72rem; color: #999; text-align: center; padding: 0.3rem; }
+
+    /* Check-in */
+    .checkin-bar {
+        background: #fdfaf8;
+        border: 1px solid #f0e6dc;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+    }
+    .checkin-label { font-size: 0.85rem; font-weight: 600; color: #3e2217; }
+    .checkin-done { font-size: 0.8rem; color: #2e7d32; font-weight: 600; }
+    .mood-btn {
+        border: 1px solid #ddd;
+        background: white;
+        padding: 0.3rem 0.6rem;
+        border-radius: 5px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #555;
+    }
+    .mood-btn:hover { border-color: #e8a87c; background: #fdfaf8; }
+    .mood-btn.selected { border-color: #3e2217; background: #3e2217; color: white; }
+    .mood-trends {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-left: auto;
+        font-size: 0.72rem;
+        color: #999;
+    }
+    .mood-trends span { display: flex; align-items: center; gap: 0.15rem; }
+
+    /* Resource Library */
+    .resources-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .resource-card {
+        background: white;
+        border: 1px solid #eee;
+        border-radius: 8px;
+        padding: 0.75rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .resource-card:hover { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .resource-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #3e2217;
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .resource-title:hover { text-decoration: underline; }
+    .resource-meta {
+        font-size: 0.7rem;
+        color: #999;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .resource-delete {
+        background: none;
+        border: none;
+        color: #c62828;
+        font-size: 0.7rem;
+        cursor: pointer;
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+    }
+    .resource-delete:hover { background: #ffebee; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="community-space-container">
+
+    <!-- Welcome Banner -->
+    {% if show_welcome and welcome_message %}
+    <div class="welcome-banner" id="welcome-banner">
+        <div>
+            <strong>Welcome to {{ community.name }}!</strong>
+            <p>{{ welcome_message }}</p>
+        </div>
+        <button onclick="dismissWelcome('{{ community._id }}')">Got it</button>
+    </div>
+    {% endif %}
 
     <!-- Brown gradient header -->
     <div class="comm-header">
@@ -465,6 +636,63 @@
                 <button type="submit" class="btn-sm" style="font-size:0.75rem;">End Challenge</button>
             </form>
             {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Active Polls -->
+    {% if active_polls or is_admin %}
+    <div class="section-label">
+        Polls
+        {% if is_admin %}
+        <button onclick="document.getElementById('createPollModal').style.display='flex'" style="background:none;border:1px solid #ddd;padding:0.15rem 0.4rem;border-radius:4px;font-size:0.7rem;cursor:pointer;color:#555;float:right;">+ Create Poll</button>
+        {% endif %}
+    </div>
+    {% if active_polls %}
+    {% for poll in active_polls %}
+    <div class="poll-card">
+        <div class="poll-header">
+            <strong>{{ poll.question }}</strong>
+            <span>{{ poll.total_votes }} vote{{ 's' if poll.total_votes != 1 }}</span>
+        </div>
+        {% for option in poll.options %}
+        {% set pct = (option.votes / poll.total_votes * 100)|round if poll.total_votes > 0 else 0 %}
+        {% set is_leading = option.votes > 0 and option.votes >= (poll.options|map(attribute='votes')|max) %}
+        <div class="poll-option {{ 'voted' if poll.user_vote_index == loop.index0 }}" onclick="votePoll('{{ poll._id }}', {{ loop.index0 }})">
+            <div class="poll-bar {{ 'leading' if is_leading }}" style="width: {{ pct }}%;"></div>
+            <span class="poll-option-text">{{ option.text }}</span>
+            <span class="poll-option-count">{{ option.votes }}</span>
+        </div>
+        {% endfor %}
+        {% if is_admin %}
+        <form action="{{ url_for('communities.api_close_poll', community_id=community._id, poll_id=poll._id) }}" method="POST" style="margin-top:0.4rem;text-align:right;" onsubmit="return confirm('Close this poll?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="background:none;border:none;color:#999;font-size:0.72rem;cursor:pointer;text-decoration:underline;">Close poll</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Check-in -->
+    {% if is_member %}
+    <div class="checkin-bar" id="checkin-bar">
+        <span class="checkin-label">How are you?</span>
+        {% if user_checkin_today %}
+        <span class="checkin-done">Checked in today</span>
+        {% else %}
+        <button class="mood-btn" onclick="checkin('great', this)">Great</button>
+        <button class="mood-btn" onclick="checkin('good', this)">Good</button>
+        <button class="mood-btn" onclick="checkin('okay', this)">Okay</button>
+        <button class="mood-btn" onclick="checkin('down', this)">Down</button>
+        <button class="mood-btn" onclick="checkin('tough', this)">Tough</button>
+        {% endif %}
+        <div class="mood-trends">
+            <span>Great {{ mood_counts.great }}</span>
+            <span>Good {{ mood_counts.good }}</span>
+            <span>Okay {{ mood_counts.okay }}</span>
+            <span>Down {{ mood_counts.down }}</span>
+            <span>Tough {{ mood_counts.tough }}</span>
         </div>
     </div>
     {% endif %}
@@ -659,6 +887,45 @@
     </div>
     {% endif %}
 
+    <!-- Resource Library -->
+    {% if resources or is_admin %}
+    <div style="margin-top:1.5rem;">
+        <div class="section-label">
+            Resources
+            {% if is_admin %}
+            <button onclick="document.getElementById('uploadResourceModal').style.display='flex'" style="background:none;border:1px solid #ddd;padding:0.15rem 0.4rem;border-radius:4px;font-size:0.7rem;cursor:pointer;color:#555;float:right;">+ Upload</button>
+            {% endif %}
+        </div>
+        {% if resources %}
+        <div class="resources-grid">
+            {% for resource in resources %}
+            <div class="resource-card">
+                {% if resource.resource_type == 'image' %}
+                <img src="{{ resource.file_url }}" alt="{{ resource.title }}" style="width:100%;height:120px;object-fit:cover;border-radius:4px;">
+                {% endif %}
+                <a href="{{ resource.file_url }}" target="_blank" class="resource-title" title="{{ resource.title }}">
+                    {% if resource.resource_type != 'image' %}<i class="fas fa-file" style="margin-right:3px;"></i>{% endif %}
+                    {{ resource.title }}
+                </a>
+                {% if resource.description %}
+                <span style="font-size:0.72rem;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ resource.description }}</span>
+                {% endif %}
+                <div class="resource-meta">
+                    <span>{{ resource.uploader_name }}</span>
+                    <span>{{ resource.created_at|localtime }}</span>
+                    {% if is_admin or resource.uploader_id|string == current_user.id %}
+                    <button class="resource-delete" onclick="deleteResource('{{ resource._id }}', '{{ community._id }}')">Delete</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="font-size:0.82rem;color:#aaa;text-align:center;padding:0.5rem;">No resources yet. {{ 'Upload study materials, posters, or event photos for the community.' if is_admin else 'Check back later for shared resources.' }}</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Past Challenges -->
     {% if past_challenges %}
     <div style="margin-top:1.5rem;">
@@ -827,6 +1094,64 @@
             }
         }).catch(() => showToast('Failed to delete note.'));
     }
+
+    // Welcome banner dismiss
+    function dismissWelcome(communityId) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        fetch(`/api/community/${communityId}/welcome/dismiss`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(() => {
+            const banner = document.getElementById('welcome-banner');
+            if (banner) banner.style.display = 'none';
+        }).catch(() => {});
+    }
+
+    // Poll voting
+    function votePoll(pollId, optionIndex) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        fetch('/api/community/{{ community._id }}/poll/' + pollId + '/vote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ option_index: optionIndex })
+        }).then(res => res.json()).then(data => {
+            if (data.success) location.reload();
+            else showToast(data.error || 'Vote failed.');
+        }).catch(() => showToast('Network error.'));
+    }
+
+    // Mood check-in
+    function checkin(mood, btn) {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        fetch('/api/community/{{ community._id }}/checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ mood: mood })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                const bar = document.getElementById('checkin-bar');
+                if (bar) {
+                    bar.innerHTML = '<span class="checkin-label">How are you?</span><span class="checkin-done">Checked in today</span>';
+                }
+                showToast('Checked in!');
+            } else {
+                showToast(data.error || 'Check-in failed.');
+            }
+        }).catch(() => showToast('Network error.'));
+    }
+
+    // Delete resource
+    function deleteResource(resourceId, communityId) {
+        if (!confirm('Delete this resource?')) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        fetch(`/api/community/${communityId}/resource/${resourceId}/delete`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(res => res.json()).then(data => {
+            if (data.success) location.reload();
+            else showToast(data.error || 'Delete failed.');
+        }).catch(() => showToast('Network error.'));
+    }
 </script>
 
 <!-- Admin Settings Modal -->
@@ -908,6 +1233,64 @@
             </form>
             {% endif %}
         </div>
+
+        <!-- Welcome Message -->
+        <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
+            <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Welcome Message</label>
+            <form action="{{ url_for('communities.api_set_welcome', community_id=community._id) }}" method="POST" style="margin-top:0.4rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <textarea name="welcome_message" maxlength="500" placeholder="Show a welcome banner to new members..." style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;min-height:60px;resize:vertical;font-family:inherit;margin-bottom:0.4rem;">{{ community.welcome_message or '' }}</textarea>
+                <button type="submit" style="width:100%;background:#2e7d32;color:white;border:none;padding:0.45rem;border-radius:6px;font-weight:600;font-size:0.82rem;cursor:pointer;">Set Welcome Message</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Create Poll Modal -->
+<div id="createPollModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;padding:1.5rem;border-radius:12px;width:90%;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:80vh;overflow-y:auto;">
+        <span onclick="document.getElementById('createPollModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+        <h2 style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Create a Poll</h2>
+        <form action="{{ url_for('communities.api_create_poll', community_id=community._id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Question</label>
+                <input type="text" name="question" maxlength="200" required placeholder="What do you want to ask?" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Options (one per line, at least 2)</label>
+                <textarea name="options" rows="4" required placeholder="Option A&#10;Option B&#10;Option C" style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.78rem;color:#666;margin-bottom:0.2rem;">Expires (optional)</label>
+                <input type="datetime-local" name="expires_at" style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:6px;font-size:0.82rem;box-sizing:border-box;">
+            </div>
+            <button type="submit" style="width:100%;background:#3e2217;color:white;border:none;padding:0.5rem;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">Create Poll</button>
+        </form>
+    </div>
+</div>
+
+<!-- Upload Resource Modal -->
+<div id="uploadResourceModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;padding:1.5rem;border-radius:12px;width:90%;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:80vh;overflow-y:auto;">
+        <span onclick="document.getElementById('uploadResourceModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+        <h2 style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Upload Resource</h2>
+        <form action="{{ url_for('communities.api_upload_resource', community_id=community._id) }}" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Title</label>
+                <input type="text" name="title" maxlength="100" required placeholder="e.g. Study Guide - Week 1" style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Description (optional)</label>
+                <input type="text" name="description" maxlength="200" placeholder="Brief description..." style="width:100%;padding:0.5rem;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;box-sizing:border-box;">
+            </div>
+            <div style="margin-bottom:0.75rem;">
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">File (image, PDF, or document)</label>
+                <input type="file" name="file" required style="width:100%;font-size:0.82rem;">
+            </div>
+            <button type="submit" style="width:100%;background:#3e2217;color:white;border:none;padding:0.5rem;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">Upload</button>
+        </form>
     </div>
 </div>
 {% endif %}

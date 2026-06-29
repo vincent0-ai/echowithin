@@ -467,6 +467,59 @@ def revoke_premium(user_id):
     return redirect(url_for('admin.admin_premium_users'))
 
 
+@bp.route('/admin/community-vouchers', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_community_vouchers():
+    import main as m
+    if request.method == 'POST':
+        community_id = request.form.get('community_id', '').strip()
+        duration_days = request.form.get('duration_days', 30, type=int)
+        max_claims = request.form.get('max_claims', '').strip()
+        try:
+            comm_obj_id = ObjectId(community_id)
+        except Exception:
+            flash('Invalid community ID.', 'danger')
+            return redirect(url_for('admin.admin_community_vouchers'))
+        community = m.communities_conf.find_one({'_id': comm_obj_id})
+        if not community:
+            flash('Community not found.', 'danger')
+            return redirect(url_for('admin.admin_community_vouchers'))
+        import secrets
+        code = f"CM-{community.get('name', 'COMM')[:4].upper()}-{secrets.token_hex(3).upper()}"
+        voucher = {
+            'community_id': comm_obj_id,
+            'community_name': community.get('name', ''),
+            'code': code,
+            'duration_days': max(duration_days, 1),
+            'max_claims': int(max_claims) if max_claims.isdigit() else None,
+            'claimed_by': [],
+            'active': True,
+            'created_by': ObjectId(current_user.id),
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        }
+        m.community_premium_vouchers_conf.insert_one(voucher)
+        flash(f'Voucher "{code}" created for {community["name"]} ({duration_days} days).', 'success')
+        return redirect(url_for('admin.admin_community_vouchers'))
+
+    vouchers = list(m.community_premium_vouchers_conf.find().sort('created_at', -1))
+    communities = list(m.communities_conf.find({}, {'name': 1}).sort('name', 1))
+    return render_template('admin_community_vouchers.html', title='Community Vouchers', vouchers=vouchers, communities=communities)
+
+
+@bp.route('/admin/community-vouchers/<voucher_id>/deactivate', methods=['POST'])
+@login_required
+@admin_required
+def deactivate_voucher(voucher_id):
+    import main as m
+    m.community_premium_vouchers_conf.update_one(
+        {'_id': ObjectId(voucher_id)},
+        {'$set': {'active': False}}
+    )
+    flash('Voucher deactivated.', 'info')
+    return redirect(url_for('admin.admin_community_vouchers'))
+
+
 @bp.route('/admin/users')
 @login_required
 @admin_required

@@ -538,6 +538,7 @@ community_polls_conf = db['community_polls']
 community_poll_votes_conf = db['community_poll_votes']
 community_resources_conf = db['community_resources']
 community_checkins_conf = db['community_checkins']
+community_premium_vouchers_conf = db['community_premium_vouchers']
 
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
@@ -646,6 +647,8 @@ community_polls_conf.create_index([('community_id', 1), ('status', 1), ('created
 community_poll_votes_conf.create_index([('poll_id', 1), ('user_id', 1)], unique=True)
 community_resources_conf.create_index([('community_id', 1), ('created_at', -1)])
 community_checkins_conf.create_index([('community_id', 1), ('created_at', -1)])
+community_premium_vouchers_conf.create_index('code', unique=True)
+community_premium_vouchers_conf.create_index([('community_id', 1), ('active', 1)])
 
 # --- Performance: Additional compound indexes for common query patterns ---
 comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
@@ -685,6 +688,7 @@ database.community_polls_conf = community_polls_conf
 database.community_poll_votes_conf = community_poll_votes_conf
 database.community_resources_conf = community_resources_conf
 database.community_checkins_conf = community_checkins_conf
+database.community_premium_vouchers_conf = community_premium_vouchers_conf
 database.dm_permissions_conf = dm_permissions_conf
 database.scheduled_messages_conf = scheduled_messages_conf
 database.note_attachments_conf = note_attachments_conf

@@ -285,6 +285,33 @@ def join_community_link(invite_code):
         flash('You are already a member of this community.', 'info')
         return redirect(url_for('communities.view_community', community_id=str(community['_id'])))
     m.communities_conf.update_one({'_id': community['_id']}, {'$addToSet': {'members': user_id_obj}, '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}})
+
+    # Claim community premium voucher if available
+    vouchers = list(m.community_premium_vouchers_conf.find({
+        'community_id': community['_id'],
+        'active': True
+    }))
+    voucher = None
+    for v in vouchers:
+        if v.get('max_claims') is None or len(v.get('claimed_by', [])) < v['max_claims']:
+            if user_id_obj not in v.get('claimed_by', []):
+                voucher = v
+                break
+    if voucher:
+        grant_days = voucher.get('duration_days', 30)
+        m.users_conf.update_one(
+            {'_id': user_id_obj},
+            {'$set': {
+                'account_tier': 'premium',
+                'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=grant_days)
+            }}
+        )
+        m.community_premium_vouchers_conf.update_one(
+            {'_id': voucher['_id']},
+            {'$addToSet': {'claimed_by': user_id_obj}}
+        )
+        flash(f'Community voucher applied — {grant_days} days of premium granted!', 'success')
+
     flash(f'Successfully joined {community.get("name")}!', 'success')
     return redirect(url_for('communities.view_community', community_id=str(community['_id'])))
 
@@ -327,6 +354,32 @@ def api_join_public_community(community_id):
                 '$set': {'updated_at': datetime.datetime.now(datetime.timezone.utc)}
             }
         )
+
+        # Claim community premium voucher if available
+        vouchers = list(m.community_premium_vouchers_conf.find({
+            'community_id': comm_obj_id, 'active': True
+        }))
+        voucher = None
+        for v in vouchers:
+            if v.get('max_claims') is None or len(v.get('claimed_by', [])) < v['max_claims']:
+                if user_id_obj not in v.get('claimed_by', []):
+                    voucher = v
+                    break
+        if voucher:
+            grant_days = voucher.get('duration_days', 30)
+            m.users_conf.update_one(
+                {'_id': user_id_obj},
+                {'$set': {
+                    'account_tier': 'premium',
+                    'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=grant_days)
+                }}
+            )
+            m.community_premium_vouchers_conf.update_one(
+                {'_id': voucher['_id']},
+                {'$addToSet': {'claimed_by': user_id_obj}}
+            )
+            flash(f'Community voucher applied — {grant_days} days of premium granted!', 'success')
+
         flash(f'Successfully joined {community.get("name")}!', 'success')
         
     return redirect(url_for('communities.view_community', community_id=str(comm_obj_id)))

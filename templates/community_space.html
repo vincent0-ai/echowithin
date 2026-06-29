@@ -424,6 +424,57 @@
     }
     .welcome-banner button:hover { background: #1b5e20; }
 
+    /* Resource type badge */
+    .resource-type-badge {
+        position: absolute; top: 6px; left: 6px;
+        font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+        padding: 2px 6px; border-radius: 3px;
+        background: #e0e0e0; color: #555;
+    }
+    .resource-type-badge.pdf { background: #ffebee; color: #c62828; }
+    .resource-type-badge.doc,
+    .resource-type-badge.docx { background: #e3f2fd; color: #1565c0; }
+    .resource-type-badge.xls,
+    .resource-type-badge.xlsx { background: #e8f5e9; color: #2e7d32; }
+    .resource-type-badge.jpg,
+    .resource-type-badge.jpeg,
+    .resource-type-badge.png,
+    .resource-type-badge.gif,
+    .resource-type-badge.webp { background: #f3e5f5; color: #7b1fa2; display: none; }
+    .resource-type-badge.video { background: #fff3e0; color: #e65100; }
+    .resource-thumb {
+        width: 100%; height: 130px; object-fit: cover; border-radius: 4px;
+        cursor: pointer; transition: transform 0.15s;
+    }
+    .resource-thumb:hover { transform: scale(1.03); }
+
+    /* Image expand overlay */
+    #imageExpandOverlay {
+        display: none; position: fixed; z-index: 2000;
+        left: 0; top: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); align-items: center; justify-content: center;
+        backdrop-filter: blur(5px); cursor: zoom-out;
+    }
+    #imageExpandOverlay img {
+        max-width: 90vw; max-height: 90vh; border-radius: 8px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5); object-fit: contain;
+    }
+    #imageExpandOverlay .expand-close {
+        position: absolute; top: 1rem; right: 1.5rem;
+        color: white; font-size: 2rem; cursor: pointer; opacity: 0.7;
+    }
+    #imageExpandOverlay .expand-close:hover { opacity: 1; }
+
+    /* Upload progress */
+    #uploadProgress { display: none; margin-top: 0.5rem; }
+    #uploadProgress .progress-bar {
+        width: 100%; height: 6px; background: #eee; border-radius: 3px; overflow: hidden;
+    }
+    #uploadProgress .progress-fill {
+        width: 0%; height: 100%; background: #3e2217; border-radius: 3px; transition: width 0.3s;
+    }
+    #uploadProgress .progress-text { font-size: 0.72rem; color: #888; margin-top: 0.2rem; text-align: center; }
+
     /* Polls */
     .poll-card {
         background: white;
@@ -523,6 +574,7 @@
         border: 1px solid #eee;
         border-radius: 8px;
         padding: 0.75rem;
+        position: relative;
         transition: transform 0.2s, box-shadow 0.2s;
         display: flex;
         flex-direction: column;
@@ -900,12 +952,16 @@
         {% if resources %}
         <div class="resources-grid">
             {% for resource in resources %}
+            {% set ext = resource.file_name.rsplit('.', 1)[-1].lower() if resource.file_name and '.' in resource.file_name else '' %}
+            {% set doc_type = 'PDF' if ext == 'pdf' else 'Word' if ext in ('doc','docx') else 'Excel' if ext in ('xls','xlsx') else 'Image' if resource.resource_type == 'image' else 'Video' if resource.resource_type == 'video' else 'File' %}
+            {% set doc_icon = 'fa-file-pdf' if ext == 'pdf' else 'fa-file-word' if ext in ('doc','docx') else 'fa-file-excel' if ext in ('xls','xlsx') else 'fa-file-image' if resource.resource_type == 'image' else 'fa-file-video' if resource.resource_type == 'video' else 'fa-file' %}
             <div class="resource-card">
+                <div class="resource-type-badge {{ ext }}">{{ doc_type }}</div>
                 {% if resource.resource_type == 'image' %}
-                <img src="{{ resource.file_url }}" alt="{{ resource.title }}" style="width:100%;height:120px;object-fit:cover;border-radius:4px;">
+                <img src="{{ resource.file_url }}" alt="{{ resource.title }}" class="resource-thumb" onclick="expandImage(this.src, '{{ resource.title|e }}')" loading="lazy">
                 {% endif %}
                 <a href="{{ resource.file_url }}" target="_blank" class="resource-title" title="{{ resource.title }}">
-                    {% if resource.resource_type != 'image' %}<i class="fas fa-file" style="margin-right:3px;"></i>{% endif %}
+                    <i class="fas {{ doc_icon }}" style="margin-right:3px;"></i>
                     {{ resource.title }}
                 </a>
                 {% if resource.description %}
@@ -1153,6 +1209,35 @@
             else showToast(data.error || 'Delete failed.');
         }).catch(() => showToast('Network error.'));
     }
+
+    // Image expand
+    function expandImage(url, title) {
+        document.getElementById('imageExpandOverlay').style.display = 'flex';
+        document.getElementById('expandImage').src = url;
+        document.getElementById('expandImage').alt = title;
+    }
+
+    // Upload progress & button disable
+    function onUploadSubmit(form) {
+        const btn = document.getElementById('uploadBtn');
+        const progress = document.getElementById('uploadProgress');
+        const fill = document.getElementById('progressFill');
+        const text = document.getElementById('progressText');
+        btn.disabled = true;
+        btn.textContent = 'Uploading...';
+        btn.style.opacity = '0.6';
+        progress.style.display = 'block';
+        let pct = 0;
+        const interval = setInterval(() => {
+            pct = Math.min(pct + 8, 90);
+            fill.style.width = pct + '%';
+            if (pct >= 90) clearInterval(interval);
+        }, 300);
+        setTimeout(() => {
+            fill.style.width = '100%';
+            text.textContent = 'Processing...';
+        }, 8000);
+    }
 </script>
 
 <!-- Admin Settings Modal -->
@@ -1196,25 +1281,6 @@
             </form>
         </div>
 
-        <!-- Members List -->
-        <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
-            <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Members ({{ members|length }})</label>
-            <div style="margin-top:0.4rem;max-height:200px;overflow-y:auto;">
-                {% for member in members %}
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f5f5f5;">
-                    <span style="font-size:0.82rem;color:#333;">{{ member.username }}{% if member._id == community.admin_id %} <span style="font-size:0.65rem;color:#2e7d32;background:#e8f5e9;padding:0.1rem 0.3rem;border-radius:3px;">Admin</span>{% endif %}</span>
-                    {% if member._id != community.admin_id %}
-                    <form action="{{ url_for('communities.api_remove_member', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove {{ member.username }}?');">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="member_id" value="{{ member._id }}">
-                        <button type="submit" style="background:none;border:none;color:#c62828;font-size:0.72rem;cursor:pointer;">Remove</button>
-                    </form>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-
         <!-- Challenge Creation -->
         <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
             <label style="font-size:0.82rem;font-weight:600;color:#3e2217;">Start a Challenge</label>
@@ -1244,6 +1310,28 @@
                 <button type="submit" style="width:100%;background:#2e7d32;color:white;border:none;padding:0.45rem;border-radius:6px;font-weight:600;font-size:0.82rem;cursor:pointer;">Set Welcome Message</button>
             </form>
         </div>
+
+        <!-- Members List -->
+        <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid #eee;">
+            <label onclick="this.nextElementSibling.style.maxHeight=this.nextElementSibling.style.maxHeight==='0px'?'150px':'0px'" style="font-size:0.82rem;font-weight:600;color:#3e2217;cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;">
+                Members ({{ members|length }})
+                <span style="font-size:0.7rem;color:#999;">toggle</span>
+            </label>
+            <div style="margin-top:0.4rem;max-height:150px;overflow-y:auto;transition:max-height 0.25s;">
+                {% for member in members %}
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;border-bottom:1px solid #f5f5f5;">
+                    <span style="font-size:0.82rem;color:#333;">{{ member.username }}{% if member._id == community.admin_id %} <span style="font-size:0.65rem;color:#2e7d32;background:#e8f5e9;padding:0.1rem 0.3rem;border-radius:3px;">Admin</span>{% endif %}</span>
+                    {% if member._id != community.admin_id %}
+                    <form action="{{ url_for('communities.api_remove_member', community_id=community._id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Remove {{ member.username }}?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="member_id" value="{{ member._id }}">
+                        <button type="submit" style="background:none;border:none;color:#c62828;font-size:0.72rem;cursor:pointer;">Remove</button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1271,12 +1359,18 @@
     </div>
 </div>
 
+<!-- Image expand overlay -->
+<div id="imageExpandOverlay" onclick="this.style.display='none'">
+    <span class="expand-close">&times;</span>
+    <img id="expandImage" src="" alt="">
+</div>
+
 <!-- Upload Resource Modal -->
 <div id="uploadResourceModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);" onclick="if(event.target===this)this.style.display='none'">
     <div style="background:#fff;padding:1.5rem;border-radius:12px;width:90%;max-width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:80vh;overflow-y:auto;">
         <span onclick="document.getElementById('uploadResourceModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
         <h2 style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Upload Resource</h2>
-        <form action="{{ url_for('communities.api_upload_resource', community_id=community._id) }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ url_for('communities.api_upload_resource', community_id=community._id) }}" method="POST" enctype="multipart/form-data" onsubmit="onUploadSubmit(this)">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div style="margin-bottom:0.75rem;">
                 <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">Title</label>
@@ -1290,7 +1384,11 @@
                 <label style="display:block;font-size:0.82rem;font-weight:600;color:#3e2217;margin-bottom:0.25rem;">File (image, PDF, or document)</label>
                 <input type="file" name="file" required style="width:100%;font-size:0.82rem;">
             </div>
-            <button type="submit" style="width:100%;background:#3e2217;color:white;border:none;padding:0.5rem;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">Upload</button>
+            <button type="submit" id="uploadBtn" style="width:100%;background:#3e2217;color:white;border:none;padding:0.5rem;border-radius:6px;font-weight:600;font-size:0.85rem;cursor:pointer;">Upload</button>
+            <div id="uploadProgress">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-text" id="progressText">Uploading...</div>
+            </div>
         </form>
     </div>
 </div>

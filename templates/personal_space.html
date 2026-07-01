@@ -3689,6 +3689,7 @@
         box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: minmax(0, 1fr);
         gap: 0;
         overflow: hidden;
         min-height: 0;
@@ -3951,9 +3952,20 @@
     @media (max-width: 720px) {
         .note-preview-shell {
             grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: 1fr auto;
             margin: 0;
             border-radius: 0;
             max-height: 100vh;
+        }
+
+        .note-preview-body {
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .note-preview-content {
+            flex: 1 1 0;
+            overflow-y: auto;
         }
 
         .note-preview-actions {
@@ -3963,9 +3975,10 @@
             border-left: none;
             border-top: 1px solid #eee;
             padding: 0.4rem 0.5rem;
-            justify-content: space-between;
+            justify-content: space-around;
             gap: 0.25rem;
             overflow-x: auto;
+            flex-shrink: 0;
         }
 
         .note-preview-action {
@@ -6291,13 +6304,24 @@
             });
         }
 
+        // Expose so the lazy-loader script block can re-trigger after previews load.
+        window.initCollapsibleNotes = initCollapsibleNotes;
+
         // Progressive enhancement: libs load with defer, so they may not
         // be available yet. Poll briefly then render; raw text is already
         // visible so the user isn't staring at a spinner.
+        //
+        // Immediately initialise collapsible notes on the server-rendered HTML
+        // so the layout is correct even before JS libs finish loading.
+        requestAnimationFrame(() => {
+            initCollapsibleNotes();
+        });
+
         (function upgradeNotes() {
             if (typeof katex !== 'undefined' && typeof marked !== 'undefined') {
                 renderAllNotes();
-                // Run collapsible note detection after content is rendered
+                // Re-run collapsible detection after content is re-rendered
+                // with math (heights may have changed).
                 requestAnimationFrame(() => {
                     initCollapsibleNotes();
                 });
@@ -8826,8 +8850,8 @@
             const card = entry.card;
             el.setAttribute('data-raw', preview);
             el.removeAttribute('data-lazy');
-            if (window.renderMarkdownContent) {
-                el.innerHTML = window.renderMarkdownContent(preview);
+            if (window.renderMarkdownWithMath) {
+                el.innerHTML = window.renderMarkdownWithMath(preview);
             } else {
                 el.textContent = preview.substring(0, 300);
             }
@@ -8869,6 +8893,10 @@
                 if (window.formatDecryptionErrors) {
                     window.formatDecryptionErrors(document.getElementById('notes-list-container'));
                 }
+                // Re-run collapsible detection now that lazy content is rendered
+                requestAnimationFrame(() => {
+                    if (window.initCollapsibleNotes) window.initCollapsibleNotes();
+                });
             })
             .catch(async (err) => {
                 console.warn('Note preview fetch failed, trying offline cache:', err);

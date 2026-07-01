@@ -999,10 +999,14 @@ def share_settings_page(share_id):
 
     share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
 
-    # Format unlock_date for datetime-local input
+    # Send the UTC ISO string to the template; JS will convert to local
+    # for the datetime-local input and convert back to UTC on submit.
     unlock_date_str = ''
     if share.get('unlock_date'):
-        unlock_date_str = share['unlock_date'].strftime('%Y-%m-%dT%H:%M')
+        ud = share['unlock_date']
+        if ud.tzinfo is None:
+            ud = ud.replace(tzinfo=datetime.timezone.utc)
+        unlock_date_str = ud.isoformat()
 
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     user_is_premium = m.is_premium(user_doc)
@@ -1057,11 +1061,21 @@ def api_update_share_settings(share_id):
         auto_approve = False
     update_fields['auto_approve'] = auto_approve
 
-    # Time Capsule unlock date
-    unlock_date_str = request.form.get('unlock_date', '').strip()
+    # Time Capsule unlock date — the frontend sends a UTC ISO string
+    # (converted from the user's local datetime-local input via JS).
+    unlock_date_str = request.form.get('unlock_date_utc', '').strip()
+    if not unlock_date_str:
+        # Fallback: try the raw datetime-local field (old clients / no-JS)
+        unlock_date_str = request.form.get('unlock_date', '').strip()
     if unlock_date_str:
         try:
-            unlock_date = datetime.datetime.fromisoformat(unlock_date_str).replace(tzinfo=datetime.timezone.utc)
+            unlock_date = datetime.datetime.fromisoformat(unlock_date_str)
+            if unlock_date.tzinfo is None:
+                # Treat naive datetimes as UTC (legacy fallback)
+                unlock_date = unlock_date.replace(tzinfo=datetime.timezone.utc)
+            else:
+                # Convert any tz-aware datetime to UTC for storage
+                unlock_date = unlock_date.astimezone(datetime.timezone.utc)
             update_fields['unlock_date'] = unlock_date
         except (ValueError, TypeError):
             flash('Invalid unlock date format.', 'danger')

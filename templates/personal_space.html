@@ -236,6 +236,21 @@
             margin-bottom: 0.75rem;
         }
 
+        .note-content a.auto-link,
+        .rendered-note a[href^="http"] {
+            color: #3e2217;
+            text-decoration: underline;
+            text-decoration-color: rgba(62, 34, 23, 0.3);
+            text-underline-offset: 2px;
+            word-break: break-all;
+            transition: text-decoration-color 0.2s;
+        }
+
+        .note-content a.auto-link:hover,
+        .rendered-note a[href^="http"]:hover {
+            text-decoration-color: #3e2217;
+        }
+
         /* --- Collapsible Long Notes --- */
         .note-content.note-collapsed {
             max-height: 200px;
@@ -5694,6 +5709,13 @@
             text = text.replace(/```[\s\S]*?```/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
             text = text.replace(/`[^`]+`/g, (m) => { codeBlocks.push(m); return `%%CODE${codeBlocks.length - 1}%%`; });
 
+            // Protect URLs from math detection (underscores, slashes, etc.)
+            const urlPlaceholders = [];
+            // Markdown links: [text](url)
+            text = text.replace(/\[([^\]]*?)\]\((https?:\/\/[^\s\)]+)\)/g, (m) => { urlPlaceholders.push(m); return `%%URL${urlPlaceholders.length - 1}%%`; });
+            // Raw URLs: https://... or http://...
+            text = text.replace(/(^|[\s(])((https?:\/\/)[^\s<>"'\)]+)/gm, (m, pre, url) => { urlPlaceholders.push(url); return `${pre}%%URL${urlPlaceholders.length - 1}%%`; });
+
             // Protect EXISTING $...$
             const existingMath = [];
             text = text.replace(/\$\$[\s\S]*?\$\$/g, (m) => { existingMath.push(m); return `%%EXISTING${existingMath.length - 1}%%`; });
@@ -6050,6 +6072,8 @@
             // Restore protected existing math and code blocks
             text = text.replace(/%%EXISTING(\d+)%%/g, (m, i) => existingMath[parseInt(i)]);
             text = text.replace(/%%CODE(\d+)%%/g, (m, i) => codeBlocks[parseInt(i)]);
+            // Restore protected URLs
+            text = text.replace(/%%URL(\d+)%%/g, (m, i) => urlPlaceholders[parseInt(i)]);
 
             return text;
         }
@@ -6180,6 +6204,19 @@
             processedText = processedText.replace(/%%MATHBLOCK(\d+)%%/g, (match, index) => {
                 return mathPlaceholders[parseInt(index)] || match;
             });
+
+            // 8. Linkify bare URLs that weren't already wrapped in <a> tags
+            // This catches URLs that markdown's autolink didn't handle.
+            processedText = processedText.replace(
+                /(?<!href=")(?<!src=")(?<!">)(https?:\/\/[^\s<>"']+?)(?=[<"'\s]|[.,;:!?)\]]*(?:[\s<]|$)|$)/g,
+                function (url) {
+                    // Extract domain for preview tooltip
+                    let domain = '';
+                    try { domain = new URL(url).hostname; } catch (e) { }
+                    const title = domain ? domain : url;
+                    return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" title="' + title + '" class="auto-link">' + url + '</a>';
+                }
+            );
 
             return processedText;
         }

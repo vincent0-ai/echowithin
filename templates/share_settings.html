@@ -297,8 +297,8 @@
             <h3>Time Capsule</h3>
             <div class="form-group">
                 <label for="unlock-date">Unlock Date</label>
-                <input type="datetime-local" name="unlock_date" id="unlock-date" class="form-input"
-                    value="{{ unlock_date_str }}">
+                <input type="datetime-local" id="unlock-date" class="form-input">
+                <input type="hidden" name="unlock_date_utc" id="unlock-date-utc">
                 <div class="help-text">Leave empty to make the note available immediately. Set a future date to lock the note until then.</div>
             </div>
             {% if unlock_date_str %}
@@ -338,6 +338,51 @@
             surpriseOptions.style.display = themeSelect.value === 'none' ? 'none' : 'block';
         });
     }
+
+    // --- Time Capsule: UTC ↔ Local conversion ---
+    (function () {
+        const dateInput = document.getElementById('unlock-date');
+        const hiddenUtc = document.getElementById('unlock-date-utc');
+        if (!dateInput || !hiddenUtc) return;
+
+        // On page load: convert the UTC ISO string from the server to local
+        // for the datetime-local input.
+        const serverUtc = {{ unlock_date_str|tojson }};
+        if (serverUtc) {
+            const utcDate = (window.parseServerTime && window.parseServerTime(serverUtc)) || new Date(serverUtc);
+            if (utcDate && !isNaN(utcDate.getTime())) {
+                // Format as YYYY-MM-DDTHH:MM for datetime-local (in local timezone)
+                const pad = (n) => String(n).padStart(2, '0');
+                const localStr = utcDate.getFullYear() + '-' +
+                    pad(utcDate.getMonth() + 1) + '-' +
+                    pad(utcDate.getDate()) + 'T' +
+                    pad(utcDate.getHours()) + ':' +
+                    pad(utcDate.getMinutes());
+                dateInput.value = localStr;
+            }
+        }
+
+        // Sync the hidden UTC field whenever the datetime-local value changes
+        function syncUtcField() {
+            const val = dateInput.value;
+            if (val) {
+                // datetime-local gives a local time string; convert to UTC ISO
+                const localDate = new Date(val);
+                if (!isNaN(localDate.getTime())) {
+                    hiddenUtc.value = localDate.toISOString();
+                } else {
+                    hiddenUtc.value = '';
+                }
+            } else {
+                hiddenUtc.value = '';
+            }
+        }
+
+        dateInput.addEventListener('change', syncUtcField);
+        dateInput.addEventListener('input', syncUtcField);
+        // Initial sync in case a value was pre-filled
+        syncUtcField();
+    })();
 
     // --- Async form submission with progress bar ---
     (function () {

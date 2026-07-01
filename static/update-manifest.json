@@ -1,6 +1,6 @@
 {
-  "versionCode": 23,
-  "versionName": "1.8.5",
+  "versionCode": 24,
+  "versionName": "1.9.0",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "🔄 Fixed backslash escape rendering issue where unnecessary backslashes (e.g. \\*, \\_, \\[, etc.) were displayed in note details and list previews, particularly affecting imported notes."
+  "changelog": "v1.9.0 — Bug fixes & new features:\n• Fixed sync timing: auto-sync now throttled to every 5 minutes (manual mode unaffected)\n• Fixed version history restore not updating local cache\n• Fixed locked note titles leaking in Shared Links tab\n• Reduced top spacing above the app header for more working area\n• New Trash screen with restore/permanent-delete/empty-trash\n• Settings: Default sort order picker & auto-purge trash toggle\n• Cleaned up deprecated icon usage"
 }

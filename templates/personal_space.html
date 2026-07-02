@@ -6453,8 +6453,8 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = {{ user_max_chars }
-        };
+            const maxChars = {{ user_max_chars }};
+
         const dangerThreshold = Math.floor(maxChars * 0.9);
         const warningThreshold = Math.floor(maxChars * 0.75);
         noteInput.addEventListener('input', () => {

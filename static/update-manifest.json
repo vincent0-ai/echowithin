@@ -1,6 +1,6 @@
 {
-  "versionCode": 25,
-  "versionName": "1.9.1",
+  "versionCode": 26,
+  "versionName": "1.9.2",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.1 — New features:\n• Share Intent Receiver: Share text from any app directly into Echo Within as a new note\n• Biometric Lock: Use fingerprint or face unlock to access locked notes (toggle in Settings)\n• Folder Chips: Filter notes by folder with scrollable chip row on the Notes tab\n• Biometric 'Use Fingerprint' button on the Locked Notes tab"
+  "changelog": "v1.9.2 — Share link improvements:\n• Copy Link: One-tap copy of share URLs to clipboard with toast confirmation\n• Share Link: Android share sheet integration for share links\n• Improved share card layout with dedicated Copy / Share / Open / Revoke buttons"
 }

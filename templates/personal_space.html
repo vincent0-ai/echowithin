@@ -219,7 +219,7 @@
             background: white;
             border-radius: 12px;
             padding: 1rem;
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.3rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
             border-left: 4px solid var(--primary-color);
             position: relative;
@@ -1016,7 +1016,7 @@
             background: white;
             border-radius: 12px;
             padding: 1rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.3rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
             border-left: 4px solid #5a3328;
             position: relative;
@@ -2439,8 +2439,7 @@
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888;"
-                                        title="{{ share.permissions }} access"></i>
+                                        style="color: #888;" title="{{ share.permissions }} access"></i>
                                     <span style="overflow: hidden; text-overflow: ellipsis;">{{
                                         share.share_url[-8:] }}</span>
                                 </span>
@@ -2942,8 +2941,7 @@
                                     {% if share.surprise_theme != 'none' %}<i class="fas fa-gift"
                                         style="color: #ff4d6d;"></i>{% endif %}
                                     <i class="fas fa-{{ 'pen' if share.permissions == 'edit' else 'eye' }}"
-                                        style="color: #888;"
-                                        title="{{ share.permissions }} access"></i>
+                                        style="color: #888;" title="{{ share.permissions }} access"></i>
                                     <span style="overflow: hidden; text-overflow: ellipsis;">{{
                                         share.share_url[-8:] }}</span>
                                 </span>
@@ -3171,9 +3169,12 @@
                     style="background: none; border: none; color: var(--primary-color); font-size: 0.82rem; cursor: pointer; padding: 0; display: flex; align-items: center; gap: 4px;"><i
                         class="fas fa-arrow-left"></i> Back to options</button>
             </div>
-            <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">Select a community to share this note to:</p>
-            <div id="community-picker-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto;">
-                <div style="text-align: center; padding: 2rem; color: #999; font-size: 0.85rem;">Loading communities...</div>
+            <p style="font-size: 0.85rem; color: #666; margin: 0 0 0.75rem 0;">Select a community to share this note to:
+            </p>
+            <div id="community-picker-list"
+                style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto;">
+                <div style="text-align: center; padding: 2rem; color: #999; font-size: 0.85rem;">Loading communities...
+                </div>
             </div>
             <div id="community-picker-empty" style="display: none; text-align: center; padding: 1.5rem; color: #999;">
                 <p style="font-size: 0.85rem; margin: 0 0 0.5rem 0;">You haven't joined any communities yet.</p>
@@ -6452,8 +6453,9 @@
         const charCountContainer = charCount?.parentElement;
 
         if (noteInput && charCount) {
-            const maxChars = {{ user_max_chars }};
-            const dangerThreshold = Math.floor(maxChars * 0.9);
+            const maxChars = {{ user_max_chars }
+        };
+        const dangerThreshold = Math.floor(maxChars * 0.9);
         const warningThreshold = Math.floor(maxChars * 0.75);
         noteInput.addEventListener('input', () => {
             const len = noteInput.value.length;
@@ -6700,24 +6702,24 @@
         const targetNoteId = '{{ target_note_id }}';
         let attempts = 0;
         const maxAttempts = 100; // 10 seconds at 100ms intervals
-        
+
         function tryScrollToNote() {
             attempts++;
             const noteCard = document.querySelector(`.note-card[data-note-id="${targetNoteId}"]`);
-            
+
             if (!noteCard) {
                 // Note card not in DOM yet
                 if (attempts < maxAttempts) return false;
                 return 'timeout';
             }
-            
+
             const noteContent = noteCard.querySelector('.note-content');
             if (noteContent && noteContent.hasAttribute('data-lazy')) {
                 // Still lazy-loading
                 if (attempts < maxAttempts) return false;
                 return 'timeout';
             }
-            
+
             // Note is ready - scroll and highlight
             document.querySelectorAll('.note-card.search-active-match').forEach(
                 c => c.classList.remove('search-active-match')
@@ -6726,7 +6728,7 @@
             noteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return true;
         }
-        
+
         // Poll until success or timeout
         const interval = setInterval(() => {
             const result = tryScrollToNote();
@@ -8215,30 +8217,30 @@
                 },
                 body: JSON.stringify({ community_id: communityId })
             })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    if (typeof showCustomAlert === 'function') {
-                        showCustomAlert(data.message || 'Note shared to community!', 'success');
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(data.message || 'Note shared to community!', 'success');
+                        } else {
+                            alert(data.message || 'Note shared to community!');
+                        }
+                        closeShareModal();
                     } else {
-                        alert(data.message || 'Note shared to community!');
+                        if (typeof showCustomAlert === 'function') {
+                            showCustomAlert(data.error || 'Failed to share', 'danger');
+                        } else {
+                            alert(data.error || 'Failed to share');
+                        }
+                        loadCommunities(); // Reload the list
                     }
-                    closeShareModal();
-                } else {
+                })
+                .catch(() => {
                     if (typeof showCustomAlert === 'function') {
-                        showCustomAlert(data.error || 'Failed to share', 'danger');
-                    } else {
-                        alert(data.error || 'Failed to share');
+                        showCustomAlert('Network error. Please try again.', 'danger');
                     }
-                    loadCommunities(); // Reload the list
-                }
-            })
-            .catch(() => {
-                if (typeof showCustomAlert === 'function') {
-                    showCustomAlert('Network error. Please try again.', 'danger');
-                }
-                loadCommunities();
-            });
+                    loadCommunities();
+                });
         }
 
         // Mode button clicks
@@ -8590,7 +8592,8 @@
     // ====== Note Export Logic ======
     (function () {
         let exportNoteId = null;
-        const isPremium = {{ 'true' if user_is_premium else 'false' }};
+        const isPremium = {{ 'true' if user_is_premium else 'false' }
+    };
 
     // Open export modal
     document.body.addEventListener('click', function (e) {

@@ -1,6 +1,6 @@
 {
-  "versionCode": 24,
-  "versionName": "1.9.0",
+  "versionCode": 25,
+  "versionName": "1.9.1",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.0 — Bug fixes & new features:\n• Fixed sync timing: auto-sync now throttled to every 5 minutes (manual mode unaffected)\n• Fixed version history restore not updating local cache\n• Fixed locked note titles leaking in Shared Links tab\n• Reduced top spacing above the app header for more working area\n• New Trash screen with restore/permanent-delete/empty-trash\n• Settings: Default sort order picker & auto-purge trash toggle\n• Cleaned up deprecated icon usage"
+  "changelog": "v1.9.1 — New features:\n• Share Intent Receiver: Share text from any app directly into Echo Within as a new note\n• Biometric Lock: Use fingerprint or face unlock to access locked notes (toggle in Settings)\n• Folder Chips: Filter notes by folder with scrollable chip row on the Notes tab\n• Biometric 'Use Fingerprint' button on the Locked Notes tab"
 }

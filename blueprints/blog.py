@@ -1159,43 +1159,8 @@ def view_post(slug):
     post_html = bleach.linkify(post_html, callbacks=[m._linkify_target_blank], parse_email=True)
     post['content'] = post_html
 
-    # --- Fetch Related Posts using Typesense (with caching) ---
+    # --- Fetch Related Posts (disabled) ---
     related_posts = []
-    post_id_str = str(post['_id'])
-
-    # Try cache first
-    related_cache_key = f"related_posts:{post_id_str}"
-    cached_related = m.related_posts_cache.get(related_cache_key)
-
-    if cached_related is not None:
-        related_posts = cached_related
-    elif m._t.ts_posts:
-        try:
-            search_query = post.get('title', '')
-            search_params = {
-                'q': search_query or '*',
-                'query_by': 'title,content,tags',
-                'per_page': 4,
-                'filter_by': f'id:!={post_id_str}',
-            }
-
-            if post.get('tags'):
-                tags_str = " ".join(post.get('tags'))
-                search_query = f"{tags_str} {search_query}"
-                search_params['q'] = search_query
-
-            search_result = m._t._ts_search('posts', search_params)
-            hits = search_result.get('hits', [])
-            related_posts_raw = [h.get('document', h) for h in hits[:3]]
-
-            for p in related_posts_raw:
-                if p.get('created_at'):
-                    p['created_at'] = datetime.datetime.fromtimestamp(p['created_at'], tz=datetime.timezone.utc)
-            related_posts = related_posts_raw
-
-            m.related_posts_cache[related_cache_key] = related_posts
-        except Exception as e:
-            current_app.logger.error(f"Failed to get similar posts for {post_id_str}: {e}")
 
     # Add comment count and fetch recent comments
     try:

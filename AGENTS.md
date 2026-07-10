@@ -158,6 +158,9 @@ If the logic requires some further modification note at the end.
 - **Synchronize Homepage Trending Feed**:
   - Extracted the main blog feed selection logic (recent posts + month selection + weighted older post memories) from `blog.py` into a helper function `get_latest_posts_feed()`.
   - Updated `pages.py` to retrieve `get_latest_posts_feed()[:5]` for homepage `hot_posts` trending list, ensuring the homepage trending posts include older "memories" and match the blog feed.
+- **Remove Related Posts Section**:
+  - Removed the related posts HTML block and toggle JavaScript from `templates/view_post.html`.
+  - Removed the Typesense related posts retrieval/caching logic from the `view_post` endpoint in `blueprints/blog.py`, leaving `related_posts` as an empty list to avoid unnecessary queries.
 
 **Files touched:** `templates/_macros.html`, `templates/blog.html`, `templates/view_post.html`, `blueprints/blog.py`, `blueprints/pages.py`, `AGENTS.md`.
 

@@ -291,27 +291,6 @@
         </div>
         {% endif %}
 
-        {% if related_posts %}
-        <div class="related-posts-section" style="margin-top: 40px; border-top: 1px solid #eee; padding-top: 5px;">
-            <h3 id="toggle-related-posts" style="cursor: pointer; display: inline-block;">
-                Related Posts <i class="fa-solid fa-chevron-down" style="font-size: 0.8em;"></i>
-            </h3>
-            <div id="related-posts-list" class="related-posts-list" style="display: none; margin-top: 10px;">
-                {% for r_post in related_posts %}
-                <div class="related-post-item" style="margin-bottom: 15px;">
-                    <h4 style="margin: 0 0 5px 0; font-size: 1.1rem;">
-                        {# The title from Typesense might contain highlight tags, so it needs to be marked safe #}
-                        <a href="{{ url_for('blog.view_post', slug=r_post.slug) }}">{{ r_post.title|safe }}</a>
-                    </h4>
-                    <div class="related-post-meta" style="font-size: 0.85rem; color: #666;">
-                        by {{ r_post.author_username }} on {{ r_post.created_at|localtime('%b %d, %Y') if
-                        r_post.created_at else '' }}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         <div style="margin-top: 20px; text-align: center;">
             {% if current_user.is_authenticated %}
@@ -971,23 +950,7 @@
         document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') closeLightbox(); if (ev.key === 'ArrowLeft' && currentGallery.length > 1) { currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } if (ev.key === 'ArrowRight' && currentGallery.length > 1) { currentIndex = (currentIndex + 1) % currentGallery.length; modalImg.src = currentGallery[currentIndex]; } });
     })();
 
-    // Toggle for related posts
-    const toggleRelatedBtn = document.getElementById('toggle-related-posts');
-    if (toggleRelatedBtn) {
-        toggleRelatedBtn.addEventListener('click', function () {
-            const relatedList = document.getElementById('related-posts-list');
-            const icon = this.querySelector('i');
-            if (relatedList.style.display === 'none') {
-                relatedList.style.display = 'block';
-                icon.classList.remove('fa-chevron-down');
-                icon.classList.add('fa-chevron-up');
-            } else {
-                relatedList.style.display = 'none';
-                icon.classList.remove('fa-chevron-up');
-                icon.classList.add('fa-chevron-down');
-            }
-        });
-    }
+
 });
 </script>
 {% endblock %}

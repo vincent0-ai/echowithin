@@ -1,6 +1,6 @@
 {
-  "versionCode": 27,
-  "versionName": "1.9.3",
+  "versionCode": 28,
+  "versionName": "1.9.4",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.3 \ud83d\udd27 Bug Fix Release:\n\ud83d\udcdd Markdown rendering fixed \u2014 notes with dollar signs no longer break formatting\n\u23f0 Timestamps fixed \u2014 shows actual time instead of always 'Just now'\n\ud83d\udd14 Sync toast \u2014 only shows on manual sync, not spammy auto-syncs\n\ud83d\udcbe Draft auto-save \u2014 going back now saves note locally as draft\n\u2328\ufe0f Editor keyboard \u2014 cursor area scrolls into view when keyboard opens\n\ud83d\udd10 Biometric unlock \u2014 fingerprint/face unlock now works properly"
+  "changelog": "v1.9.4 \ud83d\udd27 Fixes:\n\ud83d\udcdd Markdown now renders using WebView with bundled marked.js + KaTeX (works offline, matches backend)\n\u2328\ufe0f Editor cursor focus fix \u2014 reverted broken scroll wrapper"
 }

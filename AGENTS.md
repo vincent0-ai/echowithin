@@ -146,3 +146,19 @@ If the logic requires some further modification note at the end.
 **Verification:** `python -m py_compile echowithin/blueprints/communities.py` → syntax OK.
 
 **Privacy Note:** Check-in moods are stored per-user per-day but only aggregate counts are displayed to others (anonymous). Poll votes are stored per-user for dedup but only aggregate option counts are displayed. Resource uploads use existing Cloudinary infrastructure with no new data exposure. Welcome dismissals are stored as user ID list (only used to suppress the banner).
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-10
+**Changes:**
+
+- **Remove Author Achievements from Blog Pages**:
+  - Removed author achievement badges from the blog post cards in `templates/_macros.html` and `templates/blog.html`.
+  - Removed author achievement badges from the post details page in `templates/view_post.html`.
+  - Kept user achievements active on the profile page (`templates/profile.html`).
+- **Synchronize Homepage Trending Feed**:
+  - Extracted the main blog feed selection logic (recent posts + month selection + weighted older post memories) from `blog.py` into a helper function `get_latest_posts_feed()`.
+  - Updated `pages.py` to retrieve `get_latest_posts_feed()[:5]` for homepage `hot_posts` trending list, ensuring the homepage trending posts include older "memories" and match the blog feed.
+
+**Files touched:** `templates/_macros.html`, `templates/blog.html`, `templates/view_post.html`, `blueprints/blog.py`, `blueprints/pages.py`, `AGENTS.md`.
+
+**Verification:** Ran `python -m py_compile blueprints/blog.py blueprints/pages.py` which compiled successfully.

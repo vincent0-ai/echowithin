@@ -6,6 +6,66 @@ import datetime, math, json, random, os, re
 bp = Blueprint('blog', __name__, template_folder='templates')
 
 
+def get_latest_posts_feed():
+    import main as m
+    cached_feed = m.blog_feed_cache.get('main')
+    if cached_feed:
+        return cached_feed
+
+    total_posts_count = m.posts_conf.count_documents({})
+    pinned_posts = list(m.posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
+    pinned_ids = [p['_id'] for p in pinned_posts]
+    if total_posts_count <= 10:
+        other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
+        random.shuffle(other_posts)
+        all_posts_list = pinned_posts + other_posts
+        with current_app.app_context():
+            latest_posts_prepared = m.prepare_posts(all_posts_list)
+    else:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        one_month_ago = now - datetime.timedelta(days=30)
+        recent_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1).limit(2))
+        recent_ids = [p['_id'] for p in recent_posts]
+        month_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids + recent_ids}, 'timestamp': {'$gte': one_month_ago}}).sort('timestamp', -1).limit(20))
+        if len(month_posts) > 4:
+            month_weights = []
+            for mp in month_posts:
+                eng = (mp.get('likes_count', 0) or 0) + (mp.get('comment_count', 0) or 0) * 2 + (mp.get('share_count', 0) or 0)
+                month_weights.append(max(eng, 1))
+            month_selection = random.choices(month_posts, weights=month_weights, k=4)
+            seen_ids = set()
+            deduped = []
+            for mp in month_selection:
+                if mp['_id'] not in seen_ids:
+                    seen_ids.add(mp['_id'])
+                    deduped.append(mp)
+            month_selection = deduped
+        else:
+            month_selection = month_posts
+        month_ids = [p['_id'] for p in month_selection]
+        excluded_ids = pinned_ids + recent_ids + month_ids
+        posts_needed = 10 - len(recent_posts) - len(month_selection)
+        older_posts = list(m.posts_conf.aggregate([
+            {'$match': {'_id': {'$nin': excluded_ids}}},
+            {'$addFields': {'_eng_weight': {'$add': [{'$ifNull': ['$likes_count', 0]}, {'$multiply': [{'$ifNull': ['$share_count', 0]}, 2]}, 1]}}},
+            {'$sample': {'size': max(posts_needed * 3, 3)}}
+        ]))
+        older_posts.sort(key=lambda p: p.get('_eng_weight', 1), reverse=True)
+        if len(older_posts) > posts_needed:
+            top_half = older_posts[:max(len(older_posts) // 2, posts_needed)]
+            older_posts = random.sample(top_half, min(posts_needed, len(top_half)))
+        for p in older_posts:
+            p.pop('_eng_weight', None)
+        mixed_posts = recent_posts + month_selection + older_posts
+        random.shuffle(mixed_posts)
+        combined_posts = pinned_posts + mixed_posts
+        with current_app.app_context():
+            latest_posts_prepared = m.prepare_posts(combined_posts)
+    m.blog_feed_cache['main'] = latest_posts_prepared
+    return latest_posts_prepared
+
+
+
 @bp.route("/blog")
 def blog():
     import main as m
@@ -23,60 +83,7 @@ def blog():
         page_title = f"Search results for '{query}'"
         page_description = f"Displaying search results for '{query}' on EchoWithin."
         return render_template("blog.html", posts=search_results, active_page='blog', page=page, total_pages=total_pages, query=query, title=page_title, description=page_description)
-    cached_feed = m.blog_feed_cache.get('main')
-    if cached_feed:
-        latest_posts_prepared = cached_feed
-    else:
-        total_posts_count = m.posts_conf.count_documents({})
-        pinned_posts = list(m.posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
-        pinned_ids = [p['_id'] for p in pinned_posts]
-        if total_posts_count <= 10:
-            other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
-            random.shuffle(other_posts)
-            all_posts_list = pinned_posts + other_posts
-            with current_app.app_context():
-                latest_posts_prepared = m.prepare_posts(all_posts_list)
-        else:
-            now = datetime.datetime.now(datetime.timezone.utc)
-            one_month_ago = now - datetime.timedelta(days=30)
-            recent_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1).limit(2))
-            recent_ids = [p['_id'] for p in recent_posts]
-            month_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids + recent_ids}, 'timestamp': {'$gte': one_month_ago}}).sort('timestamp', -1).limit(20))
-            if len(month_posts) > 4:
-                month_weights = []
-                for mp in month_posts:
-                    eng = (mp.get('likes_count', 0) or 0) + (mp.get('comment_count', 0) or 0) * 2 + (mp.get('share_count', 0) or 0)
-                    month_weights.append(max(eng, 1))
-                month_selection = random.choices(month_posts, weights=month_weights, k=4)
-                seen_ids = set()
-                deduped = []
-                for mp in month_selection:
-                    if mp['_id'] not in seen_ids:
-                        seen_ids.add(mp['_id'])
-                        deduped.append(mp)
-                month_selection = deduped
-            else:
-                month_selection = month_posts
-            month_ids = [p['_id'] for p in month_selection]
-            excluded_ids = pinned_ids + recent_ids + month_ids
-            posts_needed = 10 - len(recent_posts) - len(month_selection)
-            older_posts = list(m.posts_conf.aggregate([
-                {'$match': {'_id': {'$nin': excluded_ids}}},
-                {'$addFields': {'_eng_weight': {'$add': [{'$ifNull': ['$likes_count', 0]}, {'$multiply': [{'$ifNull': ['$share_count', 0]}, 2]}, 1]}}},
-                {'$sample': {'size': max(posts_needed * 3, 3)}}
-            ]))
-            older_posts.sort(key=lambda p: p.get('_eng_weight', 1), reverse=True)
-            if len(older_posts) > posts_needed:
-                top_half = older_posts[:max(len(older_posts) // 2, posts_needed)]
-                older_posts = random.sample(top_half, min(posts_needed, len(top_half)))
-            for p in older_posts:
-                p.pop('_eng_weight', None)
-            mixed_posts = recent_posts + month_selection + older_posts
-            random.shuffle(mixed_posts)
-            combined_posts = pinned_posts + mixed_posts
-            with current_app.app_context():
-                latest_posts_prepared = m.prepare_posts(combined_posts)
-        m.blog_feed_cache['main'] = latest_posts_prepared
+    latest_posts_prepared = get_latest_posts_feed()
     page_title = "EchoWithin Blog - Community & Collaboration"
     page_description = "Explore the latest posts, collaborative discussions, and ideas from the EchoWithin community."
     return render_template("blog.html", latest_posts=latest_posts_prepared, active_page='blog', title=page_title, description=page_description)

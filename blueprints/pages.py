@@ -54,110 +54,11 @@ def home():
         active_now = max(1, active_now)
         m.community_stats_cache['community_stats'] = {'total_members': total_members, 'total_posts': total_posts, 'most_active_member': most_active_member, 'active_now': active_now}
     hot_posts = []
-    cache_key = 'home_hot_posts'
-    if m.redis_cache:
-        try:
-            cached = m.redis_cache.get(cache_key)
-            if cached:
-                hot_posts = json.loads(cached)
-        except Exception:
-            pass
-    if not hot_posts:
-        try:
-            thirty_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
-            hot_posts_pipeline = [
-                {'$match': {'timestamp': {'$gte': thirty_days_ago}}},
-                {'$lookup': {'from': 'comments', 'let': {'post_slug': '$slug'}, 'pipeline': [{'$match': {'$expr': {'$eq': ['$post_slug', '$$post_slug']}, 'is_deleted': {'$ne': True}}}, {'$count': 'count'}], 'as': 'comment_data'}},
-                {'$addFields': {'comment_count': {'$ifNull': [{'$arrayElemAt': ['$comment_data.count', 0]}, 0]}, 'likes_safe': {'$ifNull': ['$likes_count', 0]}, 'shares_safe': {'$ifNull': ['$share_count', 0]}, 'views_safe': {'$ifNull': ['$view_count', 0]}, 'age_in_hours': {'$divide': [{'$subtract': ["$$NOW", '$timestamp']}, 3600000]}}},
-                {'$addFields': {'raw_engagement': {'$add': [{'$multiply': ['$comment_count', m.ENGAGEMENT_WEIGHTS['comment']]}, {'$multiply': ['$likes_safe', m.ENGAGEMENT_WEIGHTS['reaction']]}, {'$multiply': ['$shares_safe', m.ENGAGEMENT_WEIGHTS['share']]}, {'$multiply': ['$views_safe', m.ENGAGEMENT_WEIGHTS['view']]}]}, 'recency_boost': {'$switch': {'branches': [{'case': {'$lt': ['$age_in_hours', 2]}, 'then': 1.5}, {'case': {'$lt': ['$age_in_hours', 6]}, 'then': 1.2}], 'default': 1.0}}}},
-                {'$addFields': {'engagement_score': {'$multiply': [{'$ln': {'$add': ['$raw_engagement', 1]}}, 10]}}},
-                {'$addFields': {'hot_score': {'$multiply': ['$recency_boost', {'$divide': [{'$add': ['$engagement_score', 1]}, {'$pow': [{'$add': ['$age_in_hours', 8]}, 1.2]}]}]}}},
-                {'$sort': {'hot_score': -1}},
-                {'$limit': 20}
-            ]
-            hot_posts_candidates = list(m.posts_conf.aggregate(hot_posts_pipeline))
-            author_count = {}
-            hot_posts = []
-            for post in hot_posts_candidates:
-                author_id = str(post.get('author_id', ''))
-                author_count[author_id] = author_count.get(author_id, 0) + 1
-                if author_count[author_id] <= 2:
-                    hot_posts.append(post)
-                    if len(hot_posts) >= 5:
-                        break
-            with current_app.app_context():
-                hot_posts = m.prepare_posts(hot_posts)
-            if len(hot_posts) == 0:
-                latest_posts_cursor = m.posts_conf.find({}).sort('timestamp', -1).limit(5)
-                with current_app.app_context():
-                    hot_posts = m.prepare_posts(list(latest_posts_cursor))
-            if m.redis_cache and hot_posts:
-                try:
-                    m.redis_cache.setex(cache_key, 120, json.dumps(hot_posts, default=str))
-                except Exception:
-                    pass
-        except Exception as e:
-            current_app.logger.error(f"Failed to calculate hot posts: {e}")
-    def _mix_home_posts(hot_posts_list, fresh_posts_list, max_posts=5, max_posts_per_author=2):
-        mixed_posts = []
-        seen_post_ids = set()
-        author_counts = {}
-        def try_add_post(post_doc):
-            post_id = str(post_doc.get('_id') or post_doc.get('id') or '')
-            if not post_id or post_id in seen_post_ids:
-                return
-            author_id = str(post_doc.get('author_id') or '')
-            if author_id and author_counts.get(author_id, 0) >= max_posts_per_author:
-                return
-            mixed_posts.append(post_doc)
-            seen_post_ids.add(post_id)
-            if author_id:
-                author_counts[author_id] = author_counts.get(author_id, 0) + 1
-        hot_index = 0
-        fresh_index = 0
-        while len(mixed_posts) < max_posts and (hot_index < len(hot_posts_list) or fresh_index < len(fresh_posts_list)):
-            if hot_index < len(hot_posts_list):
-                try_add_post(hot_posts_list[hot_index])
-                hot_index += 1
-                if len(mixed_posts) >= max_posts:
-                    break
-            if fresh_index < len(fresh_posts_list):
-                try_add_post(fresh_posts_list[fresh_index])
-                fresh_index += 1
-                if len(mixed_posts) >= max_posts:
-                    break
-        for post_doc in hot_posts_list[hot_index:]:
-            if len(mixed_posts) >= max_posts:
-                break
-            try_add_post(post_doc)
-        for post_doc in fresh_posts_list[fresh_index:]:
-            if len(mixed_posts) >= max_posts:
-                break
-            try_add_post(post_doc)
-        return mixed_posts[:max_posts]
-    fresh_posts = []
-    fresh_cache_key = 'home_fresh_posts'
-    if m.redis_cache:
-        try:
-            cached_fresh = m.redis_cache.get(fresh_cache_key)
-            if cached_fresh:
-                fresh_posts = json.loads(cached_fresh)
-        except Exception:
-            pass
-    if not fresh_posts:
-        try:
-            recent_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
-            recent_posts_cursor = m.posts_conf.find({'timestamp': {'$gte': recent_cutoff}}).sort('timestamp', -1).limit(10)
-            with current_app.app_context():
-                fresh_posts = m.prepare_posts(list(recent_posts_cursor))
-            if m.redis_cache and fresh_posts:
-                try:
-                    m.redis_cache.setex(fresh_cache_key, 30, json.dumps(fresh_posts, default=str))
-                except Exception:
-                    pass
-        except Exception as e:
-            current_app.logger.debug(f"Failed to load fresh homepage posts: {e}")
-    hot_posts = _mix_home_posts(hot_posts, fresh_posts)
+    try:
+        from blueprints.blog import get_latest_posts_feed
+        hot_posts = get_latest_posts_feed()[:5]
+    except Exception as e:
+        current_app.logger.error(f"Failed to load hot posts for homepage: {e}")
     user_oid = ObjectId(current_user.id)
     user_id_str = str(current_user.id)
     # PERF: Cache per-user counts in Redis (60s TTL) to avoid count_documents on every load

@@ -1,163 +1,511 @@
 {% extends "base.html" %}
-{% block title %}Bonds — EchoWithin{% endblock %}
-
 {% block content %}
 <style nonce="{{ csp_nonce }}">
-    .bonds-page { max-width: 800px; margin: 0 auto; padding: 1rem; }
-    .bonds-header { margin-bottom: 1.5rem; }
-    .bonds-header h1 { font-size: 1.6rem; color: var(--primary-dark-color); margin-bottom: 0.3rem; }
-    .bonds-header p { color: #666; font-size: 0.9rem; margin: 0; }
+    .bonds-page {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 1rem;
+    }
 
-    .bonds-section { margin-bottom: 2rem; }
-    .bonds-section-title { font-size: 1.1rem; color: var(--primary-dark-color); margin-bottom: 0.8rem; font-weight: 600; }
+    .bonds-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .bonds-header h1 {
+        font-size: 1.6rem;
+        color: var(--primary-dark-color);
+        margin-bottom: 0.3rem;
+    }
+
+    .bonds-header p {
+        color: #666;
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    .bonds-section {
+        margin-bottom: 2rem;
+    }
+
+    .bonds-section-title {
+        font-size: 1.1rem;
+        color: var(--primary-dark-color);
+        margin-bottom: 0.8rem;
+        font-weight: 600;
+    }
 
     .bond-card {
-        background: #fff; border-radius: 8px; padding: 1.2rem;
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.2rem;
         border-left: 4px solid var(--primary-color);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        margin-bottom: 1rem;
     }
-    .bond-card-header { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.8rem; }
+
+    .bond-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        margin-bottom: 0.8rem;
+    }
+
     .bond-avatar {
-        width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        object-fit: cover;
         border: 2px solid var(--primary-color);
     }
+
     .bond-avatar-placeholder {
-        width: 48px; height: 48px; border-radius: 50%;
-        background: var(--primary-color); color: #fff;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.2rem; font-weight: 600;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        font-weight: 600;
     }
-    .bond-info { flex: 1; }
-    .bond-username { font-weight: 600; color: var(--primary-dark-color); font-size: 1rem; }
-    .bond-label { font-size: 0.8rem; color: #888; margin-top: 2px; }
-    .bond-meta { font-size: 0.78rem; color: #999; margin-top: 2px; }
-    .bond-streak { font-size: 0.85rem; color: var(--primary-color); font-weight: 500; }
 
-    .bond-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.8rem; }
+    .bond-info {
+        flex: 1;
+    }
+
+    .bond-username {
+        font-weight: 600;
+        color: var(--primary-dark-color);
+        font-size: 1rem;
+    }
+
+    .bond-label {
+        font-size: 0.8rem;
+        color: #888;
+        margin-top: 2px;
+    }
+
+    .bond-meta {
+        font-size: 0.78rem;
+        color: #999;
+        margin-top: 2px;
+    }
+
+    .bond-streak {
+        font-size: 0.85rem;
+        color: var(--primary-color);
+        font-weight: 500;
+    }
+
+    .bond-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-top: 0.8rem;
+    }
+
     .bond-actions .btn {
-        font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 20px;
-        border: none; cursor: pointer; color: #fff;
+        font-size: 0.8rem;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        border: none;
+        cursor: pointer;
+        color: #fff;
     }
-    .btn-bond-primary { background: var(--primary-color); }
-    .btn-bond-primary:hover { background: var(--primary-dark-color); }
-    .btn-bond-danger { background: var(--danger-color); }
-    .btn-bond-danger:hover { background: #da190b; }
-    .btn-bond-success { background: var(--success-color); }
-    .btn-bond-success:hover { background: #45a049; }
-    .btn-bond-secondary { background: #888; }
-    .btn-bond-secondary:hover { background: #666; }
 
-    .bond-expand-section { margin-top: 1rem; border-top: 1px solid #eee; padding-top: 1rem; display: none; }
-    .bond-expand-section.active { display: block; }
+    .btn-bond-primary {
+        background: var(--primary-color);
+    }
+
+    .btn-bond-primary:hover {
+        background: var(--primary-dark-color);
+    }
+
+    .btn-bond-danger {
+        background: var(--danger-color);
+    }
+
+    .btn-bond-danger:hover {
+        background: #da190b;
+    }
+
+    .btn-bond-success {
+        background: var(--success-color);
+    }
+
+    .btn-bond-success:hover {
+        background: #45a049;
+    }
+
+    .btn-bond-secondary {
+        background: #888;
+    }
+
+    .btn-bond-secondary:hover {
+        background: #666;
+    }
+
+    .bond-expand-section {
+        margin-top: 1rem;
+        border-top: 1px solid #eee;
+        padding-top: 1rem;
+        display: none;
+    }
+
+    .bond-expand-section.active {
+        display: block;
+    }
 
     /* Goals */
     .goal-card {
-        background: #f9f9f9; border-radius: 6px; padding: 0.8rem;
-        border: 1px solid #eee; margin-bottom: 0.6rem;
+        background: #f9f9f9;
+        border-radius: 6px;
+        padding: 0.8rem;
+        border: 1px solid #eee;
+        margin-bottom: 0.6rem;
     }
-    .goal-title { font-weight: 600; color: var(--text-dark-color); font-size: 0.95rem; }
+
+    .goal-title {
+        font-weight: 600;
+        color: var(--text-dark-color);
+        font-size: 0.95rem;
+    }
+
     .goal-category {
-        display: inline-block; font-size: 0.7rem; padding: 2px 8px;
-        background: var(--primary-color); color: #fff; border-radius: 10px;
-        margin-left: 0.4rem; vertical-align: middle;
+        display: inline-block;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        background: var(--primary-color);
+        color: #fff;
+        border-radius: 10px;
+        margin-left: 0.4rem;
+        vertical-align: middle;
     }
+
     .goal-status-badge {
-        display: inline-block; font-size: 0.7rem; padding: 2px 8px;
-        border-radius: 10px; margin-left: 0.4rem; vertical-align: middle;
+        display: inline-block;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: 0.4rem;
+        vertical-align: middle;
     }
-    .goal-status-proposed { background: #f0ad4e; color: #fff; }
-    .goal-status-active { background: var(--success-color); color: #fff; }
-    .goal-status-completed { background: var(--primary-color); color: #fff; }
-    .goal-status-abandoned { background: #999; color: #fff; }
-    .goal-description { font-size: 0.85rem; color: #666; margin: 0.4rem 0; }
+
+    .goal-status-proposed {
+        background: #f0ad4e;
+        color: #fff;
+    }
+
+    .goal-status-active {
+        background: var(--success-color);
+        color: #fff;
+    }
+
+    .goal-status-completed {
+        background: var(--primary-color);
+        color: #fff;
+    }
+
+    .goal-status-abandoned {
+        background: #999;
+        color: #fff;
+    }
+
+    .goal-description {
+        font-size: 0.85rem;
+        color: #666;
+        margin: 0.4rem 0;
+    }
+
     .goal-progress-bar {
-        background: #e0e0e0; border-radius: 6px; height: 8px;
-        margin: 0.5rem 0; overflow: hidden;
+        background: #e0e0e0;
+        border-radius: 6px;
+        height: 8px;
+        margin: 0.5rem 0;
+        overflow: hidden;
     }
+
     .goal-progress-fill {
-        background: var(--primary-color); height: 100%; border-radius: 6px;
+        background: var(--primary-color);
+        height: 100%;
+        border-radius: 6px;
         transition: width 0.3s ease;
     }
-    .goal-progress-text { font-size: 0.78rem; color: #888; }
-    .goal-deadline { font-size: 0.78rem; color: #999; }
-    .goal-milestones { margin: 0.5rem 0; }
-    .milestone-item { display: flex; align-items: center; gap: 0.4rem; margin: 0.2rem 0; font-size: 0.85rem; }
-    .milestone-item input[type="checkbox"] { accent-color: var(--primary-color); cursor: pointer; }
-    .milestone-item.completed label { text-decoration: line-through; color: #999; }
-    .goal-actions { display: flex; gap: 0.4rem; margin-top: 0.5rem; flex-wrap: wrap; }
-    .goal-actions .btn { font-size: 0.75rem; padding: 0.2rem 0.6rem; }
+
+    .goal-progress-text {
+        font-size: 0.78rem;
+        color: #888;
+    }
+
+    .goal-deadline {
+        font-size: 0.78rem;
+        color: #999;
+    }
+
+    .goal-milestones {
+        margin: 0.5rem 0;
+    }
+
+    .milestone-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin: 0.2rem 0;
+        font-size: 0.85rem;
+    }
+
+    .milestone-item input[type="checkbox"] {
+        accent-color: var(--primary-color);
+        cursor: pointer;
+    }
+
+    .milestone-item.completed label {
+        text-decoration: line-through;
+        color: #999;
+    }
+
+    .goal-actions {
+        display: flex;
+        gap: 0.4rem;
+        margin-top: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .goal-actions .btn {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.6rem;
+    }
 
     /* Check-in form */
-    .checkin-form { display: none; margin-top: 0.5rem; padding: 0.5rem; background: #fff; border-radius: 6px; border: 1px solid #ddd; }
-    .checkin-form.active { display: block; }
-    .checkin-form input, .checkin-form textarea {
-        width: 100%; padding: 0.4rem 0.6rem; border: 1px solid #ddd;
-        border-radius: 6px; font-size: 0.85rem; margin-bottom: 0.4rem;
-        font-family: var(--font-family); box-sizing: border-box;
+    .checkin-form {
+        display: none;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: #fff;
+        border-radius: 6px;
+        border: 1px solid #ddd;
     }
-    .checkin-form textarea { resize: vertical; min-height: 50px; }
+
+    .checkin-form.active {
+        display: block;
+    }
+
+    .checkin-form input,
+    .checkin-form textarea {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        margin-bottom: 0.4rem;
+        font-family: var(--font-family);
+        box-sizing: border-box;
+    }
+
+    .checkin-form textarea {
+        resize: vertical;
+        min-height: 50px;
+    }
 
     /* Journal */
     .journal-entry {
-        background: #f9f9f9; border-radius: 6px; padding: 0.8rem;
-        border: 1px solid #eee; margin-bottom: 0.5rem;
+        background: #f9f9f9;
+        border-radius: 6px;
+        padding: 0.8rem;
+        border: 1px solid #eee;
+        margin-bottom: 0.5rem;
     }
-    .journal-entry-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem; }
-    .journal-author { font-weight: 600; font-size: 0.85rem; color: var(--primary-dark-color); }
-    .journal-date { font-size: 0.75rem; color: #999; }
-    .journal-content { font-size: 0.9rem; color: var(--text-dark-color); line-height: 1.5; white-space: pre-wrap; }
-    .journal-delete { font-size: 0.75rem; color: var(--danger-color); cursor: pointer; border: none; background: none; }
+
+    .journal-entry-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.3rem;
+    }
+
+    .journal-author {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--primary-dark-color);
+    }
+
+    .journal-date {
+        font-size: 0.75rem;
+        color: #999;
+    }
+
+    .journal-content {
+        font-size: 0.9rem;
+        color: var(--text-dark-color);
+        line-height: 1.5;
+        white-space: pre-wrap;
+    }
+
+    .journal-delete {
+        font-size: 0.75rem;
+        color: var(--danger-color);
+        cursor: pointer;
+        border: none;
+        background: none;
+    }
+
     .journal-form textarea {
-        width: 100%; padding: 0.6rem; border: 1px solid #ddd;
-        border-radius: 8px; font-size: 0.9rem; min-height: 80px;
-        font-family: var(--font-family); resize: vertical; box-sizing: border-box;
+        width: 100%;
+        padding: 0.6rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        min-height: 80px;
+        font-family: var(--font-family);
+        resize: vertical;
+        box-sizing: border-box;
     }
-    .journal-form { margin-top: 0.8rem; }
+
+    .journal-form {
+        margin-top: 0.8rem;
+    }
 
     /* Pending requests */
     .pending-card {
-        background: #fff; border-radius: 8px; padding: 1rem;
-        border: 1px solid #eee; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-        margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.8rem;
+        background: #fff;
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid #eee;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
     }
-    .pending-actions { margin-left: auto; display: flex; gap: 0.4rem; }
+
+    .pending-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 0.4rem;
+    }
 
     /* Modal */
     .bond-modal-overlay {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.5); z-index: 1200; align-items: center; justify-content: center;
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1200;
+        align-items: center;
+        justify-content: center;
     }
-    .bond-modal-overlay.active { display: flex; }
+
+    .bond-modal-overlay.active {
+        display: flex;
+    }
+
     .bond-modal {
-        background: #fff; border-radius: 8px; padding: 1.5rem;
-        max-width: 450px; width: 90%; max-height: 80vh; overflow-y: auto;
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.5rem;
+        max-width: 450px;
+        width: 90%;
+        max-height: 80vh;
+        overflow-y: auto;
     }
-    .bond-modal h3 { margin: 0 0 1rem; color: var(--primary-dark-color); font-size: 1.1rem; }
-    .bond-modal label { font-size: 0.85rem; color: #555; display: block; margin-bottom: 0.3rem; font-weight: 500; }
-    .bond-modal input, .bond-modal textarea, .bond-modal select {
-        width: 100%; padding: 0.5rem 0.7rem; border: 1px solid #ddd;
-        border-radius: 8px; font-size: 0.9rem; margin-bottom: 0.8rem;
-        font-family: var(--font-family); box-sizing: border-box;
+
+    .bond-modal h3 {
+        margin: 0 0 1rem;
+        color: var(--primary-dark-color);
+        font-size: 1.1rem;
     }
-    .bond-modal input:focus, .bond-modal textarea:focus, .bond-modal select:focus {
-        border-color: var(--primary-color); outline: none;
+
+    .bond-modal label {
+        font-size: 0.85rem;
+        color: #555;
+        display: block;
+        margin-bottom: 0.3rem;
+        font-weight: 500;
+    }
+
+    .bond-modal input,
+    .bond-modal textarea,
+    .bond-modal select {
+        width: 100%;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        margin-bottom: 0.8rem;
+        font-family: var(--font-family);
+        box-sizing: border-box;
+    }
+
+    .bond-modal input:focus,
+    .bond-modal textarea:focus,
+    .bond-modal select:focus {
+        border-color: var(--primary-color);
+        outline: none;
         box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.15);
     }
-    .bond-modal textarea { resize: vertical; min-height: 60px; }
-    .bond-modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.5rem; }
+
+    .bond-modal textarea {
+        resize: vertical;
+        min-height: 60px;
+    }
+
+    .bond-modal-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 0.5rem;
+    }
 
     /* Empty state */
     .bonds-empty {
-        text-align: center; padding: 3rem 1rem; color: #888;
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #888;
     }
-    .bonds-empty p { margin: 0.5rem 0; font-size: 0.95rem; }
+
+    .bonds-empty p {
+        margin: 0.5rem 0;
+        font-size: 0.95rem;
+    }
 
     /* Milestone input */
-    .milestone-inputs { margin-bottom: 0.8rem; }
-    .milestone-input-row { display: flex; gap: 0.4rem; margin-bottom: 0.3rem; }
-    .milestone-input-row input { flex: 1; margin-bottom: 0; }
-    .milestone-remove { background: none; border: none; color: var(--danger-color); cursor: pointer; font-size: 1rem; padding: 0 4px; }
-    .add-milestone-btn { font-size: 0.8rem; color: var(--primary-color); cursor: pointer; border: none; background: none; padding: 0; }
+    .milestone-inputs {
+        margin-bottom: 0.8rem;
+    }
+
+    .milestone-input-row {
+        display: flex;
+        gap: 0.4rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .milestone-input-row input {
+        flex: 1;
+        margin-bottom: 0;
+    }
+
+    .milestone-remove {
+        background: none;
+        border: none;
+        color: var(--danger-color);
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0 4px;
+    }
+
+    .add-milestone-btn {
+        font-size: 0.8rem;
+        color: var(--primary-color);
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+    }
 </style>
 
 <div class="bonds-page">
@@ -227,7 +575,9 @@
                     <div class="bond-username">{{ bond.partner_username }}</div>
                     {% if bond.label %}<div class="bond-label">{{ bond.label }}</div>{% endif %}
                     <div class="bond-meta">
-                        Bonded <time class="local-time" datetime="{{ bond.accepted_at.isoformat() + 'Z' if bond.accepted_at else '' }}">{{ bond.accepted_at|localtime('%b %d, %Y') if bond.accepted_at else '' }}</time>
+                        Bonded <time class="local-time"
+                            datetime="{{ bond.accepted_at.isoformat() + 'Z' if bond.accepted_at else '' }}">{{
+                            bond.accepted_at|localtime('%b %d, %Y') if bond.accepted_at else '' }}</time>
                     </div>
                 </div>
                 {% if bond.streak_count > 0 %}
@@ -238,7 +588,8 @@
                 <button class="btn btn-bond-primary" onclick="toggleSection('goals-{{ bond.id }}')">
                     Goals ({{ bond.goal_count }})
                 </button>
-                <button class="btn btn-bond-primary" onclick="toggleSection('journal-{{ bond.id }}'); loadJournal('{{ bond.id }}')">
+                <button class="btn btn-bond-primary"
+                    onclick="toggleSection('journal-{{ bond.id }}'); loadJournal('{{ bond.id }}')">
                     Journal
                 </button>
                 <button class="btn btn-bond-danger" onclick="breakBond('{{ bond.id }}', '{{ bond.partner_username }}')">
@@ -253,7 +604,8 @@
                     <button class="btn btn-bond-primary" onclick="showGoalModal('{{ bond.id }}')">New Goal</button>
                 </div>
                 <div id="goals-list-{{ bond.id }}">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading goals...</div>
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading goals...
+                    </div>
                 </div>
             </div>
 
@@ -263,11 +615,14 @@
                     <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Journal</strong>
                 </div>
                 <div class="journal-form">
-                    <textarea id="journal-input-{{ bond.id }}" placeholder="Write an entry for your partner..."></textarea>
-                    <button class="btn btn-bond-primary" style="margin-top: 0.4rem;" onclick="createJournalEntry('{{ bond.id }}')">Add Entry</button>
+                    <textarea id="journal-input-{{ bond.id }}"
+                        placeholder="Write an entry for your partner..."></textarea>
+                    <button class="btn btn-bond-primary" style="margin-top: 0.4rem;"
+                        onclick="createJournalEntry('{{ bond.id }}')">Add Entry</button>
                 </div>
                 <div id="journal-list-{{ bond.id }}" style="margin-top: 0.8rem;">
-                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading journal...</div>
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">Loading journal...
+                    </div>
                 </div>
             </div>
         </div>
@@ -326,319 +681,319 @@
 </div>
 
 <script nonce="{{ csp_nonce }}">
-const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-const currentUserId = '{{ current_user.id }}';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const currentUserId = '{{ current_user.id }}';
 
-function toggleSection(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const isActive = el.classList.contains('active');
-    el.classList.toggle('active');
-    if (!isActive && id.startsWith('goals-')) {
-        const bondId = id.replace('goals-', '');
-        loadGoals(bondId);
-    }
-}
-
-// --- Goals ---
-function loadGoals(bondId) {
-    const container = document.getElementById('goals-list-' + bondId);
-    fetch('/api/bonds/' + bondId + '/goals')
-    .then(r => r.json())
-    .then(data => {
-        if (!data.goals || data.goals.length === 0) {
-            container.innerHTML = '<div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
-            return;
-        }
-        container.innerHTML = data.goals.map(g => renderGoalCard(g, bondId)).join('');
-    })
-    .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load goals.</div>'; });
-}
-
-function renderGoalCard(g, bondId) {
-    const pct = g.target_value > 0 ? Math.min(100, (g.current_value / g.target_value) * 100) : 0;
-    let milestonesHtml = '';
-    if (g.milestones && g.milestones.length > 0) {
-        milestonesHtml = '<div class="goal-milestones">' + g.milestones.map((ms, idx) =>
-            '<div class="milestone-item' + (ms.completed ? ' completed' : '') + '">' +
-            '<input type="checkbox" ' + (ms.completed ? 'checked' : '') +
-            (g.status !== 'active' ? ' disabled' : '') +
-            ' onchange="toggleMilestone(\'' + g.id + '\', ' + idx + ')">' +
-            '<label>' + escHtml(ms.title) + '</label></div>'
-        ).join('') + '</div>';
-    }
-
-    let actionsHtml = '';
-    if (g.status === 'proposed' && g.proposed_by !== currentUserId) {
-        actionsHtml = '<div class="goal-actions">' +
-            '<button class="btn btn-bond-success" onclick="approveGoal(\'' + g.id + '\', \'' + bondId + '\')">Approve</button>' +
-            '<button class="btn btn-bond-danger" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Decline</button></div>';
-    } else if (g.status === 'active') {
-        actionsHtml = '<div class="goal-actions">' +
-            '<button class="btn btn-bond-primary" onclick="toggleCheckinForm(\'' + g.id + '\')">Check In</button>' +
-            '<button class="btn btn-bond-success" onclick="completeGoal(\'' + g.id + '\', \'' + bondId + '\')">Complete</button>' +
-            '<button class="btn btn-bond-secondary" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Abandon</button></div>';
-    }
-
-    let checkinForm = '';
-    if (g.status === 'active') {
-        checkinForm = '<div class="checkin-form" id="checkin-' + g.id + '">' +
-            '<input type="number" id="checkin-value-' + g.id + '" placeholder="Progress value" step="any">' +
-            '<textarea id="checkin-note-' + g.id + '" placeholder="Note (optional)"></textarea>' +
-            '<button class="btn btn-bond-primary" onclick="submitCheckin(\'' + g.id + '\', \'' + bondId + '\')">Log Progress</button></div>';
-    }
-
-    const deadlineStr = g.deadline ? '<div class="goal-deadline">Deadline: ' + new Date(g.deadline).toLocaleDateString() + '</div>' : '';
-
-    return '<div class="goal-card">' +
-        '<div class="goal-title">' + escHtml(g.title) +
-        '<span class="goal-category">' + escHtml(g.category) + '</span>' +
-        '<span class="goal-status-badge goal-status-' + g.status + '">' + g.status + '</span></div>' +
-        (g.description ? '<div class="goal-description">' + escHtml(g.description) + '</div>' : '') +
-        (g.target_value > 0 ? '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
-        '<div class="goal-progress-text">' + g.current_value + ' / ' + g.target_value + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>' : '') +
-        deadlineStr + milestonesHtml + actionsHtml + checkinForm + '</div>';
-}
-
-function escHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s || '';
-    return d.innerHTML;
-}
-
-function showGoalModal(bondId) {
-    document.getElementById('goal-modal-bond-id').value = bondId;
-    document.getElementById('goal-title').value = '';
-    document.getElementById('goal-description').value = '';
-    document.getElementById('goal-target').value = '';
-    document.getElementById('goal-unit').value = '';
-    document.getElementById('goal-deadline').value = '';
-    document.getElementById('milestone-inputs').innerHTML =
-        '<div class="milestone-input-row"><input type="text" placeholder="Milestone title" maxlength="200">' +
-        '<button class="milestone-remove" onclick="this.parentElement.remove()" title="Remove">&times;</button></div>';
-    document.getElementById('goal-modal').classList.add('active');
-}
-
-function closeGoalModal() {
-    document.getElementById('goal-modal').classList.remove('active');
-}
-
-function addMilestoneInput() {
-    const container = document.getElementById('milestone-inputs');
-    const row = document.createElement('div');
-    row.className = 'milestone-input-row';
-    row.innerHTML = '<input type="text" placeholder="Milestone title" maxlength="200">' +
-        '<button class="milestone-remove" onclick="this.parentElement.remove()" title="Remove">&times;</button>';
-    container.appendChild(row);
-}
-
-function submitGoal() {
-    const bondId = document.getElementById('goal-modal-bond-id').value;
-    const title = document.getElementById('goal-title').value.trim();
-    if (!title) { if (window.showCustomAlert) showCustomAlert('Title is required.', 'danger'); return; }
-
-    const milestones = [];
-    document.querySelectorAll('#milestone-inputs .milestone-input-row input').forEach(inp => {
-        const v = inp.value.trim();
-        if (v) milestones.push({ title: v });
-    });
-
-    const deadlineVal = document.getElementById('goal-deadline').value;
-    const body = {
-        title: title,
-        description: document.getElementById('goal-description').value.trim(),
-        category: document.getElementById('goal-category').value,
-        target_value: parseFloat(document.getElementById('goal-target').value) || 0,
-        unit: document.getElementById('goal-unit').value.trim(),
-        deadline: deadlineVal ? new Date(deadlineVal).toISOString() : null,
-        milestones: milestones
-    };
-
-    fetch('/api/bonds/' + bondId + '/goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify(body)
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            closeGoalModal();
+    function toggleSection(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const isActive = el.classList.contains('active');
+        el.classList.toggle('active');
+        if (!isActive && id.startsWith('goals-')) {
+            const bondId = id.replace('goals-', '');
             loadGoals(bondId);
-            if (window.showCustomToast) showCustomToast('Goal proposed!', 'success');
-        } else {
-            if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to create goal.', 'danger');
         }
-    }).catch(() => { if (window.showCustomAlert) showCustomAlert('Network error.', 'danger'); });
-}
+    }
 
-function approveGoal(goalId, bondId) {
-    fetch('/api/bonds/goals/' + goalId + '/approve', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal approved!', 'success'); }
-        else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
+    // --- Goals ---
+    function loadGoals(bondId) {
+        const container = document.getElementById('goals-list-' + bondId);
+        fetch('/api/bonds/' + bondId + '/goals')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.goals || data.goals.length === 0) {
+                    container.innerHTML = '<div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
+                    return;
+                }
+                container.innerHTML = data.goals.map(g => renderGoalCard(g, bondId)).join('');
+            })
+            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load goals.</div>'; });
+    }
 
-function toggleCheckinForm(goalId) {
-    const form = document.getElementById('checkin-' + goalId);
-    if (form) form.classList.toggle('active');
-}
-
-function submitCheckin(goalId, bondId) {
-    const value = parseFloat(document.getElementById('checkin-value-' + goalId).value) || 0;
-    const note = document.getElementById('checkin-note-' + goalId).value.trim();
-    fetch('/api/bonds/goals/' + goalId + '/checkin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ value, note })
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            loadGoals(bondId);
-            if (window.showCustomToast) showCustomToast('Progress logged!', 'success');
-        } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
-
-function toggleMilestone(goalId, idx) {
-    fetch('/api/bonds/goals/' + goalId + '/milestone/' + idx + '/toggle', {
-        method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (!d.success && window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
-
-function completeGoal(goalId, bondId) {
-    if (window.showCustomConfirm) {
-        showCustomConfirm('Mark this goal as completed?', function(ok) {
-            if (ok) doCompleteGoal(goalId, bondId);
-        });
-    } else doCompleteGoal(goalId, bondId);
-}
-function doCompleteGoal(goalId, bondId) {
-    fetch('/api/bonds/goals/' + goalId + '/complete', {
-        method: 'POST', headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal completed!', 'success'); }
-        else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
-
-function abandonGoal(goalId, bondId) {
-    if (window.showCustomConfirm) {
-        showCustomConfirm('Abandon this goal?', function(ok) {
-            if (ok) doAbandonGoal(goalId, bondId);
-        });
-    } else doAbandonGoal(goalId, bondId);
-}
-function doAbandonGoal(goalId, bondId) {
-    fetch('/api/bonds/goals/' + goalId + '/abandon', {
-        method: 'POST', headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (d.success) { loadGoals(bondId); }
-        else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
-
-// --- Journal ---
-function loadJournal(bondId) {
-    const container = document.getElementById('journal-list-' + bondId);
-    fetch('/api/bonds/' + bondId + '/journal')
-    .then(r => r.json())
-    .then(data => {
-        if (!data.entries || data.entries.length === 0) {
-            container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:1rem;">No journal entries yet. Write the first one.</div>';
-            return;
+    function renderGoalCard(g, bondId) {
+        const pct = g.target_value > 0 ? Math.min(100, (g.current_value / g.target_value) * 100) : 0;
+        let milestonesHtml = '';
+        if (g.milestones && g.milestones.length > 0) {
+            milestonesHtml = '<div class="goal-milestones">' + g.milestones.map((ms, idx) =>
+                '<div class="milestone-item' + (ms.completed ? ' completed' : '') + '">' +
+                '<input type="checkbox" ' + (ms.completed ? 'checked' : '') +
+                (g.status !== 'active' ? ' disabled' : '') +
+                ' onchange="toggleMilestone(\'' + g.id + '\', ' + idx + ')">' +
+                '<label>' + escHtml(ms.title) + '</label></div>'
+            ).join('') + '</div>';
         }
-        container.innerHTML = data.entries.map(e => {
-            const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
-            const dateStr = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-            const deleteBtn = e.author_id === currentUserId ?
-                '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>' : '';
-            return '<div class="journal-entry"><div class="journal-entry-header">' +
-                '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
-                '<span><span class="journal-date">' + dateStr + '</span>' + deleteBtn + '</span>' +
-                '</div><div class="journal-content">' + escHtml(e.content) + '</div></div>';
-        }).join('');
-    })
-    .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>'; });
-}
 
-function createJournalEntry(bondId) {
-    const textarea = document.getElementById('journal-input-' + bondId);
-    const content = textarea.value.trim();
-    if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
-    fetch('/api/bonds/' + bondId + '/journal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ content })
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            textarea.value = '';
-            loadJournal(bondId);
-            if (window.showCustomToast) showCustomToast('Entry added!', 'success');
-        } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
+        let actionsHtml = '';
+        if (g.status === 'proposed' && g.proposed_by !== currentUserId) {
+            actionsHtml = '<div class="goal-actions">' +
+                '<button class="btn btn-bond-success" onclick="approveGoal(\'' + g.id + '\', \'' + bondId + '\')">Approve</button>' +
+                '<button class="btn btn-bond-danger" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Decline</button></div>';
+        } else if (g.status === 'active') {
+            actionsHtml = '<div class="goal-actions">' +
+                '<button class="btn btn-bond-primary" onclick="toggleCheckinForm(\'' + g.id + '\')">Check In</button>' +
+                '<button class="btn btn-bond-success" onclick="completeGoal(\'' + g.id + '\', \'' + bondId + '\')">Complete</button>' +
+                '<button class="btn btn-bond-secondary" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Abandon</button></div>';
+        }
 
-function deleteJournalEntry(entryId, bondId) {
-    if (window.showCustomConfirm) {
-        showCustomConfirm('Delete this journal entry?', function(ok) {
-            if (ok) doDeleteEntry(entryId, bondId);
+        let checkinForm = '';
+        if (g.status === 'active') {
+            checkinForm = '<div class="checkin-form" id="checkin-' + g.id + '">' +
+                '<input type="number" id="checkin-value-' + g.id + '" placeholder="Progress value" step="any">' +
+                '<textarea id="checkin-note-' + g.id + '" placeholder="Note (optional)"></textarea>' +
+                '<button class="btn btn-bond-primary" onclick="submitCheckin(\'' + g.id + '\', \'' + bondId + '\')">Log Progress</button></div>';
+        }
+
+        const deadlineStr = g.deadline ? '<div class="goal-deadline">Deadline: ' + new Date(g.deadline).toLocaleDateString() + '</div>' : '';
+
+        return '<div class="goal-card">' +
+            '<div class="goal-title">' + escHtml(g.title) +
+            '<span class="goal-category">' + escHtml(g.category) + '</span>' +
+            '<span class="goal-status-badge goal-status-' + g.status + '">' + g.status + '</span></div>' +
+            (g.description ? '<div class="goal-description">' + escHtml(g.description) + '</div>' : '') +
+            (g.target_value > 0 ? '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
+                '<div class="goal-progress-text">' + g.current_value + ' / ' + g.target_value + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>' : '') +
+            deadlineStr + milestonesHtml + actionsHtml + checkinForm + '</div>';
+    }
+
+    function escHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+
+    function showGoalModal(bondId) {
+        document.getElementById('goal-modal-bond-id').value = bondId;
+        document.getElementById('goal-title').value = '';
+        document.getElementById('goal-description').value = '';
+        document.getElementById('goal-target').value = '';
+        document.getElementById('goal-unit').value = '';
+        document.getElementById('goal-deadline').value = '';
+        document.getElementById('milestone-inputs').innerHTML =
+            '<div class="milestone-input-row"><input type="text" placeholder="Milestone title" maxlength="200">' +
+            '<button class="milestone-remove" onclick="this.parentElement.remove()" title="Remove">&times;</button></div>';
+        document.getElementById('goal-modal').classList.add('active');
+    }
+
+    function closeGoalModal() {
+        document.getElementById('goal-modal').classList.remove('active');
+    }
+
+    function addMilestoneInput() {
+        const container = document.getElementById('milestone-inputs');
+        const row = document.createElement('div');
+        row.className = 'milestone-input-row';
+        row.innerHTML = '<input type="text" placeholder="Milestone title" maxlength="200">' +
+            '<button class="milestone-remove" onclick="this.parentElement.remove()" title="Remove">&times;</button>';
+        container.appendChild(row);
+    }
+
+    function submitGoal() {
+        const bondId = document.getElementById('goal-modal-bond-id').value;
+        const title = document.getElementById('goal-title').value.trim();
+        if (!title) { if (window.showCustomAlert) showCustomAlert('Title is required.', 'danger'); return; }
+
+        const milestones = [];
+        document.querySelectorAll('#milestone-inputs .milestone-input-row input').forEach(inp => {
+            const v = inp.value.trim();
+            if (v) milestones.push({ title: v });
         });
-    } else doDeleteEntry(entryId, bondId);
-}
-function doDeleteEntry(entryId, bondId) {
-    fetch('/api/bonds/journal/' + entryId, {
-        method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (d.success) loadJournal(bondId);
-        else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
 
-// --- Bond Actions ---
-function respondBond(bondId, action) {
-    fetch('/api/bonds/respond/' + bondId, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-        body: JSON.stringify({ action })
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            const card = document.getElementById('pending-' + bondId);
-            if (card) card.remove();
-            if (action === 'accept') {
-                if (window.showCustomToast) showCustomToast('Bond accepted!', 'success');
-                setTimeout(() => location.reload(), 1000);
+        const deadlineVal = document.getElementById('goal-deadline').value;
+        const body = {
+            title: title,
+            description: document.getElementById('goal-description').value.trim(),
+            category: document.getElementById('goal-category').value,
+            target_value: parseFloat(document.getElementById('goal-target').value) || 0,
+            unit: document.getElementById('goal-unit').value.trim(),
+            deadline: deadlineVal ? new Date(deadlineVal).toISOString() : null,
+            milestones: milestones
+        };
+
+        fetch('/api/bonds/' + bondId + '/goals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(body)
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                closeGoalModal();
+                loadGoals(bondId);
+                if (window.showCustomToast) showCustomToast('Goal proposed!', 'success');
             } else {
-                if (window.showCustomToast) showCustomToast('Bond request declined.', 'success');
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to create goal.', 'danger');
             }
-        } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
+        }).catch(() => { if (window.showCustomAlert) showCustomAlert('Network error.', 'danger'); });
+    }
 
-function breakBond(bondId, partnerName) {
-    if (window.showCustomConfirm) {
-        showCustomConfirm('Break your bond with ' + partnerName + '? All shared goals and journal entries will be permanently deleted. You will have a 7-day cooldown before forming new bonds.', function(ok) {
-            if (ok) doBreakBond(bondId);
+    function approveGoal(goalId, bondId) {
+        fetch('/api/bonds/goals/' + goalId + '/approve', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal approved!', 'success'); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
         });
-    } else doBreakBond(bondId);
-}
-function doBreakBond(bondId) {
-    fetch('/api/bonds/break/' + bondId, {
-        method: 'POST', headers: { 'X-CSRFToken': csrfToken }
-    }).then(r => r.json()).then(d => {
-        if (d.success) {
-            const card = document.getElementById('bond-' + bondId);
-            if (card) card.remove();
-            if (window.showCustomToast) showCustomToast('Bond ended.', 'success');
-        } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-    });
-}
+    }
 
-// Close modal on overlay click
-document.getElementById('goal-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeGoalModal();
-});
+    function toggleCheckinForm(goalId) {
+        const form = document.getElementById('checkin-' + goalId);
+        if (form) form.classList.toggle('active');
+    }
+
+    function submitCheckin(goalId, bondId) {
+        const value = parseFloat(document.getElementById('checkin-value-' + goalId).value) || 0;
+        const note = document.getElementById('checkin-note-' + goalId).value.trim();
+        fetch('/api/bonds/goals/' + goalId + '/checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ value, note })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadGoals(bondId);
+                if (window.showCustomToast) showCustomToast('Progress logged!', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function toggleMilestone(goalId, idx) {
+        fetch('/api/bonds/goals/' + goalId + '/milestone/' + idx + '/toggle', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (!d.success && window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function completeGoal(goalId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Mark this goal as completed?', function (ok) {
+                if (ok) doCompleteGoal(goalId, bondId);
+            });
+        } else doCompleteGoal(goalId, bondId);
+    }
+    function doCompleteGoal(goalId, bondId) {
+        fetch('/api/bonds/goals/' + goalId + '/complete', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal completed!', 'success'); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function abandonGoal(goalId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Abandon this goal?', function (ok) {
+                if (ok) doAbandonGoal(goalId, bondId);
+            });
+        } else doAbandonGoal(goalId, bondId);
+    }
+    function doAbandonGoal(goalId, bondId) {
+        fetch('/api/bonds/goals/' + goalId + '/abandon', {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) { loadGoals(bondId); }
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- Journal ---
+    function loadJournal(bondId) {
+        const container = document.getElementById('journal-list-' + bondId);
+        fetch('/api/bonds/' + bondId + '/journal')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.entries || data.entries.length === 0) {
+                    container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:1rem;">No journal entries yet. Write the first one.</div>';
+                    return;
+                }
+                container.innerHTML = data.entries.map(e => {
+                    const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
+                    const dateStr = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    const deleteBtn = e.author_id === currentUserId ?
+                        '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>' : '';
+                    return '<div class="journal-entry"><div class="journal-entry-header">' +
+                        '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
+                        '<span><span class="journal-date">' + dateStr + '</span>' + deleteBtn + '</span>' +
+                        '</div><div class="journal-content">' + escHtml(e.content) + '</div></div>';
+                }).join('');
+            })
+            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>'; });
+    }
+
+    function createJournalEntry(bondId) {
+        const textarea = document.getElementById('journal-input-' + bondId);
+        const content = textarea.value.trim();
+        if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
+        fetch('/api/bonds/' + bondId + '/journal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ content })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                textarea.value = '';
+                loadJournal(bondId);
+                if (window.showCustomToast) showCustomToast('Entry added!', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function deleteJournalEntry(entryId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Delete this journal entry?', function (ok) {
+                if (ok) doDeleteEntry(entryId, bondId);
+            });
+        } else doDeleteEntry(entryId, bondId);
+    }
+    function doDeleteEntry(entryId, bondId) {
+        fetch('/api/bonds/journal/' + entryId, {
+            method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) loadJournal(bondId);
+            else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- Bond Actions ---
+    function respondBond(bondId, action) {
+        fetch('/api/bonds/respond/' + bondId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                const card = document.getElementById('pending-' + bondId);
+                if (card) card.remove();
+                if (action === 'accept') {
+                    if (window.showCustomToast) showCustomToast('Bond accepted!', 'success');
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    if (window.showCustomToast) showCustomToast('Bond request declined.', 'success');
+                }
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function breakBond(bondId, partnerName) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Break your bond with ' + partnerName + '? All shared goals and journal entries will be permanently deleted. You will have a 7-day cooldown before forming new bonds.', function (ok) {
+                if (ok) doBreakBond(bondId);
+            });
+        } else doBreakBond(bondId);
+    }
+    function doBreakBond(bondId) {
+        fetch('/api/bonds/break/' + bondId, {
+            method: 'POST', headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                const card = document.getElementById('bond-' + bondId);
+                if (card) card.remove();
+                if (window.showCustomToast) showCustomToast('Bond ended.', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // Close modal on overlay click
+    document.getElementById('goal-modal').addEventListener('click', function (e) {
+        if (e.target === this) closeGoalModal();
+    });
 </script>
 {% endblock %}

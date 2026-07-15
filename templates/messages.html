@@ -152,7 +152,7 @@
                             <span class="desktop-only"
                                 style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
                         </button>
-                        <button class="header-action-btn" onclick="openWhisperInvite()" title="Whisper Mode" id="whisper-invite-btn" style="display: none;">
+                        <button class="header-action-btn" onclick="openWhisperInvite()" title="Whisper Mode" id="whisper-invite-btn" style="{% if not active_chat %}display: none;{% endif %}">
                             <i class="fas fa-clock" style="font-size: 0.75rem;"></i>
                             <span style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Whisper</span>
                         </button>

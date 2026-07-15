@@ -12,6 +12,19 @@ def csrf_exempt(view):
 bp = Blueprint('payments', __name__, template_folder='templates')
 
 
+def _is_donation(metadata):
+    """Check if metadata indicates a donation payment.
+    
+    Paystack may serialize boolean metadata values as strings (e.g., "false"
+    instead of false), which are truthy in Python. This helper normalizes
+    the check to handle both boolean and string representations.
+    """
+    val = metadata.get('is_donation')
+    if isinstance(val, bool):
+        return val
+    return str(val).strip().lower() in ('true', '1', 'yes')
+
+
 @bp.route('/api/paystack/initialize', methods=['POST'])
 @login_required
 def paystack_initialize():
@@ -81,7 +94,7 @@ def paystack_callback():
         result = response.json()
         if result.get('status') and result['data']['status'] == 'success':
             metadata = result['data'].get('metadata', {})
-            if metadata.get('is_donation'):
+            if _is_donation(metadata):
                 amount_kobo = result['data'].get('amount', 0)
                 amount_ksh = amount_kobo // 100
                 flash(f"Thank you for your generous donation of KSH {amount_ksh:,}! Your support keeps EchoWithin running.", "success")
@@ -129,7 +142,7 @@ def paystack_webhook():
                 user = m.users_conf.find_one({'_id': ObjectId(user_id_str)})
             elif email:
                 user = m.users_conf.find_one({'email': email})
-            if user and not metadata.get('is_donation'):
+            if user and not _is_donation(metadata):
                 m.users_conf.update_one(
                     {'_id': user['_id']},
                     {'$set': {

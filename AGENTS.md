@@ -8,7 +8,7 @@ If the logic requires some further modification note at the end.
    
    - All agents MUST include a detailed commit message describing the changes made.
    - The commit message MUST include the agent's model name and everything saved here.(Write in this document)
-
+Dont push the AGENTS.md to github
 2. Quality checks and reviewer assignment
    
    - Claude Opus 4 is assigned to check the last commit made by other models.
@@ -221,3 +221,19 @@ If the logic requires some further modification note at the end.
 **Verification:**
 1. `python -m py_compile` passed for `payments.py`.
 2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Paystack Metadata Boolean Parsing Fix):**
+
+- **Paystack metadata `is_donation` returned as string (`blueprints/payments.py`)**:
+  - Paystack serializes boolean metadata values as strings (e.g., `"false"` instead of `false`). In Python, `bool("false")` is `True` — any non-empty string is truthy. This caused every premium payment to be treated as a donation, showing "Thank you for your generous donation..." instead of activating premium.
+  - Added `_is_donation(metadata)` helper that normalizes the check: returns `True` for `True`, `true`, `1`, `yes`; returns `False` for `False`, `false`, `0`, `no`, `""`, `None`, and any other value.
+  - Updated both `paystack_callback()` (line 97) and `paystack_webhook()` (line 145) to use the helper.
+  - This also fixes the premium activation not working even with the ObjectId fix from the previous commit — the donation branch was always taken first.
+
+**Files touched:** `blueprints/payments.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `payments.py`.

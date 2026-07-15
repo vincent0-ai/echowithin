@@ -86,13 +86,15 @@ def paystack_callback():
                 amount_ksh = amount_kobo // 100
                 flash(f"Thank you for your generous donation of KSH {amount_ksh:,}! Your support keeps EchoWithin running.", "success")
             else:
-                m.users_conf.update_one(
-                    {'_id': current_user.id},
+                result = m.users_conf.update_one(
+                    {'_id': ObjectId(current_user.id)},
                     {'$set': {
                         'account_tier': 'premium',
                         'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
                     }}
                 )
+                if result.modified_count == 0:
+                    current_app.logger.error(f"Premium activation failed: user {current_user.id} not updated")
                 flash("Payment successful! You are now a Premium member.", "success")
         else:
             flash(f"Payment verification failed: {result.get('message', 'Unknown error')}", "danger")

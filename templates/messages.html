@@ -2131,6 +2131,8 @@
             document.getElementById('selection-splash').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('chat-header-actions').style.display = 'flex';
+            var whisperBtn = document.getElementById('whisper-invite-btn');
+            if (whisperBtn) whisperBtn.style.display = '';
             document.getElementById('active-chat-username').textContent = username;
 
             // Update profile link in header
@@ -3769,6 +3771,7 @@
 
 <script nonce="{{ csp_nonce }}">
 (function() {
+    const socket = window.socket;
     // Whisper state
     let whisperState = {
         sessionId: null,

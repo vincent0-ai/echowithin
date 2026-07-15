@@ -3788,14 +3788,14 @@
     const currentUserId = '{{ current_user.id }}';
 
     // Show whisper button when a chat is selected
-    const origSelectChat = window.selectChat;
-    if (typeof origSelectChat === 'function') {
-        window.selectChat = function(userId, username) {
-            origSelectChat(userId, username);
-            const btn = document.getElementById('whisper-invite-btn');
-            if (btn) btn.style.display = '';
-        };
-    }
+    const origLoadChat = window.loadChat;
+    window.loadChat = function(userId, username, element) {
+        if (typeof origLoadChat === 'function') {
+            origLoadChat(userId, username, element);
+        }
+        const btn = document.getElementById('whisper-invite-btn');
+        if (btn) btn.style.display = '';
+    };
 
     // --- Invite Flow ---
     window.openWhisperInvite = function() {
@@ -3825,7 +3825,7 @@
     };
 
     window.sendWhisperInvite = function() {
-        const recipientId = window.currentChatPartnerId;
+        const recipientId = document.getElementById('recipient-id').value;
         if (!recipientId) return;
         const btn = document.getElementById('whisper-send-btn');
         btn.disabled = true;

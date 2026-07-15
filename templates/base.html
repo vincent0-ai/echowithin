@@ -499,6 +499,7 @@
                     Messages
                     <span id="global-unread-count" class="badge" style="display: none; background: #c62828; color: white; margin-left: 2px;">0</span>
                 </a>
+                <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 <a href="{{ url_for('auth.logout') }}" class="nav-logout-desktop" onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('auth.logout') }}'; });">Logout</a>
                 {% else %}

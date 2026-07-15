@@ -132,6 +132,52 @@
             {% endif %}
             {% endif %}
 
+            {% if current_user.is_authenticated and current_user.username != user.username %}
+            <!-- Bond Status -->
+            {% if bond_status and bond_status.status == 'active' %}
+            <a href="{{ url_for('bonds.bonds_page') }}" class="btn"
+                style="width: 100%; margin-top: 0.5rem; background-color: #3e2217; color: white; text-align: center; display: block; text-decoration: none; padding: 10px; border-radius: 5px; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
+                Bonded{% if bond_status.label %} — {{ bond_status.label }}{% endif %}
+            </a>
+            {% elif bond_status and bond_status.status == 'pending' %}
+            <button class="btn" disabled
+                style="width: 100%; margin-top: 0.5rem; background-color: #999; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: not-allowed; opacity: 0.8;">
+                {% if bond_status.is_requester %}Bond Request Sent{% else %}Bond Request Received{% endif %}
+            </button>
+            {% elif dm_status == 'accepted' %}
+            <button class="btn" onclick="sendBondRequest('{{ user._id }}')" id="bond-request-btn"
+                style="width: 100%; margin-top: 0.5rem; background-color: #3e2217; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
+                Send Bond Request
+            </button>
+            <script nonce="{{ csp_nonce }}">
+                function sendBondRequest(userId) {
+                    const btn = document.getElementById('bond-request-btn');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    fetch('/api/bonds/request/' + userId, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                        body: JSON.stringify({})
+                    }).then(r => r.json()).then(d => {
+                        if (d.success || d.status === 'accepted') {
+                            btn.innerHTML = 'Bond Request Sent';
+                            btn.style.backgroundColor = '#999';
+                            btn.style.cursor = 'not-allowed';
+                            if (window.showCustomAlert) window.showCustomAlert(d.status === 'accepted' ? 'Bond accepted!' : 'Bond request sent!', 'success');
+                        } else {
+                            btn.disabled = false;
+                            btn.innerHTML = 'Send Bond Request';
+                            if (window.showCustomAlert) window.showCustomAlert(d.error || 'Failed to send request.', 'danger');
+                        }
+                    }).catch(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Send Bond Request';
+                    });
+                }
+            </script>
+            {% endif %}
+            {% endif %}
             <div class="profile-user-search">
                 <form method="get" action="{{ url_for('profile.profile', username=user.username) }}"
                     class="profile-user-search-form">

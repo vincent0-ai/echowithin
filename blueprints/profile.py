@@ -65,7 +65,12 @@ def profile(username):
                 dm_status = 'disabled'
             else:
                 dm_status = 'none'
-    return render_template('profile.html', user=user, user_posts=user_posts, title=page_title, description=page_description, active_page='profile', page=page, total_pages=total_pages, total_posts=total_posts, total_comments=total_comments, user_achievements=m.get_active_achievements(user_id), dm_status=dm_status, user_search_query=user_search_query, user_search_results=user_search_results, profile_is_premium=(m.get_user_tier(user) == 'premium'))
+    # Bond status
+    bond_status = {'status': 'none'}
+    if current_user.is_authenticated and str(current_user.id) != str(user_id):
+        from blueprints.bonds import _get_bond_status_between
+        bond_status = _get_bond_status_between(ObjectId(current_user.id), user_id)
+    return render_template('profile.html', user=user, user_posts=user_posts, title=page_title, description=page_description, active_page='profile', page=page, total_pages=total_pages, total_posts=total_posts, total_comments=total_comments, user_achievements=m.get_active_achievements(user_id), dm_status=dm_status, bond_status=bond_status, user_search_query=user_search_query, user_search_results=user_search_results, profile_is_premium=(m.get_user_tier(user) == 'premium'))
 
 
 @bp.route('/profile/<username>/posts')

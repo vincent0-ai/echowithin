@@ -92,6 +92,10 @@ TIER_LIMITS = {
         'version_history_days': 7,
         'auto_approve_collab': False,
         'max_communities': 1,               # free users can create 1 community
+        'whisper_sessions_per_day': 3,
+        'max_whisper_duration': 30,           # minutes
+        'max_bonds': 3,
+        'max_goals_per_bond': 5,
     },
     'premium': {
         'max_notes': 99999,               # effectively unlimited
@@ -107,6 +111,10 @@ TIER_LIMITS = {
         'version_history_days': 365,
         'auto_approve_collab': True,
         'max_communities': 5,               # premium users can create up to 5 communities
+        'whisper_sessions_per_day': 10,
+        'max_whisper_duration': 120,          # minutes
+        'max_bonds': 3,
+        'max_goals_per_bond': 20,
     }
 }
 

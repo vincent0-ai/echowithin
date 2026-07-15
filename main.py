@@ -67,6 +67,8 @@ from blueprints.sharing import bp as sharing_bp
 from blueprints.chat import bp as chat_bp
 from blueprints.communities import bp as communities_bp
 from blueprints.admin import bp as admin_bp
+from blueprints.whisper import bp as whisper_bp
+from blueprints.bonds import bp as bonds_bp
 from api import api_bp
 
 from notifications import (send_code, send_reset_code, send_new_post_notifications,
@@ -136,6 +138,8 @@ app.register_blueprint(sharing_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(communities_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(whisper_bp)
+app.register_blueprint(bonds_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
 
 # CSRF exemptions — these routes accept external/API requests without CSRF tokens
@@ -576,6 +580,30 @@ activity_read_conf = db['activity_read']
 activity_read_conf.create_index([('user_id', 1), ('comment_id', 1)], unique=True, sparse=True)
 activity_read_conf.create_index([('user_id', 1), ('read_at', 1)])
 
+# --- Whisper Mode Collections ---
+whisper_sessions_conf = db['whisper_sessions']
+whisper_sessions_conf.create_index([('initiator_id', 1), ('status', 1)])
+whisper_sessions_conf.create_index([('recipient_id', 1), ('status', 1)])
+whisper_sessions_conf.create_index('expires_at', expireAfterSeconds=86400)  # cleanup 24h after expiry
+
+whisper_messages_conf = db['whisper_messages']
+whisper_messages_conf.create_index([('session_id', 1), ('timestamp', 1)])
+whisper_messages_conf.create_index('expires_at', expireAfterSeconds=0)  # auto-delete at expires_at
+
+# --- Bonds Collections ---
+bonds_conf = db['bonds']
+bonds_conf.create_index([('user_a_id', 1), ('user_b_id', 1), ('status', 1)])
+bonds_conf.create_index([('user_a_id', 1), ('status', 1)])
+bonds_conf.create_index([('user_b_id', 1), ('status', 1)])
+bonds_conf.create_index('requested_by')
+
+bond_goals_conf = db['bond_goals']
+bond_goals_conf.create_index([('bond_id', 1), ('status', 1)])
+bond_goals_conf.create_index([('bond_id', 1), ('created_at', -1)])
+
+bond_journal_conf = db['bond_journal']
+bond_journal_conf.create_index([('bond_id', 1), ('created_at', -1)])
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -695,6 +723,11 @@ database.note_attachments_conf = note_attachments_conf
 database.comment_votes_conf = comment_votes_conf
 database.activities_conf = activities_conf
 database.activity_read_conf = activity_read_conf
+database.whisper_sessions_conf = whisper_sessions_conf
+database.whisper_messages_conf = whisper_messages_conf
+database.bonds_conf = bonds_conf
+database.bond_goals_conf = bond_goals_conf
+database.bond_journal_conf = bond_journal_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---
@@ -1661,6 +1694,153 @@ def handle_stop_recording(data):
         emit('stop_recording', {
             'sender_id': str(current_user.id)
         }, room=recipient_room)
+
+
+# --- Whisper Mode SocketIO Events ---
+
+@socketio.on('whisper_message')
+@login_required
+def handle_whisper_message(data):
+    """Handle sending a message within an active whisper session."""
+    session_id = data.get('session_id')
+    content = data.get('content', '').strip()
+    if not session_id or not content:
+        return
+
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            emit('whisper_error', {'error': 'Session not active'}, room=f"user_{current_user.id}")
+            return
+
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+
+        # Check if session has expired
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = session_doc.get('expires_at')
+        if expires_at and now >= expires_at:
+            # Session expired — clean up
+            whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
+            whisper_sessions_conf.update_one(
+                {'_id': ObjectId(session_id)},
+                {'$set': {'status': 'expired'}}
+            )
+            emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
+                 room=f"user_{initiator_str}")
+            emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
+                 room=f"user_{recipient_str}")
+            return
+
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+
+        # Store message with TTL
+        msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
+        msg_doc = {
+            'session_id': ObjectId(session_id),
+            'sender_id': ObjectId(current_user.id),
+            'content': content,
+            'timestamp': now,
+            'expires_at': msg_expires,
+            'is_system': False
+        }
+        whisper_messages_conf.insert_one(msg_doc)
+
+        payload = {
+            'id': str(msg_doc['_id']),
+            'session_id': session_id,
+            'sender_id': user_id_str,
+            'content': content,
+            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'temp_id': data.get('temp_id')
+        }
+
+        emit('whisper_new_message', payload, room=f"user_{partner_id}")
+        emit('whisper_message_confirmed', payload, room=f"user_{user_id_str}")
+
+    except Exception as e:
+        app.logger.error(f"Whisper message error: {e}")
+
+
+@socketio.on('whisper_typing')
+@login_required
+def handle_whisper_typing(data):
+    """Broadcast whisper typing indicator."""
+    partner_id = data.get('partner_id')
+    if partner_id:
+        emit('whisper_user_typing', {
+            'sender_id': str(current_user.id),
+            'username': current_user.username
+        }, room=f"user_{partner_id}")
+
+
+@socketio.on('whisper_stop_typing')
+@login_required
+def handle_whisper_stop_typing(data):
+    """Broadcast whisper stop typing."""
+    partner_id = data.get('partner_id')
+    if partner_id:
+        emit('whisper_user_stop_typing', {
+            'sender_id': str(current_user.id)
+        }, room=f"user_{partner_id}")
+
+
+@socketio.on('whisper_screenshot_alert')
+@login_required
+def handle_whisper_screenshot(data):
+    """Alert both parties of potential screenshot activity."""
+    session_id = data.get('session_id')
+    if not session_id:
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            return
+
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Store as system message
+        expires_at = session_doc.get('expires_at')
+        msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
+        msg_doc = {
+            'session_id': ObjectId(session_id),
+            'sender_id': ObjectId(current_user.id),
+            'content': f'{current_user.username} may have captured the screen',
+            'timestamp': now,
+            'expires_at': msg_expires,
+            'is_system': True
+        }
+        whisper_messages_conf.insert_one(msg_doc)
+
+        alert_payload = {
+            'session_id': session_id,
+            'username': current_user.username,
+            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'id': str(msg_doc['_id'])
+        }
+        emit('whisper_screenshot_detected', alert_payload, room=f"user_{partner_id}")
+        emit('whisper_screenshot_detected', alert_payload, room=f"user_{user_id_str}")
+
+    except Exception as e:
+        app.logger.error(f"Whisper screenshot alert error: {e}")
 
 
 # Handles any possible errors

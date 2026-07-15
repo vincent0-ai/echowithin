@@ -152,6 +152,10 @@
                             <span class="desktop-only"
                                 style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Delete Chat</span>
                         </button>
+                        <button class="header-action-btn" onclick="openWhisperInvite()" title="Whisper Mode" id="whisper-invite-btn" style="display: none;">
+                            <i class="fas fa-clock" style="font-size: 0.75rem;"></i>
+                            <span style="font-size: 0.8rem; margin-left: 4px; font-weight: 500;">Whisper</span>
+                        </button>
                     </div>
                 </div>
 
@@ -3574,5 +3578,582 @@
     .swipe-reply-hint {
         pointer-events: none;
     }
+
+    /* --- Whisper Mode Styles --- */
+    .whisper-modal-overlay {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6); z-index: 1300; align-items: center; justify-content: center;
+    }
+    .whisper-modal-overlay.active { display: flex; }
+    .whisper-modal {
+        background: #fff; border-radius: 8px; padding: 1.5rem;
+        max-width: 400px; width: 90%; text-align: center;
+    }
+    .whisper-modal h3 { color: #2a1810; margin: 0 0 0.5rem; font-size: 1.1rem; }
+    .whisper-modal p { color: #666; font-size: 0.85rem; margin: 0.3rem 0; }
+    .whisper-duration-options { display: flex; gap: 0.5rem; justify-content: center; margin: 1rem 0; flex-wrap: wrap; }
+    .whisper-duration-btn {
+        padding: 0.4rem 1rem; border: 2px solid #3e2217; border-radius: 20px;
+        background: transparent; color: #3e2217; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    }
+    .whisper-duration-btn.selected { background: #3e2217; color: #fff; }
+    .whisper-consent-text { font-size: 0.78rem; color: #999; margin: 0.8rem 0; line-height: 1.4; }
+    .whisper-modal-actions { display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+    .whisper-modal-actions .btn {
+        padding: 0.5rem 1.2rem; border: none; border-radius: 20px;
+        cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    }
+    .btn-whisper-send { background: #3e2217; color: #fff; }
+    .btn-whisper-send:hover { background: #2a1810; }
+    .btn-whisper-cancel { background: #e0e0e0; color: #333; }
+
+    /* Active Whisper Session Overlay */
+    .whisper-overlay {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #1a1a1a; z-index: 1400; flex-direction: column;
+    }
+    .whisper-overlay.active { display: flex; }
+    .whisper-overlay-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.8rem 1rem; background: #2a1810; color: #fff;
+    }
+    .whisper-overlay-header .whisper-partner { font-weight: 600; font-size: 1rem; }
+    .whisper-timer-bar {
+        height: 4px; background: #3e2217; transition: width 1s linear;
+    }
+    .whisper-timer-text { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+    .whisper-end-btn {
+        background: none; border: 1px solid rgba(255,255,255,0.4); color: #fff;
+        padding: 0.3rem 0.8rem; border-radius: 20px; cursor: pointer; font-size: 0.8rem;
+    }
+    .whisper-messages {
+        flex: 1; overflow-y: auto; padding: 1rem;
+        display: flex; flex-direction: column; gap: 6px;
+    }
+    .whisper-msg {
+        max-width: 75%; padding: 0.5rem 0.8rem; border-radius: 12px;
+        font-size: 0.9rem; line-height: 1.4;
+        user-select: none; -webkit-user-select: none;
+    }
+    .whisper-msg-sent { background: #3e2217; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .whisper-msg-received { background: #333; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .whisper-msg-system {
+        align-self: center; background: rgba(255,255,255,0.1); color: #e88; border-radius: 8px;
+        font-size: 0.78rem; padding: 0.3rem 0.8rem; font-style: italic;
+    }
+    .whisper-msg-time { font-size: 0.65rem; opacity: 0.6; margin-top: 2px; }
+    .whisper-input-area {
+        display: flex; gap: 0.5rem; padding: 0.8rem 1rem;
+        background: #222; border-top: 1px solid #333;
+    }
+    .whisper-input-area textarea {
+        flex: 1; background: #333; border: none; color: #fff; border-radius: 20px;
+        padding: 0.5rem 1rem; font-size: 0.9rem; resize: none; outline: none;
+        font-family: inherit; min-height: 38px; max-height: 100px;
+    }
+    .whisper-send-btn {
+        background: #3e2217; border: none; color: #fff; border-radius: 50%;
+        width: 38px; height: 38px; cursor: pointer; display: flex;
+        align-items: center; justify-content: center;
+    }
+    .whisper-warning-banner {
+        display: none; background: #d32f2f; color: #fff; padding: 0.5rem 1rem;
+        text-align: center; font-size: 0.85rem;
+    }
+    .whisper-warning-banner.active { display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
+    .whisper-extend-btn {
+        background: #fff; color: #d32f2f; border: none; border-radius: 20px;
+        padding: 0.2rem 0.8rem; cursor: pointer; font-size: 0.8rem; font-weight: 500;
+    }
+    .whisper-typing-indicator {
+        font-size: 0.78rem; color: rgba(255,255,255,0.5); padding: 0 1rem;
+        font-style: italic; min-height: 18px;
+    }
+    .whisper-end-screen {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #1a1a1a; z-index: 1500; align-items: center; justify-content: center;
+        flex-direction: column; color: #fff; text-align: center; padding: 2rem;
+    }
+    .whisper-end-screen.active { display: flex; }
+    .whisper-end-screen h2 { margin: 0 0 0.5rem; color: #fff; font-size: 1.3rem; }
+    .whisper-end-screen p { color: rgba(255,255,255,0.6); font-size: 0.9rem; margin: 0.3rem 0; }
+    .whisper-end-close {
+        margin-top: 1.5rem; background: #3e2217; color: #fff; border: none;
+        border-radius: 20px; padding: 0.5rem 1.5rem; cursor: pointer; font-size: 0.9rem;
+    }
+
+    /* Invite notification in sidebar */
+    .whisper-invite-banner {
+        display: none; background: #3e2217; color: #fff; padding: 0.8rem 1rem;
+        border-radius: 8px; margin: 0.5rem; text-align: center; font-size: 0.85rem;
+    }
+    .whisper-invite-banner.active { display: block; }
+    .whisper-invite-banner .btn {
+        padding: 0.3rem 0.8rem; border-radius: 20px; border: none; cursor: pointer;
+        font-size: 0.8rem; margin: 0.4rem 0.2rem 0;
+    }
 </style>
+
+<!-- Whisper Invite Modal -->
+<div class="whisper-modal-overlay" id="whisper-invite-modal">
+    <div class="whisper-modal">
+        <h3>Start a Whisper</h3>
+        <p>A private, timed conversation. Messages are permanently deleted when time runs out.</p>
+        <p style="font-weight: 500; margin-top: 0.5rem;">Choose duration:</p>
+        <div class="whisper-duration-options" id="whisper-duration-options"></div>
+        <div class="whisper-consent-text">
+            Both parties must consent. Messages are text-only, cannot be copied, and are never backed up.
+            Screen capture attempts will alert both participants.
+        </div>
+        <div class="whisper-modal-actions">
+            <button class="btn btn-whisper-cancel" onclick="closeWhisperInvite()">Cancel</button>
+            <button class="btn btn-whisper-send" onclick="sendWhisperInvite()" id="whisper-send-btn">Send Invite</button>
+        </div>
+    </div>
+</div>
+
+<!-- Whisper Incoming Invite -->
+<div class="whisper-modal-overlay" id="whisper-incoming-modal">
+    <div class="whisper-modal">
+        <h3>Whisper Invite</h3>
+        <p id="whisper-incoming-text"></p>
+        <div class="whisper-consent-text">
+            This is a timed, private conversation. Messages are permanently deleted when it ends.
+        </div>
+        <div class="whisper-modal-actions">
+            <button class="btn btn-whisper-cancel" onclick="respondWhisperInvite('decline')">Decline</button>
+            <button class="btn btn-whisper-send" onclick="respondWhisperInvite('accept')">Accept</button>
+        </div>
+    </div>
+</div>
+
+<!-- Active Whisper Session Overlay -->
+<div class="whisper-overlay" id="whisper-overlay">
+    <div class="whisper-overlay-header">
+        <span class="whisper-partner" id="whisper-partner-name">Whisper</span>
+        <span class="whisper-timer-text" id="whisper-timer-text">--:--</span>
+        <button class="whisper-end-btn" onclick="endWhisperSession()">End</button>
+    </div>
+    <div class="whisper-timer-bar" id="whisper-timer-bar" style="width: 100%;"></div>
+    <div class="whisper-warning-banner" id="whisper-warning-banner">
+        <span>Time is running out!</span>
+        <button class="whisper-extend-btn" onclick="requestWhisperExtend()" id="whisper-extend-trigger">Extend</button>
+    </div>
+    <div class="whisper-messages" id="whisper-messages"></div>
+    <div class="whisper-typing-indicator" id="whisper-typing"></div>
+    <div class="whisper-input-area">
+        <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
+        <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
+    </div>
+</div>
+
+<!-- Whisper End Screen -->
+<div class="whisper-end-screen" id="whisper-end-screen">
+    <h2>Whisper Ended</h2>
+    <p>This conversation has ended.</p>
+    <p>All messages have been permanently deleted.</p>
+    <button class="whisper-end-close" onclick="closeWhisperEndScreen()">Close</button>
+</div>
+
+<!-- Extend Request Modal -->
+<div class="whisper-modal-overlay" id="whisper-extend-modal">
+    <div class="whisper-modal">
+        <h3>Extend Session?</h3>
+        <p id="whisper-extend-text">Your partner wants to extend the session by 15 minutes.</p>
+        <div class="whisper-modal-actions">
+            <button class="btn btn-whisper-cancel" onclick="closeExtendModal()">Decline</button>
+            <button class="btn btn-whisper-send" onclick="approveExtend()">Approve</button>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function() {
+    // Whisper state
+    let whisperState = {
+        sessionId: null,
+        partnerId: null,
+        partnerUsername: '',
+        expiresAt: null,
+        startedAt: null,
+        durationMinutes: 0,
+        selectedDuration: 15,
+        timerInterval: null,
+        warningShown: false,
+        pendingInviteSessionId: null,
+        pendingExtendData: null,
+        active: false
+    };
+
+    const currentUserId = '{{ current_user.id }}';
+
+    // Show whisper button when a chat is selected
+    const origSelectChat = window.selectChat;
+    if (typeof origSelectChat === 'function') {
+        window.selectChat = function(userId, username) {
+            origSelectChat(userId, username);
+            const btn = document.getElementById('whisper-invite-btn');
+            if (btn) btn.style.display = '';
+        };
+    }
+
+    // --- Invite Flow ---
+    window.openWhisperInvite = function() {
+        if (whisperState.active) return;
+        fetch('/api/whisper/durations').then(r => r.json()).then(data => {
+            const container = document.getElementById('whisper-duration-options');
+            container.innerHTML = '';
+            const durations = data.durations || [15, 30];
+            whisperState.selectedDuration = durations[0];
+            durations.forEach(d => {
+                const btn = document.createElement('button');
+                btn.className = 'whisper-duration-btn' + (d === whisperState.selectedDuration ? ' selected' : '');
+                btn.textContent = d + ' min';
+                btn.onclick = function() {
+                    whisperState.selectedDuration = d;
+                    container.querySelectorAll('.whisper-duration-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                };
+                container.appendChild(btn);
+            });
+            document.getElementById('whisper-invite-modal').classList.add('active');
+        });
+    };
+
+    window.closeWhisperInvite = function() {
+        document.getElementById('whisper-invite-modal').classList.remove('active');
+    };
+
+    window.sendWhisperInvite = function() {
+        const recipientId = window.currentChatPartnerId;
+        if (!recipientId) return;
+        const btn = document.getElementById('whisper-send-btn');
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('/api/whisper/invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ recipient_id: recipientId, duration: whisperState.selectedDuration })
+        }).then(r => r.json()).then(data => {
+            btn.disabled = false;
+            btn.textContent = 'Send Invite';
+            if (data.success) {
+                closeWhisperInvite();
+                if (window.showCustomToast) showCustomToast('Whisper invite sent. Waiting for response...', 'success');
+            } else {
+                if (window.showCustomAlert) showCustomAlert(data.error || 'Failed to send invite.', 'danger');
+            }
+        }).catch(() => { btn.disabled = false; btn.textContent = 'Send Invite'; });
+    };
+
+    // --- Respond to invite ---
+    window.respondWhisperInvite = function(action) {
+        if (!whisperState.pendingInviteSessionId) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('/api/whisper/respond/' + whisperState.pendingInviteSessionId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action: action })
+        }).then(r => r.json()).then(data => {
+            document.getElementById('whisper-incoming-modal').classList.remove('active');
+            whisperState.pendingInviteSessionId = null;
+            if (action === 'decline') return;
+            // Accepted — session will start via SocketIO event
+        });
+    };
+
+    // --- Active Session ---
+    function startWhisperSession(data) {
+        whisperState.sessionId = data.session_id;
+        whisperState.partnerId = data.partner_id;
+        whisperState.partnerUsername = data.partner_username;
+        whisperState.expiresAt = new Date(data.expires_at);
+        whisperState.startedAt = new Date(data.started_at);
+        whisperState.durationMinutes = data.duration_minutes;
+        whisperState.warningShown = false;
+        whisperState.active = true;
+
+        document.getElementById('whisper-partner-name').textContent = data.partner_username;
+        document.getElementById('whisper-messages').innerHTML = '';
+        document.getElementById('whisper-warning-banner').classList.remove('active');
+        document.getElementById('whisper-overlay').classList.add('active');
+        document.getElementById('whisper-input').focus();
+
+        // Load history for reconnection
+        fetch('/api/whisper/history/' + data.session_id)
+        .then(r => r.json()).then(hist => {
+            if (hist.messages) {
+                hist.messages.forEach(m => appendWhisperMessage(m));
+            }
+        });
+
+        startWhisperTimer();
+        setupScreenshotDetection();
+    }
+
+    function startWhisperTimer() {
+        if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
+        whisperState.timerInterval = setInterval(updateWhisperTimer, 1000);
+        updateWhisperTimer();
+    }
+
+    function updateWhisperTimer() {
+        const now = new Date();
+        const remaining = Math.max(0, (whisperState.expiresAt - now) / 1000);
+        const totalDuration = (whisperState.expiresAt - whisperState.startedAt) / 1000;
+        const pct = totalDuration > 0 ? (remaining / totalDuration) * 100 : 0;
+
+        const mins = Math.floor(remaining / 60);
+        const secs = Math.floor(remaining % 60);
+        document.getElementById('whisper-timer-text').textContent =
+            String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        document.getElementById('whisper-timer-bar').style.width = pct + '%';
+
+        // Warning at 5 min (or 2 min for sessions <= 15 min)
+        const warnThreshold = whisperState.durationMinutes <= 15 ? 120 : 300;
+        if (remaining <= warnThreshold && remaining > 0 && !whisperState.warningShown) {
+            whisperState.warningShown = true;
+            document.getElementById('whisper-warning-banner').classList.add('active');
+        }
+
+        if (remaining <= 0) {
+            clearInterval(whisperState.timerInterval);
+            whisperSessionEnded('timeout');
+        }
+    }
+
+    function appendWhisperMessage(msg) {
+        const container = document.getElementById('whisper-messages');
+        const div = document.createElement('div');
+        if (msg.is_system) {
+            div.className = 'whisper-msg whisper-msg-system';
+            div.textContent = msg.content;
+        } else {
+            const isSent = msg.sender_id === currentUserId;
+            div.className = 'whisper-msg ' + (isSent ? 'whisper-msg-sent' : 'whisper-msg-received');
+            div.textContent = msg.content;
+            const time = document.createElement('div');
+            time.className = 'whisper-msg-time';
+            const d = window.parseServerTime ? window.parseServerTime(msg.timestamp) : new Date(msg.timestamp);
+            time.textContent = d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            div.appendChild(time);
+        }
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    window.sendWhisperMessage = function() {
+        const input = document.getElementById('whisper-input');
+        const content = input.value.trim();
+        if (!content || !whisperState.sessionId) return;
+        input.value = '';
+        const tempId = 'wt-' + Date.now();
+        appendWhisperMessage({ sender_id: currentUserId, content: content, timestamp: new Date().toISOString(), is_system: false });
+        if (window.socket) {
+            socket.emit('whisper_message', {
+                session_id: whisperState.sessionId,
+                content: content,
+                temp_id: tempId
+            });
+        }
+        // Typing stop
+        if (window.socket && whisperState.partnerId) {
+            socket.emit('whisper_stop_typing', { partner_id: whisperState.partnerId });
+        }
+    };
+
+    window.endWhisperSession = function() {
+        if (!whisperState.sessionId) return;
+        if (window.showCustomConfirm) {
+            showCustomConfirm('End this whisper session? All messages will be permanently deleted.', function(ok) {
+                if (ok) doEndWhisper();
+            });
+        } else doEndWhisper();
+    };
+
+    function doEndWhisper() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('/api/whisper/end/' + whisperState.sessionId, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        });
+    }
+
+    function whisperSessionEnded(reason) {
+        whisperState.active = false;
+        if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
+        document.getElementById('whisper-overlay').classList.remove('active');
+        document.getElementById('whisper-end-screen').classList.add('active');
+        teardownScreenshotDetection();
+    }
+
+    window.closeWhisperEndScreen = function() {
+        document.getElementById('whisper-end-screen').classList.remove('active');
+        whisperState.sessionId = null;
+    };
+
+    // --- Extension ---
+    window.requestWhisperExtend = function() {
+        if (!whisperState.sessionId) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('/api/whisper/extend/' + whisperState.sessionId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action: 'request', extra_minutes: 15 })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                const btn = document.getElementById('whisper-extend-trigger');
+                btn.textContent = 'Requested';
+                btn.disabled = true;
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    };
+
+    window.approveExtend = function() {
+        if (!whisperState.pendingExtendData) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        fetch('/api/whisper/extend/' + whisperState.sessionId, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action: 'approve', extra_minutes: whisperState.pendingExtendData.extra_minutes, requested_by: whisperState.pendingExtendData.requested_by })
+        }).then(r => r.json()).then(d => {
+            document.getElementById('whisper-extend-modal').classList.remove('active');
+            whisperState.pendingExtendData = null;
+        });
+    };
+
+    window.closeExtendModal = function() {
+        document.getElementById('whisper-extend-modal').classList.remove('active');
+        whisperState.pendingExtendData = null;
+    };
+
+    // --- Screenshot Detection ---
+    let screenshotHandler = null;
+    function setupScreenshotDetection() {
+        screenshotHandler = function(e) {
+            if (!whisperState.active || !whisperState.sessionId) return;
+            if (document.visibilityState === 'hidden' || e.type === 'blur') {
+                if (window.socket) {
+                    socket.emit('whisper_screenshot_alert', { session_id: whisperState.sessionId });
+                }
+            }
+        };
+        document.addEventListener('visibilitychange', screenshotHandler);
+        window.addEventListener('blur', screenshotHandler);
+    }
+
+    function teardownScreenshotDetection() {
+        if (screenshotHandler) {
+            document.removeEventListener('visibilitychange', screenshotHandler);
+            window.removeEventListener('blur', screenshotHandler);
+            screenshotHandler = null;
+        }
+    }
+
+    // --- Whisper Input Handling ---
+    const whisperInput = document.getElementById('whisper-input');
+    if (whisperInput) {
+        let whisperTypingTimeout = null;
+        whisperInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendWhisperMessage();
+                return;
+            }
+            if (window.socket && whisperState.partnerId) {
+                socket.emit('whisper_typing', { partner_id: whisperState.partnerId });
+                clearTimeout(whisperTypingTimeout);
+                whisperTypingTimeout = setTimeout(function() {
+                    socket.emit('whisper_stop_typing', { partner_id: whisperState.partnerId });
+                }, 2000);
+            }
+        });
+    }
+
+    // --- SocketIO Event Listeners ---
+    function initWhisperSocket() {
+        if (!window.socket) { setTimeout(initWhisperSocket, 500); return; }
+
+        socket.on('whisper_invite_received', function(data) {
+            whisperState.pendingInviteSessionId = data.session_id;
+            document.getElementById('whisper-incoming-text').textContent =
+                data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
+            document.getElementById('whisper-incoming-modal').classList.add('active');
+        });
+
+        socket.on('whisper_accept', function(data) {
+            startWhisperSession(data);
+        });
+
+        socket.on('whisper_decline', function(data) {
+            if (window.showCustomToast) showCustomToast(data.by_username + ' declined the whisper invite.', 'info');
+        });
+
+        socket.on('whisper_new_message', function(data) {
+            appendWhisperMessage(data);
+        });
+
+        socket.on('whisper_message_confirmed', function(data) {
+            // Message confirmed by server — already shown optimistically
+        });
+
+        socket.on('whisper_expired', function(data) {
+            whisperSessionEnded(data.reason || 'timeout');
+        });
+
+        socket.on('whisper_extended', function(data) {
+            whisperState.expiresAt = new Date(data.new_expires_at);
+            whisperState.warningShown = false;
+            document.getElementById('whisper-warning-banner').classList.remove('active');
+            const btn = document.getElementById('whisper-extend-trigger');
+            btn.textContent = 'Extend';
+            btn.disabled = false;
+            appendWhisperMessage({ is_system: true, content: 'Session extended by ' + data.extra_minutes + ' minutes.' });
+        });
+
+        socket.on('whisper_extend_request', function(data) {
+            whisperState.pendingExtendData = data;
+            document.getElementById('whisper-extend-text').textContent =
+                data.requested_by_username + ' wants to extend the session by ' + data.extra_minutes + ' minutes.';
+            document.getElementById('whisper-extend-modal').classList.add('active');
+        });
+
+        socket.on('whisper_screenshot_detected', function(data) {
+            appendWhisperMessage({
+                is_system: true,
+                content: data.username + ' may have captured the screen'
+            });
+        });
+
+        socket.on('whisper_user_typing', function(data) {
+            document.getElementById('whisper-typing').textContent = data.username + ' is typing...';
+        });
+
+        socket.on('whisper_user_stop_typing', function() {
+            document.getElementById('whisper-typing').textContent = '';
+        });
+
+        socket.on('whisper_error', function(data) {
+            if (window.showCustomAlert) showCustomAlert(data.error, 'danger');
+        });
+    }
+
+    // Check for active session on page load
+    fetch('/api/whisper/active').then(r => r.json()).then(data => {
+        if (data.active && data.status === 'active') {
+            startWhisperSession(data);
+        }
+    });
+
+    initWhisperSocket();
+
+    // Close modals on overlay click
+    ['whisper-invite-modal', 'whisper-incoming-modal', 'whisper-extend-modal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('active');
+        });
+    });
+})();
+</script>
 {% endblock %}

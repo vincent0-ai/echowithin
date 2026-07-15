@@ -33,6 +33,15 @@ note_attachments_conf = None
 activities_conf = None
 comment_votes_conf = None
 
+# --- Whisper Mode (Ephemeral Conversations) ---
+whisper_sessions_conf = None
+whisper_messages_conf = None
+
+# --- Bonds (Partner Connection System) ---
+bonds_conf = None
+bond_goals_conf = None
+bond_journal_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 

@@ -293,3 +293,22 @@ If the logic requires some further modification note at the end.
 
 **Verification:**
 1. `python -m py_compile` passed for both files.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Whisper Pending Invites — Stuck & Unseen Fix):**
+
+- **Problem**: Pending whisper invites blocked new invites indefinitely, but recipients had no way to see them if they missed the SocketIO event (not on the messages page at the time). The pending invite stayed in the DB forever with no UI to view or respond to it.
+- **Auto-expiry**: Added `_expire_stale_pending()` that cancels pending invites older than 5 minutes (`PENDING_INVITE_TIMEOUT_MINUTES`). Called before every invite attempt and before the pending check — stale invites are auto-cleaned, unblocking new invites.
+- **`GET /api/whisper/pending`**: New endpoint returns any pending invite for the current user (incoming or outgoing). Includes the session_id, partner username, and duration so the frontend can show the accept/decline modal or a status indicator. Also calls `_expire_stale_pending()` to clean up on each check.
+- **Frontend page-load check** (`messages.html`): On page load, calls `/api/whisper/pending` and:
+  - If incoming pending exists: shows the whisper incoming modal (same as SocketIO event)
+  - If outgoing pending exists: shows a toast indicating the invite is waiting for response
+  - SocketIO event handlers still work for real-time delivery
+
+**Files touched:** `blueprints/whisper.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.
+2. Jinja2 template parsing passed for `messages.html`.

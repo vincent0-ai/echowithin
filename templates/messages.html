@@ -4149,6 +4149,21 @@
         }
     });
 
+    // Check for pending invites on page load (missed socketio event)
+    fetch('/api/whisper/pending').then(r => r.json()).then(data => {
+        if (data.has_pending && data.direction === 'incoming') {
+            whisperState.pendingInviteSessionId = data.session_id;
+            document.getElementById('whisper-incoming-text').textContent =
+                data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
+            document.getElementById('whisper-incoming-modal').classList.add('active');
+        } else if (data.has_pending && data.direction === 'outgoing') {
+            // Show a toast about the pending outgoing request
+            if (window.showCustomToast) {
+                showCustomToast('Whisper invite sent to ' + data.to_username + ' — waiting for response.', 'info');
+            }
+        }
+    });
+
     initWhisperSocket();
 
     // Close modals on overlay click

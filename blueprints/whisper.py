@@ -9,6 +9,18 @@ bp = Blueprint('whisper', __name__, template_folder='templates')
 # --- Duration options per tier ---
 FREE_DURATIONS = [15, 30]
 PREMIUM_DURATIONS = [15, 30, 60, 120]
+PENDING_INVITE_TIMEOUT_MINUTES = 5
+
+
+def _expire_stale_pending():
+    """Cancel pending invites older than the timeout."""
+    import main as m
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=PENDING_INVITE_TIMEOUT_MINUTES)
+    result = m.whisper_sessions_conf.update_many(
+        {'status': 'pending', 'created_at': {'$lt': cutoff}},
+        {'$set': {'status': 'cancelled', 'cancelled_reason': 'timeout'}}
+    )
+    return result.modified_count
 
 
 def _get_active_session(user_oid):
@@ -93,6 +105,9 @@ def api_whisper_invite():
             return jsonify({'error': 'You already have an active whisper session.'}), 409
         if _get_active_session(ObjectId(recipient_id_str)):
             return jsonify({'error': 'This user is already in a whisper session.'}), 409
+
+        # Expire stale pending invites before checking
+        _expire_stale_pending()
 
         # Check no pending invite between these users
         pending = m.whisper_sessions_conf.find_one({
@@ -218,6 +233,49 @@ def api_whisper_respond(session_id):
     except Exception as e:
         current_app.logger.error(f"Whisper respond error: {e}")
         return jsonify({'error': 'Failed to respond'}), 500
+
+
+@bp.route('/api/whisper/pending', methods=['GET'])
+@login_required
+def api_whisper_pending():
+    """Return any pending whisper invites for the current user."""
+    import main as m
+    try:
+        _expire_stale_pending()
+        my_oid = ObjectId(current_user.id)
+        incoming = m.whisper_sessions_conf.find_one({
+            'recipient_id': my_oid,
+            'status': 'pending'
+        })
+        outgoing = m.whisper_sessions_conf.find_one({
+            'initiator_id': my_oid,
+            'status': 'pending'
+        })
+        result = {'has_pending': False}
+        if incoming:
+            initiator = m.users_conf.find_one({'_id': incoming['initiator_id']}, {'username': 1})
+            result = {
+                'has_pending': True,
+                'direction': 'incoming',
+                'session_id': str(incoming['_id']),
+                'from_username': initiator['username'] if initiator else 'User',
+                'from_user_id': str(incoming['initiator_id']),
+                'duration_minutes': incoming['proposed_duration_minutes']
+            }
+        elif outgoing:
+            recipient = m.users_conf.find_one({'_id': outgoing['recipient_id']}, {'username': 1})
+            result = {
+                'has_pending': True,
+                'direction': 'outgoing',
+                'session_id': str(outgoing['_id']),
+                'to_username': recipient['username'] if recipient else 'User',
+                'to_user_id': str(outgoing['recipient_id']),
+                'duration_minutes': outgoing['proposed_duration_minutes']
+            }
+        return jsonify(result)
+    except Exception as e:
+        current_app.logger.error(f"Whisper pending check error: {e}")
+        return jsonify({'has_pending': False})
 
 
 @bp.route('/api/whisper/extend/<session_id>', methods=['POST'])

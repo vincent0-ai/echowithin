@@ -19,7 +19,25 @@
     <!-- Choices.js CSS for custom dropdowns -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
     <script nonce="{{ csp_nonce }}">
-    (function(){var s=localStorage.getItem('echowithin-theme');if(!s){s=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}if(s==='dark'){document.documentElement.setAttribute('data-theme','dark')}})()
+    (function(){
+        var s=localStorage.getItem('echowithin-theme');
+        if(!s){s=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
+        if(s==='dark'){document.documentElement.setAttribute('data-theme','dark')}
+        function updateIcon(t){var i=document.querySelectorAll('#theme-icon');i.forEach(function(el){el.className=t==='dark'?'fas fa-sun':'fas fa-moon'})}
+        function updateMeta(t){var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#1a1410':'#ffffff')}
+        window.toggleTheme=function(){
+            var h=document.documentElement;var c=h.getAttribute('data-theme')||'light';var n=c==='dark'?'light':'dark';
+            h.setAttribute('data-theme',n);localStorage.setItem('echowithin-theme',n);updateIcon(n);updateMeta(n);
+            var csrf=document.querySelector('meta[name="csrf-token"]');
+            if(csrf){fetch('/api/profile/theme',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf.getAttribute('content')},body:JSON.stringify({theme:n})}).catch(function(){})}
+        };
+        document.addEventListener('DOMContentLoaded',function(){
+            var t=document.documentElement.getAttribute('data-theme')||'light';updateIcon(t);updateMeta(t);
+            if(window.matchMedia){window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(e){
+                if(!localStorage.getItem('echowithin-theme')){var nt=e.matches?'dark':'light';document.documentElement.setAttribute('data-theme',nt);updateIcon(nt);updateMeta(nt)}
+            })}
+        });
+    })()
     </script>
 
     <!-- Canonical URL to prevent duplicate content issues -->

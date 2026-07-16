@@ -1879,12 +1879,68 @@
             }
         });
 
-        // Whisper invite received (via messages socket which properly joins the user room)
+        // --- Whisper SocketIO Handlers (messages socket joins user room properly) ---
         socket.on('whisper_invite_received', function(data) {
             whisperState.pendingInviteSessionId = data.session_id;
             document.getElementById('whisper-incoming-text').textContent =
                 data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
             document.getElementById('whisper-incoming-modal').classList.add('active');
+        });
+
+        socket.on('whisper_accept', function(data) {
+            startWhisperSession(data);
+        });
+
+        socket.on('whisper_decline', function(data) {
+            if (window.showCustomToast) showCustomToast(data.by_username + ' declined the whisper invite.', 'info');
+        });
+
+        socket.on('whisper_new_message', function(data) {
+            appendWhisperMessage(data);
+        });
+
+        socket.on('whisper_message_confirmed', function(data) {
+            // Message confirmed by server — already shown optimistically
+        });
+
+        socket.on('whisper_expired', function(data) {
+            whisperSessionEnded(data.reason || 'timeout');
+        });
+
+        socket.on('whisper_extended', function(data) {
+            whisperState.expiresAt = new Date(data.new_expires_at);
+            whisperState.warningShown = false;
+            document.getElementById('whisper-warning-banner').classList.remove('active');
+            const btn = document.getElementById('whisper-extend-trigger');
+            btn.textContent = 'Extend';
+            btn.disabled = false;
+            appendWhisperMessage({ is_system: true, content: 'Session extended by ' + data.extra_minutes + ' minutes.' });
+        });
+
+        socket.on('whisper_extend_request', function(data) {
+            whisperState.pendingExtendData = data;
+            document.getElementById('whisper-extend-text').textContent =
+                data.requested_by_username + ' wants to extend the session by ' + data.extra_minutes + ' minutes.';
+            document.getElementById('whisper-extend-modal').classList.add('active');
+        });
+
+        socket.on('whisper_screenshot_detected', function(data) {
+            appendWhisperMessage({
+                is_system: true,
+                content: data.username + ' may have captured the screen'
+            });
+        });
+
+        socket.on('whisper_user_typing', function(data) {
+            document.getElementById('whisper-typing').textContent = data.username + ' is typing...';
+        });
+
+        socket.on('whisper_user_stop_typing', function() {
+            document.getElementById('whisper-typing').textContent = '';
+        });
+
+        socket.on('whisper_error', function(data) {
+            if (window.showCustomAlert) showCustomAlert(data.error, 'danger');
         });
 
         // DM error (e.g. permission denied)
@@ -3899,7 +3955,7 @@
     };
 
     // --- Active Session ---
-    function startWhisperSession(data) {
+    window.startWhisperSession = function(data) {
         whisperState.sessionId = data.session_id;
         whisperState.partnerId = data.partner_id;
         whisperState.partnerUsername = data.partner_username;
@@ -3925,7 +3981,7 @@
 
         startWhisperTimer();
         setupScreenshotDetection();
-    }
+    };
 
     function startWhisperTimer() {
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
@@ -3958,8 +4014,7 @@
         }
     }
 
-    function appendWhisperMessage(msg) {
-        const container = document.getElementById('whisper-messages');
+    window.appendWhisperMessage = function(msg) {
         const div = document.createElement('div');
         if (msg.is_system) {
             div.className = 'whisper-msg whisper-msg-system';
@@ -3976,7 +4031,7 @@
         }
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
-    }
+    };
 
     window.sendWhisperMessage = function() {
         const input = document.getElementById('whisper-input');
@@ -4000,11 +4055,9 @@
 
     window.endWhisperSession = function() {
         if (!whisperState.sessionId) return;
-        if (window.showCustomConfirm) {
-            showCustomConfirm('End this whisper session? All messages will be permanently deleted.', function(ok) {
-                if (ok) doEndWhisper();
-            });
-        } else doEndWhisper();
+        if (confirm('End this whisper session? All messages will be permanently deleted.')) {
+            doEndWhisper();
+        }
     };
 
     function doEndWhisper() {
@@ -4015,13 +4068,13 @@
         });
     }
 
-    function whisperSessionEnded(reason) {
+    window.whisperSessionEnded = function(reason) {
         whisperState.active = false;
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
         document.getElementById('whisper-overlay').classList.remove('active');
         document.getElementById('whisper-end-screen').classList.add('active');
         teardownScreenshotDetection();
-    }
+    };
 
     window.closeWhisperEndScreen = function() {
         document.getElementById('whisper-end-screen').classList.remove('active');
@@ -4065,9 +4118,13 @@
 
     // --- Screenshot Detection ---
     let screenshotHandler = null;
+    let screenshotReady = false;
     function setupScreenshotDetection() {
+        screenshotReady = false;
         screenshotHandler = function(e) {
+            if (!screenshotReady) return;
             if (!whisperState.active || !whisperState.sessionId) return;
+            if (!document.getElementById('whisper-overlay').classList.contains('active')) return;
             if (document.visibilityState === 'hidden' || e.type === 'blur') {
                 if (window.socket) {
                     socket.emit('whisper_screenshot_alert', { session_id: whisperState.sessionId });
@@ -4076,6 +4133,7 @@
         };
         document.addEventListener('visibilitychange', screenshotHandler);
         window.addEventListener('blur', screenshotHandler);
+        setTimeout(function() { screenshotReady = true; }, 3000);
     }
 
     function teardownScreenshotDetection() {

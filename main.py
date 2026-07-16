@@ -608,6 +608,9 @@ bond_journal_conf.create_index([('bond_id', 1), ('created_at', -1)])
 hidden_chats_conf = db['hidden_chats']
 hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
 
+deleted_items_conf = db['deleted_items']
+deleted_items_conf.create_index('expires_at', expireAfterSeconds=0)
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -733,6 +736,7 @@ database.bonds_conf = bonds_conf
 database.bond_goals_conf = bond_goals_conf
 database.bond_journal_conf = bond_journal_conf
 database.hidden_chats_conf = hidden_chats_conf
+database.deleted_items_conf = deleted_items_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---

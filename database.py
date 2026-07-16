@@ -45,6 +45,9 @@ bond_journal_conf = None
 # --- Chat Deletion (Soft-Delete per User) ---
 hidden_chats_conf = None
 
+# --- Deleted Items Backup (3-day TTL before permanent purge) ---
+deleted_items_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 

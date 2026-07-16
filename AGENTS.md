@@ -258,3 +258,23 @@ If the logic requires some further modification note at the end.
 **Verification:**
 1. `python -m py_compile` passed for `chat.py`, `main.py`, `database.py`.
 2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Platform-Wide 3-Day Deletion Backup):**
+
+- **Unified backup collection with 3-day TTL for all deletable content**:
+  - Renamed `deleted_messages_conf` to `deleted_items_conf` — a universal backup collection for ALL entity types (DMs, notes, posts, comments). TTL index on `expires_at` purges after 3 days, making deletions truly permanent.
+  - Created `backup_before_delete(collection_name, doc, deleted_by_user_id)` helper in `utils.py`. Inserts a document into `deleted_items` with `{original_collection, original_id, user_id, data (full document), deleted_at, expires_at}`. Failure is silently caught to never block deletion.
+  - **Personal Notes** (`api.py:api_delete_note`, `notes.py:delete_personal_post`): Back up each note document to `deleted_items` before the final `delete_many` from `personal_posts_conf`.
+  - **Blog Posts** (`blog.py:delete_post`): Back up the post + all its comments before deleting from `posts_conf` and `comments_conf`.
+  - **Blog Comments** (`blog.py:api_delete_comment`): Back up the comment + all sub-replies before `delete_many` from `comments_conf`.
+  - **DM Single Message** (`chat.py:api_delete_message`): Back up the message document before `delete_one` from `direct_messages_conf`.
+  - **DM Chat** (already done in previous commit): When both parties hide, all messages are backed up to `deleted_items_conf` before deletion.
+  - After 3 days, MongoDB's TTL index on `deleted_items.expires_at` auto-deletes the backup — making the deletion permanently irrecoverable.
+
+**Files touched:** `utils.py`, `database.py`, `main.py`, `blueprints/chat.py`, `blueprints/blog.py`, `blueprints/notes.py`, `api.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for all 7 modified files.

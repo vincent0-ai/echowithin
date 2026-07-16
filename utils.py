@@ -557,6 +557,27 @@ def get_trial_days_remaining(user_doc):
     return 0
 
 
+def backup_before_delete(collection_name, doc, deleted_by_user_id):
+    """Back up a document to deleted_items before permanent deletion.
+    
+    The backup is stored with a 3-day TTL index. After 3 days MongoDB
+    auto-deletes the backup — making the deletion truly irreversible.
+    """
+    try:
+        import main as m
+        now = datetime.datetime.now(datetime.timezone.utc)
+        m.deleted_items_conf.insert_one({
+            'original_collection': collection_name,
+            'original_id': doc['_id'],
+            'user_id': ObjectId(deleted_by_user_id),
+            'data': doc,
+            'deleted_at': now,
+            'expires_at': now + datetime.timedelta(days=3)
+        })
+    except Exception:
+        pass  # backup failure should not block deletion
+
+
 # ---------------------------------------------------------------------------
 # Post / comment helpers
 # ---------------------------------------------------------------------------

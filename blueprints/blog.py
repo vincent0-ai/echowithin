@@ -1526,6 +1526,14 @@ def api_delete_comment(comment_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         # Absolute Hard-Delete Policy: All comments and their sub-replies are purged.
+        from utils import backup_before_delete
+        for c in m.comments_conf.find({
+            '$or': [
+                {'_id': ObjectId(comment_id)},
+                {'parent_id': ObjectId(comment_id)}
+            ]
+        }):
+            backup_before_delete('comments', c, current_user.id)
         m.comments_conf.delete_many({
             '$or': [
                 {'_id': ObjectId(comment_id)},
@@ -1837,8 +1845,15 @@ def delete_post(post_id):
         except Exception as e:
             current_app.logger.error(f"Failed to delete Cloudinary video {post_to_delete.get('video_public_id')}: {e}")
 
-    m.posts_conf.delete_one({'_id': ObjectId(post_id)})
+    # Back up comments before deleting
+    from utils import backup_before_delete
+    for c in m.comments_conf.find({'post_slug': post_to_delete.get('slug')}):
+        backup_before_delete('comments', c, current_user.id)
     m.comments_conf.delete_many({'post_slug': post_to_delete.get('slug')})
+    
+    # Back up post itself before deleting
+    backup_before_delete('posts', post_to_delete, current_user.id)
+    m.posts_conf.delete_one({'_id': ObjectId(post_id)})
 
     flash('Post deleted successfully.', 'success')
     return redirect(url_for('blog.blog'))

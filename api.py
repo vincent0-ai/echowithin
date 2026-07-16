@@ -1424,6 +1424,9 @@ def api_delete_note(note_id):
         pass
 
     # 5. Final: Delete entries from personal_posts_conf
+    from utils import backup_before_delete
+    for note_doc in m.personal_posts_conf.find({'_id': {'$in': target_ids}}):
+        backup_before_delete('personal_posts', note_doc, current_user.id)
     m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
     return jsonify({'success': True, 'message': 'Note deleted successfully.'})

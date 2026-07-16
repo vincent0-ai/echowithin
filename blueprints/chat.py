@@ -576,6 +576,8 @@ def api_delete_message(message_id):
         if str(msg['sender_id']) != str(current_user.id):
             return jsonify({'error': 'Unauthorized'}), 403
         recipient_id_str = str(msg['recipient_id'])
+        from utils import backup_before_delete
+        backup_before_delete('direct_messages', msg, current_user.id)
         m.direct_messages_conf.delete_one({'_id': ObjectId(message_id)})
         m.socketio.emit('message_deleted', {'id': message_id}, room=f"user_{recipient_id_str}")
         m.socketio.emit('message_deleted', {'id': message_id}, room=f"user_{current_user.id}")
@@ -596,7 +598,38 @@ def api_delete_chat(other_user_id):
             {'$set': {'hidden_at': datetime.datetime.now(datetime.timezone.utc)}},
             upsert=True
         )
-        m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
+        other_also_hidden = m.hidden_chats_conf.find_one({'user_id': other_id, 'partner_id': my_id})
+        if other_also_hidden:
+            expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3)
+            messages = list(m.direct_messages_conf.find({
+                '$or': [
+                    {'sender_id': my_id, 'recipient_id': other_id},
+                    {'sender_id': other_id, 'recipient_id': my_id}
+                ]
+            }))
+            if messages:
+                for msg in messages:
+                    msg['original_collection'] = 'direct_messages'
+                    msg['_id'] = ObjectId()
+                    msg['expires_at'] = expires_at
+                    msg['deleted_at'] = datetime.datetime.now(datetime.timezone.utc)
+                m.deleted_items_conf.insert_many(messages)
+            m.direct_messages_conf.delete_many({
+                '$or': [
+                    {'sender_id': my_id, 'recipient_id': other_id},
+                    {'sender_id': other_id, 'recipient_id': my_id}
+                ]
+            })
+            m.hidden_chats_conf.delete_many({
+                '$or': [
+                    {'user_id': my_id, 'partner_id': other_id},
+                    {'user_id': other_id, 'partner_id': my_id}
+                ]
+            })
+            m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
+            m.socketio.emit('chat_deleted', {'by_id': str(current_user.id)}, room=f"user_{other_user_id}")
+        else:
+            m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 400

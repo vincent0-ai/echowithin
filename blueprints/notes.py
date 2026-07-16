@@ -1321,6 +1321,9 @@ def delete_personal_post(post_id):
         m.remove_notes_from_typesense(target_ids)
 
         # 5. Final: Delete entries from m.personal_posts_conf
+        from utils import backup_before_delete
+        for note_doc in m.personal_posts_conf.find({'_id': {'$in': target_ids}}):
+            backup_before_delete('personal_posts', note_doc, current_user.id)
         m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
         flash(f'Personal note {msg_suffix}', 'success')

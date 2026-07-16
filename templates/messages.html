@@ -1879,6 +1879,14 @@
             }
         });
 
+        // Whisper invite received (via messages socket which properly joins the user room)
+        socket.on('whisper_invite_received', function(data) {
+            whisperState.pendingInviteSessionId = data.session_id;
+            document.getElementById('whisper-incoming-text').textContent =
+                data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
+            document.getElementById('whisper-incoming-modal').classList.add('active');
+        });
+
         // DM error (e.g. permission denied)
         socket.on('dm_error', (data) => {
             showToast(data.error || 'Failed to send message', 'error');
@@ -3782,7 +3790,7 @@
 (function() {
     const socket = window.socket;
     // Whisper state
-    let whisperState = {
+    window.whisperState = {
         sessionId: null,
         partnerId: null,
         partnerUsername: '',

@@ -207,14 +207,10 @@ def api_whisper_invite():
             tag=f'whisper-invite-{current_user.id}'
         )
 
-        # DM system messages for both parties
+        # DM system message (single — both parties see it from their perspective)
         _send_whisper_dm(
             user_oid, ObjectId(recipient_id_str),
             f'Whisper invite from {current_user.username} — {duration} min'
-        )
-        _send_whisper_dm(
-            ObjectId(recipient_id_str), user_oid,
-            f'You sent a whisper invite to {recipient.get("username", "User")} — {duration} min'
         )
 
         return jsonify({
@@ -318,7 +314,6 @@ def api_whisper_respond(session_id):
         i_name = initiator['username'] if initiator else 'User'
         r_name = recipient['username'] if recipient else 'User'
         _send_whisper_dm(initiator_oid, recipient_oid, f'Whisper started — {duration} min')
-        _send_whisper_dm(recipient_oid, initiator_oid, f'Whisper started — {duration} min')
 
         return jsonify({'success': True, 'status': 'accepted', **payload})
 
@@ -526,10 +521,6 @@ def api_whisper_end(session_id):
         ender_name = current_user.username
         _send_whisper_dm(
             ObjectId(user_id_str), ObjectId(partner_id),
-            f'Whisper session ended by {ender_name}'
-        )
-        _send_whisper_dm(
-            ObjectId(partner_id), ObjectId(user_id_str),
             f'Whisper session ended by {ender_name}'
         )
 

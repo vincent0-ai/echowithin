@@ -1741,7 +1741,10 @@ def handle_whisper_message(data):
         # Check if session has expired
         now = datetime.datetime.now(datetime.timezone.utc)
         expires_at = session_doc.get('expires_at')
-        if expires_at and now >= expires_at:
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+            if now >= expires_at:
             # Session expired — clean up
             whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
             whisper_sessions_conf.update_one(

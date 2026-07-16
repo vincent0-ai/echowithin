@@ -3617,4 +3617,30 @@ body {
     color: var(--text-light-color) !important;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
 }
+
+/* --- Universal Overrides for Hardcoded Light Pinkish Color (#f5ebe7) --- */
+[data-theme="dark"] [style*="background: #f5ebe7"],
+[data-theme="dark"] [style*="background:#f5ebe7"],
+[data-theme="dark"] [style*="background-color: #f5ebe7"],
+[data-theme="dark"] [style*="background-color:#f5ebe7"],
+[data-theme="dark"] .sidebar-header,
+[data-theme="dark"] .contact-search,
+[data-theme="dark"] .active-link-toggle {
+    background: var(--surface-bg) !important;
+    background-color: var(--surface-bg) !important;
+}
+[data-theme="dark"] [style*="border: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border:1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-right: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-right:1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-bottom: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-bottom:1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-top: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-top:1px solid #f5ebe7"] {
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .active-link-toggle {
+    color: var(--primary-color) !important;
+    border-color: var(--card-border) !important;
+}
 

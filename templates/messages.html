@@ -2569,7 +2569,7 @@
         };
 
         window.deleteChat = function () {
-            if (confirm("Permanently delete ALL messages in this chat?")) {
+            if (confirm("Delete this conversation for you? The other person will still see the messages.")) {
                 fetch(`/api/messages/chat/delete/${activeRecipientId}`, {
                     method: 'POST',
                     headers: { 'X-CSRFToken': csrfToken }

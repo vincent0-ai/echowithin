@@ -237,3 +237,24 @@ If the logic requires some further modification note at the end.
 
 **Verification:**
 1. `python -m py_compile` passed for `payments.py`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (DM Chat Deletion Soft-Delete):**
+
+- **Chat deletion now per-user rather than destructive for both parties (`blueprints/chat.py`, `main.py`, `database.py`, `templates/messages.html`)**:
+  - Previously, deleting a DM conversation did `delete_many` on the `direct_messages` collection, physically removing all messages between both users. Both parties lost the chat history.
+  - Now uses a soft-delete approach via a new `hidden_chats` collection (`{user_id, partner_id, hidden_at}`) with a unique compound index. Deleting a chat inserts a record into `hidden_chats` instead of deleting messages.
+  - **Contacts pipeline** (`messages_page`): After building contacts, query `hidden_chats` for the current user and filter out hidden partner IDs from the sidebar.
+  - **Message history endpoint** (`api_message_history`): Returns empty `{messages: []}` if the chat is hidden for the current user.
+  - **Deep-link protection** (`messages_page` with `?user=` param): Won't load the chat if hidden for the current user.
+  - **Un-hide on new message** (`handle_send_dm` in `main.py`): When a new DM arrives, the recipient's `hidden_chats` entry is automatically deleted so the conversation re-appears in their sidebar.
+  - **SocketIO event**: `chat_deleted` is now only emitted to the deleting user's room (not the other party), since the other party is unaffected.
+  - **Frontend**: Updated confirmation prompt to "Delete this conversation for you? The other person will still see the messages."
+
+**Files touched:** `blueprints/chat.py`, `main.py`, `database.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `chat.py`, `main.py`, `database.py`.
+2. Jinja2 template parsing passed for `messages.html`.

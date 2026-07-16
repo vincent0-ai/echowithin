@@ -42,6 +42,9 @@ bonds_conf = None
 bond_goals_conf = None
 bond_journal_conf = None
 
+# --- Chat Deletion (Soft-Delete per User) ---
+hidden_chats_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 

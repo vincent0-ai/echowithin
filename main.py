@@ -604,6 +604,10 @@ bond_goals_conf.create_index([('bond_id', 1), ('created_at', -1)])
 bond_journal_conf = db['bond_journal']
 bond_journal_conf.create_index([('bond_id', 1), ('created_at', -1)])
 
+# Soft-delete for DMs — one row per (user, partner) means user hid the chat
+hidden_chats_conf = db['hidden_chats']
+hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
+
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
@@ -728,6 +732,7 @@ database.whisper_messages_conf = whisper_messages_conf
 database.bonds_conf = bonds_conf
 database.bond_goals_conf = bond_goals_conf
 database.bond_journal_conf = bond_journal_conf
+database.hidden_chats_conf = hidden_chats_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---
@@ -1601,6 +1606,9 @@ def handle_send_dm(data):
         
         # Save to DB
         direct_messages_conf.insert_one(message_doc)
+        
+        # Un-hide conversation for the recipient if they had deleted it
+        hidden_chats_conf.delete_one({'user_id': recipient_id, 'partner_id': ObjectId(current_user.id)})
         
         # Broadcast payload
         payload = {

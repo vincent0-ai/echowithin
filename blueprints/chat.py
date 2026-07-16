@@ -74,10 +74,20 @@ def messages_page():
         contacts.append(build_contact_entry(user_info, system_preview, event_time, 0))
         contact_user_ids.add(other_user_id_str)
     contacts.sort(key=lambda c: c.get('timestamp') or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc), reverse=True)
+    hidden_partners = set()
+    for hc in m.hidden_chats_conf.find({'user_id': current_user_oid}, {'partner_id': 1}):
+        hidden_partners.add(str(hc['partner_id']))
+    contacts = [c for c in contacts if c['user_id'] not in hidden_partners]
     target_user_id = request.args.get('user_id')
     active_chat = None
     if target_user_id:
-        active_chat = m.users_conf.find_one({'_id': ObjectId(target_user_id)}, {'username': 1, 'last_active': 1})
+        target_oid = None
+        try:
+            target_oid = ObjectId(target_user_id)
+        except Exception:
+            pass
+        if target_oid and not m.hidden_chats_conf.find_one({'user_id': current_user_oid, 'partner_id': target_oid}):
+            active_chat = m.users_conf.find_one({'_id': target_oid}, {'username': 1, 'last_active': 1})
     pending_request_count = m.dm_permissions_conf.count_documents({'target_id': ObjectId(current_user.id), 'status': 'pending'})
     return render_template('messages.html', active_page='messages', contacts=contacts, active_chat=active_chat, pending_request_count=pending_request_count)
 
@@ -93,6 +103,8 @@ def api_message_history(other_user_id):
     other_user = m.users_conf.find_one({'_id': other_id}, {'username': 1, 'last_active': 1})
     if not other_user:
         return jsonify({'error': 'User not found'}), 404
+    if m.hidden_chats_conf.find_one({'user_id': ObjectId(current_user.id), 'partner_id': other_id}):
+        return jsonify({'messages': []})
     messages = list(m.direct_messages_conf.find({'$or': [{'sender_id': ObjectId(current_user.id), 'recipient_id': other_id}, {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}]}).sort('timestamp', -1).limit(200))
     messages.reverse()
     m.direct_messages_conf.update_many({'sender_id': other_id, 'recipient_id': ObjectId(current_user.id), 'is_read': False}, {'$set': {'is_read': True}})
@@ -578,13 +590,12 @@ def api_delete_chat(other_user_id):
     import main as m
     try:
         other_id = ObjectId(other_user_id)
-        m.direct_messages_conf.delete_many({
-            '$or': [
-                {'sender_id': ObjectId(current_user.id), 'recipient_id': other_id},
-                {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}
-            ]
-        })
-        m.socketio.emit('chat_deleted', {'by_id': str(current_user.id)}, room=f"user_{other_user_id}")
+        my_id = ObjectId(current_user.id)
+        m.hidden_chats_conf.update_one(
+            {'user_id': my_id, 'partner_id': other_id},
+            {'$set': {'hidden_at': datetime.datetime.now(datetime.timezone.utc)}},
+            upsert=True
+        )
         m.socketio.emit('chat_deleted', {'by_id': str(current_user.id), 'target_id': other_user_id}, room=f"user_{current_user.id}")
         return jsonify({'success': True})
     except Exception as e:

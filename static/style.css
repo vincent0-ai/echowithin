@@ -2639,6 +2639,20 @@ body {
     .admin-page-container {
         padding: 1.5rem 1rem;
     }
+/* Settings Panel Layout */
+.settings-panel {
+    background: white;
+    border: 1px solid #eee;
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    box-sizing: border-box;
+}
+
+@media (max-width: 576px) {
+    .settings-panel {
+        padding: 1rem 1.25rem;
+    }
 }
 
 /* ============================================================
@@ -3148,5 +3162,142 @@ body {
 
 [data-theme="dark"] .native-app-section p {
     color: var(--text-secondary) !important;
+}
+
+/* --- Inline Code and Markdown Code Block Overrides --- */
+[data-theme="dark"] code {
+    background-color: var(--surface-bg) !important;
+    color: var(--text-accent) !important;
+}
+[data-theme="dark"] pre code {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+[data-theme="dark"] .note-content code {
+    background-color: var(--surface-bg) !important;
+    color: var(--text-accent) !important;
+}
+
+/* --- Profile Post Cards Hover Fix --- */
+[data-theme="dark"] .profile-post-card {
+    border-bottom-color: var(--separator-color) !important;
+}
+[data-theme="dark"] .profile-post-card:hover {
+    background: var(--surface-hover-bg) !important;
+}
+
+/* --- Community Space Overrides --- */
+[data-theme="dark"] .create-note-box {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-textarea {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .create-note-options {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-card:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .note-content {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-content.handwriting {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-tag {
+    background: var(--surface-bg) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .author-name {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .poll-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .poll-header strong {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .poll-option {
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .poll-option:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .poll-option.voted {
+    border-color: var(--primary-color) !important;
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .poll-bar {
+    background: var(--surface-bg) !important;
+}
+[data-theme="dark"] .poll-bar.leading {
+    background: #5a3e2b !important;
+}
+[data-theme="dark"] .poll-option-text {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .checkin-bar {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .checkin-label {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .mood-btn {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .mood-btn:hover {
+    background: var(--surface-hover-bg) !important;
+    border-color: var(--primary-color) !important;
+}
+[data-theme="dark"] .mood-btn.selected {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+}
+
+/* --- Shared Note Page Overrides --- */
+[data-theme="dark"] .note-card-shared {
+    background: var(--card-bg) !important;
+}
+[data-theme="dark"] .shared-note-header {
+    background: var(--surface-bg) !important;
+    border-bottom-color: var(--card-border) !important;
+}
+[data-theme="dark"] .owner-info {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .comment-form {
+    background: var(--card-bg) !important;
+}
+[data-theme="dark"] .discussion-title {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .comment-count {
+    background: var(--surface-bg) !important;
+    color: var(--text-secondary) !important;
+}
+
+/* --- View Post Page Overrides --- */
+[data-theme="dark"] .post-item.auto-view-post {
+    background-color: var(--card-bg) !important;
+}
+[data-theme="dark"] .comment-item {
+    border-bottom-color: var(--card-border) !important;
 }
 

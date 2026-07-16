@@ -12,6 +12,20 @@ PREMIUM_DURATIONS = [15, 30, 60, 120]
 PENDING_INVITE_TIMEOUT_MINUTES = 5
 
 
+def _utc_iso(dt):
+    """Convert a datetime to an ISO string with Z suffix.
+    
+    Handles both aware and naive datetimes (MongoDB returns naive,
+    which are always UTC). JavaScript needs the Z suffix to parse as UTC.
+    Without it, new Date() treats the string as local time.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.isoformat() + 'Z'
+    return dt.isoformat().replace('+00:00', 'Z')
+
+
 def _send_whisper_dm(sender_oid, recipient_oid, content):
     """Insert a whisper-related system message into the DM chat and emit via SocketIO."""
     import main as m
@@ -564,9 +578,11 @@ def api_whisper_active():
         }
 
         if session_doc.get('started_at'):
-            result['started_at'] = session_doc['started_at'].isoformat().replace('+00:00', 'Z')
+            st = session_doc['started_at']
+            result['started_at'] = (st.isoformat() + 'Z') if st.tzinfo is None else st.isoformat().replace('+00:00', 'Z')
         if session_doc.get('expires_at'):
-            result['expires_at'] = session_doc['expires_at'].isoformat().replace('+00:00', 'Z')
+            et = session_doc['expires_at']
+            result['expires_at'] = (et.isoformat() + 'Z') if et.tzinfo is None else et.isoformat().replace('+00:00', 'Z')
 
         return jsonify(result)
 
@@ -602,7 +618,7 @@ def api_whisper_history(session_id):
                 'id': str(msg['_id']),
                 'sender_id': str(msg['sender_id']),
                 'content': msg.get('content', ''),
-                'timestamp': msg['timestamp'].isoformat().replace('+00:00', 'Z'),
+                'timestamp': (msg['timestamp'].isoformat() + 'Z') if msg['timestamp'].tzinfo is None else msg['timestamp'].isoformat().replace('+00:00', 'Z'),
                 'is_system': msg.get('is_system', False)
             })
 

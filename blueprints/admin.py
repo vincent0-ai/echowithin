@@ -298,10 +298,30 @@ def admin_posts():
 @admin_required
 def admin_delete_post(post_id):
     import main as m
+    from utils import backup_before_delete
     post = m.posts_conf.find_one({'_id': ObjectId(post_id)})
     if post:
-        m.posts_conf.delete_one({'_id': post['_id']})
+        if post.get('image_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(post['image_public_id'])
+            except Exception:
+                pass
+        if post.get('image_public_ids'):
+            for pid in post['image_public_ids']:
+                try:
+                    m.cloudinary.uploader.destroy(pid)
+                except Exception:
+                    pass
+        if post.get('video_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(post['video_public_id'], resource_type='video')
+            except Exception:
+                pass
+        for c in m.comments_conf.find({'post_slug': post.get('slug')}):
+            backup_before_delete('comments', c, current_user.id)
         m.comments_conf.delete_many({'post_slug': post.get('slug')})
+        backup_before_delete('posts', post, current_user.id)
+        m.posts_conf.delete_one({'_id': post['_id']})
         flash('Post deleted.', 'success')
     else:
         flash('Post not found.', 'danger')
@@ -569,6 +589,11 @@ def delete_user(user_id):
     import main as m
     user = m.users_conf.find_one({'_id': ObjectId(user_id)})
     if user:
+        if user.get('profile_image_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(user['profile_image_public_id'])
+            except Exception:
+                pass
         m.users_conf.delete_one({'_id': ObjectId(user_id)})
         flash(f'User {user.get("username")} deleted.', 'info')
     else:
@@ -697,6 +722,16 @@ def api_admin_delete_community(community_id):
         return jsonify({'error': 'Community not found'}), 404
     
     comm_name = community.get('name', 'Unknown')
+    
+    # Delete community resources and their Cloudinary files
+    resources = list(m.community_resources_conf.find({'community_id': comm_obj_id}))
+    for res in resources:
+        if res.get('file_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(res['file_public_id'])
+            except Exception:
+                pass
+    m.community_resources_conf.delete_many({'community_id': comm_obj_id})
     
     # Delete all community notes
     note_ids = [n['_id'] for n in m.community_notes_conf.find({'community_id': comm_obj_id}, {'_id': 1})]

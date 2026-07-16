@@ -278,3 +278,18 @@ If the logic requires some further modification note at the end.
 
 **Verification:**
 1. `python -m py_compile` passed for all 7 modified files.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Admin Cloudinary Cleanup + Atlas Backup Exclusion):**
+
+- **`admin_delete_post` (`blueprints/admin.py`)** — was not deleting Cloudinary media at all, leaving orphaned images/videos. Also missing `backup_before_delete`. Fixed to mirror the user-facing `delete_post`: destroy `image_public_id`, `image_public_ids`, `video_public_id` from Cloudinary, backup comments + post to `deleted_items`, then delete from DB.
+- **`delete_user` (`blueprints/admin.py`)** — was not cleaning up `profile_image_public_id` from Cloudinary. Fixed.
+- **`api_admin_delete_community` (`blueprints/admin.py`)** — was not deleting community resources or their Cloudinary files. Fixed: iterate `community_resources`, destroy each `file_public_id` from Cloudinary, then `delete_many` from `community_resources_conf`.
+- **`backup_to_atlas.py` (`scripts/`)** — excluded `deleted_items` collection from Atlas sync. Syncing it was wasteful and counter-productive: TTL-expired local documents appeared as "stale" on Atlas, triggering unnecessary `_deleted_at` marking and creating noisy write churn. The `deleted_items` collection is temporary trash, not permanent data.
+
+**Files touched:** `blueprints/admin.py`, `scripts/backup_to_atlas.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for both files.

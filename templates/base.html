@@ -72,7 +72,10 @@
     <script nonce="{{ csp_nonce }}">
         // Global Socket.IO instance
         window.socket = io({ transports: ['websocket'], upgrade: false });
-        window.socket.on('connect', () => console.log('Connected to real-time server'));
+        window.socket.on('connect', () => {
+            console.log('Connected to real-time server');
+            window.socket.emit('join_inbox');
+        });
     </script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>

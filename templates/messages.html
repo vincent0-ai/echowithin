@@ -4015,6 +4015,8 @@
     }
 
     window.appendWhisperMessage = function(msg) {
+        const container = document.getElementById('whisper-messages');
+        if (!container) return;
         const div = document.createElement('div');
         if (msg.is_system) {
             div.className = 'whisper-msg whisper-msg-system';

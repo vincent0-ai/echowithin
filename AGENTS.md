@@ -333,3 +333,18 @@ If the logic requires some further modification note at the end.
 **Verification:**
 1. `python -m py_compile` passed for `whisper.py` and `main.py`.
 2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-16
+**Changes (Whisper Stale Active Session Blocking):**
+
+- **Problem**: Expired whisper sessions with `status: 'active'` blocked new invites. The user got "you already have an active whisper session" but reloading showed "Whisper Ended" because the `expires_at` had passed but the status was never updated.
+- **Root cause**: `_get_active_session()` only checked `status: 'active'` without verifying `expires_at`. The `/api/whisper/active` endpoint had the same issue, returning stale active sessions to the frontend.
+- **Fix in `_get_active_session()`**: After finding an active session, checks `expires_at`. If expired, auto-updates status to `'expired'`, deletes messages, and returns `None` — unblocking new invites.
+- **Fix in `/api/whisper/active`**: Separated active and pending checks. Active sessions now go through `_get_active_session()` (which auto-expires). Pending invites go through a separate query with `_expire_stale_pending()` cleanup.
+
+**Files touched:** `blueprints/whisper.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.

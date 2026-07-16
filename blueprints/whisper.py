@@ -24,15 +24,33 @@ def _expire_stale_pending():
 
 
 def _get_active_session(user_oid):
-    """Return any active whisper session involving this user, or None."""
+    """Return any active whisper session involving this user, or None.
+    
+    Also auto-expires sessions that have passed their expires_at timestamp.
+    """
     import main as m
-    return m.whisper_sessions_conf.find_one({
+    now = datetime.datetime.now(datetime.timezone.utc)
+    session = m.whisper_sessions_conf.find_one({
         'status': 'active',
         '$or': [
             {'initiator_id': user_oid},
             {'recipient_id': user_oid}
         ]
     })
+    if not session:
+        return None
+    expires_at = session.get('expires_at')
+    if expires_at:
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if now >= expires_at:
+            m.whisper_sessions_conf.update_one(
+                {'_id': session['_id']},
+                {'$set': {'status': 'expired'}}
+            )
+            m.whisper_messages_conf.delete_many({'session_id': session['_id']})
+            return None
+    return session
 
 
 def _is_participant(session_doc, user_id_str):
@@ -455,13 +473,20 @@ def api_whisper_active():
     import main as m
     try:
         user_oid = ObjectId(current_user.id)
-        session_doc = m.whisper_sessions_conf.find_one({
-            'status': {'$in': ['active', 'pending']},
-            '$or': [
-                {'initiator_id': user_oid},
-                {'recipient_id': user_oid}
-            ]
-        })
+        
+        # Check active sessions — auto-expires stale ones
+        session_doc = _get_active_session(user_oid)
+        
+        if not session_doc:
+            # Check pending invites
+            _expire_stale_pending()
+            session_doc = m.whisper_sessions_conf.find_one({
+                'status': 'pending',
+                '$or': [
+                    {'initiator_id': user_oid},
+                    {'recipient_id': user_oid}
+                ]
+            })
 
         if not session_doc:
             return jsonify({'active': False})

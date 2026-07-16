@@ -3606,4 +3606,15 @@ body {
 [data-theme="dark"] .health-card h4 {
     color: var(--text-dark-color) !important;
 }
+
+/* --- DM Input Action Buttons (Microphone, Clock, Attachments) --- */
+[data-theme="dark"] #chat-form .action-btn {
+    background: var(--surface-bg) !important;
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] #chat-form #send-btn {
+    background: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25) !important;
+}
 

@@ -2742,81 +2742,154 @@ body {
     color: var(--text-dark-color) !important;
 }
 
-/* --- Messages page inline overrides --- */
-[data-theme="dark"] [style*="background: #fff"],
-[data-theme="dark"] [style*="background: white"],
-[data-theme="dark"] [style*="background:#fff"],
-[data-theme="dark"] [style*="background: #fafafa"],
-[data-theme="dark"] [style*="background: #faf8f7"],
-[data-theme="dark"] [style*="background: #fdfaf9"],
-[data-theme="dark"] [style*="background: #fdf4ee"],
-[data-theme="dark"] [style*="background: #f5ebe7"],
-[data-theme="dark"] [style*="background: #faf8f6"] {
+/* --- Messages page explicit overrides --- */
+[data-theme="dark"] .messages-wrapper {
     background: var(--card-bg) !important;
-}
-
-[data-theme="dark"] [style*="border-right: 1px solid #f5ebe7"],
-[data-theme="dark"] [style*="border-bottom: 1px solid #f5ebe7"],
-[data-theme="dark"] [style*="border: 1px solid #f5ebe7"],
-[data-theme="dark"] [style*="border: 1px solid #eee"] {
     border-color: var(--card-border) !important;
 }
 
-[data-theme="dark"] [style*="color: #999"],
-[data-theme="dark"] [style*="color: #777"],
-[data-theme="dark"] [style*="color:#999"] {
-    color: var(--text-muted) !important;
+[data-theme="dark"] .messages-sidebar {
+    background: var(--background-light-color) !important;
+    border-right-color: var(--card-border) !important;
 }
 
-[data-theme="dark"] [style*="color: #333"],
-[data-theme="dark"] [style*="color: #555"],
-[data-theme="dark"] [style*="color:#555"] {
-    color: var(--text-secondary) !important;
+[data-theme="dark"] .sidebar-header {
+    background: var(--card-bg) !important;
+    border-bottom-color: var(--card-border) !important;
 }
 
-/* Messages sidebar & chat area */
+[data-theme="dark"] .sidebar-header h2 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .contact-search {
+    border-bottom-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .contact-search input {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .contact-list {
+    background: var(--background-light-color) !important;
+}
+
 [data-theme="dark"] .contact-item {
-    border-bottom-color: var(--separator-color) !important;
+    border-bottom-color: var(--card-border) !important;
 }
 
-[data-theme="dark"] [style*="background: #e8dcd5"] {
+[data-theme="dark"] .contact-item:hover,
+[data-theme="dark"] .contact-item.active {
     background: var(--surface-hover-bg) !important;
 }
 
-/* Chat message input area */
+[data-theme="dark"] .contact-item .contact-avatar {
+    border-color: var(--card-border) !important;
+    background: var(--surface-bg) !important;
+}
+
+[data-theme="dark"] .contact-item .contact-avatar i {
+    color: var(--text-accent) !important;
+}
+
+[data-theme="dark"] .contact-info span {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .contact-info .contact-time,
+[data-theme="dark"] .contact-info .contact-last-msg {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .chat-main {
+    background: var(--card-bg) !important;
+}
+
+[data-theme="dark"] #selection-splash {
+    background: var(--card-bg) !important;
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] #selection-splash h3 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] #selection-splash div {
+    background: var(--surface-bg) !important;
+}
+
+[data-theme="dark"] #selection-splash div i {
+    color: var(--text-accent) !important;
+}
+
+[data-theme="dark"] .chat-header {
+    background: var(--card-bg) !important;
+    border-bottom-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] #active-chat-username {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] #chat-status {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .active-avatar {
+    background: var(--surface-bg) !important;
+}
+
+[data-theme="dark"] .active-avatar i {
+    color: var(--text-accent) !important;
+}
+
+[data-theme="dark"] #chat-search-bar {
+    background: var(--surface-bg) !important;
+    border-bottom-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] #chat-search-bar input {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] #chat-history {
+    background: var(--background-color) !important;
+}
+
+[data-theme="dark"] #reply-preview-banner,
+[data-theme="dark"] #image-upload-banner,
+[data-theme="dark"] #scheduled-banner {
+    background: var(--surface-bg) !important;
+    border-top-color: var(--card-border) !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] #reply-preview-banner #reply-to-text,
+[data-theme="dark"] #image-upload-banner #image-upload-status {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .chat-input-area {
+    background: var(--card-bg) !important;
+    border-top-color: var(--card-border) !important;
+}
+
 [data-theme="dark"] #message-input {
     background: var(--input-bg) !important;
     border-color: var(--input-border) !important;
     color: var(--text-dark-color) !important;
 }
 
-/* Voice & schedule action buttons in chat */
-[data-theme="dark"] .voice-msg-btn,
-[data-theme="dark"] #schedule-btn {
-    background: var(--surface-hover-bg) !important;
+[data-theme="dark"] .action-btn {
+    background: var(--surface-bg) !important;
     color: var(--text-accent) !important;
 }
 
-/* Send button */
 [data-theme="dark"] #send-btn {
     background: var(--primary-color) !important;
-}
-
-/* Image preview in chat */
-[data-theme="dark"] [style*="border: 1px solid #eee"] {
-    border-color: var(--card-border) !important;
-}
-
-/* Reply bar in chat */
-[data-theme="dark"] #reply-bar {
-    background: var(--surface-bg) !important;
-    border-top-color: var(--separator-color) !important;
-}
-
-/* Search bar in chat */
-[data-theme="dark"] #chat-search-bar {
-    background: var(--surface-bg) !important;
-    border-bottom-color: var(--separator-color) !important;
+    color: var(--text-light-color) !important;
 }
 
 /* --- Personal Space / Notes --- */

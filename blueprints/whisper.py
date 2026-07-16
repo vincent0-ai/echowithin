@@ -208,6 +208,17 @@ def api_whisper_respond(session_id):
             }}
         )
 
+        # Insert start marker system message
+        msg_expires = expires_at + datetime.timedelta(minutes=5)
+        m.whisper_messages_conf.insert_one({
+            'session_id': ObjectId(session_id),
+            'sender_id': ObjectId(current_user.id),
+            'content': f'Whisper started — {duration} minutes',
+            'timestamp': now,
+            'expires_at': msg_expires,
+            'is_system': True
+        })
+
         payload = {
             'session_id': session_id,
             'started_at': now.isoformat().replace('+00:00', 'Z'),
@@ -379,6 +390,32 @@ def api_whisper_end(session_id):
             return jsonify({'error': 'Not a participant'}), 403
 
         partner_id = _get_partner_id(session_doc, user_id_str)
+
+        # Insert "Session ended" system message before cleanup
+        now = datetime.datetime.now(datetime.timezone.utc)
+        ended_msg = f'Session ended by {current_user.username}'
+        m.whisper_messages_conf.insert_one({
+            'session_id': ObjectId(session_id),
+            'sender_id': ObjectId(user_id_str),
+            'content': ended_msg,
+            'timestamp': now,
+            'expires_at': now + datetime.timedelta(minutes=5),
+            'is_system': True
+        })
+        m.socketio.emit('whisper_new_message', {
+            'session_id': session_id,
+            'sender_id': user_id_str,
+            'content': ended_msg,
+            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'is_system': True
+        }, room=f"user_{partner_id}")
+        m.socketio.emit('whisper_new_message', {
+            'session_id': session_id,
+            'sender_id': user_id_str,
+            'content': ended_msg,
+            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'is_system': True
+        }, room=f"user_{user_id_str}")
 
         # Delete all whisper messages immediately
         m.whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})

@@ -2640,3 +2640,277 @@ body {
         padding: 1.5rem 1rem;
     }
 }
+
+/* ============================================================
+   DARK MODE — Element overrides (catches inline styles)
+   Uses !important to override style="" attributes on elements.
+   ============================================================ */
+[data-theme="dark"] body {
+    background-color: var(--background-color) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Generic card/container patterns --- */
+[data-theme="dark"] .quick-action-card,
+[data-theme="dark"] .home-notes-summary,
+[data-theme="dark"] .home-trending,
+[data-theme="dark"] .stat-pill,
+[data-theme="dark"] .feature-card,
+[data-theme="dark"] .landing-highlights,
+[data-theme="dark"] .contact-form,
+[data-theme="dark"] .post-card,
+[data-theme="dark"] .blog-card,
+[data-theme="dark"] .community-card,
+[data-theme="dark"] .note-card,
+[data-theme="dark"] .settings-panel,
+[data-theme="dark"] .share-promo-card,
+[data-theme="dark"] #zen-quote-container,
+[data-theme="dark"] .pending-card,
+[data-theme="dark"] .profile-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Text color overrides --- */
+[data-theme="dark"] .quick-action-card strong,
+[data-theme="dark"] .feature-card h3,
+[data-theme="dark"] .home-section-header h2,
+[data-theme="dark"] .home-section-link,
+[data-theme="dark"] .home-trending h3,
+[data-theme="dark"] .stat-pill strong,
+[data-theme="dark"] .notes-count-number,
+[data-theme="dark"] .highlight-item strong,
+[data-theme="dark"] .landing-bottom-cta .landing-btn-primary,
+[data-theme="dark"] h1, [data-theme="dark"] h2, [data-theme="dark"] h3 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .quick-action-card span,
+[data-theme="dark"] .feature-card p,
+[data-theme="dark"] .notes-count-label,
+[data-theme="dark"] .notes-empty-hint,
+[data-theme="dark"] .stat-pill span,
+[data-theme="dark"] .highlight-item span,
+[data-theme="dark"] .home-trending a,
+[data-theme="dark"] .landing-bottom-cta p,
+[data-theme="dark"] .quote-attribution,
+[data-theme="dark"] .quote-attribution a,
+[data-theme="dark"] #zen-quote-author {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .home-section-header {
+    border-bottom-color: var(--separator-color) !important;
+}
+
+[data-theme="dark"] .home-trending li {
+    border-bottom-color: var(--separator-color) !important;
+}
+
+[data-theme="dark"] .home-trending a:hover {
+    color: var(--text-accent) !important;
+}
+
+/* --- Dashboard/landing page --- */
+[data-theme="dark"] .landing-btn-primary {
+    background: var(--card-bg) !important;
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .landing-btn-primary:hover {
+    background: var(--surface-hover-bg) !important;
+}
+
+/* --- Forms & Inputs (override inline style="background: #fff") --- */
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .form-input {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Messages page inline overrides --- */
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background: white"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background: #fafafa"],
+[data-theme="dark"] [style*="background: #faf8f7"],
+[data-theme="dark"] [style*="background: #fdfaf9"],
+[data-theme="dark"] [style*="background: #fdf4ee"],
+[data-theme="dark"] [style*="background: #f5ebe7"],
+[data-theme="dark"] [style*="background: #faf8f6"] {
+    background: var(--card-bg) !important;
+}
+
+[data-theme="dark"] [style*="border-right: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border-bottom: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border: 1px solid #f5ebe7"],
+[data-theme="dark"] [style*="border: 1px solid #eee"] {
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] [style*="color: #999"],
+[data-theme="dark"] [style*="color: #777"],
+[data-theme="dark"] [style*="color:#999"] {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] [style*="color: #333"],
+[data-theme="dark"] [style*="color: #555"],
+[data-theme="dark"] [style*="color:#555"] {
+    color: var(--text-secondary) !important;
+}
+
+/* Messages sidebar & chat area */
+[data-theme="dark"] .contact-item {
+    border-bottom-color: var(--separator-color) !important;
+}
+
+[data-theme="dark"] [style*="background: #e8dcd5"] {
+    background: var(--surface-hover-bg) !important;
+}
+
+/* Chat message input area */
+[data-theme="dark"] #message-input {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* Voice & schedule action buttons in chat */
+[data-theme="dark"] .voice-msg-btn,
+[data-theme="dark"] #schedule-btn {
+    background: var(--surface-hover-bg) !important;
+    color: var(--text-accent) !important;
+}
+
+/* Send button */
+[data-theme="dark"] #send-btn {
+    background: var(--primary-color) !important;
+}
+
+/* Image preview in chat */
+[data-theme="dark"] [style*="border: 1px solid #eee"] {
+    border-color: var(--card-border) !important;
+}
+
+/* Reply bar in chat */
+[data-theme="dark"] #reply-bar {
+    background: var(--surface-bg) !important;
+    border-top-color: var(--separator-color) !important;
+}
+
+/* Search bar in chat */
+[data-theme="dark"] #chat-search-bar {
+    background: var(--surface-bg) !important;
+    border-bottom-color: var(--separator-color) !important;
+}
+
+/* --- Personal Space / Notes --- */
+[data-theme="dark"] .personal-space-header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, #5a3328 100%) !important;
+}
+
+[data-theme="dark"] .tab-content,
+[data-theme="dark"] .note-editor-container,
+[data-theme="dark"] .note-compose-area {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-tab,
+[data-theme="dark"] .tabs-row {
+    border-bottom-color: var(--separator-color) !important;
+}
+
+/* --- Profile page --- */
+[data-theme="dark"] .profile-header,
+[data-theme="dark"] .profile-info,
+[data-theme="dark"] .user-posts-section {
+    background: var(--card-bg) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- About page / contact form --- */
+[data-theme="dark"] .about-section,
+[data-theme="dark"] .faq-item,
+[data-theme="dark"] .feature-grid-item {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Blog cards --- */
+[data-theme="dark"] .card,
+[data-theme="dark"] .post-detail-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* --- Auth features strip badges --- */
+[data-theme="dark"] .auth-feature-badge {
+    background: var(--surface-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* --- Scrollbar styling for dark mode --- */
+[data-theme="dark"] ::-webkit-scrollbar {
+    width: 8px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--background-color);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--surface-hover-bg);
+    border-radius: 4px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* --- Navbar in dark mode --- */
+[data-theme="dark"] .navbar {
+    background-color: var(--background-color) !important;
+    border-bottom-color: var(--separator-color) !important;
+}
+
+[data-theme="dark"] .nav-links a {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .nav-links a:hover,
+[data-theme="dark"] .nav-links a.active {
+    color: var(--text-accent) !important;
+}
+
+/* --- Reaction badges in messages --- */
+[data-theme="dark"] .reaction-badge {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .reaction-badge.user-reacted {
+    background: var(--surface-hover-bg) !important;
+    border-color: var(--primary-color) !important;
+}
+
+/* --- Link preview cards --- */
+[data-theme="dark"] .link-preview-card {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+}

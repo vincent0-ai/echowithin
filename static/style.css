@@ -3643,4 +3643,17 @@ body {
     color: var(--primary-color) !important;
     border-color: var(--card-border) !important;
 }
+
+/* --- Home Welcome Header Card Overrides --- */
+[data-theme="dark"] .home-header {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .home-header h1 {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .home-header p {
+    color: var(--text-secondary) !important;
+}
 

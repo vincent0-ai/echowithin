@@ -3590,4 +3590,20 @@ body {
 [data-theme="dark"] #toggle-metadata-edit {
     color: var(--primary-color) !important;
 }
+
+/* --- Inline Note Preview Box & Admin Health Cards --- */
+[data-theme="dark"] .note-preview {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .health-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .health-card p {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .health-card h4 {
+    color: var(--text-dark-color) !important;
+}
 

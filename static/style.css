@@ -3300,4 +3300,294 @@ body {
 [data-theme="dark"] .comment-item {
     border-bottom-color: var(--card-border) !important;
 }
+
+/* --- Saved Posts Tab Overrides --- */
+[data-theme="dark"] .saved-post-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .saved-post-title a {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .saved-post-title a:hover {
+    color: var(--primary-color) !important;
+}
+
+/* --- Blockquote & Code Overrides --- */
+[data-theme="dark"] .note-content blockquote,
+[data-theme="dark"] blockquote {
+    background: var(--surface-bg) !important;
+    background-color: var(--surface-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-left-color: var(--primary-color) !important;
+}
+
+/* --- Shared Link Popover/Dropdown Overrides --- */
+[data-theme="dark"] .share-dropdown {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .share-link-item {
+    background: var(--surface-bg) !important;
+}
+[data-theme="dark"] .share-link-item span {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .share-link-item .copy-btn {
+    background-color: var(--primary-color) !important;
+}
+[data-theme="dark"] .share-link-item .revoke-btn {
+    background-color: #5c1c1a !important;
+    color: #ffcccc !important;
+    border-color: #7d2623 !important;
+}
+
+/* --- Note Expanded See More Modal / Preview Overrides --- */
+[data-theme="dark"] .note-preview-shell {
+    background: var(--background-color) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-body {
+    background: var(--card-bg) !important;
+}
+[data-theme="dark"] .note-preview-header {
+    background: var(--surface-bg) !important;
+    border-bottom-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-header h2 {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-preview-content {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-preview-content .reference-line {
+    color: var(--text-dark-color) !important;
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-actions {
+    background: var(--surface-bg) !important;
+    border-left-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-action {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .note-preview-action:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .note-preview-action.primary {
+    background: var(--surface-bg) !important;
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .note-preview-action.primary:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .note-preview-action.danger {
+    color: #ff8a80 !important;
+    border-color: #5c1c1a !important;
+}
+[data-theme="dark"] .note-preview-action.danger:hover {
+    background: #4a1513 !important;
+}
+
+/* --- Inline Edit inside Preview Modal --- */
+[data-theme="dark"] .note-preview-edit {
+    background: var(--surface-bg) !important;
+    border-bottom-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-edit textarea,
+[data-theme="dark"] .note-preview-edit-row input[type="text"] {
+    background: var(--input-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--input-border) !important;
+}
+[data-theme="dark"] .note-preview-edit-btn {
+    background: var(--card-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .note-preview-edit-btn:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .note-preview-edit-btn.primary {
+    background: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+    border-color: var(--primary-color) !important;
+}
+[data-theme="dark"] .note-preview-edit-btn.primary:hover {
+    background: var(--primary-dark-color) !important;
+}
+
+/* --- Feature Quick Tips Card --- */
+[data-theme="dark"] .feature-tips-card {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .feature-tips-header {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .feature-tip-row code {
+    background: var(--surface-hover-bg) !important;
+    color: var(--primary-color) !important;
+}
+
+/* --- Note Search Results Cards --- */
+[data-theme="dark"] .search-result-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .search-result-card:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .search-result-snippet {
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Advanced Search Page Form & Results --- */
+[data-theme="dark"] .search-page-form,
+[data-theme="dark"] .search-result-item {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .search-result-item h3 a {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .search-result-item h3 a:hover {
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .result-excerpt {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .results-header {
+    border-bottom-color: var(--card-border) !important;
+}
+[data-theme="dark"] .search-actions .btn-reset {
+    background: var(--surface-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .search-actions .btn-reset:hover {
+    background: var(--surface-hover-bg) !important;
+}
+
+/* --- Choices.js Dropdown Selects --- */
+[data-theme="dark"] .choices__inner {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .choices__list--dropdown {
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .choices__list--dropdown .choices__item--selectable.is-highlighted {
+    background-color: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .choices__item {
+    background-color: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .choices[data-type*="select-one"]::after {
+    border-color: var(--text-dark-color) transparent transparent transparent !important;
+}
+
+/* --- EasyMDE / CodeMirror Editor --- */
+[data-theme="dark"] .editor-toolbar {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    opacity: 0.9;
+}
+[data-theme="dark"] .editor-toolbar a {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .editor-toolbar a:hover {
+    background: var(--surface-hover-bg) !important;
+}
+[data-theme="dark"] .CodeMirror {
+    background: var(--input-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--card-border) !important;
+}
+[data-theme="dark"] .CodeMirror-cursor {
+    border-left-color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .editor-preview {
+    background: var(--card-bg) !important;
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Suggest Magic Tags Button --- */
+[data-theme="dark"] #suggest-tags-btn {
+    background: var(--surface-bg) !important;
+    color: var(--primary-color) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* --- Version History List & Cards --- */
+[data-theme="dark"] .version-card {
+    background: var(--surface-bg) !important;
+    border-left-color: var(--primary-color) !important;
+}
+[data-theme="dark"] .version-editor {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .version-preview {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .version-toggle {
+    color: var(--primary-color) !important;
+}
+
+/* --- Universal Overrides for Hardcoded Light/White Elements --- */
+[data-theme="dark"] [style*="background: #f9f9f9"],
+[data-theme="dark"] [style*="background:#f9f9f9"],
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background:#ffffff"],
+[data-theme="dark"] [style*="background: white"],
+[data-theme="dark"] [style*="background:white"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background-color: #ffffff"],
+[data-theme="dark"] [style*="background-color:#ffffff"],
+[data-theme="dark"] [style*="background-color: white"],
+[data-theme="dark"] [style*="background-color:white"],
+[data-theme="dark"] [style*="background-color: #fff"],
+[data-theme="dark"] [style*="background-color:#fff"],
+[data-theme="dark"] [style*="background-color: #f9f9f9"],
+[data-theme="dark"] [style*="background-color:#f9f9f9"],
+[data-theme="dark"] [style*="background: #fdfaf7"],
+[data-theme="dark"] [style*="background:#fdfaf7"],
+[data-theme="dark"] [style*="background: #fcf8f2"],
+[data-theme="dark"] [style*="background:#fcf8f2"],
+[data-theme="dark"] [style*="background: #fafafa"],
+[data-theme="dark"] [style*="background:#fafafa"] {
+    background: var(--card-bg) !important;
+    background-color: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+/* --- Universal Overrides for Hardcoded Light/White Borders --- */
+[data-theme="dark"] [style*="border: 1px solid #eee"],
+[data-theme="dark"] [style*="border:1px solid #eee"],
+[data-theme="dark"] [style*="border: 1px solid #ddd"],
+[data-theme="dark"] [style*="border:1px solid #ddd"],
+[data-theme="dark"] [style*="border: 1px solid #ccc"],
+[data-theme="dark"] [style*="border:1px solid #ccc"] {
+    border-color: var(--card-border) !important;
+}
+
+/* --- Universal Overrides for Hardcoded Maroon/Brown Text (#3e2217) --- */
+[data-theme="dark"] [style*="color: #3e2217"],
+[data-theme="dark"] [style*="color:#3e2217"],
+[data-theme="dark"] [style*="color: rgb(62, 34, 23)"],
+[data-theme="dark"] [style*="color:rgb(62, 34, 23)"],
+[data-theme="dark"] #toggle-metadata-create,
+[data-theme="dark"] #toggle-metadata-edit {
+    color: var(--primary-color) !important;
+}
 

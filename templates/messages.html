@@ -314,19 +314,19 @@
 
     /* Contact Items */
     .contact-item:hover {
-        background: #fdfaf9;
+        background: var(--surface-bg);
     }
 
     .contact-item.active {
-        background: #f5ebe7 !important;
-        border-left: 4px solid #3e2217;
+        background: var(--surface-hover-bg) !important;
+        border-left: 4px solid var(--primary-color);
     }
 
     /* Chat Header Actions */
     .chat-header {
         padding: 0.75rem 1.5rem;
-        background: white;
-        border-bottom: 1px solid #f5ebe7;
+        background: var(--card-bg);
+        border-bottom: 1px solid var(--border-color);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -346,7 +346,7 @@
         border: none;
         padding: 6px 10px;
         border-radius: 8px;
-        color: #64748b;
+        color: var(--text-muted);
         cursor: pointer;
         display: flex;
         align-items: center;
@@ -354,7 +354,7 @@
     }
 
     .header-action-btn:hover {
-        background: #f1f5f9;
+        background: var(--hover-bg);
         color: #ef4444;
     }
 
@@ -388,8 +388,8 @@
     }
 
     .message-received {
-        background: #f1f5f9;
-        color: #1e293b;
+        background: var(--surface-bg);
+        color: var(--text-dark-color);
         align-self: flex-start;
         border-bottom-left-radius: 4px;
         border: none;
@@ -445,7 +445,7 @@
     .chat-typing-bubble {
         display: none;
         padding: 8px 14px;
-        background: #f0ebe7;
+        background: var(--hover-bg);
         border-radius: 14px 14px 14px 4px;
         margin: 4px 12px 8px 12px;
         width: fit-content;
@@ -517,7 +517,7 @@
 
     .action-btn {
         background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #eee;
+        border: 1px solid var(--separator-color);
         border-radius: 50%;
         width: 24px;
         height: 24px;
@@ -525,14 +525,14 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        color: #64748b;
+        color: var(--text-muted);
         font-size: 0.75rem;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .action-btn:hover {
         color: var(--primary-color);
-        background: #fff;
+        background: var(--card-bg);
     }
 
     .action-btn.delete:hover {
@@ -544,7 +544,7 @@
         position: absolute;
         bottom: calc(100% + 2px);
         left: 0;
-        background: #fff;
+        background: var(--card-bg);
         border-radius: 30px;
         padding: 4px;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
@@ -578,7 +578,7 @@
 
     .react-btn:hover {
         transform: scale(1.3);
-        background: #f5ebe7;
+        background: var(--hover-bg);
     }
 
     .reaction-badges {
@@ -594,7 +594,7 @@
         border-radius: 12px;
         padding: 2px 6px;
         font-size: 0.7rem;
-        color: #555;
+        color: var(--text-secondary);
         cursor: pointer;
         display: flex;
         align-items: center;

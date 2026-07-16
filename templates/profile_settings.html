@@ -45,6 +45,37 @@
       </div>
 
       <div class="form-group">
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Appearance</label>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">Choose your preferred theme.</p>
+        <div style="display: flex; gap: 0.8rem; flex-wrap: wrap;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s;" id="theme-opt-light"
+            onclick="if(document.documentElement.getAttribute('data-theme')!=='light'){toggleTheme()}">
+            <i class="fas fa-sun" style="color: var(--text-accent);"></i>
+            <span style="font-size: 0.9rem; font-weight: 500;">Light</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1rem; border: 2px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s;" id="theme-opt-dark"
+            onclick="if(document.documentElement.getAttribute('data-theme')!=='dark'){toggleTheme()}">
+            <i class="fas fa-moon" style="color: var(--text-accent);"></i>
+            <span style="font-size: 0.9rem; font-weight: 500;">Dark</span>
+          </label>
+        </div>
+        <script nonce="{{ csp_nonce }}">
+        (function(){
+          function highlightTheme(){
+            var t=document.documentElement.getAttribute('data-theme')||'light';
+            var l=document.getElementById('theme-opt-light');
+            var d=document.getElementById('theme-opt-dark');
+            if(l)l.style.borderColor=t==='light'?'var(--primary-color)':'var(--border-color)';
+            if(d)d.style.borderColor=t==='dark'?'var(--primary-color)':'var(--border-color)';
+          }
+          highlightTheme();
+          var origToggle=window.toggleTheme;
+          window.toggleTheme=function(){origToggle();highlightTheme()};
+        })()
+        </script>
+      </div>
+
+      <div class="form-group">
         <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Email Notifications</label>
         <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Choose how often you'd like to receive email
           updates for new posts.</p>

@@ -539,9 +539,6 @@
                 </a>
                 <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
-                <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode" aria-label="Toggle dark mode">
-                    <i class="fas fa-moon" id="theme-icon"></i>
-                </button>
                 <a href="{{ url_for('auth.logout') }}" class="nav-logout-desktop" onclick="event.preventDefault(); window.showCustomConfirm('Are you sure you want to log out?', function(confirm) { if(confirm) window.location.href='{{ url_for('auth.logout') }}'; });">Logout</a>
                 {% else %}
                 <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
@@ -549,9 +546,6 @@
                 <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
-                <button id="theme-toggle" class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode" aria-label="Toggle dark mode">
-                    <i class="fas fa-moon" id="theme-icon"></i>
-                </button>
                 {% endif %}
 
             </nav>

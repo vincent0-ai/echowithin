@@ -71,10 +71,37 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script nonce="{{ csp_nonce }}">
         // Global Socket.IO instance
-        window.socket = io({ transports: ['websocket'], upgrade: false });
+        window.socket = io({
+            reconnection: true,
+            reconnectionDelay: 500,
+            reconnectionDelayMax: 4000,
+            timeout: 10000,
+            transports: ['websocket', 'polling']
+        });
         window.socket.on('connect', () => {
             console.log('Connected to real-time server');
             window.socket.emit('join_inbox');
+        });
+        // Global Whisper handlers for redirection/prompt when not on messages page
+        window.socket.on('whisper_accept', (data) => {
+            if (!window.location.pathname.startsWith('/messages')) {
+                window.location.href = '/messages?user_id=' + data.partner_id;
+            }
+        });
+        window.socket.on('whisper_invite_received', (data) => {
+            if (!window.location.pathname.startsWith('/messages')) {
+                if (window.showCustomConfirm) {
+                    window.showCustomConfirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?', (confirmed) => {
+                        if (confirmed) {
+                            window.location.href = '/messages?user_id=' + data.from_user_id;
+                        }
+                    });
+                } else {
+                    if (confirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?')) {
+                        window.location.href = '/messages?user_id=' + data.from_user_id;
+                    }
+                }
+            }
         });
     </script>
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>

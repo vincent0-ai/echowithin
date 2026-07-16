@@ -1569,13 +1569,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', function () {
-        const socket = io({
-            reconnection: true,
-            reconnectionDelay: 500,
-            reconnectionDelayMax: 4000,
-            timeout: 10000,
-            transports: ['websocket', 'polling']
-        });
+        const socket = window.socket;
         const chatHistory = document.getElementById('chat-history');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -1848,14 +1842,19 @@
         // Rejoin server-side rooms after reconnects so realtime delivery stays reliable.
         // IMPORTANT: Use sync (append-only) instead of full reload to avoid clearing
         // the chat when a friend comes online and triggers a socket reconnect.
-        socket.on('connect', () => {
+        function onSocketConnect() {
             socket.emit('join_inbox');
             if (activeRecipientId) {
                 socket.emit('viewing_chat', { partner_id: activeRecipientId });
                 syncActiveChatHistory();
                 startChatSync();
             }
-        });
+        }
+
+        socket.on('connect', onSocketConnect);
+        if (socket.connected) {
+            onSocketConnect();
+        }
 
         if (activeRecipientId) {
             startChatSync();
@@ -1879,69 +1878,6 @@
             }
         });
 
-        // --- Whisper SocketIO Handlers (messages socket joins user room properly) ---
-        socket.on('whisper_invite_received', function(data) {
-            whisperState.pendingInviteSessionId = data.session_id;
-            document.getElementById('whisper-incoming-text').textContent =
-                data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
-            document.getElementById('whisper-incoming-modal').classList.add('active');
-        });
-
-        socket.on('whisper_accept', function(data) {
-            startWhisperSession(data);
-        });
-
-        socket.on('whisper_decline', function(data) {
-            if (window.showCustomToast) showCustomToast(data.by_username + ' declined the whisper invite.', 'info');
-        });
-
-        socket.on('whisper_new_message', function(data) {
-            appendWhisperMessage(data);
-        });
-
-        socket.on('whisper_message_confirmed', function(data) {
-            // Message confirmed by server — already shown optimistically
-        });
-
-        socket.on('whisper_expired', function(data) {
-            whisperSessionEnded(data.reason || 'timeout');
-        });
-
-        socket.on('whisper_extended', function(data) {
-            whisperState.expiresAt = new Date(data.new_expires_at);
-            whisperState.warningShown = false;
-            document.getElementById('whisper-warning-banner').classList.remove('active');
-            const btn = document.getElementById('whisper-extend-trigger');
-            btn.textContent = 'Extend';
-            btn.disabled = false;
-            appendWhisperMessage({ is_system: true, content: 'Session extended by ' + data.extra_minutes + ' minutes.' });
-        });
-
-        socket.on('whisper_extend_request', function(data) {
-            whisperState.pendingExtendData = data;
-            document.getElementById('whisper-extend-text').textContent =
-                data.requested_by_username + ' wants to extend the session by ' + data.extra_minutes + ' minutes.';
-            document.getElementById('whisper-extend-modal').classList.add('active');
-        });
-
-        socket.on('whisper_screenshot_detected', function(data) {
-            appendWhisperMessage({
-                is_system: true,
-                content: data.username + ' may have captured the screen'
-            });
-        });
-
-        socket.on('whisper_user_typing', function(data) {
-            document.getElementById('whisper-typing').textContent = data.username + ' is typing...';
-        });
-
-        socket.on('whisper_user_stop_typing', function() {
-            document.getElementById('whisper-typing').textContent = '';
-        });
-
-        socket.on('whisper_error', function(data) {
-            if (window.showCustomAlert) showCustomAlert(data.error, 'danger');
-        });
 
         // DM error (e.g. permission denied)
         socket.on('dm_error', (data) => {
@@ -4067,10 +4003,19 @@
         fetch('/api/whisper/end/' + whisperState.sessionId, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => {
+            if (r.ok) {
+                whisperSessionEnded('manual');
+            } else {
+                console.error("Failed to end whisper session");
+            }
+        }).catch(err => {
+            console.error("Error ending whisper session:", err);
         });
     }
 
     window.whisperSessionEnded = function(reason) {
+        if (!whisperState.active) return;
         whisperState.active = false;
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
         document.getElementById('whisper-overlay').classList.remove('active');
@@ -4127,21 +4072,19 @@
             if (!screenshotReady) return;
             if (!whisperState.active || !whisperState.sessionId) return;
             if (!document.getElementById('whisper-overlay').classList.contains('active')) return;
-            if (document.visibilityState === 'hidden' || e.type === 'blur') {
+            if (document.visibilityState === 'hidden') {
                 if (window.socket) {
                     socket.emit('whisper_screenshot_alert', { session_id: whisperState.sessionId });
                 }
             }
         };
         document.addEventListener('visibilitychange', screenshotHandler);
-        window.addEventListener('blur', screenshotHandler);
         setTimeout(function() { screenshotReady = true; }, 3000);
     }
 
     function teardownScreenshotDetection() {
         if (screenshotHandler) {
             document.removeEventListener('visibilitychange', screenshotHandler);
-            window.removeEventListener('blur', screenshotHandler);
             screenshotHandler = null;
         }
     }

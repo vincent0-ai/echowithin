@@ -455,11 +455,13 @@ def api_whisper_end(session_id):
     import main as m
     try:
         session_doc = m.whisper_sessions_conf.find_one({
-            '_id': ObjectId(session_id),
-            'status': {'$in': ['active', 'pending']}
+            '_id': ObjectId(session_id)
         })
         if not session_doc:
             return jsonify({'error': 'Session not found'}), 404
+
+        if session_doc.get('status') == 'expired':
+            return jsonify({'success': True, 'already_ended': True})
 
         user_id_str = str(current_user.id)
         if not _is_participant(session_doc, user_id_str):

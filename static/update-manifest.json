@@ -1,6 +1,6 @@
 {
-  "versionCode": 28,
-  "versionName": "1.9.4",
+  "versionCode": 29,
+  "versionName": "1.9.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.4 \ud83d\udd27 Fixes:\n\ud83d\udcdd Markdown now renders using WebView with bundled marked.js + KaTeX (works offline, matches backend)\n\u2328\ufe0f Editor cursor focus fix \u2014 reverted broken scroll wrapper"
+  "changelog": "v1.9.5 \ud83d\udd27 Bug fixes:\n\ud83d\udcca Sort options now actually sort your notes\n\ud83d\udccc Pin works offline \u2014 sync retries on failure\n\ud83d\udcbe Export no longer crashes \u2014 runs on background thread\n\ud83d\udcdd Drafts stay local until you explicitly save"
 }

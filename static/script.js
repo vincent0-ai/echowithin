@@ -145,3 +145,55 @@ if (loginTab && registerTab) {
     loginTab.addEventListener('click', showLogin);
     registerTab.addEventListener('click', showRegister);
 }
+
+// === Dark Mode / Theme Toggle ===
+window.toggleTheme = function() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme') || 'light';
+    var next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('echowithin-theme', next);
+    updateThemeIcon(next);
+    updateThemeColor(next);
+    // Sync to backend if logged in
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta) {
+        fetch('/api/profile/theme', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfMeta.getAttribute('content') },
+            body: JSON.stringify({ theme: next })
+        }).catch(function() {});
+    }
+};
+
+function updateThemeIcon(theme) {
+    var icons = document.querySelectorAll('#theme-icon');
+    icons.forEach(function(icon) {
+        icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    });
+}
+
+function updateThemeColor(theme) {
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+        meta.setAttribute('content', theme === 'dark' ? '#1a1410' : '#ffffff');
+    }
+}
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', function() {
+    var theme = document.documentElement.getAttribute('data-theme') || 'light';
+    updateThemeIcon(theme);
+    updateThemeColor(theme);
+    // Listen for system preference changes
+    if (window.matchMedia) {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (!localStorage.getItem('echowithin-theme')) {
+                var newTheme = e.matches ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                updateThemeIcon(newTheme);
+                updateThemeColor(newTheme);
+            }
+        });
+    }
+});

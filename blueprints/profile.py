@@ -94,6 +94,21 @@ def user_posts_page(username):
     return render_template('user_posts.html', user=user, posts=user_posts, title=page_title, description=page_description, page=page, total_pages=total_pages, total_posts=total_posts, now=datetime.datetime.now(datetime.timezone.utc))
 
 
+@bp.route('/api/profile/theme', methods=['POST'])
+@login_required
+def update_theme():
+    import main as m
+    data = request.get_json(silent=True) or {}
+    theme = data.get('theme', 'light')
+    if theme not in ('light', 'dark'):
+        theme = 'light'
+    m.users_conf.update_one(
+        {'_id': ObjectId(current_user.id)},
+        {'$set': {'theme_preference': theme}}
+    )
+    return jsonify(success=True)
+
+
 @bp.route('/profile/<username>/settings', methods=['GET', 'POST'])
 @login_required
 def profile_settings(username):

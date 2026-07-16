@@ -8,7 +8,7 @@ If the logic requires some further modification note at the end.
    
    - All agents MUST include a detailed commit message describing the changes made.
    - The commit message MUST include the agent's model name and everything saved here.(Write in this document)
-Dont push the AGENTS.md to github
+   - Dont push the AGENTS.md to github-should remain local
 2. Quality checks and reviewer assignment
    
    - Claude Opus 4 is assigned to check the last commit made by other models.

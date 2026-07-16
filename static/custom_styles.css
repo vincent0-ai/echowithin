@@ -3,10 +3,10 @@
 /* This class provides a consistent gradient background and container style for all main content pages. */
 /* On larger screens, we constrain the width for better readability. */
 .content-wrapper {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: var(--surface-bg);
     padding: 2rem;
     border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px var(--shadow-color);
     max-width: 900px;
     /* Constrain width on larger screens for better readability */
     margin: 0 auto;
@@ -21,7 +21,7 @@
 .content-wrapper p,
 .content-wrapper div,
 .content-wrapper a:not(.btn) {
-    color: #333;
+    color: var(--text-dark-color);
 }
 
 /* On mobile devices, make the container full-width for better use of space. */
@@ -45,7 +45,7 @@
     height: 128px;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid white;
+    border: 3px solid var(--card-bg);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 

@@ -972,6 +972,9 @@ def inject_template_globals():
         ctx['user_max_chars'] = current_user.get_limit('max_chars_per_note')
         ctx['user_max_shares'] = current_user.get_limit('max_share_links_per_note')
         ctx['user_max_communities'] = current_user.get_limit('max_communities')
+        # Theme preference for dark mode
+        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'theme_preference': 1})
+        ctx['theme_preference'] = (user_doc or {}).get('theme_preference', 'light')
     else:
         ctx['user_is_premium'] = False
         ctx['user_is_trial'] = False

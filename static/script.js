@@ -185,15 +185,4 @@ document.addEventListener('DOMContentLoaded', function() {
     var theme = document.documentElement.getAttribute('data-theme') || 'light';
     updateThemeIcon(theme);
     updateThemeColor(theme);
-    // Listen for system preference changes
-    if (window.matchMedia) {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
-            if (!localStorage.getItem('echowithin-theme')) {
-                var newTheme = e.matches ? 'dark' : 'light';
-                document.documentElement.setAttribute('data-theme', newTheme);
-                updateThemeIcon(newTheme);
-                updateThemeColor(newTheme);
-            }
-        });
-    }
 });

@@ -2232,6 +2232,21 @@
             const resolvedId = msgId || msgData.id || null;
             if (resolvedId && renderedMessageIds.has(resolvedId)) return;
 
+            // Whisper system messages render as centered dividers (like date separators)
+            if (msgData.message_type === 'whisper_system') {
+                const ts = msgData.timestamp || new Date().toISOString();
+                const d = window.parseServerTime(ts) || new Date();
+                const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                chatHistory.insertAdjacentHTML('beforeend', `
+                    <div style="text-align: center; margin: 1rem 0; position: relative;" class="date-divider">
+                        <hr style="border: 0; border-top: 1px solid #d4b8a8; position: absolute; width: 100%; top: 50%;">
+                        <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${escapeHtml(msgData.content || '')} — ${time}</span>
+                    </div>
+                `);
+                if (resolvedId) renderedMessageIds.add(resolvedId);
+                return;
+            }
+
             const timestamp = msgData.timestamp || new Date().toISOString();
             const messageDate = window.parseServerTime(timestamp) || new Date();
             const dateString = messageDate.toDateString();

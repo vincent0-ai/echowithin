@@ -312,3 +312,24 @@ If the logic requires some further modification note at the end.
 **Verification:**
 1. `python -m py_compile` passed for `whisper.py`.
 2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Whisper Session Fixes — Premature End + Start/End Markers):**
+
+- **Premature session end bug (`main.py`)**:
+  - The server-side expiry check compared an aware `datetime` (`now`) with a naive `datetime` (`expires_at` from MongoDB), causing a `TypeError` in Python 3. The generic except block silently caught this — messages failed to send, and the `whisper_expired` event was never emitted. The client-side timer eventually ended the session, appearing as a "premature end."
+  - Fixed by normalizing `expires_at` to be timezone-aware before comparison.
+  - Also fixed indentation that was broken by a previous edit.
+- **Whisper start/end markers (`whisper.py`, `main.py`, `messages.html`)**:
+  - **Start marker**: When a session is accepted, a system message "Whisper started — {duration} minutes" is inserted into `whisper_messages` with a 5-min buffer TTL. It appears in both parties' overlay when the session opens.
+  - **End marker**: When a session is manually ended, a system message "Session ended by {username}" is inserted and emitted via SocketIO BEFORE the messages are deleted, so both parties see it momentarily before the end screen appears.
+  - **Divider styling**: System messages now render with `<div class="whisper-divider"><span>text</span></div>` — a horizontal line with centered text (like date separators in chat). The `::before` and `::after` pseudo-elements create the lines.
+  - Replaced `textContent` with `innerHTML` for system messages to support the divider structure.
+
+**Files touched:** `blueprints/whisper.py`, `main.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py` and `main.py`.
+2. Jinja2 template parsing passed for `messages.html`.

@@ -1745,17 +1745,17 @@ def handle_whisper_message(data):
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
             if now >= expires_at:
-            # Session expired — clean up
-            whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
-            whisper_sessions_conf.update_one(
-                {'_id': ObjectId(session_id)},
-                {'$set': {'status': 'expired'}}
-            )
-            emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
-                 room=f"user_{initiator_str}")
-            emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
-                 room=f"user_{recipient_str}")
-            return
+                # Session expired — clean up
+                whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
+                whisper_sessions_conf.update_one(
+                    {'_id': ObjectId(session_id)},
+                    {'$set': {'status': 'expired'}}
+                )
+                emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
+                     room=f"user_{initiator_str}")
+                emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
+                     room=f"user_{recipient_str}")
+                return
 
         partner_id = recipient_str if user_id_str == initiator_str else initiator_str
 

@@ -41,9 +41,9 @@
     --background-light-color: #242019;
     --background-color: #1a1410;
     --border-color: #3a3530;
-    --success-color: #5cb85c;
-    --danger-color: #e57373;
-    --info-color: #64b5f6;
+    --success-color: #2e7d32;
+    --danger-color: #c62828;
+    --info-color: #1976d2;
     --card-bg: #242019;
     --card-border: #3a3530;
     --surface-bg: #2e2a22;
@@ -2986,4 +2986,167 @@ body {
 [data-theme="dark"] .link-preview-card {
     background: var(--surface-bg) !important;
     border-color: var(--card-border) !important;
-}
+}
+
+/* --- Alert Text and legibility overrides --- */
+[data-theme="dark"] .alert {
+    color: white !important;
+}
+
+/* --- Personal Space Overrides --- */
+[data-theme="dark"] .create-note-card {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-search-bar {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+
+[data-theme="dark"] .note-search-bar input {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .note-metadata-inputs {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-metadata-inputs input {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .note-tag-badge {
+    background: var(--surface-bg) !important;
+    color: var(--text-secondary) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-ref-display {
+    color: var(--text-accent) !important;
+}
+
+[data-theme="dark"] .tab-nav {
+    border-bottom-color: var(--separator-color) !important;
+}
+
+[data-theme="dark"] .tab-nav button {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .tab-nav button:hover {
+    color: var(--text-dark-color) !important;
+    background: var(--surface-hover-bg) !important;
+}
+
+[data-theme="dark"] .tab-nav button.active {
+    color: var(--primary-color) !important;
+    border-bottom-color: var(--primary-color) !important;
+}
+
+[data-theme="dark"] .tab-nav button .badge {
+    background: var(--surface-bg) !important;
+    color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .note-card.pinned {
+    background: #2b251d !important;
+}
+
+[data-theme="dark"] .note-card.pinned .note-content.note-collapsed::after {
+    background: linear-gradient(transparent, #2b251d) !important;
+}
+
+[data-theme="dark"] .note-content.note-collapsed::after {
+    background: linear-gradient(transparent, var(--card-bg)) !important;
+}
+
+[data-theme="dark"] .note-content a.auto-link,
+[data-theme="dark"] .rendered-note a[href^="http"] {
+    color: var(--text-accent) !important;
+    text-decoration-color: rgba(201, 160, 122, 0.3) !important;
+}
+
+[data-theme="dark"] .note-content a.auto-link:hover,
+[data-theme="dark"] .rendered-note a[href^="http"]:hover {
+    text-decoration-color: var(--text-accent) !important;
+}
+
+[data-theme="dark"] .version-card {
+    background: var(--surface-bg) !important;
+    border-left-color: var(--primary-color) !important;
+}
+
+[data-theme="dark"] .version-editor {
+    color: var(--text-dark-color) !important;
+}
+
+/* --- Note content tables --- */
+[data-theme="dark"] .table-wrapper {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-content th,
+[data-theme="dark"] .note-content td {
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .note-content th {
+    background: var(--surface-bg) !important;
+}
+
+[data-theme="dark"] .note-content tbody tr:nth-child(even) {
+    background: var(--surface-bg) !important;
+}
+
+[data-theme="dark"] .note-content tbody tr:hover {
+    background: var(--surface-hover-bg) !important;
+}
+
+/* --- Profile Page Overrides --- */
+[data-theme="dark"] .profile-main-content > div[style*="background: linear-gradient"],
+[data-theme="dark"] .profile-main-content > div[style*="background:linear-gradient"] {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .profile-main-content > div[style*="background: linear-gradient"] div,
+[data-theme="dark"] .profile-main-content > div[style*="background: linear-gradient"] span,
+[data-theme="dark"] .profile-main-content > div[style*="background: linear-gradient"] i,
+[data-theme="dark"] .profile-main-content > div[style*="background:linear-gradient"] div,
+[data-theme="dark"] .profile-main-content > div[style*="background:linear-gradient"] span,
+[data-theme="dark"] .profile-main-content > div[style*="background:linear-gradient"] i {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .profile-main-content > div[style*="background"] a[style*="background: #3e2217"],
+[data-theme="dark"] .profile-main-content > div[style*="background"] a[style*="background:#3e2217"] {
+    background: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+}
+
+[data-theme="dark"] .profile-post-tag {
+    background: var(--surface-bg) !important;
+    color: var(--text-secondary) !important;
+}
+
+/* --- About Page Overrides --- */
+[data-theme="dark"] .native-app-section {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+}
+
+[data-theme="dark"] .native-app-section h3,
+[data-theme="dark"] .native-app-section h4 {
+    color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .native-app-section p {
+    color: var(--text-secondary) !important;
+}
+

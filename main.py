@@ -1755,6 +1755,13 @@ def handle_whisper_message(data):
                      room=f"user_{initiator_str}")
                 emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
                      room=f"user_{recipient_str}")
+                # Insert DM system message
+                now_str = now.isoformat().replace('+00:00', 'Z')
+                end_content = 'Whisper session ended (timeout)'
+                for (s_oid, r_oid) in [(ObjectId(initiator_str), ObjectId(recipient_str)), (ObjectId(recipient_str), ObjectId(initiator_str))]:
+                    d = {'sender_id': s_oid, 'recipient_id': r_oid, 'content': end_content, 'encrypted': False, 'timestamp': now, 'is_read': False, 'message_type': 'whisper_system'}
+                    r = direct_messages_conf.insert_one(d)
+                    emit('new_dm', {'id': str(r.inserted_id), 'sender_id': str(s_oid), 'content': end_content, 'timestamp': now_str, 'message_type': 'whisper_system'}, room=f"user_{str(r_oid)}")
                 return
 
         partner_id = recipient_str if user_id_str == initiator_str else initiator_str

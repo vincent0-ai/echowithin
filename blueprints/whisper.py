@@ -12,6 +12,31 @@ PREMIUM_DURATIONS = [15, 30, 60, 120]
 PENDING_INVITE_TIMEOUT_MINUTES = 5
 
 
+def _send_whisper_dm(sender_oid, recipient_oid, content):
+    """Insert a whisper-related system message into the DM chat and emit via SocketIO."""
+    import main as m
+    from bson.objectid import ObjectId as OId
+    now = datetime.datetime.now(datetime.timezone.utc)
+    msg_doc = {
+        'sender_id': sender_oid,
+        'recipient_id': recipient_oid,
+        'content': content,
+        'encrypted': False,
+        'timestamp': now,
+        'is_read': False,
+        'message_type': 'whisper_system'
+    }
+    result = m.direct_messages_conf.insert_one(msg_doc)
+    payload = {
+        'id': str(result.inserted_id),
+        'sender_id': str(sender_oid),
+        'content': content,
+        'timestamp': now.isoformat().replace('+00:00', 'Z'),
+        'message_type': 'whisper_system'
+    }
+    m.socketio.emit('new_dm', payload, room=f"user_{str(recipient_oid)}")
+
+
 def _expire_stale_pending():
     """Cancel pending invites older than the timeout."""
     import main as m
@@ -168,6 +193,16 @@ def api_whisper_invite():
             tag=f'whisper-invite-{current_user.id}'
         )
 
+        # DM system messages for both parties
+        _send_whisper_dm(
+            user_oid, ObjectId(recipient_id_str),
+            f'Whisper invite from {current_user.username} — {duration} min'
+        )
+        _send_whisper_dm(
+            ObjectId(recipient_id_str), user_oid,
+            f'You sent a whisper invite to {recipient.get("username", "User")} — {duration} min'
+        )
+
         return jsonify({
             'success': True,
             'session_id': str(result.inserted_id),
@@ -211,6 +246,10 @@ def api_whisper_respond(session_id):
                 'session_id': session_id,
                 'by_username': current_user.username
             }, room=f"user_{initiator_id_str}")
+            _send_whisper_dm(
+                ObjectId(current_user.id), session_doc['initiator_id'],
+                f'{current_user.username} declined the whisper invite'
+            )
             return jsonify({'success': True, 'status': 'declined'})
 
         # Accept — start the session
@@ -256,6 +295,16 @@ def api_whisper_respond(session_id):
         acceptor_payload['partner_username'] = initiator['username'] if initiator else 'User'
         acceptor_payload['partner_id'] = initiator_id_str
         m.socketio.emit('whisper_accept', acceptor_payload, room=f"user_{current_user.id}")
+
+        # DM system messages for both parties
+        initiator_oid = session_doc['initiator_id']
+        recipient_oid = session_doc['recipient_id']
+        initiator = m.users_conf.find_one({'_id': initiator_oid}, {'username': 1})
+        recipient = m.users_conf.find_one({'_id': recipient_oid}, {'username': 1})
+        i_name = initiator['username'] if initiator else 'User'
+        r_name = recipient['username'] if recipient else 'User'
+        _send_whisper_dm(initiator_oid, recipient_oid, f'Whisper started — {duration} min')
+        _send_whisper_dm(recipient_oid, initiator_oid, f'Whisper started — {duration} min')
 
         return jsonify({'success': True, 'status': 'accepted', **payload})
 
@@ -458,6 +507,17 @@ def api_whisper_end(session_id):
             'ended_by': current_user.username,
             'reason': 'manual'
         }, room=f"user_{user_id_str}")
+
+        # DM system message
+        ender_name = current_user.username
+        _send_whisper_dm(
+            ObjectId(user_id_str), ObjectId(partner_id),
+            f'Whisper session ended by {ender_name}'
+        )
+        _send_whisper_dm(
+            ObjectId(partner_id), ObjectId(user_id_str),
+            f'Whisper session ended by {ender_name}'
+        )
 
         return jsonify({'success': True})
 

@@ -315,6 +315,26 @@ If the logic requires some further modification note at the end.
 
 ### Model: opencode/deepseek-v4-pro
 
+**Date:** 2026-07-16
+**Changes (Whisper DM Notifications — Visible Chat Feedback):**
+
+- **Problem**: Sending a whisper invite gave no visible feedback — the modal closed, a brief toast appeared, but nothing showed in the chat. When accepted, the overlay sometimes didn't appear (SocketIO missed). No indication that a whisper happened or ended.
+- **Added `_send_whisper_dm()` helper**: Inserts an unencrypted system message (`message_type: 'whisper_system'`) into `direct_messages` and emits it via SocketIO. These appear as regular messages in the DM chat for both parties.
+- **DM notifications at every lifecycle event**:
+  - **Invite sent**: "Whisper invite from X — 15 min" (recipient) / "You sent a whisper invite to X — 15 min" (sender)
+  - **Invite declined**: "X declined the whisper invite" (sender)
+  - **Session started**: "Whisper started — 15 min" (both)
+  - **Session ended (manual)**: "Whisper session ended by X" (both)
+  - **Session ended (timeout)**: "Whisper session ended (timeout)" (both)
+- These DM messages persist in the regular chat history, so even if SocketIO events are missed, both parties see the whisper lifecycle clearly.
+
+**Files touched:** `blueprints/whisper.py`, `main.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py` and `main.py`.
+
+### Model: opencode/deepseek-v4-pro
+
 **Date:** 2026-07-15
 **Changes (Whisper Session Fixes — Premature End + Start/End Markers):**
 

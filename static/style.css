@@ -439,6 +439,27 @@ body {
     align-items: center;
 }
 
+.nav-logout {
+    margin-left: 1.5rem;
+    font-size: 1.05rem;
+    color: white;
+    opacity: 0.85;
+    text-decoration: none;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.nav-logout:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
 /* Default desktop navigation styles */
 .nav-links {
     display: flex;
@@ -1787,19 +1808,9 @@ body {
         padding: 0.4rem 0.35rem;
     }
 
-    /* Hide Logout from nav-links on mobile — it moves to top row */
-    .nav-logout-desktop {
-        display: none !important;
-    }
-
-    /* Show the mobile Logout in the brand row */
-    .nav-logout-mobile {
-        display: inline-block !important;
-    }
-
-    /* Keep social icons next to brand */
+    /* Spacing between brand row elements on mobile */
     .nav-socials {
-        margin-left: 0.5rem;
+        margin-left: 0.8rem;
     }
 
     .container {
@@ -2977,6 +2988,17 @@ body {
 
 [data-theme="dark"] .nav-links a {
     color: var(--text-dark-color) !important;
+}
+
+[data-theme="dark"] .nav-logout {
+    color: var(--text-dark-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .nav-logout:hover {
+    color: var(--text-accent) !important;
+    background-color: var(--surface-hover-bg) !important;
+    border-color: var(--text-accent) !important;
 }
 
 [data-theme="dark"] .nav-links a:hover,

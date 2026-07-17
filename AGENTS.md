@@ -368,3 +368,85 @@ If the logic requires some further modification note at the end.
 
 **Verification:**
 1. `python -m py_compile` passed for `whisper.py`.
+
+### Model: opencode/minimax-m3-free
+
+**Date:** 2026-07-16
+**Changes (Whisper Modal Not Appearing + Double DM Messages):**
+
+- **Whisper invite modal not appearing without page refresh (`templates/messages.html`)**:
+  - `window.socket` (base.html) connects before DOMContentLoaded, so the `join_inbox` handler is registered too late — the socket never joins the user's room. The whisper IIFE listens on `window.socket`, so it never receives `whisper_invite_received` events.
+  - Fix: Added `whisper_invite_received` handler on the messages page socket (created inside DOMContentLoaded, properly joins the room via `join_inbox` on connect).
+  - Exposed `whisperState` as `window.whisperState` so both the messages page socket handler and the whisper IIFE can access it.
+- **Double DM messages (`blueprints/whisper.py`)**:
+  - Every lifecycle event (invite sent, session started, session ended) called `_send_whisper_dm` twice — once from each party's perspective — creating two separate DMs that both appeared in the chat.
+  - Fix: Removed the second `_send_whisper_dm` call for all three events. A single DM from sender to recipient is visible from both perspectives (sender sees "sent", recipient sees "received").
+
+**Files touched:** `blueprints/whisper.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.
+2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-16
+**Changes (Whisper Mode Real-time & Redirect Fixes):**
+
+- **Unify Duplicate Socket Connections**:
+  - Unified the duplicate Socket.IO connections in `messages.html`. Previously, `messages.html` established a second local socket connection `socket = io(...)` alongside the global `window.socket` (defined in `base.html`). Whisper event listeners were registered on `window.socket` (which was configured with only websockets and frequently failed/disconnected), while normal direct messaging used the local socket (which supported polling fallback).
+  - Modified `base.html` to configure `window.socket` with full reconnection settings and polling transport fallback (`transports: ['websocket', 'polling']`).
+  - Modified `messages.html` to reuse `window.socket` directly (`const socket = window.socket;`) as the single page socket.
+  - Implemented `onSocketConnect` check: if the socket is already connected when the page loads, we execute the room joining/chat sync logic immediately instead of waiting for the `connect` event (which would have already fired).
+  - Removed all duplicate whisper socket event listeners from the first script block in `messages.html`.
+- **Global Whisper Redirection & Prompts**:
+  - Registered global socket event listeners for `whisper_accept` and `whisper_invite_received` on `window.socket` inside `base.html`.
+  - If a user is on another page and their whisper invite is accepted, they are automatically redirected to `/messages?user_id=partner_id` which automatically launches the whisper overlay.
+  - If they receive a whisper invite while on another page, they receive a global `showCustomConfirm` prompt asking if they want to go to Messages to accept.
+- **Harden End Session Flow**:
+  - Modified `doEndWhisper()` to close the whisper overlay locally on the client immediately after a successful response from the `/api/whisper/end/<session_id>` endpoint.
+  - Added a guard `if (!whisperState.active) return;` to `whisperSessionEnded` to prevent double-execution from both the local callback and the socket event.
+  - Hardened `/api/whisper/end/<session_id>` in `whisper.py` to return success `200 OK` (with `already_ended: true`) if the session is already in `expired` state, avoiding 404 console errors.
+- **Screenshot False Positive Fix**:
+  - Removed `window.addEventListener('blur')` from `setupScreenshotDetection()` to prevent false screenshot alerts when browser dialogs (like end-session confirm boxes) open or when the page loses focus.
+
+**Files touched:** `templates/base.html`, `templates/messages.html`, `blueprints/whisper.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `blueprints/whisper.py`.
+2. Jinja2 template parsing passed for `templates/base.html` and `templates/messages.html`.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-17
+**Changes (Navbar Logout Button Placement):**
+
+- **Relocate Logout Button**:
+  - Moved the logout button in `templates/base.html` from the right-aligned `nav-links` (desktop) and far-right `nav-left` (mobile) to a unified position immediately next to the social buttons in the `nav-left` row.
+  - Replaced the separate `nav-logout-desktop` and `nav-logout-mobile` classes with a clean, unified `.nav-logout` class styling that features `margin-left: 1.5rem` to separate it from the social icons.
+- **Navbar Styling Cleanup**:
+  - Removed outdated classes `.nav-logout-desktop` and `.nav-logout-mobile` and the display-mode media query overrides from `templates/base.html` and `static/style.css`.
+  - Added clean `.nav-logout` style rules, including hover transformations, color alignment, and custom dark mode overrides to ensure styling consistency with the platform design.
+  - Updated the PWA JavaScript inside `templates/base.html` to reference `nav-logout` instead of the old `nav-logout-mobile` ID.
+
+**Files touched:** `templates/base.html`, `static/style.css`, `AGENTS.md`.
+
+**Verification:**
+1. Checked Jinja2 template syntax in `templates/base.html`.
+2. Verified stylesheet parsing and media query validity.
+
+
+ 
+ # # #   M o d e l :   A n t i g r a v i t y   ( A d v a n c e d   C o d i n g   A g e n t ) 
+ * * D a t e : * *   2 0 2 6 - 0 7 - 1 7 
+ * * C h a n g e s   ( v 1 . 9 . 6 ) : * * 
+ -   * * S o r t   U p d a t e   &   P e r s i s t e n c e   ( N o t e s V i e w M o d e l . k t ,   S e t t i n g s S c r e e n . k t ,   A p p N a v G r a p h . k t ) * * :   F i x e d   s o r t i n g   o p t i o n s   b y   a p p l y i n g   s o r t A n d F i l t e r N o t e s   o n   a l l   d a t a   l o a d   c a l l s ,   a n d   w i r i n g   a   s o r t   o r d e r   s e l e c t i o n   c a l l b a c k   f r o m   t h e   S e t t i n g s   s c r e e n   t o   u p d a t e   t h e   V i e w M o d e l . 
+ -   * * O f f l i n e   P i n   S u p p o r t   ( N o t e s R e p o s i t o r y . k t ) * * :   A d d e d   t r y - c a t c h   h a n d l e r   t o   	 o g g l e N o t e P i n ( )   t o   f a l l   b a c k   t o   l o c a l   p i n   s t a t u s   u p d a t e   ( i s S y n c e d   =   f a l s e ,   p e n d i n g O p   =   ' e d i t ' )   w h e n   t h e   A P I   c a l l   f a i l s   o r   i s   o f f l i n e ,   r e t r y i n g   s y n c   a u t o m a t i c a l l y . 
+ -   * * S y n c   M i s m a t c h   &   D r a f t   P r o t e c t i o n   ( N o t e s R e p o s i t o r y . k t ,   N o t e D a t a b a s e H e l p e r . k t ) * * :   C h a n g e d   s a v e D r a f t L o c a l l y ( )   t o   s a v e   d r a f t s   w i t h   p e n d i n g O p   =   ' d r a f t '   a n d   u p d a t e d   t h e   s e r v e r   p u l l   r e c o n c i l i a t i o n   l o o p   t o   p r e v e n t   o v e r w r i t i n g   l o c a l   d r a f t s .   U p d a t e d   c l e a r S y n c e d N o t e s ( )   t o   p r e s e r v e   a l l   l o c a l   n o t e s   ( i n c l u d i n g   d r a f t s )   o n   l o g o u t / s e s s i o n   e x p i r a t i o n . 
+ -   * * E x p o r t   C r a s h   F i x   ( H o m e S c r e e n . k t ,   N o t e D e t a i l S c r e e n . k t ) * * :   W r a p p e d   C r e a t e D o c u m e n t   p i c k e r   l a u n c h   i n   a   t r y - c a t c h   t o   p r e v e n t   c r a s h ,   w i t h   a   f a l l b a c k   t h a t   w r i t e s   t o   p r i v a t e   c a c h e   a n d   l a u n c h e s   a   s y s t e m   S h a r e   S h e e t . 
+ -   * * D r a f t   B a d g e   ( H o m e S c r e e n . k t ) * * :   R e n d e r e d   a   ' D r a f t '   b a d g e   i n   t h e   n o t e   l i s t   n e x t   t o   n o t e s   w i t h   p e n d i n g O p   = =   ' d r a f t ' . 
+ -   * * P u s h e d   v 1 . 9 . 6   A P K * * :   U p d a t e d    e r s i o n C o d e   2 9   - >   3 0   a n d    e r s i o n N a m e   1 . 9 . 5   - >   1 . 9 . 6 .   R e b u i l t   A P K ,   d e p l o y e d   t o   s t a t i c / d o w n l o a d s / a p p - d e b u g . a p k ,   a n d   u p d a t e d   s t a t i c / u p d a t e - m a n i f e s t . j s o n . 
+ * * F i l e s   t o u c h e d : * *   a p p / b u i l d . g r a d l e . k t s ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / d a t a / l o c a l / N o t e D a t a b a s e H e l p e r . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / d a t a / r e p o s i t o r y / N o t e s R e p o s i t o r y . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / v i e w m o d e l / N o t e s V i e w M o d e l . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / S e t t i n g s S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / H o m e S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / N o t e D e t a i l S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / n a v i g a t i o n / A p p N a v G r a p h . k t ,   e c h o w i t h i n / s t a t i c / d o w n l o a d s / a p p - d e b u g . a p k ,   e c h o w i t h i n / s t a t i c / u p d a t e - m a n i f e s t . j s o n ,   t h i s   A G E N T S . m d . 
+ * * V e r i f i c a t i o n : * *   . \ g r a d l e w   c o m p i l e D e b u g K o t l i n   c o m p l e t e d   s u c c e s s f u l l y   w i t h   z e r o   e r r o r s . 
+  
+ 

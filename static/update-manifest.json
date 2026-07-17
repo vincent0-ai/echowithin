@@ -1,6 +1,6 @@
 {
-  "versionCode": 29,
-  "versionName": "1.9.5",
+  "versionCode": 30,
+  "versionName": "1.9.6",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.5 \ud83d\udd27 Bug fixes:\n\ud83d\udcca Sort options now actually sort your notes\n\ud83d\udccc Pin works offline \u2014 sync retries on failure\n\ud83d\udcbe Export no longer crashes \u2014 runs on background thread\n\ud83d\udcdd Drafts stay local until you explicitly save"
+  "changelog": "v1.9.6 \uD83D\uDD27 Bug fixes:\n\uD83D\uDCCA Fixed sorting preference updates and persistence\n\uD83D\uDCCC Pin toggles now persist offline with automatic re-sync fallback\n\uD83D\uDCBE Resolved export crashes with a share sheet fallback\n\uD83D\uDCDD Resolved draft sync conflicts that caused content loss\n\uD83C\uDFF7 Added a Draft status badge in the notes list"
 }

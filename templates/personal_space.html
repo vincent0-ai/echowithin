@@ -8391,15 +8391,15 @@
         if (!firstNoteCard) return;
 
         const steps = [
-            { selector: '.copy-btn', icon: 'fa-copy', text: '📋 Copy your note text to clipboard for pasting elsewhere' },
-            { selector: '.edit-note-btn', icon: 'fa-pen', text: '✏️ Edit your note — supports full markdown formatting' },
-            { selector: '.export-note-btn', icon: 'fa-download', text: '📥 Export — Download this note as Plain Text, PDF, or Word document' },
-            { selector: '.share-note-btn', icon: 'fa-share-alt', text: '📤 Share this note — create a link with view/edit access, or pick a surprise theme (Birthday, Anniversary) with music & photos' },
-            { selector: '.lock-note-btn', icon: 'fa-lock', text: '🔒 Lock this note behind your 4-digit PIN for extra privacy' },
-            { selector: '.version-history-btn', icon: 'fa-clock-rotate-left', text: '🕐 Version History — view all edits, compare versions side-by-side, and restore previous versions' },
-            { selector: '.sync-note-btn', icon: 'fa-sync-alt', text: '🔄 Sync — pull latest changes from the original shared note. If both copies changed, you can merge them' },
-            { selector: 'a.btn-icon[title*="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' },
-            { selector: '.delete-btn', icon: 'fa-trash-alt', text: '🗑️ Delete — Permanently remove this note (or choose to delete it for everyone if it has active shares or clones)' }
+            { selector: '.note-actions .copy-btn', icon: 'fa-copy', text: '📋 Copy your note text to clipboard for pasting elsewhere' },
+            { selector: '.note-actions .edit-note-btn', icon: 'fa-pen', text: '✏️ Edit your note — supports full markdown formatting' },
+            { selector: '.note-actions .export-note-btn', icon: 'fa-download', text: '📥 Export — Download this note as Plain Text, PDF, or Word document' },
+            { selector: '.note-actions .share-note-btn', icon: 'fa-share-alt', text: '📤 Share this note — create a link with view/edit access, or pick a surprise theme (Birthday, Anniversary) with music & photos' },
+            { selector: '.note-actions .lock-note-btn', icon: 'fa-lock', text: '🔒 Lock this note behind your 4-digit PIN for extra privacy' },
+            { selector: '.note-actions .version-history-btn', icon: 'fa-clock-rotate-left', text: '🕐 Version History — view all edits, compare versions side-by-side, and restore previous versions' },
+            { selector: '.note-actions .sync-note-btn', icon: 'fa-sync-alt', text: '🔄 Sync — pull latest changes from the original shared note. If both copies changed, you can merge them' },
+            { selector: '.note-actions a.btn-icon[title*="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' },
+            { selector: '.note-actions .delete-btn', icon: 'fa-trash-alt', text: '🗑️ Delete — Permanently remove this note (or choose to delete it for everyone if it has active shares or clones)' }
         ];
 
         let currentStep = 0;

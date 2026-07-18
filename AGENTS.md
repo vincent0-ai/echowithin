@@ -665,5 +665,7 @@ If the logic requires some further modification note at the end.
   - Removed all remaining thick left borders across the platform, replacing them with a subtle 1px border or top border (including note lists, system health cards in the admin dashboard, etc.).
 - **Fix Welcome Message Submission**:
   - Resolved form validation issue where submitting a community welcome message returned `"Message is required"`. Modified the `/welcome` route in `communities.py` to accept the form parameter `welcome_message` in addition to `message`.
+- **Fix Onboarding Tour Placement**:
+  - Scoped steps selectors inside `.note-actions` inside `initOnboardingTour()` in `personal_space.html`. This avoids targeting hidden buttons (such as the copy button inside the links dropdown) which was causing the tooltip to miscalculate coordinates and display in the top-left corner of the page.
 
-**Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `blueprints/communities.py`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.
+**Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `blueprints/communities.py`, `templates/personal_space.html`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.

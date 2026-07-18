@@ -3678,4 +3678,137 @@ body {
 [data-theme="dark"] .home-header p {
     color: var(--text-secondary) !important;
 }
+
+/* --- Shared Note Page & Discussion Comments Overrides --- */
+[data-theme="dark"] .note-attachments-section {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+}
+[data-theme="dark"] .attachments-title {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .attachments-title i {
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .attachments-empty {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .comment-card {
+    background: var(--surface-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1) !important;
+}
+[data-theme="dark"] .comment-author {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .comment-body {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .comment-form {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+}
+[data-theme="dark"] .comment-form textarea {
+    background: var(--input-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--input-border) !important;
+}
+[data-theme="dark"] .login-prompt {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .login-prompt a {
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .error-state,
+[data-theme="dark"] .auth-state {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .auth-state input {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .lightbox-close {
+    background: var(--card-bg) !important;
+    color: var(--text-dark-color) !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4) !important;
+}
+[data-theme="dark"] .toc-sidebar {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+}
+[data-theme="dark"] .toc-title {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .toc-link {
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .toc-link:hover {
+    background: var(--surface-hover-bg) !important;
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .toc-link.active {
+    color: var(--primary-color) !important;
+    background: var(--surface-bg) !important;
+}
+
+/* --- Shared Link Settings Page Overrides --- */
+[data-theme="dark"] .settings-card {
+    background: var(--card-bg) !important;
+    border: 1px solid var(--card-border) !important;
+}
+[data-theme="dark"] .settings-card h3 {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .settings-card .info-row {
+    border-bottom-color: var(--card-border) !important;
+}
+[data-theme="dark"] .info-value {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .form-group label {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .form-select,
+[data-theme="dark"] .form-input {
+    background: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .form-checkbox {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .btn-back {
+    color: var(--primary-color) !important;
+}
+[data-theme="dark"] .capsule-info {
+    background: var(--surface-bg) !important;
+    border-color: var(--card-border) !important;
+    color: var(--text-secondary) !important;
+}
+[data-theme="dark"] .premium-tag {
+    background: #4a1513 !important;
+    color: #ff8a80 !important;
+}
+[data-theme="dark"] .media-preview {
+    color: var(--text-secondary) !important;
+}
+
+/* --- Surprise Envelope Reveal Styles --- */
+[data-theme="dark"] .valentine-envelope {
+    background: var(--card-bg) !important;
+    border-color: var(--card-border) !important;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3) !important;
+}
+[data-theme="dark"] .valentine-envelope h2 {
+    color: var(--text-dark-color) !important;
+}
+[data-theme="dark"] .valentine-envelope p {
+    color: var(--text-secondary) !important;
+}
 

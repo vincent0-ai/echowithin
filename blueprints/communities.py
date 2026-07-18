@@ -1338,7 +1338,7 @@ def api_set_welcome(community_id):
     community = m.communities_conf.find_one({'_id': comm_obj_id})
     if not community or str(community.get('admin_id')) != current_user.id:
         return jsonify({'error': 'Unauthorized'}), 403
-    message = request.form.get('message', '').strip()
+    message = (request.form.get('message') or request.form.get('welcome_message') or '').strip()
     if not message:
         return jsonify({'error': 'Message is required'}), 400
     if len(message) > 1000:

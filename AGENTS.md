@@ -663,5 +663,7 @@ If the logic requires some further modification note at the end.
   - Removed the `prefers-color-scheme: dark` media queries from the HTML template of `weekly_newsletter.html` so it always stays in the light theme format.
 - **Removed Side Borders**:
   - Removed all remaining thick left borders across the platform, replacing them with a subtle 1px border or top border (including note lists, system health cards in the admin dashboard, etc.).
+- **Fix Welcome Message Submission**:
+  - Resolved form validation issue where submitting a community welcome message returned `"Message is required"`. Modified the `/welcome` route in `communities.py` to accept the form parameter `welcome_message` in addition to `message`.
 
-**Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.
+**Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `blueprints/communities.py`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.

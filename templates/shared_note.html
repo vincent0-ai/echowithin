@@ -1996,8 +1996,8 @@
     }
 
     .replies-container {
-        margin-left: 0.5rem;
-        padding-left: 0.6rem;
+        margin-left: 1rem;
+        padding-left: 0.8rem;
         border-left: 1px solid #f0e6dc;
         margin-top: 0.4rem;
         display: flex;
@@ -4016,8 +4016,23 @@
             const isReply = depth > 0;
             const containerClass = isReply ? 'reply-card' : 'comment-card';
             const isAuthor = IS_AUTHENTICATED && comment.author_name === CURRENT_USER_NAME;
-            const safeAuthor = escapeHTML(comment.author_name || 'Unknown');
+            
+            const isDeleted = comment.deleted || false;
+            let safeAuthor, bodyText;
+            if (isDeleted) {
+                safeAuthor = '<em>[deleted]</em>';
+                bodyText = '<em>Comment deleted</em>';
+            } else {
+                safeAuthor = escapeHTML(comment.author_name || 'Unknown');
+                bodyText = comment.content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            
             const safeId = escapeHTML(comment._id || '');
+            
+            let toggleRepliesHTML = '';
+            if (comment.replies && comment.replies.length > 0) {
+                toggleRepliesHTML = `<button class="toggle-replies-btn" onclick="toggleReplies('${safeId}', this)" style="border: none; background: none; color: #8c6d62; font-size: 0.75rem; cursor: pointer; margin-left: 10px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px;"><i class="fas fa-chevron-up"></i> Hide replies (${comment.replies.length})</button>`;
+            }
 
             return `
                     <div class="${containerClass}" data-comment-id="${safeId}">
@@ -4025,15 +4040,29 @@
                             <span class="comment-author"><i class="fas fa-user-circle"></i> ${safeAuthor}</span>
                             <span class="comment-time">${timeAgo(comment.created_at)}</span>
                         </div>
-                        <div class="comment-body">${comment.content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                        <div class="comment-body">${bodyText}</div>
                         <div class="comment-footer">
-                            ${IS_AUTHENTICATED ? `<button class="reply-btn" onclick="toggleReplyForm(this)"><i class="fas fa-reply"></i> Reply</button>` : ''}
-                            ${isAuthor ? `<button class="delete-btn" onclick="deleteComment('${safeId}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
+                            ${(IS_AUTHENTICATED && !isDeleted) ? `<button class="reply-btn" onclick="toggleReplyForm(this)"><i class="fas fa-reply"></i> Reply</button>` : ''}
+                            ${(isAuthor && !isDeleted) ? `<button class="delete-btn" onclick="deleteComment('${safeId}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
+                            ${toggleRepliesHTML}
                         </div>
-                        ${repliesHTML ? `<div class="replies-container">${repliesHTML}</div>` : ''}
+                        ${repliesHTML ? `<div class="replies-container" id="replies-${safeId}">${repliesHTML}</div>` : ''}
                     </div>
                 `;
         }
+
+        window.toggleReplies = function(commentId, btn) {
+            const repliesContainer = document.getElementById(`replies-${commentId}`);
+            if (!repliesContainer) return;
+            const hidden = repliesContainer.style.display === 'none';
+            if (hidden) {
+                repliesContainer.style.display = '';
+                btn.innerHTML = `<i class="fas fa-chevron-up"></i> Hide replies (${repliesContainer.children.length})`;
+            } else {
+                repliesContainer.style.display = 'none';
+                btn.innerHTML = `<i class="fas fa-chevron-down"></i> Show replies (${repliesContainer.children.length})`;
+            }
+        };
 
         async function loadComments() {
             if (!commentsList) return;

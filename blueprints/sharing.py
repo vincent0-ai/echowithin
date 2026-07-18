@@ -1510,11 +1510,22 @@ def api_get_note_comments(share_id):
     
     for c in all_comments:
         c_id = str(c['_id'])
+        c_deleted = c.get('deleted', False)
+        if c_deleted:
+            author_name = '[deleted]'
+            author_id = ''
+            content = '[deleted]'
+        else:
+            author_name = c.get('author_name', 'Unknown')
+            author_id = str(c.get('author_id', ''))
+            content = m.decrypt_note(c['content'], user_id=str(c.get('author_id'))) if c.get('encrypted', False) else c['content']
+
         comment_map[c_id] = {
             '_id': c_id,
-            'author_name': c.get('author_name', 'Unknown'),
-            'author_id': str(c.get('author_id', '')),
-            'content': m.decrypt_note(c['content'], user_id=str(c.get('author_id'))) if c.get('encrypted', False) else c['content'],
+            'author_name': author_name,
+            'author_id': author_id,
+            'content': content,
+            'deleted': c_deleted,
             'created_at': (c['created_at'].replace(tzinfo=datetime.timezone.utc).isoformat() if c.get('created_at') and c['created_at'].tzinfo is None else c['created_at'].isoformat()) if c.get('created_at') else None,
             'replies': []
         }
@@ -1655,13 +1666,22 @@ def api_delete_note_comment(share_id, comment_id):
     if not is_author:
         return jsonify({'error': 'Unauthorized to delete this comment'}), 403
 
-    # Delete the comment and any of its replies (if it is a parent)
-    m.note_discussions_conf.delete_many({
-        '$or': [
+    # Check if this comment has replies
+    has_replies = m.note_discussions_conf.count_documents({'parent_id': target_id}) > 0
+
+    if has_replies:
+        m.note_discussions_conf.update_one(
             {'_id': target_id},
-            {'parent_id': target_id}
-        ]
-    })
+            {'$set': {
+                'author_name': '[deleted]',
+                'content': m.encrypt_note('[deleted]', user_id=str(current_user.id)) if comment.get('encrypted') else '[deleted]',
+                'deleted': True,
+                'author_id': None
+            }}
+        )
+    else:
+        # Purge completely
+        m.note_discussions_conf.delete_one({'_id': target_id})
 
     # Broadcast deletion
     m.socketio.emit('discussion_updated', {

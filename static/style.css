@@ -3771,4 +3771,12 @@ body {
     border-color: rgba(255, 255, 255, 0.1) !important;
     color: var(--text-dark-color) !important;
 }
+
+[data-theme="dark"] .reply-card {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid var(--card-border) !important;
+}
+[data-theme="dark"] .replies-container {
+    border-left-color: var(--card-border) !important;
+}
 

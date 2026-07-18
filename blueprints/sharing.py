@@ -1661,9 +1661,9 @@ def api_delete_note_comment(share_id, comment_id):
     if not comment:
         return jsonify({'error': 'Comment not found'}), 404
 
-    # Allow delete if user is the comment author
-    is_author = str(comment.get('author_id')) == current_user.id
-    if not is_author:
+    # Allow delete if user is the comment author or an admin
+    can_delete = str(comment.get('author_id')) == current_user.id or getattr(current_user, 'is_admin', False)
+    if not can_delete:
         return jsonify({'error': 'Unauthorized to delete this comment'}), 403
 
     # Check if this comment has replies

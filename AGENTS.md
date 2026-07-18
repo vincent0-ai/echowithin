@@ -654,6 +654,7 @@ If the logic requires some further modification note at the end.
 - **Discussion Soft-Delete Strategy**:
   - Replaced the hard-delete cascade policy in both `sharing.py` and `blog.py` comment delete endpoints. When a comment with replies is deleted, it is now marked as `deleted` or `is_deleted` and has its author name/content updated to `"[deleted]"` to preserve the reply tree. Only comments with no active children are purged.
   - Updated comment fetch/retrieval API in `sharing.py` to check for `deleted` status and return `[deleted]` safely without attempting decryption.
+  - Added support for admins to delete shared note comments on both backend (`blueprints/sharing.py` check `current_user.is_admin`) and frontend UI (`templates/shared_note.html` using `IS_ADMIN` check).
 - **Collapsible Nested Replies in Shared Note**:
   - Updated `createCommentHTML` and `toggleReplies` in `shared_note.html` to allow users to toggle (Show/Hide) nested reply blocks under any comment.
   - Refined reply nesting visual styling (increased indentation margin/padding for clearer visual hierarchy, styled the replies border-left).

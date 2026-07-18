@@ -3843,6 +3843,7 @@
     const SHARE_ID = '{{ share_id }}';
     const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
     const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
+    const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
     const CSRF_TOKEN = '{{ csrf_token() }}';
 
     if (SHARE_ID !== 'local') {
@@ -4015,7 +4016,7 @@
             const repliesHTML = (comment.replies || []).map(r => createCommentHTML(r, depth + 1)).join('');
             const isReply = depth > 0;
             const containerClass = isReply ? 'reply-card' : 'comment-card';
-            const isAuthor = IS_AUTHENTICATED && comment.author_name === CURRENT_USER_NAME;
+            const canDelete = IS_AUTHENTICATED && (comment.author_name === CURRENT_USER_NAME || IS_ADMIN);
             
             const isDeleted = comment.deleted || false;
             let safeAuthor, bodyText;
@@ -4043,7 +4044,7 @@
                         <div class="comment-body">${bodyText}</div>
                         <div class="comment-footer">
                             ${(IS_AUTHENTICATED && !isDeleted) ? `<button class="reply-btn" onclick="toggleReplyForm(this)"><i class="fas fa-reply"></i> Reply</button>` : ''}
-                            ${(isAuthor && !isDeleted) ? `<button class="delete-btn" onclick="deleteComment('${safeId}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
+                            ${(canDelete && !isDeleted) ? `<button class="delete-btn" onclick="deleteComment('${safeId}', this)" style="color: #ff4d4d; border: none; background: none; cursor: pointer; margin-left: 10px; font-size: 0.85rem;"><i class="fas fa-trash"></i> Delete</button>` : ''}
                             ${toggleRepliesHTML}
                         </div>
                         ${repliesHTML ? `<div class="replies-container" id="replies-${safeId}">${repliesHTML}</div>` : ''}

@@ -189,7 +189,7 @@
 
                 <!-- Interactive Banners for Reply / Image Upload Preview -->
                 <div id="reply-preview-banner"
-                    style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #666; border-left: 4px solid var(--primary-color);">
+                    style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 2px solid var(--primary-color); align-items: center; justify-content: space-between; font-size: 0.85rem; color: #666;">
                     <div style="display: flex; flex-direction: column; flex: 1; min-width: 0; padding-right: 1rem;">
                         <span style="font-weight: 600; color: var(--primary-color); margin-bottom: 2px;">Replying to
                             <span id="reply-to-user">User</span></span>
@@ -319,7 +319,7 @@
 
     .contact-item.active {
         background: var(--surface-hover-bg) !important;
-        border-left: 4px solid var(--primary-color);
+        border: 1px solid var(--primary-color) !important;
     }
 
     /* Chat Header Actions */
@@ -614,7 +614,7 @@
     /* Replied Message Preview in Bubble */
     .bubble-reply-preview {
         background: rgba(0, 0, 0, 0.05);
-        border-left: 3px solid var(--primary-color);
+        border: 1px solid rgba(0, 0, 0, 0.1);
         padding: 6px 8px;
         border-radius: 4px;
         font-size: 0.8rem;

@@ -515,7 +515,7 @@ body {
     padding: 0.65rem 0.85rem;
     border-radius: 6px;
     margin-bottom: 0.35rem;
-    border-left: 4px solid var(--primary-color);
+    border: 1px solid var(--border-color);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     display: flex;
     flex-direction: column;
@@ -805,54 +805,7 @@ body {
     background-color: var(--primary-dark-color);
 }
 
-.debate-container {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
-}
 
-.debate-side {
-    flex: 1;
-    padding: 1rem;
-    border-radius: 6px;
-    background-color: var(--text-light-color);
-    border: 1px solid var(--border-color);
-}
-
-.agree-side {
-    border-left: 4px solid var(--success-color);
-}
-
-.disagree-side {
-    border-left: 4px solid var(--danger-color);
-}
-
-.debate-side h4 {
-    margin-bottom: 1rem;
-    color: var(--text-dark-color);
-}
-
-.comment {
-    background-color: var(--background-color);
-    padding: 0.75rem;
-    border-radius: 4px;
-    margin-bottom: 0.5rem;
-    border-left: 3px solid var(--border-color);
-}
-
-.comment p {
-    margin-bottom: 0.25rem;
-}
-
-.comment small {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-}
-
-.no-comments {
-    color: var(--text-muted);
-    font-style: italic;
-}
 
 .pagination-nav {
     margin-top: 2rem;
@@ -1971,7 +1924,8 @@ body {
 }
 
 .post-wrapper.has-unread-comments {
-    border-left: 3px solid #e53e3e;
+    border: 1px solid #e53e3e;
+    border-radius: 8px;
 }
 
 .unread-indicator {
@@ -2256,7 +2210,7 @@ body {
     padding: 1rem;
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
-    border-left: 3px solid var(--primary-color);
+    border: 1px solid var(--border-color);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -3810,5 +3764,11 @@ body {
 }
 [data-theme="dark"] .valentine-envelope p {
     color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .bubble-reply-preview {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: var(--text-dark-color) !important;
 }
 

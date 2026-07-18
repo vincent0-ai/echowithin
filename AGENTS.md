@@ -442,11 +442,225 @@ If the logic requires some further modification note at the end.
  * * C h a n g e s   ( v 1 . 9 . 6 ) : * * 
  -   * * S o r t   U p d a t e   &   P e r s i s t e n c e   ( N o t e s V i e w M o d e l . k t ,   S e t t i n g s S c r e e n . k t ,   A p p N a v G r a p h . k t ) * * :   F i x e d   s o r t i n g   o p t i o n s   b y   a p p l y i n g   s o r t A n d F i l t e r N o t e s   o n   a l l   d a t a   l o a d   c a l l s ,   a n d   w i r i n g   a   s o r t   o r d e r   s e l e c t i o n   c a l l b a c k   f r o m   t h e   S e t t i n g s   s c r e e n   t o   u p d a t e   t h e   V i e w M o d e l . 
  -   * * O f f l i n e   P i n   S u p p o r t   ( N o t e s R e p o s i t o r y . k t ) * * :   A d d e d   t r y - c a t c h   h a n d l e r   t o   	 o g g l e N o t e P i n ( )   t o   f a l l   b a c k   t o   l o c a l   p i n   s t a t u s   u p d a t e   ( i s S y n c e d   =   f a l s e ,   p e n d i n g O p   =   ' e d i t ' )   w h e n   t h e   A P I   c a l l   f a i l s   o r   i s   o f f l i n e ,   r e t r y i n g   s y n c   a u t o m a t i c a l l y . 
- -   * * S y n c   M i s m a t c h   &   D r a f t   P r o t e c t i o n   ( N o t e s R e p o s i t o r y . k t ,   N o t e D a t a b a s e H e l p e r . k t ) * * :   C h a n g e d   s a v e D r a f t L o c a l l y ( )   t o   s a v e   d r a f t s   w i t h   p e n d i n g O p   =   ' d r a f t '   a n d   u p d a t e d   t h e   s e r v e r   p u l l   r e c o n c i l i a t i o n   l o o p   t o   p r e v e n t   o v e r w r i t i n g   l o c a l   d r a f t s .   U p d a t e d   c l e a r S y n c e d N o t e s ( )   t o   p r e s e r v e   a l l   l o c a l   n o t e s   ( i n c l u d i n g   d r a f t s )   o n   l o g o u t / s e s s i o n   e x p i r a t i o n . 
- -   * * E x p o r t   C r a s h   F i x   ( H o m e S c r e e n . k t ,   N o t e D e t a i l S c r e e n . k t ) * * :   W r a p p e d   C r e a t e D o c u m e n t   p i c k e r   l a u n c h   i n   a   t r y - c a t c h   t o   p r e v e n t   c r a s h ,   w i t h   a   f a l l b a c k   t h a t   w r i t e s   t o   p r i v a t e   c a c h e   a n d   l a u n c h e s   a   s y s t e m   S h a r e   S h e e t . 
- -   * * D r a f t   B a d g e   ( H o m e S c r e e n . k t ) * * :   R e n d e r e d   a   ' D r a f t '   b a d g e   i n   t h e   n o t e   l i s t   n e x t   t o   n o t e s   w i t h   p e n d i n g O p   = =   ' d r a f t ' . 
- -   * * P u s h e d   v 1 . 9 . 6   A P K * * :   U p d a t e d    e r s i o n C o d e   2 9   - >   3 0   a n d    e r s i o n N a m e   1 . 9 . 5   - >   1 . 9 . 6 .   R e b u i l t   A P K ,   d e p l o y e d   t o   s t a t i c / d o w n l o a d s / a p p - d e b u g . a p k ,   a n d   u p d a t e d   s t a t i c / u p d a t e - m a n i f e s t . j s o n . 
- * * F i l e s   t o u c h e d : * *   a p p / b u i l d . g r a d l e . k t s ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / d a t a / l o c a l / N o t e D a t a b a s e H e l p e r . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / d a t a / r e p o s i t o r y / N o t e s R e p o s i t o r y . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / v i e w m o d e l / N o t e s V i e w M o d e l . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / S e t t i n g s S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / H o m e S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / s c r e e n s / N o t e D e t a i l S c r e e n . k t ,   a p p / s r c / m a i n / j a v a / c o m / e x a m p l e / e c h o w i t h i n / p r e s e n t a t i o n / n a v i g a t i o n / A p p N a v G r a p h . k t ,   e c h o w i t h i n / s t a t i c / d o w n l o a d s / a p p - d e b u g . a p k ,   e c h o w i t h i n / s t a t i c / u p d a t e - m a n i f e s t . j s o n ,   t h i s   A G E N T S . m d . 
- * * V e r i f i c a t i o n : * *   . \ g r a d l e w   c o m p i l e D e b u g K o t l i n   c o m p l e t e d   s u c c e s s f u l l y   w i t h   z e r o   e r r o r s . 
-  
- 
+  - **Message history endpoint** (`api_message_history`): Returns empty `{messages: []}` if the chat is hidden for the current user.
+  - **Deep-link protection** (`messages_page` with `?user=` param): Won't load the chat if hidden for the current user.
+  - **Un-hide on new message** (`handle_send_dm` in `main.py`): When a new DM arrives, the recipient's `hidden_chats` entry is automatically deleted so the conversation re-appears in their sidebar.
+  - **SocketIO event**: `chat_deleted` is now only emitted to the deleting user's room (not the other party), since the other party is unaffected.
+  - **Frontend**: Updated confirmation prompt to "Delete this conversation for you? The other person will still see the messages."
+
+**Files touched:** `blueprints/chat.py`, `main.py`, `database.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `chat.py`, `main.py`, `database.py`.
+2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Platform-Wide 3-Day Deletion Backup):**
+
+- **Unified backup collection with 3-day TTL for all deletable content**:
+  - Renamed `deleted_messages_conf` to `deleted_items_conf` — a universal backup collection for ALL entity types (DMs, notes, posts, comments). TTL index on `expires_at` purges after 3 days, making deletions truly permanent.
+  - Created `backup_before_delete(collection_name, doc, deleted_by_user_id)` helper in `utils.py`. Inserts a document into `deleted_items` with `{original_collection, original_id, user_id, data (full document), deleted_at, expires_at}`. Failure is silently caught to never block deletion.
+  - **Personal Notes** (`api.py:api_delete_note`, `notes.py:delete_personal_post`): Back up each note document to `deleted_items` before the final `delete_many` from `personal_posts_conf`.
+  - **Blog Posts** (`blog.py:delete_post`): Back up the post + all its comments before deleting from `posts_conf` and `comments_conf`.
+  - **Blog Comments** (`blog.py:api_delete_comment`): Back up the comment + all sub-replies before `delete_many` from `comments_conf`.
+  - **DM Single Message** (`chat.py:api_delete_message`): Back up the message document before `delete_one` from `direct_messages_conf`.
+  - **DM Chat** (already done in previous commit): When both parties hide, all messages are backed up to `deleted_items_conf` before deletion.
+  - After 3 days, MongoDB's TTL index on `deleted_items.expires_at` auto-deletes the backup — making the deletion permanently irrecoverable.
+
+**Files touched:** `utils.py`, `database.py`, `main.py`, `blueprints/chat.py`, `blueprints/blog.py`, `blueprints/notes.py`, `api.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for all 7 modified files.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Admin Cloudinary Cleanup + Atlas Backup Exclusion):**
+
+- **`admin_delete_post` (`blueprints/admin.py`)** — was not deleting Cloudinary media at all, leaving orphaned images/videos. Also missing `backup_before_delete`. Fixed to mirror the user-facing `delete_post`: destroy `image_public_id`, `image_public_ids`, `video_public_id` from Cloudinary, backup comments + post to `deleted_items`, then delete from DB.
+- **`delete_user` (`blueprints/admin.py`)** — was not cleaning up `profile_image_public_id` from Cloudinary. Fixed.
+- **`api_admin_delete_community` (`blueprints/admin.py`)** — was not deleting community resources or their Cloudinary files. Fixed: iterate `community_resources`, destroy each `file_public_id` from Cloudinary, then `delete_many` from `community_resources_conf`.
+- **`backup_to_atlas.py` (`scripts/`)** — excluded `deleted_items` collection from Atlas sync. Syncing it was wasteful and counter-productive: TTL-expired local documents appeared as "stale" on Atlas, triggering unnecessary `_deleted_at` marking and creating noisy write churn. The `deleted_items` collection is temporary trash, not permanent data.
+
+**Files touched:** `blueprints/admin.py`, `scripts/backup_to_atlas.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for both files.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Whisper Pending Invites — Stuck & Unseen Fix):**
+
+- **Problem**: Pending whisper invites blocked new invites indefinitely, but recipients had no way to see them if they missed the SocketIO event (not on the messages page at the time). The pending invite stayed in the DB forever with no UI to view or respond to it.
+- **Auto-expiry**: Added `_expire_stale_pending()` that cancels pending invites older than 5 minutes (`PENDING_INVITE_TIMEOUT_MINUTES`). Called before every invite attempt and before the pending check — stale invites are auto-cleaned, unblocking new invites.
+- **`GET /api/whisper/pending`**: New endpoint returns any pending invite for the current user (incoming or outgoing). Includes the session_id, partner username, and duration so the frontend can show the accept/decline modal or a status indicator. Also calls `_expire_stale_pending()` to clean up on each check.
+- **Frontend page-load check** (`messages.html`): On page load, calls `/api/whisper/pending` and:
+  - If incoming pending exists: shows the whisper incoming modal (same as SocketIO event)
+  - If outgoing pending exists: shows a toast indicating the invite is waiting for response
+  - SocketIO event handlers still work for real-time delivery
+
+**Files touched:** `blueprints/whisper.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.
+2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-16
+**Changes (Whisper DM Notifications — Visible Chat Feedback):**
+
+- **Problem**: Sending a whisper invite gave no visible feedback — the modal closed, a brief toast appeared, but nothing showed in the chat. When accepted, the overlay sometimes didn't appear (SocketIO missed). No indication that a whisper happened or ended.
+- **Added `_send_whisper_dm()` helper**: Inserts an unencrypted system message (`message_type: 'whisper_system'`) into `direct_messages` and emits it via SocketIO. These appear as regular messages in the DM chat for both parties.
+- **DM notifications at every lifecycle event**:
+  - **Invite sent**: "Whisper invite from X — 15 min" (recipient) / "You sent a whisper invite to X — 15 min" (sender)
+  - **Invite declined**: "X declined the whisper invite" (sender)
+  - **Session started**: "Whisper started — 15 min" (both)
+  - **Session ended (manual)**: "Whisper session ended by X" (both)
+  - **Session ended (timeout)**: "Whisper session ended (timeout)" (both)
+- These DM messages persist in the regular chat history, so even if SocketIO events are missed, both parties see the whisper lifecycle clearly.
+
+**Files touched:** `blueprints/whisper.py`, `main.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py` and `main.py`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-15
+**Changes (Whisper Session Fixes — Premature End + Start/End Markers):**
+
+- **Premature session end bug (`main.py`)**:
+  - The server-side expiry check compared an aware `datetime` (`now`) with a naive `datetime` (`expires_at` from MongoDB), causing a `TypeError` in Python 3. The generic except block silently caught this — messages failed to send, and the `whisper_expired` event was never emitted. The client-side timer eventually ended the session, appearing as a "premature end."
+  - Fixed by normalizing `expires_at` to be timezone-aware before comparison.
+  - Also fixed indentation that was broken by a previous edit.
+- **Whisper start/end markers (`whisper.py`, `main.py`, `messages.html`)**:
+  - **Start marker**: When a session is accepted, a system message "Whisper started — {duration} minutes" is inserted into `whisper_messages` with a 5-min buffer TTL. It appears in both parties' overlay when the session opens.
+  - **End marker**: When a session is manually ended, a system message "Session ended by {username}" is inserted and emitted via SocketIO BEFORE the messages are deleted, so both parties see it momentarily before the end screen appears.
+  - **Divider styling**: System messages now render with `<div class="whisper-divider"><span>text</span></div>` — a horizontal line with centered text (like date separators in chat). The `::before` and `::after` pseudo-elements create the lines.
+  - Replaced `textContent` with `innerHTML` for system messages to support the divider structure.
+
+**Files touched:** `blueprints/whisper.py`, `main.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py` and `main.py`.
+2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: opencode/deepseek-v4-pro
+
+**Date:** 2026-07-16
+**Changes (Whisper Stale Active Session Blocking):**
+
+- **Problem**: Expired whisper sessions with `status: 'active'` blocked new invites. The user got "you already have an active whisper session" but reloading showed "Whisper Ended" because the `expires_at` had passed but the status was never updated.
+- **Root cause**: `_get_active_session()` only checked `status: 'active'` without verifying `expires_at`. The `/api/whisper/active` endpoint had the same issue, returning stale active sessions to the frontend.
+- **Fix in `_get_active_session()`**: After finding an active session, checks `expires_at`. If expired, auto-updates status to `'expired'`, deletes messages, and returns `None` — unblocking new invites.
+- **Fix in `/api/whisper/active`**: Separated active and pending checks. Active sessions now go through `_get_active_session()` (which auto-expires). Pending invites go through a separate query with `_expire_stale_pending()` cleanup.
+
+**Files touched:** `blueprints/whisper.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.
+
+### Model: opencode/minimax-m3-free
+
+**Date:** 2026-07-16
+**Changes (Whisper Modal Not Appearing + Double DM Messages):**
+
+- **Whisper invite modal not appearing without page refresh (`templates/messages.html`)**:
+  - `window.socket` (base.html) connects before DOMContentLoaded, so the `join_inbox` handler is registered too late — the socket never joins the user's room. The whisper IIFE listens on `window.socket`, so it never receives `whisper_invite_received` events.
+  - Fix: Added `whisper_invite_received` handler on the messages page socket (created inside DOMContentLoaded, properly joins the room via `join_inbox` on connect).
+  - Exposed `whisperState` as `window.whisperState` so both the messages page socket handler and the whisper IIFE can access it.
+- **Double DM messages (`blueprints/whisper.py`)**:
+  - Every lifecycle event (invite sent, session started, session ended) called `_send_whisper_dm` twice — once from each party's perspective — creating two separate DMs that both appeared in the chat.
+  - Fix: Removed the second `_send_whisper_dm` call for all three events. A single DM from sender to recipient is visible from both perspectives (sender sees "sent", recipient sees "received").
+
+**Files touched:** `blueprints/whisper.py`, `templates/messages.html`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `whisper.py`.
+2. Jinja2 template parsing passed for `messages.html`.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-16
+**Changes (Whisper Mode Real-time & Redirect Fixes):**
+
+- **Unify Duplicate Socket Connections**:
+  - Unified the duplicate Socket.IO connections in `messages.html`. Previously, `messages.html` established a second local socket connection `socket = io(...)` alongside the global `window.socket` (defined in `base.html`). Whisper event listeners were registered on `window.socket` (which was configured with only websockets and frequently failed/disconnected), while normal direct messaging used the local socket (which supported polling fallback).
+  - Modified `base.html` to configure `window.socket` with full reconnection settings and polling transport fallback (`transports: ['websocket', 'polling']`).
+  - Modified `messages.html` to reuse `window.socket` directly (`const socket = window.socket;`) as the single page socket.
+  - Implemented `onSocketConnect` check: if the socket is already connected when the page loads, we execute the room joining/chat sync logic immediately instead of waiting for the `connect` event (which would have already fired).
+  - Removed all duplicate whisper socket event listeners from the first script block in `messages.html`.
+- **Global Whisper Redirection & Prompts**:
+  - Registered global socket event listeners for `whisper_accept` and `whisper_invite_received` on `window.socket` inside `base.html`.
+  - If a user is on another page and their whisper invite is accepted, they are automatically redirected to `/messages?user_id=partner_id` which automatically launches the whisper overlay.
+  - If they receive a whisper invite while on another page, they receive a global `showCustomConfirm` prompt asking if they want to go to Messages to accept.
+- **Harden End Session Flow**:
+  - Modified `doEndWhisper()` to close the whisper overlay locally on the client immediately after a successful response from the `/api/whisper/end/<session_id>` endpoint.
+  - Added a guard `if (!whisperState.active) return;` to `whisperSessionEnded` to prevent double-execution from both the local callback and the socket event.
+  - Hardened `/api/whisper/end/<session_id>` in `whisper.py` to return success `200 OK` (with `already_ended: true`) if the session is already in `expired` state, avoiding 404 console errors.
+- **Screenshot False Positive Fix**:
+  - Removed `window.addEventListener('blur')` from `setupScreenshotDetection()` to prevent false screenshot alerts when browser dialogs (like end-session confirm boxes) open or when the page loses focus.
+
+**Files touched:** `templates/base.html`, `templates/messages.html`, `blueprints/whisper.py`, `AGENTS.md`.
+
+**Verification:**
+1. `python -m py_compile` passed for `blueprints/whisper.py`.
+2. Jinja2 template parsing passed for `templates/base.html` and `templates/messages.html`.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-17
+**Changes (Navbar Logout Button Placement):**
+
+- **Relocate Logout Button**:
+  - Moved the logout button in `templates/base.html` from the right-aligned `nav-links` (desktop) and far-right `nav-left` (mobile) to a unified position immediately next to the social buttons in the `nav-left` row.
+  - Replaced the separate `nav-logout-desktop` and `nav-logout-mobile` classes with a clean, unified `.nav-logout` class styling that features `margin-left: 1.5rem` to separate it from the social icons.
+- **Navbar Styling Cleanup**:
+  - Removed outdated classes `.nav-logout-desktop` and `.nav-logout-mobile` and the display-mode media query overrides from `templates/base.html` and `static/style.css`.
+  - Added clean `.nav-logout` style rules, including hover transformations, color alignment, and custom dark mode overrides to ensure styling consistency with the platform design.
+  - Updated the PWA JavaScript inside `templates/base.html` to reference `nav-logout` instead of the old `nav-logout-mobile` ID.
+
+**Files touched:** `templates/base.html`, `static/style.css`, `AGENTS.md`.
+
+**Verification:**
+1. Checked Jinja2 template syntax in `templates/base.html`.
+2. Verified stylesheet parsing and media query validity.
+
+### Model: Antigravity (Advanced Coding Agent)
+**Date:** 2026-07-17
+**Changes (v1.9.6):**
+
+- **Sort Update & Persistence** (`NotesViewModel.kt`, `SettingsScreen.kt`, `AppNavGraph.kt`): Fixed sorting options by applying sortAndFilterNotes on all data load calls, and wiring a sort order selection callback from the Settings screen to update the ViewModel.
+- **Offline Pin Support** (`NotesRepository.kt`): Added try-catch handler to toggleNotePin() to fallback to local pin status update (isSynced = false, pendingOp = 'edit') when the API call fails or is offline, retrying sync automatically.
+- **Sync Mismatch & Draft Protection** (`NotesRepository.kt`, `NoteDatabaseHelper.kt`): Changed saveDraftLocally() to save drafts with pendingOp = 'draft' and updated the server pull reconciliation loop to prevent overwriting local drafts. Updated clearSyncedNotes() to preserve all local notes (including drafts) on logout/session expiration.
+- **Export Crash Fix** (`HomeScreen.kt`, `NoteDetailScreen.kt`): Wrapped CreateDocument picker launch in a try-catch to prevent crash, with a fallback that writes to private cache and launches a system Share Sheet.
+- **Draft Badge** (`HomeScreen.kt`): Rendered a 'Draft' badge in the note list next to notes with pendingOp == 'draft'.
+- **Pushed v1.9.6 APK**: Updated VersionCode 29 -> 30 and VersionName 1.9.5 -> 1.9.6. Rebuilt APK, deployed to static/downloads/app-debug.apk, and updated static/update-manifest.json.
+
+**Files touched:** `app/build.gradle.kts`, `app/src/main/java/com/example/echowithin/data/local/NoteDatabaseHelper.kt`, `app/src/main/java/com/example/echowithin/data/repository/NotesRepository.kt`, `app/src/main/java/com/example/echowithin/presentation/viewmodel/NotesViewModel.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/SettingsScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/HomeScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, `app/src/main/java/com/example/echowithin/presentation/navigation/AppNavGraph.kt`, `echowithin/static/downloads/app-debug.apk`, `echowithin/static/update-manifest.json`, `this AGENTS.md`.
+
+**Verification:** `.\gradlew compileDebugKotlin` completed successfully with zero errors.
+
+### Model: Antigravity (Advanced Coding Agent)
+
+**Date:** 2026-07-18
+**Changes:**
+
+- **Recovered Note Discussions**: Connected to the backup and official MongoDB database, merged the exported JSON documents from both `C:\Users\DevTech\Downloads\echowithin_db.note_discussions.json` and `C:\Users\DevTech\Desktop\Projects\echowithin\echowithin_db_export\note_discussions.json` (deduplicating and taking the most complete schemas), and successfully restored all 50 comments back to the active MongoDB collection.
+- **Discussion Soft-Delete Strategy**:
+  - Replaced the hard-delete cascade policy in both `sharing.py` and `blog.py` comment delete endpoints. When a comment with replies is deleted, it is now marked as `deleted` or `is_deleted` and has its author name/content updated to `"[deleted]"` to preserve the reply tree. Only comments with no active children are purged.
+  - Updated comment fetch/retrieval API in `sharing.py` to check for `deleted` status and return `[deleted]` safely without attempting decryption.
+- **Collapsible Nested Replies in Shared Note**:
+  - Updated `createCommentHTML` and `toggleReplies` in `shared_note.html` to allow users to toggle (Show/Hide) nested reply blocks under any comment.
+  - Refined reply nesting visual styling (increased indentation margin/padding for clearer visual hierarchy, styled the replies border-left).
+  - Added dark theme styles for `.reply-card` and `.replies-container` inside `style.css`.
+- **Force Light Theme on Weekly Newsletter**:
+  - Removed the `prefers-color-scheme: dark` media queries from the HTML template of `weekly_newsletter.html` so it always stays in the light theme format.
+- **Removed Side Borders**:
+  - Removed all remaining thick left borders across the platform, replacing them with a subtle 1px border or top border (including note lists, system health cards in the admin dashboard, etc.).
+
+**Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.

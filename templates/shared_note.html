@@ -3848,15 +3848,20 @@
 
     if (SHARE_ID !== 'local') {
         // --- Socket.IO Integration ---
-        const socket = io();
-        socket.on('connect', () => {
-            console.log('Connected to collaboration server');
-            // Join room with username for presence tracking
-            socket.emit('join_note', {
-                share_id: SHARE_ID,
-                user_name: CURRENT_USER_NAME || 'Guest'
-            });
-        });
+        const socket = window.socket;
+        if (socket) {
+            const joinNoteRoom = () => {
+                console.log('Connected to collaboration server');
+                // Join room with username for presence tracking
+                socket.emit('join_note', {
+                    share_id: SHARE_ID,
+                    user_name: CURRENT_USER_NAME || 'Guest'
+                });
+            };
+            if (socket.connected) {
+                joinNoteRoom();
+            }
+            socket.on('connect', joinNoteRoom);
 
         // Handle Presence Updates (Who's in the study)
         socket.on('presence_update', (data) => {
@@ -3991,6 +3996,7 @@
                 showToast(`New ${data.type} from ${data.author_name}`);
             }
         });
+        }
         const commentsList = document.getElementById('comments-list');
         const commentCountEl = document.getElementById('comment-count');
 

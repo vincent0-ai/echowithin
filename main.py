@@ -219,7 +219,7 @@ def cleanup_stale_global_state():
             note_locks.pop(share_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
 _ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz,https://staging.echowithin.xyz').split(',')
-socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
+socketio = SocketIO(cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
 
 # Use ProxyFix to handle headers from reverse proxies (like Render)
 # This is important for url_for to generate correct https links.
@@ -406,9 +406,17 @@ try:
     )
     redis_cache.ping()  # Test connection
     app.logger.info('Redis cache connection established')
+    if REDIS_PASSWORD:
+        socketio_redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+    else:
+        socketio_redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+    socketio.init_app(app, message_queue=socketio_redis_url)
+    app.logger.info('Socket.IO initialized with Redis message queue')
 except Exception as e:
     app.logger.warning(f'Redis cache not available, using in-memory cache: {e}')
     redis_cache = None
+    socketio.init_app(app)
+    app.logger.info('Socket.IO initialized in fallback in-memory mode')
 
 # In-memory cache fallback for pinned announcements (60 second TTL)
 _pinned_announcement_cache = TTLCache(maxsize=1, ttl=60)

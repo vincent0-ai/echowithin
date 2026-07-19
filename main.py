@@ -1454,10 +1454,19 @@ def handle_discussion_new_comment(data):
         emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
 
 
+def authenticated_only(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return
+        return f(*args, **kwargs)
+    return wrapped
+
+
 # --- Direct Messaging (DM) Functionality ---
 
 @socketio.on('join_inbox')
-@login_required
+@authenticated_only
 def handle_join_inbox():
     """Each user joins their own private room for real-time DM delivery."""
     user_room = f"user_{current_user.id}"
@@ -1473,7 +1482,7 @@ def handle_join_inbox():
 
 
 @socketio.on('viewing_chat')
-@login_required
+@authenticated_only
 def handle_viewing_chat(data):
     """Track that the user is actively viewing a specific chat for notification suppression."""
     partner_id = data.get('partner_id')
@@ -1484,7 +1493,7 @@ def handle_viewing_chat(data):
         active_chat_views[user_id].add(partner_id)
 
 @socketio.on('leave_chat')
-@login_required
+@authenticated_only
 def handle_leave_chat(data):
     """User left a specific chat view."""
     partner_id = data.get('partner_id')
@@ -1514,7 +1523,7 @@ def handle_dm_disconnect():
 
 
 @socketio.on('send_dm')
-@login_required
+@authenticated_only
 def handle_send_dm(data):
     """
     Handles sending a direct message via Socket.IO.
@@ -1671,7 +1680,7 @@ def handle_send_dm(data):
         app.logger.error(f"Error sending DM via socket: {e}")
 
 @socketio.on('typing')
-@login_required
+@authenticated_only
 def handle_typing(data):
     """Broadcasts that the current user is typing to the recipient."""
     recipient_id = data.get('recipient_id')
@@ -1684,7 +1693,7 @@ def handle_typing(data):
         }, room=recipient_room)
 
 @socketio.on('stop_typing')
-@login_required
+@authenticated_only
 def handle_stop_typing(data):
     """Broadcasts that the user has stopped typing."""
     recipient_id = data.get('recipient_id')
@@ -1696,7 +1705,7 @@ def handle_stop_typing(data):
         }, room=recipient_room)
 
 @socketio.on('recording_audio')
-@login_required
+@authenticated_only
 def handle_recording_audio(data):
     """Broadcasts that the current user is recording a voice note."""
     recipient_id = data.get('recipient_id')
@@ -1708,7 +1717,7 @@ def handle_recording_audio(data):
         }, room=recipient_room)
 
 @socketio.on('stop_recording')
-@login_required
+@authenticated_only
 def handle_stop_recording(data):
     """Broadcasts that the user stopped recording."""
     recipient_id = data.get('recipient_id')
@@ -1722,7 +1731,7 @@ def handle_stop_recording(data):
 # --- Whisper Mode SocketIO Events ---
 
 @socketio.on('whisper_message')
-@login_required
+@authenticated_only
 def handle_whisper_message(data):
     """Handle sending a message within an active whisper session."""
     session_id = data.get('session_id')
@@ -1803,7 +1812,7 @@ def handle_whisper_message(data):
 
 
 @socketio.on('whisper_typing')
-@login_required
+@authenticated_only
 def handle_whisper_typing(data):
     """Broadcast whisper typing indicator."""
     partner_id = data.get('partner_id')
@@ -1815,7 +1824,7 @@ def handle_whisper_typing(data):
 
 
 @socketio.on('whisper_stop_typing')
-@login_required
+@authenticated_only
 def handle_whisper_stop_typing(data):
     """Broadcast whisper stop typing."""
     partner_id = data.get('partner_id')
@@ -1826,7 +1835,7 @@ def handle_whisper_stop_typing(data):
 
 
 @socketio.on('whisper_screenshot_alert')
-@login_required
+@authenticated_only
 def handle_whisper_screenshot(data):
     """Alert both parties of potential screenshot activity."""
     session_id = data.get('session_id')

@@ -99,7 +99,7 @@ def run_backup():
         total_errors = 0
 
         for coll_name in collections:
-            if coll_name.startswith('system.') or coll_name.startswith('_backup') or coll_name == 'deleted_items':
+            if coll_name.startswith('system.') or coll_name.startswith('_backup') or coll_name == 'deleted_items' or coll_name.startswith('whisper_'):
                 continue
 
             local_coll = local_db[coll_name]

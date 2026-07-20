@@ -1,6 +1,6 @@
 {
-  "versionCode": 30,
-  "versionName": "1.9.6",
+  "versionCode": 31,
+  "versionName": "1.9.7",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.6 \uD83D\uDD27 Bug fixes:\n\uD83D\uDCCA Fixed sorting preference updates and persistence\n\uD83D\uDCCC Pin toggles now persist offline with automatic re-sync fallback\n\uD83D\uDCBE Resolved export crashes with a share sheet fallback\n\uD83D\uDCDD Resolved draft sync conflicts that caused content loss\n\uD83C\uDFF7 Added a Draft status badge in the notes list"
+  "changelog": "v1.9.7 \uD83D\uDD27 Bug fixes:\n\uD83D\uDCF1 Fixed scroll jank/lag on note pages inside vertical scroll container\n\uD83D\uDCDD Fixed WebView rendering issue (narrow column layout and unnecessary spaces)"
 }

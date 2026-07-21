@@ -1472,19 +1472,33 @@
 
     // --- Nudge ---
     function sendNudge(bondId, btn) {
+        if (!btn) return;
         btn.disabled = true;
+        const origIcon = btn.innerHTML;
+        btn.innerHTML = '⌛';
         fetch('/api/bonds/' + bondId + '/nudge', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
-        }).then(r => r.json()).then(d => {
+        }).then(r => r.json().then(data => ({ status: r.status, body: data }))).then(res => {
+            const d = res.body;
             if (d.success) {
+                btn.innerHTML = '✓';
                 if (window.showCustomToast) showCustomToast('Nudge sent! 💭', 'success');
-                btn.disabled = false;
+                setTimeout(() => {
+                    btn.innerHTML = origIcon;
+                    btn.disabled = false;
+                }, 1500);
             } else {
-                if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+                btn.innerHTML = origIcon;
                 btn.disabled = false;
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Could not send nudge.', 'danger');
+                else alert(d.error || 'Could not send nudge.');
             }
-        }).catch(() => { btn.disabled = false; });
+        }).catch(() => {
+            btn.innerHTML = origIcon;
+            btn.disabled = false;
+            if (window.showCustomAlert) showCustomAlert('Network error while sending nudge.', 'danger');
+        });
     }
 
     // --- Streak Shield ---

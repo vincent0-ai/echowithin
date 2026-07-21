@@ -31,7 +31,7 @@ from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
     limits, safe_object_id, admin_required, owner_required,
     _derive_fernet_key, _get_notes_encryption_key, get_notes_fernet,
     _get_user_fernet, _get_dm_fernet, encrypt_dm, decrypt_dm,
-    encrypt_note, decrypt_note, _candidate_user_ids,
+    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, _candidate_user_ids,
     _decrypt_with_candidate_ids, _note_decryption_candidates,
     _decrypt_note_record, _get_community_fernet,
     encrypt_community_note, decrypt_community_note,
@@ -612,6 +612,12 @@ bond_goals_conf.create_index([('bond_id', 1), ('created_at', -1)])
 bond_journal_conf = db['bond_journal']
 bond_journal_conf.create_index([('bond_id', 1), ('created_at', -1)])
 
+bond_moods_conf = db['bond_moods']
+bond_moods_conf.create_index([('bond_id', 1), ('date', 1), ('user_id', 1)], unique=True)
+
+bond_qotd_conf = db['bond_qotd']
+bond_qotd_conf.create_index([('bond_id', 1), ('date', 1)], unique=True)
+
 # Soft-delete for DMs — one row per (user, partner) means user hid the chat
 hidden_chats_conf = db['hidden_chats']
 hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
@@ -743,6 +749,8 @@ database.whisper_messages_conf = whisper_messages_conf
 database.bonds_conf = bonds_conf
 database.bond_goals_conf = bond_goals_conf
 database.bond_journal_conf = bond_journal_conf
+database.bond_moods_conf = bond_moods_conf
+database.bond_qotd_conf = bond_qotd_conf
 database.hidden_chats_conf = hidden_chats_conf
 database.deleted_items_conf = deleted_items_conf
 database.redis_cache = redis_cache

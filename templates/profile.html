@@ -145,34 +145,73 @@
                 {% if bond_status.is_requester %}Bond Request Sent{% else %}Bond Request Received{% endif %}
             </button>
             {% elif dm_status == 'accepted' %}
-            <button class="btn" onclick="sendBondRequest('{{ user._id }}')" id="bond-request-btn"
+            <button class="btn" onclick="document.getElementById('bond-type-modal').style.display='flex'" id="bond-request-btn"
                 style="width: 100%; margin-top: 0.5rem; background-color: #3e2217; color: white; text-align: center; display: block; padding: 10px; border-radius: 5px; border: none; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2);">
                 Send Bond Request
             </button>
+            <!-- Bond Type Selection Modal -->
+            <div id="bond-type-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1200; align-items:center; justify-content:center;" onclick="if(event.target===this)this.style.display='none'">
+                <div style="background:var(--modal-bg,#fff); border-radius:8px; padding:1.5rem; max-width:380px; width:90%; max-height:80vh; overflow-y:auto;">
+                    <h3 style="margin:0 0 0.3rem; font-size:1.1rem; color:var(--primary-dark-color,#3e2217);">What type of bond?</h3>
+                    <p style="margin:0 0 1rem; font-size:0.82rem; color:var(--text-muted,#999);">This personalises your shared questions and experience.</p>
+                    <div id="bond-type-options" style="display:flex; flex-direction:column; gap:0.4rem;">
+                        {% for key, info in bond_types.items() %}
+                        <button class="bond-type-option" data-type="{{ key }}" onclick="selectBondType(this, '{{ key }}')"
+                            style="display:flex; align-items:center; gap:0.6rem; padding:0.6rem 0.8rem; border:2px solid var(--card-border,#e0e0e0); border-radius:8px; background:var(--surface-bg,#f9f9f9); cursor:pointer; text-align:left; font-size:0.9rem; transition:border-color 0.2s;">
+                            <span style="font-size:1.2rem;">{{ info.icon }}</span>
+                            <span style="color:var(--text-dark-color,#333);">{{ info.label }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                    <div style="display:flex; gap:0.5rem; justify-content:flex-end; margin-top:1rem;">
+                        <button onclick="document.getElementById('bond-type-modal').style.display='none'"
+                            style="padding:0.4rem 1rem; border-radius:20px; border:none; cursor:pointer; background:var(--text-muted,#999); color:#fff; font-size:0.85rem;">Cancel</button>
+                        <button id="bond-type-confirm-btn" onclick="sendBondRequest('{{ user._id }}')" disabled
+                            style="padding:0.4rem 1rem; border-radius:20px; border:none; cursor:pointer; background:#3e2217; color:#fff; font-size:0.85rem; opacity:0.5;">Send Request</button>
+                    </div>
+                </div>
+            </div>
             <script nonce="{{ csp_nonce }}">
+                let selectedBondType = null;
+                function selectBondType(btn, type) {
+                    selectedBondType = type;
+                    document.querySelectorAll('.bond-type-option').forEach(b => {
+                        b.style.borderColor = 'var(--card-border, #e0e0e0)';
+                        b.style.background = 'var(--surface-bg, #f9f9f9)';
+                    });
+                    btn.style.borderColor = 'var(--primary-color, #3e2217)';
+                    btn.style.background = 'var(--hover-bg, #f0ebe8)';
+                    const confirmBtn = document.getElementById('bond-type-confirm-btn');
+                    confirmBtn.disabled = false;
+                    confirmBtn.style.opacity = '1';
+                }
                 function sendBondRequest(userId) {
-                    const btn = document.getElementById('bond-request-btn');
-                    btn.disabled = true;
-                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+                    if (!selectedBondType) return;
+                    const confirmBtn = document.getElementById('bond-type-confirm-btn');
+                    confirmBtn.disabled = true;
+                    confirmBtn.innerHTML = 'Sending...';
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                     fetch('/api/bonds/request/' + userId, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                        body: JSON.stringify({})
+                        body: JSON.stringify({ bond_type: selectedBondType })
                     }).then(r => r.json()).then(d => {
+                        document.getElementById('bond-type-modal').style.display = 'none';
+                        const mainBtn = document.getElementById('bond-request-btn');
                         if (d.success || d.status === 'accepted') {
-                            btn.innerHTML = 'Bond Request Sent';
-                            btn.style.backgroundColor = '#999';
-                            btn.style.cursor = 'not-allowed';
+                            mainBtn.innerHTML = 'Bond Request Sent';
+                            mainBtn.style.backgroundColor = '#999';
+                            mainBtn.style.cursor = 'not-allowed';
+                            mainBtn.disabled = true;
                             if (window.showCustomAlert) window.showCustomAlert(d.status === 'accepted' ? 'Bond accepted!' : 'Bond request sent!', 'success');
                         } else {
-                            btn.disabled = false;
-                            btn.innerHTML = 'Send Bond Request';
+                            confirmBtn.disabled = false;
+                            confirmBtn.innerHTML = 'Send Request';
                             if (window.showCustomAlert) window.showCustomAlert(d.error || 'Failed to send request.', 'danger');
                         }
                     }).catch(() => {
-                        btn.disabled = false;
-                        btn.innerHTML = 'Send Bond Request';
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerHTML = 'Send Request';
                     });
                 }
             </script>

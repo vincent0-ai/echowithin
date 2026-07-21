@@ -204,6 +204,47 @@ def warm_user_fernet(user_id: str):
         pass
 
 
+def _get_bond_fernet(bond_id: str) -> Fernet:
+    """Per-bond Fernet instance. Derives key from SECRET_KEY + bond_id salt."""
+    cached = database._bond_fernet_cache.get(bond_id)
+    if cached:
+        return cached
+    secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
+    salt = f'echowithin_bonds_v1_{bond_id}'.encode()
+    key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    database._bond_fernet_cache[bond_id] = f
+    return f
+
+
+def encrypt_bond_data(content: str, bond_id: str) -> str:
+    """Encrypts bond content (journal entries, QotD answers, goals, etc.) using per-bond key."""
+    if not content:
+        return content
+    try:
+        f = _get_bond_fernet(str(bond_id))
+        return f.encrypt(content.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        _get_app().logger.error(f"Error encrypting bond data for bond {bond_id}: {e}")
+        raise
+
+
+def decrypt_bond_data(encrypted_content: str, bond_id: str) -> str:
+    """Decrypts bond content using per-bond key. Falls back to raw text if legacy/unencrypted."""
+    if not encrypted_content:
+        return encrypted_content
+    try:
+        f = _get_bond_fernet(str(bond_id))
+        return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
+    except Exception:
+        # If decryption fails and text doesn't look like Fernet ciphertext, return raw (legacy/plaintext)
+        if not encrypted_content.startswith('gAAAAA'):
+            return encrypted_content
+        _get_app().logger.warning(f"Bond data decryption failed for bond {bond_id}")
+        return '[Content unavailable — decryption error]'
+
+
+
 # ---------------------------------------------------------------------------
 # v3 ENVELOPE ENCRYPTION
 # ---------------------------------------------------------------------------

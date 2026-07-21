@@ -96,6 +96,7 @@ TIER_LIMITS = {
         'max_whisper_duration': 30,           # minutes
         'max_bonds': 3,
         'max_goals_per_bond': 5,
+        'max_nudges_per_day': 3,
     },
     'premium': {
         'max_notes': 99999,               # effectively unlimited
@@ -115,6 +116,7 @@ TIER_LIMITS = {
         'max_whisper_duration': 120,          # minutes
         'max_bonds': 3,
         'max_goals_per_bond': 20,
+        'max_nudges_per_day': 10,
     }
 }
 

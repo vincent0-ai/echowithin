@@ -94,6 +94,216 @@
         font-size: 0.85rem;
         color: var(--primary-color);
         font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .bond-type-badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        background: var(--hover-bg);
+        color: var(--text-secondary);
+        border-radius: 10px;
+        margin-top: 2px;
+    }
+
+    .bond-anniversary {
+        font-size: 0.72rem;
+        color: var(--primary-color);
+        font-weight: 500;
+        margin-top: 2px;
+    }
+
+    .bond-nudge-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 4px 6px;
+        border-radius: 6px;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+
+    .bond-nudge-btn:hover {
+        opacity: 1;
+        background: var(--hover-bg);
+    }
+
+    .bond-nudge-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+
+    /* Mood tracker */
+    .mood-section {
+        text-align: center;
+    }
+
+    .mood-picker {
+        display: flex;
+        gap: 0.6rem;
+        justify-content: center;
+        margin: 0.6rem 0;
+        flex-wrap: wrap;
+    }
+
+    .mood-btn {
+        background: var(--surface-bg);
+        border: 2px solid var(--card-border);
+        border-radius: 10px;
+        padding: 0.5rem 0.7rem;
+        cursor: pointer;
+        text-align: center;
+        transition: border-color 0.2s, background 0.2s;
+        min-width: 56px;
+    }
+
+    .mood-btn:hover {
+        border-color: var(--primary-color);
+        background: var(--hover-bg);
+    }
+
+    .mood-btn.selected {
+        border-color: var(--primary-color);
+        background: var(--hover-bg);
+    }
+
+    .mood-btn .mood-emoji {
+        font-size: 1.4rem;
+        display: block;
+    }
+
+    .mood-btn .mood-label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+    }
+
+    .mood-history {
+        display: flex;
+        gap: 3px;
+        justify-content: center;
+        margin-top: 0.6rem;
+        flex-wrap: wrap;
+    }
+
+    .mood-dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.6rem;
+        cursor: default;
+    }
+
+    .mood-reveal-note {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        font-style: italic;
+        margin-top: 0.4rem;
+    }
+
+    .mood-result {
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-top: 0.5rem;
+    }
+
+    .mood-result-card {
+        text-align: center;
+        padding: 0.5rem 1rem;
+        background: var(--surface-bg);
+        border-radius: 8px;
+    }
+
+    .mood-result-card .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .mood-result-card .emoji {
+        font-size: 1.6rem;
+    }
+
+    /* QotD */
+    .qotd-question {
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--text-dark-color);
+        text-align: center;
+        margin: 0.5rem 0;
+        line-height: 1.5;
+    }
+
+    .qotd-category {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .qotd-answer-area textarea {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        font-size: 0.9rem;
+        min-height: 60px;
+        font-family: var(--font-family);
+        resize: vertical;
+        box-sizing: border-box;
+    }
+
+    .qotd-reveal {
+        margin-top: 0.8rem;
+    }
+
+    .qotd-reveal-card {
+        background: var(--surface-bg);
+        border-radius: 8px;
+        padding: 0.7rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid var(--card-border);
+    }
+
+    .qotd-reveal-card .author {
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--primary-dark-color);
+        margin-bottom: 0.3rem;
+    }
+
+    .qotd-reveal-card .answer {
+        font-size: 0.9rem;
+        color: var(--text-dark-color);
+        line-height: 1.4;
+    }
+
+    .qotd-waiting {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        text-align: center;
+        font-style: italic;
+        margin-top: 0.5rem;
+    }
+
+    /* Streak shield */
+    .streak-shield-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        padding: 0;
+        margin-left: 4px;
+    }
+
+    .streak-shield-btn:hover {
+        color: var(--primary-color);
     }
 
     .bond-actions {
@@ -525,6 +735,7 @@
             <div class="bond-info">
                 <div class="bond-username">{{ req.from_username }}</div>
                 {% if req.label %}<div class="bond-label">{{ req.label }}</div>{% endif %}
+                <div class="bond-type-badge">{{ req.bond_type_icon }} {{ req.bond_type_label }}</div>
             </div>
             <div class="pending-actions">
                 <button class="btn btn-bond-success" onclick="respondBond('{{ req.id }}', 'accept')">Accept</button>
@@ -549,6 +760,7 @@
             <div class="bond-info">
                 <div class="bond-username">{{ req.to_username }}</div>
                 {% if req.label %}<div class="bond-label">{{ req.label }}</div>{% endif %}
+                <div class="bond-type-badge">{{ req.bond_type_icon }} {{ req.bond_type_label }}</div>
                 <div class="bond-meta">Pending</div>
             </div>
         </div>
@@ -571,17 +783,32 @@
                 <div class="bond-info">
                     <div class="bond-username">{{ bond.partner_username }}</div>
                     {% if bond.label %}<div class="bond-label">{{ bond.label }}</div>{% endif %}
+                    <div class="bond-type-badge">{{ bond.bond_type_icon }} {{ bond.bond_type_label }}</div>
                     <div class="bond-meta">
                         Bonded <time class="local-time"
                             datetime="{{ bond.accepted_at.isoformat() + 'Z' if bond.accepted_at else '' }}">{{
                             bond.accepted_at|localtime('%b %d, %Y') if bond.accepted_at else '' }}</time>
+                        {% if bond.anniversary %}
+                        <span class="bond-anniversary">· {{ bond.anniversary }}</span>
+                        {% endif %}
                     </div>
                 </div>
-                {% if bond.streak_count > 0 %}
-                <div class="bond-streak">{{ bond.streak_count }} day streak</div>
-                {% endif %}
+                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                    {% if bond.streak_count > 0 %}
+                    <div class="bond-streak">🔥 {{ bond.streak_count }}d{% if user_tier == 'premium' %}<button class="streak-shield-btn" title="Use Streak Shield (1/week, premium)" onclick="useStreakShield('{{ bond.id }}')">🛡️</button>{% endif %}</div>
+                    {% endif %}
+                    <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)">💭</button>
+                </div>
             </div>
             <div class="bond-actions">
+                <button class="btn btn-bond-primary"
+                    onclick="toggleSection('mood-{{ bond.id }}'); loadMood('{{ bond.id }}')">
+                    Mood
+                </button>
+                <button class="btn btn-bond-primary"
+                    onclick="toggleSection('qotd-{{ bond.id }}'); loadQotd('{{ bond.id }}')">
+                    Question
+                </button>
                 <button class="btn btn-bond-primary" onclick="toggleSection('goals-{{ bond.id }}')">
                     Goals ({{ bond.goal_count }})
                 </button>
@@ -592,6 +819,26 @@
                 <button class="btn btn-bond-danger" onclick="breakBond('{{ bond.id }}', '{{ bond.partner_username }}')">
                     End Bond
                 </button>
+            </div>
+
+            <!-- Mood Section -->
+            <div class="bond-expand-section" id="mood-{{ bond.id }}">
+                <div style="margin-bottom: 0.4rem;">
+                    <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">How are you feeling today?</strong>
+                </div>
+                <div class="mood-section" id="mood-content-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; padding: 0.5rem;">Loading...</div>
+                </div>
+            </div>
+
+            <!-- QotD Section -->
+            <div class="bond-expand-section" id="qotd-{{ bond.id }}">
+                <div style="margin-bottom: 0.4rem;">
+                    <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Question of the Day</strong>
+                </div>
+                <div id="qotd-content-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading...</div>
+                </div>
             </div>
 
             <!-- Goals Section -->
@@ -992,5 +1239,201 @@
     document.getElementById('goal-modal').addEventListener('click', function (e) {
         if (e.target === this) closeGoalModal();
     });
+
+    // --- Mood ---
+    const moodEmojis = {{ bond_moods|tojson }};
+
+    function loadMood(bondId) {
+        const container = document.getElementById('mood-content-' + bondId);
+        fetch('/api/bonds/' + bondId + '/mood')
+            .then(r => r.json())
+            .then(data => {
+                renderMoodSection(bondId, container, data);
+            })
+            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load mood.</div>'; });
+    }
+
+    function renderMoodSection(bondId, container, data) {
+        let html = '';
+
+        if (data.my_mood && data.revealed) {
+            // Both logged — show result
+            const myInfo = moodEmojis[data.my_mood];
+            const partnerInfo = moodEmojis[data.partner_mood];
+            html += '<div class="mood-result">';
+            html += '<div class="mood-result-card"><div class="label">You</div><div class="emoji">' + (myInfo ? myInfo.emoji : '') + '</div><div class="label">' + (myInfo ? myInfo.label : data.my_mood) + '</div></div>';
+            html += '<div class="mood-result-card"><div class="label">Partner</div><div class="emoji">' + (partnerInfo ? partnerInfo.emoji : '') + '</div><div class="label">' + (partnerInfo ? partnerInfo.label : data.partner_mood) + '</div></div>';
+            html += '</div>';
+        } else if (data.my_mood && !data.revealed) {
+            // I logged, partner hasn't
+            const myInfo = moodEmojis[data.my_mood];
+            html += '<div class="mood-result"><div class="mood-result-card"><div class="label">You</div><div class="emoji">' + (myInfo ? myInfo.emoji : '') + '</div><div class="label">' + (myInfo ? myInfo.label : '') + '</div></div></div>';
+            html += '<div class="mood-reveal-note">Waiting for your partner to log their mood for the reveal...</div>';
+        } else {
+            // Haven't logged yet — show picker
+            html += '<div class="mood-picker" id="mood-picker-' + bondId + '">';
+            for (const [key, info] of Object.entries(moodEmojis)) {
+                html += '<button class="mood-btn" data-mood="' + key + '" onclick="selectMood(\'' + bondId + '\', \'' + key + '\', this)">';
+                html += '<span class="mood-emoji">' + info.emoji + '</span>';
+                html += '<span class="mood-label">' + info.label + '</span></button>';
+            }
+            html += '</div>';
+            html += '<button class="btn btn-bond-primary" id="mood-submit-' + bondId + '" style="display:none; margin: 0.4rem auto;" onclick="submitMood(\'' + bondId + '\')">Log Mood</button>';
+            if (data.partner_logged) {
+                html += '<div class="mood-reveal-note">Your partner already logged their mood today.</div>';
+            }
+        }
+
+        // History strip
+        if (data.history && data.history.length > 0) {
+            html += '<div style="margin-top: 0.8rem; font-size: 0.78rem; color: var(--text-muted); text-align: center;">Last 14 days (both logged)</div>';
+            html += '<div class="mood-history">';
+            data.history.forEach(h => {
+                const myE = moodEmojis[h.my_mood] ? moodEmojis[h.my_mood].emoji : '?';
+                const pE = moodEmojis[h.partner_mood] ? moodEmojis[h.partner_mood].emoji : '?';
+                html += '<div class="mood-dot" title="' + h.date + ': You ' + myE + ' / Partner ' + pE + '" style="background: var(--hover-bg);">' + myE + '</div>';
+            });
+            html += '</div>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    let selectedMood = {};
+    function selectMood(bondId, mood, btn) {
+        selectedMood[bondId] = mood;
+        const picker = document.getElementById('mood-picker-' + bondId);
+        picker.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        document.getElementById('mood-submit-' + bondId).style.display = 'block';
+    }
+
+    function submitMood(bondId) {
+        const mood = selectedMood[bondId];
+        if (!mood) return;
+        fetch('/api/bonds/' + bondId + '/mood', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ mood })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Mood logged!', 'success');
+                loadMood(bondId);
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- QotD ---
+    function loadQotd(bondId) {
+        const container = document.getElementById('qotd-content-' + bondId);
+        fetch('/api/bonds/' + bondId + '/qotd')
+            .then(r => r.json())
+            .then(data => {
+                renderQotdSection(bondId, container, data);
+            })
+            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load question.</div>'; });
+    }
+
+    function renderQotdSection(bondId, container, data) {
+        let html = '';
+        html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
+        html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
+
+        if (data.revealed) {
+            // Both answered — show both
+            html += '<div class="qotd-reveal">';
+            html += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div>';
+            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(data.partner_username) + '</div><div class="answer">' + escHtml(data.partner_answer) + '</div></div>';
+            html += '</div>';
+        } else if (data.my_answered) {
+            // I answered, waiting for partner
+            html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div></div>';
+            html += '<div class="qotd-waiting">Waiting for your partner to answer for the reveal...</div>';
+        } else {
+            // Haven't answered yet
+            html += '<div class="qotd-answer-area">';
+            html += '<textarea id="qotd-input-' + bondId + '" placeholder="Share your thoughts..." maxlength="1000"></textarea>';
+            html += '<button class="btn btn-bond-primary" style="margin-top: 0.4rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">Submit Answer</button>';
+            html += '</div>';
+            if (data.partner_answered) {
+                html += '<div class="qotd-waiting">Your partner has already answered. Submit yours to reveal both!</div>';
+            }
+        }
+
+        container.innerHTML = html;
+    }
+
+    function submitQotdAnswer(bondId) {
+        const textarea = document.getElementById('qotd-input-' + bondId);
+        const answer = textarea ? textarea.value.trim() : '';
+        if (!answer) {
+            if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger');
+            return;
+        }
+        fetch('/api/bonds/' + bondId + '/qotd', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ answer })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Answer submitted!', 'success');
+                loadQotd(bondId);
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- Nudge ---
+    function sendNudge(bondId, btn) {
+        btn.disabled = true;
+        fetch('/api/bonds/' + bondId + '/nudge', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Nudge sent! 💭', 'success');
+                btn.disabled = false;
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+                btn.disabled = false;
+            }
+        }).catch(() => { btn.disabled = false; });
+    }
+
+    // --- Streak Shield ---
+    function useStreakShield(bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Use your streak shield for this bond? You can only use one per week per bond.', function(ok) {
+                if (ok) doStreakShield(bondId);
+            });
+        } else doStreakShield(bondId);
+    }
+    function doStreakShield(bondId) {
+        fetch('/api/bonds/' + bondId + '/streak/shield', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Streak shield activated! 🛡️', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- SocketIO listeners ---
+    if (window.socket) {
+        socket.on('bond_nudge', function(data) {
+            if (window.showCustomToast) showCustomToast(data.from_username + ' is thinking of you 💭', 'success');
+        });
+        socket.on('bond_mood_revealed', function(data) {
+            if (window.showCustomToast) showCustomToast('Mood reveal! ' + data.partner_username + ' also logged their mood.', 'success');
+            loadMood(data.bond_id);
+        });
+        socket.on('bond_qotd_revealed', function(data) {
+            if (window.showCustomToast) showCustomToast(data.partner_username + ' answered the question! Reveal time.', 'success');
+            loadQotd(data.bond_id);
+        });
+        socket.on('bond_streak_shielded', function(data) {
+            if (window.showCustomToast) showCustomToast(data.by_username + ' shielded your streak! 🛡️', 'success');
+        });
+    }
 </script>
 {% endblock %}

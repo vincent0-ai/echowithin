@@ -1,6 +1,6 @@
 {
-  "versionCode": 31,
-  "versionName": "1.9.7",
+  "versionCode": 33,
+  "versionName": "1.9.9",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.9.7 \uD83D\uDD27 Bug fixes:\n\uD83D\uDCF1 Fixed scroll jank/lag on note pages inside vertical scroll container\n\uD83D\uDCDD Fixed WebView rendering issue (narrow column layout and unnecessary spaces)"
+  "changelog": "v1.9.9 \uD83E\uDDE0 Memory Leak & RAM Optimization:\n\uD83D\uDD17 Added onRelease callback in AndroidView to stop loading, remove Javascript interfaces, clear history, and destroy WebView instances when leaving NoteDetailScreen, preventing memory leaks when opening multiple notes."
 }

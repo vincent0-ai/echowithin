@@ -1425,11 +1425,17 @@ def api_bond_qotd_get(bond_id):
         result = {
             'question': qotd_doc['question_text'],
             'category': qotd_doc.get('question_category', 'Universal'),
+            'source': qotd_doc.get('source', 'preset'),
             'my_answer': my_ans_text,
             'my_answered': my_answered,
             'partner_answered': partner_answered,
             'revealed': revealed
         }
+
+        if qotd_doc.get('set_by'):
+            set_by_user = m.users_conf.find_one({'_id': qotd_doc['set_by']}, {'username': 1})
+            if set_by_user:
+                result['set_by_username'] = set_by_user['username']
 
         if revealed:
             partner_user = m.users_conf.find_one(
@@ -1539,6 +1545,169 @@ def api_bond_qotd_answer(bond_id):
     except Exception as e:
         current_app.logger.error(f"Bond QotD answer error: {e}")
         return jsonify({'error': 'Failed to submit answer'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/generate_ai', methods=['POST'])
+@login_required
+@limits(calls=5, period=60)
+def api_bond_qotd_generate_ai(bond_id):
+    """Generate a new AI question of the day using JigsawStack."""
+    import main as m
+    from jigsawstack import JigsawStack
+    from config import get_env_variable
+
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        today_str = datetime.date.today().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Get JigsawStack API key
+        try:
+            api_key = get_env_variable('JIGSAW_API_KEY')
+        except Exception:
+            return jsonify({'error': 'AI service is not configured.'}), 400
+
+        bond_type = bond_doc.get('bond_type', 'custom')
+        type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
+        relationship_label = type_info['label']
+
+        prompt = (
+            f"You are a thoughtful relationship & connection assistant. "
+            f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
+            f"The question should inspire reflection, bonding, or a lighthearted conversation. "
+            f"Return ONLY the question text. Do not include quotes, intro, or explanation."
+        )
+
+        client = JigsawStack(api_key=api_key)
+        res_data = client.prompt_engine.run_prompt_direct({
+            'prompt': prompt,
+            'inputs': [],
+            'input_values': {}
+        })
+
+        ai_question = ""
+        if res_data and isinstance(res_data, dict):
+            ai_question = res_data.get('result', '').strip()
+
+        if not ai_question:
+            return jsonify({'error': 'Failed to generate question with AI.'}), 502
+
+        ai_question = ai_question.strip('"\'')
+
+        # Replace or update today's QotD document
+        qotd_doc = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
+
+        if qotd_doc and qotd_doc.get('answers'):
+            return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
+
+        update_payload = {
+            'bond_id': ObjectId(bond_id),
+            'date': today_str,
+            'question_text': ai_question,
+            'question_category': f'AI Generated ({relationship_label})',
+            'source': 'ai',
+            'set_by': ObjectId(current_user.id),
+            'created_at': now,
+            'answers': {}
+        }
+
+        m.bond_qotd_conf.update_one(
+            {'bond_id': ObjectId(bond_id), 'date': today_str},
+            {'$set': update_payload},
+            upsert=True
+        )
+
+        # Broadcast update to partner via SocketIO
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_qotd_updated', {
+            'bond_id': bond_id,
+            'question': ai_question,
+            'source': 'ai',
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'question': ai_question,
+            'category': f'AI Generated ({relationship_label})',
+            'source': 'ai'
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD AI generation error: {e}")
+        return jsonify({'error': 'Failed to generate AI question'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/custom', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_qotd_custom(bond_id):
+    """Set a custom question of the day created by a partner."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        question_text = data.get('question', '').strip()
+        if not question_text or len(question_text) > 300:
+            return jsonify({'error': 'Question required (max 300 chars)'}), 400
+
+        today_str = datetime.date.today().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        qotd_doc = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
+
+        if qotd_doc and qotd_doc.get('answers'):
+            return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
+
+        update_payload = {
+            'bond_id': ObjectId(bond_id),
+            'date': today_str,
+            'question_text': question_text,
+            'question_category': f'Set by {current_user.username}',
+            'source': 'custom',
+            'set_by': ObjectId(current_user.id),
+            'created_at': now,
+            'answers': {}
+        }
+
+        m.bond_qotd_conf.update_one(
+            {'bond_id': ObjectId(bond_id), 'date': today_str},
+            {'$set': update_payload},
+            upsert=True
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_qotd_updated', {
+            'bond_id': bond_id,
+            'question': question_text,
+            'source': 'custom',
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'question': question_text,
+            'category': f'Set by {current_user.username}',
+            'source': 'custom'
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD custom question error: {e}")
+        return jsonify({'error': 'Failed to set custom question'}), 500
 
 
 # --- Streak Shield ---

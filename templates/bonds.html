@@ -1339,6 +1339,20 @@
         html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
         html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
 
+        // Action controls for AI & Custom question (only available before answers are submitted)
+        if (!data.my_answered && !data.partner_answered) {
+            html += '<div style="display:flex; gap:0.5rem; justify-content:center; margin-bottom:0.8rem; flex-wrap:wrap;">';
+            html += '<button class="btn btn-bond-primary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="generateAiQotd(\'' + bondId + '\')">Generate AI Question</button>';
+            html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Write Custom Question</button>';
+            html += '</div>';
+            html += '<div id="qotd-custom-form-' + bondId + '" style="display:none; margin-bottom:0.8rem; padding:0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
+            html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px;"></textarea>';
+            html += '<div style="display:flex; gap:0.4rem; justify-content:flex-end; margin-top:0.4rem;">';
+            html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="hideCustomQotdInput(\'' + bondId + '\')">Cancel</button>';
+            html += '<button class="btn btn-bond-primary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="submitCustomQotd(\'' + bondId + '\')">Set Question</button>';
+            html += '</div></div>';
+        }
+
         if (data.revealed) {
             // Both answered — show both
             html += '<div class="qotd-reveal">';
@@ -1361,6 +1375,57 @@
         }
 
         container.innerHTML = html;
+    }
+
+    function generateAiQotd(bondId) {
+        const container = document.getElementById('qotd-content-' + bondId);
+        container.innerHTML = '<div style="color:#999; font-size:0.85rem; text-align:center; padding:0.8rem;">Generating AI Question...</div>';
+        fetch('/api/bonds/' + bondId + '/qotd/generate_ai', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('New AI Question generated!', 'success');
+                loadQotd(bondId);
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to generate question.', 'danger');
+                loadQotd(bondId);
+            }
+        }).catch(() => {
+            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            loadQotd(bondId);
+        });
+    }
+
+    function showCustomQotdInput(bondId) {
+        const form = document.getElementById('qotd-custom-form-' + bondId);
+        if (form) form.style.display = 'block';
+    }
+
+    function hideCustomQotdInput(bondId) {
+        const form = document.getElementById('qotd-custom-form-' + bondId);
+        if (form) form.style.display = 'none';
+    }
+
+    function submitCustomQotd(bondId) {
+        const input = document.getElementById('qotd-custom-input-' + bondId);
+        const question = input ? input.value.trim() : '';
+        if (!question) {
+            if (window.showCustomAlert) showCustomAlert('Please enter a question.', 'danger');
+            return;
+        }
+        fetch('/api/bonds/' + bondId + '/qotd/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ question })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('Custom question set!', 'success');
+                loadQotd(bondId);
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to set question.', 'danger');
+            }
+        });
     }
 
     function submitQotdAnswer(bondId) {
@@ -1429,6 +1494,10 @@
         });
         socket.on('bond_qotd_revealed', function(data) {
             if (window.showCustomToast) showCustomToast(data.partner_username + ' answered the question! Reveal time.', 'success');
+            loadQotd(data.bond_id);
+        });
+        socket.on('bond_qotd_updated', function(data) {
+            if (window.showCustomToast) showCustomToast(data.by_username + ' updated today\'s question!', 'success');
             loadQotd(data.bond_id);
         });
         socket.on('bond_streak_shielded', function(data) {

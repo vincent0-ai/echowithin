@@ -345,7 +345,13 @@ body {
     flex-direction: column;
 }
 
-/* Container Styles */
+/* Layout Container Styles */
+.page-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
 .container {
     flex: 1;
     padding: 2rem;

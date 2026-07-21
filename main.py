@@ -2,6 +2,18 @@
 from gevent import monkey
 monkey.patch_all()
 
+# Patch gevent pywsgi _sendall to ensure strings are safely converted to bytes (Python 3.12+ compatibility)
+try:
+    import gevent.pywsgi
+    _orig_pywsgi_sendall = gevent.pywsgi.WSGIHandler._sendall
+    def _patched_pywsgi_sendall(self, data):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return _orig_pywsgi_sendall(self, data)
+    gevent.pywsgi.WSGIHandler._sendall = _patched_pywsgi_sendall
+except Exception:
+    pass
+
 import datetime
 import hashlib
 import re

@@ -2,15 +2,55 @@
 from gevent import monkey
 monkey.patch_all()
 
-# Patch gevent pywsgi _sendall to ensure strings are safely converted to bytes (Python 3.12+ compatibility)
+# Patch gevent socket sendall & WSGIHandler write/sendall to handle Python 3.12 string/bytes compatibility
+try:
+    import gevent.socket
+    _orig_socket_sendall = gevent.socket.socket.sendall
+    def _patched_socket_sendall(self, data, *args, **kwargs):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return _orig_socket_sendall(self, data, *args, **kwargs)
+    gevent.socket.socket.sendall = _patched_socket_sendall
+except Exception:
+    pass
+
+try:
+    import gevent._socketcommon
+    _orig_sc_sendall = gevent._socketcommon.socket.sendall
+    def _patched_sc_sendall(self, data, *args, **kwargs):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return _orig_sc_sendall(self, data, *args, **kwargs)
+    gevent._socketcommon.socket.sendall = _patched_sc_sendall
+except Exception:
+    pass
+
 try:
     import gevent.pywsgi
+    _orig_pywsgi_write = gevent.pywsgi.WSGIHandler.write
+    def _patched_pywsgi_write(self, data):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return _orig_pywsgi_write(self, data)
+    gevent.pywsgi.WSGIHandler.write = _patched_pywsgi_write
+
     _orig_pywsgi_sendall = gevent.pywsgi.WSGIHandler._sendall
     def _patched_pywsgi_sendall(self, data):
         if isinstance(data, str):
             data = data.encode('utf-8')
         return _orig_pywsgi_sendall(self, data)
     gevent.pywsgi.WSGIHandler._sendall = _patched_pywsgi_sendall
+except Exception:
+    pass
+
+try:
+    import geventwebsocket.handler
+    _orig_gws_write = geventwebsocket.handler.WebSocketHandler.write
+    def _patched_gws_write(self, data):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        return _orig_gws_write(self, data)
+    geventwebsocket.handler.WebSocketHandler.write = _patched_gws_write
 except Exception:
     pass
 

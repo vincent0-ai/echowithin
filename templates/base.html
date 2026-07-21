@@ -611,8 +611,20 @@
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-links">
-                    <a href="{{ url_for('pages.home') }}">Home</a> | <a href="{{ url_for('blog.blog') }}">Blog</a> | <a
-                        href="{{ url_for('pages.about') }}">About</a> | <a href="{{ url_for('pages.faq') }}">FAQ</a> | <a href="{{ url_for('pages.terms') }}">Terms</a>
+                    <a href="{{ url_for('pages.home') }}">Home</a> |
+                    <a href="{{ url_for('blog.blog') }}">Blog</a> |
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('notes.personal_space') }}">Notes</a> |
+                    <a href="{{ url_for('bonds.bonds_page') }}">Bonds</a> |
+                    <a href="{{ url_for('chat.messages_page') }}">Messages</a> |
+                    {% else %}
+                    <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}">Notes</a> |
+                    <a href="{{ url_for('auth.login', next=url_for('bonds.bonds_page')) }}">Bonds</a> |
+                    <a href="{{ url_for('auth.login', next=url_for('chat.messages_page')) }}">Messages</a> |
+                    {% endif %}
+                    <a href="{{ url_for('pages.about') }}">About</a> |
+                    <a href="{{ url_for('pages.faq') }}">FAQ</a> |
+                    <a href="{{ url_for('pages.terms') }}">Terms</a>
                 </div>
                 <p>&copy; {{ current_year }} EchoWithin. All Rights Reserved.</p>
             </div>

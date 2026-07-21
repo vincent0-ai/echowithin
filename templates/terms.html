@@ -5,7 +5,7 @@
 {% block content %}
 <div class="content-wrapper">
     <h1>Terms of Service</h1>
-    <p class="last-updated">Last updated: June 2, 2026</p>
+    <p class="last-updated">Last updated: July 21, 2026</p>
 
     <div class="terms-container">
         <section>
@@ -16,14 +16,16 @@
 
         <section>
             <h2>2. Service Overview</h2>
-            <p>EchoWithin provides a hybrid platform for digital expression, including:</p>
+            <p>EchoWithin provides a hybrid platform for digital expression, connection, and productivity, including:</p>
             <ul>
-                <li><strong>Public Blogs</strong>: Shared community content, discussions, and comments.</li>
-                <li><strong>Personal Space</strong>: Private, encrypted note-taking for personal thoughts with search, tags, and references.</li>
-                <li><strong>Shared Notes</strong>: Secure, temporary content sharing with optional surprise themes,
-                    access controls, and collaboration features.</li>
-                <li><strong>Direct Messaging</strong>: Real-time private conversations between users, including text and image sharing.</li>
-                <li><strong>Mobile App & PWA</strong>: Installable progressive web app and native Android app with offline support.</li>
+                <li><strong>Public Blogs</strong>: Shared community content, discussions, reactions, and threaded comments.</li>
+                <li><strong>Personal Space</strong>: Private, encrypted note-taking with markdown, PIN locking, version history, note pinning, tags, and search.</li>
+                <li><strong>Bonds & Partner Connections</strong>: 1-on-1 connections (Love Partner, Friend, Study Mate, Family, Accountability Partner, Custom) with shared goals, encrypted daily journals, mutual-reveal Question of the Day (with AI generation), daily mood tracking, streaks, and real-time nudges.</li>
+                <li><strong>Whisper Mode</strong>: Ephemeral, timed private conversations (15 to 120 minutes) with auto-deleting memory-only messages and screenshot detection alerts.</li>
+                <li><strong>Direct Messaging & Scheduled Messages</strong>: Real-time private chat, image/voice attachments, typing indicators, and scheduled future DMs.</li>
+                <li><strong>Community Spaces</strong>: Topic-focused group spaces featuring polls, resource libraries, check-in mood tracking, and welcome banners.</li>
+                <li><strong>Shared Notes & Surprises</strong>: Temporary note sharing with surprise celebration themes, access codes, and live collaboration.</li>
+                <li><strong>Mobile App & PWA</strong>: Installable progressive web app and native Android app with offline sync and push notifications.</li>
             </ul>
         </section>
 
@@ -34,143 +36,109 @@
         </section>
 
         <section>
-            <h2>4. Privacy & Data Sovereignty</h2>
-            <p>We prioritize your privacy:</p>
+            <h2>4. Privacy & Data Encryption</h2>
+            <p>We prioritize your privacy and data security across all features:</p>
             <ul>
-                <li><strong>Note Encryption</strong>: Personal notes are encrypted at rest using industry-standard
-                    protocols. Our team cannot read the contents of your private personal notes.</li>
-                <li><strong>PIN-Locked Notes</strong>: You may add an additional PIN lock to sensitive notes. The PIN is hashed and stored securely. We cannot recover lost PINs.</li>
-                <li><strong>Security Headers</strong>: All traffic is served over HTTPS with HSTS, Content Security Policy, and XSS protection headers enforced.</li>
-                <li><strong>No Data Sales</strong>: We do not sell, trade, or rent your personal information to third parties.</li>
+                <li><strong>Personal Note Encryption</strong>: Personal notes are encrypted at rest using per-user Fernet keys (AES-128-CBC + HMAC-SHA256). Platform administrators cannot read your private notes.</li>
+                <li><strong>Bond Journal & QotD Encryption</strong>: Shared bond journals and Question of the Day responses are encrypted at rest using unique per-bond Fernet keys.</li>
+                <li><strong>Direct Message Encryption</strong>: Direct messages are encrypted at rest using envelope encryption keys.</li>
+                <li><strong>Whisper Mode Non-Persistence</strong>: Whisper Mode messages exist only in temporary memory with automatic Time-To-Live (TTL) expiration. They are never written to permanent message storage, never included in backups, and are permanently erased upon session expiration.</li>
+                <li><strong>PIN-Locked Notes</strong>: Sensitive notes can be locked behind a user PIN. The PIN is securely hashed. Lost PINs cannot be recovered by administrators.</li>
+                <li><strong>Security Infrastructure</strong>: Enforced HTTPS with HSTS, Content Security Policy (CSP), and XSS protection headers.</li>
+                <li><strong>No Data Sales</strong>: We never sell, trade, or rent your personal information to third parties.</li>
             </ul>
         </section>
 
         <section>
             <h2>5. Shared Content & Collaboration</h2>
-            <p>When sharing notes via links:</p>
+            <p>When sharing notes via links or engaging in collaboration:</p>
             <ul>
-                <li><strong>Revocation</strong>: You may revoke shared links manually, or set them to expire
-                    automatically. We do not guarantee access to shared links after expiration.</li>
-                <li><strong>Access Codes</strong>: If you protect a note with an access code, you are responsible for
-                    distributing that code only to intended recipients.</li>
-                <li><strong>Collaboration & Proposals</strong>: Shared notes with edit permission allow collaborators to propose changes. Depending on your approval settings, changes are either auto-applied or queued for your review. You may accept or reject proposals at any time.</li>
-                <li><strong>Version History</strong>: Edits to notes are tracked with version snapshots (up to 50 per note). You can compare and restore any previous version. Older versions beyond the 50-version limit are automatically pruned.</li>
-                <li><strong>Media Ethics</strong>: Any media (photos/audio) uploaded for "Surprise Themes" must be owned
-                    by you or used with permission and must comply with our safety guidelines.</li>
-                <li><strong>Data Persistence (Total Purge)</strong>: When a recipient "Saves" a shared note, they create
-                    a personal copy. However, all copies remain linked to the original. If the original owner chooses to
-                    <strong>"Delete for Everyone"</strong>, all cloned copies will be permanently purged.</li>
+                <li><strong>Revocation</strong>: You may revoke shared links manually or set automatic expiration limits.</li>
+                <li><strong>Access Controls</strong>: Access codes protect shared notes. You are responsible for sharing access codes only with authorized recipients.</li>
+                <li><strong>Collaboration & Proposals</strong>: Shared notes with edit permissions allow collaborators to suggest changes. Depending on approval settings, edits auto-apply or queue for review in the Activity tab.</li>
+                <li><strong>Version History</strong>: Changes are tracked with version snapshots (up to 50 versions per note). You can compare side-by-side and restore earlier snapshots.</li>
+                <li><strong>Surprise Media Ethics</strong>: All media uploaded for celebration themes must be owned by you or authorized for use, complying with platform safety guidelines.</li>
+                <li><strong>Purge on Delete for Everyone</strong>: If an original note owner selects "Delete for Everyone", all cloned recipient copies are permanently purged.</li>
             </ul>
         </section>
 
         <section>
-            <h2>6. Direct Messaging</h2>
-            <p>EchoWithin provides real-time direct messaging between users. By using this feature:</p>
+            <h2>6. Direct Messaging & Whisper Mode</h2>
+            <p>EchoWithin offers real-time direct messaging and ephemeral Whisper sessions:</p>
             <ul>
-                <li>You agree not to send spam, harassment, or unsolicited commercial messages.</li>
-                <li>Messages may include text and images. All uploaded media must comply with our community guidelines.</li>
-                <li>We reserve the right to moderate or remove messages that violate our terms and to suspend accounts that engage in abusive messaging.</li>
-                <li>Message history is stored on our servers and is subject to the same deletion policies as other user data.</li>
+                <li><strong>Conduct Rules</strong>: Spam, harassment, unsolicited commercial offers, or abusive behavior in DMs or Whisper sessions is strictly prohibited and grounds for account termination.</li>
+                <li><strong>Whisper Mode Ephemerality</strong>: Whisper sessions run on strict timers (15, 30, 60, or 120 minutes). When the timer expires, the session and all associated messages are permanently destroyed.</li>
+                <li><strong>Screenshot Alerts</strong>: Whisper Mode incorporates best-effort browser screenshot and window blur detection. Attempting to capture or record a Whisper session triggers a notification to both participants.</li>
+                <li><strong>Rate Limits</strong>: Free accounts are limited to 3 Whisper sessions per day (max 30 mins each); Premium accounts receive up to 10 sessions per day (max 120 mins each).</li>
             </ul>
         </section>
 
         <section>
-            <h2>7. Community Guidelines & Moderation</h2>
+            <h2>7. Bonds & Partner Connections</h2>
+            <p>The Bonds feature allows users to form dedicated 1-on-1 relationship spaces:</p>
+            <ul>
+                <li><strong>Mutual Consent</strong>: Bonds require invitation acceptance by both parties. Either partner may break a bond at any time from the Bonds page.</li>
+                <li><strong>Data Deletion on Bond Termination</strong>: Breaking a bond permanently purges all shared goals, encrypted journals, mood logs, and streak history for that bond.</li>
+                <li><strong>Goal Collaboration</strong>: Partners can propose, approve, check in on, and complete shared goals. Free accounts support up to 5 active goals per bond; Premium accounts support up to 20 active goals.</li>
+                <li><strong>Streak Shields</strong>: Premium subscribers receive 1 Streak Shield per week per bond to protect active streaks from breaking due to missed daily check-ins.</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>8. Community Guidelines & Moderation</h2>
             <p>To maintain a safe and productive community, you agree NOT to:</p>
             <ul>
-                <li>Post or share illegal, abusive, harassing, or defamatory content.</li>
+                <li>Post or share illegal, abusive, harassing, hate speech, or defamatory content.</li>
                 <li>Infringe upon the intellectual property rights of others.</li>
                 <li>Engage in automated scraping or systematic data collection without permission.</li>
                 <li>Impersonate other users or create misleading accounts.</li>
-                <li>Use the platform to distribute malware or phishing content.</li>
+                <li>Use the platform to distribute malware, phishing content, or fraudulent schemes.</li>
             </ul>
-            <p>EchoWithin reserves the right to remove any content (including blog posts, comments, messages, and shared notes) and suspend or
-                terminate accounts that violate these guidelines.</p>
+            <p>EchoWithin reserves the right to remove any content (including blog posts, comments, messages, community resources, and shared notes) and suspend or terminate accounts that violate these guidelines.</p>
         </section>
 
         <section>
-            <h2>8. Communications & Notifications</h2>
+            <h2>9. Communications & Notifications</h2>
             <p>By creating an account, you may receive:</p>
             <ul>
-                <li><strong>Push Notifications</strong>: Browser and mobile push notifications for new comments, replies, messages, and collaboration activity. You can enable/disable these in your browser settings or Profile Settings.</li>
-                <li><strong>Email Notifications</strong>: Automated service emails (notifications, newsletters). We comply
-                    with RFC 8058 "One-Click Unsubscribe" standards. You may opt out of non-essential communications at any
-                    time via the unsubscribe links provided.</li>
+                <li><strong>Push Notifications</strong>: Browser and mobile push notifications for new comments, replies, messages, nudges, and collaboration activity. Manage these in Profile Settings.</li>
+                <li><strong>Email Communications</strong>: Service emails and weekly newsletters. We comply with RFC 8058 "One-Click Unsubscribe" standards. You may opt out anytime using the unsubscribe link.</li>
             </ul>
         </section>
 
         <section>
-            <h2>9. Data Export & Backup</h2>
-            <p>You have the right to a portable copy of your data at any time:</p>
+            <h2>10. Data Export & Account Deletion</h2>
+            <p>You maintain full ownership and control over your data:</p>
             <ul>
-                <li><strong>Full Export</strong>: From your Account Settings you can download a JSON file containing
-                    your profile information, blog posts, comments, and decrypted personal notes.</li>
-                <li><strong>Your Data, Your Control</strong>: We encourage regular backups. Exported data is provided
-                    as-is and is your responsibility once downloaded.</li>
+                <li><strong>Full Export</strong>: Download a complete JSON file containing your profile, blog posts, comments, and decrypted personal notes anytime from Account Settings.</li>
+                <li><strong>Account Deletion</strong>: Deleting your account immediately purges your profile, notes, blog posts, comments, DMs, bonds, and media from active databases and search indexes.</li>
+                <li><strong>3-Day Backup Recovery Window</strong>: For protection against accidental deletion, account data remains in encrypted backups for 3 days. You can request account recovery within 3 days by contacting support. After 3 days, all backup data is permanently and irreversibly destroyed.</li>
             </ul>
         </section>
 
         <section>
-            <h2>10. Account Deletion</h2>
-            <p>You may delete your account from Account Settings. Deletion triggers the following:</p>
+            <h2>11. Limitation of Liability</h2>
+            <p>EchoWithin is provided "as is." While we maintain high availability, offline sync redundancy, and end-to-end encryption standards, we are not liable for service interruptions, data loss from third-party hardware failure, or damages arising from platform use.</p>
+        </section>
+
+        <section>
+            <h2>12. Premium Subscriptions & Billing</h2>
+            <p>EchoWithin offers an optional <strong>Premium plan</strong> (billed at KSH 50/month via Paystack):</p>
             <ul>
-                <li><strong>Data Removal</strong>: Your profile, blog posts, comments, personal notes, shared links,
-                    note versions, discussion threads, messages, push subscriptions, and notification tokens are removed
-                    from our active databases.</li>
-                <li><strong>Media Cleanup</strong>: Your profile picture and any images attached to your posts are
-                    destroyed from our cloud storage.</li>
-                <li><strong>Search Index Removal</strong>: Your posts and notes are removed from our search indexes.</li>
-                <li><strong>Backup Retention & Recovery</strong>: Deleted account data is kept in our secure backups for up to 3 days. This is designed solely to allow recovery in case of accidental deletion. You can request recovery within this 3-day window by contacting support. After 3 days, all data is permanently and irreversibly purged from our backups.</li>
+                <li><strong>Unlimited Personal Notes</strong> and higher character limits (100,000 chars/note vs 20,000).</li>
+                <li><strong>Note Locking</strong> — protect sensitive notes with a PIN.</li>
+                <li><strong>Scheduled Messages</strong> — schedule DMs for future delivery.</li>
+                <li><strong>Enhanced Bonds & Streaks</strong> — 20 active goals per bond and 1 weekly Streak Shield per bond.</li>
+                <li><strong>Extended Whisper Mode</strong> — up to 10 sessions/day with up to 120-minute session timers.</li>
+                <li><strong>Extended Version History</strong> — 365-day version retention (vs 7 days on Free).</li>
+                <li><strong>Blog Space Customization</strong> — profile tagline, pinned posts, and social links.</li>
             </ul>
+            <p>Subscriptions renew monthly unless canceled in Profile Settings. Upon cancellation, Premium benefits remain active until the end of the current billing cycle. Reverting to Free never deletes your existing data.</p>
         </section>
 
         <section>
-            <h2>11. Data Deletion Policy</h2>
-            <p>When you choose to remove a blog post, a comment, a message, or a personal note, the following occurs:</p>
-            <ul>
-                <li><strong>Active Purge</strong>: The record is immediately removed from our active databases and search indexes.</li>
-                <li><strong>Cascading Media Cleanup</strong>: Any associated media (images/audio) stored in our cloud
-                    storage is destroyed if not linked to other active content.</li>
-                <li><strong>Backup Retention & Recovery</strong>: To protect users from accidental data loss, deleted items are retained in our secure backups for a recovery period of 3 days. During this 3-day window, you may contact support to request restoration of the deleted items. After 3 days, they are permanently and irreversibly deleted.</li>
-            </ul>
-        </section>
-
-        <section>
-            <h2>12. Limitation of Liability</h2>
-            <p>EchoWithin is provided "as is." While we strive for 100% uptime and data integrity (including background
-                sync for offline notes), we are not liable for data loss, service interruptions, or damages arising from
-                your use of the platform.</p>
-        </section>
-
-        <section>
-            <h2>13. Changes to Terms</h2>
-            <p>We may update these terms to reflect new features or legal requirements. We will notify you of
-                significant changes, and continued use of the Platform constitutes acceptance of the updated terms.</p>
-        </section>
-
-        <section>
-            <h2>14. Premium Subscriptions</h2>
-            <p>EchoWithin offers an optional <strong>Premium plan</strong> at KSH 50 per month. Premium features include:</p>
-            <ul>
-                <li><strong>Unlimited notes</strong> and higher character limits per note.</li>
-                <li><strong>Note Locking</strong> — additional PIN-based privacy for sensitive notes.</li>
-                <li><strong>Blog Space</strong> — customisable profile with taglines, pinned posts, and social links.</li>
-                <li><strong>Scheduled Messages</strong> — send direct messages at a specified future time.</li>
-                <li><strong>Unlimited share links</strong> and surprise notes.</li>
-                <li><strong>Extended version history</strong> (365-day retention vs 7-day on Free).</li>
-                <li><strong>Auto-approve collaboration</strong> on shared notes.</li>
-            </ul>
-            <p>Subscriptions are billed monthly via <strong>Paystack</strong>. By subscribing, you authorise recurring charges to your chosen payment method. You may cancel at any time from your Profile Settings; your Premium access will remain active until the end of the current billing period.</p>
-        </section>
-
-        <section>
-            <h2>15. Free Trial</h2>
-            <p>New accounts receive a <strong>1-day free trial</strong> of Premium features. No payment information is required to start the trial. When the trial expires, your account automatically reverts to the Free plan. <strong>No data is lost</strong> when transitioning between plans — your notes, messages, and shared content remain intact.</p>
-        </section>
-
-        <section>
-            <h2>16. Refund Policy</h2>
-            <p>Due to the digital nature of the service, Premium subscription fees are generally non-refundable. If you experience a technical issue preventing access to paid features, please <a href="{{ url_for('pages.about') }}">contact us</a> within 7 days of the charge and we will work to resolve the issue or provide a refund at our discretion.</p>
+            <h2>13. Free Trial & Refund Policy</h2>
+            <p>New accounts automatically receive a <strong>1-day free trial</strong> of Premium with no credit card required. Fees for digital Premium subscriptions are generally non-refundable, but technical billing discrepancies reported within 7 days will be reviewed by support for prompt resolution.</p>
         </section>
     </div>
 

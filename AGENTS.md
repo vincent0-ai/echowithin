@@ -742,3 +742,31 @@ If the logic requires some further modification note at the end.
 **Verification:**
 1. Ran Jinja2 parser across all modified HTML templates to verify syntax.
 2. Verified `git status` clean and CSS properties valid.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-21
+**Changes (Footer Links, Terms of Service, FAQ & About Page Comprehensive Audit & Update):**
+
+- **Footer Navigation Links (`templates/base.html`)**:
+  - Expanded site-wide footer links to include direct navigation to `Notes`, `Bonds`, and `Messages` for authenticated users (and auth redirect links for guests), ensuring fast access to core platform features from every page.
+- **Terms of Service Update (`templates/terms.html`)**:
+  - Updated effective date to July 21, 2026.
+  - Section 2 (Service Overview): Added Bonds (1-on-1 partner spaces), Whisper Mode (ephemeral timed chat), Community Spaces (polls, resource library, check-ins), and Note Pinning.
+  - Section 4 (Privacy & Data Encryption): Explicitly detailed per-user note Fernet encryption, per-bond Fernet encryption for shared journals/QotD, envelope encryption for DMs, and memory-only TTL non-persistence for Whisper Mode.
+  - Section 6 (Direct Messaging & Whisper Mode): Documented Whisper Mode timers (15–120 min), screenshot/blur detection alerts, and daily session limits.
+  - Section 7 (Bonds & Partner Connections): Added dedicated section covering mutual consent, bond termination data purges, shared goals, and Streak Shields.
+  - Section 12 & 13 (Premium Subscriptions & Billing): Updated feature limits including weekly Streak Shields, higher Whisper session limits (10 sessions/day up to 120 mins), and higher Goal caps (20/bond).
+- **FAQ Page Overhaul (`templates/faq.html`)**:
+  - Added new **Bonds & Partner Connections** section covering 1-on-1 bonds, encrypted shared journals, mutual-reveal QotD (preset, AI generation, and custom questions), streaks, streak shields, and real-time nudges.
+  - Added new **Messaging & Whisper Mode** section explaining ephemeral timed chat, memory-only non-persistence, and screenshot detection.
+  - Added new **Community Spaces** section covering polls, resource library, and check-ins.
+  - Updated existing sections for Notes, Native Android APK download, and Premium features.
+- **About Page Refinement (`templates/about.html`)**:
+  - Updated platform overview and mission statement to reflect encrypted notes, 1-on-1 Bonds, Whisper Mode, and private data sovereignty alongside blog & community sharing.
+
+**Files touched:** `templates/base.html`, `templates/terms.html`, `templates/faq.html`, `templates/about.html`, `AGENTS.md`.
+
+**Verification:**
+1. Verified Jinja2 template parsing across `base.html`, `terms.html`, `faq.html`, `about.html`.
+2. Verified all Flask `url_for` references exist and are valid.

@@ -564,20 +564,33 @@
         background: none;
     }
 
-    .journal-form textarea {
+    .journal-form textarea,
+    .journal-input-area textarea {
         width: 100%;
-        padding: 0.6rem;
+        padding: 0.75rem;
         border: 1px solid var(--border-color);
         border-radius: 8px;
         font-size: 0.9rem;
-        min-height: 80px;
-        font-family: var(--font-family);
+        min-height: 90px;
+        font-family: inherit;
+        background: var(--card-bg);
+        color: var(--text-dark-color);
         resize: vertical;
         box-sizing: border-box;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
     }
 
-    .journal-form {
-        margin-top: 0.8rem;
+    .journal-form textarea:focus,
+    .journal-input-area textarea:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(62, 34, 23, 0.1);
+    }
+
+    .journal-form,
+    .journal-input-area {
+        margin-top: 0.4rem;
+        margin-bottom: 0.8rem;
     }
 
     /* Pending requests */

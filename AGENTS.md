@@ -669,3 +669,76 @@ If the logic requires some further modification note at the end.
   - Scoped steps selectors inside `.note-actions` inside `initOnboardingTour()` in `personal_space.html`. This avoids targeting hidden buttons (such as the copy button inside the links dropdown) which was causing the tooltip to miscalculate coordinates and display in the top-left corner of the page.
 
 **Files touched:** `blueprints/sharing.py`, `blueprints/blog.py`, `blueprints/communities.py`, `templates/personal_space.html`, `templates/shared_note.html`, `templates/view_post.html`, `templates/admin_dashboard.html`, `templates/weekly_newsletter.html`, `static/style.css`, `AGENTS.md`.
+
+### Model: Antigravity (Advanced Coding Agent)
+
+**Date:** 2026-07-19
+**Changes (WebSocket Connection & Sync Reliability Fix):**
+
+- **Socket.IO Redis Message Queue Integration (`main.py`)**:
+  - Deferred the initialization of `SocketIO` to support conditional runtime configuration.
+  - Hardened the Redis connection initialization block to check if `redis_cache.ping()` succeeds. If available, it initializes `SocketIO` with a parsed Redis connection URL as the `message_queue` backend. This enables Socket.IO events and room assignments to synchronize across multiple independent Gunicorn workers.
+  - Automatically falls back to in-memory mode if Redis is offline or unavailable during local development.
+- **WebSocket Handshake / Process-Scale Alignment (`Procfile`)**:
+  - Reduced the Gunicorn worker count from `-w 3` to `-w 1` in the `Procfile` (`web` process). Because `gevent` is fully asynchronous, a single worker process can handle thousands of concurrent WebSocket connections. Running a single worker completely eliminates session ID routing mismatches during WebSocket handshake upgrades from HTTP long-polling.
+- **Client-Side Connection Reuse (`templates/shared_note.html`)**:
+  - Refactored the Socket.IO client script in the shared study note view to reuse the global `window.socket` instance defined in `base.html` instead of spawning a redundant second TCP connection.
+  - Wrapped page-specific event listeners in a safe check that automatically executes room-joining logic if `window.socket` is already in a connected state.
+
+**Files touched:** `main.py`, `Procfile`, `templates/shared_note.html`, `AGENTS.md`.
+
+**Verification:**
+1. Ran `python -m py_compile main.py` to confirm syntax validity.
+2. Ran Jinja2 parser on all HTML templates, confirming that `shared_note.html` has no parsing issues.
+
+### Model: Antigravity (Advanced Coding Agent)
+
+**Date:** 2026-07-19
+**Changes (Socket.IO Authentication Fix):**
+
+- **Incompatible Decorator Replacement (`main.py`)**:
+  - Replaced the standard Flask-Login `@login_required` decorator on all 12 Socket.IO event handlers with a custom `@authenticated_only` decorator.
+  - The `@login_required` decorator throws a redirect (302) response upon authentication check failures (such as guest access or expired handshake metadata). Inside a WebSocket/Socket.IO frame context, this causes a protocol violation, crash-disconnecting the client, looping connection failure errors in the browser console, and queuing outgoing messages permanently in client memory.
+  - The custom `@authenticated_only` decorator silently returns if `current_user.is_authenticated` is False, resolving the handshake/connection crash.
+
+**Files touched:** `main.py`, `AGENTS.md`.
+
+**Verification:**
+1. Ran `python -m py_compile main.py` to confirm syntax validity.
+2. Ran Jinja2 parser on all HTML templates, verifying that templates parse correctly.
+
+### Model: Antigravity (Advanced Coding Agent)
+
+**Date:** 2026-07-20
+**Changes (Exclude Whisper From Backup):**
+
+- **Ignored Ephemeral Whisper Collections (`scripts/backup_to_atlas.py`)**:
+  - Excluded any collection starting with `whisper_` (`whisper_sessions` and `whisper_messages`) from the MongoDB Atlas synchronization loop.
+  - This guarantees that ephemeral whisper session metadata and message payloads are never backed up, copied, or stored on MongoDB Atlas.
+
+**Files touched:** `scripts/backup_to_atlas.py`, `AGENTS.md`.
+
+**Verification:**
+1. Ran `python -m py_compile scripts/backup_to_atlas.py` to check syntax.
+2. Verified the local test runner (`scripts/backup_to_atlas.py`) executes and handles env parameters properly.
+
+### Model: Gemini 3.5 Flash (Antigravity)
+
+**Date:** 2026-07-21
+**Changes (Dark Mode Button Color Mismatch Fixes):**
+
+- **Dark Mode Button Overrides (`static/style.css`)**:
+  - Overrode `.edit-btn` and `.delete-btn` in `[data-theme="dark"]` with explicit background (`#2e7d32` / `#d32f2f`) and text color (`#ffffff !important`) to eliminate dark-on-dark illegible text and clashing button styles.
+  - Added clean `.btn-back` and `.btn-dashboard` classes with themed colors to replace overloaded `.edit-btn` usage for back links and dashboard buttons.
+- **Blog Header & Post Action Buttons (`templates/blog.html`, `templates/view_post.html`)**:
+  - Removed hardcoded `background: maroon; color: #fff` from the Advanced Search button in `templates/blog.html`, aligning it with the theme-aware `Search` button.
+  - Changed the Admin `Dashboard` button in `templates/blog.html` from `edit-btn` (green) to `btn-dashboard` (warm theme primary).
+  - Updated `#comment-submit` in `templates/view_post.html` from hardcoded `#800000` (maroon) to `var(--primary-color)` and `var(--text-light-color)` so it adapts cleanly between light and dark themes.
+- **Back Navigation Links Alignment**:
+  - Updated `admin_community_vouchers.html`, `admin_posts.html`, `admin_premium_users.html`, `admin_users.html`, and `search_results.html` to use `btn-back` instead of `btn edit-btn`.
+
+**Files touched:** `static/style.css`, `templates/blog.html`, `templates/view_post.html`, `templates/admin_community_vouchers.html`, `templates/admin_posts.html`, `templates/admin_premium_users.html`, `templates/admin_users.html`, `templates/search_results.html`, `AGENTS.md`.
+
+**Verification:**
+1. Ran Jinja2 parser across all modified HTML templates to verify syntax.
+2. Verified `git status` clean and CSS properties valid.

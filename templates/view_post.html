@@ -99,18 +99,20 @@
         /* Support fallback indentation */
     }
 
-    /* Post comment button (maroon) */
+    /* Post comment button */
     #comment-submit {
-        background: #800000;
-        color: #fff;
+        background: var(--primary-color);
+        color: var(--text-light-color);
         border: none;
-        padding: 8px 12px;
-        border-radius: 4px;
+        padding: 8px 16px;
+        border-radius: 20px;
         cursor: pointer;
+        font-weight: 600;
+        transition: background-color 0.2s ease, opacity 0.2s ease;
     }
 
     #comment-submit:hover {
-        opacity: 0.95;
+        opacity: 0.92;
     }
 
     #comment-form textarea,

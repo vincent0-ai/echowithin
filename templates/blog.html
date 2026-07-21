@@ -64,15 +64,15 @@
                     Search
                 </button>
             </div>
-            <a href="{{ url_for('pages.search') }}" class="form-button"
-                style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; color: #fff; background: maroon; border: none;">
+            <a href="{{ url_for('pages.search') }}" class="form-button btn-advanced-search"
+                style="width: auto; padding: 0 1rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
                 <i class="fa-solid fa-sliders"></i> Advanced Search
             </a>
         </form>
 
         {% if current_user.is_authenticated and current_user.is_admin %}
-        <div class="admin-actions">
-            <a href="{{ url_for('admin.admin_dashboard') }}" class="btn edit-btn">
+        <div class="admin-actions" style="margin-top: 1rem;">
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-dashboard">
                 <i class="fa-solid fa-chart-line"></i> Dashboard
             </a>
         </div>

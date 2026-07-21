@@ -597,21 +597,63 @@ body {
 }
 
 .edit-btn {
-    background-color: var(--success-color);
-    color: var(--text-light-color);
+    background-color: #2e7d32;
+    color: #ffffff;
 }
 
 .edit-btn:hover {
-    background-color: #45a049;
+    background-color: #1b5e20;
 }
 
 .delete-btn {
-    background-color: var(--danger-color);
-    color: var(--text-light-color);
+    background-color: #d32f2f;
+    color: #ffffff;
 }
 
 .delete-btn:hover {
-    background-color: #da190b;
+    background-color: #b71c1c;
+}
+
+.btn-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.85rem;
+    background-color: var(--surface-bg);
+    color: var(--text-dark-color);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.btn-back:hover {
+    background-color: var(--hover-bg);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-dashboard {
+    background-color: var(--primary-color);
+    color: var(--text-light-color);
+    border: none;
+    border-radius: 20px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.btn-dashboard:hover {
+    background-color: var(--primary-dark-color);
+    opacity: 0.95;
 }
 
 .comment-btn {
@@ -3778,5 +3820,42 @@ body {
 }
 [data-theme="dark"] .replies-container {
     border-left-color: var(--card-border) !important;
+}
+
+/* Dark mode button overrides for edit-btn, delete-btn, btn-dashboard, and btn-back */
+[data-theme="dark"] .edit-btn {
+    background-color: #2e7d32 !important;
+    color: #ffffff !important;
+    border: 1px solid #3d8c42 !important;
+}
+
+[data-theme="dark"] .edit-btn:hover {
+    background-color: #388e3c !important;
+}
+
+[data-theme="dark"] .delete-btn {
+    background-color: #d32f2f !important;
+    color: #ffffff !important;
+    border: 1px solid #e53935 !important;
+}
+
+[data-theme="dark"] .delete-btn:hover {
+    background-color: #e53935 !important;
+}
+
+[data-theme="dark"] .btn-dashboard {
+    background-color: var(--primary-color) !important;
+    color: var(--text-light-color) !important;
+}
+
+[data-theme="dark"] .btn-back {
+    background-color: var(--surface-bg) !important;
+    color: var(--text-dark-color) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .btn-back:hover {
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
 }
 

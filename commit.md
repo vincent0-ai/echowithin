@@ -1,12 +1,10 @@
 # Commit Summary
 
 ## Goal
-Fix flexbox layout bug where the chat input area (`.chat-input-area`) was pushed below the viewport when scrolling or when banners were hidden.
+Ensure mobile chat mode (`body.mobile-chat-open`) initializes immediately on page load/refresh when an active chat is present, preventing the navbar and footer from pushing the chat input bar off-screen.
 
 ## Description of Changes
-- **Enforced Flexbox Constraints**: Added `min-height: 0; overflow: hidden;` to `.chat-main` (`#chat-main-container`) and `#chat-interface`.
-- **Constrained Chat History**: Set `flex: 1 1 auto; min-height: 0; overflow-y: auto;` on `#chat-history` so message list scrolling stays bounded strictly inside the container.
-- **Pinned Input Area**: Set `flex-shrink: 0; z-index: 10;` on `.chat-input-area` so the message input bar remains permanently visible at the bottom of the screen regardless of scroll position or banner state.
+- **DOMContentLoaded Mobile Mode Init**: Added `if (activeRecipientId && window.innerWidth <= 768) document.body.classList.add('mobile-chat-open')` on DOMContentLoaded so direct page loads and refreshes immediately hide top/bottom site chrome and set full-height `100dvh` bounds on mobile.
 
 ## Modified Files
 - [templates/messages.html](file:///c:/Users/DevTech/Desktop/Projects/echowithin/echowithin/templates/messages.html)

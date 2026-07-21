@@ -1692,6 +1692,9 @@
         const messageInput = document.getElementById('message-input');
         const currentUserId = "{{ current_user.id }}";
         let activeRecipientId = "{{ active_chat._id if active_chat else '' }}";
+        if (activeRecipientId && window.innerWidth <= 768) {
+            document.body.classList.add('mobile-chat-open');
+        }
         let lastMessageDate = null;
         let typingTimeout = null;
         let remoteTypingClearTimer = null;

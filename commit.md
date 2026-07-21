@@ -1,13 +1,13 @@
 # Commit Summary
 
 ## Goal
-Fix mobile/iOS chat layout issues (send button overflow, accidental reaction popup triggers, jumpy chat scrolling, and missing bottom typing indicator).
+Enhance chat UI responsiveness and aesthetics with glassmorphism, haptic feedback, micro-animations, and dynamic input action pop effects for a smooth experience.
 
 ## Description of Changes
-- **iOS Send Button Overflow**: Added `flex-shrink: 0` to all action buttons in the chat form and `min-width: 0; box-sizing: border-box; width: 100%` on flex wrappers and `.chat-input-area` to prevent horizontal scrolling on iOS Safari.
-- **Accidental Reaction Popups**: Wrapped hover-triggered reaction bars and message action menus under `@media (hover: hover) and (pointer: fine)` so touch events on mobile do not trigger hover reactions. Integrated clean quick-reaction emojis into the mobile long-press menu overlay.
-- **Movy / Jumpy Mobile Chat**: Removed jumpy `visualViewport` height mutation JS, locked overscroll behavior with `overscroll-behavior-y: contain` on `#chat-history`, and enforced `100dvh` fixed bounds on `body.mobile-chat-open`.
-- **Bottom Typing Indicator**: Added a sticky `#bottom-typing-indicator` bar positioned directly above `#message-input` so typing/recording status is visible right above the virtual keyboard.
+- **Glassmorphism Header & Input**: Added translucent backdrop blur (`backdrop-filter: blur(12px)`) to `.chat-header` and `.chat-input-area` so scrolling messages blur underneath smoothly.
+- **Dynamic Send Button Pop**: Send button dynamically scales and glows (`scale(1.06)`) when text is typed to signal send readiness.
+- **Haptic Touch Feedback**: Added native haptic feedback (`navigator.vibrate`) on mobile touch interactions (emoji reaction tap, long-press menu trigger).
+- **Read Status Tick Animation**: Added keyframe scale-pop animation (`tickPop`) when read status updates to double checkmark (`✓✓`).
 
 ## Modified Files
 - [templates/messages.html](file:///c:/Users/DevTech/Desktop/Projects/echowithin/echowithin/templates/messages.html)

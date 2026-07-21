@@ -331,11 +331,14 @@
     /* Chat Header Actions */
     .chat-header {
         padding: 0.75rem 1.5rem;
-        background: var(--card-bg);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border-bottom: 1px solid var(--border-color);
         display: flex;
         align-items: center;
         justify-content: space-between;
+        z-index: 10;
     }
 
     .chat-header-actions {
@@ -799,9 +802,20 @@
         border: none;
     }
 
-    /* Read Status Colors */
+    /* Read Status Colors & Animations */
+    .read-status i {
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
     .read-status i.fa-check-double {
         color: #5dade2;
+        animation: tickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes tickPop {
+        0% { transform: scale(0.6); opacity: 0.5; }
+        60% { transform: scale(1.25); }
+        100% { transform: scale(1); opacity: 1; }
     }
 
     .message-sent .read-status i.fa-check {
@@ -2179,6 +2193,16 @@
             }
             messageInput.addEventListener('input', function () {
                 autoExpandInput();
+                const sendBtn = document.getElementById('send-btn');
+                if (sendBtn) {
+                    if (this.value.trim().length > 0 || document.getElementById('pending-image-url').value) {
+                        sendBtn.style.transform = 'scale(1.06)';
+                        sendBtn.style.boxShadow = '0 4px 14px rgba(62, 34, 23, 0.35)';
+                    } else {
+                        sendBtn.style.transform = 'scale(1)';
+                        sendBtn.style.boxShadow = '0 4px 10px rgba(62, 34, 23, 0.2)';
+                    }
+                }
                 if (!activeRecipientId) return;
                 socket.emit('typing', { recipient_id: activeRecipientId });
                 clearTimeout(typingTimeout);
@@ -2470,8 +2494,9 @@
         function startPressTimer(e, msgId, type) {
             if (!msgId) return;
             longPressTimer = setTimeout(() => {
+                if (navigator.vibrate) navigator.vibrate(15);
                 showMobileActions(msgId, type);
-            }, 600);
+            }, 550);
         }
 
         function cancelPressTimer() {
@@ -3183,6 +3208,7 @@
         });
 
         window.reactToMessage = function (msgId, emoji) {
+            if (navigator.vibrate) navigator.vibrate(12);
             fetch(`/api/messages/react/${msgId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },

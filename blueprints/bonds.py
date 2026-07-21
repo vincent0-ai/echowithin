@@ -146,6 +146,9 @@ def _get_bond_anniversary(accepted_at):
     if not accepted_at:
         return None
     now = datetime.datetime.now(datetime.timezone.utc)
+    # MongoDB stores tz-naive datetimes; treat as UTC
+    if accepted_at.tzinfo is None:
+        accepted_at = accepted_at.replace(tzinfo=datetime.timezone.utc)
     delta_days = (now - accepted_at).days
     milestone = None
     for days, label in _ANNIVERSARY_MILESTONES:

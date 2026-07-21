@@ -330,6 +330,12 @@
         background: var(--primary-dark-color);
     }
 
+    .btn-bond-primary.active,
+    .btn-bond-section.active {
+        background: var(--primary-dark-color);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
     .btn-bond-danger {
         background: var(--danger-color);
     }
@@ -801,19 +807,20 @@
                 </div>
             </div>
             <div class="bond-actions">
-                <button class="btn btn-bond-primary"
-                    onclick="toggleSection('mood-{{ bond.id }}'); loadMood('{{ bond.id }}')">
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('mood-{{ bond.id }}', this); loadMood('{{ bond.id }}')">
                     Mood
                 </button>
-                <button class="btn btn-bond-primary"
-                    onclick="toggleSection('qotd-{{ bond.id }}'); loadQotd('{{ bond.id }}')">
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('qotd-{{ bond.id }}', this); loadQotd('{{ bond.id }}')">
                     Question
                 </button>
-                <button class="btn btn-bond-primary" onclick="toggleSection('goals-{{ bond.id }}')">
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('goals-{{ bond.id }}', this)">
                     Goals ({{ bond.goal_count }})
                 </button>
-                <button class="btn btn-bond-primary"
-                    onclick="toggleSection('journal-{{ bond.id }}'); loadJournal('{{ bond.id }}')">
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('journal-{{ bond.id }}', this); loadJournal('{{ bond.id }}')">
                     Journal
                 </button>
                 <button class="btn btn-bond-danger" onclick="breakBond('{{ bond.id }}', '{{ bond.partner_username }}')">
@@ -928,14 +935,30 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
     const currentUserId = '{{ current_user.id }}';
 
-    function toggleSection(id) {
+    function toggleSection(id, btn) {
         const el = document.getElementById(id);
         if (!el) return;
-        const isActive = el.classList.contains('active');
-        el.classList.toggle('active');
-        if (!isActive && id.startsWith('goals-')) {
-            const bondId = id.replace('goals-', '');
-            loadGoals(bondId);
+        const isCurrentlyActive = el.classList.contains('active');
+        const bondCard = el.closest('.bond-card');
+
+        if (bondCard) {
+            // Close all expanded sections for this bond card
+            bondCard.querySelectorAll('.bond-expand-section').forEach(sec => {
+                sec.classList.remove('active');
+            });
+            // Remove active highlight from all section buttons for this bond card
+            bondCard.querySelectorAll('.bond-actions .btn-bond-section').forEach(b => {
+                b.classList.remove('active');
+            });
+        }
+
+        if (!isCurrentlyActive) {
+            el.classList.add('active');
+            if (btn) btn.classList.add('active');
+            if (id.startsWith('goals-')) {
+                const bondId = id.replace('goals-', '');
+                loadGoals(bondId);
+            }
         }
     }
 

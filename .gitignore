@@ -29,4 +29,5 @@ fix_routes.py
 /.agents/
 *.txt
 *_test.py
+perf_test.py
 AGENTS.md

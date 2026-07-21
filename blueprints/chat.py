@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, json, os, re
+import datetime, json, os, re, secrets
 from security import limits, generate_conversation_envelope_keys
 
 def csrf_exempt(view):
@@ -837,8 +837,8 @@ def api_schedule_send_now(msg_id):
 def api_process_scheduled_messages():
     import main as m
     auth_header = request.headers.get('X-Scheduler-Secret', '')
-    expected_secret = current_app.config.get('SECRET_KEY', '')
-    if not auth_header or auth_header != expected_secret:
+    expected_secret = os.environ.get('SCHEDULER_SECRET') or current_app.config.get('SECRET_KEY', '')
+    if not auth_header or not secrets.compare_digest(auth_header, expected_secret):
         return jsonify({'error': 'Unauthorized'}), 403
     now = datetime.datetime.now(datetime.timezone.utc)
     due_messages = list(m.scheduled_messages_conf.find({

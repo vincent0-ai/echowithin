@@ -33,7 +33,7 @@
             "name": "Are my notes private and encrypted?",
             "acceptedAnswer": {
                 "@type": "Answer",
-                "text": "Yes. All personal notes are end-to-end encrypted and only visible to you. Even administrators cannot read your notes."
+                "text": "Yes. All personal notes are encrypted at rest using per-user envelope encryption keys and only accessible by your authenticated session."
             }
         }
     ]
@@ -357,9 +357,7 @@
             </button>
             <div class="faq-answer">
                 <div class="faq-answer-inner">
-                    Yes. All personal notes are <strong>end-to-end encrypted</strong> and only visible to you. Even
-                    administrators cannot read your notes. They are stored securely and decrypted only when you view
-                    them.
+                    Yes. All personal notes are <strong>encrypted at rest</strong> using per-user envelope keys and only accessible by your authenticated session. They are stored securely in database storage.
                 </div>
             </div>
         </div>

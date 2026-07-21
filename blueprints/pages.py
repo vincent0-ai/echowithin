@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 import datetime, os, json, hashlib, math, re
 from urllib.parse import urlparse, urljoin
 from bson.objectid import ObjectId
-from security import limits
+from security import limits, admin_required
 from config import get_env_variable
 
 def csrf_exempt(view):
@@ -371,6 +371,7 @@ def sitemap_index():
 
 @bp.route('/api/admin/clear-sitemap-cache', methods=['POST'])
 @login_required
+@admin_required
 def api_clear_sitemap_cache():
     import main as m
     if m.redis_cache:

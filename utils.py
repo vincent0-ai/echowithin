@@ -5,6 +5,9 @@ import math
 import html
 import hashlib
 import os
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from io import BytesIO
 
 from flask import url_for
@@ -835,8 +838,37 @@ def can_dm(user_a_id, user_b_id):
     return existing is not None
 
 
+def is_safe_fetch_url(url):
+    """Validates that a URL is http(s) and does not point to loopback, private IP ranges, or cloud metadata endpoints."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        if hostname.lower() in ('localhost', '169.254.169.254'):
+            return False
+
+        # Resolve hostname to IP to prevent private network SSRF
+        try:
+            ip_list = socket.getaddrinfo(hostname, None)
+            for item in ip_list:
+                ip_str = item[4][0]
+                ip_obj = ipaddress.ip_address(ip_str)
+                if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_multicast:
+                    return False
+        except socket.gaierror:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def fetch_link_preview(url):
     """Fetches OpenGraph metadata from a URL for a link preview card."""
+    if not is_safe_fetch_url(url):
+        return None
     try:
         response = requests.get(url, timeout=3, stream=True)
         # Read only a small chunk to prevent memory issues with large files

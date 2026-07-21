@@ -5,6 +5,8 @@ from flask import Blueprint, request, jsonify, session, url_for, make_response
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
+from security import limits, generate_user_envelope_keys
+from config import TIME
 
 # Create the API blueprint
 api_bp = Blueprint('api_v1', __name__)
@@ -18,6 +20,7 @@ def safe_obj_id(val):
 # --- AUTHENTICATION ENDPOINTS ---
 
 @api_bp.route('/register', methods=['POST'])
+@limits(calls=15, period=TIME)
 def api_register():
     import main as m
     data = request.get_json(silent=True) or {}
@@ -49,6 +52,7 @@ def api_register():
             return jsonify({'success': True, 'confirmed': False, 'email': email, 'message': 'New confirmation code sent.'})
 
     hashed_password = generate_password_hash(password)
+    envelope_keys = generate_user_envelope_keys()
     m.users_conf.insert_one({
         'username': username,
         'email': email,
@@ -56,7 +60,8 @@ def api_register():
         'is_confirmed': False,
         'is_admin': False,
         'join_date': datetime.datetime.now(datetime.timezone.utc),
-        'notification_preference': 'weekly'
+        'notification_preference': 'weekly',
+        **envelope_keys
     })
 
     gen_code = str(secrets.randbelow(10**6)).zfill(6)
@@ -107,14 +112,13 @@ def api_confirm(email):
         return jsonify({'error': 'The confirmation code is incorrect.'}), 400
 
 @api_bp.route('/login', methods=['POST'])
+@limits(calls=15, period=TIME)
 def api_login():
     import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
     remember = bool(data.get("remember", True))
-
-    print(f"[DEBUG LOGIN] Attempt for username/email: '{username}'", flush=True)
 
     user = m.users_conf.find_one({
         "$or": [
@@ -123,18 +127,13 @@ def api_login():
         ]
     })
 
-    print(f"[DEBUG LOGIN] User found in DB: {user is not None}", flush=True)
-
     if user and user.get('password') is None:
-        print("[DEBUG LOGIN] User password is None (Google Auth account)", flush=True)
         return jsonify({'error': 'This account was created with Google. Please use Google Login.'}), 400
 
     if user:
         is_correct = check_password_hash(user["password"], password)
-        print(f"[DEBUG LOGIN] Password check result: {is_correct}", flush=True)
         if is_correct:
             if not user.get('is_confirmed'):
-                print(f"[DEBUG LOGIN] User '{user['username']}' is not confirmed. Regenerating code and returning unconfirmed status.", flush=True)
                 gen_code = str(secrets.randbelow(10**6)).zfill(6)
                 hashed = hashlib.sha256(gen_code.encode()).hexdigest()
                 code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
@@ -148,7 +147,6 @@ def api_login():
                 }), 200
 
             if user.get('is_banned'):
-                print("[DEBUG LOGIN] User is banned", flush=True)
                 return jsonify({'error': 'Your account has been suspended.'}), 403
 
             user_obj = m.User(user)
@@ -164,7 +162,6 @@ def api_login():
                 'user_id': user['_id'],
                 'created_at': datetime.datetime.now(datetime.timezone.utc)
             })
-            print(f"[DEBUG LOGIN] Login successful. Generated token: {_app_token[:12]}...", flush=True)
 
             resp = make_response(jsonify({
                 'success': True,

@@ -792,6 +792,7 @@ def reindex_my_notes():
 
 
 @bp.route('/api/merge/ai', methods=['POST'])
+@login_required
 @limits(calls=20, period=60)
 def merge_conflict_ai():
     """Uses JigsawStack AI to intelligently resolve merge conflicts between two versions."""

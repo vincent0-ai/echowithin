@@ -1411,12 +1411,22 @@ def process_post_media(post_id_str, temp_image_paths, temp_video_path):
         app.logger.info(f"Cleaned up temporary files for post {post_id_str}")
 
 
+def authenticated_only(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return
+        return f(*args, **kwargs)
+    return wrapped
+
+
 # --- WebSocket Real-time collaboration ---
 @socketio.on('join_note')
+@authenticated_only
 def handle_join_note(data):
     share_id = data.get('share_id')
-    user_name = data.get('user_name', 'Anonymous')
-    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    user_name = getattr(current_user, 'username', 'Anonymous')
+    user_id = str(current_user.id)
     
     if share_id:
         join_room(share_id)
@@ -1427,7 +1437,7 @@ def handle_join_note(data):
         
         active_note_viewers[share_id][user_id] = {
             'name': user_name,
-            'avatar': getattr(current_user, 'profile_image_url', None) if current_user.is_authenticated else None,
+            'avatar': getattr(current_user, 'profile_image_url', None),
             'id': user_id
         }
         
@@ -1444,9 +1454,10 @@ def handle_join_note(data):
         app.logger.info(f"User {user_name} joined note room: fp={share_fp}")
 
 @socketio.on('leave_note')
+@authenticated_only
 def handle_leave_note(data):
     share_id = data.get('share_id')
-    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    user_id = str(current_user.id)
     
     if share_id:
         leave_room(share_id)
@@ -1465,10 +1476,11 @@ def handle_leave_note(data):
         app.logger.info(f"User left note room: fp={share_fp}")
 
 @socketio.on('acquire_lock')
+@authenticated_only
 def handle_acquire_lock(data):
     share_id = data.get('share_id')
-    user_name = data.get('user_name', 'Anonymous')
-    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    user_name = getattr(current_user, 'username', 'Anonymous')
+    user_id = str(current_user.id)
     
     if not share_id: return
 
@@ -1494,15 +1506,17 @@ def handle_acquire_lock(data):
     emit('lock_acquired', lock_info, room=share_id)
 
 @socketio.on('release_lock')
+@authenticated_only
 def handle_release_lock(data):
     share_id = data.get('share_id')
-    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
+    user_id = str(current_user.id)
     
     if share_id in note_locks and note_locks[share_id]['user_id'] == user_id:
         note_locks.pop(share_id)
         emit('lock_released', {'share_id': share_id}, room=share_id)
 
 @socketio.on('note_update')
+@authenticated_only
 def handle_note_update(data):
     share_id = data.get('share_id')
     content = data.get('content')
@@ -1511,20 +1525,12 @@ def handle_note_update(data):
         emit('note_changed', {'content': content}, room=share_id, include_self=False)
 
 @socketio.on('discussion_new_comment')
+@authenticated_only
 def handle_discussion_new_comment(data):
     share_id = data.get('share_id')
     comment_data = data.get('comment')
     if share_id and comment_data:
         emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
-
-
-def authenticated_only(f):
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        if not current_user.is_authenticated:
-            return
-        return f(*args, **kwargs)
-    return wrapped
 
 
 # --- Direct Messaging (DM) Functionality ---

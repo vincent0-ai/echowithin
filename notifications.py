@@ -162,7 +162,6 @@ def process_image_for_nsfw(post_id, image_url, public_id):
 
 
 def send_code(email, gen_code=None, retries=3, delay=2):
-    _get_app().logger.info(f"[DEV DEBUG] Generated verification code for {email}: {gen_code}")
     for attempt in range(retries):
         try:
             sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
@@ -174,7 +173,7 @@ def send_code(email, gen_code=None, retries=3, delay=2):
             msg.html = render_template("verify.html", code=gen_code)
             msg.body = f"Your EchoWithin verification code is: {gen_code}\n\nIf you didn't request this, please ignore this email."
             _get_mail().send(msg)
-            _get_app().logger.info(f"Verification email sent to {email}. DEV CODE: {gen_code}")
+            _get_app().logger.info(f"Verification email sent to {email}.")
             return True
         except Exception as e:
             _get_app().logger.error(f"Attempt {attempt+1} failed to send email to {email}: {e}")
@@ -186,7 +185,7 @@ def send_reset_code(email, reset_token=None, retries=3, delay=2):
     reset_url = ""
     try:
         reset_url = url_for('auth.reset_password', token=reset_token, _external=True)
-        _get_app().logger.info(f"[DEV DEBUG] Generated password reset link for {email}: {reset_url}")
+        _get_app().logger.debug(f"Generated password reset link for {email}")
     except Exception:
         pass
     for attempt in range(retries):

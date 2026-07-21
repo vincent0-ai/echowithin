@@ -1,12 +1,12 @@
 # Commit Summary
 
 ## Goal
-Fix mobile keyboard issue where input area and send button were pushed down or hidden under the page footer when typing.
+Fix flexbox layout bug where the chat input area (`.chat-input-area`) was pushed below the viewport when scrolling or when banners were hidden.
 
 ## Description of Changes
-- **Hidden Footer in Chat View**: Added `display: none !important` on `footer`, `.footer`, and `.site-footer` when `mobile-chat-open` is active so the page footer doesn't take up vertical space or overlap input area.
-- **Dynamic VisualViewport Height**: Bound `.messages-wrapper` height directly to `window.visualViewport.height` on mobile keyboard resize, keeping the entire chat container (header, history, input bar, and send button) pinned perfectly above the virtual keyboard.
-- **Form Flex Shrink & Button Sizing**: Explicitly enforced `flex-shrink: 0` on `.action-btn` and `#send-btn` with reduced mobile gap (`0.35rem`) so all 5 input components remain fully visible on screen.
+- **Enforced Flexbox Constraints**: Added `min-height: 0; overflow: hidden;` to `.chat-main` (`#chat-main-container`) and `#chat-interface`.
+- **Constrained Chat History**: Set `flex: 1 1 auto; min-height: 0; overflow-y: auto;` on `#chat-history` so message list scrolling stays bounded strictly inside the container.
+- **Pinned Input Area**: Set `flex-shrink: 0; z-index: 10;` on `.chat-input-area` so the message input bar remains permanently visible at the bottom of the screen regardless of scroll position or banner state.
 
 ## Modified Files
 - [templates/messages.html](file:///c:/Users/DevTech/Desktop/Projects/echowithin/echowithin/templates/messages.html)

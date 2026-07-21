@@ -97,7 +97,7 @@
 
         <!-- Main Chat Area -->
         <div class="chat-main" id="chat-main-container"
-            style="flex: 1; display: flex; flex-direction: column; background: #fff;">
+            style="flex: 1; display: flex; flex-direction: column; background: #fff; min-height: 0; overflow: hidden;">
 
             <!-- Selection Splash Screen -->
             <div id="selection-splash"
@@ -113,7 +113,7 @@
 
             <!-- Chat Interface -->
             <div id="chat-interface"
-                style="flex: 1; flex-direction: column; height: 100%; {{ 'display: flex;' if active_chat else 'display: none;' }}">
+                style="flex: 1; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; position: relative; {{ 'display: flex;' if active_chat else 'display: none;' }}">
                 <!-- Chat Header -->
                 <div class="chat-header">
                     <div class="chat-header-info">
@@ -172,7 +172,7 @@
 
                 <!-- Messages List -->
                 <div id="chat-history"
-                    style="flex: 1; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa; position: relative;"
+                    style="flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa; position: relative;"
                     data-theme="default">
                     {% if not active_chat %}
                     <div style="text-align: center; color: #999; font-size: 0.85rem; padding: 2rem;">Loading chat
@@ -933,8 +933,35 @@
 
         .messages-wrapper, .chat-main, #chat-interface {
             min-width: 0 !important;
+            min-height: 0 !important;
             max-width: 100vw !important;
             box-sizing: border-box !important;
+            overflow: hidden !important;
+        }
+
+        .chat-main {
+            height: 100% !important;
+            min-height: 0 !important;
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+
+        #chat-interface {
+            height: 100% !important;
+            min-height: 0 !important;
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            position: relative !important;
+        }
+
+        #chat-history {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
         }
 
         .chat-header {
@@ -964,6 +991,7 @@
             min-width: 0 !important;
             background: #fff !important;
             flex-shrink: 0 !important;
+            z-index: 10 !important;
         }
 
         .chat-input-area form {

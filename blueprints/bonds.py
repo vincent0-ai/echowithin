@@ -1777,3 +1777,308 @@ def api_bond_streak_shield(bond_id):
     except Exception as e:
         current_app.logger.error(f"Streak shield error: {e}")
         return jsonify({'error': 'Failed to use streak shield'}), 500
+
+
+# --- Daily Habits System (Encrypted) ---
+
+@bp.route('/api/bonds/<bond_id>/habits', methods=['GET'])
+@login_required
+def api_bond_habits_list(bond_id):
+    """List active daily habits for a bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        today_str = datetime.date.today().isoformat()
+
+        # Last 7 days dates YYYY-MM-DD
+        last_7_days = [(datetime.date.today() - datetime.timedelta(days=i)).isoformat() for i in range(7)]
+
+        habits = list(m.bond_habits_conf.find({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        }).sort('created_at', -1))
+
+        result = []
+        for h in habits:
+            decrypted_title = m.decrypt_bond_data(h.get('title', ''), bond_id)
+            logs = h.get('logs', {})
+            today_logs = logs.get(today_str, {})
+            my_today = today_logs.get(user_id_str, {}).get('completed', False)
+            partner_today = today_logs.get(partner_id, {}).get('completed', False)
+
+            # Calculate 7-day completion count for user & partner
+            my_7d = sum(1 for d in last_7_days if logs.get(d, {}).get(user_id_str, {}).get('completed'))
+            partner_7d = sum(1 for d in last_7_days if logs.get(d, {}).get(partner_id, {}).get('completed'))
+
+            result.append({
+                'id': str(h['_id']),
+                'title': decrypted_title,
+                'my_completed': my_today,
+                'partner_completed': partner_today,
+                'my_7d_count': my_7d,
+                'partner_7d_count': partner_7d,
+                'created_at': h['created_at'].isoformat().replace('+00:00', 'Z')
+            })
+
+        return jsonify({'habits': result})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond habits list error: {e}")
+        return jsonify({'error': 'Failed to fetch habits'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/habits', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_habit_create(bond_id):
+    """Create a new encrypted daily habit."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        title = data.get('title', '').strip()
+        if not title or len(title) > 200:
+            return jsonify({'error': 'Habit title required (max 200 chars)'}), 400
+
+        # Check limit: max 10 active habits per bond
+        active_count = m.bond_habits_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        })
+        if active_count >= 10:
+            return jsonify({'error': 'Maximum 10 active habits per bond.'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+
+        habit_doc = {
+            'bond_id': ObjectId(bond_id),
+            'title': encrypted_title,
+            'encrypted': True,
+            'created_by': ObjectId(user_id_str),
+            'created_at': now,
+            'archived': False,
+            'logs': {}
+        }
+        res = m.bond_habits_conf.insert_one(habit_doc)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_habit_updated', {
+            'bond_id': bond_id,
+            'habit_id': str(res.inserted_id),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'habit_id': str(res.inserted_id),
+            'title': title
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond habit create error: {e}")
+        return jsonify({'error': 'Failed to create habit'}), 500
+
+
+@bp.route('/api/bonds/habits/<habit_id>/toggle', methods=['POST'])
+@login_required
+@limits(calls=30, period=60)
+def api_bond_habit_toggle(habit_id):
+    """Toggle today's habit completion status."""
+    import main as m
+    try:
+        habit = m.bond_habits_conf.find_one({'_id': ObjectId(habit_id)})
+        if not habit or habit.get('archived'):
+            return jsonify({'error': 'Habit not found'}), 404
+
+        bond_id = str(habit['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        today_str = datetime.date.today().isoformat()
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        logs = habit.get('logs', {})
+        today_logs = logs.get(today_str, {})
+        current_status = today_logs.get(user_id_str, {}).get('completed', False)
+        new_status = not current_status
+
+        log_key = f'logs.{today_str}.{user_id_str}'
+        m.bond_habits_conf.update_one(
+            {'_id': ObjectId(habit_id)},
+            {'$set': {log_key: {'completed': new_status, 'completed_at': now}}}
+        )
+
+        if new_status:
+            # Completing a habit contributes to streak
+            _update_bond_streak(bond_doc)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_habit_updated', {
+            'bond_id': bond_id,
+            'habit_id': habit_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True, 'completed': new_status})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond habit toggle error: {e}")
+        return jsonify({'error': 'Failed to toggle habit'}), 500
+
+
+@bp.route('/api/bonds/habits/<habit_id>', methods=['DELETE'])
+@login_required
+def api_bond_habit_delete(habit_id):
+    """Archive a habit."""
+    import main as m
+    try:
+        habit = m.bond_habits_conf.find_one({'_id': ObjectId(habit_id)})
+        if not habit:
+            return jsonify({'error': 'Habit not found'}), 404
+
+        bond_id = str(habit['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bond_habits_conf.update_one(
+            {'_id': ObjectId(habit_id)},
+            {'$set': {'archived': True}}
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond habit delete error: {e}")
+        return jsonify({'error': 'Failed to archive habit'}), 500
+
+
+# --- Relationship Insights & Monthly Recap ("Echo Together") ---
+
+@bp.route('/api/bonds/<bond_id>/insights', methods=['GET'])
+@login_required
+def api_bond_insights_get(bond_id):
+    """Get 30-day mood comparison and monthly recap stats for a bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)}, {'username': 1})
+        partner_username = partner_user['username'] if partner_user else 'Partner'
+
+        today = datetime.date.today()
+        first_of_month = today.replace(day=1).isoformat()
+
+        # --- 1. 30-Day Mood Comparison ---
+        last_30_days = [(today - datetime.timedelta(days=i)).isoformat() for i in range(29, -1, -1)]
+        mood_entries = list(m.bond_moods_conf.find({
+            'bond_id': ObjectId(bond_id),
+            'date': {'$in': last_30_days}
+        }))
+
+        mood_map = {}
+        for me in mood_entries:
+            d = me['date']
+            u = str(me['user_id'])
+            if d not in mood_map:
+                mood_map[d] = {}
+            mood_map[d][u] = me['mood']
+
+        mood_comparison = []
+        for d in last_30_days:
+            m_user = mood_map.get(d, {}).get(user_id_str)
+            m_partner = mood_map.get(d, {}).get(partner_id)
+            mood_comparison.append({
+                'date': d,
+                'my_mood': m_user,
+                'partner_mood': m_partner
+            })
+
+        # --- 2. Monthly Recap Stats ("Echo Together") ---
+        # Current month start datetime
+        month_start_dt = datetime.datetime.combine(today.replace(day=1), datetime.time.min, tzinfo=datetime.timezone.utc)
+
+        # Completed goals this month
+        goals_completed = m.bond_goals_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'status': 'completed',
+            'completed_at': {'$gte': month_start_dt}
+        })
+
+        # QotD answered together this month
+        qotd_entries = list(m.bond_qotd_conf.find({
+            'bond_id': ObjectId(bond_id),
+            'date': {'$gte': first_of_month}
+        }))
+        qotd_answered = sum(1 for q in qotd_entries if len(q.get('answers', {})) == 2)
+
+        # Journal entries this month
+        journal_count = m.bond_journal_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'created_at': {'$gte': month_start_dt}
+        })
+
+        # Top mood for each partner this month
+        def _get_top_mood(uid):
+            month_moods = [me['mood'] for me in mood_entries if str(me['user_id']) == uid and me['date'] >= first_of_month]
+            if not month_moods:
+                return None
+            counts = {}
+            for mood_k in month_moods:
+                counts[mood_k] = counts.get(mood_k, 0) + 1
+            return max(counts, key=counts.get)
+
+        my_top_mood = _get_top_mood(user_id_str)
+        partner_top_mood = _get_top_mood(partner_id)
+
+        current_streak = bond_doc.get('streak_count', 0)
+        best_streak = bond_doc.get('best_streak', current_streak)
+
+        return jsonify({
+            'partner_username': partner_username,
+            'mood_comparison': mood_comparison,
+            'recap': {
+                'month_name': today.strftime('%B %Y'),
+                'current_streak': current_streak,
+                'best_streak': best_streak,
+                'goals_completed': goals_completed,
+                'qotd_answered': qotd_answered,
+                'journal_count': journal_count,
+                'my_top_mood': my_top_mood,
+                'partner_top_mood': partner_top_mood
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond insights error: {e}")
+        return jsonify({'error': 'Failed to fetch insights'}), 500

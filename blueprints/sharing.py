@@ -506,7 +506,7 @@ def api_upload_note_attachment(share_id):
             'filename': sanitized_filename,
             'uploader_name': current_user.username,
             'uploader_id': str(current_user.id),
-            'created_at': now.isoformat()
+            'created_at': now.isoformat().replace('+00:00', 'Z')
         }
     })
 
@@ -876,11 +876,11 @@ def api_edit_shared_note(share_id):
     )
 
     try:
-        m.socketio.emit('note_changed', {'content': content, 'updated_at': now.isoformat()}, room=share_id)
+        m.socketio.emit('note_changed', {'content': content, 'updated_at': now.isoformat().replace('+00:00', 'Z')}, room=share_id)
     except Exception:
         pass
 
-    return jsonify({'success': True, 'pending_approval': False, 'updated_at': now.isoformat()})
+    return jsonify({'success': True, 'pending_approval': False, 'updated_at': now.isoformat().replace('+00:00', 'Z')})
 
 
 @bp.route('/personal_post/revoke_share/<share_id>', methods=['POST'])
@@ -961,10 +961,10 @@ def api_get_note_shares(post_id):
             'owner_id': str(s.get('owner_id', '')),
             'permissions': s.get('permissions', 'view'),
             'url': url_for('sharing.view_shared_note', share_id=s.get('share_id', ''), _external=True),
-            'expires_at': s['expires_at'].isoformat() if s.get('expires_at') else None,
-            'created_at': s['created_at'].isoformat() if s.get('created_at') else None,
+            'expires_at': s['expires_at'].isoformat().replace('+00:00', 'Z') if s.get('expires_at') else None,
+            'created_at': s['created_at'].isoformat().replace('+00:00', 'Z') if s.get('created_at') else None,
             'surprise_theme': s.get('surprise_theme', 'none'),
-            'unlock_date': s['unlock_date'].isoformat() if s.get('unlock_date') else None,
+            'unlock_date': s['unlock_date'].isoformat().replace('+00:00', 'Z') if s.get('unlock_date') else None,
         })
     
     return jsonify(result)
@@ -1325,7 +1325,7 @@ def api_restore_note_version(post_id, version_id):
     plain = m._decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or m.decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
     m.index_note_to_typesense(post_id, decrypted_content=plain)
 
-    return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat()})
+    return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat().replace('+00:00', 'Z')})
 
 
 @bp.route('/personal_post/proposal/<version_id>/decision', methods=['POST'])
@@ -1464,9 +1464,9 @@ def api_decide_note_proposal(version_id):
         m.index_note_to_typesense(str(note_id), decrypted_content=final_plain)
 
         # Notify owner sessions and collaborators in the share room.
-        m.socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat()}, room=str(current_user.id))
+        m.socketio.emit('note_changed', {'note_id': str(note_id), 'content': final_plain, 'updated_at': now.isoformat().replace('+00:00', 'Z')}, room=str(current_user.id))
         if proposal.get('share_id'):
-            m.socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat()}, room=proposal.get('share_id'))
+            m.socketio.emit('note_changed', {'content': final_plain, 'updated_at': now.isoformat().replace('+00:00', 'Z')}, room=proposal.get('share_id'))
 
         # Notify contributor of acceptance
         contributor_id = proposal.get('editor_id')
@@ -1481,7 +1481,7 @@ def api_decide_note_proposal(version_id):
                 )
             except Exception: pass
 
-        return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat()})
+        return jsonify({'success': True, 'status': 'accepted', 'content': final_plain, 'updated_at': now.isoformat().replace('+00:00', 'Z')})
     except Exception as e:
         current_app.logger.error(f"Failed to process proposal decision {version_id}: {e}", exc_info=True)
         return jsonify({'error': 'Internal server error while reviewing proposal'}), 500
@@ -1587,7 +1587,7 @@ def api_post_note_comment(share_id):
         '_id': str(result.inserted_id),
         'author_name': comment['author_name'],
         'content': content,
-        'created_at': comment['created_at'].isoformat()
+        'created_at': comment['created_at'].isoformat().replace('+00:00', 'Z')
     })
 
 
@@ -1640,7 +1640,7 @@ def api_post_note_reply(share_id, comment_id):
         '_id': str(result.inserted_id),
         'author_name': reply['author_name'],
         'content': content,
-        'created_at': reply['created_at'].isoformat()
+        'created_at': reply['created_at'].isoformat().replace('+00:00', 'Z')
     })
 
 

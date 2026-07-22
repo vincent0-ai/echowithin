@@ -160,7 +160,7 @@ def _get_bond_anniversary(accepted_at):
 def _get_daily_question(bond_doc):
     """Deterministic daily question selection based on bond type + date."""
     bond_type = bond_doc.get('bond_type', 'custom')
-    today_str = datetime.date.today().isoformat()
+    today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     bond_id_str = str(bond_doc['_id'])
 
     # Combine type-specific + universal questions
@@ -1237,7 +1237,7 @@ def api_bond_nudge(bond_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
-        today_str = datetime.date.today().isoformat()
+        today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
 
         # Check daily nudge limit
         user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
@@ -1314,8 +1314,8 @@ def api_bond_mood_log(bond_id):
         if mood not in BOND_MOODS:
             return jsonify({'error': 'Invalid mood. Choose from: ' + ', '.join(BOND_MOODS.keys())}), 400
 
-        today_str = datetime.date.today().isoformat()
         now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
         user_oid = ObjectId(current_user.id)
 
         # Upsert — allows changing mood within the same day
@@ -1392,7 +1392,7 @@ def api_bond_mood_status(bond_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
-        today_str = datetime.date.today().isoformat()
+        today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
 
         # Today's moods
         my_mood_doc = m.bond_moods_conf.find_one({
@@ -1411,7 +1411,7 @@ def api_bond_mood_status(bond_id):
         revealed = my_mood is not None and partner_mood is not None
 
         # 14-day history (only show days where both logged — mutual reveal)
-        fourteen_days_ago = (datetime.date.today() - datetime.timedelta(days=14)).isoformat()
+        fourteen_days_ago = (datetime.datetime.now(datetime.timezone.utc).date() - datetime.timedelta(days=14)).isoformat()
         all_moods = list(m.bond_moods_conf.find({
             'bond_id': ObjectId(bond_id),
             'date': {'$gte': fourteen_days_ago}
@@ -1468,7 +1468,7 @@ def api_bond_qotd_get(bond_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
-        today_str = datetime.date.today().isoformat()
+        today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
 
         # Get or create today's question doc
         qotd_doc = m.bond_qotd_conf.find_one({
@@ -1560,8 +1560,8 @@ def api_bond_qotd_answer(bond_id):
         if not answer or len(answer) > 1000:
             return jsonify({'error': 'Answer required (max 1000 chars)'}), 400
 
-        today_str = datetime.date.today().isoformat()
         now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
 
         # Ensure question exists
         qotd_doc = m.bond_qotd_conf.find_one({
@@ -1669,8 +1669,8 @@ def api_bond_qotd_generate_ai(bond_id):
         if not _is_bond_participant(bond_doc, user_id_str):
             return jsonify({'error': 'Not authorized'}), 403
 
-        today_str = datetime.date.today().isoformat()
         now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
 
         # Get JigsawStack API key
         try:
@@ -1779,8 +1779,8 @@ def api_bond_qotd_custom(bond_id):
         if not question_text or len(question_text) > 300:
             return jsonify({'error': 'Question required (max 300 chars)'}), 400
 
-        today_str = datetime.date.today().isoformat()
         now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
 
         qotd_doc = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
 
@@ -1916,10 +1916,11 @@ def api_bond_habits_list(bond_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
-        today_str = datetime.date.today().isoformat()
+        today_utc = datetime.datetime.now(datetime.timezone.utc).date()
+        today_str = today_utc.isoformat()
 
         # Last 7 days dates YYYY-MM-DD
-        last_7_days = [(datetime.date.today() - datetime.timedelta(days=i)).isoformat() for i in range(7)]
+        last_7_days = [(today_utc - datetime.timedelta(days=i)).isoformat() for i in range(7)]
 
         habits = list(m.bond_habits_conf.find({
             'bond_id': ObjectId(bond_id),
@@ -2042,8 +2043,8 @@ def api_bond_habit_toggle(habit_id):
         if not _is_bond_participant(bond_doc, user_id_str):
             return jsonify({'error': 'Not authorized'}), 403
 
-        today_str = datetime.date.today().isoformat()
         now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
 
         logs = habit.get('logs', {})
         today_logs = logs.get(today_str, {})
@@ -2134,7 +2135,7 @@ def api_bond_insights_get(bond_id):
         partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)}, {'username': 1})
         partner_username = partner_user['username'] if partner_user else 'Partner'
 
-        today = datetime.date.today()
+        today = datetime.datetime.now(datetime.timezone.utc).date()
         first_of_month = today.replace(day=1).isoformat()
 
         # --- 1. 30-Day Mood Comparison ---

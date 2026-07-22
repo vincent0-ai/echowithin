@@ -862,6 +862,7 @@
         .messages-container {
             padding: 0 !important;
             height: 100vh !important;
+            height: 100dvh !important;
         }
 
         .messages-sidebar {
@@ -925,6 +926,22 @@
             overflow: hidden !important;
             width: 100% !important;
             margin: 0 !important;
+        }
+
+        body.mobile-chat-open .container {
+            padding: 0 !important;
+            margin: 0 !important;
+            flex: 1 !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+            width: 100% !important;
+        }
+
+        body.mobile-chat-open .flash-messages,
+        body.mobile-chat-open .overlay {
+            display: none !important;
         }
 
         body.mobile-chat-open .messages-container {

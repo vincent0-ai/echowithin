@@ -1795,18 +1795,16 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        gap: 0.5rem;
+        gap: 0.3rem 0.4rem;
         justify-content: center;
         width: 100%;
-        white-space: nowrap;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
     }
 
     .nav-links a {
         white-space: nowrap;
-        flex-shrink: 0;
-        font-size: 0.85rem;
-        padding: 0.4rem 0.35rem;
+        font-size: 0.82rem;
+        padding: 0.3rem 0.35rem;
     }
 
     /* Spacing between brand row elements on mobile */
@@ -2010,17 +2008,16 @@ body {
     .nav-links {
         display: flex;
         flex-direction: row;
-        flex-wrap: nowrap;
-        gap: 0.25rem;
+        flex-wrap: wrap;
+        gap: 0.15rem 0.3rem;
         width: 100%;
         justify-content: center;
     }
 
     .nav-links a {
-        font-size: 0.8rem;
-        padding: 0.3rem 0.3rem;
+        font-size: 0.72rem;
+        padding: 0.25rem 0.25rem;
         white-space: nowrap;
-        flex-shrink: 0;
     }
 
     /* Tab responsiveness on very small screens */

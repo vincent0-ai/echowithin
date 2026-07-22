@@ -617,6 +617,14 @@ def api_bond_break(bond_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} ended your Bond",
+            "Your bond has been broken.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-broken-{bond_id}'
+        )
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -861,6 +869,14 @@ def api_bond_goal_approve(goal_id):
             'approved_by': current_user.username
         }, room=f"user_{proposer_id}")
 
+        m.send_push_notification_to_user(
+            proposer_id,
+            f"{current_user.username} approved your goal!",
+            "Your shared goal is now active.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-goal-approved-{goal_id}'
+        )
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -924,6 +940,14 @@ def api_bond_goal_checkin(goal_id):
             'new_total': new_current
         }, room=f"user_{partner_id}")
 
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} checked in on a goal",
+            "Progress has been logged on your shared goal.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-checkin-{goal_id}'
+        )
+
         return jsonify({
             'success': True,
             'current_value': new_current,
@@ -977,6 +1001,15 @@ def api_bond_goal_milestone_toggle(goal_id, idx):
             'completed': ms['completed'],
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        if ms['completed']:
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} completed a milestone",
+                "A goal milestone has been checked off.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-milestone-{goal_id}-{idx}'
+            )
 
         return jsonify({'success': True, 'completed': ms['completed']})
 
@@ -1055,6 +1088,14 @@ def api_bond_goal_abandon(goal_id):
             'title': goal['title'],
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} abandoned a goal",
+            "A shared goal has been abandoned.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-goal-abandon-{goal_id}'
+        )
 
         return jsonify({'success': True})
 
@@ -1139,6 +1180,14 @@ def api_bond_journal_create(bond_id):
             'entry_id': str(result.inserted_id),
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} wrote in your shared journal",
+            "A new journal entry is waiting for you.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-journal-{bond_id}'
+        )
 
         return jsonify({
             'success': True,
@@ -1303,6 +1352,23 @@ def api_bond_mood_log(bond_id):
                 'partner_mood': mood,
                 'partner_username': current_user.username
             }, room=f"user_{partner_id}")
+
+            m.send_push_notification_to_user(
+                partner_id,
+                "Moods revealed! 🎭",
+                f"{current_user.username} logged their mood — see how you both feel today.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-mood-{bond_id}'
+            )
+        else:
+            # Partner hasn't logged yet — nudge them
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} logged their mood",
+                "Log yours to reveal both moods!",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-mood-{bond_id}'
+            )
 
         return jsonify(result)
 
@@ -1561,6 +1627,23 @@ def api_bond_qotd_answer(bond_id):
                 'partner_username': current_user.username
             }, room=f"user_{partner_id}")
 
+            m.send_push_notification_to_user(
+                partner_id,
+                "Answers revealed! 💬",
+                f"{current_user.username} answered today's question — see both answers now.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-qotd-{bond_id}'
+            )
+        else:
+            # Partner hasn't answered yet — nudge them
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} answered today's question",
+                "Answer yours to reveal both!",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-qotd-{bond_id}'
+            )
+
         return jsonify(result)
 
     except Exception as e:
@@ -1656,6 +1739,14 @@ def api_bond_qotd_generate_ai(bond_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} set a new Question of the Day",
+            "An AI-generated question is waiting for you.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-qotd-new-{bond_id}'
+        )
+
         return jsonify({
             'success': True,
             'question': ai_question,
@@ -1722,6 +1813,14 @@ def api_bond_qotd_custom(bond_id):
             'source': 'custom',
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} asked you a question",
+            "A custom Question of the Day is waiting for you.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-qotd-new-{bond_id}'
+        )
 
         return jsonify({
             'success': True,
@@ -1904,6 +2003,14 @@ def api_bond_habit_create(bond_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} added a new habit",
+            f'"{title}" — Start tracking it together.',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-habit-new-{res.inserted_id}'
+        )
+
         return jsonify({
             'success': True,
             'habit_id': str(res.inserted_id),
@@ -1959,6 +2066,15 @@ def api_bond_habit_toggle(habit_id):
             'habit_id': habit_id,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        if new_status:
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} completed a habit ✓",
+                "Your partner checked off a daily habit.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-habit-toggle-{habit_id}'
+            )
 
         return jsonify({'success': True, 'completed': new_status})
 
@@ -2199,6 +2315,14 @@ def api_bond_countdown_create(bond_id):
             'bond_id': bond_id,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} added a countdown",
+            f'"{title}" — {event_date_str}',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-countdown-{res.inserted_id}'
+        )
 
         return jsonify({
             'success': True,

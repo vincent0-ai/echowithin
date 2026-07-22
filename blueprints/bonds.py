@@ -675,10 +675,12 @@ def api_bond_goals_list(bond_id):
         result = []
         for g in goals:
             proposer = m.users_conf.find_one({'_id': g['proposed_by']}, {'username': 1})
+            decrypted_title = m.decrypt_bond_data(g.get('title', ''), bond_id)
+            decrypted_desc = m.decrypt_bond_data(g.get('description', ''), bond_id)
             result.append({
                 'id': str(g['_id']),
-                'title': g['title'],
-                'description': g.get('description', ''),
+                'title': decrypted_title,
+                'description': decrypted_desc,
                 'category': g.get('category', 'Custom'),
                 'target_value': g.get('target_value', 0),
                 'current_value': g.get('current_value', 0),
@@ -688,7 +690,7 @@ def api_bond_goals_list(bond_id):
                 'proposed_by': str(g['proposed_by']),
                 'proposed_by_username': proposer['username'] if proposer else 'User',
                 'milestones': [{
-                    'title': ms['title'],
+                    'title': m.decrypt_bond_data(ms.get('title', ''), bond_id),
                     'completed': ms.get('completed', False),
                     'completed_by': str(ms['completed_by']) if ms.get('completed_by') else None,
                     'completed_at': ms['completed_at'].isoformat().replace('+00:00', 'Z') if ms.get('completed_at') else None
@@ -696,7 +698,7 @@ def api_bond_goals_list(bond_id):
                 'check_ins': [{
                     'user_id': str(ci['user_id']),
                     'value': ci.get('value', 0),
-                    'note': ci.get('note', ''),
+                    'note': m.decrypt_bond_data(ci.get('note', ''), bond_id),
                     'at': ci['at'].isoformat().replace('+00:00', 'Z')
                 } for ci in g.get('check_ins', [])[-10:]],  # last 10 check-ins
                 'created_at': g['created_at'].isoformat().replace('+00:00', 'Z'),
@@ -775,10 +777,20 @@ def api_bond_goal_create(bond_id):
                 })
 
         now = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+        encrypted_desc = m.encrypt_bond_data(description, bond_id) if description else ''
+        encrypted_milestones = []
+        for ms in milestones:
+            encrypted_milestones.append({
+                'title': m.encrypt_bond_data(ms['title'], bond_id),
+                'completed': ms['completed'],
+                'completed_by': ms['completed_by'],
+                'completed_at': ms['completed_at']
+            })
         goal_doc = {
             'bond_id': ObjectId(bond_id),
-            'title': title,
-            'description': description,
+            'title': encrypted_title,
+            'description': encrypted_desc,
             'category': category,
             'target_value': target_value,
             'current_value': 0,
@@ -786,7 +798,8 @@ def api_bond_goal_create(bond_id):
             'deadline': deadline,
             'status': 'proposed',
             'proposed_by': ObjectId(current_user.id),
-            'milestones': milestones,
+            'milestones': encrypted_milestones,
+            'encrypted': True,
             'check_ins': [],
             'created_at': now,
             'completed_at': None
@@ -879,11 +892,13 @@ def api_bond_goal_checkin(goal_id):
 
         note = data.get('note', '').strip()[:500]
         now = datetime.datetime.now(datetime.timezone.utc)
+        bond_id_str = str(goal['bond_id'])
+        encrypted_note = m.encrypt_bond_data(note, bond_id_str) if note else ''
 
         check_in = {
             'user_id': ObjectId(current_user.id),
             'value': value,
-            'note': note,
+            'note': encrypted_note,
             'at': now
         }
 
@@ -1398,11 +1413,13 @@ def api_bond_qotd_get(bond_id):
         if not qotd_doc:
             question_text, question_category = _get_daily_question(bond_doc)
             now = datetime.datetime.now(datetime.timezone.utc)
+            encrypted_question = m.encrypt_bond_data(question_text, bond_id)
             qotd_doc = {
                 'bond_id': ObjectId(bond_id),
                 'date': today_str,
-                'question_text': question_text,
+                'question_text': encrypted_question,
                 'question_category': question_category,
+                'encrypted': True,
                 'answers': {},
                 'created_at': now
             }
@@ -1425,8 +1442,9 @@ def api_bond_qotd_get(bond_id):
 
         my_ans_text = m.decrypt_bond_data(my_answer.get('answer'), bond_id) if my_answer else None
 
+        decrypted_question = m.decrypt_bond_data(qotd_doc.get('question_text', ''), bond_id)
         result = {
-            'question': qotd_doc['question_text'],
+            'question': decrypted_question,
             'category': qotd_doc.get('question_category', 'Universal'),
             'source': qotd_doc.get('source', 'preset'),
             'my_answer': my_ans_text,
@@ -1610,12 +1628,14 @@ def api_bond_qotd_generate_ai(bond_id):
         if qotd_doc and qotd_doc.get('answers'):
             return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
 
+        encrypted_ai_question = m.encrypt_bond_data(ai_question, bond_id)
         update_payload = {
             'bond_id': ObjectId(bond_id),
             'date': today_str,
-            'question_text': ai_question,
+            'question_text': encrypted_ai_question,
             'question_category': f'AI Generated ({relationship_label})',
             'source': 'ai',
+            'encrypted': True,
             'set_by': ObjectId(current_user.id),
             'created_at': now,
             'answers': {}
@@ -1676,12 +1696,14 @@ def api_bond_qotd_custom(bond_id):
         if qotd_doc and qotd_doc.get('answers'):
             return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
 
+        encrypted_question = m.encrypt_bond_data(question_text, bond_id)
         update_payload = {
             'bond_id': ObjectId(bond_id),
             'date': today_str,
-            'question_text': question_text,
+            'question_text': encrypted_question,
             'question_category': f'Set by {current_user.username}',
             'source': 'custom',
+            'encrypted': True,
             'set_by': ObjectId(current_user.id),
             'created_at': now,
             'answers': {}

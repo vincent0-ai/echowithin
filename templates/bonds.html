@@ -732,6 +732,144 @@
         background: none;
         padding: 0;
     }
+
+    /* --- Mobile Responsive --- */
+    @media (max-width: 768px) {
+        .bonds-page {
+            padding: 0.5rem;
+        }
+
+        .bonds-header h1 {
+            font-size: 1.3rem;
+        }
+
+        .bonds-header p {
+            font-size: 0.82rem;
+        }
+
+        .bond-card {
+            padding: 0.9rem;
+        }
+
+        .bond-card-header {
+            gap: 0.6rem;
+            margin-bottom: 0.6rem;
+        }
+
+        .bond-avatar, .bond-avatar-placeholder {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+
+        .bond-username {
+            font-size: 0.92rem;
+        }
+
+        .bond-actions {
+            gap: 0.35rem;
+            margin-top: 0.6rem;
+        }
+
+        .bond-actions .btn {
+            font-size: 0.72rem;
+            padding: 0.25rem 0.6rem;
+        }
+
+        .bond-expand-section {
+            margin-top: 0.8rem;
+            padding-top: 0.8rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .bonds-page {
+            padding: 0.3rem;
+        }
+
+        .bonds-header {
+            margin-bottom: 1rem;
+        }
+
+        .bonds-header h1 {
+            font-size: 1.15rem;
+        }
+
+        .bonds-header p {
+            font-size: 0.78rem;
+        }
+
+        .bond-card {
+            padding: 0.7rem;
+            border-radius: 6px;
+        }
+
+        .bond-card-header {
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .bond-avatar, .bond-avatar-placeholder {
+            width: 36px;
+            height: 36px;
+            font-size: 0.9rem;
+        }
+
+        .bond-username {
+            font-size: 0.85rem;
+        }
+
+        .bond-type-badge {
+            font-size: 0.65rem;
+            padding: 1px 6px;
+        }
+
+        .bond-meta {
+            font-size: 0.7rem;
+        }
+
+        .bond-label {
+            font-size: 0.72rem;
+        }
+
+        .bond-streak {
+            font-size: 0.78rem;
+        }
+
+        .bond-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+            gap: 0.3rem;
+            margin-top: 0.5rem;
+        }
+
+        .bond-actions .btn {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.3rem;
+            text-align: center;
+            border-radius: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bond-expand-section {
+            margin-top: 0.6rem;
+            padding-top: 0.6rem;
+        }
+
+        .goal-card {
+            padding: 0.6rem;
+        }
+
+        .goal-title {
+            font-size: 0.85rem;
+        }
+
+        .bonds-section-title {
+            font-size: 0.95rem;
+        }
+    }
 </style>
 
 <div class="bonds-page">

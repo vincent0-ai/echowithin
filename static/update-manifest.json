@@ -1,6 +1,6 @@
 {
-  "versionCode": 34,
-  "versionName": "1.10.0",
+  "versionCode": 35,
+  "versionName": "1.10.1",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.0 📜 Fix Note Content Display Cutoff:\nFixed height calculation in NoteDetailScreen where HTML content height was improperly divided by device pixel density a second time, restoring full height note text rendering."
+  "changelog": "v1.10.1 ⚡ Performance & Stability:\n• Smoother list scrolling (memoized date formatting, derivedStateOf, DB indexes)\n• Shimmer skeleton loader on note detail screen\n• Fixed keyboard hiding editor content (adjustResize)\n• Fixed PIN creation crash in guest/offline mode"
 }

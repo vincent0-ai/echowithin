@@ -1696,6 +1696,7 @@
         const messageInput = document.getElementById('message-input');
         const currentUserId = "{{ current_user.id }}";
         let activeRecipientId = "{{ active_chat._id if active_chat else '' }}";
+        let activeRecipientName = "{{ active_chat.username if active_chat else '' }}";
         if (activeRecipientId && window.innerWidth <= 768) {
             document.body.classList.add('mobile-chat-open');
         }
@@ -2278,6 +2279,7 @@
             if (element) element.classList.add('active');
 
             activeRecipientId = userId;
+            activeRecipientName = username;
             document.getElementById('recipient-id').value = userId;
             document.getElementById('selection-splash').style.display = 'none';
             document.getElementById('chat-interface').style.display = 'flex';

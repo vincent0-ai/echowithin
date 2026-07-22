@@ -44,6 +44,7 @@ bond_journal_conf = None
 bond_moods_conf = None
 bond_qotd_conf = None
 bond_habits_conf = None
+bond_countdowns_conf = None
 
 # --- Chat Deletion (Soft-Delete per User) ---
 hidden_chats_conf = None

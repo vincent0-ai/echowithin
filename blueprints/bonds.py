@@ -2082,3 +2082,145 @@ def api_bond_insights_get(bond_id):
     except Exception as e:
         current_app.logger.error(f"Bond insights error: {e}")
         return jsonify({'error': 'Failed to fetch insights'}), 500
+
+@bp.route('/api/bonds/<bond_id>/countdowns', methods=['GET'])
+@login_required
+def api_bond_countdowns_list(bond_id):
+    """List active countdowns for a bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        countdowns = list(m.bond_countdowns_conf.find({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        }).sort('event_date', 1))
+
+        result = []
+        for c in countdowns:
+            decrypted_title = m.decrypt_bond_data(c.get('title', ''), bond_id)
+            result.append({
+                'id': str(c['_id']),
+                'title': decrypted_title,
+                'event_date': c['event_date'].strftime('%Y-%m-%d') if isinstance(c.get('event_date'), datetime.datetime) else str(c.get('event_date', '')),
+                'created_by': str(c.get('created_by', '')),
+                'created_at': c['created_at'].isoformat().replace('+00:00', 'Z') if c.get('created_at') else None
+            })
+
+        return jsonify({'countdowns': result})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond countdowns list error: {e}")
+        return jsonify({'error': 'Failed to fetch countdowns'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/countdowns', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_countdown_create(bond_id):
+    """Create a new encrypted countdown."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        title = data.get('title', '').strip()
+        event_date_str = data.get('event_date', '').strip()
+
+        if not title or len(title) > 200:
+            return jsonify({'error': 'Event name required (max 200 chars)'}), 400
+        if not event_date_str:
+            return jsonify({'error': 'Event date is required'}), 400
+
+        try:
+            event_date = datetime.datetime.strptime(event_date_str, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
+        except ValueError:
+            return jsonify({'error': 'Invalid date format (YYYY-MM-DD)'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if event_date.date() < now.date():
+            return jsonify({'error': 'Event date must be today or in the future'}), 400
+
+        # Check limit: max 5 active countdowns per bond
+        active_count = m.bond_countdowns_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        })
+        if active_count >= 5:
+            return jsonify({'error': 'Maximum 5 active countdowns per bond.'}), 400
+
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+
+        countdown_doc = {
+            'bond_id': ObjectId(bond_id),
+            'title': encrypted_title,
+            'encrypted': True,
+            'event_date': event_date,
+            'created_by': ObjectId(user_id_str),
+            'created_at': now,
+            'archived': False
+        }
+        res = m.bond_countdowns_conf.insert_one(countdown_doc)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_countdown_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'countdown_id': str(res.inserted_id),
+            'title': title
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond countdown create error: {e}")
+        return jsonify({'error': 'Failed to create countdown'}), 500
+
+
+@bp.route('/api/bonds/countdowns/<countdown_id>', methods=['DELETE'])
+@login_required
+def api_bond_countdown_delete(countdown_id):
+    """Archive a countdown."""
+    import main as m
+    try:
+        countdown = m.bond_countdowns_conf.find_one({'_id': ObjectId(countdown_id)})
+        if not countdown:
+            return jsonify({'error': 'Countdown not found'}), 404
+
+        bond_id = str(countdown['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bond_countdowns_conf.update_one(
+            {'_id': ObjectId(countdown_id)},
+            {'$set': {'archived': True}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_countdown_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond countdown delete error: {e}")
+        return jsonify({'error': 'Failed to archive countdown'}), 500

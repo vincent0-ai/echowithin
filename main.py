@@ -676,6 +676,11 @@ bond_habits_conf.create_index([('bond_id', 1), ('archived', 1)])
 bond_countdowns_conf = db['bond_countdowns']
 bond_countdowns_conf.create_index([('bond_id', 1), ('archived', 1)])
 
+# --- Community Question Bank (AI-generated QotD reuse across bonds) ---
+community_questions_conf = db['community_questions']
+community_questions_conf.create_index('bond_type')
+community_questions_conf.create_index('question_hash', unique=True)
+
 # Soft-delete for DMs — one row per (user, partner) means user hid the chat
 hidden_chats_conf = db['hidden_chats']
 hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
@@ -811,6 +816,7 @@ database.bond_moods_conf = bond_moods_conf
 database.bond_qotd_conf = bond_qotd_conf
 database.bond_habits_conf = bond_habits_conf
 database.bond_countdowns_conf = bond_countdowns_conf
+database.community_questions_conf = community_questions_conf
 database.hidden_chats_conf = hidden_chats_conf
 database.deleted_items_conf = deleted_items_conf
 database.redis_cache = redis_cache

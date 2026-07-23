@@ -262,6 +262,144 @@ def _get_bond_status_between(user_a_oid, user_b_oid):
         'label': bond.get('label', '')
     }
 
+# --- AI Question Generation Helpers ---
+
+# Maximum AI generations per bond per day (quota protection)
+_MAX_AI_GENERATIONS_PER_BOND_PER_DAY = 3
+
+
+def _generate_ai_question_gemini(relationship_label):
+    """Generate a QotD question using Gemini API (fallback when JigsawStack is unavailable).
+
+    Supports multiple comma-separated API keys in GEMINI_API_KEY env var.
+    Rotates through keys on 429 quota errors.
+    Returns the question text string, or None on failure.
+    """
+    import os
+    import json
+    import urllib.request
+    import urllib.error
+    from flask import current_app
+
+    raw_keys = os.environ.get('GEMINI_API_KEY', '').strip()
+    if not raw_keys:
+        return None
+
+    keys = [k.strip() for k in raw_keys.split(',') if k.strip()]
+    if not keys:
+        return None
+
+    prompt = (
+        f"You are a thoughtful relationship & connection assistant. "
+        f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
+        f"The question should inspire reflection, bonding, or a lighthearted conversation. "
+        f"Return ONLY the question text. Do not include quotes, intro, or explanation."
+    )
+
+    payload = json.dumps({
+        'contents': [{'parts': [{'text': prompt}]}]
+    }).encode('utf-8')
+
+    # Try each key; skip to next on 429 quota errors
+    for key in keys:
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}'
+        req = urllib.request.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                text = (data.get('candidates', [{}])[0]
+                        .get('content', {})
+                        .get('parts', [{}])[0]
+                        .get('text', '')).strip().strip('"\'')
+                if text:
+                    return text
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            if status_code == 429:
+                # Quota exhausted on this key, try next
+                current_app.logger.info(f'Gemini key ...{key[-6:]} quota exhausted, trying next')
+                continue
+            current_app.logger.warning(f'Gemini API error HTTP {status_code} with key ...{key[-6:]}')
+            return None
+        except Exception as e:
+            current_app.logger.warning(f'Gemini API request failed: {e}')
+            return None
+
+    current_app.logger.warning('All Gemini API keys exhausted (429 on all)')
+    return None
+
+
+def _get_community_bank_question(bond_type, bond_id):
+    """Pick a random question from the community bank that this bond hasn't used recently.
+
+    Returns (question_text, question_id) or (None, None) if no suitable question found.
+    """
+    import main as m
+
+    # Get questions this bond used in the last 30 days to avoid repeats
+    thirty_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+    recent_qotds = list(m.bond_qotd_conf.find(
+        {'bond_id': ObjectId(bond_id), 'source': {'$in': ['ai', 'community_bank']}},
+        {'community_question_id': 1}
+    ).sort('created_at', -1).limit(60))
+
+    used_ids = set()
+    for q in recent_qotds:
+        cq_id = q.get('community_question_id')
+        if cq_id:
+            used_ids.add(cq_id)
+
+    # Find a question from the bank that hasn't been used recently
+    query = {'bond_type': bond_type}
+    if used_ids:
+        query['_id'] = {'$nin': list(used_ids)}
+
+    # Use aggregation $sample for random selection
+    pipeline = [{'$match': query}, {'$sample': {'size': 1}}]
+    results = list(m.community_questions_conf.aggregate(pipeline))
+
+    if results:
+        doc = results[0]
+        # Increment used_count
+        m.community_questions_conf.update_one(
+            {'_id': doc['_id']},
+            {'$inc': {'used_count': 1}}
+        )
+        return doc['question_text'], doc['_id']
+
+    return None, None
+
+
+def _store_in_community_bank(question_text, bond_type, source='ai'):
+    """Store an AI-generated question in the community bank for reuse.
+
+    Uses SHA-256 hash of the question text to prevent exact duplicates.
+    Questions are stored unencrypted (they're generic prompts, not personal data).
+    """
+    import main as m
+
+    question_hash = hashlib.sha256(question_text.strip().lower().encode()).hexdigest()
+
+    try:
+        m.community_questions_conf.update_one(
+            {'question_hash': question_hash},
+            {
+                '$setOnInsert': {
+                    'question_text': question_text,
+                    'bond_type': bond_type,
+                    'question_hash': question_hash,
+                    'source': source,
+                    'used_count': 0,
+                    'created_at': datetime.datetime.now(datetime.timezone.utc)
+                }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        # Non-critical — don't fail the request if bank storage fails
+        from flask import current_app
+        current_app.logger.warning(f'Failed to store question in community bank: {e}')
+
 
 # --- Page Route ---
 
@@ -1655,9 +1793,16 @@ def api_bond_qotd_answer(bond_id):
 @login_required
 @limits(calls=5, period=60)
 def api_bond_qotd_generate_ai(bond_id):
-    """Generate a new AI question of the day using JigsawStack."""
+    """Generate a new AI question of the day.
+
+    Flow:
+    1. Check community question bank first (zero API cost)
+    2. Try JigsawStack prompt engine
+    3. Fall back to Gemini API (multi-key rotation)
+    4. Store successful AI questions in community bank for future reuse
+    Supports ?force_new=true to skip the community bank and force fresh AI generation.
+    """
     import main as m
-    from jigsawstack import JigsawStack
     from config import get_env_variable
 
     try:
@@ -1672,61 +1817,98 @@ def api_bond_qotd_generate_ai(bond_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         today_str = now.date().isoformat()
 
-        # Get JigsawStack API key
-        try:
-            api_key = get_env_variable('JIGSAW_API_KEY')
-        except Exception:
-            return jsonify({'error': 'AI service is not configured.'}), 400
+        # Check if answers already submitted today
+        existing_qotd = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
+        if existing_qotd and existing_qotd.get('answers'):
+            return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
+
+        # Per-bond daily AI generation limit
+        ai_gen_count = existing_qotd.get('ai_gen_count', 0) if existing_qotd else 0
+        if ai_gen_count >= _MAX_AI_GENERATIONS_PER_BOND_PER_DAY:
+            return jsonify({'error': f'AI question limit reached ({_MAX_AI_GENERATIONS_PER_BOND_PER_DAY} per day). Try again tomorrow or use a custom question.'}), 429
 
         bond_type = bond_doc.get('bond_type', 'custom')
         type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
         relationship_label = type_info['label']
 
-        prompt = (
-            f"You are a thoughtful relationship & connection assistant. "
-            f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
-            f"The question should inspire reflection, bonding, or a lighthearted conversation. "
-            f"Return ONLY the question text. Do not include quotes, intro, or explanation."
-        )
+        force_new = request.args.get('force_new', '').lower() in ('true', '1', 'yes')
+        ai_question = None
+        source = 'ai'
+        community_question_id = None
 
-        client = JigsawStack(api_key=api_key)
-        res_data = client.prompt_engine.run_prompt_direct({
-            'prompt': prompt,
-            'inputs': [],
-            'input_values': {}
-        })
+        # --- Step 1: Check community question bank (free, zero API cost) ---
+        if not force_new:
+            bank_question, bank_id = _get_community_bank_question(bond_type, bond_id)
+            if bank_question:
+                ai_question = bank_question
+                source = 'community_bank'
+                community_question_id = bank_id
+                current_app.logger.info(f'QotD served from community bank for bond {bond_id}')
 
-        ai_question = ""
-        if res_data and isinstance(res_data, dict):
-            ai_question = res_data.get('result', '').strip()
-
+        # --- Step 2: Try JigsawStack ---
         if not ai_question:
-            return jsonify({'error': 'Failed to generate question with AI.'}), 502
+            try:
+                from jigsawstack import JigsawStack
+                api_key = get_env_variable('JIGSAW_API_KEY')
 
-        ai_question = ai_question.strip('"\'')
+                prompt = (
+                    f"You are a thoughtful relationship & connection assistant. "
+                    f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
+                    f"The question should inspire reflection, bonding, or a lighthearted conversation. "
+                    f"Return ONLY the question text. Do not include quotes, intro, or explanation."
+                )
 
-        # Replace or update today's QotD document
-        qotd_doc = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
+                client = JigsawStack(api_key=api_key)
+                res_data = client.prompt_engine.run_prompt_direct({
+                    'prompt': prompt,
+                    'inputs': [],
+                    'input_values': {}
+                })
 
-        if qotd_doc and qotd_doc.get('answers'):
-            return jsonify({'error': 'Cannot change today\'s question after an answer has already been submitted.'}), 400
+                if res_data and isinstance(res_data, dict):
+                    result_text = res_data.get('result', '').strip()
+                    if result_text:
+                        ai_question = result_text.strip('"\'')
+                        source = 'ai'
+                        current_app.logger.info(f'QotD generated via JigsawStack for bond {bond_id}')
+            except Exception as jigsaw_err:
+                current_app.logger.warning(f'JigsawStack QotD failed, trying Gemini fallback: {jigsaw_err}')
 
+        # --- Step 3: Fall back to Gemini API ---
+        if not ai_question:
+            gemini_result = _generate_ai_question_gemini(relationship_label)
+            if gemini_result:
+                ai_question = gemini_result
+                source = 'ai_gemini'
+                current_app.logger.info(f'QotD generated via Gemini fallback for bond {bond_id}')
+
+        # --- All providers failed ---
+        if not ai_question:
+            return jsonify({'error': 'All AI services are currently unavailable. Try a custom question instead.'}), 502
+
+        # --- Store in community bank for future reuse (non-blocking) ---
+        if source in ('ai', 'ai_gemini'):
+            _store_in_community_bank(ai_question, bond_type, source=source)
+
+        # --- Save as today's QotD ---
         encrypted_ai_question = m.encrypt_bond_data(ai_question, bond_id)
         update_payload = {
             'bond_id': ObjectId(bond_id),
             'date': today_str,
             'question_text': encrypted_ai_question,
             'question_category': f'AI Generated ({relationship_label})',
-            'source': 'ai',
+            'source': source,
             'encrypted': True,
             'set_by': ObjectId(current_user.id),
             'created_at': now,
             'answers': {}
         }
+        if community_question_id:
+            update_payload['community_question_id'] = community_question_id
 
         m.bond_qotd_conf.update_one(
             {'bond_id': ObjectId(bond_id), 'date': today_str},
-            {'$set': update_payload},
+            {'$set': update_payload, '$inc': {'ai_gen_count': 1}},
             upsert=True
         )
 
@@ -1735,7 +1917,7 @@ def api_bond_qotd_generate_ai(bond_id):
         m.socketio.emit('bond_qotd_updated', {
             'bond_id': bond_id,
             'question': ai_question,
-            'source': 'ai',
+            'source': source,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
@@ -1751,7 +1933,7 @@ def api_bond_qotd_generate_ai(bond_id):
             'success': True,
             'question': ai_question,
             'category': f'AI Generated ({relationship_label})',
-            'source': 'ai'
+            'source': source
         })
 
     except Exception as e:

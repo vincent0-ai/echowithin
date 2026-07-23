@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, current_app, url_for
+from flask import Blueprint, request, jsonify, render_template, current_app, url_for, session
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime

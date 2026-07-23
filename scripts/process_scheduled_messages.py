@@ -46,7 +46,7 @@ def process_via_api():
     handles the actual message insertion and broadcast.
     """
     app_url = get_app_url()
-    secret_key = get_env_variable('SECRET')
+    secret_key = os.environ.get('SCHEDULER_SECRET') or get_env_variable('SECRET')
     
     try:
         response = requests.post(

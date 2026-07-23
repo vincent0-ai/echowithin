@@ -13,9 +13,41 @@ Only requires ATLAS_MONGODB_CONNECTION env var to be set.
 import os
 import sys
 import datetime
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def send_ntfy_alert(message, title="🚨 CRITICAL: Database Backup Circuit Breaker", tags="rotating_light,sos,warning", priority="max"):
+    """Sends a high-priority alert to the configured ntfy topic."""
+    ntfy_topic = os.environ.get('NTFY_TOPIC')
+    if not ntfy_topic:
+        print("NTFY_TOPIC not configured; skipping ntfy alert.")
+        return
+    try:
+        headers = {
+            'Title': title,
+            'Tags': tags,
+            'Priority': priority
+        }
+        ntfy_user = os.environ.get('NTFY_USERNAME')
+        ntfy_pass = os.environ.get('NTFY_PASSWORD')
+        auth = (ntfy_user, ntfy_pass) if ntfy_user and ntfy_pass else None
+
+        resp = requests.post(
+            f"https://ntfy.sh/{ntfy_topic}",
+            data=message.encode('utf-8'),
+            headers=headers,
+            timeout=10,
+            auth=auth
+        )
+        if resp.ok:
+            print(f"Successfully sent ntfy alert to topic: {ntfy_topic}")
+        else:
+            print(f"Failed to send ntfy alert: status={resp.status_code}, body={resp.text}")
+    except Exception as e:
+        print(f"Error sending ntfy alert: {e}")
 
 # Collections that have a reliable timestamp field for incremental sync
 # Maps collection name -> list of timestamp field names to check (in priority order)
@@ -97,6 +129,22 @@ def run_backup():
         total_synced = 0
         total_deleted = 0
         total_errors = 0
+
+        # --- Circuit Breaker / Mass Deletion Guard ---
+        # Calculate total active documents in local DB vs Atlas DB
+        total_local_docs = sum(local_db[c].count_documents({}) for c in collections if not c.startswith('system.') and not c.startswith('_backup') and c != 'deleted_items' and not c.startswith('whisper_'))
+        atlas_colls = atlas_db.list_collection_names()
+        total_atlas_docs = sum(atlas_db[c].count_documents({'_deleted_at': {'$exists': False}}) for c in collections if c in atlas_colls and not c.startswith('system.') and not c.startswith('_backup') and c != 'deleted_items' and not c.startswith('whisper_'))
+
+        if total_atlas_docs >= 20 and total_local_docs < (total_atlas_docs * 0.5):
+            alert_msg = (
+                f"🚨 BACKUP ABORTED! Circuit Breaker Triggered.\n"
+                f"Local DB document count ({total_local_docs}) is less than 50% of Atlas DB count ({total_atlas_docs}).\n"
+                f"Atlas backup is locked to prevent data destruction. Inspect local MongoDB immediately!"
+            )
+            print(f"[{now}] {alert_msg}")
+            send_ntfy_alert(alert_msg)
+            return False
 
         for coll_name in collections:
             if coll_name.startswith('system.') or coll_name.startswith('_backup') or coll_name == 'deleted_items' or coll_name.startswith('whisper_'):

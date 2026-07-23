@@ -410,9 +410,19 @@ def bonds_page():
     import main as m
     user_oid = ObjectId(current_user.id)
 
+    # Get user tier for max nudges
+    user_doc = m.users_conf.find_one({'_id': user_oid})
+    user_tier = m.get_user_tier(user_doc) if user_doc else 'free'
+    max_nudges = m.TIER_LIMITS.get(user_tier, m.TIER_LIMITS['free']).get('max_nudges_per_day', 3)
+
     # Get active bonds with partner info
     active_bonds = _get_user_bonds(user_oid, 'active')
     bonds_data = []
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    current_week_iso = now_utc.strftime('%G-W%V')
+    today_str = now_utc.date().isoformat()
+
     for bond in active_bonds:
         partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
         partner = m.users_conf.find_one(
@@ -432,6 +442,14 @@ def bonds_page():
         type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
         anniversary = _get_bond_anniversary(bond.get('accepted_at'))
 
+        is_user_a = str(bond.get('user_a_id', '')) == str(current_user.id)
+        nudge_key = 'a_to_b' if is_user_a else 'b_to_a'
+        nudge_data = bond.get('nudge_data') or {}
+        nudge_used = nudge_data.get(nudge_key, 0) if nudge_data.get('date') == today_str else 0
+        nudge_remaining = max(0, max_nudges - nudge_used)
+
+        streak_shield_used_this_week = bond.get('streak_shield', {}).get('week_iso') == current_week_iso
+
         bonds_data.append({
             'id': str(bond['_id']),
             'partner_id': partner_id,
@@ -444,7 +462,9 @@ def bonds_page():
             'accepted_at': bond.get('accepted_at'),
             'streak_count': bond.get('streak_count', 0),
             'goal_count': goal_count,
-            'anniversary': anniversary
+            'anniversary': anniversary,
+            'streak_shield_used_this_week': streak_shield_used_this_week,
+            'nudge_remaining': nudge_remaining
         })
 
     # Get pending received requests
@@ -502,9 +522,19 @@ def bonds_page():
                 'created_at': bond.get('created_at')
             })
 
-    # Get user tier for template (streak shield availability)
-    user_doc = m.users_conf.find_one({'_id': user_oid})
-    user_tier = m.get_user_tier(user_doc) if user_doc else 'free'
+    # App Lock PIN checks
+    has_app_lock = bool(user_doc.get('app_lock_pin_hash')) if user_doc else False
+    unlock_ts = session.get('app_lock_unlocked_at')
+    is_unlocked = False
+    if unlock_ts and has_app_lock:
+        if isinstance(unlock_ts, datetime.datetime):
+            if unlock_ts.tzinfo is None:
+                unlock_ts = unlock_ts.replace(tzinfo=datetime.timezone.utc)
+            elapsed = (datetime.datetime.now(datetime.timezone.utc) - unlock_ts).total_seconds()
+        else:
+            elapsed = 999999
+        if elapsed < 300:  # 5-minute unlock window
+            is_unlocked = True
 
     return render_template('bonds.html',
                            active_page='bonds',
@@ -514,7 +544,9 @@ def bonds_page():
                            goal_categories=GOAL_CATEGORIES,
                            bond_types=BOND_TYPES,
                            bond_moods=BOND_MOODS,
-                           user_tier=user_tier)
+                           user_tier=user_tier,
+                           has_app_lock=has_app_lock,
+                           is_unlocked=is_unlocked)
 
 
 # --- Bond Management ---
@@ -734,11 +766,13 @@ def api_bond_break(bond_id):
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         now = datetime.datetime.now(datetime.timezone.utc)
 
-        # Delete all goals, journal entries, moods, and QotD for this bond
-        m.bond_goals_conf.delete_many({'bond_id': ObjectId(bond_id)})
-        m.bond_journal_conf.delete_many({'bond_id': ObjectId(bond_id)})
-        m.bond_moods_conf.delete_many({'bond_id': ObjectId(bond_id)})
-        m.bond_qotd_conf.delete_many({'bond_id': ObjectId(bond_id)})
+        # Archives all shared data
+        m.bond_goals_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
+        m.bond_journal_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
+        m.bond_moods_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
+        m.bond_qotd_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
+        m.bond_habits_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
+        m.bond_countdowns_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
 
         # Mark bond as broken
         m.bonds_conf.update_one(
@@ -1097,6 +1131,100 @@ def api_bond_goal_checkin(goal_id):
         return jsonify({'error': 'Failed to log check-in'}), 500
 
 
+@bp.route('/api/bonds/goals/<goal_id>/edit', methods=['PUT'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_goal_edit(goal_id):
+    """Edit an active or proposed goal."""
+    import main as m
+    try:
+        goal_doc = m.bond_goals_conf.find_one({'_id': ObjectId(goal_id)})
+        if not goal_doc:
+            return jsonify({'error': 'Goal not found'}), 404
+
+        bond_id = str(goal_doc['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Active bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if goal_doc.get('status') == 'proposed' and str(goal_doc.get('proposed_by', '')) != user_id_str:
+            return jsonify({'error': 'Only the proposer can edit a proposed goal'}), 403
+
+        if goal_doc.get('status') not in ['proposed', 'active']:
+            return jsonify({'error': 'Cannot edit completed or abandoned goals'}), 400
+
+        data = request.get_json() or {}
+        
+        updates = {}
+        
+        if 'title' in data:
+            title = data['title'].strip()
+            if not title or len(title) > 200:
+                return jsonify({'error': 'Title required (max 200 chars)'}), 400
+            updates['title'] = m.encrypt_bond_data(title, bond_id)
+            
+        if 'description' in data:
+            description = data['description'].strip()[:1000]
+            updates['description'] = m.encrypt_bond_data(description, bond_id) if description else ''
+            
+        if 'target_value' in data:
+            try:
+                updates['target_value'] = float(data['target_value'])
+            except (TypeError, ValueError):
+                pass
+                
+        if 'unit' in data:
+            updates['unit'] = data['unit'].strip()[:30]
+            
+        if 'deadline' in data:
+            deadline_str = data['deadline']
+            if deadline_str:
+                try:
+                    deadline = datetime.datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
+                    if deadline.tzinfo is None:
+                        deadline = deadline.replace(tzinfo=datetime.timezone.utc)
+                    updates['deadline'] = deadline
+                except (ValueError, AttributeError):
+                    pass
+            else:
+                updates['deadline'] = None
+
+        if not updates:
+            return jsonify({'error': 'No updates provided'}), 400
+
+        updates['updated_at'] = datetime.datetime.now(datetime.timezone.utc)
+
+        m.bond_goals_conf.update_one(
+            {'_id': ObjectId(goal_id)},
+            {'$set': updates}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_goal_updated', {
+            'bond_id': bond_id,
+            'goal_id': goal_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"Goal Updated in '{bond_doc.get('label', 'Bond')}'",
+            f"{current_user.username} updated a goal.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-goal-edit-{goal_id}'
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond goal edit error: {e}")
+        return jsonify({'error': 'Failed to edit goal'}), 500
+
+
 @bp.route('/api/bonds/goals/<goal_id>/milestone/<int:idx>/toggle', methods=['POST'])
 @login_required
 def api_bond_goal_milestone_toggle(goal_id, idx):
@@ -1335,6 +1463,55 @@ def api_bond_journal_create(bond_id):
     except Exception as e:
         current_app.logger.error(f"Bond journal create error: {e}")
         return jsonify({'error': 'Failed to create entry'}), 500
+
+
+@bp.route('/api/bonds/journal/<entry_id>/edit', methods=['PUT'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_journal_edit(entry_id):
+    """Edit a journal entry within 24 hours."""
+    import main as m
+    try:
+        entry = m.bond_journal_conf.find_one({'_id': ObjectId(entry_id)})
+        if not entry:
+            return jsonify({'error': 'Entry not found'}), 404
+        if str(entry['author_id']) != str(current_user.id):
+            return jsonify({'error': 'Can only edit your own entries'}), 403
+
+        # Check if within 24 hours
+        created_at = entry.get('created_at')
+        if not created_at:
+            return jsonify({'error': 'Invalid entry date'}), 400
+        
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+            
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if (now - created_at) > datetime.timedelta(hours=24):
+            return jsonify({'error': 'Can only edit entries within 24 hours of creation'}), 400
+
+        data = request.get_json() or {}
+        content = data.get('content', '').strip()
+        if not content or len(content) > 5000:
+            return jsonify({'error': 'Content required (max 5000 chars)'}), 400
+
+        bond_id = str(entry['bond_id'])
+        encrypted_content = m.encrypt_bond_data(content, bond_id)
+        
+        m.bond_journal_conf.update_one(
+            {'_id': ObjectId(entry_id)},
+            {'$set': {
+                'content': encrypted_content,
+                'updated_at': now,
+                'edited': True
+            }}
+        )
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond journal edit error: {e}")
+        return jsonify({'error': 'Failed to edit entry'}), 500
 
 
 @bp.route('/api/bonds/journal/<entry_id>', methods=['DELETE'])
@@ -2016,6 +2193,67 @@ def api_bond_qotd_custom(bond_id):
         return jsonify({'error': 'Failed to set custom question'}), 500
 
 
+@bp.route('/api/bonds/<bond_id>/qotd/history', methods=['GET'])
+@login_required
+def api_bond_qotd_history(bond_id):
+    """Get history of past QotD entries where both partners answered."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        partner_id_str = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner = m.users_conf.find_one({'_id': ObjectId(partner_id_str)}, {'username': 1})
+        partner_username = partner['username'] if partner else 'Partner'
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
+
+        history_docs = list(m.bond_qotd_conf.find(
+            {
+                'bond_id': ObjectId(bond_id),
+                'date': {'$ne': today_str}
+            }
+        ).sort('date', -1).limit(30))
+
+        history = []
+        for doc in history_docs:
+            answers = doc.get('answers', {})
+            if user_id_str in answers and partner_id_str in answers:
+                decrypted_q = m.decrypt_bond_data(doc.get('question_text', ''), bond_id) if doc.get('encrypted') else doc.get('question_text', '')
+                
+                my_ans = m.decrypt_bond_data(answers[user_id_str].get('answer', ''), bond_id) if answers[user_id_str].get('encrypted') else answers[user_id_str].get('answer', '')
+                partner_ans = m.decrypt_bond_data(answers[partner_id_str].get('answer', ''), bond_id) if answers[partner_id_str].get('encrypted') else answers[partner_id_str].get('answer', '')
+                
+                history.append({
+                    'date': doc.get('date'),
+                    'question': decrypted_q,
+                    'category': doc.get('question_category', ''),
+                    'source': doc.get('source', 'app'),
+                    'answers': {
+                        user_id_str: {
+                            'username': current_user.username,
+                            'text': my_ans
+                        },
+                        partner_id_str: {
+                            'username': partner_username,
+                            'text': partner_ans
+                        }
+                    }
+                })
+
+        return jsonify({'history': history})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD history error: {e}")
+        return jsonify({'error': 'Failed to fetch QotD history'}), 500
+
+
 # --- Streak Shield ---
 
 @bp.route('/api/bonds/<bond_id>/streak/shield', methods=['POST'])
@@ -2421,6 +2659,28 @@ def api_bond_countdowns_list(bond_id):
             'bond_id': ObjectId(bond_id),
             'archived': {'$ne': True}
         }).sort('event_date', 1))
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        grace_period = now - datetime.timedelta(days=7)
+        to_archive = []
+        valid_countdowns = []
+
+        for c in countdowns:
+            event_date = c.get('event_date')
+            if isinstance(event_date, datetime.datetime) and event_date.tzinfo is None:
+                event_date = event_date.replace(tzinfo=datetime.timezone.utc)
+                
+            if isinstance(event_date, datetime.datetime) and event_date < grace_period:
+                to_archive.append(c['_id'])
+            else:
+                valid_countdowns.append(c)
+
+        if to_archive:
+            m.bond_countdowns_conf.update_many(
+                {'_id': {'$in': to_archive}},
+                {'$set': {'archived': True}}
+            )
+            countdowns = valid_countdowns
 
         result = []
         for c in countdowns:

@@ -330,10 +330,28 @@
         background: var(--primary-dark-color);
     }
 
-    .btn-bond-primary.active,
-    .btn-bond-section.active {
+    .btn-bond-primary.active {
         background: var(--primary-dark-color);
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Section toggle buttons — outlined chip style for readability */
+    .btn-bond-section {
+        background: transparent !important;
+        color: var(--primary-color) !important;
+        border: 1.5px solid var(--primary-color) !important;
+        font-weight: 600;
+        transition: background 0.2s, color 0.2s;
+    }
+
+    .btn-bond-section:hover {
+        background: rgba(62, 34, 23, 0.08) !important;
+    }
+
+    .btn-bond-section.active {
+        background: var(--primary-color) !important;
+        color: #fff !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .btn-bond-danger {
@@ -522,6 +540,41 @@
         min-height: 50px;
     }
 
+    /* Check-in history */
+    .checkin-history {
+        display: none;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: var(--surface-bg);
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        font-size: 0.85rem;
+    }
+
+    .checkin-history.active {
+        display: block;
+    }
+
+    .checkin-history-item {
+        border-bottom: 1px solid var(--card-border);
+        padding: 0.4rem 0;
+    }
+
+    .checkin-history-item:last-child {
+        border-bottom: none;
+    }
+
+    .checkin-history-date {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+    }
+
+    .checkin-history-note {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        margin-top: 0.2rem;
+    }
+
     /* Journal */
     .journal-entry {
         background: var(--surface-bg);
@@ -685,6 +738,41 @@
         gap: 0.5rem;
         justify-content: flex-end;
         margin-top: 0.5rem;
+    }
+
+    .qotd-history-item {
+        border-bottom: 1px solid var(--card-border);
+        padding: 0.6rem 0;
+    }
+    .qotd-history-item:last-child {
+        border-bottom: none;
+    }
+
+    .goal-edit-form {
+        display: none;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        background: var(--card-bg);
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+    }
+    .goal-edit-form.active {
+        display: block;
+    }
+    .goal-edit-form input,
+    .goal-edit-form textarea {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.85rem;
+        margin-bottom: 0.4rem;
+        font-family: var(--font-family);
+        box-sizing: border-box;
+    }
+    .goal-edit-form textarea {
+        resize: vertical;
+        min-height: 50px;
     }
 
     /* Empty state */
@@ -870,13 +958,197 @@
             font-size: 0.95rem;
         }
     }
+
+    /* Locked Gate & PIN Modal Styles */
+    .locked-gate {
+        text-align: center;
+        padding: 3.5rem 1rem;
+        color: var(--text-muted);
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        margin: 1.5rem 0;
+    }
+
+    .locked-gate .gate-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: var(--primary-color);
+        opacity: 0.7;
+    }
+
+    .locked-gate h3 {
+        color: var(--primary-dark-color);
+        margin-bottom: 0.5rem;
+        font-size: 1.2rem;
+    }
+
+    .locked-gate p {
+        margin-bottom: 1.5rem;
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .locked-gate .unlock-btn {
+        background: var(--primary-color);
+        color: white;
+        border: none;
+        padding: 0.7rem 2rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+
+    .locked-gate .unlock-btn:hover {
+        background: var(--primary-dark-color);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(62, 34, 23, 0.2);
+    }
+
+    .pin-modal-content {
+        text-align: center;
+        padding: 0.5rem;
+    }
+
+    .pin-modal-content h2 {
+        color: var(--primary-dark-color);
+        margin: 0 0 0.5rem 0;
+        font-size: 1.25rem;
+    }
+
+    .pin-modal-content p {
+        color: var(--text-muted);
+        margin: 0 0 1.2rem 0;
+        font-size: 0.85rem;
+    }
+
+    .pin-dots {
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+        margin-bottom: 1.2rem;
+    }
+
+    .pin-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 2px solid var(--border-color);
+        background: transparent;
+        transition: all 0.2s ease;
+    }
+
+    .pin-dot.filled {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        transform: scale(1.1);
+    }
+
+    .pin-dot.error {
+        border-color: var(--danger-color);
+        background: var(--danger-color);
+        animation: pinShake 0.4s ease-in-out;
+    }
+
+    .pin-dot.success {
+        border-color: var(--success-color);
+        background: var(--success-color);
+    }
+
+    @keyframes pinShake {
+        0%, 100% { transform: translateX(0); }
+        20% { transform: translateX(-8px); }
+        40% { transform: translateX(8px); }
+        60% { transform: translateX(-6px); }
+        80% { transform: translateX(6px); }
+    }
+
+    .pin-keypad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        max-width: 250px;
+        margin: 0 auto 1rem auto;
+    }
+
+    .pin-key {
+        width: 100%;
+        aspect-ratio: 1.4;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--surface-bg);
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: var(--text-dark-color);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .pin-key:hover {
+        background: var(--card-bg);
+        border-color: var(--primary-color);
+    }
+
+    .pin-key:active {
+        transform: scale(0.96);
+    }
+
+    .pin-key.empty {
+        visibility: hidden;
+    }
+
+    .pin-key.backspace {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+    }
+
+    .pin-error-msg {
+        color: var(--danger-color);
+        font-size: 0.82rem;
+        min-height: 1.2rem;
+        margin-bottom: 0.5rem;
+    }
 </style>
 
 <div class="bonds-page">
     <div class="bonds-header">
-        <h1>Bonds</h1>
-        <p>Build meaningful connections. Set shared goals, track progress together, and grow as a team.</p>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+                <h1>Bonds</h1>
+                <p>Build meaningful connections. Set shared goals, track progress together, and grow as a team.</p>
+            </div>
+            {% if has_app_lock and is_unlocked %}
+            <span style="font-size: 0.8rem; background: var(--surface-bg); color: var(--primary-color); padding: 0.35rem 0.8rem; border-radius: 20px; border: 1px solid var(--border-color); font-weight: 500; display: inline-flex; align-items: center;">
+                Unlocked (Session Active)
+            </span>
+            {% endif %}
+        </div>
     </div>
+
+    {% if has_app_lock and not is_unlocked %}
+    <div class="locked-gate">
+        <h3>Bonds is Locked</h3>
+        <p>Your relationship space contains private goals, journals, habits, and Q&A. Enter your 4-digit App Lock PIN to view your bond.</p>
+        <button type="button" class="unlock-btn" onclick="openPinModal('verify')">Enter PIN</button>
+        <div style="margin-top: 1rem;">
+            <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.85rem; color: var(--text-muted); text-decoration: underline;">Forgot PIN?</a>
+        </div>
+    </div>
+    {% else %}
+    {% if not has_app_lock %}
+    <div style="background: var(--surface-bg); border: 1px dashed var(--border-color); padding: 0.6rem 1rem; border-radius: 8px; font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <span>Keep your shared bond private by setting up an <strong>App Lock PIN</strong>.</span>
+        <button class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;" onclick="openPinModal('setup')">Set Up PIN</button>
+    </div>
+    {% endif %}
 
     <!-- Pending Received Requests -->
     {% if pending_received %}
@@ -954,7 +1226,7 @@
                     {% if bond.streak_count > 0 %}
                     <div class="bond-streak">🔥 {{ bond.streak_count }}d{% if user_tier == 'premium' %}<button class="streak-shield-btn" title="Use Streak Shield (1/week, premium)" onclick="useStreakShield('{{ bond.id }}')">🛡️</button>{% endif %}</div>
                     {% endif %}
-                    <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)">💭</button>
+                    <button class="bond-nudge-btn" title="Send a nudge" onclick="sendNudge('{{ bond.id }}', this)"><span class="nudge-icon">💭</span> <span class="nudge-count" style="font-size: 0.7rem;">({{ bond.nudge_remaining }} left)</span></button>
                 </div>
             </div>
             <div class="bond-actions">
@@ -1088,6 +1360,47 @@
         <p style="font-size: 0.85rem;">Visit someone's profile to send a bond request and start building together.</p>
     </div>
     {% endif %}
+    {% endif %}
+</div>
+
+<!-- PIN Modal Overlay -->
+<div class="bond-modal-overlay" id="pin-modal">
+    <div class="bond-modal" style="max-width: 320px;">
+        <div class="pin-modal-content">
+            <h2 id="pin-modal-title">Enter PIN</h2>
+            <p id="pin-modal-desc">Enter your 4-digit PIN to unlock</p>
+
+            <div id="pin-error" class="pin-error-msg"></div>
+
+            <div class="pin-dots" id="pin-dots">
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+                <div class="pin-dot"></div>
+            </div>
+
+            <div class="pin-keypad">
+                <button type="button" class="pin-key" onclick="handlePinKey('1')">1</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('2')">2</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('3')">3</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('4')">4</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('5')">5</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('6')">6</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('7')">7</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('8')">8</button>
+                <button type="button" class="pin-key" onclick="handlePinKey('9')">9</button>
+                <div class="pin-key empty"></div>
+                <button type="button" class="pin-key" onclick="handlePinKey('0')">0</button>
+                <button type="button" class="pin-key backspace" onclick="handlePinKey('backspace')">⌫</button>
+            </div>
+
+            <div id="pin-forgot-link" style="margin-top: 0.5rem; display: none;">
+                <a href="#" onclick="event.preventDefault(); startPinReset()" style="font-size: 0.82rem; color: var(--text-muted); text-decoration: underline;">Forgot PIN?</a>
+            </div>
+
+            <button type="button" onclick="closePinModal()" class="btn btn-bond-secondary" style="width: 100%; margin-top: 0.5rem; background: none; border: none; color: var(--text-muted); font-size: 0.85rem;">Cancel</button>
+        </div>
+    </div>
 </div>
 
 <!-- Goal Creation Modal -->
@@ -1200,7 +1513,11 @@
             actionsHtml = '<div class="goal-actions">' +
                 '<button class="btn btn-bond-primary" onclick="toggleCheckinForm(\'' + g.id + '\')">Check In</button>' +
                 '<button class="btn btn-bond-success" onclick="completeGoal(\'' + g.id + '\', \'' + bondId + '\')">Complete</button>' +
+                '<button class="btn btn-bond-secondary" onclick="showGoalEditForm(\'' + g.id + '\', \'' + bondId + '\')">Edit</button>' +
                 '<button class="btn btn-bond-secondary" onclick="abandonGoal(\'' + g.id + '\', \'' + bondId + '\')">Abandon</button></div>';
+        } else if (g.status === 'proposed' && g.proposed_by === currentUserId) {
+            actionsHtml = '<div class="goal-actions">' +
+                '<button class="btn btn-bond-secondary" onclick="showGoalEditForm(\'' + g.id + '\', \'' + bondId + '\')">Edit</button></div>';
         }
 
         let checkinForm = '';
@@ -1211,6 +1528,42 @@
                 '<button class="btn btn-bond-primary" onclick="submitCheckin(\'' + g.id + '\', \'' + bondId + '\')">Log Progress</button></div>';
         }
 
+        let checkinHistoryHtml = '';
+        if (g.check_ins && g.check_ins.length > 0) {
+            const historyItems = g.check_ins.map(ci => {
+                const username = ci.user_id === currentUserId ? 'You' : 'Partner';
+                const date = window.parseServerTime ? window.parseServerTime(ci.at) : new Date(ci.at);
+                const dateStr = date ? date.toLocaleDateString() : '';
+                return '<div class="checkin-history-item">' +
+                       '<span class="checkin-history-date">[' + dateStr + ']</span> — ' + username + ' logged ' + ci.value + ' ' + escHtml(g.unit || '') +
+                       (ci.note ? '<div class="checkin-history-note">' + escHtml(ci.note) + '</div>' : '') +
+                       '</div>';
+            }).join('');
+            checkinHistoryHtml = '<div style="margin-top: 0.4rem;"><button class="btn btn-bond-secondary" style="font-size: 0.7rem; padding: 0.2rem 0.5rem;" onclick="document.getElementById(\'history-' + g.id + '\').classList.toggle(\'active\')">History</button></div>' +
+                                 '<div class="checkin-history" id="history-' + g.id + '">' + historyItems + '</div>';
+        }
+
+        let progressHtml = '';
+        if (g.target_value > 0) {
+            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
+                '<div class="goal-progress-text">' + g.current_value + ' / ' + g.target_value + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>';
+        } else if (g.current_value > 0) {
+            progressHtml = '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
+        }
+
+        let editForm = '<div class="goal-edit-form" id="edit-goal-' + g.id + '">' +
+            '<input type="text" id="edit-goal-title-' + g.id + '" value="' + escHtml(g.title).replace(/"/g, '&quot;') + '" placeholder="Title">' +
+            '<textarea id="edit-goal-desc-' + g.id + '" placeholder="Description">' + escHtml(g.description || '') + '</textarea>' +
+            '<div style="display:flex;gap:0.4rem;margin-bottom:0.4rem;">' +
+            '<input type="number" id="edit-goal-target-' + g.id + '" value="' + (g.target_value || '') + '" placeholder="Target" style="flex:1;">' +
+            '<input type="text" id="edit-goal-unit-' + g.id + '" value="' + escHtml(g.unit || '').replace(/"/g, '&quot;') + '" placeholder="Unit" style="flex:1;">' +
+            '</div>' +
+            '<input type="date" id="edit-goal-deadline-' + g.id + '" value="' + (g.deadline ? new Date(g.deadline).toISOString().split('T')[0] : '') + '">' +
+            '<div style="display:flex;gap:0.4rem;justify-content:flex-end;">' +
+            '<button class="btn btn-bond-secondary" onclick="document.getElementById(\'edit-goal-' + g.id + '\').classList.remove(\'active\')">Cancel</button>' +
+            '<button class="btn btn-bond-primary" onclick="submitGoalEdit(\'' + g.id + '\', \'' + bondId + '\')">Save</button>' +
+            '</div></div>';
+
         const deadlineStr = g.deadline ? '<div class="goal-deadline">Deadline: ' + new Date(g.deadline).toLocaleDateString() + '</div>' : '';
 
         return '<div class="goal-card">' +
@@ -1218,9 +1571,8 @@
             '<span class="goal-category">' + escHtml(g.category) + '</span>' +
             '<span class="goal-status-badge goal-status-' + g.status + '">' + g.status + '</span></div>' +
             (g.description ? '<div class="goal-description">' + escHtml(g.description) + '</div>' : '') +
-            (g.target_value > 0 ? '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
-                '<div class="goal-progress-text">' + g.current_value + ' / ' + g.target_value + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>' : '') +
-            deadlineStr + milestonesHtml + actionsHtml + checkinForm + '</div>';
+            progressHtml +
+            deadlineStr + milestonesHtml + actionsHtml + checkinForm + editForm + checkinHistoryHtml + '</div>';
     }
 
     function escHtml(s) {
@@ -1363,6 +1715,31 @@
         });
     }
 
+    function showGoalEditForm(goalId, bondId) {
+        const form = document.getElementById('edit-goal-' + goalId);
+        if (form) form.classList.add('active');
+    }
+
+    function submitGoalEdit(goalId, bondId) {
+        const title = document.getElementById('edit-goal-title-' + goalId).value.trim();
+        const description = document.getElementById('edit-goal-desc-' + goalId).value.trim();
+        const target_value = parseFloat(document.getElementById('edit-goal-target-' + goalId).value) || 0;
+        const unit = document.getElementById('edit-goal-unit-' + goalId).value.trim();
+        const deadlineVal = document.getElementById('edit-goal-deadline-' + goalId).value;
+        const deadline = deadlineVal ? new Date(deadlineVal).toISOString() : null;
+
+        fetch('/api/bonds/goals/' + goalId + '/edit', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ title, description, target_value, unit, deadline })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadGoals(bondId);
+                if (window.showCustomToast) showCustomToast('Goal updated!', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
     // --- Journal ---
     function loadJournal(bondId) {
         const container = document.getElementById('journal-list-' + bondId);
@@ -1376,12 +1753,28 @@
                 container.innerHTML = data.entries.map(e => {
                     const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
                     const dateStr = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-                    const deleteBtn = e.author_id === currentUserId ?
-                        '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>' : '';
-                    return '<div class="journal-entry"><div class="journal-entry-header">' +
+                    const isAuthor = e.author_id === currentUserId;
+                    const within24h = (Date.now() - date.getTime()) < 86400000;
+                    const editedTag = e.edited ? ' <span style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">(edited)</span>' : '';
+                    let actionBtns = '';
+                    if (isAuthor) {
+                        actionBtns += '<span style="display:flex;gap:0.4rem;">';
+                        if (within24h) {
+                            actionBtns += '<button class="btn btn-bond-secondary" style="font-size:0.65rem;padding:0.1rem 0.4rem;background:none;color:var(--text-muted);border:none;cursor:pointer;" onclick="showJournalEditForm(\'' + e.id + '\')">Edit</button>';
+                        }
+                        actionBtns += '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>';
+                        actionBtns += '</span>';
+                    }
+                    return '<div class="journal-entry" id="journal-entry-container-' + e.id + '"><div class="journal-entry-header">' +
                         '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
-                        '<span><span class="journal-date">' + dateStr + '</span>' + deleteBtn + '</span>' +
-                        '</div><div class="journal-content">' + escHtml(e.content) + '</div></div>';
+                        '<span style="display:flex;align-items:center;gap:0.4rem;"><span class="journal-date">' + dateStr + editedTag + '</span>' + actionBtns + '</span>' +
+                        '</div><div class="journal-content" id="journal-content-' + e.id + '">' + escHtml(e.content) + '</div>' +
+                        '<div class="journal-edit-form" id="journal-edit-form-' + e.id + '" style="display:none;margin-top:0.5rem;">' +
+                        '<textarea id="journal-edit-input-' + e.id + '" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;min-height:60px;font-family:inherit;font-size:0.9rem;resize:vertical;"></textarea>' +
+                        '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.4rem;">' +
+                        '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="hideJournalEditForm(\'' + e.id + '\')">Cancel</button>' +
+                        '<button class="btn btn-bond-primary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="submitJournalEdit(\'' + e.id + '\', \'' + bondId + '\')">Save</button>' +
+                        '</div></div></div>';
                 }).join('');
             })
             .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>'; });
@@ -1417,6 +1810,42 @@
         }).then(r => r.json()).then(d => {
             if (d.success) loadJournal(bondId);
             else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    function showJournalEditForm(entryId) {
+        const contentDiv = document.getElementById('journal-content-' + entryId);
+        const formDiv = document.getElementById('journal-edit-form-' + entryId);
+        const input = document.getElementById('journal-edit-input-' + entryId);
+        if (contentDiv && formDiv && input) {
+            input.value = contentDiv.textContent;
+            contentDiv.style.display = 'none';
+            formDiv.style.display = 'block';
+        }
+    }
+
+    function hideJournalEditForm(entryId) {
+        const contentDiv = document.getElementById('journal-content-' + entryId);
+        const formDiv = document.getElementById('journal-edit-form-' + entryId);
+        if (contentDiv && formDiv) {
+            formDiv.style.display = 'none';
+            contentDiv.style.display = 'block';
+        }
+    }
+
+    function submitJournalEdit(entryId, bondId) {
+        const input = document.getElementById('journal-edit-input-' + entryId);
+        const content = input ? input.value.trim() : '';
+        if (!content) { if (window.showCustomAlert) showCustomAlert('Content cannot be empty.', 'danger'); return; }
+        fetch('/api/bonds/journal/' + entryId + '/edit', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ content })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadJournal(bondId);
+                if (window.showCustomToast) showCustomToast('Entry updated!', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
         });
     }
 
@@ -1497,12 +1926,11 @@
             // Haven't logged yet — show picker
             html += '<div class="mood-picker" id="mood-picker-' + bondId + '">';
             for (const [key, info] of Object.entries(moodEmojis)) {
-                html += '<button class="mood-btn" data-mood="' + key + '" onclick="selectMood(\'' + bondId + '\', \'' + key + '\', this)">';
+                html += '<button class="mood-btn" data-mood="' + key + '" onclick="selectAndLogMood(\'' + bondId + '\', \'' + key + '\', this)">';
                 html += '<span class="mood-emoji">' + info.emoji + '</span>';
                 html += '<span class="mood-label">' + info.label + '</span></button>';
             }
             html += '</div>';
-            html += '<button class="btn btn-bond-primary" id="mood-submit-' + bondId + '" style="display:none; margin: 0.4rem auto;" onclick="submitMood(\'' + bondId + '\')">Log Mood</button>';
             if (data.partner_logged) {
                 html += '<div class="mood-reveal-note">Your partner already logged their mood today.</div>';
             }
@@ -1523,18 +1951,14 @@
         container.innerHTML = html;
     }
 
-    let selectedMood = {};
-    function selectMood(bondId, mood, btn) {
-        selectedMood[bondId] = mood;
+    function selectAndLogMood(bondId, mood, btn) {
         const picker = document.getElementById('mood-picker-' + bondId);
-        picker.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+        picker.querySelectorAll('.mood-btn').forEach(b => {
+            b.classList.remove('selected');
+            b.disabled = true;
+        });
         btn.classList.add('selected');
-        document.getElementById('mood-submit-' + bondId).style.display = 'block';
-    }
-
-    function submitMood(bondId) {
-        const mood = selectedMood[bondId];
-        if (!mood) return;
+        
         fetch('/api/bonds/' + bondId + '/mood', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -1543,7 +1967,13 @@
             if (d.success) {
                 if (window.showCustomToast) showCustomToast('Mood logged!', 'success');
                 loadMood(bondId);
-            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+                picker.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
+            }
+        }).catch(() => {
+            if (window.showCustomAlert) showCustomAlert('Failed to log mood.', 'danger');
+            picker.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
         });
     }
 
@@ -1562,6 +1992,12 @@
         let html = '';
         html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
         html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
+
+        if (data.source === 'ai') {
+            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">AI Generated</div>';
+        } else if (data.source === 'custom' && data.set_by_username) {
+            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">Asked by ' + escHtml(data.set_by_username) + '</div>';
+        }
 
         // Action controls for AI & Custom question (only available before answers are submitted)
         if (!data.my_answered && !data.partner_answered) {
@@ -1597,6 +2033,9 @@
                 html += '<div class="qotd-waiting">Your partner has already answered. Submit yours to reveal both!</div>';
             }
         }
+
+        html += '<div style="margin-top:0.8rem;text-align:center;"><button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="toggleQotdHistory(\'' + bondId + '\')">Past Questions</button></div>';
+        html += '<div id="qotd-history-' + bondId + '" style="display:none; margin-top:0.8rem;"></div>';
 
         container.innerHTML = html;
     }
@@ -1671,32 +2110,69 @@
         });
     }
 
+    function toggleQotdHistory(bondId) {
+        const historyContainer = document.getElementById('qotd-history-' + bondId);
+        if (!historyContainer) return;
+        if (historyContainer.style.display === 'none') {
+            historyContainer.style.display = 'block';
+            if (historyContainer.innerHTML === '') {
+                historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Loading history...</div>';
+                fetch('/api/bonds/' + bondId + '/qotd/history')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (!d.history || d.history.length === 0) {
+                            historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions yet.</div>';
+                            return;
+                        }
+                        let html = '';
+                        d.history.forEach(item => {
+                            html += '<div class="qotd-history-item">';
+                            html += '<div style="font-size:0.75rem; color:var(--text-muted);">' + escHtml(item.date) + ' &bull; ' + escHtml(item.category) + '</div>';
+                            html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
+                            html += '<div class="qotd-reveal">';
+                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(item.my_username) + '</div><div class="answer">' + escHtml(item.my_answer) + '</div></div>';
+                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(item.partner_username) + '</div><div class="answer">' + escHtml(item.partner_answer) + '</div></div>';
+                            html += '</div></div>';
+                        });
+                        historyContainer.innerHTML = html;
+                    }).catch(() => {
+                        historyContainer.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;">Failed to load history.</div>';
+                    });
+            }
+        } else {
+            historyContainer.style.display = 'none';
+        }
+    }
+
     // --- Nudge ---
     function sendNudge(bondId, btn) {
         if (!btn) return;
         btn.disabled = true;
-        const origIcon = btn.innerHTML;
-        btn.innerHTML = '⌛';
+        const iconSpan = btn.querySelector('.nudge-icon') || btn;
+        const countSpan = btn.querySelector('.nudge-count');
+        const origIcon = iconSpan.innerHTML;
+        iconSpan.innerHTML = '⌛';
         fetch('/api/bonds/' + bondId + '/nudge', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json().then(data => ({ status: r.status, body: data }))).then(res => {
             const d = res.body;
             if (d.success) {
-                btn.innerHTML = '✓';
+                iconSpan.innerHTML = '✓';
+                if (countSpan && d.remaining !== undefined) countSpan.innerText = '(' + d.remaining + ' left)';
                 if (window.showCustomToast) showCustomToast('Nudge sent! 💭', 'success');
                 setTimeout(() => {
-                    btn.innerHTML = origIcon;
+                    iconSpan.innerHTML = origIcon;
                     btn.disabled = false;
                 }, 1500);
             } else {
-                btn.innerHTML = origIcon;
+                iconSpan.innerHTML = origIcon;
                 btn.disabled = false;
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Could not send nudge.', 'danger');
                 else alert(d.error || 'Could not send nudge.');
             }
         }).catch(() => {
-            btn.innerHTML = origIcon;
+            iconSpan.innerHTML = origIcon;
             btn.disabled = false;
             if (window.showCustomAlert) showCustomAlert('Network error while sending nudge.', 'danger');
         });
@@ -1737,7 +2213,8 @@
                     html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem; background:var(--card-bg); border:1px solid var(--card-border); border-radius:6px;">' +
                         '<div style="display:flex; align-items:center; gap:0.6rem; flex:1;">' +
                         '<input type="checkbox" ' + (h.my_completed ? 'checked' : '') + ' onchange="toggleHabit(\'' + h.id + '\', \'' + bondId + '\')" style="width:1.1rem; height:1.1rem; cursor:pointer;">' +
-                        '<span style="font-size:0.9rem; color:var(--text-dark-color); ' + (h.my_completed ? 'text-decoration:line-through; opacity:0.7;' : '') + '">' + escHtml(h.title) + '</span>' +
+                        '<span style="font-size:0.9rem; color:var(--text-dark-color); ' + (h.my_completed ? 'text-decoration:line-through; opacity:0.7;' : '') + '">' + escHtml(h.title) + 
+                        ' <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(You: ' + (h.my_7d_count || 0) + '/7 · Partner: ' + (h.partner_7d_count || 0) + '/7)</span></span>' +
                         '</div>' +
                         '<div style="display:flex; align-items:center; gap:0.5rem;">' +
                         '<span style="font-size:0.75rem; padding:0.15rem 0.4rem; background:var(--hover-bg); border-radius:4px; color:var(--text-secondary);" title="Partner completed today">' + (h.partner_completed ? 'Partner ✓' : 'Partner ○') + '</span>' +
@@ -1837,6 +2314,7 @@
                     '<div style="font-weight:600; font-size:1rem; color:var(--primary-dark-color); margin-bottom:0.6rem;">Echo Together — ' + escHtml(rcp.month_name) + '</div>' +
                     '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem; text-align:center;">' +
                     '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.current_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Current Streak</div></div>' +
+                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.best_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Best Streak</div></div>' +
                     '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.goals_completed || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Goals Completed</div></div>' +
                     '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.qotd_answered || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">QotD Answered</div></div>' +
                     '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.journal_count || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Journal Entries</div></div>' +
@@ -1999,16 +2477,187 @@
     }
 
     function deleteCountdown(countdownId, bondId) {
-        if (!confirm('Remove this countdown?')) return;
-        fetch('/api/bonds/countdowns/' + countdownId, {
-            method: 'DELETE',
-            headers: { 'X-CSRFToken': csrfToken }
-        }).then(function(r) { return r.json(); }).then(function(d) {
-            if (d.success) {
-                loadCountdowns(bondId);
-                if (window.showCustomToast) showCustomToast('Countdown removed.', 'success');
-            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Remove this countdown?', function(ok) {
+                if (ok) doDeleteCountdown(countdownId, bondId);
+            });
+        } else {
+            if (confirm('Remove this countdown?')) doDeleteCountdown(countdownId, bondId);
+        }
+    }
+
+    // --- App Lock PIN Modal & Verification ---
+    let currentPin = '';
+    let pinAction = 'verify'; // 'verify', 'setup'
+    let setupPinFirst = '';
+
+    window.openPinModal = function(action) {
+        currentPin = '';
+        pinAction = action || 'verify';
+        setupPinFirst = '';
+        updatePinDots();
+
+        const modal = document.getElementById('pin-modal');
+        const title = document.getElementById('pin-modal-title');
+        const desc = document.getElementById('pin-modal-desc');
+        const error = document.getElementById('pin-error');
+
+        if (error) error.textContent = '';
+
+        if (pinAction === 'verify') {
+            if (title) title.textContent = 'Enter PIN';
+            if (desc) desc.textContent = 'Enter your 4-digit PIN to unlock';
+        } else if (pinAction === 'setup') {
+            if (title) title.textContent = 'Set New PIN';
+            if (desc) desc.textContent = 'Create a 4-digit PIN for privacy';
+        }
+
+        const forgotLink = document.getElementById('pin-forgot-link');
+        if (forgotLink) forgotLink.style.display = (pinAction === 'verify') ? 'block' : 'none';
+
+        if (modal) {
+            modal.classList.add('active');
+            document.addEventListener('keydown', handlePinModalKey);
+        }
+    };
+
+    window.closePinModal = function() {
+        const modal = document.getElementById('pin-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            document.removeEventListener('keydown', handlePinModalKey);
+        }
+    };
+
+    function handlePinModalKey(e) {
+        if (e.key >= '0' && e.key <= '9') {
+            handlePinKey(e.key);
+        } else if (e.key === 'Backspace') {
+            handlePinKey('backspace');
+        } else if (e.key === 'Escape') {
+            closePinModal();
+        }
+    }
+
+    window.handlePinKey = function(key) {
+        const error = document.getElementById('pin-error');
+        if (error) error.textContent = '';
+
+        if (key === 'backspace') {
+            currentPin = currentPin.slice(0, -1);
+            updatePinDots();
+        } else if (currentPin.length < 4) {
+            currentPin += key;
+            updatePinDots();
+
+            if (currentPin.length === 4) {
+                setTimeout(processPin, 200);
+            }
+        }
+    };
+
+    function updatePinDots() {
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach(function(dot, index) {
+            if (index < currentPin.length) {
+                dot.classList.add('filled');
+            } else {
+                dot.classList.remove('filled');
+            }
         });
     }
+
+    function processPin() {
+        if (pinAction === 'verify') {
+            verifyPin(currentPin);
+        } else if (pinAction === 'setup') {
+            if (!setupPinFirst) {
+                setupPinFirst = currentPin;
+                currentPin = '';
+                updatePinDots();
+                const title = document.getElementById('pin-modal-title');
+                const desc = document.getElementById('pin-modal-desc');
+                if (title) title.textContent = 'Confirm PIN';
+                if (desc) desc.textContent = 'Re-enter your 4-digit PIN';
+            } else {
+                if (currentPin !== setupPinFirst) {
+                    handlePinError('PINs do not match');
+                    setupPinFirst = '';
+                    setTimeout(function() {
+                        const title = document.getElementById('pin-modal-title');
+                        const desc = document.getElementById('pin-modal-desc');
+                        if (title) title.textContent = 'Set New PIN';
+                        if (desc) desc.textContent = 'Create a 4-digit PIN for privacy';
+                    }, 600);
+                } else {
+                    submitPinSetup(currentPin);
+                }
+            }
+        }
+    }
+
+    function verifyPin(pin) {
+        fetch('/api/app_lock/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ pin: pin })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                handlePinSuccess();
+            } else {
+                handlePinError(d.error || 'Incorrect PIN');
+            }
+        }).catch(function() {
+            handlePinError('Network error');
+        });
+    }
+
+    function submitPinSetup(pin) {
+        fetch('/api/app_lock/setup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ pin: pin })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('App lock PIN created!', 'success');
+                handlePinSuccess();
+            } else {
+                handlePinError(d.error || 'Failed to set PIN');
+            }
+        }).catch(function() {
+            handlePinError('Network error');
+        });
+    }
+
+    function handlePinSuccess() {
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach(function(d) {
+            d.classList.add('success');
+            d.classList.remove('filled');
+        });
+        setTimeout(function() {
+            window.location.reload();
+        }, 500);
+    }
+
+    function handlePinError(errorMsg) {
+        const dots = document.querySelectorAll('#pin-dots .pin-dot');
+        dots.forEach(function(d) {
+            d.classList.add('error');
+            d.classList.remove('filled');
+        });
+        const errorEl = document.getElementById('pin-error');
+        if (errorEl) errorEl.textContent = errorMsg || 'Incorrect PIN';
+
+        setTimeout(function() {
+            currentPin = '';
+            dots.forEach(function(d) { d.classList.remove('error'); });
+            updatePinDots();
+        }, 600);
+    }
+
+    window.startPinReset = function() {
+        if (window.showCustomAlert) showCustomAlert('To reset your PIN, please visit Notes or Account Settings.', 'info');
+    };
 </script>
 {% endblock %}

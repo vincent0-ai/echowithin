@@ -1,6 +1,6 @@
-# EchoWithin — Secure Notes, Community & Collaboration Platform
+# EchoWithin — Secure Notes, Community, Bonds & Collaboration Platform
 
-EchoWithin is a community platform that combines blogging, encrypted personal notes, collaborative note sharing, direct messaging, and premium-tier power features. It is built with a Python/Flask backend, MongoDB, real-time WebSocket communication, and ships as both a Progressive Web App (PWA) and a native Android application.
+EchoWithin is a comprehensive platform that combines blogging, encrypted personal notes, collaborative note sharing, pair relationship spaces ("Bonds & Echo Together"), direct messaging with ephemeral Whisper Mode, and premium-tier power features. It is built with a Python/Flask backend, MongoDB, real-time WebSocket communication, and ships as both a Progressive Web App (PWA) and a native Android application.
 
 ---
 
@@ -25,6 +25,17 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Bidirectional sync between saved copies and the original source.
 - Discussion threads and file attachments on shared notes.
 
+### Bonds & Echo Together (Pair Relationships)
+
+- **Dedicated Pair Spaces**: Connect with partners, best friends, study mates, family, or accountability partners with custom labels, icons, and automated milestone tracking (1 week to multi-year anniversaries).
+- **Daily Habits System**: Build shared daily habits (up to 10 active habits per bond) with E2E encrypted habit titles at rest, real-time WebSocket toggles, and habit check-offs contributing to shared daily streaks.
+- **Shared Countdowns**: Track upcoming shared events (birthdays, anniversaries, trips) with live day counters ("X days left", "Today!", "Tomorrow!") and E2E encrypted titles at rest.
+- **Encrypted Shared Journaling**: Write and reflect in a private, end-to-end encrypted shared journal using per-bond Fernet keys.
+- **Daily Question of the Day (QotD)**: Deepen connections with curated daily prompts, AI-generated questions (via JigsawStack), or custom partner-written questions. Features a dual blind reveal mechanic (answers are hidden until both partners respond). Encrypted at rest.
+- **Mutual Goals & Milestones**: Propose shared goals requiring partner approval, track milestone step completions, log progress check-ins, and manage goal lifecycles with encrypted titles and descriptions.
+- **Daily Mood Tracker & 30-Day Insights**: Log daily moods with dual reveal, compare 30-day side-by-side mood histories, and view monthly recap summaries ("Echo Together") tracking streaks, completed goals, QotDs answered, and top moods.
+- **Real-Time Sync & Activity Push Notifications**: Instant SocketIO state synchronization accompanied by push notifications for 14 bond activity triggers.
+
 ### Community Blogging
 
 - Rich posts with **Markdown** support, image/video uploads, and tag categorization.
@@ -42,19 +53,20 @@ EchoWithin is a community platform that combines blogging, encrypted personal no
 - Reporting system for rule violations.
 - Tiered limits: 1 community (free) → 5 communities (premium).
 
-### Direct Messaging
+### Direct Messaging & Whisper Mode
 
 - Encrypted 1-on-1 conversations with text, images, and voice notes.
 - Emoji reactions, message editing, deletion, and full conversation deletion.
 - Message **request system** — users approve or reject first contact.
 - Typing indicators, read receipts, and active chat presence via Socket.IO.
 - **Scheduled messages** for delayed delivery (premium feature).
+- **Whisper Mode**: Ephemeral, self-destructing temporary chat sessions with strict expiry timers, real-time screenshot alerts, and automatic message purging.
 
 ### Push Notifications
 
 - **Web Push** (PWA) via VAPID for browser notifications on desktop, Android, and iOS.
 - **Firebase Cloud Messaging (FCM)** for native Android app notifications.
-- Notifications for: new posts, comments, replies, message requests, collaboration proposals, and admin announcements.
+- Notifications for: new posts, comments, replies, message requests, collaboration proposals, admin announcements, and **14 real-time bond activity triggers** (habit check-offs, countdowns, goal proposals/check-ins, QotD & mood reveals, bond invites).
 - Smart suppression: no push when the recipient is actively viewing the conversation.
 - Stale subscription cleanup, iOS Safari-specific handling.
 
@@ -93,6 +105,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 - **Rate limiting** on authentication endpoints (15 calls/minute).
 - Honeypot bot detection on registration.
 - Secure cookies (HttpOnly, Secure, SameSite=Lax), **HSTS** (1 year with preload), and **CSP** headers.
+- End-to-end encryption at rest for personal notes, DMs, shared journals, bond habits, countdowns, QotDs, and shared goals using per-user / per-bond **Fernet symmetric encryption** with PBKDF2 key derivation.
 - HTML sanitization via **Bleach** — Markdown rendered safely, links set to `target="_blank" rel="noopener"`.
 - NSFW image detection via **JigsawStack** — flagged images are tagged and hidden.
 - Canonical domain enforcement and automatic HTTP→HTTPS redirects.
@@ -118,7 +131,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 
 | Category               | Technology                                                                     |
 | ---------------------- | ------------------------------------------------------------------------------ |
-| **Backend Framework**  | Python 3.12, Flask 3.1 (blueprints), Gunicorn 23 (gevent WebSocket worker)                  |
+| **Backend Framework**  | Python 3.12, Flask 3.1 (blueprints), Gunicorn 23 (gevent WebSocket worker)     |
 | **Database**           | MongoDB 7 (primary), Redis 7 (caching + task queue)                            |
 | **Real-time**          | Flask-SocketIO 5.3, gevent-websocket                                           |
 | **Search**             | Typesense (full-text with typo tolerance, tenant-isolated scoped keys)         |
@@ -128,7 +141,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 | **Email**              | Flask-Mail (SMTP) with List-Unsubscribe headers                                |
 | **Authentication**     | Flask-Login, Google OAuth2 (requests-oauthlib)                                 |
 | **Encryption**         | Fernet (cryptography 46), PBKDF2-HMAC-SHA256                                   |
-| **AI / Moderation**    | JigsawStack (NSFW detection, tag suggestions)                                  |
+| **AI / Moderation**    | JigsawStack (NSFW detection, AI QotD generation, tag suggestions)             |
 | **Markdown**           | Python-Markdown 3.10 + Bleach 6.3 sanitization                                 |
 | **Payments**           | Paystack                                                                       |
 | **Frontend**           | Jinja2 templates, vanilla JS, CSS                                              |
@@ -154,6 +167,8 @@ echowithin/
 │   ├── notes.py             # Personal space, note CRUD, search, merge, app lock
 │   ├── sharing.py           # Shared notes, attachments, proposals, version history
 │   ├── chat.py              # Direct messages, scheduled messages, reactions
+│   ├── whisper.py           # Ephemeral self-destructing chat sessions & screenshot alerts
+│   ├── bonds.py             # Bonds & Echo Together: habits, countdowns, QotD, goals, journal, insights
 │   ├── communities.py       # Communities, notes, challenges, reports
 │   ├── admin.py             # Admin dashboard, user/post management, APK upload
 │   ├── payments.py          # Paystack webhook, premium activation
@@ -254,23 +269,26 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 
 A REST API is available at `/api/v1/*` for mobile/native app clients. Key endpoint groups:
 
-| Group             | Endpoints                                                                                                              |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| **Auth**          | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`                           |
-| **Notes**         | `GET /notes`, `GET /notes/<id>`, `GET /notes/content/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>` |
-| **Note Shares**   | `GET /notes/shares`, `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/share/<id>/auto_approve`, `POST /notes/revoke_share/<id>` |
-| **Note Previews** | `POST /notes/previews`                                                                                                 |
-| **Note Dedup**    | `POST /notes/dedup`                                                                                                    |
-| **Versions**      | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                                   |
-| **Proposals**     | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                                           |
-| **Sync**          | `POST /notes/<id>/sync`                                                                                                |
-| **Lock**          | `POST /notes/toggle_lock/<id>`                                                                                         |
-| **App Lock**      | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`                |
-| **Activity**      | `GET /posts/my-commented`, `POST /posts/mark-all-read`, `POST /activity/mark_read`, `GET /notifications/badge-counts`  |
-| **FCM**           | `POST /fcm/register`, `POST /fcm/unregister`                                                                           |
-| **Premium**       | `POST /premium/activate`                                                                                               |
-| **Profile**       | `GET /profile`                                                                                                         |
-| **Collaboration** | `GET /notes/share/<id>/attachments`                                                                                    |
+| Group                 | Endpoints                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**              | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`                                                                                         |
+| **Notes**             | `GET /notes`, `GET /notes/<id>`, `GET /notes/content/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>`                                                 |
+| **Note Shares**       | `GET /notes/shares`, `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/share/<id>/auto_approve`, `POST /notes/revoke_share/<id>`                                     |
+| **Note Previews**     | `POST /notes/previews`                                                                                                                                                                |
+| **Note Dedup**        | `POST /notes/dedup`                                                                                                                                                                   |
+| **Versions**          | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                                                                                                  |
+| **Proposals**         | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                                                                                                          |
+| **Sync**              | `POST /notes/<id>/sync`                                                                                                                                                               |
+| **Lock**              | `POST /notes/toggle_lock/<id>`                                                                                                                                                        |
+| **App Lock**          | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`                                                                               |
+| **Bonds & Habits**    | `POST /api/bonds/request/<user_id>`, `POST /api/bonds/accept/<id>`, `POST /api/bonds/break/<id>`, `GET /api/bonds/<id>/habits`, `POST /api/bonds/<id>/habits`, `POST /api/bonds/habits/<id>/toggle` |
+| **Countdowns & Recap**| `GET /api/bonds/<id>/countdowns`, `POST /api/bonds/<id>/countdowns`, `DELETE /api/bonds/countdowns/<id>`, `GET /api/bonds/<id>/insights`                                              |
+| **Bond Goals & QotD** | `GET /api/bonds/<id>/goals`, `POST /api/bonds/<id>/goals`, `POST /api/bonds/goals/<id>/approve`, `GET /api/bonds/<id>/qotd`, `POST /api/bonds/<id>/qotd/answer`, `POST /api/bonds/<id>/qotd/generate_ai` |
+| **Activity**          | `GET /posts/my-commented`, `POST /posts/mark-all-read`, `POST /activity/mark_read`, `GET /notifications/badge-counts`                                                                 |
+| **FCM**               | `POST /fcm/register`, `POST /fcm/unregister`                                                                                                                                          |
+| **Premium**           | `POST /premium/activate`                                                                                                                                                              |
+| **Profile**           | `GET /profile`                                                                                                                                                                        |
+| **Collaboration**     | `GET /notes/share/<id>/attachments`                                                                                                                                                   |
 
 ---
 

@@ -1492,7 +1492,6 @@
     }
 
     function renderGoalCard(g, bondId) {
-        const pct = g.target_value > 0 ? Math.min(100, (g.current_value / g.target_value) * 100) : 0;
         let milestonesHtml = '';
         if (g.milestones && g.milestones.length > 0) {
             milestonesHtml = '<div class="goal-milestones">' + g.milestones.map((ms, idx) =>
@@ -1543,12 +1542,20 @@
                                  '<div class="checkin-history" id="history-' + g.id + '">' + historyItems + '</div>';
         }
 
+        let effectiveTarget = g.target_value || 0;
+        if (effectiveTarget <= 0 && g.unit && g.unit.indexOf('%') !== -1) {
+            effectiveTarget = 100;
+        }
+
         let progressHtml = '';
-        if (g.target_value > 0) {
+        if (effectiveTarget > 0) {
+            const pct = Math.min(100, Math.max(0, (g.current_value / effectiveTarget) * 100));
             progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
-                '<div class="goal-progress-text">' + g.current_value + ' / ' + g.target_value + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>';
+                '<div class="goal-progress-text">' + g.current_value + ' / ' + effectiveTarget + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>';
         } else if (g.current_value > 0) {
-            progressHtml = '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
+            const fillPct = Math.min(100, Math.max(10, g.current_value <= 100 ? g.current_value : 100));
+            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + fillPct + '%"></div></div>' +
+                '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
         }
 
         let editForm = '<div class="goal-edit-form" id="edit-goal-' + g.id + '">' +

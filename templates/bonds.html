@@ -2128,12 +2128,32 @@
                         d.history.forEach(item => {
                             const dObj = window.parseServerTime ? window.parseServerTime(item.date) : new Date(item.date);
                             const formattedDate = dObj && !isNaN(dObj) ? dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : item.date;
+
+                            let myUser = item.my_username || 'You';
+                            let myAns = item.my_answer || '';
+                            let partnerUser = item.partner_username || 'Partner';
+                            let partnerAns = item.partner_answer || '';
+
+                            if (item.answers) {
+                                if (item.answers[currentUserId]) {
+                                    myUser = item.answers[currentUserId].username || myUser;
+                                    myAns = item.answers[currentUserId].text || myAns;
+                                }
+                                for (const k in item.answers) {
+                                    if (k !== currentUserId) {
+                                        partnerUser = item.answers[k].username || partnerUser;
+                                        partnerAns = item.answers[k].text || partnerAns;
+                                        break;
+                                    }
+                                }
+                            }
+
                             html += '<div class="qotd-history-item">';
-                            html += '<div style="font-size:0.75rem; color:var(--text-muted);">' + escHtml(formattedDate) + ' &bull; ' + escHtml(item.category) + '</div>';
+                            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' &bull; ' + escHtml(item.category) + '</div>';
                             html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
                             html += '<div class="qotd-reveal">';
-                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(item.my_username) + '</div><div class="answer">' + escHtml(item.my_answer) + '</div></div>';
-                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(item.partner_username) + '</div><div class="answer">' + escHtml(item.partner_answer) + '</div></div>';
+                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + escHtml(myAns) + '</div></div>';
+                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
                             html += '</div></div>';
                         });
                         historyContainer.innerHTML = html;

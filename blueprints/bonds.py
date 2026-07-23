@@ -2225,16 +2225,30 @@ def api_bond_qotd_history(bond_id):
         for doc in history_docs:
             answers = doc.get('answers', {})
             if user_id_str in answers and partner_id_str in answers:
-                decrypted_q = m.decrypt_bond_data(doc.get('question_text', ''), bond_id) if doc.get('encrypted') else doc.get('question_text', '')
-                
-                my_ans = m.decrypt_bond_data(answers[user_id_str].get('answer', ''), bond_id) if answers[user_id_str].get('encrypted') else answers[user_id_str].get('answer', '')
-                partner_ans = m.decrypt_bond_data(answers[partner_id_str].get('answer', ''), bond_id) if answers[partner_id_str].get('encrypted') else answers[partner_id_str].get('answer', '')
-                
+                decrypted_q = m.decrypt_bond_data(doc.get('question_text', ''), bond_id) if doc.get('encrypted', True) else doc.get('question_text', '')
+
+                def _parse_ans(a_val):
+                    if isinstance(a_val, dict):
+                        raw_a = a_val.get('answer', '')
+                        if a_val.get('encrypted', True):
+                            return m.decrypt_bond_data(raw_a, bond_id)
+                        return raw_a or ''
+                    elif isinstance(a_val, str):
+                        return m.decrypt_bond_data(a_val, bond_id)
+                    return ''
+
+                my_ans = _parse_ans(answers.get(user_id_str))
+                partner_ans = _parse_ans(answers.get(partner_id_str))
+
                 history.append({
                     'date': doc.get('date'),
                     'question': decrypted_q,
                     'category': doc.get('question_category', ''),
                     'source': doc.get('source', 'app'),
+                    'my_username': current_user.username,
+                    'my_answer': my_ans,
+                    'partner_username': partner_username,
+                    'partner_answer': partner_ans,
                     'answers': {
                         user_id_str: {
                             'username': current_user.username,

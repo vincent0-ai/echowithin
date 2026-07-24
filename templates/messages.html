@@ -4,18 +4,24 @@
 <div class="messages-container"
     style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); display: flex; flex-direction: column;">
     {% if current_user.is_authenticated and current_user.is_guest %}
-    <div class="tour-guide-page-card" style="background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 12px; padding: 0.8rem 1.2rem; margin-bottom: 0.8rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
-            <h3 style="margin: 0; font-size: 1rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Messaging & Whisper Mode</h3>
-            <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 12px; font-weight: 600;">Guest Session</span>
+    <div class="floating-tour-tooltip" id="tour-tooltip-messages" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Messaging & Whisper Mode</h4>
+                <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+            </div>
+            <button type="button" onclick="document.getElementById('tour-tooltip-messages').style.display='none'" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
-        <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: var(--text-muted, #666); line-height: 1.4;">
-            Chat securely with contacts or launch Whisper Mode for ephemeral, self-destructing chats with real-time screenshot alerts.
+        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
+            Chat securely with contacts or launch Whisper Mode for self-destructing chats with real-time screenshot alerts.
         </p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border-color, #eee);">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
             <div><strong>Direct Messages:</strong> Instant 1-on-1 private messaging.</div>
             <div><strong>Whisper Mode:</strong> Self-destructing chat with screenshot alerts.</div>
             <div><strong>Use Case:</strong> Best for private 1-on-1 conversations and sensitive check-ins.</div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
+            <button type="button" onclick="document.getElementById('tour-tooltip-messages').style.display='none'" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
     {% endif %}

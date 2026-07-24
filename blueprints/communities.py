@@ -169,6 +169,8 @@ def api_my_communities():
 def api_share_note_to_community(post_id):
     """Cross-posts a personal note to a community as a new community note."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot share notes to public communities. Please sign up to participate.'}), 403
     try:
         data = request.get_json() or {}
         community_id_str = data.get('community_id')
@@ -242,6 +244,9 @@ def api_share_note_to_community(post_id):
 @limits(calls=5, period=3600)
 def api_create_community():
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest accounts in tour mode cannot create communities. Please sign up to participate.', 'warning')
+        return redirect(url_for('communities.communities_page'))
     name = request.form.get('name', '').strip()
     bio = request.form.get('bio', '').strip()
     visibility = request.form.get('visibility', 'private')
@@ -276,6 +281,9 @@ def api_create_community():
 @login_required
 def join_community_link(invite_code):
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest accounts in tour mode cannot join communities. Please sign up to participate.', 'warning')
+        return redirect(url_for('communities.communities_page'))
     community = m.communities_conf.find_one({'invite_code': invite_code})
     if not community:
         flash('Invalid or expired invite link.', 'danger')
@@ -334,6 +342,9 @@ def api_join_community_code():
 def api_join_public_community(community_id):
     """Join a public community by ID directly from the discovery page."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest accounts in tour mode cannot join public communities. Please sign up to participate.', 'warning')
+        return redirect(url_for('communities.communities_page'))
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -501,6 +512,9 @@ def api_remove_member(community_id):
 def api_create_community_note(community_id):
     """Create a new community note with optional surprise theme and media."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest accounts in tour mode cannot post in public communities. Please sign up to participate.', 'warning')
+        return redirect(url_for('communities.view_community', community_id=community_id))
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -662,6 +676,8 @@ def api_create_community_note(community_id):
 def api_react_community_note(note_id):
     """Toggle a reaction on a community note."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot react to public community notes.'}), 403
     try:
         note_obj_id = ObjectId(note_id)
     except Exception:
@@ -884,6 +900,8 @@ def view_shared_community_note(share_id):
 def api_save_community_note(note_id):
     """Save a community note to user's personal notes."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot save community notes. Please sign up to participate.'}), 403
     try:
         note_obj_id = ObjectId(note_id)
     except Exception:
@@ -936,6 +954,8 @@ def api_save_community_note(note_id):
 def api_create_challenge(community_id):
     """Create a writing challenge/prompt (admin only). One active per community."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot perform this action.'}), 403
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -1079,6 +1099,9 @@ def api_end_challenge(community_id, challenge_id):
 @limits(calls=5, period=3600)
 def api_create_poll(community_id):
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest accounts in tour mode cannot create polls.', 'warning')
+        return redirect(url_for('communities.view_community', community_id=community_id))
     try:
         comm_obj_id = ObjectId(community_id)
     except Exception:
@@ -1127,6 +1150,8 @@ def api_create_poll(community_id):
 @login_required
 def api_vote_poll(community_id, poll_id):
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot vote in polls.'}), 403
     try:
         poll_obj_id = ObjectId(poll_id)
         comm_obj_id = ObjectId(community_id)

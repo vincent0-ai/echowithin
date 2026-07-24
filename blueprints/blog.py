@@ -1443,6 +1443,8 @@ def api_post_comments(slug):
     # POST -> create new comment
     if not current_user.is_authenticated:
         return jsonify({'error': 'Authentication required'}), 401
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot post comments on the public blog.'}), 403
 
     content = request.form.get('content') or (request.json and request.json.get('content'))
     parent_id_str = request.form.get('parent_id') or (request.json and request.json.get('parent_id'))
@@ -1595,6 +1597,8 @@ def api_edit_comment(comment_id):
 def api_vote_comment(comment_id):
     """Upvote or remove an upvote from a comment."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot vote on comments.'}), 403
     try:
         user_id = ObjectId(current_user.id)
         comment_oid = ObjectId(comment_id)
@@ -1867,6 +1871,8 @@ def delete_post(post_id):
 @login_required
 def toggle_reaction_post(post_id):
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({'error': 'Guest users in tour mode cannot react to public blog posts.'}), 403
     try:
         # Support both 'reaction' and 'emoji' keys to be backward-compatible
         data = request.get_json() or {}

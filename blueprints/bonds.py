@@ -1684,6 +1684,17 @@ def api_bond_mood_log(bond_id):
 
         # Check if partner also logged today (for mutual reveal)
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)})
+        
+        # Interactive Demo Bot: auto-log mood for Maya_DemoPartner
+        if partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username') == 'Maya_DemoPartner'):
+            bot_mood = random.choice(['happy', 'peaceful', 'excited'])
+            m.bond_moods_conf.update_one(
+                {'bond_id': ObjectId(bond_id), 'date': today_str, 'user_id': ObjectId(partner_id)},
+                {'$set': {'mood': bot_mood, 'created_at': now}},
+                upsert=True
+            )
+
         partner_mood_doc = m.bond_moods_conf.find_one({
             'bond_id': ObjectId(bond_id),
             'date': today_str,
@@ -1823,14 +1834,15 @@ def api_bond_qotd_get(bond_id):
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        is_broken = bond_doc.get('status') == 'broken'
 
-        # Get or create today's question doc
+        # Get today's question doc
         qotd_doc = m.bond_qotd_conf.find_one({
             'bond_id': ObjectId(bond_id),
             'date': today_str
         })
 
-        if not qotd_doc:
+        if not qotd_doc and not is_broken:
             question_text, question_category = _get_daily_question(bond_doc)
             now = datetime.datetime.now(datetime.timezone.utc)
             encrypted_question = m.encrypt_bond_data(question_text, bond_id)
@@ -1852,6 +1864,12 @@ def api_bond_qotd_get(bond_id):
                     'date': today_str
                 })
 
+        if not qotd_doc:
+            return jsonify({
+                'has_question': False,
+                'is_archived_bond': is_broken
+            })
+
         answers = qotd_doc.get('answers', {})
         my_answer = answers.get(user_id_str)
         partner_answer = answers.get(partner_id)
@@ -1864,13 +1882,15 @@ def api_bond_qotd_get(bond_id):
 
         decrypted_question = m.decrypt_bond_data(qotd_doc.get('question_text', ''), bond_id)
         result = {
+            'has_question': True,
             'question': decrypted_question,
             'category': qotd_doc.get('question_category', 'Universal'),
             'source': qotd_doc.get('source', 'preset'),
             'my_answer': my_ans_text,
             'my_answered': my_answered,
             'partner_answered': partner_answered,
-            'revealed': revealed
+            'revealed': revealed,
+            'is_archived_bond': is_broken
         }
 
         if qotd_doc.get('set_by'):
@@ -1954,6 +1974,23 @@ def api_bond_qotd_answer(bond_id):
 
         # Check if partner also answered (mutual reveal)
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)})
+
+        # Interactive Demo Bot: auto-answer QotD for Maya_DemoPartner
+        if partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username') == 'Maya_DemoPartner'):
+            bot_answers = [
+                "Taking quality time each day to check in with each other and building shared habits matters most to me!",
+                "Planning our upcoming trip and celebrating small milestones together!",
+                "Being open, supportive, and creating a comfortable space to express thoughts freely."
+            ]
+            bot_ans_text = random.choice(bot_answers)
+            bot_enc_ans = m.encrypt_bond_data(bot_ans_text, bond_id)
+            bot_answer_key = f'answers.{partner_id}'
+            m.bond_qotd_conf.update_one(
+                {'_id': qotd_doc['_id']},
+                {'$set': {bot_answer_key: {'answer': bot_enc_ans, 'encrypted': True, 'answered_at': now}}}
+            )
+
         # Re-fetch to get updated answers
         updated_doc = m.bond_qotd_conf.find_one({'_id': qotd_doc['_id']})
         answers = updated_doc.get('answers', {})
@@ -2535,6 +2572,16 @@ def api_bond_habit_toggle(habit_id):
             _update_bond_streak(bond_doc)
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)})
+
+        # Interactive Demo Bot: auto-check habit for Maya_DemoPartner when user completes habit
+        if new_status and partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username') == 'Maya_DemoPartner'):
+            bot_log_key = f'logs.{today_str}.{partner_id}'
+            m.bond_habits_conf.update_one(
+                {'_id': ObjectId(habit_id)},
+                {'$set': {bot_log_key: {'completed': True, 'completed_at': now}}}
+            )
+
         m.socketio.emit('bond_habit_updated', {
             'bond_id': bond_id,
             'habit_id': habit_id,

@@ -1134,19 +1134,25 @@
     </div>
 
     {% if current_user.is_authenticated and current_user.is_guest %}
-    <div class="tour-guide-page-card" style="background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-            <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h3>
-            <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 12px; font-weight: 600;">Guest Session</span>
+    <div class="floating-tour-tooltip" id="tour-tooltip-bonds" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h4>
+                <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+            </div>
+            <button type="button" onclick="document.getElementById('tour-tooltip-bonds').style.display='none'" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
-        <p style="margin: 0 0 0.8rem 0; font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.45;">
-            Bonds are dedicated spaces for couples, best friends, or partners to build meaningful connections through shared goals, daily habits, and encrypted memories.
+        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
+            Bonds are dedicated paired spaces for best friends, partners, family members, or close companions to build meaningful connections through shared goals, daily habits, and encrypted memories.
         </p>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; font-size: 0.82rem; background: var(--card-bg, #fafafa); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-            <div><strong>Shared Goals:</strong> Set savings, travel, or fitness targets with dual contribution bars.</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
+            <div><strong>Shared Goals:</strong> Set savings, travel, or project targets with dual contribution bars.</div>
             <div><strong>Daily Habits:</strong> Track 7-day streaks and daily check-offs together.</div>
             <div><strong>Daily Question (QotD):</strong> Blind reveal daily prompts with AI generation.</div>
-            <div><strong>Use Case:</strong> Best for building habits, tracking couple goals, and growing together.</div>
+            <div><strong>Use Case:</strong> Best for building habits, tracking shared goals, and staying connected with friends or partners.</div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
+            <button type="button" onclick="document.getElementById('tour-tooltip-bonds').style.display='none'" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
     {% endif %}
@@ -2180,6 +2186,15 @@
 
     function renderQotdSection(bondId, container, data) {
         let html = '';
+        if (data.is_archived_bond && !data.has_question) {
+            html += '<div style="color:var(--text-muted); font-size:0.88rem; text-align:center; padding:1rem; line-height:1.45;">This bond has ended and is in read-only memory archive.</div>';
+            html += '<div style="margin-top:0.8rem;text-align:center;"><button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="toggleQotdHistory(\'' + bondId + '\')">View Q&A Memory Lane</button></div>';
+            html += '<div id="qotd-history-' + bondId + '" style="display:block; margin-top:0.8rem;"></div>';
+            container.innerHTML = html;
+            loadQotdHistory(bondId);
+            return;
+        }
+
         html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
         html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
 
@@ -2189,8 +2204,8 @@
             html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">Asked by ' + escHtml(data.set_by_username) + '</div>';
         }
 
-        // Action controls for AI & Custom question (only available before answers are submitted)
-        if (!data.my_answered && !data.partner_answered) {
+        // Action controls for AI & Custom question (only available before answers are submitted AND for active bonds)
+        if (!data.is_archived_bond && !data.my_answered && !data.partner_answered) {
             html += '<div style="display:flex; gap:0.5rem; justify-content:center; margin-bottom:0.8rem; flex-wrap:wrap;">';
             html += '<button class="btn btn-bond-primary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="generateAiQotd(\'' + bondId + '\')">Generate AI Question</button>';
             html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Write Custom Question</button>';
@@ -2213,8 +2228,10 @@
             // I answered, waiting for partner
             html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div></div>';
             html += '<div class="qotd-waiting">Waiting for your partner to answer for the reveal...</div>';
+        } else if (data.is_archived_bond) {
+            html += '<div class="qotd-waiting" style="color:var(--text-muted);">This bond has ended and is in read-only memory archive.</div>';
         } else {
-            // Haven't answered yet
+            // Active bond & haven't answered yet
             html += '<div class="qotd-answer-area">';
             html += '<textarea id="qotd-input-' + bondId + '" placeholder="Share your thoughts..." maxlength="1000"></textarea>';
             html += '<button class="btn btn-bond-primary" style="margin-top: 0.4rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">Submit Answer</button>';
@@ -2300,57 +2317,61 @@
         });
     }
 
+    function loadQotdHistory(bondId) {
+        const historyContainer = document.getElementById('qotd-history-' + bondId);
+        if (!historyContainer) return;
+        historyContainer.style.display = 'block';
+        historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Loading history...</div>';
+        fetch('/api/bonds/' + bondId + '/qotd/history')
+            .then(r => r.json())
+            .then(d => {
+                if (!d.history || d.history.length === 0) {
+                    historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions found in history.</div>';
+                    return;
+                }
+                let html = '';
+                d.history.forEach(item => {
+                    const dObj = window.parseServerTime ? window.parseServerTime(item.date) : new Date(item.date);
+                    const formattedDate = dObj && !isNaN(dObj) ? dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : item.date;
+
+                    let myUser = item.my_username || 'You';
+                    let myAns = item.my_answer || '';
+                    let partnerUser = item.partner_username || 'Partner';
+                    let partnerAns = item.partner_answer || '';
+
+                    if (item.answers) {
+                        if (item.answers[currentUserId]) {
+                            myUser = item.answers[currentUserId].username || myUser;
+                            myAns = item.answers[currentUserId].text || myAns;
+                        }
+                        for (const k in item.answers) {
+                            if (k !== currentUserId) {
+                                partnerUser = item.answers[k].username || partnerUser;
+                                partnerAns = item.answers[k].text || partnerAns;
+                                break;
+                            }
+                        }
+                    }
+
+                    html += '<div class="qotd-history-item">';
+                    html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' &bull; ' + escHtml(item.category) + '</div>';
+                    html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
+                    html += '<div class="qotd-reveal">';
+                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + escHtml(myAns) + '</div></div>';
+                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
+                    html += '</div></div>';
+                });
+                historyContainer.innerHTML = html;
+            }).catch(() => {
+                historyContainer.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;">Failed to load history.</div>';
+            });
+    }
+
     function toggleQotdHistory(bondId) {
         const historyContainer = document.getElementById('qotd-history-' + bondId);
         if (!historyContainer) return;
         if (historyContainer.style.display === 'none') {
-            historyContainer.style.display = 'block';
-            if (historyContainer.innerHTML === '') {
-                historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Loading history...</div>';
-                fetch('/api/bonds/' + bondId + '/qotd/history')
-                    .then(r => r.json())
-                    .then(d => {
-                        if (!d.history || d.history.length === 0) {
-                            historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions yet.</div>';
-                            return;
-                        }
-                        let html = '';
-                        d.history.forEach(item => {
-                            const dObj = window.parseServerTime ? window.parseServerTime(item.date) : new Date(item.date);
-                            const formattedDate = dObj && !isNaN(dObj) ? dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : item.date;
-
-                            let myUser = item.my_username || 'You';
-                            let myAns = item.my_answer || '';
-                            let partnerUser = item.partner_username || 'Partner';
-                            let partnerAns = item.partner_answer || '';
-
-                            if (item.answers) {
-                                if (item.answers[currentUserId]) {
-                                    myUser = item.answers[currentUserId].username || myUser;
-                                    myAns = item.answers[currentUserId].text || myAns;
-                                }
-                                for (const k in item.answers) {
-                                    if (k !== currentUserId) {
-                                        partnerUser = item.answers[k].username || partnerUser;
-                                        partnerAns = item.answers[k].text || partnerAns;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            html += '<div class="qotd-history-item">';
-                            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' &bull; ' + escHtml(item.category) + '</div>';
-                            html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
-                            html += '<div class="qotd-reveal">';
-                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + escHtml(myAns) + '</div></div>';
-                            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
-                            html += '</div></div>';
-                        });
-                        historyContainer.innerHTML = html;
-                    }).catch(() => {
-                        historyContainer.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;">Failed to load history.</div>';
-                    });
-            }
+            loadQotdHistory(bondId);
         } else {
             historyContainer.style.display = 'none';
         }

@@ -2255,19 +2255,25 @@
         </div>
 
         {% if current_user.is_authenticated and current_user.is_guest %}
-        <div class="tour-guide-page-card" style="background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
-                <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Personal Notes Space</h3>
-                <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 12px; font-weight: 600;">Guest Session</span>
+        <div class="floating-tour-tooltip" id="tour-tooltip-notes" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Personal Notes Space</h4>
+                    <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+                </div>
+                <button type="button" onclick="document.getElementById('tour-tooltip-notes').style.display='none'" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
             </div>
-            <p style="margin: 0 0 0.8rem 0; font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.45;">
+            <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
                 Welcome to your private encrypted space. Here you can create confidential notes, lock entries behind an App Lock PIN, or share animated surprise notes with friends.
             </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; font-size: 0.82rem; background: var(--card-bg, #fafafa); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-                <div><strong>Write Note:</strong> Create encrypted markdown entries.</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
+                <div><strong>Write Note:</strong> Create encrypted markdown entries (use **bold**, *italic*, # headings).</div>
                 <div><strong>Lock Note:</strong> Secure private notes with a 4-digit PIN.</div>
-                <div><strong>Share Surprise:</strong> Create animated themed links (Romantic, Birthday).</div>
-                <div><strong>Use Case:</strong> Best for private journaling, confidential thoughts, and gift notes.</div>
+                <div><strong>Share Surprise:</strong> Create animated themed links for celebration or collaboration.</div>
+                <div><strong>Use Case:</strong> Best for private journaling, confidential thoughts, and shared notes.</div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
+                <button type="button" onclick="document.getElementById('tour-tooltip-notes').style.display='none'" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
             </div>
         </div>
         {% endif %}
@@ -8409,15 +8415,14 @@
         if (!firstNoteCard) return;
 
         const steps = [
-            { selector: '.note-actions .copy-btn', icon: 'fa-copy', text: '📋 Copy your note text to clipboard for pasting elsewhere' },
-            { selector: '.note-actions .edit-note-btn', icon: 'fa-pen', text: '✏️ Edit your note — supports full markdown formatting' },
-            { selector: '.note-actions .export-note-btn', icon: 'fa-download', text: '📥 Export — Download this note as Plain Text, PDF, or Word document' },
-            { selector: '.note-actions .share-note-btn', icon: 'fa-share-alt', text: '📤 Share this note — create a link with view/edit access, or pick a surprise theme (Birthday, Anniversary) with music & photos' },
-            { selector: '.note-actions .lock-note-btn', icon: 'fa-lock', text: '🔒 Lock this note behind your 4-digit PIN for extra privacy' },
-            { selector: '.note-actions .version-history-btn', icon: 'fa-clock-rotate-left', text: '🕐 Version History — view all edits, compare versions side-by-side, and restore previous versions' },
-            { selector: '.note-actions .sync-note-btn', icon: 'fa-sync-alt', text: '🔄 Sync — pull latest changes from the original shared note. If both copies changed, you can merge them' },
-            { selector: '.note-actions a.btn-icon[title*="View original shared note"]', icon: 'fa-external-link-alt', text: '🔗 Open Original — view the original shared note, its discussion, and latest updates in a new tab' },
-            { selector: '.note-actions .delete-btn', icon: 'fa-trash-alt', text: '🗑️ Delete — Permanently remove this note (or choose to delete it for everyone if it has active shares or clones)' }
+            { selector: '.note-actions .copy-btn', text: 'Copy note text to clipboard' },
+            { selector: '.note-actions .edit-note-btn', text: 'Edit note with full markdown formatting' },
+            { selector: '.note-actions .export-note-btn', text: 'Export note as Plain Text, PDF, or Word document' },
+            { selector: '.note-actions .share-note-btn', text: 'Share note link or choose a surprise theme with music and photos' },
+            { selector: '.note-actions .lock-note-btn', text: 'Lock note behind 4-digit PIN for privacy' },
+            { selector: '.note-actions .version-history-btn', text: 'View edit history and restore previous versions' },
+            { selector: '.note-actions .sync-note-btn', text: 'Sync changes from original shared note' },
+            { selector: '.note-actions .delete-btn', text: 'Delete note from your personal space' }
         ];
 
         let currentStep = 0;
@@ -8427,17 +8432,18 @@
         tooltip.id = 'onboarding-tooltip';
         tooltip.style.cssText = `
             position: absolute;
-            background: #333;
-            color: white;
-            padding: 0.6rem 0.9rem;
+            background: #2b2b2b;
+            color: #ffffff;
+            padding: 0.7rem 0.9rem;
             border-radius: 10px;
             font-size: 0.82rem;
-            max-width: 220px;
+            max-width: 240px;
             z-index: 10000;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
             pointer-events: auto;
             transition: opacity 0.2s, transform 0.2s;
             opacity: 0;
+            border: 1px solid rgba(255,255,255,0.15);
         `;
         document.body.appendChild(tooltip);
 
@@ -8453,12 +8459,11 @@
 
             // Position tooltip below the target, ensuring horizontal fit in viewport
             tooltip.style.top = (rect.bottom + scrollY + 8) + 'px';
-            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 240, rect.left + scrollX + rect.width / 2 - 110)) + 'px';
+            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 250, rect.left + scrollX + rect.width / 2 - 120)) + 'px';
         }
 
         function showStep(index) {
             if (index >= steps.length) {
-                // Tour complete
                 cleanUpTour();
                 localStorage.setItem('ew_onboarding_complete', '1');
                 return;
@@ -8482,24 +8487,48 @@
 
             // Highlight target
             target.classList.add('onboarding-highlight');
-            target.style.outline = '2px solid var(--primary-color)';
+            target.style.outline = '2px solid var(--primary-color, #3e2217)';
             target.style.outlineOffset = '3px';
             target.style.borderRadius = '6px';
 
             tooltip.innerHTML = `
-                <div style="margin-bottom: 0.4rem; line-height: 1.4;">${step.text}</div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem;">
-                    <span style="font-size: 0.7rem; color: #aaa;">${index + 1} of ${steps.length}</span>
-                    <button id="onboarding-next" style="background: var(--primary-color); color: white; border: none; padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
-                        ${index === steps.length - 1 ? 'Done' : 'Next'}
-                    </button>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem; gap: 0.5rem;">
+                    <div style="line-height: 1.4;">${step.text}</div>
+                    <button id="onboarding-exit" style="background: transparent; border: none; color: #888; font-size: 0.9rem; cursor: pointer; padding: 0; line-height: 1;" title="Exit tour">✕</button>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.4rem;">
+                    <span style="font-size: 0.7rem; color: #888;">${index + 1} of ${steps.length}</span>
+                    <div style="display: flex; gap: 0.35rem;">
+                        <button id="onboarding-skip" style="background: transparent; border: 1px solid #555; color: #ccc; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Skip</button>
+                        <button id="onboarding-next" style="background: var(--primary-color, #3e2217); color: white; border: none; padding: 0.2rem 0.65rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
+                            ${index === steps.length - 1 ? 'Done' : 'Next'}
+                        </button>
+                    </div>
                 </div>
             `;
 
             repositionTooltip();
             tooltip.style.opacity = '1';
 
-            // Wire next button
+            // Wire action buttons
+            const exitBtn = document.getElementById('onboarding-exit');
+            if (exitBtn) {
+                exitBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    cleanUpTour();
+                    localStorage.setItem('ew_onboarding_complete', '1');
+                });
+            }
+
+            const skipBtn = document.getElementById('onboarding-skip');
+            if (skipBtn) {
+                skipBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    cleanUpTour();
+                    localStorage.setItem('ew_onboarding_complete', '1');
+                });
+            }
+
             const nextBtn = document.getElementById('onboarding-next');
             if (nextBtn) {
                 nextBtn.addEventListener('click', (e) => {

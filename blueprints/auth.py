@@ -10,6 +10,9 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
+bp = Blueprint('auth', __name__, template_folder='templates')
+
+
 def _user_is_guest(user):
     if not user or not user.is_authenticated:
         return False
@@ -53,35 +56,29 @@ def register():
                     "username": username,
                     "email": email,
                     "password": hashed_password,
-                    "is_guest": False,
-                    "is_confirmed": True,
-                    "guest_expires_at": None
+                    "is_confirmed": False
                 }}
             )
-            updated_data = m.users_conf.find_one({'_id': guest_id})
-            user_obj = m.User(updated_data)
-            login_user(user_obj, remember=True)
-            session.pop('is_guest_tour', None)
-            flash("Account created! All your tour notes and preferences have been saved.", "success")
-            return redirect(url_for('notes.personal_space'))
+        else:
+            envelope_keys = generate_user_envelope_keys()
+            m.users_conf.insert_one({
+                "username": username,
+                "email": email,
+                "password": hashed_password,
+                "is_confirmed": False,
+                "join_date": datetime.datetime.now(datetime.timezone.utc),
+                "notification_preference": 'weekly',
+                **envelope_keys
+            })
 
-        envelope_keys = generate_user_envelope_keys()
-        res = m.users_conf.insert_one({
-            "username": username,
-            "email": email,
-            "password": hashed_password,
-            "is_confirmed": True,
-            "join_date": datetime.datetime.now(datetime.timezone.utc),
-            "notification_preference": 'weekly',
-            **envelope_keys
-        })
-        
-        user_data = m.users_conf.find_one({'_id': res.inserted_id})
-        user_obj = m.User(user_data)
-        login_user(user_obj, remember=True)
-        warm_user_fernet(str(res.inserted_id))
-        flash(f"Account created successfully! Welcome, {username}!", "success")
-        return redirect(url_for('notes.personal_space'))
+        gen_code = str(secrets.randbelow(10**6)).zfill(6)
+        hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+        code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
+        m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+        m.send_code(email, gen_code)
+
+        flash("Confirmation code sent to your email. Please verify to activate your account.", "info")
+        return redirect(url_for('auth.confirm', email=email))
     return render_template("auth.html", active_page='register', form='register')
 
 
@@ -104,10 +101,23 @@ def confirm(email):
                 if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
                     error = 'This confirmation code has expired.'
                 elif hashed_obj['hashed_code'] == hashlib.sha256(code.encode()).hexdigest():
-                    m.users_conf.update_one({"email": email}, {"$set": {"is_confirmed": True}})
+                    m.users_conf.update_one(
+                        {"email": email},
+                        {"$set": {
+                            "is_confirmed": True,
+                            "is_guest": False,
+                            "guest_expires_at": None
+                        }}
+                    )
                     m.auth_conf.delete_one({"email": email})
-                    flash("Email confirmed! You can now log in.", "success")
-                    return redirect(url_for('auth.login'))
+                    user_data = m.users_conf.find_one({"email": email})
+                    if user_data:
+                        user_obj = m.User(user_data)
+                        login_user(user_obj, remember=True)
+                        session.pop('is_guest_tour', None)
+                        warm_user_fernet(str(user_data['_id']))
+                    flash("Email confirmed! Your account is active and ready.", "success")
+                    return redirect(url_for('notes.personal_space'))
                 else:
                     error = 'Invalid verification code.'
     return render_template("confirm.html", email=email, error=error)

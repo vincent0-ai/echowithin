@@ -834,7 +834,7 @@ def purge_guest_user_data(guest_id_str):
         
         # 1. Notes & shares
         personal_posts_conf.delete_many({'user_id': g_oid})
-        share_configurations_conf.delete_many({'user_id': g_oid})
+        note_shares_conf.delete_many({'$or': [{'owner_id': g_oid}, {'user_id': g_oid}]})
         
         # 2. Bonds & partner data
         bonds = list(bonds_conf.find({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]}))

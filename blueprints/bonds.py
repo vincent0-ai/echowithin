@@ -25,6 +25,13 @@ GOAL_CATEGORIES = [
 
 BOND_COOLDOWN_DAYS = 7
 
+def _clean_username(username):
+    if not username:
+        return 'Partner'
+    if username.startswith('Maya_DemoPartner'):
+        return 'Maya (Demo Partner)'
+    return username
+
 # Bond types for personalisation
 BOND_TYPES = {
     'partner':        {'label': 'Love Partner',           'icon': '❤️'},
@@ -463,7 +470,7 @@ def bonds_page():
         bonds_data.append({
             'id': str(bond['_id']),
             'partner_id': partner_id,
-            'partner_username': partner['username'],
+            'partner_username': _clean_username(partner['username']),
             'partner_avatar': partner.get('profile_image_url'),
             'label': bond.get('label', ''),
             'bond_type': bond_type,
@@ -555,7 +562,7 @@ def bonds_page():
         past_bonds_data.append({
             'id': str(bond['_id']),
             'partner_id': partner_id,
-            'partner_username': partner['username'],
+            'partner_username': _clean_username(partner['username']),
             'partner_avatar': partner.get('profile_image_url'),
             'label': bond.get('label', ''),
             'bond_type': bond_type,
@@ -871,7 +878,7 @@ def api_bonds_active():
                 result.append({
                     'bond_id': str(bond['_id']),
                     'partner_id': partner_id,
-                    'partner_username': partner['username'],
+                    'partner_username': _clean_username(partner['username']),
                     'partner_avatar': partner.get('profile_image_url'),
                     'label': bond.get('label', ''),
                     'accepted_at': _format_datetime(bond.get('accepted_at')),
@@ -1698,8 +1705,8 @@ def api_bond_mood_log(bond_id):
         partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)})
         
         # Interactive Demo Bot: auto-log mood for Maya_DemoPartner
-        if partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username') == 'Maya_DemoPartner'):
-            bot_mood = random.choice(['happy', 'peaceful', 'excited'])
+        if partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username', '').startswith('Maya_DemoPartner')):
+            bot_mood = random.choice(['great', 'good', 'okay'])
             m.bond_moods_conf.update_one(
                 {'bond_id': ObjectId(bond_id), 'date': today_str, 'user_id': ObjectId(partner_id)},
                 {'$set': {'mood': bot_mood, 'created_at': now}},

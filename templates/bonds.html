@@ -2117,21 +2117,32 @@
             .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load mood.</div>'; });
     }
 
+    function getMoodInfo(moodKey) {
+        if (!moodKey) return { emoji: '❓', label: 'Unknown' };
+        if (moodEmojis[moodKey]) return moodEmojis[moodKey];
+        const aliases = {
+            'happy': { emoji: '😊', label: 'Good' },
+            'peaceful': { emoji: '😊', label: 'Good' },
+            'excited': { emoji: '🌟', label: 'Great' }
+        };
+        return aliases[moodKey] || { emoji: '😊', label: moodKey.charAt(0).toUpperCase() + moodKey.slice(1) };
+    }
+
     function renderMoodSection(bondId, container, data) {
         let html = '';
 
         if (data.my_mood && data.revealed) {
             // Both logged — show result
-            const myInfo = moodEmojis[data.my_mood];
-            const partnerInfo = moodEmojis[data.partner_mood];
+            const myInfo = getMoodInfo(data.my_mood);
+            const partnerInfo = getMoodInfo(data.partner_mood);
             html += '<div class="mood-result">';
-            html += '<div class="mood-result-card"><div class="label">You</div><div class="emoji">' + (myInfo ? myInfo.emoji : '') + '</div><div class="label">' + (myInfo ? myInfo.label : data.my_mood) + '</div></div>';
-            html += '<div class="mood-result-card"><div class="label">Partner</div><div class="emoji">' + (partnerInfo ? partnerInfo.emoji : '') + '</div><div class="label">' + (partnerInfo ? partnerInfo.label : data.partner_mood) + '</div></div>';
+            html += '<div class="mood-result-card"><div class="label">You</div><div class="emoji">' + myInfo.emoji + '</div><div class="label">' + myInfo.label + '</div></div>';
+            html += '<div class="mood-result-card"><div class="label">Partner</div><div class="emoji">' + partnerInfo.emoji + '</div><div class="label">' + partnerInfo.label + '</div></div>';
             html += '</div>';
         } else if (data.my_mood && !data.revealed) {
             // I logged, partner hasn't
-            const myInfo = moodEmojis[data.my_mood];
-            html += '<div class="mood-result"><div class="mood-result-card"><div class="label">You</div><div class="emoji">' + (myInfo ? myInfo.emoji : '') + '</div><div class="label">' + (myInfo ? myInfo.label : '') + '</div></div></div>';
+            const myInfo = getMoodInfo(data.my_mood);
+            html += '<div class="mood-result"><div class="mood-result-card"><div class="label">You</div><div class="emoji">' + myInfo.emoji + '</div><div class="label">' + myInfo.label + '</div></div></div>';
             html += '<div class="mood-reveal-note">Waiting for your partner to log their mood for the reveal...</div>';
         } else {
             // Haven't logged yet — show picker

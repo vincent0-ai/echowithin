@@ -35,6 +35,11 @@ def messages_page():
     contacts = []
     contact_user_ids = set()
     five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+    def _clean_chat_username(u_name):
+        if u_name and u_name.startswith('Maya_DemoPartner'):
+            return 'Maya (Demo Partner)'
+        return u_name or 'User'
+
     def build_contact_entry(user_info, last_msg, timestamp, unread_count=0):
         is_online = False
         if user_info.get('is_demo_bot') or user_info.get('username', '').startswith('Maya_DemoPartner'):
@@ -45,7 +50,7 @@ def messages_page():
                 if last_active.tzinfo is None:
                     last_active = last_active.replace(tzinfo=datetime.timezone.utc)
                 is_online = last_active >= five_minutes_ago
-        return {'user_id': str(user_info['_id']), 'username': user_info['username'], 'profile_image': user_info.get('profile_image_url'), 'last_message': last_msg, 'timestamp': timestamp, 'unread_count': unread_count, 'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None, 'is_online': is_online}
+        return {'user_id': str(user_info['_id']), 'username': _clean_chat_username(user_info['username']), 'profile_image': user_info.get('profile_image_url'), 'last_message': last_msg, 'timestamp': timestamp, 'unread_count': unread_count, 'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None, 'is_online': is_online}
     for c in contacts_raw:
         user_info = _contact_users_map.get(c['_id'])
         if user_info:

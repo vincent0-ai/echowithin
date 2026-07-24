@@ -2490,9 +2490,9 @@
                                     <i class="fas fa-external-link-alt"></i> Open
                                 </a>
                                 <a href="/share/settings/{{ share.share_id }}" rel="noopener"
-                                    title="Configure link — surprise theme, time capsule, photos, auto-approve"
+                                    title="Share Settings — surprise theme, time capsule, photos, auto-approve"
                                     style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.58rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 2px; line-height: 1;">
-                                    <i class="fas fa-cog"></i> Config
+                                    <i class="fas fa-cog"></i> Share Settings
                                 </a>
                                 <button type="button" class="copy-btn" data-copy-text="{{ share.share_url }}"
                                     title="Copy link"
@@ -2992,7 +2992,7 @@
                                     <i class="fas fa-external-link-alt"></i>
                                 </a>
                                 <a href="/share/settings/{{ share.share_id }}" rel="noopener"
-                                    title="Configure link — surprise theme, time capsule, photos, auto-approve"
+                                    title="Share Settings — surprise theme, time capsule, photos, auto-approve"
                                     style="background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; border-radius: 5px; padding: 0.15rem 0.32rem; font-size: 0.62rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; line-height: 1;">
                                     <i class="fas fa-cog"></i>
                                 </a>
@@ -3181,7 +3181,7 @@
             <div
                 style="padding: 0.6rem 0.75rem; background: #faf5f0; border: 1px solid #e8ddd3; border-radius: 6px; margin-bottom: 1rem;">
                 <div style="font-size: 0.78rem; color: #666;">
-                    After creating a link, use <strong>Configure</strong> to set surprise themes, time capsules, photos,
+                    After creating a link, use <strong>Share Settings</strong> to set surprise themes, time capsules, photos,
                     music, and more.
                 </div>
             </div>
@@ -7099,7 +7099,7 @@
                                 </span>
                                 <span style="display:flex;gap:0.5rem;align-items:center;font-size:0.72rem;">
                                     <a href="${s.url}" target="_blank" style="color:#3e2217;text-decoration:none;">Open</a>
-                                    <a href="/share/settings/${s.share_id}" style="color:#3e2217;text-decoration:none;font-weight:600;">Configure</a>
+                                    <a href="/share/settings/${s.share_id}" style="color:#3e2217;text-decoration:none;font-weight:600;">Share Settings</a>
                                     <button class="revoke-btn" style="color:#d9534f;background:none;border:none;padding:0;font-size:0.72rem;cursor:pointer;" data-share-id="${s.share_id}">Revoke</button>
                                 </span>
                             </div>
@@ -9033,14 +9033,14 @@
                 </div>
             </div>
 
-            <!-- Step 2: Interactive Surprise Notes -->
+            <!-- Step 2: Interactive Surprise Notes & Configure Page -->
             <div id="lesson-step-2" class="lesson-step-slide" style="display: none;">
-                <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--text-dark-color, #222);">2. Animated Surprise Notes</h4>
-                <p style="font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.5; margin-bottom: 1rem;">
-                    Transform ordinary notes into interactive surprise links with custom music, typewriter reveals, and floating background animations.
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 1rem; color: var(--text-dark-color, #222);">2. Configure Page & Surprise Themes</h4>
+                <p style="font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.5; margin-bottom: 0.8rem;">
+                    Once a share link is created, click <strong>Configure / Share Settings</strong> (gear icon) to open the full <strong>Share Settings Page</strong> where surprise themes, background music, photos, and time capsules are configured:
                 </p>
                 <div style="background: var(--card-bg, #fafafa); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-dark-color, #222); margin-bottom: 0.5rem;">Select Theme to Preview:</div>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-dark-color, #222); margin-bottom: 0.5rem;">Select Theme to Preview Configure Options:</div>
                     <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem; flex-wrap: wrap;">
                         <button type="button" onclick="previewLessonTheme('celebration')" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--primary-color, #3e2217); font-size: 0.75rem; padding: 0.25rem 0.65rem; border-radius: 6px; font-weight: 600;">Celebration</button>
                         <button type="button" onclick="previewLessonTheme('love')" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--primary-color, #3e2217); font-size: 0.75rem; padding: 0.25rem 0.65rem; border-radius: 6px; font-weight: 600;">Love</button>
@@ -9049,7 +9049,7 @@
                     </div>
                     <div id="lesson-theme-preview-box" style="background: #fff; border: 1px solid var(--primary-color, #3e2217); border-radius: 8px; padding: 0.8rem; font-size: 0.82rem; color: #333; transition: all 0.3s;">
                         <strong id="lesson-theme-preview-title" style="color: var(--primary-color, #3e2217); display: block; margin-bottom: 0.2rem;">Celebration Theme Selected</strong>
-                        <span id="lesson-theme-preview-desc">Features floating confetti animations, upbeat ambient sound, and typewriter text reveal.</span>
+                        <span id="lesson-theme-preview-desc">Configured on the Share Settings page: features floating confetti animations, upbeat ambient sound, custom photo attachment, and typewriter text reveal.</span>
                     </div>
                 </div>
             </div>

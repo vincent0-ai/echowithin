@@ -982,6 +982,10 @@ def api_get_note_shares(post_id):
 def share_settings_page(share_id):
     """Full-page settings for a share link (owner only)."""
     import main as m
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest tour accounts cannot access shared note configuration settings. Please sign up for a free account!', 'danger')
+        return redirect(url_for('notes.personal_space'))
+
     share = m.note_shares_conf.find_one({
         'share_id': share_id,
         'owner_id': ObjectId(current_user.id)

@@ -528,29 +528,43 @@ def start_guest_tour():
     warm_user_fernet(guest_id_str)
     
     # --- 1. Pre-fill Demo Notes ---
+    def _insert_demo_note(content, reference='', tags=None):
+        g_oid = ObjectId(guest_id_str)
+        enc = m.encrypt_note(content, user_id=guest_id_str)
+        res = m.personal_posts_conf.insert_one({
+            'user_id': g_oid,
+            'content_owner_id': g_oid,
+            'content': enc,
+            'encrypted': True,
+            'reference': reference,
+            'tags': tags or [],
+            'created_at': now
+        })
+        return str(res.inserted_id)
+
     note1_content = (
-        "# Welcome to EchoWithin! 🌟\n\n"
+        "# Welcome to EchoWithin\n\n"
         "This is your private, end-to-end encrypted personal space.\n\n"
         "### Key Features to Explore:\n"
-        "- **Encryption at Rest**: Notes are secured with per-user Fernet envelope keys.\n"
-        "- **App Lock PIN**: Click **Set Up PIN** to lock confidential notes.\n"
-        "- **Surprise Note Sharing**: Share themed notes with music & animations (Birthday, Romantic, Celebration).\n"
-        "- **Rich Formatting**: Markdown, tags, checklists, and code blocks."
+        "* **Encryption at Rest**: Notes are secured with per-user Fernet envelope keys.\n"
+        "* **App Lock PIN**: Click Set Up PIN to lock confidential notes.\n"
+        "* **Surprise Note Sharing**: Share themed notes with music and animations.\n"
+        "* **Rich Formatting**: Markdown, tags, checklists, and code blocks."
     )
-    m.create_note_record(guest_id_str, note1_content, reference="Getting Started", tags=["Welcome", "Privacy", "Guide"])
+    _insert_demo_note(note1_content, reference="Getting Started", tags=["Welcome", "Privacy", "Guide"])
     
     note2_content = (
-        "## 🔒 Sensitive Note Demo\n\n"
-        "This note demonstrates confidential storage. Try clicking the Lock button or setting an App Lock PIN!"
+        "## Sensitive Note Demo\n\n"
+        "This note demonstrates confidential storage. Try clicking the Lock button or setting an App Lock PIN."
     )
-    n2_id = m.create_note_record(guest_id_str, note2_content, reference="Confidential", tags=["PIN-Protected", "Security"])
+    n2_id = _insert_demo_note(note2_content, reference="Confidential", tags=["PIN-Protected", "Security"])
     m.personal_posts_conf.update_one({'_id': ObjectId(n2_id)}, {'$set': {'is_locked': True}})
     
     note3_content = (
-        "## 🎁 Surprise Link Demo Note\n\n"
-        "Surprise a friend or partner! Turn any note into an interactive surprise link complete with music, animations, and photos."
+        "## Surprise Link Demo Note\n\n"
+        "Surprise a friend or partner. Turn any note into an interactive surprise link complete with music, animations, and photos."
     )
-    m.create_note_record(guest_id_str, note3_content, reference="Surprise Idea", tags=["Surprise", "Sharing"])
+    _insert_demo_note(note3_content, reference="Surprise Idea", tags=["Surprise", "Sharing"])
     
     # --- 2. Pre-fill Demo Partner & Active Bond ---
     demo_partner = m.users_conf.find_one({'username': 'Maya_DemoPartner'})
@@ -584,7 +598,7 @@ def start_guest_tour():
     bond_id_str = str(bond_id)
     
     # Demo Goal
-    enc_goal_title = m.encrypt_bond_data("Save $1,000 for Summer Getaway ✈️", bond_id_str)
+    enc_goal_title = m.encrypt_bond_data("Save $1,000 for Summer Getaway", bond_id_str)
     enc_goal_desc = m.encrypt_bond_data("Joint savings fund for our vacation.", bond_id_str)
     m.bond_goals_conf.insert_one({
         'bond_id': bond_id,
@@ -619,7 +633,7 @@ def start_guest_tour():
     })
     
     # Demo Habit
-    enc_habit = m.encrypt_bond_data("30 min Evening Walk Together 🚶", bond_id_str)
+    enc_habit = m.encrypt_bond_data("30 min Evening Walk Together", bond_id_str)
     m.bond_habits_conf.insert_one({
         'bond_id': bond_id,
         'title': enc_habit,
@@ -640,7 +654,7 @@ def start_guest_tour():
         'recipient_id': guest_id,
         'sender_username': 'Maya_DemoPartner',
         'recipient_username': username,
-        'content': "Hey! 👋 Welcome to EchoWithin tour mode. Feel free to explore our shared Bond space, notes, and features!",
+        'content': "Welcome to EchoWithin tour mode. Feel free to explore our shared Bond space, notes, and features!",
         'created_at': now - datetime.timedelta(minutes=5),
         'read': False,
         'encrypted': False
@@ -652,5 +666,5 @@ def start_guest_tour():
     login_user(user_obj)
     session['is_guest_tour'] = True
     
-    flash("🚀 Welcome to Tour Mode! You are in an isolated demo session. Enjoy exploring!", "success")
+    flash("Welcome to Tour Mode. You are in an isolated demo session.", "success")
     return redirect(url_for('notes.personal_space'))

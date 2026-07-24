@@ -522,6 +522,41 @@ def bonds_page():
                 'created_at': bond.get('created_at')
             })
 
+    # Get broken/past bonds for memory archive
+    broken_bonds = _get_user_bonds(user_oid, 'broken')
+    past_bonds_data = []
+    for bond in broken_bonds:
+        dismissed_by = [str(x) for x in bond.get('dismissed_by', [])]
+        if str(current_user.id) in dismissed_by:
+            continue
+
+        partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        partner = m.users_conf.find_one(
+            {'_id': ObjectId(partner_id)},
+            {'username': 1, 'profile_image_url': 1}
+        )
+        if not partner:
+            continue
+
+        bond_type = bond.get('bond_type', 'custom')
+        type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
+        anniversary = _get_bond_anniversary(bond.get('accepted_at'))
+
+        past_bonds_data.append({
+            'id': str(bond['_id']),
+            'partner_id': partner_id,
+            'partner_username': partner['username'],
+            'partner_avatar': partner.get('profile_image_url'),
+            'label': bond.get('label', ''),
+            'bond_type': bond_type,
+            'bond_type_label': type_info['label'],
+            'bond_type_icon': type_info['icon'],
+            'accepted_at': bond.get('accepted_at'),
+            'broken_at': bond.get('broken_at'),
+            'anniversary': anniversary,
+            'is_broken': True
+        })
+
     # App Lock PIN checks
     has_app_lock = bool(user_doc.get('app_lock_pin_hash')) if user_doc else False
     unlock_ts = session.get('app_lock_unlocked_at')
@@ -539,6 +574,7 @@ def bonds_page():
     return render_template('bonds.html',
                            active_page='bonds',
                            bonds=bonds_data,
+                           past_bonds=past_bonds_data,
                            pending_received=pending_data,
                            pending_sent=sent_data,
                            goal_categories=GOAL_CATEGORIES,
@@ -842,7 +878,7 @@ def api_bond_goals_list(bond_id):
     """List all goals for a bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
         if not _is_bond_participant(bond_doc, str(current_user.id)):
@@ -1378,7 +1414,7 @@ def api_bond_journal_list(bond_id):
     """List journal entries for a bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
         if not _is_bond_participant(bond_doc, str(current_user.id)):
@@ -1698,7 +1734,7 @@ def api_bond_mood_status(bond_id):
     """Get today's mood status and 14-day history for this bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
 
@@ -1774,7 +1810,7 @@ def api_bond_qotd_get(bond_id):
     """Get today's question of the day for this bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
 
@@ -2199,7 +2235,7 @@ def api_bond_qotd_history(bond_id):
     """Get history of past QotD entries where both partners answered."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
 
@@ -2342,7 +2378,7 @@ def api_bond_habits_list(bond_id):
     """List active daily habits for a bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
         user_id_str = str(current_user.id)
@@ -2557,7 +2593,7 @@ def api_bond_insights_get(bond_id):
     """Get 30-day mood comparison and monthly recap stats for a bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
 
@@ -2662,7 +2698,7 @@ def api_bond_countdowns_list(bond_id):
     """List active countdowns for a bond."""
     import main as m
     try:
-        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
         if not bond_doc:
             return jsonify({'error': 'Bond not found'}), 404
         user_id_str = str(current_user.id)
@@ -2827,3 +2863,26 @@ def api_bond_countdown_delete(countdown_id):
     except Exception as e:
         current_app.logger.error(f"Bond countdown delete error: {e}")
         return jsonify({'error': 'Failed to archive countdown'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/dismiss_archive', methods=['POST'])
+@login_required
+def api_bond_dismiss_archive(bond_id):
+    """Dismiss/hide an archived past bond from current user's past bonds view."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'broken'})
+        if not bond_doc:
+            return jsonify({'error': 'Past bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bonds_conf.update_one(
+            {'_id': ObjectId(bond_id)},
+            {'$addToSet': {'dismissed_by': ObjectId(user_id_str)}}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Dismiss archive error: {e}")
+        return jsonify({'error': 'Failed to dismiss past bond'}), 500

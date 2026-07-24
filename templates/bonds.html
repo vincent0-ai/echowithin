@@ -1352,9 +1352,104 @@
         </div>
         {% endfor %}
     </div>
+    <!-- Past Bonds / Memory Archive -->
+    {% if past_bonds %}
+    <div class="bonds-section" style="margin-top: 1.5rem;">
+        <div class="bonds-section-title" style="color: var(--text-muted);">Past Bonds (Memory Archive)</div>
+        {% for bond in past_bonds %}
+        <div class="bond-card" id="bond-{{ bond.id }}" style="opacity: 0.9; border: 1px dashed var(--border-color);">
+            <div class="bond-card-header">
+                {% if bond.partner_avatar %}
+                <img src="{{ bond.partner_avatar }}" class="bond-avatar" alt="{{ bond.partner_username }}">
+                {% else %}
+                <div class="bond-avatar-placeholder">{{ bond.partner_username[0]|upper }}</div>
+                {% endif %}
+                <div class="bond-info">
+                    <div class="bond-username">{{ bond.partner_username }}</div>
+                    {% if bond.label %}<div class="bond-label">{{ bond.label }}</div>{% endif %}
+                    <div class="bond-type-badge">{{ bond.bond_type_icon }} {{ bond.bond_type_label }}</div>
+                    <div class="bond-meta">
+                        Past Bond &bull; Read-Only Memory Archive
+                    </div>
+                </div>
+                <div>
+                    <button class="btn btn-bond-secondary" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;" onclick="dismissPastBond('{{ bond.id }}')">Remove</button>
+                </div>
+            </div>
+            <div class="bond-actions">
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('mood-{{ bond.id }}', this); loadMood('{{ bond.id }}')">
+                    Mood
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('qotd-{{ bond.id }}', this); loadQotd('{{ bond.id }}')">
+                    Question
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('goals-{{ bond.id }}', this)">
+                    Goals
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('journal-{{ bond.id }}', this); loadJournal('{{ bond.id }}')">
+                    Journal
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('habits-{{ bond.id }}', this); loadHabits('{{ bond.id }}')">
+                    Habits
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('insights-{{ bond.id }}', this); loadInsights('{{ bond.id }}')">
+                    Insights
+                </button>
+            </div>
+
+            <!-- Mood Section (Read-Only) -->
+            <div class="bond-expand-section" id="mood-{{ bond.id }}">
+                <div id="mood-status-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading mood history...</div>
+                </div>
+            </div>
+
+            <!-- QotD Section (Read-Only) -->
+            <div class="bond-expand-section" id="qotd-{{ bond.id }}">
+                <div id="qotd-content-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading question history...</div>
+                </div>
+            </div>
+
+            <!-- Goals Section (Read-Only) -->
+            <div class="bond-expand-section" id="goals-{{ bond.id }}">
+                <div id="goals-list-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading past goals...</div>
+                </div>
+            </div>
+
+            <!-- Journal Section (Read-Only) -->
+            <div class="bond-expand-section" id="journal-{{ bond.id }}">
+                <div id="journal-list-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading journal archive...</div>
+                </div>
+            </div>
+
+            <!-- Habits Section (Read-Only) -->
+            <div class="bond-expand-section" id="habits-{{ bond.id }}">
+                <div id="habits-list-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habit stats...</div>
+                </div>
+            </div>
+
+            <!-- Insights Section (Read-Only) -->
+            <div class="bond-expand-section" id="insights-{{ bond.id }}">
+                <div id="insights-content-{{ bond.id }}">
+                    <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading recap...</div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
     {% endif %}
 
-    {% if not bonds and not pending_received and not pending_sent %}
+    {% if not bonds and not past_bonds and not pending_received and not pending_sent %}
     <div class="bonds-empty">
         <p>You don't have any bonds yet.</p>
         <p style="font-size: 0.85rem;">Visit someone's profile to send a bond request and start building together.</p>
@@ -1527,6 +1622,25 @@
                 '<button class="btn btn-bond-primary" onclick="submitCheckin(\'' + g.id + '\', \'' + bondId + '\')">Log Progress</button></div>';
         }
 
+        let myLogged = 0;
+        let partnerLogged = 0;
+        let myCheckinCount = 0;
+        let partnerCheckinCount = 0;
+
+        if (g.check_ins && g.check_ins.length > 0) {
+            g.check_ins.forEach(ci => {
+                const val = parseFloat(ci.value) || 0;
+                if (ci.user_id === currentUserId) {
+                    myLogged += val;
+                    myCheckinCount++;
+                } else {
+                    partnerLogged += val;
+                    partnerCheckinCount++;
+                }
+            });
+        }
+        const totalLoggedVal = myLogged + partnerLogged;
+
         let checkinHistoryHtml = '';
         if (g.check_ins && g.check_ins.length > 0) {
             const historyItems = g.check_ins.map(ci => {
@@ -1547,15 +1661,62 @@
             effectiveTarget = 100;
         }
 
+        let completedMsCount = 0;
+        const totalMsCount = (g.milestones && g.milestones.length) ? g.milestones.length : 0;
+        if (totalMsCount > 0) {
+            completedMsCount = g.milestones.filter(m => m.completed).length;
+        }
+
         let progressHtml = '';
         if (effectiveTarget > 0) {
             const pct = Math.min(100, Math.max(0, (g.current_value / effectiveTarget) * 100));
             progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + pct + '%"></div></div>' +
                 '<div class="goal-progress-text">' + g.current_value + ' / ' + effectiveTarget + ' ' + escHtml(g.unit || '') + ' (' + Math.round(pct) + '%)</div>';
+        } else if (totalMsCount > 0) {
+            const msPct = Math.min(100, Math.max(0, (completedMsCount / totalMsCount) * 100));
+            progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + msPct + '%"></div></div>' +
+                '<div class="goal-progress-text">Checklist: ' + completedMsCount + ' / ' + totalMsCount + ' milestones completed (' + Math.round(msPct) + '%)</div>';
         } else if (g.current_value > 0) {
             const fillPct = Math.min(100, Math.max(10, g.current_value <= 100 ? g.current_value : 100));
             progressHtml = '<div class="goal-progress-bar"><div class="goal-progress-fill" style="width:' + fillPct + '%"></div></div>' +
                 '<div class="goal-progress-text">' + g.current_value + ' ' + escHtml(g.unit || '') + ' logged so far</div>';
+        }
+
+        let contributionSplitHtml = '';
+        if (totalLoggedVal > 0) {
+            const myContribPct = Math.round((myLogged / totalLoggedVal) * 100);
+            const partnerContribPct = 100 - myContribPct;
+            contributionSplitHtml = '<div class="goal-split-bar" style="display:flex; height:6px; border-radius:3px; overflow:hidden; background:#eee; margin-top:0.35rem;" title="Contribution Split">' +
+                '<div style="width:' + myContribPct + '%; background:var(--primary-dark-color, #3e2217);"></div>' +
+                '<div style="width:' + partnerContribPct + '%; background:#8d5b4c;"></div>' +
+                '</div>' +
+                '<div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted); margin-top:0.2rem;">' +
+                '<span>You: <strong>' + myLogged + ' ' + escHtml(g.unit || '') + '</strong> (' + myContribPct + '%)</span>' +
+                '<span>Partner: <strong>' + partnerLogged + ' ' + escHtml(g.unit || '') + '</strong> (' + partnerContribPct + '%)</span>' +
+                '</div>';
+        }
+
+        let completionBadgeHtml = '';
+        if (g.status === 'completed') {
+            let topContributor = 'Equal Split';
+            if (myLogged > partnerLogged) topContributor = 'You';
+            else if (partnerLogged > myLogged) topContributor = 'Partner';
+
+            const createdDate = g.created_at ? new Date(g.created_at) : null;
+            const completedDate = g.completed_at ? new Date(g.completed_at) : new Date();
+            let durationDays = 1;
+            if (createdDate && completedDate) {
+                durationDays = Math.max(1, Math.ceil((completedDate - createdDate) / (1000 * 60 * 60 * 24)));
+            }
+
+            completionBadgeHtml = '<div class="goal-completion-badge" style="background:var(--card-bg, #ffffff); border:1px solid var(--border-color, #3e2217); border-radius:8px; padding:0.65rem 0.85rem; margin:0.5rem 0;">' +
+                '<div style="font-weight:700; color:var(--primary-dark-color, #3e2217); font-size:0.88rem; margin-bottom:0.3rem;">Goal Achieved!</div>' +
+                '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem; font-size:0.75rem; color:var(--text-muted);">' +
+                '<div>Duration: <strong>' + durationDays + ' day' + (durationDays > 1 ? 's' : '') + '</strong></div>' +
+                '<div>Top Contributor: <strong>' + topContributor + '</strong></div>' +
+                '<div>Your Check-ins: <strong>' + myCheckinCount + '</strong></div>' +
+                '<div>Partner Check-ins: <strong>' + partnerCheckinCount + '</strong></div>' +
+                '</div></div>';
         }
 
         let editForm = '<div class="goal-edit-form" id="edit-goal-' + g.id + '">' +
@@ -1578,7 +1739,9 @@
             '<span class="goal-category">' + escHtml(g.category) + '</span>' +
             '<span class="goal-status-badge goal-status-' + g.status + '">' + g.status + '</span></div>' +
             (g.description ? '<div class="goal-description">' + escHtml(g.description) + '</div>' : '') +
+            completionBadgeHtml +
             progressHtml +
+            contributionSplitHtml +
             deadlineStr + milestonesHtml + actionsHtml + checkinForm + editForm + checkinHistoryHtml + '</div>';
     }
 
@@ -2688,5 +2851,28 @@
     window.startPinReset = function() {
         if (window.showCustomAlert) showCustomAlert('To reset your PIN, please visit Notes or Account Settings.', 'info');
     };
+
+    window.dismissPastBond = function(bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Remove this past bond from your memory archive?', function(ok) {
+                if (ok) doDismissPastBond(bondId);
+            });
+        } else {
+            if (confirm('Remove this past bond from your memory archive?')) doDismissPastBond(bondId);
+        }
+    };
+
+    function doDismissPastBond(bondId) {
+        fetch('/api/bonds/' + bondId + '/dismiss_archive', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                const el = document.getElementById('bond-' + bondId);
+                if (el) el.remove();
+                if (window.showCustomToast) showCustomToast('Past bond removed from archive.', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to remove', 'danger');
+        });
+    }
 </script>
 {% endblock %}

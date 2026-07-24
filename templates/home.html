@@ -42,15 +42,15 @@
             <strong>New Note</strong>
             <span>Create a private, encrypted note</span>
         </a>
-        <a href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes" class="quick-action-card">
+        <a href="{{ url_for('notes.personal_space') }}?open_share_picker=1#notes" class="quick-action-card qa-primary">
             <strong>Send Surprise</strong>
             <span>Share a themed note with someone</span>
         </a>
-        <a href="{{ url_for('pages.create_post') }}" class="quick-action-card">
+        <a href="{{ url_for('pages.create_post') }}" class="quick-action-card qa-primary">
             <strong>Write Blog Post</strong>
             <span>Publish to the community blog</span>
         </a>
-        <a href="{{ url_for('communities.communities_page') }}" class="quick-action-card">
+        <a href="{{ url_for('communities.communities_page') }}" class="quick-action-card qa-primary">
             <strong>Communities</strong>
             <span>{{ user_community_count }} space{{ 's' if user_community_count != 1 }} joined</span>
         </a>
@@ -239,7 +239,7 @@
         padding: 1rem 1.1rem;
         background: white;
         border-radius: 10px;
-        border: 1px solid rgba(62, 34, 23, 0.08);
+        border: 1px solid #3e2217;
         box-shadow: 0 2px 6px rgba(62, 34, 23, 0.04);
         text-decoration: none;
         color: inherit;
@@ -248,8 +248,8 @@
 
     .quick-action-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 14px rgba(62, 34, 23, 0.1);
-        border-color: rgba(62, 34, 23, 0.15);
+        box-shadow: 0 4px 14px rgba(62, 34, 23, 0.12);
+        border-color: #3e2217;
     }
 
     .quick-action-card strong {

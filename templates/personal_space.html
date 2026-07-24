@@ -9106,29 +9106,28 @@
 
 <script>
     let currentLessonStep = 1;
-    function openInteractiveShareLesson() {
+    window.openInteractiveShareLesson = function() {
         currentLessonStep = 1;
         updateLessonStepUI();
         const modal = document.getElementById('share-lesson-modal');
         if (modal) modal.style.display = 'flex';
-    }
-    function closeInteractiveShareLesson() {
+    };
+    window.closeInteractiveShareLesson = function() {
         const modal = document.getElementById('share-lesson-modal');
         if (modal) modal.style.display = 'none';
-    }
-    function window_openGuestShareGuardModal() {
+    };
+    window.openGuestShareGuardModal = function() {
         const modal = document.getElementById('guest-share-guard-modal');
         if (modal) modal.style.display = 'flex';
-    }
-    window.openGuestShareGuardModal = window_openGuestShareGuardModal;
-    function closeGuestShareGuardModal() {
+    };
+    window.closeGuestShareGuardModal = function() {
         const modal = document.getElementById('guest-share-guard-modal');
         if (modal) modal.style.display = 'none';
-    }
-    function navLessonStep(dir) {
+    };
+    window.navLessonStep = function(dir) {
         currentLessonStep = Math.min(3, Math.max(1, currentLessonStep + dir));
         updateLessonStepUI();
-    }
+    };
     function updateLessonStepUI() {
         for (let i = 1; i <= 3; i++) {
             const slide = document.getElementById('lesson-step-' + i);

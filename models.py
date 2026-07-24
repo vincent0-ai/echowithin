@@ -24,6 +24,7 @@ class User(UserMixin):
         self.username = user_data["username"]
         self.is_admin = user_data.get('is_admin', False)
         self._is_active = user_data.get('is_confirmed', False)
+        self.is_guest = user_data.get('is_guest', False)
         # Track when user last checked their activity tab
         self.last_activity_check = user_data.get('last_activity_check')
         # Email notification preference: 'immediate', 'weekly', or 'none'

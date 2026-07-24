@@ -1133,7 +1133,7 @@
         </div>
     </div>
 
-    {% if current_user.is_authenticated and getattr(current_user, 'is_guest', False) %}
+    {% if current_user.is_authenticated and current_user.is_guest %}
     <div class="tour-guide-page-card" style="background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
             <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h3>

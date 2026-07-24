@@ -1,7 +1,7 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app, abort
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, hashlib, secrets
+import datetime, hashlib, secrets, os
 from security import limits
 
 bp = Blueprint('sharing', __name__, template_folder='templates')
@@ -342,8 +342,8 @@ def view_shared_note(share_id):
             'event_type': 'proposal'
         }) > 0
 
-    owner_doc = m.users_conf.find_one({'_id': ObjectId(note_owner_id)})
-    owner_max_chars = m.get_limit(owner_doc, 'max_chars_per_note')
+    owner_doc = m.users_conf.find_one({'_id': ObjectId(note_owner_id)}) if note_owner_id else None
+    owner_max_chars = m.get_limit(owner_doc, 'max_chars_per_note') if owner_doc else m.get_limit(None, 'max_chars_per_note')
 
     # --- Note Attachments (images & voice notes) ---
     raw_attachments = list(m.note_attachments_conf.find({'note_id': note['_id']}).sort('created_at', 1))
@@ -1352,14 +1352,14 @@ def api_decide_note_proposal(version_id):
         action = (data.get('action') or '').strip().lower()
         decision_summary = (data.get('edit_summary') or '').strip()[:180]
 
+        if proposal.get('status') != 'pending':
+            return jsonify({'error': 'Proposal already reviewed'}), 400
+
         if data.get('auto_approve_subsequent') and proposal.get('share_id') and proposal.get('editor_id'):
             m.note_shares_conf.update_one(
                 {'share_id': proposal.get('share_id')},
                 {'$addToSet': {'auto_approved_users': ObjectId(proposal['editor_id'])}}
             )
-
-        if proposal.get('status') != 'pending':
-            return jsonify({'error': 'Proposal already reviewed'}), 400
 
         if action == 'reject':
             m.note_versions_conf.update_one(

@@ -37,11 +37,14 @@ def messages_page():
     five_minutes_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
     def build_contact_entry(user_info, last_msg, timestamp, unread_count=0):
         is_online = False
-        last_active = user_info.get('last_active')
-        if last_active and isinstance(last_active, datetime.datetime):
-            if last_active.tzinfo is None:
-                last_active = last_active.replace(tzinfo=datetime.timezone.utc)
-            is_online = last_active >= five_minutes_ago
+        if user_info.get('is_demo_bot') or user_info.get('username', '').startswith('Maya_DemoPartner'):
+            is_online = True
+        else:
+            last_active = user_info.get('last_active')
+            if last_active and isinstance(last_active, datetime.datetime):
+                if last_active.tzinfo is None:
+                    last_active = last_active.replace(tzinfo=datetime.timezone.utc)
+                is_online = last_active >= five_minutes_ago
         return {'user_id': str(user_info['_id']), 'username': user_info['username'], 'profile_image': user_info.get('profile_image_url'), 'last_message': last_msg, 'timestamp': timestamp, 'unread_count': unread_count, 'last_active': (user_info.get('last_active').isoformat() + 'Z').replace('+00:00Z', 'Z') if user_info.get('last_active') else None, 'is_online': is_online}
     for c in contacts_raw:
         user_info = _contact_users_map.get(c['_id'])
@@ -110,6 +113,8 @@ def api_message_history(other_user_id):
     m.direct_messages_conf.update_many({'sender_id': other_id, 'recipient_id': ObjectId(current_user.id), 'is_read': False}, {'$set': {'is_read': True}})
     formatted_messages = []
     for msg in messages:
+        if msg.get('recipient_id') == ObjectId(current_user.id):
+            msg['is_read'] = True
         content = msg.get('content', '')
         if msg.get('encrypted') or (content and content.startswith('gAAAAA')):
             try:

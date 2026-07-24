@@ -448,7 +448,9 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
     try:
         f = _get_dm_fernet(user1_id, user2_id)
         return f.decrypt(encrypted_content.encode('utf-8')).decode('utf-8')
-    except Exception:
+    except Exception as e:
+        if isinstance(encrypted_content, str) and encrypted_content.startswith('gAAAAA'):
+            _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id}): {e}")
         # Fallback to plaintext for legacy messages
         return encrypted_content
 

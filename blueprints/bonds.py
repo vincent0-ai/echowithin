@@ -3,9 +3,19 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime
 import hashlib
+import random
 from security import limits
 
 bp = Blueprint('bonds', __name__, template_folder='templates')
+
+def _format_datetime(val):
+    if not val:
+        return None
+    if isinstance(val, str):
+        return val.replace('+00:00', 'Z')
+    if hasattr(val, 'isoformat'):
+        return val.isoformat().replace('+00:00', 'Z')
+    return str(val)
 
 # Goal categories
 GOAL_CATEGORIES = [
@@ -864,7 +874,7 @@ def api_bonds_active():
                     'partner_username': partner['username'],
                     'partner_avatar': partner.get('profile_image_url'),
                     'label': bond.get('label', ''),
-                    'accepted_at': bond['accepted_at'].isoformat().replace('+00:00', 'Z') if bond.get('accepted_at') else None,
+                    'accepted_at': _format_datetime(bond.get('accepted_at')),
                     'streak_count': bond.get('streak_count', 0)
                 })
         return jsonify({'bonds': result})
@@ -904,24 +914,24 @@ def api_bond_goals_list(bond_id):
                 'target_value': g.get('target_value', 0),
                 'current_value': g.get('current_value', 0),
                 'unit': g.get('unit', ''),
-                'deadline': g['deadline'].isoformat().replace('+00:00', 'Z') if g.get('deadline') else None,
-                'status': g['status'],
+                'deadline': _format_datetime(g.get('deadline')),
+                'status': g.get('status', 'active'),
                 'proposed_by': str(g['proposed_by']),
                 'proposed_by_username': proposer['username'] if proposer else 'User',
                 'milestones': [{
                     'title': m.decrypt_bond_data(ms.get('title', ''), bond_id),
                     'completed': ms.get('completed', False),
                     'completed_by': str(ms['completed_by']) if ms.get('completed_by') else None,
-                    'completed_at': ms['completed_at'].isoformat().replace('+00:00', 'Z') if ms.get('completed_at') else None
+                    'completed_at': _format_datetime(ms.get('completed_at'))
                 } for ms in g.get('milestones', [])],
                 'check_ins': [{
                     'user_id': str(ci['user_id']),
                     'value': ci.get('value', 0),
                     'note': m.decrypt_bond_data(ci.get('note', ''), bond_id),
-                    'at': ci['at'].isoformat().replace('+00:00', 'Z')
+                    'at': _format_datetime(ci.get('at'))
                 } for ci in g.get('check_ins', [])[-10:]],  # last 10 check-ins
-                'created_at': g['created_at'].isoformat().replace('+00:00', 'Z'),
-                'completed_at': g['completed_at'].isoformat().replace('+00:00', 'Z') if g.get('completed_at') else None
+                'created_at': _format_datetime(g.get('created_at')),
+                'completed_at': _format_datetime(g.get('completed_at'))
             })
 
         return jsonify({'goals': result})
@@ -1429,14 +1439,15 @@ def api_bond_journal_list(bond_id):
 
         result = []
         for entry in entries:
-            author = m.users_conf.find_one({'_id': entry['author_id']}, {'username': 1})
+            author_id = entry.get('author_id') or entry.get('user_id')
+            author = m.users_conf.find_one({'_id': author_id}, {'username': 1}) if author_id else None
             decrypted_content = m.decrypt_bond_data(entry.get('content', ''), bond_id)
             result.append({
                 'id': str(entry['_id']),
-                'author_id': str(entry['author_id']),
+                'author_id': str(author_id) if author_id else '',
                 'author_username': author['username'] if author else 'User',
                 'content': decrypted_content,
-                'created_at': entry['created_at'].isoformat().replace('+00:00', 'Z')
+                'created_at': _format_datetime(entry.get('created_at'))
             })
 
         return jsonify({'entries': result})
@@ -2456,7 +2467,7 @@ def api_bond_habits_list(bond_id):
                 'partner_completed': partner_today,
                 'my_7d_count': my_7d,
                 'partner_7d_count': partner_7d,
-                'created_at': h['created_at'].isoformat().replace('+00:00', 'Z')
+                'created_at': _format_datetime(h.get('created_at'))
             })
 
         return jsonify({'habits': result})
@@ -2790,7 +2801,7 @@ def api_bond_countdowns_list(bond_id):
                 'title': decrypted_title,
                 'event_date': c['event_date'].strftime('%Y-%m-%d') if isinstance(c.get('event_date'), datetime.datetime) else str(c.get('event_date', '')),
                 'created_by': str(c.get('created_by', '')),
-                'created_at': c['created_at'].isoformat().replace('+00:00', 'Z') if c.get('created_at') else None
+                'created_at': _format_datetime(c.get('created_at'))
             })
 
         return jsonify({'countdowns': result})

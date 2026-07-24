@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app, make_response
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
-import datetime, hashlib, secrets, os
+import datetime, hashlib, secrets, os, hmac
 from security import limits, warm_user_fernet, generate_user_envelope_keys
 from config import TIME
 
@@ -23,6 +23,9 @@ def _user_is_guest(user):
 @limits(calls=15, period=TIME)
 def register():
     import main as m
+    if current_user.is_authenticated and not _user_is_guest(current_user):
+        return redirect(url_for('pages.home'))
+
     next_url = request.args.get('next')
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -30,10 +33,10 @@ def register():
         password = request.form.get("password", "").strip()
         if not username or not email or not password:
             flash("All fields are required", "danger")
-            return redirect(url_for('auth.register'))
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
         if len(username) < 2 or len(password) < 6:
             flash("Username must be at least 2 characters and password at least 6 characters.", "danger")
-            return redirect(url_for('auth.register'))
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
 
         is_guest_session = _user_is_guest(current_user)
         guest_id = ObjectId(current_user.id) if is_guest_session else None
@@ -45,7 +48,7 @@ def register():
 
         if m.users_conf.find_one(dup_query):
             flash("Email or username already exists.", "danger")
-            return redirect(url_for('auth.register'))
+            return redirect(url_for('auth.register', next=next_url) if next_url else url_for('auth.register'))
 
         hashed_password = m.generate_password_hash(password)
 
@@ -78,13 +81,14 @@ def register():
         m.send_code(email, gen_code)
 
         flash("Confirmation code sent to your email. Please verify to activate your account.", "info")
-        return redirect(url_for('auth.confirm', email=email))
+        return redirect(url_for('auth.confirm', email=email, next=next_url) if next_url else url_for('auth.confirm', email=email))
     return render_template("auth.html", active_page='register', form='register')
 
 
 @bp.route("/confirm/<email>", methods=['GET', 'POST'])
 def confirm(email):
     import main as m
+    next_url = request.args.get('next')
     error = None
     if request.method == "POST":
         code = request.form.get("code", "").strip()
@@ -100,7 +104,7 @@ def confirm(email):
                     code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
                 if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
                     error = 'This confirmation code has expired.'
-                elif hashed_obj['hashed_code'] == hashlib.sha256(code.encode()).hexdigest():
+                elif hmac.compare_digest(hashed_obj['hashed_code'], hashlib.sha256(code.encode()).hexdigest()):
                     m.users_conf.update_one(
                         {"email": email},
                         {"$set": {
@@ -117,6 +121,8 @@ def confirm(email):
                         session.pop('is_guest_tour', None)
                         warm_user_fernet(str(user_data['_id']))
                     flash("Email confirmed! Your account is active and ready.", "success")
+                    if next_url and m.is_safe_url(next_url):
+                        return redirect(next_url)
                     return redirect(url_for('notes.personal_space'))
                 else:
                     error = 'Invalid verification code.'
@@ -127,11 +133,14 @@ def confirm(email):
 @limits(calls=15, period=TIME)
 def login():
     import main as m
+    if current_user.is_authenticated and not _user_is_guest(current_user):
+        return redirect(url_for('pages.home'))
+
     next_url = request.args.get('next')
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        remember = request.form.get("remember")
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
+        remember = request.form.get("remember") in ("true", "on", "1", "True")
         if not username or not password:
             flash("Username and password required.", "danger")
             return redirect(url_for('auth.login'))
@@ -376,7 +385,7 @@ def logout():
 def forgot_password():
     import main as m
     if request.method == 'POST':
-        email = request.form.get('email')
+        email = (request.form.get('email') or '').strip()
         if email:
             user = m.users_conf.find_one({'email': email})
             if user:
@@ -389,11 +398,8 @@ def forgot_password():
                     upsert=True
                 )
                 m.send_reset_code(email, reset_token)
-                flash("We've sent a password reset link to your email. Please check your inbox (and spam folder).", "success")
-                return redirect(url_for('auth.login'))
-            else:
-                flash("If an account with that email exists, we've sent you a password reset link.", "info")
-                return redirect(url_for('auth.login'))
+            flash("If an account with that email exists, we've sent a password reset link to your email.", "info")
+            return redirect(url_for('auth.login'))
         else:
             flash("Please enter your email address.", "danger")
     return render_template('forgot_password.html', active_page='forgot_password')
@@ -412,6 +418,9 @@ def reset_password(token):
         flash("Invalid or expired reset token.", "danger")
         return redirect(url_for('auth.forgot_password'))
     user_to_update = m.users_conf.find_one({'email': auth_record['email']})
+    if not user_to_update:
+        flash("The user account associated with this reset token no longer exists.", "danger")
+        return redirect(url_for('auth.login'))
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -587,22 +596,20 @@ def start_guest_tour():
     )
     _insert_demo_note(note3_content, reference="Surprise Idea", tags=["Surprise", "Sharing"])
     
-    # --- 2. Pre-fill Demo Partner & Active Bond ---
-    demo_partner = m.users_conf.find_one({'username': 'Maya_DemoPartner'})
-    if not demo_partner:
-        p_env = generate_user_envelope_keys()
-        p_res = m.users_conf.insert_one({
-            'username': 'Maya_DemoPartner',
-            'email': 'maya_demo@tour.echowithin.internal',
-            'password': m.generate_password_hash('demopartner123'),
-            'is_confirmed': True,
-            'is_demo_bot': True,
-            'join_date': now,
-            **p_env
-        })
-        partner_id = p_res.inserted_id
-    else:
-        partner_id = demo_partner['_id']
+    # --- 2. Pre-fill Per-Guest Disposable Demo Partner & Active Bond ---
+    p_env = generate_user_envelope_keys()
+    p_res = m.users_conf.insert_one({
+        'username': f"Maya_DemoPartner_{guest_token}",
+        'email': f"maya_{guest_token}@tour.echowithin.internal",
+        'password': m.generate_password_hash(secrets.token_urlsafe(16)),
+        'is_confirmed': True,
+        'is_demo_bot': True,
+        'is_guest': True,
+        'guest_expires_at': now + datetime.timedelta(hours=2),
+        'join_date': now,
+        **p_env
+    })
+    partner_id = p_res.inserted_id
         
     bond_res = m.bonds_conf.insert_one({
         'user_a_id': guest_id,
@@ -669,11 +676,19 @@ def start_guest_tour():
         }
     })
     
-    # --- 3. Pre-fill Demo Message Thread ---
+    # --- 3. Pre-fill Demo Message Thread & DM Permission ---
+    bot_username = f"Maya_DemoPartner_{guest_token}"
+    m.dm_permissions_conf.insert_one({
+        'requester_id': guest_id,
+        'target_id': partner_id,
+        'status': 'accepted',
+        'created_at': now,
+        'updated_at': now
+    })
     m.direct_messages_conf.insert_one({
         'sender_id': partner_id,
         'recipient_id': guest_id,
-        'sender_username': 'Maya_DemoPartner',
+        'sender_username': bot_username,
         'recipient_username': username,
         'content': "Welcome to EchoWithin tour mode. Feel free to explore our shared Bond space, notes, and features!",
         'timestamp': now - datetime.timedelta(minutes=5),

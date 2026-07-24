@@ -2921,7 +2921,13 @@
         function updateUserStatus(lastActiveStr, serverNow) {
             const el = document.getElementById('chat-status');
             if (!el) return;
-            if (!lastActiveStr) { el.textContent = 'Offline'; return; }
+            if (activeRecipientName && (activeRecipientName.startsWith('Maya_DemoPartner') || activeRecipientName.includes('DemoPartner'))) {
+                el.textContent = 'Active now';
+                el.style.color = '#27ae60';
+                el.style.display = 'block';
+                return;
+            }
+            if (!lastActiveStr) { el.textContent = 'Offline'; el.style.display = 'block'; return; }
 
             // ServerNow is UTC from Python isoformat()
             // lastActiveStr is UTC from Python isoformat()

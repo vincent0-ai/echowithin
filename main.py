@@ -836,18 +836,24 @@ def purge_guest_user_data(guest_id_str):
         personal_posts_conf.delete_many({'user_id': g_oid})
         share_configurations_conf.delete_many({'user_id': g_oid})
         
-        # 2. Bonds data
+        # 2. Bonds & partner data
+        bonds = list(bonds_conf.find({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]}))
+        for b in bonds:
+            p_id = b['user_b_id'] if b['user_a_id'] == g_oid else b['user_a_id']
+            users_conf.delete_one({'_id': p_id, 'is_demo_bot': True})
+
         bonds_conf.delete_many({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
         bond_goals_conf.delete_many({'proposed_by': g_oid})
         bond_journal_conf.delete_many({'user_id': g_oid})
         bond_moods_conf.delete_many({'user_id': g_oid})
         bond_habits_conf.delete_many({'created_by': g_oid})
         bond_countdowns_conf.delete_many({'created_by': g_oid})
-        
+
         # 3. Messages & Communities
         messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
+        direct_messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
         community_memberships_conf.delete_many({'user_id': g_oid})
-        
+
         # 4. User record
         users_conf.delete_one({'_id': g_oid})
         app.logger.info(f"Purged guest tour session: {guest_id_str}")
@@ -1804,7 +1810,7 @@ def handle_send_dm(data):
 
         # Interactive Demo Bot: auto-reply for Maya_DemoPartner
         recipient_user = users_conf.find_one({'_id': recipient_id})
-        if recipient_user and (recipient_user.get('is_demo_bot') or recipient_user.get('username') == 'Maya_DemoPartner'):
+        if recipient_user and (recipient_user.get('is_demo_bot') or recipient_user.get('username', '').startswith('Maya_DemoPartner')):
             def _bot_reply_task(sub_sender_id_str, sub_recipient_id_str, sub_recipient_id, sub_recipient_username):
                 time.sleep(1.2)
                 with app.app_context():
@@ -1946,12 +1952,13 @@ def handle_whisper_message(data):
 
         partner_id = recipient_str if user_id_str == initiator_str else initiator_str
 
-        # Store message with TTL
+        # Store message encrypted at rest with TTL
         msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
+        encrypted_content = encrypt_dm(content, user_id_str, partner_id)
         msg_doc = {
             'session_id': ObjectId(session_id),
             'sender_id': ObjectId(current_user.id),
-            'content': content,
+            'content': encrypted_content,
             'timestamp': now,
             'expires_at': msg_expires,
             'is_system': False

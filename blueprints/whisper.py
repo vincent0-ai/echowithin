@@ -29,7 +29,6 @@ def _utc_iso(dt):
 def _send_whisper_dm(sender_oid, recipient_oid, content):
     """Insert a whisper-related system message into the DM chat and emit via SocketIO."""
     import main as m
-    from bson.objectid import ObjectId as OId
     now = datetime.datetime.now(datetime.timezone.utc)
     msg_doc = {
         'sender_id': sender_oid,
@@ -263,6 +262,11 @@ def api_whisper_respond(session_id):
             return jsonify({'success': True, 'status': 'declined'})
 
         # Accept — start the session
+        if _get_active_session(session_doc['initiator_id']):
+            return jsonify({'error': 'The initiator is already in another whisper session.'}), 409
+        if _get_active_session(session_doc['recipient_id']):
+            return jsonify({'error': 'You are already in another whisper session.'}), 409
+
         duration = session_doc['proposed_duration_minutes']
         expires_at = now + datetime.timedelta(minutes=duration)
 
@@ -288,8 +292,8 @@ def api_whisper_respond(session_id):
 
         payload = {
             'session_id': session_id,
-            'started_at': now.isoformat().replace('+00:00', 'Z'),
-            'expires_at': expires_at.isoformat().replace('+00:00', 'Z'),
+            'started_at': _utc_iso(now),
+            'expires_at': _utc_iso(expires_at),
             'duration_minutes': duration,
             'partner_username': current_user.username,
             'partner_id': str(current_user.id)
@@ -309,10 +313,6 @@ def api_whisper_respond(session_id):
         # DM system messages for both parties
         initiator_oid = session_doc['initiator_id']
         recipient_oid = session_doc['recipient_id']
-        initiator = m.users_conf.find_one({'_id': initiator_oid}, {'username': 1})
-        recipient = m.users_conf.find_one({'_id': recipient_oid}, {'username': 1})
-        i_name = initiator['username'] if initiator else 'User'
-        r_name = recipient['username'] if recipient else 'User'
         _send_whisper_dm(initiator_oid, recipient_oid, f'Whisper started — {duration} min')
 
         return jsonify({'success': True, 'status': 'accepted', **payload})
@@ -373,7 +373,12 @@ def api_whisper_extend(session_id):
     try:
         data = request.get_json() or {}
         action = data.get('action')  # 'request' or 'approve'
-        extra_minutes = data.get('extra_minutes', 15)
+        try:
+            extra_minutes = int(data.get('extra_minutes', 15))
+            if extra_minutes <= 0 or extra_minutes > 120:
+                return jsonify({'error': 'Invalid extra_minutes duration. Must be between 1 and 120 minutes.'}), 400
+        except (TypeError, ValueError):
+            return jsonify({'error': 'extra_minutes must be an integer.'}), 400
 
         session_doc = m.whisper_sessions_conf.find_one({
             '_id': ObjectId(session_id),
@@ -388,7 +393,7 @@ def api_whisper_extend(session_id):
 
         partner_id = _get_partner_id(session_doc, user_id_str)
 
-        # Validate extra_minutes
+        # Validate extra_minutes bounds against user tier limit
         user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
         tier = m.get_user_tier(user_doc)
         max_duration = m.TIER_LIMITS.get(tier, m.TIER_LIMITS['free']).get('max_whisper_duration', 30)
@@ -424,7 +429,7 @@ def api_whisper_extend(session_id):
                 {
                     '$set': {'expires_at': new_expires},
                     '$push': {'extensions': {
-                        'requested_by': ObjectId(data.get('requested_by', user_id_str)),
+                        'requested_by': ObjectId(partner_id),
                         'approved_by': ObjectId(user_id_str),
                         'extra_minutes': extra_minutes,
                         'at': now
@@ -434,7 +439,7 @@ def api_whisper_extend(session_id):
 
             payload = {
                 'session_id': session_id,
-                'new_expires_at': new_expires.isoformat().replace('+00:00', 'Z'),
+                'new_expires_at': _utc_iso(new_expires),
                 'extra_minutes': extra_minutes
             }
             m.socketio.emit('whisper_extended', payload, room=f"user_{partner_id}")
@@ -498,11 +503,12 @@ def api_whisper_end(session_id):
         # Delete all whisper messages immediately
         m.whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
 
-        # Mark session as expired
+        # Mark session as cancelled (if still pending) or expired (if active)
+        final_status = 'cancelled' if session_doc.get('status') == 'pending' else 'expired'
         m.whisper_sessions_conf.update_one(
             {'_id': ObjectId(session_id)},
             {'$set': {
-                'status': 'expired',
+                'status': final_status,
                 'ended_by': ObjectId(user_id_str),
                 'expires_at': datetime.datetime.now(datetime.timezone.utc)
             }}
@@ -601,17 +607,24 @@ def api_whisper_history(session_id):
         if not _is_participant(session_doc, user_id_str):
             return jsonify({'error': 'Not a participant'}), 403
 
+        partner_id = _get_partner_id(session_doc, user_id_str)
         messages = list(m.whisper_messages_conf.find(
             {'session_id': ObjectId(session_id)}
         ).sort('timestamp', 1).limit(500))
 
         formatted = []
         for msg in messages:
+            content = msg.get('content', '')
+            if not msg.get('is_system') and content and content.startswith('gAAAAA'):
+                try:
+                    content = m.decrypt_dm(content, user_id_str, partner_id)
+                except Exception as err:
+                    current_app.logger.warning(f"Whisper message decryption error: {err}")
             formatted.append({
                 'id': str(msg['_id']),
                 'sender_id': str(msg['sender_id']),
-                'content': msg.get('content', ''),
-                'timestamp': (msg['timestamp'].isoformat() + 'Z') if msg['timestamp'].tzinfo is None else msg['timestamp'].isoformat().replace('+00:00', 'Z'),
+                'content': content,
+                'timestamp': _utc_iso(msg.get('timestamp')),
                 'is_system': msg.get('is_system', False)
             })
 

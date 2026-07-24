@@ -544,7 +544,7 @@ def start_guest_tour():
         'password': m.generate_password_hash(secrets.token_urlsafe(16)),
         'is_confirmed': True,
         'is_guest': True,
-        'guest_expires_at': now + datetime.timedelta(hours=2),
+        'guest_expires_at': now + datetime.timedelta(minutes=20),
         'join_date': now,
         'notification_preference': 'weekly',
         **envelope_keys
@@ -605,7 +605,7 @@ def start_guest_tour():
         'is_confirmed': True,
         'is_demo_bot': True,
         'is_guest': True,
-        'guest_expires_at': now + datetime.timedelta(hours=2),
+        'guest_expires_at': now + datetime.timedelta(minutes=20),
         'join_date': now,
         **p_env
     })

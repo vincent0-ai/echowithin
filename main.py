@@ -862,7 +862,7 @@ def purge_guest_user_data(guest_id_str):
 
 
 def cleanup_expired_guest_sessions():
-    """Background cleanup for guest sessions older than 2 hours."""
+    """Background cleanup for guest sessions older than 20 minutes."""
     try:
         now = datetime.datetime.now(datetime.timezone.utc)
         expired_guests = list(users_conf.find({'is_guest': True, 'guest_expires_at': {'$lt': now}}, {'_id': 1}))

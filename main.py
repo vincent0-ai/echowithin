@@ -123,7 +123,7 @@ from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
 from api import api_bp
 
-from notifications import (send_code, send_reset_code, send_new_post_notifications,
+from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
     send_weekly_newsletter, send_push_notification_to_user,
     send_admin_broadcast_push, send_push_notifications_for_new_post,
     send_fcm_notification_to_user, send_fcm_notifications_batch,
@@ -816,8 +816,51 @@ database.bond_moods_conf = bond_moods_conf
 database.bond_qotd_conf = bond_qotd_conf
 database.bond_habits_conf = bond_habits_conf
 database.bond_countdowns_conf = bond_countdowns_conf
-database.community_questions_conf = community_questions_conf
 database.hidden_chats_conf = hidden_chats_conf
+
+
+def purge_guest_user_data(guest_id_str):
+    """Purge all ephemeral data for a guest tour session."""
+    try:
+        g_oid = safe_object_id(guest_id_str)
+        if not g_oid:
+            return
+        user_doc = users_conf.find_one({'_id': g_oid, 'is_guest': True})
+        if not user_doc:
+            return
+        
+        # 1. Notes & shares
+        personal_posts_conf.delete_many({'user_id': g_oid})
+        share_configurations_conf.delete_many({'user_id': g_oid})
+        
+        # 2. Bonds data
+        bonds_conf.delete_many({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
+        bond_goals_conf.delete_many({'proposed_by': g_oid})
+        bond_journal_conf.delete_many({'user_id': g_oid})
+        bond_moods_conf.delete_many({'user_id': g_oid})
+        bond_habits_conf.delete_many({'created_by': g_oid})
+        bond_countdowns_conf.delete_many({'created_by': g_oid})
+        
+        # 3. Messages & Communities
+        messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
+        community_memberships_conf.delete_many({'user_id': g_oid})
+        
+        # 4. User record
+        users_conf.delete_one({'_id': g_oid})
+        app.logger.info(f"Purged guest tour session: {guest_id_str}")
+    except Exception as e:
+        app.logger.error(f"Error purging guest user data: {e}")
+
+
+def cleanup_expired_guest_sessions():
+    """Background cleanup for guest sessions older than 2 hours."""
+    try:
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expired_guests = list(users_conf.find({'is_guest': True, 'guest_expires_at': {'$lt': now}}, {'_id': 1}))
+        for g in expired_guests:
+            purge_guest_user_data(str(g['_id']))
+    except Exception as e:
+        app.logger.error(f"Error during expired guest cleanup: {e}")
 database.deleted_items_conf = deleted_items_conf
 database.redis_cache = redis_cache
 

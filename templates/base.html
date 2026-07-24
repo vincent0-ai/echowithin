@@ -468,6 +468,12 @@
 </head>
 
 <body data-user-logged-in="{{ 'true' if current_user.is_authenticated else 'false' }}">
+    {% if current_user.is_authenticated and getattr(current_user, 'is_guest', False) %}
+    <div class="tour-mode-banner" style="background: #3e2217; color: #ffffff; padding: 0.45rem 1rem; font-size: 0.82rem; text-align: center; display: flex; justify-content: center; align-items: center; gap: 0.75rem; position: sticky; top: 0; z-index: 10001; border-bottom: 1px solid rgba(255,255,255,0.15);">
+        <span><strong>Interactive Tour Mode</strong>: You are in an isolated demo session. Data will be erased on exit.</span>
+        <a href="{{ url_for('auth.register') }}" style="background: #ffffff; color: #3e2217; font-weight: 600; font-size: 0.75rem; padding: 0.2rem 0.65rem; border-radius: 16px; text-decoration: none; display: inline-block;">Save Data & Sign Up</a>
+    </div>
+    {% endif %}
     <!-- Native app: auto-reauth on session loss using httpOnly cookie -->
     <script nonce="{{ csp_nonce }}">
     (function(){

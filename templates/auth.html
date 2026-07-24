@@ -16,114 +16,138 @@
             <span class="auth-features-tag">Community spaces</span>
         </div>
         <div class="auth-container">
-        <nav class="auth-tabs">
-            <div class="auth-tabs-wrapper">
-                <button class="tab-button {% if form == 'login' %}active{% endif %}"
-                    data-form="login-form">Login</button>
-                <button class="tab-button {% if form == 'register' %}active{% endif %}"
-                    data-form="register-form">Register</button>
+            <nav class="auth-tabs">
+                <div class="auth-tabs-wrapper">
+                    <button class="tab-button {% if form == 'login' %}active{% endif %}"
+                        data-form="login-form">Login</button>
+                    <button class="tab-button {% if form == 'register' %}active{% endif %}"
+                        data-form="register-form">Register</button>
+                </div>
+            </nav>
+
+            <div class="auth-forms">
+                <!-- Login Form -->
+                <form id="login-form" class="auth-form {% if form == 'login' %}active{% endif %}" method="POST"
+                    action="{{ url_for('auth.login', next=request.args.get('next')) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <h2 class="form-title">Welcome Back</h2>
+                    </div>
+                    <div class="inputs">
+                        <input type="text" name="username" class="form-input" placeholder="Username or Email" required>
+                        <div class="password-input-container">
+                            <input type="password" name="password" class="form-input password-input"
+                                placeholder="Password" required>
+                            <i class="far fa-eye password-toggle-icon"></i>
+                        </div>
+                    </div>
+                    <div class="form-options">
+                        <div class="remember-me" style="display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" name="remember" id="remember" style="margin: 0; cursor: pointer;">
+                            <label for="remember" style="cursor: pointer; color: var(--text-dark-color);">Remember
+                                Me</label>
+                        </div>
+                        <a href="{{ url_for('auth.forgot_password') }}">Forgot Password?</a>
+                    </div>
+
+                    <button type="submit" class="form-button">Login</button>
+
+                    <div class="form-separator">
+                        <span>or</span>
+                    </div>
+
+                    <div class="google-signin">
+                        <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}"
+                            class="google-button">
+                            <svg width="18" height="18" viewBox="0 0 24 24">
+                                <path fill="#4285F4"
+                                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853"
+                                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05"
+                                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                <path fill="#EA4335"
+                                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                            </svg>
+                            Sign in with Google
+                        </a>
+                    </div>
+
+                    <div style="width: 100%;">
+                        <a href="{{ url_for('auth.start_guest_tour') }}" class="google-button"
+                            style="border-color: var(--border-color); color: var(--primary-color);">
+                            Take Interactive Tour (No Signup Needed)
+                        </a>
+                    </div>
+
+                    <div class="form-footer">
+                        <p>Don't have an account? <a href="#" class="switch-tab" data-form="register-form">Sign up</a>
+                        </p>
+                    </div>
+                </form>
+
+                <!-- Registration Form -->
+                <form id="register-form" class="auth-form {% if form == 'register' %}active{% endif %}" method="POST"
+                    action="{{ url_for('auth.register', next=request.args.get('next')) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div>
+                        <h2 class="form-title">Create Account</h2>
+                        <p class="form-subtitle">Join EchoWithin to journal privately and build meaningful connections.
+                        </p>
+                    </div>
+                    <div class="inputs">
+                        <input type="text" name="username" class="form-input" placeholder="Username" required>
+                        <input type="email" name="email" class="form-input" placeholder="Email" required>
+
+                        <!-- Honeypot Field -->
+                        <div style="display: none;" aria-hidden="true">
+                            <label for="website">Leave this field empty</label>
+                            <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">
+                        </div>
+
+                        <div class="password-input-container">
+                            <input type="password" name="password" class="form-input password-input"
+                                placeholder="Password" required>
+                            <i class="far fa-eye password-toggle-icon"></i>
+                        </div>
+                    </div>
+                    <div
+                        style="font-size: 0.85rem; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
+                        <input type="checkbox" name="agree_terms" id="agree_terms" required
+                            style="margin-top: 3px; cursor: pointer;">
+                        <label for="agree_terms" style="cursor: pointer; color: var(--text-muted);">
+                            I agree to the <a href="{{ url_for('pages.terms') }}" target="_blank"
+                                style="color: var(--primary-color); text-decoration: underline;">Terms of Service and
+                                Privacy Policy</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="form-button">Register</button>
+                    <div class="form-separator">
+                        <span>or</span>
+                    </div>
+                    <div class="google-signin">
+                        <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}"
+                            class="google-button">
+                            <svg width="18" height="18" viewBox="0 0 24 24">
+                                <path fill="#4285F4"
+                                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853"
+                                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05"
+                                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                <path fill="#EA4335"
+                                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                            </svg>
+                            Sign up with Google
+                        </a>
+                    </div>
+                    <div class="form-footer">
+                        <p>Already have an account? <a href="#" class="switch-tab" data-form="login-form">Log in</a></p>
+                    </div>
+                </form>
             </div>
-        </nav>
-
-        <div class="auth-forms">
-            <!-- Login Form -->
-            <form id="login-form" class="auth-form {% if form == 'login' %}active{% endif %}" method="POST"
-                action="{{ url_for('auth.login', next=request.args.get('next')) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <h2 class="form-title">Welcome Back</h2>
-                <div class="inputs">
-                    <input type="text" name="username" class="form-input" placeholder="Username or Email" required>
-                    <div class="password-input-container">
-                        <input type="password" name="password" class="form-input password-input" placeholder="Password"
-                            required>
-                        <i class="far fa-eye password-toggle-icon"></i>
-                    </div>
-                </div>
-                <div class="form-options">
-                    <div class="remember-me">
-                        <input type="checkbox" name="remember" id="remember" style="margin-right: 5px;">
-                        <label for="remember">Remember Me</label>
-                    </div>
-                    <a href="{{ url_for('auth.forgot_password') }}">Forgot Password?</a>
-                </div>
-
-                <button type="submit" class="form-button">Login</button>
-                <div class="form-separator">
-                    <span>or</span>
-                </div>
-                <div class="google-signin">
-                    <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}" class="google-button">
-                        <svg width="18" height="18" viewBox="0 0 24 24">
-                            <path fill="#4285F4"
-                                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                            <path fill="#34A853"
-                                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                            <path fill="#FBBC05"
-                                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                            <path fill="#EA4335"
-                                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                        </svg>
-                        Sign in with Google
-                    </a>
-                </div>
-                <div class="form-footer">
-                    <p>Don't have an account? <a href="#" class="switch-tab" data-form="register-form">Sign up</a></p>
-                </div>
-            </form>
-
-            <!-- Registration Form -->
-            <form id="register-form" class="auth-form {% if form == 'register' %}active{% endif %}" method="POST"
-                action="{{ url_for('auth.register', next=request.args.get('next')) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <h2 class="form-title">Create Account</h2>
-                <div class="inputs">
-                    <input type="text" name="username" class="form-input" placeholder="Username" required>
-                    <input type="email" name="email" class="form-input" placeholder="Email" required>
-
-                    <!-- Honeypot Field -->
-                    <div style="display: none;" aria-hidden="true">
-                        <label for="website">Leave this field empty</label>
-                        <input type="text" name="website" id="website" tabindex="-1" autocomplete="off">
-                    </div>
-
-                    <div class="password-input-container">
-                        <input type="password" name="password" class="form-input password-input" placeholder="Password"
-                            required>
-                        <i class="far fa-eye password-toggle-icon"></i>
-                    </div>
-                </div>
-                <div class="form-footer"
-                    style="margin-top: 1rem; margin-bottom: 1rem; font-size: 0.9rem; text-align: left; display: flex; align-items: flex-start; gap: 8px;">
-                    <input type="checkbox" name="agree_terms" id="agree_terms" required style="margin-top: 3px;">
-                    <label for="agree_terms" style="cursor: pointer; color: #555;">
-                        I agree to the <a href="{{ url_for('pages.terms') }}" target="_blank"
-                            style="color: var(--primary-color); text-decoration: underline;">Terms of Service</a>
-                    </label>
-                </div>
-                <button type="submit" class="form-button">Register</button>
-                <div class="form-separator">
-                    <span>or</span>
-                </div>
-                <div class="google-signin">
-                    <a href="{{ url_for('auth.google_login', next=request.args.get('next')) }}" class="google-button">
-                        <svg width="18" height="18" viewBox="0 0 24 24">
-                            <path fill="#4285F4"
-                                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                            <path fill="#34A853"
-                                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                            <path fill="#FBBC05"
-                                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                            <path fill="#EA4335"
-                                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                        </svg>
-                        Sign up with Google
-                    </a>
-                </div>
-                <div class="form-footer">
-                    <p>Already have an account? <a href="#" class="switch-tab" data-form="login-form">Log in</a></p>
-                </div>
-            </form>
         </div>
+    </div>
     </div>
 
     </div>

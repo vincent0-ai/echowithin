@@ -1133,6 +1133,24 @@
         </div>
     </div>
 
+    {% if current_user.is_authenticated and getattr(current_user, 'is_guest', False) %}
+    <div class="tour-guide-page-card" style="background: var(--surface-bg, #ffffff); border: 1px solid var(--border-color, #e0e0e0); border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1.2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+            <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h3>
+            <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.72rem; padding: 0.2rem 0.55rem; border-radius: 12px; font-weight: 600;">Guest Session</span>
+        </div>
+        <p style="margin: 0 0 0.8rem 0; font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.45;">
+            Bonds are dedicated spaces for couples, best friends, or partners to build meaningful connections through shared goals, daily habits, and encrypted memories.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; font-size: 0.82rem; background: var(--card-bg, #fafafa); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
+            <div><strong>Shared Goals:</strong> Set savings, travel, or fitness targets with dual contribution bars.</div>
+            <div><strong>Daily Habits:</strong> Track 7-day streaks and daily check-offs together.</div>
+            <div><strong>Daily Question (QotD):</strong> Blind reveal daily prompts with AI generation.</div>
+            <div><strong>Use Case:</strong> Best for building habits, tracking couple goals, and growing together.</div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if has_app_lock and not is_unlocked %}
     <div class="locked-gate">
         <h3>Bonds is Locked</h3>

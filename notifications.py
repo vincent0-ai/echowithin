@@ -181,6 +181,28 @@ def send_code(email, gen_code=None, retries=3, delay=2):
     else:
         _get_app().logger.error(f"Failed to send verification email to {email} after {retries} attempts.")
 
+def send_account_deletion_code(email, gen_code=None, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            sender = f"EchoWithin <{get_env_variable('MAIL_USERNAME')}>"
+            msg = Message(
+                subject="Account Deletion Verification Code",
+                sender=sender,
+                recipients=[email]
+            )
+            msg.body = (
+                f"Your EchoWithin account deletion verification code is: {gen_code}\n\n"
+                "This code will expire in 15 minutes.\n\n"
+                "If you did not request account deletion, please change your password immediately."
+            )
+            _get_mail().send(msg)
+            _get_app().logger.info(f"Account deletion verification code sent to {email}.")
+            return True
+        except Exception as e:
+            _get_app().logger.error(f"Attempt {attempt+1} failed to send deletion code to {email}: {e}")
+            time.sleep(delay)
+    return False
+
 def send_reset_code(email, reset_token=None, retries=3, delay=2):
     reset_url = ""
     try:

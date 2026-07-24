@@ -980,6 +980,10 @@ def post():
     from werkzeug.utils import secure_filename
     
     if request.method == "POST":
+        if getattr(current_user, 'is_guest', False):
+            flash("Publishing to the community blog is disabled in Tour Mode. Sign up to publish your posts!", "warning")
+            return redirect(url_for('pages.create_post'))
+
         title = request.form.get("title")
         content = request.form.get("content", '') or ''
         tags = request.form.getlist("tags")

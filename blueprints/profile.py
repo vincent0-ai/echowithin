@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, make_response, abort, current_app
 from flask_login import login_required, current_user, login_user
 from bson.objectid import ObjectId
-import datetime, math, json, os
+import datetime, math, json, os, hashlib, secrets
 from security import limits
 from config import TIME
 bp = Blueprint('profile', __name__, template_folder='templates')
@@ -223,6 +223,51 @@ def export_data(username):
     return response
 
 
+@bp.route('/profile/<username>/request_delete_code', methods=['POST'])
+@login_required
+@limits(calls=5, period=TIME)
+def request_delete_code(username):
+    import main as m
+    if username != current_user.username:
+        return jsonify({'error': 'Unauthorized'}), 403
+    user = m.users_conf.find_one({'username': username})
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+        
+    is_google_only = user.get('google_signup') and not user.get('password')
+    if not is_google_only:
+        password = request.form.get('password', '') or (request.json or {}).get('password', '')
+        if not password or not m.check_password_hash(user['password'], password):
+            return jsonify({'error': 'Incorrect password. Account deletion code not sent.'}), 400
+    else:
+        confirm = request.form.get('confirm_delete', '') or (request.json or {}).get('confirm_delete', '')
+        if confirm != 'DELETE':
+            return jsonify({'error': 'Please type DELETE to confirm.'}), 400
+
+    gen_code = str(secrets.randbelow(10**6)).zfill(6)
+    hashed = hashlib.sha256(gen_code.encode()).hexdigest()
+    code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+    
+    m.auth_conf.update_one(
+        {'email': user['email'], 'type': 'delete_account'},
+        {'$set': {
+            'hashed_code': hashed,
+            'code_expiry': code_expiry,
+            'user_id': user['_id']
+        }},
+        upsert=True
+    )
+    
+    sent = m.send_account_deletion_code(user['email'], gen_code)
+    if not sent:
+        return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500
+
+    return jsonify({
+        'success': True,
+        'message': f'Verification code sent to {user["email"]}. Enter the code below to complete deletion.'
+    })
+
+
 @bp.route('/profile/<username>/delete_account', methods=['POST'])
 @login_required
 @limits(calls=5, period=TIME)
@@ -233,6 +278,7 @@ def delete_account(username):
     user = m.users_conf.find_one({'username': username})
     if not user:
         abort(404)
+
     is_google_only = user.get('google_signup') and not user.get('password')
     if not is_google_only:
         password = request.form.get('password', '')
@@ -244,6 +290,31 @@ def delete_account(username):
         if confirm != 'DELETE':
             flash('Please confirm deletion. Account deletion cancelled.', 'danger')
             return redirect(url_for('profile.profile_settings', username=username))
+
+    code = (request.form.get('verification_code') or '').strip()
+    if not code:
+        flash('Verification code is required to delete your account.', 'danger')
+        return redirect(url_for('profile.profile_settings', username=username))
+
+    auth_doc = m.auth_conf.find_one({'email': user['email'], 'type': 'delete_account'})
+    if not auth_doc:
+        flash('No deletion request found. Please request a verification code first.', 'danger')
+        return redirect(url_for('profile.profile_settings', username=username))
+
+    code_exp = auth_doc.get('code_expiry')
+    if code_exp and code_exp.tzinfo is None:
+        code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
+
+    if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
+        flash('Verification code has expired. Please request a new code.', 'danger')
+        return redirect(url_for('profile.profile_settings', username=username))
+
+    if auth_doc.get('hashed_code') != hashlib.sha256(code.encode()).hexdigest():
+        flash('Invalid verification code. Please check your email and try again.', 'danger')
+        return redirect(url_for('profile.profile_settings', username=username))
+
+    m.auth_conf.delete_one({'_id': auth_doc['_id']})
+
     user_id = user['_id']
     app_token = request.cookies.get('x_app_token')
     if app_token:
@@ -259,13 +330,17 @@ def delete_account(username):
     m.note_versions_conf.delete_many({'author_id': user_id})
     m.note_discussions_conf.delete_many({'author_id': user_id})
     m.newsletter_conf.delete_many({'email': user.get('email')})
+    m.bonds_conf.delete_many({'$or': [{'user_a_id': user_id}, {'user_b_id': user_id}]})
+    m.bond_goals_conf.delete_many({'proposed_by': user_id})
+    m.bond_journal_conf.delete_many({'user_id': user_id})
+    m.bond_moods_conf.delete_many({'user_id': user_id})
     m.communities_conf.update_many({'admin_id': user_id}, {'$set': {'admin_id': None}})
     m.communities_conf.update_many({}, {'$pull': {'members': user_id, 'moderators': user_id}})
     m.community_notes_conf.delete_many({'author_id': user_id})
     m.community_reactions_conf.delete_many({'user_id': user_id})
     m.users_conf.delete_one({'_id': user_id})
     m.logout_user()
-    flash('Your account has been permanently deleted. We are sorry to see you go.', 'info')
+    flash('Your account has been permanently deleted.', 'info')
     resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
     return resp

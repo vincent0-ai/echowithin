@@ -32,6 +32,26 @@ def register():
             flash("Email or username already exists.", "danger")
             return redirect(url_for('auth.register'))
         hashed_password = m.generate_password_hash(password)
+        if current_user.is_authenticated and (getattr(current_user, 'is_guest', False) or user_is_guest(current_user)):
+            guest_id = ObjectId(current_user.id)
+            m.users_conf.update_one(
+                {'_id': guest_id},
+                {'$set': {
+                    "username": username,
+                    "email": email,
+                    "password": hashed_password,
+                    "is_guest": False,
+                    "is_confirmed": True,
+                    "guest_expires_at": None
+                }}
+            )
+            updated_data = m.users_conf.find_one({'_id': guest_id})
+            user_obj = m.User(updated_data)
+            login_user(user_obj, remember=True)
+            session.pop('is_guest_tour', None)
+            flash("Account created! All your tour notes and preferences have been saved.", "success")
+            return redirect(url_for('notes.personal_space'))
+
         envelope_keys = generate_user_envelope_keys()
         m.users_conf.insert_one({
             "username": username,
@@ -317,10 +337,13 @@ def logout():
     if app_token:
         m.app_tokens_conf.delete_one({'token': app_token})
     if current_user.is_authenticated:
+        if getattr(current_user, 'is_guest', False) or user_is_guest(current_user):
+            m.purge_guest_user_data(str(current_user.id))
         m.app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     logout_user()
     session.pop('oauth_state', None)
     session.pop('oauth_platform', None)
+    session.pop('is_guest_tour', None)
     flash('You have been logged out.', 'info')
     resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
@@ -462,3 +485,172 @@ def app_reauth():
     login_user(user_obj, remember=True)
     warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
     return jsonify({'success': True, 'username': user['username']})
+
+
+@bp.route('/tour')
+@limits(calls=10, period=60)
+def start_guest_tour():
+    """Start an instant, isolated guest tour session with pre-filled demo data."""
+    import main as m
+    
+    if current_user.is_authenticated and (getattr(current_user, 'is_guest', False) or user_is_guest(current_user)):
+        flash("Resuming your interactive tour session!", "info")
+        return redirect(url_for('notes.personal_space'))
+    
+    if current_user.is_authenticated:
+        flash("You are already logged into an active account.", "info")
+        return redirect(url_for('pages.home'))
+        
+    now = datetime.datetime.now(datetime.timezone.utc)
+    guest_token = secrets.token_hex(4)
+    username = f"Explorer_{guest_token}"
+    email = f"guest_{guest_token}@tour.echowithin.internal"
+    
+    envelope_keys = generate_user_envelope_keys()
+    
+    guest_doc = {
+        'username': username,
+        'email': email,
+        'password': m.generate_password_hash(secrets.token_urlsafe(16)),
+        'is_confirmed': True,
+        'is_guest': True,
+        'guest_expires_at': now + datetime.timedelta(hours=2),
+        'join_date': now,
+        'notification_preference': 'weekly',
+        **envelope_keys
+    }
+    
+    res = m.users_conf.insert_one(guest_doc)
+    guest_id = res.inserted_id
+    guest_id_str = str(guest_id)
+    
+    # Warm up Fernet encryption keys for guest
+    warm_user_fernet(guest_id_str)
+    
+    # --- 1. Pre-fill Demo Notes ---
+    note1_content = (
+        "# Welcome to EchoWithin! 🌟\n\n"
+        "This is your private, end-to-end encrypted personal space.\n\n"
+        "### Key Features to Explore:\n"
+        "- **Encryption at Rest**: Notes are secured with per-user Fernet envelope keys.\n"
+        "- **App Lock PIN**: Click **Set Up PIN** to lock confidential notes.\n"
+        "- **Surprise Note Sharing**: Share themed notes with music & animations (Birthday, Romantic, Celebration).\n"
+        "- **Rich Formatting**: Markdown, tags, checklists, and code blocks."
+    )
+    m.create_note_record(guest_id_str, note1_content, reference="Getting Started", tags=["Welcome", "Privacy", "Guide"])
+    
+    note2_content = (
+        "## 🔒 Sensitive Note Demo\n\n"
+        "This note demonstrates confidential storage. Try clicking the Lock button or setting an App Lock PIN!"
+    )
+    n2_id = m.create_note_record(guest_id_str, note2_content, reference="Confidential", tags=["PIN-Protected", "Security"])
+    m.personal_posts_conf.update_one({'_id': ObjectId(n2_id)}, {'$set': {'is_locked': True}})
+    
+    note3_content = (
+        "## 🎁 Surprise Link Demo Note\n\n"
+        "Surprise a friend or partner! Turn any note into an interactive surprise link complete with music, animations, and photos."
+    )
+    m.create_note_record(guest_id_str, note3_content, reference="Surprise Idea", tags=["Surprise", "Sharing"])
+    
+    # --- 2. Pre-fill Demo Partner & Active Bond ---
+    demo_partner = m.users_conf.find_one({'username': 'Maya_DemoPartner'})
+    if not demo_partner:
+        p_env = generate_user_envelope_keys()
+        p_res = m.users_conf.insert_one({
+            'username': 'Maya_DemoPartner',
+            'email': 'maya_demo@tour.echowithin.internal',
+            'password': m.generate_password_hash('demopartner123'),
+            'is_confirmed': True,
+            'is_demo_bot': True,
+            'join_date': now,
+            **p_env
+        })
+        partner_id = p_res.inserted_id
+    else:
+        partner_id = demo_partner['_id']
+        
+    bond_res = m.bonds_conf.insert_one({
+        'user_a_id': guest_id,
+        'user_b_id': partner_id,
+        'status': 'active',
+        'bond_type': 'romantic',
+        'label': 'Our Relationship Space',
+        'created_at': now - datetime.timedelta(days=14),
+        'accepted_at': now - datetime.timedelta(days=14),
+        'streak_count': 5,
+        'last_streak_date': now
+    })
+    bond_id = bond_res.inserted_id
+    bond_id_str = str(bond_id)
+    
+    # Demo Goal
+    enc_goal_title = m.encrypt_bond_data("Save $1,000 for Summer Getaway ✈️", bond_id_str)
+    enc_goal_desc = m.encrypt_bond_data("Joint savings fund for our vacation.", bond_id_str)
+    m.bond_goals_conf.insert_one({
+        'bond_id': bond_id,
+        'title': enc_goal_title,
+        'description': enc_goal_desc,
+        'category': 'Travel',
+        'target_value': 1000,
+        'current_value': 450,
+        'unit': '$',
+        'proposed_by': partner_id,
+        'status': 'active',
+        'created_at': now - datetime.timedelta(days=7),
+        'encrypted': True,
+        'milestones': [
+            {'title': 'Book hotel flights', 'completed': True},
+            {'title': 'Reserve rental car', 'completed': False}
+        ],
+        'check_ins': [
+            {'user_id': str(partner_id), 'value': 250, 'note': 'Saved initial deposit', 'at': (now - datetime.timedelta(days=5)).isoformat()},
+            {'user_id': guest_id_str, 'value': 200, 'note': 'Added my contribution!', 'at': (now - datetime.timedelta(days=2)).isoformat()}
+        ]
+    })
+    
+    # Demo Journal Entry
+    enc_journal = m.encrypt_bond_data("Looking forward to exploring new places together!", bond_id_str)
+    m.bond_journal_conf.insert_one({
+        'bond_id': bond_id,
+        'user_id': partner_id,
+        'content': enc_journal,
+        'encrypted': True,
+        'created_at': now - datetime.timedelta(days=1)
+    })
+    
+    # Demo Habit
+    enc_habit = m.encrypt_bond_data("30 min Evening Walk Together 🚶", bond_id_str)
+    m.bond_habits_conf.insert_one({
+        'bond_id': bond_id,
+        'title': enc_habit,
+        'encrypted': True,
+        'created_by': partner_id,
+        'created_at': now - datetime.timedelta(days=3),
+        'archived': False,
+        'logs': {
+            now.date().isoformat(): {
+                str(partner_id): {'completed': True, 'completed_at': now}
+            }
+        }
+    })
+    
+    # --- 3. Pre-fill Demo Message Thread ---
+    m.messages_conf.insert_one({
+        'sender_id': partner_id,
+        'recipient_id': guest_id,
+        'sender_username': 'Maya_DemoPartner',
+        'recipient_username': username,
+        'content': "Hey! 👋 Welcome to EchoWithin tour mode. Feel free to explore our shared Bond space, notes, and features!",
+        'created_at': now - datetime.timedelta(minutes=5),
+        'read': False,
+        'encrypted': False
+    })
+    
+    # Authenticate guest
+    guest_doc['_id'] = guest_id
+    user_obj = m.User(guest_doc)
+    login_user(user_obj)
+    session['is_guest_tour'] = True
+    
+    flash("🚀 Welcome to Tour Mode! You are in an isolated demo session. Enjoy exploring!", "success")
+    return redirect(url_for('notes.personal_space'))

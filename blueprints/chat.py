@@ -222,6 +222,11 @@ def api_send_dm_request(target_user_id):
         target_id = ObjectId(target_user_id)
         sender_id = ObjectId(current_user.id)
         
+        if getattr(current_user, 'is_guest', False):
+            t_user = m.users_conf.find_one({'_id': target_id}, {'is_demo_bot': 1})
+            if t_user and not t_user.get('is_demo_bot'):
+                return jsonify({'error': 'Messaging real users is restricted in Tour Mode. Sign up to connect with others!'}), 403
+
         if str(sender_id) == target_user_id:
             return jsonify({'error': 'Cannot send request to yourself'}), 400
         

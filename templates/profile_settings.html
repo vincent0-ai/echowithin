@@ -324,33 +324,35 @@
 
       <!-- Delete Account -->
       <div style="margin-top: 2rem;">
-        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: #dc3545;"><i
-            class="fas fa-exclamation-triangle"></i>
-          Delete Account</h2>
-        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Permanently delete your account and all
-          associated data. This action <strong>cannot be undone</strong>.</p>
+        <h2 style="font-size: 1.1rem; margin-bottom: 0.5rem; color: #dc3545;">Delete Account</h2>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">Permanently delete your account and all associated data. A 6-digit verification code will be sent to your email before deletion can be completed.</p>
+        
         <form id="delete-account-form" method="POST" action="{{ url_for('profile.delete_account', username=user.username) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% if not user.get('google_signup') or user.get('password') %}
-          <div class="form-group">
-            <label for="delete-password">Enter your password to confirm:</label>
-            <input type="password" id="delete-password" name="password" class="form-input"
-              placeholder="Your current password" autocomplete="current-password" required>
+          <div class="form-group" id="delete-password-group">
+            <label for="delete-password">Enter your password to request deletion code:</label>
+            <input type="password" id="delete-password" name="password" class="form-input" placeholder="Your current password" autocomplete="current-password" required>
           </div>
           {% else %}
           <input type="hidden" name="confirm_delete" id="confirm-delete-field" value="">
-          <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Since you signed up with Google, type
-            <strong>DELETE</strong> below to confirm:
-          </p>
-          <div class="form-group">
-            <input type="text" id="delete-confirm-text" class="form-input" placeholder="Type DELETE to confirm"
-              autocomplete="off" required>
+          <div class="form-group" id="delete-confirm-text-group">
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem;">Since you signed up with Google, type <strong>DELETE</strong> below to request deletion code:</p>
+            <input type="text" id="delete-confirm-text" class="form-input" placeholder="Type DELETE to confirm" autocomplete="off" required>
           </div>
           {% endif %}
-          <button type="button" id="delete-account-btn" class="btn"
-            style="background-color: #dc3545; color: white; padding: 0.5rem 1.5rem;">
-            Delete My Account
-          </button>
+
+          <div class="form-group" id="delete-code-group" style="display: none; margin-top: 1rem;">
+            <p id="delete-code-status-msg" style="font-size: 0.88rem; color: var(--primary-color); margin-bottom: 0.5rem; font-weight: 500;"></p>
+            <label for="verification-code">Verification Code (sent to your email):</label>
+            <input type="text" id="verification-code" name="verification_code" class="form-input" placeholder="Enter 6-digit code" autocomplete="off" maxlength="6">
+          </div>
+
+          <div style="margin-top: 1rem;">
+            <button type="button" id="delete-account-btn" class="btn" style="background-color: #dc3545; color: white; padding: 0.5rem 1.5rem;">
+              Send Verification Code
+            </button>
+          </div>
         </form>
       </div>
     </details>
@@ -562,31 +564,77 @@
 <script>
 
 
-  // Delete account confirmation
+  // Delete account confirmation with 2-step email verification
+  let deleteStep = 1;
   document.getElementById('delete-account-btn').addEventListener('click', function () {
     var form = document.getElementById('delete-account-form');
-    {% if not user.get('google_signup') or user.get('password') %}
-    var pw = document.getElementById('delete-password').value;
-    if (!pw) {
-      window.showCustomAlert('Please enter your password.', 'danger');
-      return;
-    }
-    {% else %}
-    var confirmText = document.getElementById('delete-confirm-text').value.trim();
-    if (confirmText !== 'DELETE') {
-      window.showCustomAlert('Please type DELETE to confirm.', 'danger');
-      return;
-    }
-    document.getElementById('confirm-delete-field').value = 'DELETE';
-    {% endif %}
-    window.showCustomConfirm(
-      'Are you sure you want to permanently delete your account? All your posts, comments, notes, and data will be removed forever. This cannot be undone.',
-      function (confirmed) {
-        if (confirmed) {
-          form.submit();
-        }
+    var btn = this;
+
+    if (deleteStep === 1) {
+      var payload = {};
+      {% if not user.get('google_signup') or user.get('password') %}
+      var pw = document.getElementById('delete-password').value;
+      if (!pw) {
+        if (window.showCustomAlert) showCustomAlert('Please enter your password.', 'danger');
+        return;
       }
-    );
+      payload.password = pw;
+      {% else %}
+      var confirmText = document.getElementById('delete-confirm-text').value.trim();
+      if (confirmText !== 'DELETE') {
+        if (window.showCustomAlert) showCustomAlert('Please type DELETE to confirm.', 'danger');
+        return;
+      }
+      document.getElementById('confirm-delete-field').value = 'DELETE';
+      payload.confirm_delete = 'DELETE';
+      {% endif %}
+
+      btn.disabled = true;
+      btn.innerText = 'Sending Code...';
+
+      fetch('{{ url_for("profile.request_delete_code", username=user.username) }}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        btn.disabled = false;
+        if (d.success) {
+          deleteStep = 2;
+          document.getElementById('delete-code-group').style.display = 'block';
+          document.getElementById('delete-code-status-msg').innerText = d.message;
+          document.getElementById('verification-code').required = true;
+          document.getElementById('verification-code').focus();
+          btn.innerText = 'Confirm Permanent Account Deletion';
+          if (window.showCustomToast) showCustomToast('Verification code sent to your email.', 'info');
+        } else {
+          btn.innerText = 'Send Verification Code';
+          if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to send verification code.', 'danger');
+        }
+      })
+      .catch(function(e) {
+        btn.disabled = false;
+        btn.innerText = 'Send Verification Code';
+        if (window.showCustomAlert) showCustomAlert('Connection error. Please try again.', 'danger');
+      });
+    } else {
+      var code = document.getElementById('verification-code').value.trim();
+      if (!code) {
+        if (window.showCustomAlert) showCustomAlert('Please enter the 6-digit verification code sent to your email.', 'danger');
+        return;
+      }
+      if (window.showCustomConfirm) {
+        showCustomConfirm('Are you sure you want to permanently delete your account? All your posts, comments, notes, and data will be removed forever. This cannot be undone.', function(ok) {
+          if (ok) form.submit();
+        });
+      } else {
+        if (confirm('Are you sure you want to permanently delete your account?')) form.submit();
+      }
+    }
   });
 
   // --- App Lock Management Logic ---

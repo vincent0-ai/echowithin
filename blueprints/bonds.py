@@ -603,6 +603,9 @@ def api_bond_request(target_user_id):
         user_oid = ObjectId(current_user.id)
         target_oid = ObjectId(target_user_id)
 
+        if getattr(current_user, 'is_guest', False):
+            return jsonify({'error': 'Sending bond requests to real users is restricted in Tour Mode. Sign up to connect with others!'}), 403
+
         if str(user_oid) == target_user_id:
             return jsonify({'error': 'Cannot bond with yourself'}), 400
 

@@ -649,14 +649,14 @@ def start_guest_tour():
     })
     
     # --- 3. Pre-fill Demo Message Thread ---
-    m.messages_conf.insert_one({
+    m.direct_messages_conf.insert_one({
         'sender_id': partner_id,
         'recipient_id': guest_id,
         'sender_username': 'Maya_DemoPartner',
         'recipient_username': username,
         'content': "Welcome to EchoWithin tour mode. Feel free to explore our shared Bond space, notes, and features!",
-        'created_at': now - datetime.timedelta(minutes=5),
-        'read': False,
+        'timestamp': now - datetime.timedelta(minutes=5),
+        'is_read': False,
         'encrypted': False
     })
     

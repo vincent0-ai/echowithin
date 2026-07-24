@@ -89,6 +89,13 @@ def api_create_share(post_id):
     if not note:
         return jsonify({'error': 'Note not found or unauthorized'}), 404
 
+    # Guest tour restriction check
+    if getattr(current_user, 'is_guest', False):
+        return jsonify({
+            'error': 'Guest tour accounts cannot generate public share links or surprise notes. Please sign up for a free account to share notes with friends!',
+            'is_guest': True
+        }), 403
+
     # --- Premium tier enforcement: share link limit ---
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     max_shares = m.get_limit(user_doc, 'max_share_links_per_note')
@@ -1029,6 +1036,10 @@ def api_update_share_settings(share_id):
         'share_id': share_id,
         'owner_id': ObjectId(current_user.id)
     })
+    if getattr(current_user, 'is_guest', False):
+        flash('Guest tour accounts cannot modify note share settings. Please sign up for a free account!', 'danger')
+        return redirect(url_for('notes.personal_space'))
+
     if not share:
         flash('Share link not found or unauthorized.', 'danger')
         return redirect(url_for('notes.personal_space'))

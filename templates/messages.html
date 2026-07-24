@@ -10,7 +10,7 @@
                 <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Messaging & Whisper Mode</h4>
                 <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
             </div>
-            <button type="button" onclick="document.getElementById('tour-tooltip-messages').style.display='none'" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
         <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
             Chat securely with contacts or launch Whisper Mode for self-destructing chats with real-time screenshot alerts.
@@ -21,9 +21,24 @@
             <div><strong>Use Case:</strong> Best for private 1-on-1 conversations and sensitive check-ins.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
-            <button type="button" onclick="document.getElementById('tour-tooltip-messages').style.display='none'" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
+    <script>
+        function dismissTourTooltip(id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+            try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
+        }
+        (function() {
+            try {
+                if (localStorage.getItem('dismissed_tour-tooltip-messages') === '1') {
+                    var el = document.getElementById('tour-tooltip-messages');
+                    if (el) el.style.display = 'none';
+                }
+            } catch(e) {}
+        })();
+    </script>
     {% endif %}
     <div class="messages-wrapper {{ 'chat-view-active' if active_chat else '' }}"
         style="display: flex; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); flex: 1; overflow: hidden; border: 1px solid #f5ebe7;">

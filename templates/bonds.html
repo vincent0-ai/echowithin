@@ -1140,7 +1140,7 @@
                 <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h4>
                 <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
             </div>
-            <button type="button" onclick="document.getElementById('tour-tooltip-bonds').style.display='none'" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
         <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
             Bonds are dedicated paired spaces for best friends, partners, family members, or close companions to build meaningful connections through shared goals, daily habits, and encrypted memories.
@@ -1152,9 +1152,24 @@
             <div><strong>Use Case:</strong> Best for building habits, tracking shared goals, and staying connected with friends or partners.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
-            <button type="button" onclick="document.getElementById('tour-tooltip-bonds').style.display='none'" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
+    <script>
+        function dismissTourTooltip(id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+            try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
+        }
+        (function() {
+            try {
+                if (localStorage.getItem('dismissed_tour-tooltip-bonds') === '1') {
+                    var el = document.getElementById('tour-tooltip-bonds');
+                    if (el) el.style.display = 'none';
+                }
+            } catch(e) {}
+        })();
+    </script>
     {% endif %}
 
     {% if has_app_lock and not is_unlocked %}

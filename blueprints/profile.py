@@ -338,6 +338,7 @@ def delete_account(username):
     m.communities_conf.update_many({}, {'$pull': {'members': user_id, 'moderators': user_id}})
     m.community_notes_conf.delete_many({'author_id': user_id})
     m.community_reactions_conf.delete_many({'user_id': user_id})
+    m.auth_conf.delete_many({'email': user.get('email')})
     m.users_conf.delete_one({'_id': user_id})
     m.logout_user()
     flash('Your account has been permanently deleted.', 'info')

@@ -10,7 +10,10 @@ def csrf_exempt(view):
     view._csrf_exempt = True
     return view
 
-bp = Blueprint('auth', __name__, template_folder='templates')
+def _user_is_guest(user):
+    if not user or not user.is_authenticated:
+        return False
+    return getattr(user, 'is_guest', False) or session.get('is_guest_tour', False)
 
 
 @bp.route('/register', methods=['GET', 'POST'])
@@ -19,21 +22,31 @@ def register():
     import main as m
     next_url = request.args.get('next')
     if request.method == "POST":
-        username = request.form.get("username")
-        email = request.form.get("email")
-        password = request.form.get("password")
+        username = request.form.get("username", "").strip()
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "").strip()
         if not username or not email or not password:
             flash("All fields are required", "danger")
             return redirect(url_for('auth.register'))
         if len(username) < 2 or len(password) < 6:
             flash("Username must be at least 2 characters and password at least 6 characters.", "danger")
             return redirect(url_for('auth.register'))
-        if m.users_conf.find_one({"$or": [{"email": email}, {"username": username}]}):
+
+        is_guest_session = _user_is_guest(current_user)
+        guest_id = ObjectId(current_user.id) if is_guest_session else None
+
+        # Check existing user credentials (excluding current guest user if converting)
+        dup_query = {"$or": [{"email": email}, {"username": username}]}
+        if guest_id:
+            dup_query["_id"] = {"$ne": guest_id}
+
+        if m.users_conf.find_one(dup_query):
             flash("Email or username already exists.", "danger")
             return redirect(url_for('auth.register'))
+
         hashed_password = m.generate_password_hash(password)
-        if current_user.is_authenticated and (getattr(current_user, 'is_guest', False) or user_is_guest(current_user)):
-            guest_id = ObjectId(current_user.id)
+
+        if is_guest_session and guest_id:
             m.users_conf.update_one(
                 {'_id': guest_id},
                 {'$set': {
@@ -53,24 +66,22 @@ def register():
             return redirect(url_for('notes.personal_space'))
 
         envelope_keys = generate_user_envelope_keys()
-        m.users_conf.insert_one({
+        res = m.users_conf.insert_one({
             "username": username,
             "email": email,
             "password": hashed_password,
-            "is_confirmed": False,
+            "is_confirmed": True,
             "join_date": datetime.datetime.now(datetime.timezone.utc),
             "notification_preference": 'weekly',
             **envelope_keys
         })
         
-        gen_code = str(secrets.randbelow(10**6)).zfill(6)
-        hashed = hashlib.sha256(gen_code.encode()).hexdigest()
-        code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-        m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
-        m.send_code(email, gen_code)
-        
-        flash("Confirmation email sent. Please confirm your email to log in.", "success")
-        return redirect(url_for('auth.confirm', email=email))
+        user_data = m.users_conf.find_one({'_id': res.inserted_id})
+        user_obj = m.User(user_data)
+        login_user(user_obj, remember=True)
+        warm_user_fernet(str(res.inserted_id))
+        flash(f"Account created successfully! Welcome, {username}!", "success")
+        return redirect(url_for('notes.personal_space'))
     return render_template("auth.html", active_page='register', form='register')
 
 
@@ -337,7 +348,7 @@ def logout():
     if app_token:
         m.app_tokens_conf.delete_one({'token': app_token})
     if current_user.is_authenticated:
-        if getattr(current_user, 'is_guest', False) or user_is_guest(current_user):
+        if _user_is_guest(current_user):
             m.purge_guest_user_data(str(current_user.id))
         m.app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     logout_user()
@@ -493,7 +504,7 @@ def start_guest_tour():
     """Start an instant, isolated guest tour session with pre-filled demo data."""
     import main as m
     
-    if current_user.is_authenticated and (getattr(current_user, 'is_guest', False) or user_is_guest(current_user)):
+    if _user_is_guest(current_user):
         flash("Resuming your interactive tour session!", "info")
         return redirect(url_for('notes.personal_space'))
     

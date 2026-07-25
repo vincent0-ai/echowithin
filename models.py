@@ -25,6 +25,7 @@ class User(UserMixin):
         self.is_admin = user_data.get('is_admin', False)
         self._is_active = user_data.get('is_confirmed', False)
         self.is_guest = user_data.get('is_guest', False)
+        self.guest_expires_at = user_data.get('guest_expires_at')
         # Track when user last checked their activity tab
         self.last_activity_check = user_data.get('last_activity_check')
         # Email notification preference: 'immediate', 'weekly', or 'none'
@@ -32,6 +33,22 @@ class User(UserMixin):
         # Premium tier
         self._user_data_tier = user_data  # cache for tier resolution
         self.account_tier = get_user_tier(user_data)
+
+    @property
+    def is_guest_expired(self):
+        if not self.is_guest or not self.guest_expires_at:
+            return False
+        now = datetime.datetime.now(datetime.timezone.utc)
+        exp = self.guest_expires_at
+        if isinstance(exp, str):
+            from security import parse_iso_utc
+            exp = parse_iso_utc(exp)
+        elif isinstance(exp, datetime.datetime):
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=datetime.timezone.utc)
+        else:
+            return False
+        return exp <= now if exp else False
 
     @property
     def is_active(self):

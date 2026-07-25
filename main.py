@@ -60,6 +60,8 @@ except Exception:
 import datetime
 import hashlib
 import re
+import time
+import threading
 
 from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, send_file, abort
 import logging
@@ -831,6 +833,14 @@ def purge_guest_user_data(guest_id_str):
         user_doc = users_conf.find_one({'_id': g_oid, 'is_guest': True})
         if not user_doc:
             return
+
+        # 0. Clear in-memory & Redis user loader caches
+        user_loader_cache.pop(f"user:{guest_id_str}", None)
+        if redis_cache:
+            try:
+                redis_cache.delete(f"last_active:{guest_id_str}")
+            except Exception:
+                pass
         
         # 1. Notes & shares
         personal_posts_conf.delete_many({'user_id': g_oid})
@@ -841,6 +851,7 @@ def purge_guest_user_data(guest_id_str):
         for b in bonds:
             p_id = b['user_b_id'] if b['user_a_id'] == g_oid else b['user_a_id']
             users_conf.delete_one({'_id': p_id, 'is_demo_bot': True})
+            user_loader_cache.pop(f"user:{str(p_id)}", None)
 
         bonds_conf.delete_many({'$or': [{'user_a_id': g_oid}, {'user_b_id': g_oid}]})
         bond_goals_conf.delete_many({'proposed_by': g_oid})
@@ -865,9 +876,25 @@ def cleanup_expired_guest_sessions():
     """Background cleanup for guest sessions older than 20 minutes."""
     try:
         now = datetime.datetime.now(datetime.timezone.utc)
-        expired_guests = list(users_conf.find({'is_guest': True, 'guest_expires_at': {'$lt': now}}, {'_id': 1}))
-        for g in expired_guests:
-            purge_guest_user_data(str(g['_id']))
+        twenty_mins_ago = now - datetime.timedelta(minutes=20)
+
+        # Query for expired guest sessions with guest_expires_at <= now
+        expired_guests = list(users_conf.find(
+            {'is_guest': True, 'guest_expires_at': {'$exists': True, '$ne': None, '$lt': now}},
+            {'_id': 1}
+        ))
+        # Fallback query: guests missing guest_expires_at created > 20 mins ago
+        orphaned_guests = list(users_conf.find(
+            {'is_guest': True, 'guest_expires_at': None, 'join_date': {'$lt': twenty_mins_ago}},
+            {'_id': 1}
+        ))
+
+        all_expired_ids = set(str(g['_id']) for g in (expired_guests + orphaned_guests))
+        for guest_id_str in all_expired_ids:
+            purge_guest_user_data(guest_id_str)
+        
+        if all_expired_ids:
+            app.logger.info(f"Purged {len(all_expired_ids)} expired guest session(s).")
     except Exception as e:
         app.logger.error(f"Error during expired guest cleanup: {e}")
 database.deleted_items_conf = deleted_items_conf
@@ -891,6 +918,39 @@ _t.start_init()
 # Typesense state — always resolved from _t.<attr> to avoid stale capture at import
 
 
+
+
+_last_guest_cleanup_time = 0
+
+@app.before_request
+def check_guest_expiration():
+    """Ensure expired guest tour sessions are invalidated and purged immediately on any user request."""
+    if current_user.is_authenticated and getattr(current_user, 'is_guest', False):
+        if getattr(current_user, 'is_guest_expired', False):
+            guest_id = str(current_user.id)
+            logout_user()
+            session.clear()
+            purge_guest_user_data(guest_id)
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'error': 'guest_session_expired',
+                    'message': 'Your 20-minute guest tour session has expired.'
+                }), 401
+            flash('Your 20-minute interactive tour session has expired.', 'info')
+            return redirect(url_for('auth.login'))
+
+
+@app.before_request
+def periodic_guest_cleanup():
+    """Periodically trigger background guest session cleanup every 60 seconds on incoming web traffic."""
+    global _last_guest_cleanup_time
+    now_ts = time.time()
+    if now_ts - _last_guest_cleanup_time > 60:
+        _last_guest_cleanup_time = now_ts
+        try:
+            executor.submit(cleanup_expired_guest_sessions)
+        except Exception:
+            cleanup_expired_guest_sessions()
 
 
 @app.before_request

@@ -59,7 +59,8 @@ def register():
                     "username": username,
                     "email": email,
                     "password": hashed_password,
-                    "is_confirmed": False
+                    "is_confirmed": False,
+                    "guest_expires_at": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
                 }}
             )
         else:

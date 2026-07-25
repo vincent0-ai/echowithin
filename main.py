@@ -861,8 +861,8 @@ def purge_guest_user_data(guest_id_str):
         bond_countdowns_conf.delete_many({'created_by': g_oid})
 
         # 3. Messages & Communities
-        messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
         direct_messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
+        dm_permissions_conf.delete_many({'$or': [{'requester_id': g_oid}, {'target_id': g_oid}]})
         community_memberships_conf.delete_many({'user_id': g_oid})
 
         # 4. User record
@@ -1872,19 +1872,24 @@ def handle_send_dm(data):
         recipient_user = users_conf.find_one({'_id': recipient_id})
         if recipient_user and (recipient_user.get('is_demo_bot') or recipient_user.get('username', '').startswith('Maya_DemoPartner')):
             def _bot_reply_task(sub_sender_id_str, sub_recipient_id_str, sub_recipient_id, sub_recipient_username):
+                socketio.emit('user_typing', {'sender_id': sub_recipient_id_str}, room=f"user_{sub_sender_id_str}")
                 time.sleep(1.2)
+                socketio.emit('user_stop_typing', {'sender_id': sub_recipient_id_str}, room=f"user_{sub_sender_id_str}")
                 with app.app_context():
                     bot_replies = [
                         "Thanks for reaching out! I'm your interactive demo partner. Try checking out our shared Bond space, logging today's mood, or answering today's daily question!",
                         "Hey! I'm right here exploring EchoWithin with you. Have you tried checking out the shared habit tracker or setting up app lock?",
-                        "So glad we are testing this together! You can also check out our shared countdowns and journal memory lane under Bonds."
+                        "So glad we are testing this together! You can also check out our shared countdowns and journal memory lane under Bonds.",
+                        "I love testing out EchoWithin's features with you! Everything in this demo session is private and isolated to your tour.",
+                        "You can try sending self-destructing messages in Whisper mode, or creating a shared note!"
                     ]
                     reply_text = random.choice(bot_replies)
                     bot_now = datetime.datetime.now(datetime.timezone.utc)
+                    enc_content = encrypt_dm(reply_text, sub_recipient_id_str, sub_sender_id_str)
                     bot_msg_doc = {
                         'sender_id': sub_recipient_id,
                         'recipient_id': ObjectId(sub_sender_id_str),
-                        'content': encrypt_dm(reply_text, sub_recipient_id_str, sub_sender_id_str),
+                        'content': enc_content,
                         'encrypted': True,
                         'timestamp': bot_now,
                         'is_read': False,
@@ -1895,15 +1900,15 @@ def handle_send_dm(data):
                         'id': str(bot_msg_doc['_id']),
                         'sender_id': sub_recipient_id_str,
                         'recipient_id': sub_sender_id_str,
-                        'sender_username': sub_recipient_username,
+                        'sender_username': 'Maya (Demo Partner)',
                         'content': reply_text,
-                        'timestamp': bot_now.isoformat(),
+                        'timestamp': (bot_now.isoformat() + 'Z').replace('+00:00Z', 'Z'),
                         'is_read': False,
                         'message_type': 'text'
                     }
                     socketio.emit('new_dm', bot_payload, room=f"user_{sub_sender_id_str}")
 
-            executor.submit(_bot_reply_task, sender_id_str, recipient_id_str, recipient_id, recipient_user.get('username', 'Maya_DemoPartner'))
+            socketio.start_background_task(_bot_reply_task, sender_id_str, recipient_id_str, recipient_id, recipient_user.get('username', 'Maya_DemoPartner'))
         
     except Exception as e:
         app.logger.error(f"Error sending DM via socket: {e}")

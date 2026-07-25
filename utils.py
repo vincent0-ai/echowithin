@@ -812,12 +812,23 @@ def _has_active_auto_approve(share_id, editor_id):
 def can_dm(user_a_id, user_b_id):
     """Check if two users are allowed to exchange DMs.
     Returns True if:
+      - Either user is a demo bot (is_demo_bot or Maya_DemoPartner)
       - An accepted dm_permission exists between them (either direction), OR
       - They have prior message history (grandfathered conversations)
     """
-    a_oid = ObjectId(user_a_id)
-    b_oid = ObjectId(user_b_id)
+    try:
+        a_oid = ObjectId(user_a_id)
+        b_oid = ObjectId(user_b_id)
+    except Exception:
+        return False
     
+    # Always allow DMs with demo bots (e.g. Maya_DemoPartner)
+    u_a = database.users_conf.find_one({'_id': a_oid}, {'is_demo_bot': 1, 'username': 1})
+    u_b = database.users_conf.find_one({'_id': b_oid}, {'is_demo_bot': 1, 'username': 1})
+    if (u_a and (u_a.get('is_demo_bot') or u_a.get('username', '').startswith('Maya_DemoPartner'))) or \
+       (u_b and (u_b.get('is_demo_bot') or u_b.get('username', '').startswith('Maya_DemoPartner'))):
+        return True
+
     # Check for accepted permission in either direction
     perm = database.dm_permissions_conf.find_one({
         '$or': [

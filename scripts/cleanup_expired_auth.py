@@ -63,8 +63,8 @@ def _purge_guest_data_standalone(db, guest_id_str):
     db['bond_countdowns'].delete_many({'created_by': g_oid})
 
     # 3. Messages & Communities
-    db['messages'].delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
     db['direct_messages'].delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})
+    db['dm_permissions'].delete_many({'$or': [{'requester_id': g_oid}, {'target_id': g_oid}]})
     db['community_memberships'].delete_many({'user_id': g_oid})
 
     # 4. User record

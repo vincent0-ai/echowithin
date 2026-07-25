@@ -608,6 +608,7 @@ community_poll_votes_conf = db['community_poll_votes']
 community_resources_conf = db['community_resources']
 community_checkins_conf = db['community_checkins']
 community_premium_vouchers_conf = db['community_premium_vouchers']
+community_memberships_conf = db['community_memberships']
 
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
@@ -806,6 +807,7 @@ database.community_poll_votes_conf = community_poll_votes_conf
 database.community_resources_conf = community_resources_conf
 database.community_checkins_conf = community_checkins_conf
 database.community_premium_vouchers_conf = community_premium_vouchers_conf
+database.community_memberships_conf = community_memberships_conf
 database.dm_permissions_conf = dm_permissions_conf
 database.scheduled_messages_conf = scheduled_messages_conf
 database.note_attachments_conf = note_attachments_conf

@@ -1861,6 +1861,8 @@
             <button class="btn btn-bond-secondary" onclick="closeGoalModal()">Cancel</button>
             <button class="btn btn-bond-primary" onclick="submitGoal()">Propose Goal</button>
         </div>
+    </div>
+</div>
 <!-- Bond Album Upload Modal -->
 <div id="bond-album-upload-modal" class="bond-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAlbumUploadModal()">
     <div class="bond-modal-content" style="max-width: 520px; width: 92%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem; box-shadow: 0 10px 30px var(--shadow-color); position: relative;">
@@ -2539,7 +2541,7 @@
     function breakBond(bondId, partnerName) {
         if (window.showCustomConfirm) {
             var isDemo = partnerName === 'Maya (Demo Partner)' || partnerName.indexOf('Maya_DemoPartner') === 0;
-            var cooldownText = isDemo ? '' : ' You will have a 7-day cooldown before forming new bonds.';
+            var cooldownText = isDemo ? '' : ' You will have a 3-day cooldown before forming new bonds.';
             showCustomConfirm('Break your bond with ' + partnerName + '? All shared goals and journal entries will be permanently deleted.' + cooldownText, function (ok) {
                 if (ok) doBreakBond(bondId);
             });
@@ -2910,7 +2912,8 @@
                 var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
                 d.photos.forEach(function(p, idx) {
                     var title = p.title ? escHtml(p.title) : 'Untitled';
-                    var dateStr = p.date_taken ? new Date(p.date_taken).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    var dateObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+                    var dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
                     var catLabel = p.category ? (p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Memory';
 
                     html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
@@ -3060,10 +3063,12 @@
         document.getElementById('lightbox-desc').textContent = p.description || 'No description provided.';
         document.getElementById('lightbox-cat-badge').textContent = (p.category || 'memory').toUpperCase();
 
-        var dtStr = p.date_taken ? new Date(p.date_taken).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
+        var dtObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+        var dtStr = dtObj && !isNaN(dtObj) ? dtObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
         document.getElementById('lightbox-date-taken').textContent = dtStr;
         document.getElementById('lightbox-uploaded-by').textContent = p.uploaded_by_name || 'Partner';
-        var upStr = p.uploaded_at ? new Date(p.uploaded_at).toLocaleDateString() : '-';
+        var upObj = p.uploaded_at ? (window.parseServerTime ? window.parseServerTime(p.uploaded_at) : new Date(p.uploaded_at)) : null;
+        var upStr = upObj && !isNaN(upObj) ? upObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-';
         document.getElementById('lightbox-uploaded-at').textContent = upStr;
 
         var pinBtn = document.getElementById('lightbox-pin-btn');
@@ -3265,6 +3270,8 @@
     window.submitAlbumEditModal = submitAlbumEditModal;
     window.deleteLightboxPhoto = deleteLightboxPhoto;
     window.deleteAlbumPhoto = deleteAlbumPhoto;
+    window.breakBond = breakBond;
+    window.doBreakBond = doBreakBond;
 
     // Keyboard Shortcuts for Lightbox Navigation
     document.addEventListener('keydown', function(e) {
@@ -3300,10 +3307,13 @@
                     var statusColor = item.status === 'done' ? '#2e7d32' : item.status === 'agreed' ? '#1565c0' : '#888';
                     var statusBg = item.status === 'done' ? '#e8f5e9' : item.status === 'agreed' ? '#e3f2fd' : '#f5f5f5';
                     var statusText = item.status === 'done' ? 'Done' : item.status === 'agreed' ? 'Planned' : 'Dreaming';
+                    var bObj = item.completed_at ? (window.parseServerTime ? window.parseServerTime(item.completed_at) : new Date(item.completed_at)) : (item.created_at ? (window.parseServerTime ? window.parseServerTime(item.created_at) : new Date(item.created_at)) : null);
+                    var bDateStr = bObj && !isNaN(bObj) ? (item.completed_at ? ' · Completed ' : ' · ') + bObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
                     html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">'
                         + '<div style="flex:1;min-width:0;">'
                         + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(item.title) + '</div>'
-                        + (item.description ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(item.description) + '</div>' : '')
+                        + '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + (item.description ? escHtml(item.description) + bDateStr : bDateStr.replace(/^ · /, '')) + '</div>'
                         + '</div>'
                         + '<div style="display:flex;align-items:center;gap:0.3rem;flex-shrink:0;">'
                         + '<span style="font-size:0.65rem;padding:0.15rem 0.4rem;border-radius:10px;background:' + statusBg + ';color:' + statusColor + ';font-weight:600;">' + statusText + '</span>';
@@ -3408,13 +3418,16 @@
                 d.recommendations.forEach(function(r) {
                     var iconMap = { book:'📚', song:'🎵', podcast:'🎙️', movie:'🎬', show:'📺', game:'🎮', other:'📌' };
                     var icon = iconMap[r.media_type] || '📌';
+                    var rObj = r.created_at ? (window.parseServerTime ? window.parseServerTime(r.created_at) : new Date(r.created_at)) : null;
+                    var rDateStr = rObj && !isNaN(rObj) ? ' · ' + rObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
                     html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:flex-start;gap:0.5rem;">'
                         + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
                         + '<div style="flex:1;min-width:0;">'
                         + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
                         + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
                         + (r.link ? '<a href="' + r.link + '" target="_blank" rel="noopener" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
-                        + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + r.media_type + '</div>'
+                        + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
                         + '</div>'
                         + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';
                     if (!r.recommended_by_me) {
@@ -3505,7 +3518,8 @@
                 }
                 var html = '<div style="display:flex;flex-wrap:wrap;gap:0.35rem;">';
                 d.pulses.forEach(function(p) {
-                    var timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+                    var timeObj = p.created_at ? (window.parseServerTime ? window.parseServerTime(p.created_at) : new Date(p.created_at)) : null;
+                    var timeStr = timeObj && !isNaN(timeObj) ? timeObj.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
                     html += '<div style="display:flex;align-items:center;gap:0.25rem;padding:0.3rem 0.55rem;background:' + (p.from_me ? 'var(--surface-bg)' : '#e8f5e9') + ';border:1px solid var(--border-color);border-radius:20px;font-size:0.78rem;">'
                         + '<span style="font-size:1rem;">' + p.emoji + '</span>'
                         + (p.message ? '<span style="color:var(--text-dark-color);">' + escHtml(p.message) + '</span>' : '')
@@ -4114,10 +4128,10 @@
             headers: { 'X-CSRFToken': csrfToken }
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
-                const el = document.getElementById('bond-' + bondId);
+                var el = document.getElementById('bond-' + bondId);
+                var pastSection = el ? el.closest('.bonds-section') : null;
                 if (el) el.remove();
 
-                const pastSection = document.querySelector('.bonds-section-past');
                 if (pastSection && pastSection.querySelectorAll('.bond-card').length === 0) {
                     pastSection.remove();
                 }

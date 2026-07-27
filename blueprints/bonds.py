@@ -13,9 +13,30 @@ def _format_datetime(val):
     if not val:
         return None
     if isinstance(val, str):
-        return val.replace('+00:00', 'Z')
+        s = val.strip()
+        if not s:
+            return None
+        if not s.endswith('Z') and '+00:00' not in s and not ('-' in s[10:] or '+' in s[10:]):
+            return s + 'Z'
+        return s.replace('+00:00', 'Z')
+    if isinstance(val, datetime.datetime):
+        if val.tzinfo is None:
+            val = val.replace(tzinfo=datetime.timezone.utc)
+        else:
+            val = val.astimezone(datetime.timezone.utc)
+        res = val.isoformat()
+        if res.endswith('+00:00'):
+            res = res[:-6] + 'Z'
+        elif not res.endswith('Z'):
+            res = res + 'Z'
+        return res
     if hasattr(val, 'isoformat'):
-        return val.isoformat().replace('+00:00', 'Z')
+        res = val.isoformat()
+        if res.endswith('+00:00'):
+            return res[:-6] + 'Z'
+        if not res.endswith('Z'):
+            return res + 'Z'
+        return res
     return str(val)
 
 # Goal categories
@@ -24,7 +45,7 @@ GOAL_CATEGORIES = [
     'Personal Growth', 'Creative', 'Custom'
 ]
 
-BOND_COOLDOWN_DAYS = 7
+BOND_COOLDOWN_DAYS = 3
 
 def _clean_username(username):
     if not username:
@@ -3801,6 +3822,7 @@ def api_bond_pulse_send(bond_id):
             'from_username': current_user.username,
             'emoji': emoji,
             'message': message,
+            'created_at': _format_datetime(now),
         }
         m.socketio.emit('bond_pulse_received', pulse_data, room=f"user_{partner_id}")
 

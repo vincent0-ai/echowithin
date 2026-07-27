@@ -725,6 +725,14 @@ def _serialize_comment(doc, reply_counts=None):
     if reply_counts is None: reply_counts = {}
     raw_content = doc.get('content') or ''
     content_html = markdown_filter(raw_content) if raw_content else ''
+
+    def _fmt_iso(dt):
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.isoformat().replace('+00:00', 'Z')
+
     return {
         'id': str(doc.get('_id')),
         'post_slug': doc.get('post_slug'),
@@ -732,8 +740,8 @@ def _serialize_comment(doc, reply_counts=None):
         'author_username': doc.get('author_username') or doc.get('author'),
         'content': raw_content,
         'content_html': content_html,
-        'created_at': doc.get('created_at').isoformat() if doc.get('created_at') else None,
-        'edited_at': doc.get('edited_at').isoformat() if doc.get('edited_at') else None,
+        'created_at': _fmt_iso(doc.get('created_at')),
+        'edited_at': _fmt_iso(doc.get('edited_at')),
         'is_deleted': doc.get('is_deleted', False),
         'parent_id': str(doc.get('parent_id')) if doc.get('parent_id') else None,
         'upvote_count': doc.get('upvote_count', 0),

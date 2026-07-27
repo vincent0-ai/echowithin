@@ -3015,11 +3015,11 @@ def api_bond_album_list(bond_id):
                 'id': str(p['_id']),
                 'title': p.get('title', ''),
                 'category': p.get('category', 'other'),
-                'date_taken': p.get('date_taken').isoformat() if p.get('date_taken') else None,
+                'date_taken': _format_datetime(p.get('date_taken')),
                 'url': decrypted_url,
                 'uploaded_by': str(p['uploaded_by']),
                 'uploaded_by_me': str(p['uploaded_by']) == user_id_str,
-                'uploaded_at': p.get('uploaded_at').isoformat() if p.get('uploaded_at') else None,
+                'uploaded_at': _format_datetime(p.get('uploaded_at')),
             }
             if decrypted_url:
                 result.append(photo)
@@ -3197,8 +3197,8 @@ def api_bond_bucketlist_list(bond_id):
                 'status': item.get('status', 'dreamt'),
                 'proposed_by': str(item.get('proposed_by', '')),
                 'proposed_by_me': str(item.get('proposed_by', '')) == str(current_user.id),
-                'completed_at': item.get('completed_at').isoformat() if item.get('completed_at') else None,
-                'created_at': item.get('created_at').isoformat() if item.get('created_at') else None,
+                'completed_at': _format_datetime(item.get('completed_at')),
+                'created_at': _format_datetime(item.get('created_at')),
             })
         return jsonify({'success': True, 'items': result})
     except Exception as e:
@@ -3423,7 +3423,7 @@ def api_bond_recommendations_list(bond_id):
                 'recommended_by': str(r.get('recommended_by', '')),
                 'recommended_by_me': str(r.get('recommended_by', '')) == str(current_user.id),
                 'tried_by_partner': r.get('tried_by_partner', False),
-                'created_at': r.get('created_at').isoformat() if r.get('created_at') else None,
+                'created_at': _format_datetime(r.get('created_at')),
             })
         return jsonify({'success': True, 'recommendations': result})
     except Exception as e:
@@ -3590,7 +3590,7 @@ def api_bond_pulses_list(bond_id):
                 'from_me': str(p['user_id']) == str(current_user.id),
                 'emoji': p.get('emoji', '😊'),
                 'message': p.get('message', ''),
-                'created_at': p.get('created_at').isoformat() if p.get('created_at') else None,
+                'created_at': _format_datetime(p.get('created_at')),
             })
         return jsonify({'success': True, 'pulses': result})
     except Exception as e:

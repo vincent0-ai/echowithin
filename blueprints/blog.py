@@ -1181,6 +1181,9 @@ def view_post(slug):
         comment_page = 1
         per_page = 10
         comments = list(m.comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((comment_page-1)*per_page).limit(per_page))
+        for c in comments:
+            raw = c.get('content') or ''
+            c['content_html'] = m.markdown_filter(raw) if raw else ''
         reply_counts = {}
         try:
             pipeline = [

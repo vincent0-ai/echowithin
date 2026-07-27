@@ -318,6 +318,7 @@
                 <label for="comment-content" class="visually-hidden">Write a comment</label>
                 <textarea id="comment-content" name="content" rows="3" style="width:100%;"
                     placeholder="Write a comment..."></textarea>
+                <div style="font-size:0.8em; color:#888; margin-top:4px;">Markdown supported</div>
                 <button id="comment-submit" type="submit">Post Comment</button>
             </form>
             {% else %}
@@ -339,7 +340,7 @@
                         {% endif %}
                     </div>
                     <div class="comment-body" style="margin-top:4px;">{% if c.is_deleted %}<em>Comment deleted</em>{%
-                        else %}{{ c.content|linkify|safe }}{% endif %}</div>
+                        else %}{{ c.content_html|safe }}{% endif %}</div>
 
                     <div class="comment-actions" style="margin-top:6px;">
                         {% if not c.is_deleted %}
@@ -471,7 +472,8 @@
         const body = document.createElement('div');
         body.className = 'comment-body';
         body.style.marginTop = '4px';
-        body.innerHTML = comment.is_deleted ? '<em>Comment deleted</em>' : (comment.content || '');
+        body.setAttribute('data-raw-content', comment.content || '');
+        body.innerHTML = comment.is_deleted ? '<em>Comment deleted</em>' : (comment.content_html || '');
 
         el.appendChild(meta);
         el.appendChild(body);
@@ -725,7 +727,7 @@
             const form = document.createElement('form');
             form.className = 'reply-form';
             form.style.marginTop = '8px';
-            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><button type="submit" class="reply-submit-btn">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
+            form.innerHTML = `<textarea rows="2" style="width:100%;" class="reply-content"></textarea><div style="font-size:0.75em; color:#888;">Markdown supported</div><button type="submit" class="reply-submit-btn">Reply</button> <button type="button" class="cancel-reply">Cancel</button>`;
             replies.insertBefore(form, replies.firstChild);
 
             form.addEventListener('submit', async (ev) => {
@@ -819,7 +821,7 @@
             const editForm = document.createElement('form');
             editForm.className = 'edit-form';
             editForm.style.marginTop = '8px';
-            editForm.innerHTML = `<textarea rows="3" style="width:100%;" class="edit-content">${bodyEl.textContent}</textarea><button type="submit">Save</button> <button type="button" class="cancel-edit">Cancel</button>`;
+            editForm.innerHTML = `<textarea rows="3" style="width:100%;" class="edit-content">${bodyEl.getAttribute('data-raw-content') || bodyEl.textContent}</textarea><button type="submit">Save</button> <button type="button" class="cancel-edit">Cancel</button>`;
             bodyEl.style.display = 'none';
             bodyEl.parentNode.insertBefore(editForm, bodyEl.nextSibling);
 
@@ -837,7 +839,8 @@
                 });
                 if (resp.ok) {
                     const updated = await resp.json();
-                    bodyEl.innerHTML = updated.content;
+                    bodyEl.setAttribute('data-raw-content', updated.content || '');
+                    bodyEl.innerHTML = updated.content_html || bodyEl.textContent;
                     bodyEl.style.display = '';
                     editForm.remove();
                 } else {

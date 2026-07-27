@@ -723,12 +723,15 @@ def calculate_hot_score(post, comment_count):
 
 def _serialize_comment(doc, reply_counts=None):
     if reply_counts is None: reply_counts = {}
+    raw_content = doc.get('content') or ''
+    content_html = markdown_filter(raw_content) if raw_content else ''
     return {
         'id': str(doc.get('_id')),
         'post_slug': doc.get('post_slug'),
         'author_id': str(doc.get('author_id')) if doc.get('author_id') else None,
         'author_username': doc.get('author_username') or doc.get('author'),
-        'content': doc.get('content'),
+        'content': raw_content,
+        'content_html': content_html,
         'created_at': doc.get('created_at').isoformat() if doc.get('created_at') else None,
         'edited_at': doc.get('edited_at').isoformat() if doc.get('edited_at') else None,
         'is_deleted': doc.get('is_deleted', False),

@@ -3,13 +3,13 @@ import os
 import json
 import time
 import hashlib
+import hmac
 import secrets
 
 from flask import render_template, url_for
 from flask_mail import Mail, Message
 from flask_rq2 import RQ
 from bson.objectid import ObjectId
-from jigsawstack import JigsawStack
 from pywebpush import webpush, WebPushException
 import cloudinary
 import cloudinary.uploader
@@ -98,25 +98,6 @@ class _RqProxy:
 rq = _RqProxy()
 
 
-def check_image_for_nsfw(image_path):
-    """
-    Checks an image for NSFW content using JigsawStack validate/nsfw.
-    Returns True if NSFW, False otherwise.
-    """
-    try:
-        client = JigsawStack(api_key=get_env_variable('JIGSAW_API_KEY'))
-        response = client.validate.nsfw({
-            'url': image_path
-        })
-        if isinstance(response, dict):
-            return response.get('nsfw', False)
-        return getattr(response, 'nsfw', False)
-
-    except Exception as e:
-        _get_app().logger.error(f"Error calling JigsawStack NSFW API via SDK: {e}")
-        return False
-
-
 @rq.job
 def process_image_for_nsfw(post_id, image_url, public_id):
     """
@@ -138,6 +119,11 @@ def process_image_for_nsfw(post_id, image_url, public_id):
         else:
             _get_app().logger.warning(f"NSFW API returned status {api_response.status_code} for post {post_id}")
             is_nsfw = False
+            database.posts_conf.update_one(
+                {'_id': ObjectId(post_id), 'image_status': {'$ne': 'removed_nsfw'}},
+                {'$set': {'image_status': 'pending_review'}}
+            )
+            return
 
         if is_nsfw:
             _get_app().logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging image and updating post.")
@@ -156,7 +142,7 @@ def process_image_for_nsfw(post_id, image_url, public_id):
         _get_app().logger.error(f"Error during NSFW check job for post {post_id}: {e}")
         database.posts_conf.update_one(
             {'_id': ObjectId(post_id), 'image_status': {'$ne': 'removed_nsfw'}},
-            {'$set': {'image_status': 'safe'}}
+            {'$set': {'image_status': 'pending_review'}}
         )
 
 
@@ -274,7 +260,7 @@ def send_new_post_notifications(post_id_str):
                         recipient_name = u.get('username') or ''
                         
                         secret = _get_app().config["SECRET_KEY"]
-                        unsub_token = hashlib.sha256(f"{secret}{recipient_email}unsubscribe".encode()).hexdigest()
+                        unsub_token = hmac.new(secret.encode(), f"{recipient_email}unsubscribe".encode(), hashlib.sha256).hexdigest()
                         try:
                             unsub_url = url_for('pages.unsubscribe', email=recipient_email, token=unsub_token, _external=True)
                         except RuntimeError:
@@ -901,6 +887,7 @@ def send_log_email_job():
 
             _get_mail().send(msg)
             _get_app().logger.info(f"Log file email sent to {developer_email}.")
+            open(log_file_path, 'w').close()
     except Exception as e:
         _get_app().logger.error(f"Failed to send log file email: {e}", exc_info=True)
 

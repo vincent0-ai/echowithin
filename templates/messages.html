@@ -84,7 +84,8 @@
                 {% for contact in contacts %}
                 <div class="contact-item {{ 'active' if active_chat and active_chat.username == contact.username else '' }}"
                     data-user-id="{{ contact.user_id }}"
-                    onclick="window.loadChat('{{ contact.user_id }}', '{{ contact.username }}', this)"
+                    data-username="{{ contact.username }}"
+                    onclick="window.loadChat(this.dataset.userId, this.dataset.username, this)"
                     style="padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1rem; cursor: pointer; transition: all 0.2s; border-bottom: 1px solid #f1f1f1; position: relative;">
                     <div style="position: relative;">
                         <div class="contact-avatar"

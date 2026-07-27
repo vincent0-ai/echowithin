@@ -8695,8 +8695,25 @@
         if (!noteCard) return;
 
         const rawEl = noteCard.querySelector('.rendered-note');
-        const rawContent = rawEl ? rawEl.dataset.raw : '';
-        const renderedContent = rawEl ? rawEl.innerHTML : '';
+        if (!rawEl) return;
+        if (rawEl.hasAttribute('data-lazy')) {
+            if (window.showCustomAlert) {
+                window.showCustomAlert('This note is still loading. Please wait a moment and try again.', 'warning');
+            } else {
+                alert('This note is still loading. Please wait a moment and try again.');
+            }
+            return;
+        }
+        const rawContent = rawEl.dataset.raw || '';
+        const renderedContent = rawEl.innerHTML || '';
+        if (!rawContent.trim()) {
+            if (window.showCustomAlert) {
+                window.showCustomAlert('Unable to export this note — no content available.', 'warning');
+            } else {
+                alert('Unable to export this note — no content available.');
+            }
+            return;
+        }
         const noteRef = noteCard.querySelector('.note-ref-display');
         const reference = noteRef ? noteRef.textContent.trim() : '';
 

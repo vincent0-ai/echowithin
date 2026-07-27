@@ -1297,7 +1297,7 @@
                     onclick="toggleSection('countdowns-{{ bond.id }}', this); loadCountdowns('{{ bond.id }}')">
                     Countdowns
                 </button>
-                <button class="btn btn-bond-danger" onclick="breakBond('{{ bond.id }}', '{{ bond.partner_username }}')">
+                <button class="btn btn-bond-danger" data-bond-id="{{ bond.id }}" data-partner="{{ bond.partner_username }}" onclick="breakBond(this.dataset.bondId, this.dataset.partner)">
                     End Bond
                 </button>
             </div>
@@ -2743,6 +2743,18 @@
         } else {
             if (confirm('Remove this countdown?')) doDeleteCountdown(countdownId, bondId);
         }
+    }
+
+    function doDeleteCountdown(countdownId, bondId) {
+        fetch('/api/bonds/countdowns/' + countdownId, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                loadCountdowns(bondId);
+                if (window.showCustomToast) showCustomToast('Countdown removed.', 'success');
+            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
     }
 
     // --- App Lock PIN Modal & Verification ---

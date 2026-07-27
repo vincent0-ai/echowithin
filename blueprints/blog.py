@@ -964,7 +964,11 @@ def get_related_posts_json():
 @bp.route('/api/posts/<post_id>/status')
 def get_post_status(post_id):
     import main as m
-    post = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'status': 1})
+    from bson import errors
+    try:
+        post = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'status': 1})
+    except errors.InvalidId:
+        return jsonify({'error': 'Invalid post ID'}), 400
     if not post:
         return jsonify({'error': 'Post not found'}), 404
     return jsonify({'status': post.get('status', 'unknown')})
@@ -986,6 +990,7 @@ def post():
 
         title = request.form.get("title")
         content = request.form.get("content", '') or ''
+        content = m.bleach.clean(content, tags=[], strip=True)
         tags = request.form.getlist("tags")
         images_files = request.files.getlist('images') if request.files else []
         image_alts = request.form.getlist('image_alts') if request.form else []
@@ -1157,9 +1162,13 @@ def view_post(slug):
         except Exception as e:
             current_app.app_context().logger.error(f"Failed to update view tracking for post {slug}: {e}")
 
-    # Convert post content from Markdown to HTML
+    # Convert post content from Markdown to HTML, then strip dangerous tags
+    BLOG_ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'a', 'code', 'pre', 'blockquote',
+                         'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'img', 'hr']
+    BLOG_ALLOWED_ATTRS = {'a': ['href', 'title', 'rel', 'target'],
+                          'img': ['src', 'alt', 'title']}
     post_html = markdown.markdown(post.get('content', ''), extensions=['fenced_code', 'nl2br'])
-    # Linkify bare URLs in post content
+    post_html = bleach.clean(post_html, tags=BLOG_ALLOWED_TAGS, attributes=BLOG_ALLOWED_ATTRS)
     post_html = bleach.linkify(post_html, callbacks=[m._linkify_target_blank], parse_email=True)
     post['content'] = post_html
 
@@ -1678,6 +1687,7 @@ def update_post(post_id):
     video_status = post.get('video_status', 'none')
 
     content = content or ''
+    content = m.bleach.clean(content, tags=[], strip=True)
     has_existing_media = bool(image_urls) or bool(image_url) or bool(video_url)
     has_new_media = any(f and f.filename for f in images_files) or (video_file and video_file.filename)
 

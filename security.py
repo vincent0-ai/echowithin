@@ -341,6 +341,17 @@ def _get_user_fernet_v3(user_id: str):
         return None
 
 
+def _invalidate_user_fernet_v3(user_id: str):
+    """Remove the v3 Fernet cache entry for a user.
+
+    Call this after setting encryption_key_enc on a user document
+    (e.g. during a background migration from v2 to v3) so the next
+    encrypt/decrypt operation re-derives the Fernet from the fresh DEK.
+    """
+    uid = str(user_id)
+    database._user_fernet_v3_cache.pop(uid, None)
+
+
 # -- v3 DM envelope encryption --
 
 def generate_conversation_envelope_keys() -> dict:
@@ -401,6 +412,17 @@ def _get_dm_fernet_v3(user1_id: str, user2_id: str):
         return None
 
 
+def _invalidate_dm_fernet_v3(user1_id: str, user2_id: str):
+    """Remove the v3 DM Fernet cache entry for a conversation.
+
+    Call this after setting conversation_key_enc on a dm_permissions document
+    so the next encrypt/decrypt operation re-derives the Fernet from the fresh DEK.
+    """
+    uids = sorted([str(user1_id), str(user2_id)])
+    conv_id = f"{uids[0]}_{uids[1]}"
+    database._dm_fernet_v3_cache.pop(conv_id, None)
+
+
 def _get_dm_fernet(user1_id: str, user2_id: str) -> Fernet:
     """Derives a unique Fernet key for a conversation between two users."""
     # Deterministic order ensures both users derive the same key
@@ -451,6 +473,7 @@ def decrypt_dm(encrypted_content, user1_id, user2_id):
     except Exception as e:
         if isinstance(encrypted_content, str) and encrypted_content.startswith('gAAAAA'):
             _get_app().logger.warning(f"DM Decryption failed for user pair ({user1_id}, {user2_id}): {e}")
+            return '[Content unavailable \u2014 decryption error]'
         # Fallback to plaintext for legacy messages
         return encrypted_content
 
@@ -786,6 +809,9 @@ def admin_required(f):
 def owner_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            flash("You must be logged in to perform this action.", "danger")
+            return redirect(url_for('pages.dashboard'))
         post_id = kwargs.get('post_id')
         if not post_id:
             # This case should ideally not be reached if routes are set up correctly

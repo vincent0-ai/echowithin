@@ -19,7 +19,8 @@ load_dotenv()
 # Add the project root to the Python path to allow imports from main
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from main import app, send_log_email_job
+from main import app
+from notifications import send_log_email_job
 
 
 def enqueue_log_job():

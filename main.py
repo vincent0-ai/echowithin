@@ -59,7 +59,9 @@ except Exception:
 
 import datetime
 import hashlib
+import random
 import re
+import sys
 import time
 import threading
 
@@ -133,14 +135,11 @@ from notifications import (send_code, send_reset_code, send_account_deletion_cod
     send_admin_broadcast_push, send_push_notifications_for_new_post,
     send_fcm_notification_to_user, send_fcm_notifications_batch,
     send_push_notification_for_comment, process_image_for_nsfw,
-    send_log_email_job, send_ntfy_notification, check_image_for_nsfw)
+    send_log_email_job, send_ntfy_notification)
 import secrets
-from jigsawstack import JigsawStack
 from cachetools import cached, TTLCache
-import time
 import requests
 from werkzeug.utils import secure_filename
-import hashlib
 import hmac
 from slugify import slugify
 import cloudinary
@@ -148,7 +147,6 @@ import cloudinary.uploader
 import json
 from logging.handlers import RotatingFileHandler
 import markdown
-import re
 import html
 import difflib
 from pythonjsonlogger import jsonlogger
@@ -268,7 +266,7 @@ def cleanup_stale_global_state():
 
     for share_id, lock_data in list(note_locks.items()):
         lock_age = now_ts - lock_data.get('timestamp', now_ts)
-        if lock_age > 300:
+        if lock_age > 600:
             try:
                 socketio.emit('lock_released', {'share_id': share_id}, room=share_id)
             except Exception:
@@ -1192,145 +1190,6 @@ def inject_template_globals():
     return ctx
 
 
-def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None):
-    """Send FCM notification to all registered devices for a user (native app).
-    
-    This is called alongside web push to ensure both browser and native app users
-    receive notifications.
-    """
-    if not FIREBASE_INITIALIZED:
-        return 0
-    
-    try:
-        # Get all FCM tokens for this user
-        tokens = list(fcm_tokens_conf.find({'user_id': ObjectId(user_id_str)}))
-        if not tokens:
-            return 0
-        
-        # Get the user's current unread count for the badge
-        badge_count = _get_user_badge_count(user_id_str)
-
-        sent_count = 0
-        for token_doc in tokens:
-            try:
-                message = messaging.Message(
-                    notification=messaging.Notification(
-                        title=title,
-                        body=body,
-                    ),
-                    data={
-                        'url': url or '/',
-                        'click_action': url or '/',  # URL to open when clicked
-                        **(data or {})
-                    },
-                    token=token_doc['token'],
-                    android=messaging.AndroidConfig(
-                        priority='high',
-                        notification=messaging.AndroidNotification(
-                            icon='ic_stat_notification',
-                            color='#3e2217',
-                            channel_id='default',
-                            notification_count=badge_count,
-                        ),
-                    ),
-                    apns=messaging.APNSConfig(
-                        headers={'apns-priority': '10'},
-                        payload=messaging.APNSPayload(
-                            aps=messaging.Aps(
-                                alert=messaging.ApsAlert(
-                                    title=title,
-                                    body=body
-                                ),
-                                badge=badge_count,
-                                sound='default',
-                                mutable_content=True,
-                            ),
-                        ),
-                    ),
-                )
-                messaging.send(message)
-                sent_count += 1
-            except messaging.UnregisteredError:
-                # Token is invalid, remove it
-                fcm_tokens_conf.delete_one({'_id': token_doc['_id']})
-                app.logger.debug(f"Removed invalid FCM token for user {user_id_str}")
-            except Exception as e:
-                app.logger.error(f"FCM send error for user {user_id_str}: {e}")
-        
-        return sent_count
-    except Exception as e:
-        app.logger.error(f"Error in send_fcm_notification_to_user: {e}")
-        return 0
-
-
-def send_fcm_notifications_batch(tokens_list, title, body, url=None, data=None):
-    """Send FCM notifications to multiple tokens at once (for broadcast notifications)."""
-    if not FIREBASE_INITIALIZED or not tokens_list:
-        return 0
-    
-    try:
-        messages = []
-        for token_doc in tokens_list:
-            # Get per-user badge count for targeted notifications
-            token_user_id = token_doc.get('user_id')
-            badge_count = _get_user_badge_count(str(token_user_id)) if token_user_id else 1
-
-            messages.append(messaging.Message(
-                notification=messaging.Notification(
-                    title=title,
-                    body=body,
-                ),
-                data={
-                    'url': url or '/',
-                    'click_action': url or '/',
-                    **(data or {})
-                },
-                token=token_doc['token'],
-                android=messaging.AndroidConfig(
-                    priority='high',
-                    notification=messaging.AndroidNotification(
-                        icon='ic_stat_notification',
-                        color='#3e2217',
-                        channel_id='default',
-                        notification_count=badge_count,
-                    ),
-                ),
-                apns=messaging.APNSConfig(
-                    headers={'apns-priority': '10'},
-                    payload=messaging.APNSPayload(
-                        aps=messaging.Aps(
-                            alert=messaging.ApsAlert(
-                                title=title,
-                                body=body
-                            ),
-                            badge=badge_count,
-                            sound='default',
-                            mutable_content=True,
-                        ),
-                    ),
-                ),
-            ))
-        
-        # Send in batches of 500 (FCM limit)
-        sent_count = 0
-        for i in range(0, len(messages), 500):
-            batch = messages[i:i+500]
-            response = messaging.send_each(batch)
-            sent_count += response.success_count
-            
-            # Remove failed tokens
-            for idx, send_response in enumerate(response.responses):
-                if not send_response.success:
-                    if hasattr(send_response, 'exception') and isinstance(send_response.exception, messaging.UnregisteredError):
-                        fcm_tokens_conf.delete_one({'_id': tokens_list[i + idx]['_id']})
-        
-        return sent_count
-    except Exception as e:
-        app.logger.error(f"Error in send_fcm_notifications_batch: {e}")
-        return 0
-
-
-
 @rq.job
 def reindex_typesense_job():
     """Background job to reindex all posts into Typesense."""
@@ -1339,78 +1198,6 @@ def reindex_typesense_job():
         app.logger.info(f'Typesense posts reindex job finished ({total} docs)')
     except Exception as e:
         app.logger.error(f'Typesense reindex job failed: {e}', exc_info=True)
-
-
-
-@rq.job
-def send_log_email_job():
-    """
-    A background job that sends the contents of the log file via email
-    and then rotates the log file.
-    """
-    log_file_path = 'echowithin.log'
-    if not os.path.exists(log_file_path) or os.path.getsize(log_file_path) == 0:
-        app.logger.info("Log file is empty or does not exist. Skipping email.")
-        return
-
-    try:
-        with app.app_context():
-            developer_email = get_env_variable('MY_EMAIL')
-            msg = Message(
-                subject=f"EchoWithin Weekly Log Report - {datetime.date.today().isoformat()}",
-                sender=get_env_variable('MAIL_USERNAME'),
-                recipients=[developer_email]
-            )
-            msg.body = "Attached is the latest log file from the EchoWithin application."
-
-            with open(log_file_path, 'rb') as f:
-                msg.attach(
-                    "echowithin.log",
-                    "text/plain",
-                    f.read()
-                )
-
-            mail.send(msg)
-            app.logger.info(f"Log file email sent to {developer_email}.")
-    except Exception as e:
-        app.logger.error(f"Failed to send log file email: {e}", exc_info=True)
-
-
-@rq.job
-def send_ntfy_notification(message, title, tags=""):
-    """Sends a push notification to an ntfy topic as a background job."""
-    # Use os.environ.get to avoid raising an exception when not configured
-    ntfy_topic = os.environ.get('NTFY_TOPIC')
-    if not ntfy_topic:
-        app.logger.info("NTFY_TOPIC not set, skipping notification.")
-        return
-
-    try:
-        headers = {}
-        if title:
-            headers['Title'] = title
-        if tags:
-            headers['Tags'] = tags
-
-        # Optional basic auth for ntfy (if the topic requires auth)
-        ntfy_user = os.environ.get('NTFY_USERNAME')
-        ntfy_pass = os.environ.get('NTFY_PASSWORD')
-        auth = (ntfy_user, ntfy_pass) if ntfy_user and ntfy_pass else None
-
-        resp = requests.post(
-            f"https://ntfy.sh/{ntfy_topic}",
-            data=message.encode('utf-8'),
-            headers=headers,
-            timeout=5,
-            auth=auth
-        )
-
-        if resp.ok:
-            app.logger.info(f"Successfully sent ntfy notification to topic: {ntfy_topic} (status {resp.status_code})")
-        else:
-            app.logger.error(f"ntfy send failed for topic {ntfy_topic}: status={resp.status_code}, body={resp.text}")
-    except Exception as e:
-        app.logger.error(f"Failed to send ntfy notification: {e}", exc_info=True)
 
 
 

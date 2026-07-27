@@ -203,18 +203,13 @@ def personal_space():
     ]))
     personal_posts = []
     for note in personal_posts_raw:
-        # OPTIMIZATION: Defer decryption to the client via lazy-loading.
-        # Use the reference field if available; otherwise set content to empty
-        # and let JS fetch the preview via /api/v1/notes/previews after page load.
-        ref = (note.get('reference') or '').strip()
-        if ref:
-            note['content'] = ref
-            note['content_preview'] = True
-            note['lazy_content'] = False
-        else:
-            note['content'] = ''
-            note['content_preview'] = True
-            note['lazy_content'] = True  # Flag: JS will fetch this note's preview
+        # Decrypt note content on the server side.  _decrypt_note_record
+        # uses Redis caching so repeated page loads are fast even with
+        # many notes, and this guarantees preview text is immediately
+        # visible in every note card without waiting for a lazy fetch.
+        note['content'] = m._decrypt_note_record(note) or ''
+        note['content_preview'] = False
+        note['lazy_content'] = False
 
         # Determine if an update is available on the original note
         # PERF: Use timestamp-only comparison instead of decrypting both notes.

@@ -6283,6 +6283,9 @@
         // Render all saved notes on page load
         function renderAllNotes() {
             document.querySelectorAll('.rendered-note').forEach(el => {
+                // Skip lazy-loaded notes – their content is fetched asynchronously
+                // and replacing the shimmer placeholder early would blank the card.
+                if (el.dataset.lazy === 'true') return;
                 const rawContent = el.dataset.raw || '';
                 const textarea = document.createElement('textarea');
                 textarea.innerHTML = rawContent;

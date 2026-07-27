@@ -508,7 +508,8 @@ def bonds_page():
         nudge_used = nudge_data.get(nudge_key, 0) if nudge_data.get('date') == today_str else 0
         nudge_remaining = max(0, max_nudges - nudge_used)
 
-        streak_shield_used_this_week = bond.get('streak_shield', {}).get('week_iso') == current_week_iso
+        streak_shield = bond.get('streak_shield') or {}
+        streak_shield_used_this_week = streak_shield.get('week_iso') == current_week_iso
 
         bonds_data.append({
             'id': str(bond['_id']),

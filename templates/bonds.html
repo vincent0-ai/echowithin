@@ -2059,16 +2059,22 @@
     // --- Goals ---
     function loadGoals(bondId) {
         const container = document.getElementById('goals-list-' + bondId);
+        if (!container) return;
         fetch('/api/bonds/' + bondId + '/goals')
             .then(r => r.json())
             .then(data => {
+                const el = document.getElementById('goals-list-' + bondId);
+                if (!el) return;
                 if (!data.goals || data.goals.length === 0) {
-                    container.innerHTML = '<div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
+                    el.innerHTML = '<div style="color: #999; font-size: 0.85rem; text-align: center; padding: 1rem;">No goals yet. Propose one to get started.</div>';
                     return;
                 }
-                container.innerHTML = data.goals.map(g => renderGoalCard(g, bondId)).join('');
+                el.innerHTML = data.goals.map(g => renderGoalCard(g, bondId)).join('');
             })
-            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load goals.</div>'; });
+            .catch(() => {
+                const el = document.getElementById('goals-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load goals.</div>';
+            });
     }
 
     function renderGoalCard(g, bondId) {
@@ -2398,14 +2404,17 @@
     // --- Journal ---
     function loadJournal(bondId) {
         const container = document.getElementById('journal-list-' + bondId);
+        if (!container) return;
         fetch('/api/bonds/' + bondId + '/journal')
             .then(r => r.json())
             .then(data => {
+                const el = document.getElementById('journal-list-' + bondId);
+                if (!el) return;
                 if (!data.entries || data.entries.length === 0) {
-                    container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:1rem;">No journal entries yet. Write the first one.</div>';
+                    el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:1rem;">No journal entries yet. Write the first one.</div>';
                     return;
                 }
-                container.innerHTML = data.entries.map(e => {
+                el.innerHTML = data.entries.map(e => {
                     const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
                     const dateStr = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
                     const isAuthor = e.author_id === currentUserId;
@@ -2432,7 +2441,10 @@
                         '</div></div></div>';
                 }).join('');
             })
-            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>'; });
+            .catch(() => {
+                const el = document.getElementById('journal-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>';
+            });
     }
 
     function createJournalEntry(bondId) {
@@ -2555,12 +2567,17 @@
 
     function loadMood(bondId) {
         const container = document.getElementById('mood-content-' + bondId);
+        if (!container) return;
         fetch('/api/bonds/' + bondId + '/mood')
             .then(r => r.json())
             .then(data => {
-                renderMoodSection(bondId, container, data);
+                const el = document.getElementById('mood-content-' + bondId);
+                if (el) renderMoodSection(bondId, el, data);
             })
-            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load mood.</div>'; });
+            .catch(() => {
+                const el = document.getElementById('mood-content-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load mood.</div>';
+            });
     }
 
     function getMoodInfo(moodKey) {
@@ -2575,6 +2592,7 @@
     }
 
     function renderMoodSection(bondId, container, data) {
+        if (!container) return;
         let html = '';
 
         if (data.my_mood && data.revealed) {
@@ -2621,6 +2639,7 @@
 
     function selectAndLogMood(bondId, mood, btn) {
         const picker = document.getElementById('mood-picker-' + bondId);
+        if (!picker) return;
         picker.querySelectorAll('.mood-btn').forEach(b => {
             b.classList.remove('selected');
             b.disabled = true;
@@ -2637,26 +2656,34 @@
                 loadMood(bondId);
             } else {
                 if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-                picker.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
+                const p = document.getElementById('mood-picker-' + bondId);
+                if (p) p.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
             }
         }).catch(() => {
             if (window.showCustomAlert) showCustomAlert('Failed to log mood.', 'danger');
-            picker.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
+            const p = document.getElementById('mood-picker-' + bondId);
+            if (p) p.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
         });
     }
 
     // --- QotD ---
     function loadQotd(bondId) {
         const container = document.getElementById('qotd-content-' + bondId);
+        if (!container) return;
         fetch('/api/bonds/' + bondId + '/qotd')
             .then(r => r.json())
             .then(data => {
-                renderQotdSection(bondId, container, data);
+                const el = document.getElementById('qotd-content-' + bondId);
+                if (el) renderQotdSection(bondId, el, data);
             })
-            .catch(() => { container.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load question.</div>'; });
+            .catch(() => {
+                const el = document.getElementById('qotd-content-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load question.</div>';
+            });
     }
 
     function renderQotdSection(bondId, container, data) {
+        if (!container) return;
         let html = '';
         if (data.is_archived_bond && !data.has_question) {
             html += '<div style="color:var(--text-muted); font-size:0.88rem; text-align:center; padding:1rem; line-height:1.45;">This bond has ended and is in read-only memory archive.</div>';
@@ -2797,8 +2824,10 @@
         fetch('/api/bonds/' + bondId + '/qotd/history')
             .then(r => r.json())
             .then(d => {
+                const el = document.getElementById('qotd-history-' + bondId);
+                if (!el) return;
                 if (!d.history || d.history.length === 0) {
-                    historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions found in history.</div>';
+                    el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions found in history.</div>';
                     return;
                 }
                 let html = '';
@@ -2833,9 +2862,10 @@
                     html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
                     html += '</div></div>';
                 });
-                historyContainer.innerHTML = html;
+                el.innerHTML = html;
             }).catch(function () {
-                historyContainer.innerHTML = '<div style="color:#c62828;">Failed to load QotD history.</div>';
+                const el = document.getElementById('qotd-history-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load QotD history.</div>';
             });
     }
 
@@ -2863,11 +2893,13 @@
         fetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort)
             .then(function(r) { return r.json(); })
             .then(function(d) {
+                var el = document.getElementById('album-grid-' + bondId);
+                if (!el) return;
                 if (!d.success || !d.photos || d.photos.length === 0) {
                     bondAlbumState[bondId].photos = [];
                     var countEl = document.getElementById('album-count-' + bondId);
                     if (countEl) countEl.textContent = '0 photos';
-                    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
                     return;
                 }
 
@@ -2893,10 +2925,11 @@
                     html += '</div></div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
             .catch(function() {
-                container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;padding:0.6rem;">Failed to load album photos.</div>';
+                var el = document.getElementById('album-grid-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;padding:0.6rem;">Failed to load album photos.</div>';
             });
     }
 
@@ -3237,8 +3270,10 @@
         fetch('/api/bonds/' + bondId + '/bucketlist')
             .then(r => r.json())
             .then(d => {
+                var el = document.getElementById('bucketlist-container-' + bondId);
+                if (!el) return;
                 if (!d.items || d.items.length === 0) {
-                    container.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No bucket list items yet. Dream up something to do together!</div>';
+                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No bucket list items yet. Dream up something to do together!</div>';
                     return;
                 }
                 var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
@@ -3265,9 +3300,12 @@
                     html += '</div></div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
-            .catch(function() { container.innerHTML = '<div style="color:#c62828;">Failed to load bucket list.</div>'; });
+            .catch(function() {
+                var el = document.getElementById('bucketlist-container-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load bucket list.</div>';
+            });
     }
 
     function showAddBucketlistForm(bondId) {
@@ -3341,8 +3379,10 @@
         fetch('/api/bonds/' + bondId + '/recommendations')
             .then(r => r.json())
             .then(d => {
+                var el = document.getElementById('recs-list-' + bondId);
+                if (!el) return;
                 if (!d.recommendations || d.recommendations.length === 0) {
-                    container.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No recommendations yet. Share something you love!</div>';
+                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No recommendations yet. Share something you love!</div>';
                     return;
                 }
                 var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
@@ -3367,9 +3407,12 @@
                     html += '</div></div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
-            .catch(function() { container.innerHTML = '<div style="color:#c62828;">Failed to load recommendations.</div>'; });
+            .catch(function() {
+                var el = document.getElementById('recs-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load recommendations.</div>';
+            });
     }
 
     function showAddRecommendationForm(bondId) {
@@ -3435,8 +3478,10 @@
         fetch('/api/bonds/' + bondId + '/pulses')
             .then(r => r.json())
             .then(d => {
+                var el = document.getElementById('pulses-list-' + bondId);
+                if (!el) return;
                 if (!d.pulses || d.pulses.length === 0) {
-                    container.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No pulses yet. Send one anytime!</div>';
+                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No pulses yet. Send one anytime!</div>';
                     return;
                 }
                 var html = '<div style="display:flex;flex-wrap:wrap;gap:0.35rem;">';
@@ -3449,9 +3494,12 @@
                         + '</div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
-            .catch(function() { container.innerHTML = '<div style="color:#c62828;">Failed to load pulses.</div>'; });
+            .catch(function() {
+                var el = document.getElementById('pulses-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load pulses.</div>';
+            });
     }
 
     function sendPulse(bondId, emoji) {
@@ -3539,8 +3587,10 @@
         fetch('/api/bonds/' + bondId + '/habits')
             .then(r => r.json())
             .then(d => {
+                const el = document.getElementById('habits-list-' + bondId);
+                if (!el) return;
                 if (!d.habits || d.habits.length === 0) {
-                    container.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No active habits yet. Add a daily habit above to build consistency together!</div>';
+                    el.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No active habits yet. Add a daily habit above to build consistency together!</div>';
                     return;
                 }
                 let html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
@@ -3558,10 +3608,11 @@
                         '</div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
             .catch(() => {
-                container.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load habits.</div>';
+                const el = document.getElementById('habits-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load habits.</div>';
             });
     }
 
@@ -3636,8 +3687,10 @@
         fetch('/api/bonds/' + bondId + '/insights')
             .then(r => r.json())
             .then(d => {
+                const el = document.getElementById('insights-content-' + bondId);
+                if (!el) return;
                 if (d.error) {
-                    container.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">' + escHtml(d.error) + '</div>';
+                    el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">' + escHtml(d.error) + '</div>';
                     return;
                 }
                 const rcp = d.recap || {};
@@ -3682,10 +3735,11 @@
                 }
 
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
             .catch(() => {
-                container.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load insights.</div>';
+                const el = document.getElementById('insights-content-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load insights.</div>';
             });
     }
 
@@ -3754,8 +3808,10 @@
         fetch('/api/bonds/' + bondId + '/countdowns')
             .then(function(r) { return r.json(); })
             .then(function(d) {
+                var el = document.getElementById('countdowns-list-' + bondId);
+                if (!el) return;
                 if (!d.countdowns || d.countdowns.length === 0) {
-                    container.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No countdowns yet. Add one to start counting down together!</div>';
+                    el.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No countdowns yet. Add one to start counting down together!</div>';
                     return;
                 }
                 var html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
@@ -3791,10 +3847,11 @@
                         '</div>';
                 });
                 html += '</div>';
-                container.innerHTML = html;
+                el.innerHTML = html;
             })
             .catch(function() {
-                container.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load countdowns.</div>';
+                var el = document.getElementById('countdowns-list-' + bondId);
+                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load countdowns.</div>';
             });
     }
 
@@ -4040,8 +4097,16 @@
             if (d.success) {
                 const el = document.getElementById('bond-' + bondId);
                 if (el) el.remove();
+
+                const pastSection = document.querySelector('.bonds-section-past');
+                if (pastSection && pastSection.querySelectorAll('.bond-card').length === 0) {
+                    pastSection.remove();
+                }
+
                 if (window.showCustomToast) showCustomToast('Past bond removed from archive.', 'success');
             } else if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to remove', 'danger');
+        }).catch(function() {
+            if (window.showCustomAlert) showCustomAlert('Failed to remove past bond from archive.', 'danger');
         });
     }
 </script>

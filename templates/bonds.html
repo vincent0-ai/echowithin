@@ -2817,22 +2817,6 @@
             }
         });
     }
-                        }
-                    }
-
-                    html += '<div class="qotd-history-item">';
-                    html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' &bull; ' + escHtml(item.category) + '</div>';
-                    html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
-                    html += '<div class="qotd-reveal">';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + escHtml(myAns) + '</div></div>';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
-                    html += '</div></div>';
-                });
-                historyContainer.innerHTML = html;
-            }).catch(() => {
-                historyContainer.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;">Failed to load history.</div>';
-            });
-    }
 
     function toggleQotdHistory(bondId) {
         const historyContainer = document.getElementById('qotd-history-' + bondId);

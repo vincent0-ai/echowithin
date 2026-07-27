@@ -3247,6 +3247,25 @@
         });
     }
 
+    // Expose functions globally for inline HTML event attributes
+    window.loadAlbum = loadAlbum;
+    window.setAlbumCategory = setAlbumCategory;
+    window.changeAlbumSort = changeAlbumSort;
+    window.openAlbumUploadModal = openAlbumUploadModal;
+    window.closeAlbumUploadModal = closeAlbumUploadModal;
+    window.handleAlbumFileSelect = handleAlbumFileSelect;
+    window.submitAlbumUploadModal = submitAlbumUploadModal;
+    window.openBondPhotoLightbox = openBondPhotoLightbox;
+    window.navigateLightbox = navigateLightbox;
+    window.closeBondPhotoLightbox = closeBondPhotoLightbox;
+    window.toggleLightboxPhotoPin = toggleLightboxPhotoPin;
+    window.downloadLightboxPhoto = downloadLightboxPhoto;
+    window.openLightboxPhotoEdit = openLightboxPhotoEdit;
+    window.closeAlbumEditModal = closeAlbumEditModal;
+    window.submitAlbumEditModal = submitAlbumEditModal;
+    window.deleteLightboxPhoto = deleteLightboxPhoto;
+    window.deleteAlbumPhoto = deleteAlbumPhoto;
+
     // Keyboard Shortcuts for Lightbox Navigation
     document.addEventListener('keydown', function(e) {
         var modal = document.getElementById('bond-album-lightbox-modal');

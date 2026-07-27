@@ -3420,13 +3420,17 @@
                     var icon = iconMap[r.media_type] || '📌';
                     var rObj = r.created_at ? (window.parseServerTime ? window.parseServerTime(r.created_at) : new Date(r.created_at)) : null;
                     var rDateStr = rObj && !isNaN(rObj) ? ' · ' + rObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+                    var hrefUrl = r.link ? r.link.trim() : '';
+                    if (hrefUrl && !/^https?:\/\//i.test(hrefUrl) && !hrefUrl.startsWith('//')) {
+                        hrefUrl = 'https://' + hrefUrl;
+                    }
 
                     html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:flex-start;gap:0.5rem;">'
                         + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
                         + '<div style="flex:1;min-width:0;">'
                         + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
                         + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
-                        + (r.link ? '<a href="' + r.link + '" target="_blank" rel="noopener" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
+                        + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
                         + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
                         + '</div>'
                         + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';

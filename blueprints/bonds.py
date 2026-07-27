@@ -3642,6 +3642,8 @@ def api_bond_recommendations_create(bond_id):
             media_type = 'other'
 
         link = (data.get('link', '') or '').strip()[:500]
+        if link and not (link.startswith('http://') or link.startswith('https://') or link.startswith('//')):
+            link = 'https://' + link
         note = (data.get('note', '') or '').strip()[:300]
 
         now = datetime.datetime.now(datetime.timezone.utc)

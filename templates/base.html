@@ -131,10 +131,9 @@
             /* Hidden by default */
             justify-content: center;
             align-items: center;
-            /* Higher than the note preview overlay (1100) so version history,
-               share, delete, etc. always render above the fullscreen preview
-               when triggered from the preview's action toolbar. */
-            z-index: 1200;
+            /* Higher than full-screen lightboxes & overlays (10000+) so confirmation modals
+               always render above photo lightboxes, previews, and dialogs. */
+            z-index: 200000;
         }
 
         .custom-modal {
@@ -611,7 +610,7 @@
         </div>
         <!-- Toast container for custom alerts -->
         <div id="custom-toast-container"
-            style="position: fixed; top: 20px; right: 20px; z-index:1200; display:flex; flex-direction:column; gap:10px;">
+            style="position: fixed; top: 20px; right: 20px; z-index:200000; display:flex; flex-direction:column; gap:10px;">
         </div>
 
         <footer class="footer">

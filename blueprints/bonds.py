@@ -2991,7 +2991,7 @@ def api_bond_countdown_delete(countdown_id):
 @bp.route('/api/bonds/<bond_id>/album/photos', methods=['GET'])
 @login_required
 def api_bond_album_list(bond_id):
-    """List all photos in the bond's shared album."""
+    """List all photos in the bond's shared album with category filter & sorting."""
     import main as m
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
@@ -3001,9 +3001,25 @@ def api_bond_album_list(bond_id):
         if not _is_bond_participant(bond_doc, user_id_str):
             return jsonify({'error': 'Not authorized'}), 403
 
-        photos = list(m.bond_album_photos_conf.find(
-            {'bond_id': ObjectId(bond_id)}
-        ).sort('uploaded_at', -1).limit(100))
+        category = request.args.get('category', 'all').strip().lower()
+        sort_mode = request.args.get('sort', 'date_desc').strip().lower()
+
+        query_filter = {'bond_id': ObjectId(bond_id)}
+        if category and category != 'all':
+            query_filter['category'] = category
+
+        # Sort modes: date_desc, date_asc, uploaded_desc, uploaded_asc, pinned
+        sort_spec = [('is_pinned', -1), ('date_taken', -1)]
+        if sort_mode == 'date_asc':
+            sort_spec = [('is_pinned', -1), ('date_taken', 1)]
+        elif sort_mode == 'uploaded_desc':
+            sort_spec = [('is_pinned', -1), ('uploaded_at', -1)]
+        elif sort_mode == 'uploaded_asc':
+            sort_spec = [('is_pinned', -1), ('uploaded_at', 1)]
+        elif sort_mode == 'pinned':
+            sort_spec = [('is_pinned', -1), ('date_taken', -1)]
+
+        photos = list(m.bond_album_photos_conf.find(query_filter).sort(sort_spec).limit(200))
 
         result = []
         for p in photos:
@@ -3011,20 +3027,39 @@ def api_bond_album_list(bond_id):
                 decrypted_url = m.decrypt_bond_data(p.get('url', ''), bond_id)
             except Exception:
                 decrypted_url = None
+
+            uploaded_by_id = str(p.get('uploaded_by', ''))
+            uploader_name = 'Partner'
+            if uploaded_by_id == user_id_str:
+                uploader_name = 'You'
+            else:
+                uploader_doc = m.users_conf.find_one({'_id': ObjectId(uploaded_by_id)}) if uploaded_by_id else None
+                if uploader_doc:
+                    uploader_name = _clean_username(uploader_doc.get('username', 'Partner'))
+
             photo = {
                 'id': str(p['_id']),
                 'title': p.get('title', ''),
+                'description': p.get('description', ''),
                 'category': p.get('category', 'other'),
                 'date_taken': _format_datetime(p.get('date_taken')),
                 'url': decrypted_url,
-                'uploaded_by': str(p['uploaded_by']),
-                'uploaded_by_me': str(p['uploaded_by']) == user_id_str,
+                'uploaded_by': uploaded_by_id,
+                'uploaded_by_name': uploader_name,
+                'uploaded_by_me': uploaded_by_id == user_id_str,
                 'uploaded_at': _format_datetime(p.get('uploaded_at')),
+                'is_pinned': bool(p.get('is_pinned', False)),
             }
             if decrypted_url:
                 result.append(photo)
 
-        return jsonify({'success': True, 'photos': result})
+        return jsonify({
+            'success': True,
+            'photos': result,
+            'total_count': len(result),
+            'sort': sort_mode,
+            'category': category
+        })
     except Exception as e:
         current_app.logger.error(f"Album list error: {e}")
         return jsonify({'error': 'Failed to load album'}), 500
@@ -3032,10 +3067,11 @@ def api_bond_album_list(bond_id):
 
 @bp.route('/api/bonds/<bond_id>/album/upload', methods=['POST'])
 @login_required
-@limits(calls=15, period=60)
+@limits(calls=30, period=60)
 def api_bond_album_upload(bond_id):
-    """Upload a photo to the bond's shared album."""
+    """Upload photos (single or batch) to the bond's shared album with past date support and local storage fallback."""
     import main as m
+    import uuid
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
         if not bond_doc:
@@ -3045,59 +3081,99 @@ def api_bond_album_upload(bond_id):
             return jsonify({'error': 'Not authorized'}), 403
 
         title = (request.form.get('title', '') or '')[:100].strip()
-        category = request.form.get('category', 'other').strip()
-        if category not in ('memory', 'milestone', 'fun', 'travel', 'other'):
+        description = (request.form.get('description', '') or '')[:500].strip()
+        category = (request.form.get('category', 'other') or 'other').strip().lower()
+        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'other'):
             category = 'other'
 
         date_taken_str = request.form.get('date_taken', '').strip()
-        date_taken = None
-        if date_taken_str:
-            try:
-                date_taken = datetime.datetime.fromisoformat(date_taken_str)
-                if date_taken.tzinfo is None:
-                    date_taken = date_taken.replace(tzinfo=datetime.timezone.utc)
-            except ValueError:
-                pass
+        date_taken = m.parse_iso_utc(date_taken_str) if date_taken_str else None
         if not date_taken:
             date_taken = datetime.datetime.now(datetime.timezone.utc)
 
-        # Handle multipart file upload
-        file = request.files.get('file')
-        if not file or not file.filename:
-            return jsonify({'error': 'No photo file provided.'}), 400
+        # Handle multiple file uploads
+        files = request.files.getlist('files') or request.files.getlist('file')
+        if not files and request.files.get('file'):
+            files = [request.files.get('file')]
 
-        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-        if ext not in m.ALLOWED_IMAGE_EXTENSIONS:
-            return jsonify({'error': f'Unsupported file type. Allowed: {", ".join(m.ALLOWED_IMAGE_EXTENSIONS)}'}), 400
-
-        file.seek(0, os.SEEK_END)
-        size = file.tell()
-        file.seek(0)
-        if size > m.MAX_IMAGE_SIZE:
-            return jsonify({'error': f'Photo too large. Maximum size: {m.MAX_IMAGE_SIZE // (1024*1024)} MB.'}), 400
+        if not files or not any(f and f.filename for f in files):
+            return jsonify({'error': 'No photo files provided.'}), 400
 
         now = datetime.datetime.now(datetime.timezone.utc)
-        try:
-            upload_result = m.cloudinary.uploader.upload(file, folder='echowithin_bond_album', resource_type='image',
-                transformation=[{'width': 1600, 'height': 1600, 'crop': 'limit'}, {'quality': 'auto', 'fetch_format': 'auto'}])
-            photo_url = upload_result.get('secure_url', '')
-        except Exception as upload_err:
-            current_app.logger.error(f"Cloudinary upload failed for bond album: {upload_err}")
-            return jsonify({'error': 'Photo upload service is temporarily unavailable.'}), 503
+        uploaded_photos = []
 
-        if not photo_url:
-            return jsonify({'error': 'Upload failed — no URL returned.'}), 500
+        for file in files:
+            if not file or not file.filename:
+                continue
 
-        encrypted_url = m.encrypt_bond_data(photo_url, bond_id)
-        result = m.bond_album_photos_conf.insert_one({
-            'bond_id': ObjectId(bond_id),
-            'title': title,
-            'category': category,
-            'date_taken': date_taken,
-            'url': encrypted_url,
-            'uploaded_by': ObjectId(user_id_str),
-            'uploaded_at': now,
-        })
+            ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+            if ext not in m.ALLOWED_IMAGE_EXTENSIONS:
+                continue
+
+            file.seek(0, os.SEEK_END)
+            size = file.tell()
+            file.seek(0)
+            if size > m.MAX_IMAGE_SIZE or size == 0:
+                continue
+
+            photo_url = None
+            # Attempt Cloudinary upload first
+            try:
+                upload_result = m.cloudinary.uploader.upload(
+                    file,
+                    folder='echowithin_bond_album',
+                    resource_type='image',
+                    transformation=[
+                        {'width': 1600, 'height': 1600, 'crop': 'limit'},
+                        {'quality': 'auto', 'fetch_format': 'auto'}
+                    ]
+                )
+                photo_url = upload_result.get('secure_url', '')
+            except Exception as upload_err:
+                current_app.logger.warning(f"Cloudinary upload failed for bond album, trying local fallback: {upload_err}")
+                photo_url = None
+
+            # Resilient Local File Storage Fallback
+            if not photo_url:
+                try:
+                    os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
+                    unique_filename = f"bond_album_{uuid.uuid4().hex[:12]}.{ext}"
+                    file.seek(0)
+                    save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
+                    file.save(save_path)
+                    photo_url = url_for('blog.uploaded_file', filename=unique_filename, _external=True)
+                except Exception as save_err:
+                    current_app.logger.error(f"Local file fallback upload failed: {save_err}")
+                    continue
+
+            if not photo_url:
+                continue
+
+            encrypted_url = m.encrypt_bond_data(photo_url, bond_id)
+            db_res = m.bond_album_photos_conf.insert_one({
+                'bond_id': ObjectId(bond_id),
+                'title': title,
+                'description': description,
+                'category': category,
+                'date_taken': date_taken,
+                'url': encrypted_url,
+                'uploaded_by': ObjectId(user_id_str),
+                'uploaded_at': now,
+                'is_pinned': False,
+            })
+
+            uploaded_photos.append({
+                'id': str(db_res.inserted_id),
+                'title': title,
+                'description': description,
+                'category': category,
+                'url': photo_url,
+                'uploaded_by_me': True,
+                'date_taken': _format_datetime(date_taken)
+            })
+
+        if not uploaded_photos:
+            return jsonify({'error': 'Failed to upload photos. Please check file format and size.'}), 400
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         m.socketio.emit('bond_album_updated', {
@@ -3105,27 +3181,116 @@ def api_bond_album_upload(bond_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        count = len(uploaded_photos)
+        notif_msg = f"{current_user.username} added {count} photo{'s' if count > 1 else ''} to your album"
         m.send_push_notification_to_user(
             partner_id,
-            f"{current_user.username} added a photo to your album",
-            title if title else "A new memory has been shared.",
+            notif_msg,
+            title if title else "New memories shared.",
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-album-{bond_id}'
         )
 
         return jsonify({
             'success': True,
-            'photo': {
-                'id': str(result.inserted_id),
-                'title': title,
-                'category': category,
-                'url': photo_url,
-                'uploaded_by_me': True,
-            }
+            'photos': uploaded_photos,
+            'count': count
         })
     except Exception as e:
         current_app.logger.error(f"Album upload error: {e}")
         return jsonify({'error': 'Failed to upload photo'}), 500
+
+
+@bp.route('/api/bonds/album/photo/<photo_id>/pin', methods=['POST'])
+@login_required
+def api_bond_album_pin(photo_id):
+    """Toggle pinned status for a bond album photo."""
+    import main as m
+    try:
+        photo = m.bond_album_photos_conf.find_one({'_id': ObjectId(photo_id)})
+        if not photo:
+            return jsonify({'error': 'Photo not found'}), 404
+
+        bond_id = str(photo['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        new_pinned = not bool(photo.get('is_pinned', False))
+        m.bond_album_photos_conf.update_one(
+            {'_id': ObjectId(photo_id)},
+            {'$set': {'is_pinned': new_pinned}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True, 'is_pinned': new_pinned})
+    except Exception as e:
+        current_app.logger.error(f"Album pin error: {e}")
+        return jsonify({'error': 'Failed to update pin state'}), 500
+
+
+@bp.route('/api/bonds/album/photo/<photo_id>', methods=['PUT'])
+@login_required
+def api_bond_album_update(photo_id):
+    """Update title, description, category, and date_taken of a photo."""
+    import main as m
+    try:
+        photo = m.bond_album_photos_conf.find_one({'_id': ObjectId(photo_id)})
+        if not photo:
+            return jsonify({'error': 'Photo not found'}), 404
+
+        bond_id = str(photo['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title', '') or '')[:100].strip()
+        description = (data.get('description', '') or '')[:500].strip()
+        category = (data.get('category', 'other') or 'other').strip().lower()
+        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'other'):
+            category = 'other'
+
+        update_fields = {
+            'title': title,
+            'description': description,
+            'category': category,
+        }
+
+        date_taken_str = data.get('date_taken')
+        if date_taken_str:
+            parsed_dt = m.parse_iso_utc(date_taken_str)
+            if parsed_dt:
+                update_fields['date_taken'] = parsed_dt
+
+        m.bond_album_photos_conf.update_one(
+            {'_id': ObjectId(photo_id)},
+            {'$set': update_fields}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Album update error: {e}")
+        return jsonify({'error': 'Failed to update photo details'}), 500
 
 
 @bp.route('/api/bonds/album/photo/<photo_id>', methods=['DELETE'])

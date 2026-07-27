@@ -140,6 +140,165 @@
         text-align: center;
     }
 
+    /* Bond Album & Lightbox Modern Platform Styling */
+    .album-chip {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-dark-color);
+        font-size: 0.72rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .album-chip:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+    .album-chip.active {
+        background: var(--primary-color);
+        color: #ffffff;
+        border-color: var(--primary-color);
+        font-weight: 600;
+    }
+    .album-photo-card {
+        position: relative;
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        cursor: pointer;
+    }
+    .album-photo-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px var(--shadow-color);
+        border-color: var(--primary-color);
+    }
+    .album-photo-card img {
+        width: 100%;
+        height: 125px;
+        object-fit: cover;
+        display: block;
+        transition: filter 0.15s ease;
+    }
+    .album-photo-card:hover img {
+        filter: brightness(0.95);
+    }
+    .album-pin-badge {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        background: rgba(0, 0, 0, 0.65);
+        color: #ffd700;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        backdrop-filter: blur(4px);
+        z-index: 2;
+    }
+    .album-cat-badge {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        background: rgba(0, 0, 0, 0.65);
+        color: #ffffff;
+        font-size: 0.62rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 10px;
+        font-weight: 500;
+        text-transform: capitalize;
+        backdrop-filter: blur(4px);
+        z-index: 2;
+    }
+
+    /* Photo Lightbox Overlay */
+    .bond-lightbox-backdrop, .bond-modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+    .bond-lightbox-container {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        max-width: 900px;
+        width: 95%;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    @media (min-width: 768px) {
+        .bond-lightbox-container {
+            flex-direction: row;
+        }
+    }
+    .bond-lightbox-media {
+        flex: 1.5;
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        min-height: 300px;
+        max-height: 70vh;
+        user-select: none;
+    }
+    .bond-lightbox-media img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+    .bond-lightbox-details {
+        flex: 1;
+        padding: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: var(--card-bg);
+        overflow-y: auto;
+    }
+    .lightbox-nav-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0, 0, 0, 0.5);
+        color: #ffffff;
+        border: none;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+        z-index: 5;
+    }
+    .lightbox-nav-btn:hover {
+        background: rgba(0, 0, 0, 0.85);
+    }
+    .lightbox-nav-prev { left: 10px; }
+    .lightbox-nav-next { right: 10px; }
+
     .mood-picker {
         display: flex;
         gap: 0.6rem;
@@ -1400,10 +1559,41 @@
 
             <!-- Shared Album Section -->
             <div class="bond-expand-section" id="album-{{ bond.id }}">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
-                    <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Shared Album</strong>
-                    <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.2rem 0.6rem;" onclick="showAddPhotoModal('{{ bond.id }}')">+ Add Photo</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Shared Album</strong>
+                        <span id="album-count-{{ bond.id }}" style="font-size: 0.75rem; color: var(--text-muted); background: var(--surface-bg); border: 1px solid var(--border-color); padding: 0.1rem 0.4rem; border-radius: 12px;">0 photos</span>
+                    </div>
+                    <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.7rem; border-radius: 6px;" onclick="openAlbumUploadModal('{{ bond.id }}')">+ Add Photos</button>
                 </div>
+
+                <!-- Album Toolbar: Category Chips & Sort Selector -->
+                <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.4rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <!-- Category Filter Chips -->
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;" id="album-cat-chips-{{ bond.id }}">
+                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)">All</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)">Memories</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)">Milestones</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)">Fun</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)">Travel</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)">Special</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)">Other</button>
+                    </div>
+
+                    <!-- Sort Arrangement Selector -->
+                    <div style="display: flex; align-items: center; gap: 0.4rem;">
+                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Sort:</label>
+                        <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer;">
+                            <option value="date_desc">Date Taken (Newest)</option>
+                            <option value="date_asc">Date Taken (Oldest)</option>
+                            <option value="uploaded_desc">Latest Uploaded</option>
+                            <option value="uploaded_asc">Oldest Uploaded</option>
+                            <option value="pinned">Pinned First</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Photo Grid -->
                 <div id="album-grid-{{ bond.id }}">
                     <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading photos...</div>
                 </div>
@@ -1671,6 +1861,167 @@
             <button class="btn btn-bond-secondary" onclick="closeGoalModal()">Cancel</button>
             <button class="btn btn-bond-primary" onclick="submitGoal()">Propose Goal</button>
         </div>
+<!-- Bond Album Upload Modal -->
+<div id="bond-album-upload-modal" class="bond-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAlbumUploadModal()">
+    <div class="bond-modal-content" style="max-width: 520px; width: 92%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem; box-shadow: 0 10px 30px var(--shadow-color); position: relative;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <strong style="font-size: 1rem; color: var(--primary-dark-color);">Add Photos to Album</strong>
+            <button type="button" onclick="closeAlbumUploadModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1;">&times;</button>
+        </div>
+
+        <form id="album-upload-form" onsubmit="submitAlbumUploadModal(event)">
+            <input type="hidden" id="upload-bond-id" value="">
+
+            <!-- Drag & Drop Zone / File Picker -->
+            <div id="album-dropzone" style="border: 2px dashed var(--border-color); border-radius: 8px; padding: 1.2rem; text-align: center; background: var(--surface-bg); cursor: pointer; margin-bottom: 1rem; transition: border-color 0.2s;" onclick="document.getElementById('album-file-input').click()">
+                <i class="fas fa-cloud-upload-alt" style="font-size: 1.8rem; color: var(--primary-color); margin-bottom: 0.4rem; display: block;"></i>
+                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-dark-color); display: block;">Click or drag photos here to upload</span>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Supports PNG, JPG, GIF, WEBP up to 10MB (Multiple selection enabled)</span>
+                <input type="file" id="album-file-input" multiple accept="image/*" style="display: none;" onchange="handleAlbumFileSelect(this.files)">
+            </div>
+
+            <!-- Selected Files Preview Container -->
+            <div id="album-files-preview" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; max-height: 110px; overflow-y: auto;"></div>
+
+            <!-- Memory Title -->
+            <div style="margin-bottom: 0.8rem;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Memory Title (Optional)</label>
+                <input type="text" id="album-upload-title" placeholder="e.g. Summer Beach Trip 2024" maxlength="100" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box;">
+            </div>
+
+            <!-- Description / Memory Note -->
+            <div style="margin-bottom: 0.8rem;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Memory Description / Note (Optional)</label>
+                <textarea id="album-upload-desc" placeholder="Write a short story or details about this memory..." maxlength="500" rows="2" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.2rem;">
+                <!-- Category Selector -->
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
+                    <select id="album-upload-cat" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
+                        <option value="memory">Memory</option>
+                        <option value="milestone">Milestone</option>
+                        <option value="fun">Fun</option>
+                        <option value="travel">Travel</option>
+                        <option value="special">Special</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <!-- Date Taken Picker (Allows Past Dates) -->
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Date Taken</label>
+                    <input type="date" id="album-upload-date" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box; cursor: pointer;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.6rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.9rem;" onclick="closeAlbumUploadModal()">Cancel</button>
+                <button type="submit" id="album-upload-submit-btn" class="btn btn-bond-primary" style="font-size: 0.8rem; padding: 0.4rem 1rem;">Upload Photos</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Photo Expanded Lightbox Modal -->
+<div id="bond-album-lightbox-modal" class="bond-lightbox-backdrop" style="display:none;" onclick="if(event.target===this) closeBondPhotoLightbox()">
+    <div class="bond-lightbox-container">
+        <!-- Close Button -->
+        <button type="button" onclick="closeBondPhotoLightbox()" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.6); color:#fff; border:none; width:32px; height:32px; border-radius:50%; font-size:1.2rem; cursor:pointer; z-index:20; display:flex; align-items:center; justify-content:center;">&times;</button>
+
+        <!-- Media View with Prev/Next Navigation -->
+        <div class="bond-lightbox-media">
+            <button type="button" class="lightbox-nav-btn lightbox-nav-prev" onclick="navigateLightbox(-1)">&lsaquo;</button>
+            <img id="lightbox-img" src="" alt="Expanded Memory">
+            <button type="button" class="lightbox-nav-btn lightbox-nav-next" onclick="navigateLightbox(1)">&rsaquo;</button>
+        </div>
+
+        <!-- Photo Details Sidebar -->
+        <div class="bond-lightbox-details">
+            <div>
+                <!-- Category & Pinned Badges -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
+                    <span id="lightbox-cat-badge" style="font-size: 0.72rem; font-weight: 600; text-transform: uppercase; background: var(--surface-bg); border: 1px solid var(--border-color); color: var(--primary-color); padding: 0.2rem 0.6rem; border-radius: 12px;">Memory</span>
+                    <button type="button" id="lightbox-pin-btn" onclick="toggleLightboxPhotoPin()" style="background: none; border: 1px solid var(--border-color); padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.3rem;">
+                        <i class="fas fa-thumbtack"></i> <span id="lightbox-pin-label">Pin</span>
+                    </button>
+                </div>
+
+                <!-- Title & Description -->
+                <h3 id="lightbox-title" style="margin: 0 0 0.4rem 0; font-size: 1.1rem; color: var(--text-dark-color); word-break: break-word;">Untitled Memory</h3>
+                <p id="lightbox-desc" style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; word-break: break-word; white-space: pre-line;"></p>
+
+                <!-- Metadata List -->
+                <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 0.8rem; margin-top: 0.8rem;">
+                    <div style="margin-bottom: 0.3rem;"><strong style="color: var(--text-dark-color);">Date Taken:</strong> <span id="lightbox-date-taken">-</span></div>
+                    <div style="margin-bottom: 0.3rem;"><strong style="color: var(--text-dark-color);">Uploaded By:</strong> <span id="lightbox-uploaded-by">-</span></div>
+                    <div><strong style="color: var(--text-dark-color);">Uploaded On:</strong> <span id="lightbox-uploaded-at">-</span></div>
+                </div>
+            </div>
+
+            <!-- Action Toolbar (Download, Edit, Delete) -->
+            <div style="display: flex; gap: 0.5rem; margin-top: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1;" onclick="downloadLightboxPhoto()">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button type="button" id="lightbox-edit-btn" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1;" onclick="openLightboxPhotoEdit()">
+                    <i class="fas fa-edit"></i> Edit
+                </button>
+                <button type="button" id="lightbox-delete-btn" class="btn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; background: #c62828; color: #fff; border: none; border-radius: 6px; cursor: pointer; flex: 1;" onclick="deleteLightboxPhoto()">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Photo Details Modal -->
+<div id="bond-album-edit-modal" class="bond-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAlbumEditModal()">
+    <div class="bond-modal-content" style="max-width: 460px; width: 90%; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.2rem; box-shadow: 0 10px 30px var(--shadow-color);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.6rem;">
+            <strong style="font-size: 1rem; color: var(--primary-dark-color);">Edit Memory Details</strong>
+            <button type="button" onclick="closeAlbumEditModal()" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; line-height:1;">&times;</button>
+        </div>
+
+        <form id="album-edit-form" onsubmit="submitAlbumEditModal(event)">
+            <input type="hidden" id="edit-photo-id" value="">
+            <input type="hidden" id="edit-bond-id" value="">
+
+            <div style="margin-bottom: 0.8rem;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Title</label>
+                <input type="text" id="edit-photo-title" maxlength="100" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box;">
+            </div>
+
+            <div style="margin-bottom: 0.8rem;">
+                <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Description / Story</label>
+                <textarea id="edit-photo-desc" maxlength="500" rows="3" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1.2rem;">
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
+                    <select id="edit-photo-cat" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
+                        <option value="memory">Memory</option>
+                        <option value="milestone">Milestone</option>
+                        <option value="fun">Fun</option>
+                        <option value="travel">Travel</option>
+                        <option value="special">Special</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Date Taken</label>
+                    <input type="date" id="edit-photo-date" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); box-sizing: border-box; cursor: pointer;">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.6rem; justify-content: flex-end;">
+                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.9rem;" onclick="closeAlbumEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-bond-primary" style="font-size: 0.8rem; padding: 0.4rem 1rem;">Save Changes</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -2489,93 +2840,393 @@
     }
 
     // ===================================================================
-    // Shared Album Functions
+    // Shared Album & Photo Lightbox Functions
     // ===================================================================
-    function loadAlbum(bondId) {
+    var bondAlbumState = {}; // Stores { category: 'all', sort: 'date_desc', photos: [] } per bondId
+    var currentLightboxState = { bondId: null, index: -1 };
+
+    function loadAlbum(bondId, catOverride, sortOverride) {
         var container = document.getElementById('album-grid-' + bondId);
         if (!container) return;
-        fetch('/api/bonds/' + bondId + '/album/photos')
-            .then(r => r.json())
-            .then(d => {
-                if (!d.photos || d.photos.length === 0) {
-                    container.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No photos yet. Add your first shared memory!</div>';
+
+        if (!bondAlbumState[bondId]) {
+            bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', photos: [] };
+        }
+        if (catOverride !== undefined) bondAlbumState[bondId].category = catOverride;
+        if (sortOverride !== undefined) bondAlbumState[bondId].sort = sortOverride;
+
+        var cat = bondAlbumState[bondId].category;
+        var sort = bondAlbumState[bondId].sort;
+
+        container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
+
+        fetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success || !d.photos || d.photos.length === 0) {
+                    bondAlbumState[bondId].photos = [];
+                    var countEl = document.getElementById('album-count-' + bondId);
+                    if (countEl) countEl.textContent = '0 photos';
+                    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
                     return;
                 }
-                var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.5rem;">';
-                d.photos.forEach(function(p) {
-                    var title = p.title ? escHtml(p.title) : '';
-                    var dateStr = p.date_taken ? new Date(p.date_taken).toLocaleDateString() : '';
-                    var catLabel = p.category.charAt(0).toUpperCase() + p.category.slice(1);
-                    html += '<div style="position:relative;border-radius:8px;overflow:hidden;background:var(--card-bg);border:1px solid var(--border-color);">'
-                        + '<img src="' + p.url + '" alt="' + title + '" style="width:100%;height:120px;object-fit:cover;display:block;" loading="lazy">'
-                        + '<div style="padding:0.35rem 0.4rem;">'
-                        + (title ? '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' : '')
-                        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
-                        + '<span style="font-size:0.65rem;color:var(--text-muted);">' + catLabel + (dateStr ? ' · ' + dateStr : '') + '</span>'
-                        + (p.uploaded_by_me ? '<button onclick="deleteAlbumPhoto(\'' + p.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.75rem;padding:0;" title="Delete">&times;</button>' : '')
-                        + '</div></div></div>';
+
+                bondAlbumState[bondId].photos = d.photos;
+                var countEl = document.getElementById('album-count-' + bondId);
+                if (countEl) countEl.textContent = d.photos.length + ' photo' + (d.photos.length > 1 ? 's' : '');
+
+                var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
+                d.photos.forEach(function(p, idx) {
+                    var title = p.title ? escHtml(p.title) : 'Untitled';
+                    var dateStr = p.date_taken ? new Date(p.date_taken).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    var catLabel = p.category ? (p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Memory';
+
+                    html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
+                    if (p.is_pinned) {
+                        html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
+                    }
+                    html += '<div class="album-cat-badge">' + escHtml(catLabel) + '</div>';
+                    html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy">';
+                    html += '<div style="padding:0.4rem 0.5rem;">';
+                    html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+                    html += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + (dateStr ? dateStr : 'No date') + ' · ' + escHtml(p.uploaded_by_name) + '</div>';
+                    html += '</div></div>';
                 });
                 html += '</div>';
                 container.innerHTML = html;
             })
-            .catch(function() { container.innerHTML = '<div style="color:#c62828;">Failed to load album.</div>'; });
+            .catch(function() {
+                container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;padding:0.6rem;">Failed to load album photos.</div>';
+            });
     }
 
-    function showAddPhotoModal(bondId) {
-        var input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.onchange = function() {
-            var file = input.files[0];
-            if (!file) return;
-            if (file.size > 5 * 1024 * 1024) {
-                if (window.showCustomAlert) showCustomAlert('Photo too large. Maximum 5 MB.', 'danger');
-                return;
-            }
-            var title = prompt('Title (optional):');
-            var cat = prompt('Category (memory, milestone, fun, travel, other):', 'memory');
-            if (!cat) cat = 'other';
+    function setAlbumCategory(bondId, cat, chipBtn) {
+        var parent = document.getElementById('album-cat-chips-' + bondId);
+        if (parent) {
+            var chips = parent.querySelectorAll('.album-chip');
+            chips.forEach(function(c) { c.classList.remove('active'); });
+        }
+        if (chipBtn) chipBtn.classList.add('active');
+        loadAlbum(bondId, cat, undefined);
+    }
 
-            var fd = new FormData();
-            fd.append('file', file);
-            fd.append('title', title || '');
-            fd.append('category', cat);
-            fd.append('date_taken', new Date().toISOString());
+    function changeAlbumSort(bondId, sortVal) {
+        loadAlbum(bondId, undefined, sortVal);
+    }
 
-            var container = document.getElementById('album-grid-' + bondId);
-            if (container) container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.6rem;">Uploading...</div>';
+    // Modal Upload
+    function openAlbumUploadModal(bondId) {
+        var modal = document.getElementById('bond-album-upload-modal');
+        if (!modal) return;
+        document.getElementById('upload-bond-id').value = bondId;
+        document.getElementById('album-upload-title').value = '';
+        document.getElementById('album-upload-desc').value = '';
+        document.getElementById('album-upload-cat').value = 'memory';
 
-            fetch('/api/bonds/' + bondId + '/album/upload', {
-                method: 'POST',
-                headers: { 'X-CSRFToken': csrfToken },
-                body: fd
-            }).then(r => r.json()).then(d => {
-                if (d.success) {
-                    loadAlbum(bondId);
-                    if (window.showCustomToast) showCustomToast('Photo added!', 'success');
-                } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-            }).catch(function() {
-                if (window.showCustomAlert) showCustomAlert('Upload failed.', 'danger');
+        var today = new Date().toISOString().split('T')[0];
+        document.getElementById('album-upload-date').value = today;
+        document.getElementById('album-file-input').value = '';
+        document.getElementById('album-files-preview').innerHTML = '';
+
+        modal.style.display = 'flex';
+    }
+
+    function closeAlbumUploadModal() {
+        var modal = document.getElementById('bond-album-upload-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function handleAlbumFileSelect(files) {
+        var previewContainer = document.getElementById('album-files-preview');
+        previewContainer.innerHTML = '';
+        if (!files || files.length === 0) return;
+
+        Array.from(files).forEach(function(file) {
+            if (!file.type.startsWith('image/')) return;
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var thumb = document.createElement('div');
+                thumb.style.cssText = 'position:relative;width:55px;height:55px;border-radius:6px;overflow:hidden;border:1px solid var(--border-color);';
+                thumb.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;">';
+                previewContainer.appendChild(thumb);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function submitAlbumUploadModal(e) {
+        e.preventDefault();
+        var bondId = document.getElementById('upload-bond-id').value;
+        var fileInput = document.getElementById('album-file-input');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            if (window.showCustomAlert) showCustomAlert('Please select at least one photo.', 'danger');
+            return;
+        }
+
+        var btn = document.getElementById('album-upload-submit-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+        var fd = new FormData();
+        Array.from(fileInput.files).forEach(function(f) {
+            fd.append('files', f);
+        });
+
+        fd.append('title', document.getElementById('album-upload-title').value || '');
+        fd.append('description', document.getElementById('album-upload-desc').value || '');
+        fd.append('category', document.getElementById('album-upload-cat').value || 'other');
+        var dateVal = document.getElementById('album-upload-date').value;
+        if (dateVal) {
+            fd.append('date_taken', new Date(dateVal).toISOString());
+        }
+
+        fetch('/api/bonds/' + bondId + '/album/upload', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: fd
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            btn.disabled = false;
+            btn.textContent = 'Upload Photos';
+            if (d.success) {
+                closeAlbumUploadModal();
                 loadAlbum(bondId);
-            });
+                if (window.showCustomToast) showCustomToast('Added ' + d.count + ' memory photo' + (d.count > 1 ? 's' : '') + '!', 'success');
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Upload failed', 'danger');
+            }
+        }).catch(function() {
+            btn.disabled = false;
+            btn.textContent = 'Upload Photos';
+            if (window.showCustomAlert) showCustomAlert('Upload failed. Please try again.', 'danger');
+        });
+    }
+
+    // Lightbox Expanded View
+    function openBondPhotoLightbox(bondId, index) {
+        var state = bondAlbumState[bondId];
+        if (!state || !state.photos || !state.photos[index]) return;
+
+        currentLightboxState.bondId = bondId;
+        currentLightboxState.index = index;
+
+        renderLightboxContent();
+
+        var modal = document.getElementById('bond-album-lightbox-modal');
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function renderLightboxContent() {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || photos.length === 0 || index < 0 || index >= photos.length) return;
+
+        var p = photos[index];
+        document.getElementById('lightbox-img').src = p.url;
+        document.getElementById('lightbox-title').textContent = p.title || 'Untitled Memory';
+        document.getElementById('lightbox-desc').textContent = p.description || 'No description provided.';
+        document.getElementById('lightbox-cat-badge').textContent = (p.category || 'memory').toUpperCase();
+
+        var dtStr = p.date_taken ? new Date(p.date_taken).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
+        document.getElementById('lightbox-date-taken').textContent = dtStr;
+        document.getElementById('lightbox-uploaded-by').textContent = p.uploaded_by_name || 'Partner';
+        var upStr = p.uploaded_at ? new Date(p.uploaded_at).toLocaleDateString() : '-';
+        document.getElementById('lightbox-uploaded-at').textContent = upStr;
+
+        var pinBtn = document.getElementById('lightbox-pin-btn');
+        var pinLabel = document.getElementById('lightbox-pin-label');
+        if (p.is_pinned) {
+            pinBtn.style.background = 'var(--primary-color)';
+            pinBtn.style.color = '#ffffff';
+            pinLabel.textContent = 'Pinned';
+        } else {
+            pinBtn.style.background = 'none';
+            pinBtn.style.color = 'var(--text-dark-color)';
+            pinLabel.textContent = 'Pin';
+        }
+
+        var editBtn = document.getElementById('lightbox-edit-btn');
+        var deleteBtn = document.getElementById('lightbox-delete-btn');
+        if (editBtn) editBtn.style.display = 'inline-flex';
+        if (deleteBtn) deleteBtn.style.display = p.uploaded_by_me ? 'inline-flex' : 'none';
+    }
+
+    function navigateLightbox(dir) {
+        var bondId = currentLightboxState.bondId;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || photos.length === 0) return;
+
+        var newIdx = currentLightboxState.index + dir;
+        if (newIdx < 0) newIdx = photos.length - 1;
+        if (newIdx >= photos.length) newIdx = 0;
+
+        currentLightboxState.index = newIdx;
+        renderLightboxContent();
+    }
+
+    function closeBondPhotoLightbox() {
+        var modal = document.getElementById('bond-album-lightbox-modal');
+        if (modal) modal.style.display = 'none';
+        currentLightboxState = { bondId: null, index: -1 };
+    }
+
+    function toggleLightboxPhotoPin() {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || !photos[index]) return;
+
+        var p = photos[index];
+        fetch('/api/bonds/album/photo/' + p.id + '/pin', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                p.is_pinned = d.is_pinned;
+                renderLightboxContent();
+                loadAlbum(bondId);
+                if (window.showCustomToast) showCustomToast(d.is_pinned ? 'Photo pinned!' : 'Photo unpinned', 'success');
+            }
+        });
+    }
+
+    function downloadLightboxPhoto() {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || !photos[index]) return;
+
+        var p = photos[index];
+        var a = document.createElement('a');
+        a.href = p.url;
+        a.download = (p.title || 'bond_memory') + '.jpg';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    function openLightboxPhotoEdit() {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || !photos[index]) return;
+
+        var p = photos[index];
+        document.getElementById('edit-photo-id').value = p.id;
+        document.getElementById('edit-bond-id').value = bondId;
+        document.getElementById('edit-photo-title').value = p.title || '';
+        document.getElementById('edit-photo-desc').value = p.description || '';
+        document.getElementById('edit-photo-cat').value = p.category || 'other';
+
+        if (p.date_taken) {
+            var dt = new Date(p.date_taken).toISOString().split('T')[0];
+            document.getElementById('edit-photo-date').value = dt;
+        } else {
+            document.getElementById('edit-photo-date').value = '';
+        }
+
+        var editModal = document.getElementById('bond-album-edit-modal');
+        if (editModal) editModal.style.display = 'flex';
+    }
+
+    function closeAlbumEditModal() {
+        var modal = document.getElementById('bond-album-edit-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function submitAlbumEditModal(e) {
+        e.preventDefault();
+        var photoId = document.getElementById('edit-photo-id').value;
+        var bondId = document.getElementById('edit-bond-id').value;
+        var title = document.getElementById('edit-photo-title').value;
+        var desc = document.getElementById('edit-photo-desc').value;
+        var cat = document.getElementById('edit-photo-cat').value;
+        var dateVal = document.getElementById('edit-photo-date').value;
+
+        var payload = {
+            title: title,
+            description: desc,
+            category: cat,
+            date_taken: dateVal ? new Date(dateVal).toISOString() : null
         };
-        input.click();
+
+        fetch('/api/bonds/album/photo/' + photoId, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(payload)
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                closeAlbumEditModal();
+                loadAlbum(bondId);
+                if (currentLightboxState.index >= 0) {
+                    var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+                    if (photos[currentLightboxState.index]) {
+                        photos[currentLightboxState.index].title = title;
+                        photos[currentLightboxState.index].description = desc;
+                        photos[currentLightboxState.index].category = cat;
+                        if (dateVal) photos[currentLightboxState.index].date_taken = new Date(dateVal).toISOString();
+                        renderLightboxContent();
+                    }
+                }
+                if (window.showCustomToast) showCustomToast('Memory details updated.', 'success');
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Update failed', 'danger');
+            }
+        });
+    }
+
+    function deleteLightboxPhoto() {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || !photos[index]) return;
+
+        var p = photos[index];
+        deleteAlbumPhoto(p.id, bondId);
     }
 
     function deleteAlbumPhoto(photoId, bondId) {
         if (window.showCustomConfirm) {
-            showCustomConfirm('Delete this photo?', function(ok) {
-                if (ok) {
-                    fetch('/api/bonds/album/photo/' + photoId, {
-                        method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
-                    }).then(r => r.json()).then(d => {
-                        if (d.success) { loadAlbum(bondId); if (window.showCustomToast) showCustomToast('Photo deleted.', 'success'); }
-                        else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-                    });
-                }
+            showCustomConfirm('Delete this photo memory?', function(ok) {
+                if (ok) doDeletePhoto(photoId, bondId);
             });
+        } else {
+            if (confirm('Delete this photo memory?')) doDeletePhoto(photoId, bondId);
         }
     }
+
+    function doDeletePhoto(photoId, bondId) {
+        fetch('/api/bonds/album/photo/' + photoId, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                closeBondPhotoLightbox();
+                loadAlbum(bondId);
+                if (window.showCustomToast) showCustomToast('Photo deleted.', 'success');
+            } else if (window.showCustomAlert) {
+                showCustomAlert(d.error || 'Failed to delete photo', 'danger');
+            }
+        });
+    }
+
+    // Keyboard Shortcuts for Lightbox Navigation
+    document.addEventListener('keydown', function(e) {
+        var modal = document.getElementById('bond-album-lightbox-modal');
+        if (!modal || modal.style.display === 'none') return;
+
+        if (e.key === 'ArrowLeft') {
+            navigateLightbox(-1);
+        } else if (e.key === 'ArrowRight') {
+            navigateLightbox(1);
+        } else if (e.key === 'Escape') {
+            closeBondPhotoLightbox();
+        }
+    });
 
     // ===================================================================
     // Bucket List Functions

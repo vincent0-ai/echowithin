@@ -8444,7 +8444,7 @@
         const steps = [
             { selector: '.note-actions .copy-btn', text: 'Copy note text to clipboard' },
             { selector: '.note-actions .edit-note-btn', text: 'Edit note with full markdown formatting' },
-            { selector: '.note-actions .export-note-btn', text: 'Export note as Plain Text, PDF, or Word document' },
+            { selector: '.note-actions .export-note-btn', text: 'Export note as Plain Text or Word document' },
             { selector: '.note-actions .share-note-btn', text: 'Share note link or choose a surprise theme with music and photos' },
             { selector: '.note-actions .lock-note-btn', text: 'Lock note behind 4-digit PIN for privacy' },
             { selector: '.note-actions .version-history-btn', text: 'View edit history and restore previous versions' },
@@ -8634,18 +8634,6 @@
                     <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Download as .txt file</div>
                 </div>
             </button>
-            <button onclick="exportNote('pdf')" class="btn"
-                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
-                <i class="fas fa-file-pdf"
-                    style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
-                <div>
-                    <div style="font-weight: 600;">PDF Document{% if not user_is_premium %} <span
-                            style="background: linear-gradient(135deg, #c9a84c, #e0c068); color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">PREMIUM</span>{%
-                        endif %}</div>
-                    <div style="font-size: 0.75rem; color: #888; font-weight: 400;">Formatted with markdown styling
-                    </div>
-                </div>
-            </button>
             <button onclick="exportNote('docx')" class="btn"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem; transition: all 0.15s;">
                 <i class="fas fa-file-word"
@@ -8683,12 +8671,12 @@
     window.exportNote = function (format) {
         if (!exportNoteId) return;
 
-        // Premium gate for PDF and DOCX
-        if ((format === 'pdf' || format === 'docx') && !isPremium) {
+        // Premium gate for DOCX
+        if (format === 'docx' && !isPremium) {
             if (window.showCustomAlert) {
-                window.showCustomAlert('PDF and DOCX export is a Premium feature. Upgrade to unlock formatted exports.', 'warning');
+                window.showCustomAlert('DOCX export is a Premium feature. Upgrade to unlock formatted exports.', 'warning');
             } else {
-                alert('PDF and DOCX export is a Premium feature.');
+                alert('DOCX export is a Premium feature.');
             }
             return;
         }
@@ -8726,8 +8714,6 @@
 
         if (format === 'txt') {
             exportAsTxt(rawContent, reference, safeName);
-        } else if (format === 'pdf') {
-            exportAsPdf(renderedContent, reference, safeName);
         } else if (format === 'docx') {
             exportAsDocx(rawContent, renderedContent, reference, safeName);
         }
@@ -8742,49 +8728,6 @@
 
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         downloadBlob(blob, filename + '.txt');
-    }
-
-    function exportAsPdf(html, reference, filename) {
-        // Load html2pdf.js dynamically if not already loaded
-        if (typeof html2pdf === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-            script.onload = function () { generatePdf(html, reference, filename); };
-            script.onerror = function () {
-                if (window.showCustomAlert) window.showCustomAlert('Failed to load PDF library. Please try again.', 'danger');
-            };
-            document.head.appendChild(script);
-        } else {
-            generatePdf(html, reference, filename);
-        }
-    }
-
-    function generatePdf(html, reference, filename) {
-        const container = document.createElement('div');
-        container.style.cssText = 'font-family: Georgia, serif; font-size: 14px; line-height: 1.6; color: #333; padding: 20px; max-width: 650px; position: fixed; left: -9999px; top: 0; z-index: -1; background: white;';
-
-        let content = '';
-        if (reference) {
-            content += '<div style="color: #666; font-size: 12px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee;">' + reference + '</div>';
-        }
-        content += html;
-        content += '<div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #eee; font-size: 10px; color: #aaa; text-align: center;">Exported from EchoWithin</div>';
-        container.innerHTML = content;
-
-        // Must be in DOM for html2canvas to render
-        document.body.appendChild(container);
-
-        const opt = {
-            margin: [15, 15, 15, 15],
-            filename: filename + '.pdf',
-            image: { type: 'jpeg', quality: 0.95 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        html2pdf().set(opt).from(container).save().then(function () {
-            document.body.removeChild(container);
-        });
     }
 
     function exportAsDocx(rawContent, html, reference, filename) {

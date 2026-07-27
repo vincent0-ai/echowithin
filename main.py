@@ -680,6 +680,22 @@ bond_habits_conf.create_index([('bond_id', 1), ('archived', 1)])
 bond_countdowns_conf = db['bond_countdowns']
 bond_countdowns_conf.create_index([('bond_id', 1), ('archived', 1)])
 
+# --- Bond Shared Album (Photo Memories) ---
+bond_album_photos_conf = db['bond_album_photos']
+bond_album_photos_conf.create_index([('bond_id', 1), ('uploaded_at', -1)])
+
+# --- Bond Bucket List ---
+bond_bucketlist_conf = db['bond_bucketlist']
+bond_bucketlist_conf.create_index([('bond_id', 1), ('status', 1)])
+
+# --- Bond Media Recommendations ---
+bond_recommendations_conf = db['bond_recommendations']
+bond_recommendations_conf.create_index([('bond_id', 1), ('created_at', -1)])
+
+# --- Bond Quick Pulse (anytime check-in) ---
+bond_pulses_conf = db['bond_pulses']
+bond_pulses_conf.create_index([('bond_id', 1), ('created_at', -1)])
+
 # --- Community Question Bank (AI-generated QotD reuse across bonds) ---
 community_questions_conf = db['community_questions']
 community_questions_conf.create_index('bond_type')
@@ -821,6 +837,10 @@ database.bond_moods_conf = bond_moods_conf
 database.bond_qotd_conf = bond_qotd_conf
 database.bond_habits_conf = bond_habits_conf
 database.bond_countdowns_conf = bond_countdowns_conf
+database.bond_album_photos_conf = bond_album_photos_conf
+database.bond_bucketlist_conf = bond_bucketlist_conf
+database.bond_recommendations_conf = bond_recommendations_conf
+database.bond_pulses_conf = bond_pulses_conf
 database.hidden_chats_conf = hidden_chats_conf
 
 
@@ -859,6 +879,10 @@ def purge_guest_user_data(guest_id_str):
         bond_moods_conf.delete_many({'user_id': g_oid})
         bond_habits_conf.delete_many({'created_by': g_oid})
         bond_countdowns_conf.delete_many({'created_by': g_oid})
+        bond_album_photos_conf.delete_many({'uploaded_by': g_oid})
+        bond_bucketlist_conf.delete_many({'proposed_by': g_oid})
+        bond_recommendations_conf.delete_many({'recommended_by': g_oid})
+        bond_pulses_conf.delete_many({'user_id': g_oid})
 
         # 3. Messages & Communities
         direct_messages_conf.delete_many({'$or': [{'sender_id': g_oid}, {'recipient_id': g_oid}]})

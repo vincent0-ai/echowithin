@@ -5056,15 +5056,6 @@
                     <div style="font-size: 0.75rem; color: #888;">Download as .txt file</div>
                 </div>
             </button>
-            <button onclick="exportSharedNote('pdf')"
-                style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem;">
-                <i class="fas fa-file-pdf"
-                    style="font-size: 1.2rem; color: #c0392b; width: 24px; text-align: center;"></i>
-                <div>
-                    <div style="font-weight: 600;">PDF Document</div>
-                    <div style="font-size: 0.75rem; color: #888;">Formatted with styling</div>
-                </div>
-            </button>
             <button onclick="exportSharedNote('docx')"
                 style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: #f9f6f3; border: 1px solid #e0d5ca; border-radius: 10px; color: #3e2217; cursor: pointer; text-align: left; font-size: 0.9rem;">
                 <i class="fas fa-file-word"
@@ -5098,13 +5089,6 @@
             if (format === 'txt') {
                 var blob = new Blob([rawContent + '\n\n---\nExported from EchoWithin'], { type: 'text/plain;charset=utf-8' });
                 dlBlob(blob, safeName + '.txt');
-            } else if (format === 'pdf') {
-                if (typeof html2pdf === 'undefined') {
-                    var s = document.createElement('script');
-                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                    s.onload = function () { genPdf(renderedContent, safeName); };
-                    document.head.appendChild(s);
-                } else { genPdf(renderedContent, safeName); }
             } else if (format === 'docx') {
                 var dh = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>body{font-family:Calibri,sans-serif;font-size:11pt;line-height:1.5;color:#333;}h1{font-size:18pt;}h2{font-size:14pt;}code{background:#f5f5f5;padding:2px 4px;font-family:Consolas,monospace;}</style></head><body>' + renderedContent + '<p style="margin-top:20px;border-top:1px solid #eee;padding-top:8px;font-size:8pt;color:#aaa;text-align:center;">Exported from EchoWithin</p></body></html>';
                 var blob = new Blob(['\ufeff' + dh], { type: 'application/msword' });
@@ -5112,14 +5096,6 @@
             }
             document.getElementById('export-shared-modal').style.display = 'none';
         };
-
-        function genPdf(html, filename) {
-            var c = document.createElement('div');
-            c.style.cssText = 'font-family:Georgia,serif;font-size:14px;line-height:1.6;color:#333;padding:20px;max-width:650px;position:fixed;left:-9999px;top:0;z-index:-1;background:white;';
-            c.innerHTML = html + '<div style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center;">Exported from EchoWithin</div>';
-            document.body.appendChild(c);
-            html2pdf().set({ margin: [15, 15, 15, 15], filename: filename + '.pdf', image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).from(c).save().then(function () { document.body.removeChild(c); });
-        }
 
         function dlBlob(blob, name) {
             var url = URL.createObjectURL(blob);

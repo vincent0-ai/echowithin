@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime
 import hashlib
+import os
 import random
 from security import limits
 
@@ -285,7 +286,54 @@ def _get_bond_status_between(user_a_oid, user_b_oid):
 _MAX_AI_GENERATIONS_PER_BOND_PER_DAY = 3
 
 
-def _generate_ai_question_gemini(relationship_label):
+def _get_recent_qotd_questions(bond_id, limit=15):
+    """Fetch recently asked QOTD questions for a bond (decrypted).
+
+    Used to provide the AI with context about what not to repeat.
+    Returns a list of question strings (most recent first).
+    """
+    import main as m
+    recent = list(m.bond_qotd_conf.find(
+        {'bond_id': ObjectId(bond_id)},
+        {'question_text': 1, 'encrypted': 1, 'date': 1}
+    ).sort('date', -1).limit(limit))
+
+    questions = []
+    for doc in recent:
+        try:
+            if doc.get('encrypted', True):
+                q = m.decrypt_bond_data(doc['question_text'], bond_id)
+            else:
+                q = doc.get('question_text', '')
+            if q and q.strip():
+                questions.append(q.strip())
+        except Exception:
+            pass
+    return questions
+
+
+def _build_qotd_ai_prompt(relationship_label, recent_questions):
+    """Build the AI prompt for QOTD generation.
+
+    Includes recently asked questions so the model knows what to avoid,
+    plus a creativity directive to discourage repetition.
+    """
+    base = (
+        f"You are a creative relationship & connection assistant. "
+        f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
+        f"The question should inspire reflection, bonding, or a lighthearted conversation. "
+        f"Be original — the question must be unique and different from any previously asked questions. "
+    )
+
+    if recent_questions:
+        avoid_block = "DO NOT repeat or rephrase any of these recently used questions:\n"
+        avoid_block += "\n".join(f"- {q}" for q in recent_questions)
+        return base + avoid_block + "\n\nReturn ONLY the new question text. Do not include quotes, intro, or explanation."
+
+    return base + "Return ONLY the question text. Do not include quotes, intro, or explanation."
+
+
+def _generate_ai_question_gemini(relationship_label, recent_questions=None):
     """Generate a QotD question using Gemini API (fallback when JigsawStack is unavailable).
 
     Supports multiple comma-separated API keys in GEMINI_API_KEY env var.
@@ -306,12 +354,7 @@ def _generate_ai_question_gemini(relationship_label):
     if not keys:
         return None
 
-    prompt = (
-        f"You are a thoughtful relationship & connection assistant. "
-        f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
-        f"The question should inspire reflection, bonding, or a lighthearted conversation. "
-        f"Return ONLY the question text. Do not include quotes, intro, or explanation."
-    )
+    prompt = _build_qotd_ai_prompt(relationship_label, recent_questions or [])
 
     payload = json.dumps({
         'contents': [{'parts': [{'text': prompt}]}]
@@ -822,6 +865,12 @@ def api_bond_break(bond_id):
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         now = datetime.datetime.now(datetime.timezone.utc)
 
+        # Check whether the bond partner is a demo bot so we can skip
+        # the cooldown penalty — users who break their guest-tour bonds
+        # shouldn't be locked out of forming real bonds after registering.
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)}, {'is_demo_bot': 1, 'username': 1})
+        is_demo_bond = bool(partner_user and (partner_user.get('is_demo_bot') or (partner_user.get('username', '').startswith('Maya_DemoPartner'))))
+
         # Archives all shared data
         m.bond_goals_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
         m.bond_journal_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
@@ -830,14 +879,18 @@ def api_bond_break(bond_id):
         m.bond_habits_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
         m.bond_countdowns_conf.update_many({'bond_id': ObjectId(bond_id)}, {'$set': {'archived_by_bond_break': True}})
 
-        # Mark bond as broken
+        # Mark bond as broken.  Do NOT record broken_by for demo
+        # partner bonds — otherwise the 7‑day cooldown in
+        # api_bond_request() blocks the user from forming real bonds.
+        update_fields = {
+            'status': 'broken',
+            'broken_at': now,
+        }
+        if not is_demo_bond:
+            update_fields['broken_by'] = ObjectId(user_id_str)
         m.bonds_conf.update_one(
             {'_id': ObjectId(bond_id)},
-            {'$set': {
-                'status': 'broken',
-                'broken_at': now,
-                'broken_by': ObjectId(user_id_str)
-            }}
+            {'$set': update_fields}
         )
 
         m.socketio.emit('bond_broken', {
@@ -2107,6 +2160,9 @@ def api_bond_qotd_generate_ai(bond_id):
         source = 'ai'
         community_question_id = None
 
+        # Fetch recent questions so the AI knows what to avoid repeating
+        recent_questions = _get_recent_qotd_questions(bond_id)
+
         # --- Step 1: Check community question bank (free, zero API cost) ---
         if not force_new:
             bank_question, bank_id = _get_community_bank_question(bond_type, bond_id)
@@ -2122,12 +2178,7 @@ def api_bond_qotd_generate_ai(bond_id):
                 from jigsawstack import JigsawStack
                 api_key = get_env_variable('JIGSAW_API_KEY')
 
-                prompt = (
-                    f"You are a thoughtful relationship & connection assistant. "
-                    f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
-                    f"The question should inspire reflection, bonding, or a lighthearted conversation. "
-                    f"Return ONLY the question text. Do not include quotes, intro, or explanation."
-                )
+                prompt = _build_qotd_ai_prompt(relationship_label, recent_questions)
 
                 client = JigsawStack(api_key=api_key)
                 res_data = client.prompt_engine.run_prompt_direct({
@@ -2147,7 +2198,7 @@ def api_bond_qotd_generate_ai(bond_id):
 
         # --- Step 3: Fall back to Gemini API ---
         if not ai_question:
-            gemini_result = _generate_ai_question_gemini(relationship_label)
+            gemini_result = _generate_ai_question_gemini(relationship_label, recent_questions)
             if gemini_result:
                 ai_question = gemini_result
                 source = 'ai_gemini'
@@ -2931,6 +2982,674 @@ def api_bond_countdown_delete(countdown_id):
     except Exception as e:
         current_app.logger.error(f"Bond countdown delete error: {e}")
         return jsonify({'error': 'Failed to archive countdown'}), 500
+
+
+# ===================================================================
+# Shared Photo Album
+# ===================================================================
+
+@bp.route('/api/bonds/<bond_id>/album/photos', methods=['GET'])
+@login_required
+def api_bond_album_list(bond_id):
+    """List all photos in the bond's shared album."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        photos = list(m.bond_album_photos_conf.find(
+            {'bond_id': ObjectId(bond_id)}
+        ).sort('uploaded_at', -1).limit(100))
+
+        result = []
+        for p in photos:
+            try:
+                decrypted_url = m.decrypt_bond_data(p.get('url', ''), bond_id)
+            except Exception:
+                decrypted_url = None
+            photo = {
+                'id': str(p['_id']),
+                'title': p.get('title', ''),
+                'category': p.get('category', 'other'),
+                'date_taken': p.get('date_taken').isoformat() if p.get('date_taken') else None,
+                'url': decrypted_url,
+                'uploaded_by': str(p['uploaded_by']),
+                'uploaded_by_me': str(p['uploaded_by']) == user_id_str,
+                'uploaded_at': p.get('uploaded_at').isoformat() if p.get('uploaded_at') else None,
+            }
+            if decrypted_url:
+                result.append(photo)
+
+        return jsonify({'success': True, 'photos': result})
+    except Exception as e:
+        current_app.logger.error(f"Album list error: {e}")
+        return jsonify({'error': 'Failed to load album'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/album/upload', methods=['POST'])
+@login_required
+@limits(calls=15, period=60)
+def api_bond_album_upload(bond_id):
+    """Upload a photo to the bond's shared album."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        title = (request.form.get('title', '') or '')[:100].strip()
+        category = request.form.get('category', 'other').strip()
+        if category not in ('memory', 'milestone', 'fun', 'travel', 'other'):
+            category = 'other'
+
+        date_taken_str = request.form.get('date_taken', '').strip()
+        date_taken = None
+        if date_taken_str:
+            try:
+                date_taken = datetime.datetime.fromisoformat(date_taken_str)
+                if date_taken.tzinfo is None:
+                    date_taken = date_taken.replace(tzinfo=datetime.timezone.utc)
+            except ValueError:
+                pass
+        if not date_taken:
+            date_taken = datetime.datetime.now(datetime.timezone.utc)
+
+        # Handle multipart file upload
+        file = request.files.get('file')
+        if not file or not file.filename:
+            return jsonify({'error': 'No photo file provided.'}), 400
+
+        ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+        if ext not in m.ALLOWED_IMAGE_EXTENSIONS:
+            return jsonify({'error': f'Unsupported file type. Allowed: {", ".join(m.ALLOWED_IMAGE_EXTENSIONS)}'}), 400
+
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        if size > m.MAX_IMAGE_SIZE:
+            return jsonify({'error': f'Photo too large. Maximum size: {m.MAX_IMAGE_SIZE // (1024*1024)} MB.'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            upload_result = m.cloudinary.uploader.upload(file, folder='echowithin_bond_album', resource_type='image',
+                transformation=[{'width': 1600, 'height': 1600, 'crop': 'limit'}, {'quality': 'auto', 'fetch_format': 'auto'}])
+            photo_url = upload_result.get('secure_url', '')
+        except Exception as upload_err:
+            current_app.logger.error(f"Cloudinary upload failed for bond album: {upload_err}")
+            return jsonify({'error': 'Photo upload service is temporarily unavailable.'}), 503
+
+        if not photo_url:
+            return jsonify({'error': 'Upload failed — no URL returned.'}), 500
+
+        encrypted_url = m.encrypt_bond_data(photo_url, bond_id)
+        result = m.bond_album_photos_conf.insert_one({
+            'bond_id': ObjectId(bond_id),
+            'title': title,
+            'category': category,
+            'date_taken': date_taken,
+            'url': encrypted_url,
+            'uploaded_by': ObjectId(user_id_str),
+            'uploaded_at': now,
+        })
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} added a photo to your album",
+            title if title else "A new memory has been shared.",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-album-{bond_id}'
+        )
+
+        return jsonify({
+            'success': True,
+            'photo': {
+                'id': str(result.inserted_id),
+                'title': title,
+                'category': category,
+                'url': photo_url,
+                'uploaded_by_me': True,
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Album upload error: {e}")
+        return jsonify({'error': 'Failed to upload photo'}), 500
+
+
+@bp.route('/api/bonds/album/photo/<photo_id>', methods=['DELETE'])
+@login_required
+def api_bond_album_delete(photo_id):
+    """Delete a photo from the bond album (only the uploader can delete)."""
+    import main as m
+    try:
+        photo = m.bond_album_photos_conf.find_one({'_id': ObjectId(photo_id)})
+        if not photo:
+            return jsonify({'error': 'Photo not found'}), 404
+
+        bond_id = str(photo['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if str(photo['uploaded_by']) != user_id_str:
+            return jsonify({'error': 'Only the uploader can delete this photo.'}), 403
+
+        m.bond_album_photos_conf.delete_one({'_id': ObjectId(photo_id)})
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Album delete error: {e}")
+        return jsonify({'error': 'Failed to delete photo'}), 500
+
+
+# ===================================================================
+# Shared Bucket List
+# ===================================================================
+
+BUCKETLIST_CATEGORIES = ('travel', 'adventure', 'learning', 'creative', 'food', 'experience', 'other')
+
+
+@bp.route('/api/bonds/<bond_id>/bucketlist', methods=['GET'])
+@login_required
+def api_bond_bucketlist_list(bond_id):
+    """List all bucket list items for the bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        if not _is_bond_participant(bond_doc, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        items = list(m.bond_bucketlist_conf.find(
+            {'bond_id': ObjectId(bond_id)}
+        ).sort('created_at', -1))
+
+        result = []
+        for item in items:
+            result.append({
+                'id': str(item['_id']),
+                'title': item.get('title', ''),
+                'description': item.get('description', ''),
+                'category': item.get('category', 'other'),
+                'status': item.get('status', 'dreamt'),
+                'proposed_by': str(item.get('proposed_by', '')),
+                'proposed_by_me': str(item.get('proposed_by', '')) == str(current_user.id),
+                'completed_at': item.get('completed_at').isoformat() if item.get('completed_at') else None,
+                'created_at': item.get('created_at').isoformat() if item.get('created_at') else None,
+            })
+        return jsonify({'success': True, 'items': result})
+    except Exception as e:
+        current_app.logger.error(f"Bucket list error: {e}")
+        return jsonify({'error': 'Failed to load bucket list'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/bucketlist', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_bucketlist_create(bond_id):
+    """Propose a new bucket list item."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title', '') or '').strip()[:200]
+        if not title:
+            return jsonify({'error': 'Title is required.'}), 400
+
+        description = (data.get('description', '') or '').strip()[:500]
+        category = data.get('category', 'other').strip()
+        if category not in BUCKETLIST_CATEGORIES:
+            category = 'other'
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        item = {
+            'bond_id': ObjectId(bond_id),
+            'title': title,
+            'description': description,
+            'category': category,
+            'status': 'dreamt',
+            'proposed_by': ObjectId(user_id_str),
+            'created_at': now,
+        }
+        result = m.bond_bucketlist_conf.insert_one(item)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_bucketlist_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} added to your bucket list",
+            f'"{title}" — check it out!',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-bucketlist-{bond_id}'
+        )
+
+        return jsonify({
+            'success': True,
+            'item': {
+                'id': str(result.inserted_id),
+                'title': title,
+                'description': description,
+                'category': category,
+                'status': 'dreamt',
+                'proposed_by_me': True,
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Bucket list create error: {e}")
+        return jsonify({'error': 'Failed to create bucket list item'}), 500
+
+
+@bp.route('/api/bonds/bucketlist/<item_id>/agree', methods=['POST'])
+@login_required
+def api_bond_bucketlist_agree(item_id):
+    """Agree to a bucket list item proposed by the partner."""
+    import main as m
+    try:
+        item = m.bond_bucketlist_conf.find_one({'_id': ObjectId(item_id), 'status': 'dreamt'})
+        if not item:
+            return jsonify({'error': 'Bucket list item not found'}), 404
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(item['bond_id']), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if str(item['proposed_by']) == user_id_str:
+            return jsonify({'error': 'You cannot agree to your own proposal.'}), 400
+
+        m.bond_bucketlist_conf.update_one(
+            {'_id': ObjectId(item_id)},
+            {'$set': {'status': 'agreed'}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_bucketlist_updated', {
+            'bond_id': str(item['bond_id']),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True, 'status': 'agreed'})
+    except Exception as e:
+        current_app.logger.error(f"Bucket list agree error: {e}")
+        return jsonify({'error': 'Failed to agree to item'}), 500
+
+
+@bp.route('/api/bonds/bucketlist/<item_id>/done', methods=['POST'])
+@login_required
+def api_bond_bucketlist_done(item_id):
+    """Mark a bucket list item as done."""
+    import main as m
+    try:
+        item = m.bond_bucketlist_conf.find_one({'_id': ObjectId(item_id), 'status': 'agreed'})
+        if not item:
+            return jsonify({'error': 'Bucket list item must be agreed by both before marking done.'}), 400
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(item['bond_id']), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        m.bond_bucketlist_conf.update_one(
+            {'_id': ObjectId(item_id)},
+            {'$set': {'status': 'done', 'completed_at': now}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_bucketlist_updated', {
+            'bond_id': str(item['bond_id']),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            "Bucket list item completed!",
+            f'"{item.get("title", "")}" has been marked done.',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-bucketlist-done-{item_id}'
+        )
+
+        return jsonify({'success': True, 'status': 'done'})
+    except Exception as e:
+        current_app.logger.error(f"Bucket list done error: {e}")
+        return jsonify({'error': 'Failed to mark item as done'}), 500
+
+
+@bp.route('/api/bonds/bucketlist/<item_id>', methods=['DELETE'])
+@login_required
+def api_bond_bucketlist_delete(item_id):
+    """Delete a bucket list item (only the proposer can delete)."""
+    import main as m
+    try:
+        item = m.bond_bucketlist_conf.find_one({'_id': ObjectId(item_id)})
+        if not item:
+            return jsonify({'error': 'Item not found'}), 404
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(item['bond_id']), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if str(item['proposed_by']) != user_id_str:
+            return jsonify({'error': 'Only the proposer can delete this item.'}), 403
+
+        m.bond_bucketlist_conf.delete_one({'_id': ObjectId(item_id)})
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_bucketlist_updated', {
+            'bond_id': str(item['bond_id']),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Bucket list delete error: {e}")
+        return jsonify({'error': 'Failed to delete item'}), 500
+
+
+# ===================================================================
+# Media Recommendations
+# ===================================================================
+
+MEDIA_TYPES = ('book', 'song', 'podcast', 'movie', 'show', 'game', 'other')
+
+
+@bp.route('/api/bonds/<bond_id>/recommendations', methods=['GET'])
+@login_required
+def api_bond_recommendations_list(bond_id):
+    """List all media recommendations for the bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        if not _is_bond_participant(bond_doc, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        recs = list(m.bond_recommendations_conf.find(
+            {'bond_id': ObjectId(bond_id)}
+        ).sort('created_at', -1).limit(60))
+
+        result = []
+        for r in recs:
+            result.append({
+                'id': str(r['_id']),
+                'title': r.get('title', ''),
+                'media_type': r.get('media_type', 'other'),
+                'link': r.get('link', ''),
+                'note': r.get('note', ''),
+                'recommended_by': str(r.get('recommended_by', '')),
+                'recommended_by_me': str(r.get('recommended_by', '')) == str(current_user.id),
+                'tried_by_partner': r.get('tried_by_partner', False),
+                'created_at': r.get('created_at').isoformat() if r.get('created_at') else None,
+            })
+        return jsonify({'success': True, 'recommendations': result})
+    except Exception as e:
+        current_app.logger.error(f"Recommendations list error: {e}")
+        return jsonify({'error': 'Failed to load recommendations'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/recommendations', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_recommendations_create(bond_id):
+    """Share a media recommendation."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title', '') or '').strip()[:200]
+        if not title:
+            return jsonify({'error': 'Title is required.'}), 400
+
+        media_type = (data.get('media_type', 'other') or '').strip()
+        if media_type not in MEDIA_TYPES:
+            media_type = 'other'
+
+        link = (data.get('link', '') or '').strip()[:500]
+        note = (data.get('note', '') or '').strip()[:300]
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = m.bond_recommendations_conf.insert_one({
+            'bond_id': ObjectId(bond_id),
+            'title': title,
+            'media_type': media_type,
+            'link': link,
+            'note': note,
+            'recommended_by': ObjectId(user_id_str),
+            'tried_by_partner': False,
+            'created_at': now,
+        })
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_recommendation_added', {
+            'bond_id': bond_id,
+            'title': title,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} recommended something for you",
+            title,
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-rec-{bond_id}'
+        )
+
+        return jsonify({
+            'success': True,
+            'recommendation': {
+                'id': str(result.inserted_id),
+                'title': title,
+                'media_type': media_type,
+                'recommended_by_me': True,
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f"Recommendation create error: {e}")
+        return jsonify({'error': 'Failed to share recommendation'}), 500
+
+
+@bp.route('/api/bonds/recommendations/<rec_id>/tried', methods=['POST'])
+@login_required
+def api_bond_recommendations_tried(rec_id):
+    """Toggle 'tried it' on a recommendation."""
+    import main as m
+    try:
+        rec = m.bond_recommendations_conf.find_one({'_id': ObjectId(rec_id)})
+        if not rec:
+            return jsonify({'error': 'Recommendation not found'}), 404
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(rec['bond_id']), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if str(rec['recommended_by']) == user_id_str:
+            return jsonify({'error': 'You cannot mark your own recommendation as tried.'}), 400
+
+        new_val = not rec.get('tried_by_partner', False)
+        m.bond_recommendations_conf.update_one(
+            {'_id': ObjectId(rec_id)},
+            {'$set': {'tried_by_partner': new_val}}
+        )
+
+        return jsonify({'success': True, 'tried': new_val})
+    except Exception as e:
+        current_app.logger.error(f"Recommendation tried error: {e}")
+        return jsonify({'error': 'Failed to update'}), 500
+
+
+@bp.route('/api/bonds/recommendations/<rec_id>', methods=['DELETE'])
+@login_required
+def api_bond_recommendations_delete(rec_id):
+    """Delete a recommendation (only the recommender can delete)."""
+    import main as m
+    try:
+        rec = m.bond_recommendations_conf.find_one({'_id': ObjectId(rec_id)})
+        if not rec:
+            return jsonify({'error': 'Recommendation not found'}), 404
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(rec['bond_id']), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        if str(rec['recommended_by']) != user_id_str:
+            return jsonify({'error': 'Only the recommender can delete this.'}), 403
+
+        m.bond_recommendations_conf.delete_one({'_id': ObjectId(rec_id)})
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Recommendation delete error: {e}")
+        return jsonify({'error': 'Failed to delete recommendation'}), 500
+
+
+# ===================================================================
+# Quick Pulse (anytime check-in — no daily limit)
+# ===================================================================
+
+PULSE_EMOJIS = ['😊', '🥰', '🤗', '💪', '🎉', '🙏', '🤔', '😴', '😤', '😢']
+
+
+@bp.route('/api/bonds/<bond_id>/pulses', methods=['GET'])
+@login_required
+def api_bond_pulses_list(bond_id):
+    """Get recent quick pulses for the bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        if not _is_bond_participant(bond_doc, str(current_user.id)):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        pulses = list(m.bond_pulses_conf.find(
+            {'bond_id': ObjectId(bond_id)}
+        ).sort('created_at', -1).limit(30))
+
+        result = []
+        for p in pulses:
+            result.append({
+                'id': str(p['_id']),
+                'user_id': str(p['user_id']),
+                'from_me': str(p['user_id']) == str(current_user.id),
+                'emoji': p.get('emoji', '😊'),
+                'message': p.get('message', ''),
+                'created_at': p.get('created_at').isoformat() if p.get('created_at') else None,
+            })
+        return jsonify({'success': True, 'pulses': result})
+    except Exception as e:
+        current_app.logger.error(f"Pulses list error: {e}")
+        return jsonify({'error': 'Failed to load pulses'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/pulse', methods=['POST'])
+@login_required
+@limits(calls=30, period=60)
+def api_bond_pulse_send(bond_id):
+    """Send a quick pulse (anytime check-in)."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        emoji = (data.get('emoji', '😊') or '').strip()
+        if emoji not in PULSE_EMOJIS:
+            emoji = '😊'
+        message = (data.get('message', '') or '').strip()[:140]
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = m.bond_pulses_conf.insert_one({
+            'bond_id': ObjectId(bond_id),
+            'user_id': ObjectId(user_id_str),
+            'emoji': emoji,
+            'message': message,
+            'created_at': now,
+        })
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        pulse_data = {
+            'bond_id': bond_id,
+            'pulse_id': str(result.inserted_id),
+            'from_user_id': user_id_str,
+            'from_username': current_user.username,
+            'emoji': emoji,
+            'message': message,
+        }
+        m.socketio.emit('bond_pulse_received', pulse_data, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{emoji} {current_user.username} sent a pulse",
+            message if message else "Thinking of you!",
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-pulse-{bond_id}'
+        )
+
+        return jsonify({'success': True, 'id': str(result.inserted_id)})
+    except Exception as e:
+        current_app.logger.error(f"Pulse send error: {e}")
+        return jsonify({'error': 'Failed to send pulse'}), 500
 
 
 @bp.route('/api/bonds/<bond_id>/dismiss_archive', methods=['POST'])

@@ -46,6 +46,18 @@ bond_qotd_conf = None
 bond_habits_conf = None
 bond_countdowns_conf = None
 
+# --- Bond Shared Album (Photo Memories) ---
+bond_album_photos_conf = None
+
+# --- Bond Bucket List ---
+bond_bucketlist_conf = None
+
+# --- Bond Media Recommendations ---
+bond_recommendations_conf = None
+
+# --- Bond Quick Pulse (anytime check-in) ---
+bond_pulses_conf = None
+
 # --- Community Question Bank (AI-generated QotD reuse) ---
 community_questions_conf = None
 

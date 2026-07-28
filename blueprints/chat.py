@@ -113,7 +113,14 @@ def api_message_history(other_user_id):
         return jsonify({'error': 'User not found'}), 404
     if m.hidden_chats_conf.find_one({'user_id': ObjectId(current_user.id), 'partner_id': other_id}):
         return jsonify({'messages': []})
-    messages = list(m.direct_messages_conf.find({'$or': [{'sender_id': ObjectId(current_user.id), 'recipient_id': other_id}, {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}]}).sort('timestamp', -1).limit(200))
+    before_id = request.args.get('before')
+    query_filter = {'$or': [{'sender_id': ObjectId(current_user.id), 'recipient_id': other_id}, {'sender_id': other_id, 'recipient_id': ObjectId(current_user.id)}]}
+    if before_id:
+        try:
+            query_filter['_id'] = {'$lt': ObjectId(before_id)}
+        except Exception:
+            pass
+    messages = list(m.direct_messages_conf.find(query_filter).sort('timestamp', -1).limit(50))
     messages.reverse()
     m.direct_messages_conf.update_many({'sender_id': other_id, 'recipient_id': ObjectId(current_user.id), 'is_read': False}, {'$set': {'is_read': True}})
     formatted_messages = []

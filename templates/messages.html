@@ -210,7 +210,7 @@
 
                 <!-- Messages List -->
                 <div id="chat-history"
-                    style="flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa; position: relative;"
+                    style="flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem; display: flex; flex-direction: column; gap: 4px; background: #fafafa; position: relative;"
                     data-theme="default">
                     {% if not active_chat %}
                     <div style="text-align: center; color: #999; font-size: 0.85rem; padding: 2rem;">Loading chat
@@ -241,21 +241,21 @@
 
                 <div id="image-upload-banner"
                     style="display: none; padding: 0.6rem 1.5rem; background: #fdfaf9; border-top: 1px solid #f5ebe7; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; align-items: center; gap: 0.8rem;">
-                        <div style="position: relative; width: 40px; height: 40px;">
+                    <div style="display: flex; align-items: center; gap: 0.8rem; flex: 1; min-width: 0;">
+                        <div style="position: relative; width: 48px; height: 48px; flex-shrink: 0;">
                             <img id="image-upload-preview" src=""
-                                style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover; border: 1px solid #eee;">
+                                style="width: 48px; height: 48px; border-radius: 8px; object-fit: cover; border: 1px solid #eee;">
                             <div id="image-upload-spinner" class="img-upload-overlay" style="display: none;">
                                 <div class="img-upload-spinner"></div>
                             </div>
                         </div>
-                        <div style="display: flex; flex-direction: column;">
+                        <div style="display: flex; flex-direction: column; min-width: 0;">
                             <span style="font-size: 0.85rem; font-weight: 600; color: #333;">Attached Image</span>
                             <span id="image-upload-status" style="font-size: 0.75rem; color: #999;">Uploading...</span>
                         </div>
                     </div>
                     <button onclick="cancelImageUpload()"
-                        style="background: none; border: none; color: #999; cursor: pointer; padding: 5px;"><i
+                        style="background: none; border: none; color: #999; cursor: pointer; padding: 5px; flex-shrink: 0;"><i
                             class="fas fa-times"></i></button>
                 </div>
 
@@ -287,7 +287,7 @@
 
                 <!-- Message Input -->
                 <div class="chat-input-area"
-                    style="padding: 1rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff; width: 100%; box-sizing: border-box; min-width: 0;">
+                    style="padding: 1rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden;">
 
                     <!-- Voice Recording UI -->
                     <div id="voice-recording-ui" class="voice-recording-ui" style="display:none;">
@@ -306,7 +306,7 @@
                         </div>
                     </div>
 
-                    <form id="chat-form" style="display: flex; gap: 0.8rem; align-items: center; width: 100%; min-width: 0; box-sizing: border-box;">
+                    <form id="chat-form" style="display: flex; gap: 0.8rem; align-items: center; width: 100%; min-width: 0; box-sizing: border-box; flex-wrap: nowrap;">
                         <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
                         <input type="hidden" id="reply-parent-id" value="">
                         <input type="hidden" id="pending-image-url" value="">
@@ -314,7 +314,7 @@
                         <!-- Image Upload Button -->
                         <button type="button" class="action-btn"
                             onclick="document.getElementById('dm-image-upload').click()"
-                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; flex-shrink: 0;">
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; flex: 0 0 auto;">
                             <i class="fas fa-paperclip"></i>
                         </button>
                         <input type="file" id="dm-image-upload" accept="image/*" style="display: none;"
@@ -322,26 +322,26 @@
 
                         <div style="flex: 1; min-width: 0; position: relative;">
                             <textarea id="message-input" placeholder="Type a message..." autocomplete="off" rows="1"
-                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none; resize: none; overflow-y: hidden; max-height: 120px; line-height: 1.4; font-family: inherit; box-sizing: border-box;"></textarea>
+                                style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none; resize: none; overflow-y: hidden; max-height: 120px; line-height: 1.4; font-family: inherit; box-sizing: border-box; min-width: 0; touch-action: manipulation;"></textarea>
                         </div>
 
                         <!-- Voice Message Button -->
                         <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn"
                             onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
                             title="Hold to record voice message"
-                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex-shrink: 0;">
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 auto;">
                             <i class="fas fa-microphone"></i>
                         </button>
 
                         <!-- Schedule Button -->
                         <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
                             title="Schedule message"
-                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0;">
+                            style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 auto;">
                             <i class="far fa-clock"></i>
                         </button>
 
                         <button type="submit" class="btn" id="send-btn"
-                            style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex-shrink: 0;">
+                            style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 auto;">
                             <i class="fas fa-paper-plane"></i>
                         </button>
                     </form>
@@ -354,6 +354,23 @@
 <style>
     :root {
         --primary-color: #3e2217;
+    }
+
+    /* Android keyboard & touch behavior fixes */
+    #message-input {
+        touch-action: manipulation;
+        -webkit-user-select: text;
+        user-select: text;
+    }
+    body.mobile-chat-open {
+        /* Prevent layout shifts when Android keyboard opens/closes */
+        overscroll-behavior: none;
+    }
+    body.mobile-chat-open .chat-input-area {
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+        flex-shrink: 0;
     }
 
     /* Contact Items */
@@ -419,6 +436,8 @@
         transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
         margin-bottom: 1px;
         animation: msgAppear 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        content-visibility: auto;
+        contain-intrinsic-size: 60px;
     }
 
     @keyframes msgAppear {
@@ -488,6 +507,37 @@
 
     .typing-dot:nth-child(3) {
         animation-delay: 0.4s;
+    }
+
+    /* Load older messages button */
+    #load-older-btn {
+        text-align: center;
+        padding: 0.75rem;
+        font-size: 0.8rem;
+        color: var(--primary-color);
+        cursor: pointer;
+        user-select: none;
+    }
+    #load-older-btn:hover {
+        opacity: 0.7;
+    }
+    #load-older-btn.loading {
+        pointer-events: none;
+        opacity: 0.5;
+    }
+
+    /* Failed message retry state */
+    .message-bubble.message-failed {
+        opacity: 0.7;
+        cursor: pointer;
+    }
+    .message-bubble.message-failed .retry-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #e74c3c;
+        font-size: 0.65rem;
+        margin-left: 4px;
     }
 
     /* In-chat typing bubble */
@@ -1114,6 +1164,13 @@
             font-size: 1.1rem;
             padding: 3px;
         }
+
+        /* Android keyboard: ensure input bar stays anchored at bottom */
+        .chat-input-area {
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+        }
     }
 
     /* Hide PWA native refresh button when chatting to prevent blocking the send button */
@@ -1130,8 +1187,8 @@
         position: fixed;
         top: 0;
         left: 0;
-        width: 100%;
-        height: 100%;
+        width: 100dvw;
+        height: 100dvh;
         background: rgba(0, 0, 0, 0.5);
         z-index: 10001;
         display: none;
@@ -1150,12 +1207,13 @@
         background: #fff;
         border-radius: 16px;
         padding: 0;
-        width: 340px;
-        max-width: 90vw;
+        width: min(90%, 340px);
+        max-width: calc(100dvw - 32px);
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
         transform: translateY(20px);
         transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         overflow: hidden;
+        box-sizing: border-box;
     }
 
     .schedule-overlay.show .schedule-modal {
@@ -1598,8 +1656,8 @@
         position: fixed;
         top: 0;
         left: 0;
-        width: 100%;
-        height: 100%;
+        width: 100dvw;
+        height: 100dvh;
         background: rgba(0, 0, 0, 0.5);
         z-index: 2000;
         display: none;
@@ -2068,6 +2126,11 @@
         // DM error (e.g. permission denied)
         socket.on('dm_error', (data) => {
             showToast(data.error || 'Failed to send message', 'error');
+            // Mark all pending messages as failed
+            Object.keys(pendingMessages).forEach(function(tempId) {
+                markMessageFailed(tempId);
+                clearTimeout(pendingMessages[tempId].timer);
+            });
         });
 
         // Real-time incoming message request
@@ -2141,10 +2204,20 @@
 
         socket.on('message_confirmed', (data) => {
             console.log("Sync: Message confirmed ID", data.id);
+            // Clear from pending queue
+            if (data.temp_id && pendingMessages[data.temp_id]) {
+                clearTimeout(pendingMessages[data.temp_id].timer);
+                delete pendingMessages[data.temp_id];
+            }
             const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
             if (bubble) {
                 bubble.setAttribute('data-id', data.id);
                 bubble.removeAttribute('data-temp');
+                bubble.removeAttribute('data-failed');
+                bubble.classList.remove('message-failed');
+                var indicator = bubble.querySelector('.retry-indicator');
+                if (indicator) indicator.remove();
+                bubble.style.opacity = '';
                 renderedMessageIds.add(data.id);
                 const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
                 addMessageActions(bubble, data.id, inferredType);
@@ -2228,6 +2301,55 @@
         });
 
         // --- Message Actions ---
+        // --- Send queue (pending messages with retry support) ---
+        var pendingMessages = {};
+        var SEND_TIMEOUT = 8000;
+
+        function addPendingMessage(tempId, payload) {
+            pendingMessages[tempId] = {
+                payload: payload,
+                retries: 0,
+                timer: setTimeout(function() {
+                    markMessageFailed(tempId);
+                }, SEND_TIMEOUT)
+            };
+        }
+
+        function markMessageFailed(tempId) {
+            var bubble = document.querySelector('.message-bubble[data-temp="' + tempId + '"]');
+            if (bubble) {
+                bubble.classList.add('message-failed');
+                bubble.setAttribute('data-failed', 'true');
+                var meta = bubble.querySelector('.message-meta');
+                if (meta && !meta.querySelector('.retry-indicator')) {
+                    meta.insertAdjacentHTML('beforeend', '<span class="retry-indicator"><i class="fas fa-exclamation-circle"></i> Failed — tap to retry</span>');
+                }
+            }
+        }
+
+        window.retrySendMessage = function(tempId) {
+            var entry = pendingMessages[tempId];
+            if (!entry) return;
+            entry.retries++;
+            if (entry.retries > 3) {
+                showToast('Message failed after 3 retries.', 'error');
+                return;
+            }
+            var bubble = document.querySelector('.message-bubble[data-temp="' + tempId + '"]');
+            if (bubble) {
+                bubble.classList.remove('message-failed');
+                bubble.removeAttribute('data-failed');
+                var indicator = bubble.querySelector('.retry-indicator');
+                if (indicator) indicator.remove();
+                bubble.style.opacity = '0.5';
+            }
+            clearTimeout(entry.timer);
+            entry.timer = setTimeout(function() {
+                markMessageFailed(tempId);
+            }, SEND_TIMEOUT);
+            socket.emit('send_dm', entry.payload);
+        };
+
         if (chatForm) {
             chatForm.onsubmit = (e) => {
                 e.preventDefault();
@@ -2264,10 +2386,15 @@
                     msgData.reply_to_sender = document.getElementById('reply-to-user').textContent;
                 }
 
+                // Add to send queue before emitting
+                addPendingMessage(tempId, payload);
                 socket.emit('send_dm', payload);
 
                 // Show optimistically
                 appendMessage(msgData, 'sent', false, null, false, tempId);
+
+                // Haptic feedback on send
+                if (navigator.vibrate) navigator.vibrate(15);
 
                 // Update sidebar preview for active chat
                 const activeContact = document.querySelector(`.contact-item[data-user-id="${activeRecipientId}"]`);
@@ -2290,6 +2417,9 @@
                 cancelReply();
                 cancelImageUpload();
                 document.getElementById('send-btn').style.opacity = '1';
+
+                // Focus back to textarea for quick consecutive sends
+                messageInput.focus();
 
                 scrollToBottom();
             };
@@ -2381,11 +2511,21 @@
         function loadChatHistory(userId) {
             lastMessageDate = null;
             renderedMessageIds.clear();
+            loadingOlder = false;
+            hasMoreMessages = true;
+            oldestMessageId = null;
+            pendingMessages = {};
             fetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
                 chatHistory.innerHTML = ''; // Clean start
                 const messages = data.messages || [];
                 if (messages.length === 0) {
                     chatHistory.insertAdjacentHTML('beforeend', '<div style="text-align: center; color: #999; padding: 3rem; font-size: 0.85rem;">No messages yet. Say hello!</div>');
+                } else {
+                    // Insert "load older" button at top
+                    var loadBtn = '<div id="load-older-btn" onclick="loadOlderMessages()">Load older messages</div>';
+                    chatHistory.insertAdjacentHTML('beforeend', loadBtn);
+                    oldestMessageId = messages[0].id;
+                    hasMoreMessages = messages.length >= 50;
                 }
                 let lastSender = null;
                 messages.forEach(m => {
@@ -2394,7 +2534,7 @@
                 });
                 scrollToBottom();
                 // Re-scroll after images load (they change the container height)
-                chatHistory.querySelectorAll('img').forEach(img => {
+                chatHistory.querySelectorAll('img.chat-image').forEach(img => {
                     if (!img.complete) {
                         img.addEventListener('load', scrollToBottom, { once: true });
                     }
@@ -2486,7 +2626,7 @@
             // Build Content block
             let contentHTML = '';
             if (msgData.message_type === 'image' && msgData.image_url) {
-                contentHTML = `<img src="${msgData.image_url}" class="chat-image" onclick="openLightbox('${msgData.image_url}')">`;
+                contentHTML = `<img src="${msgData.image_url}" class="chat-image" loading="lazy" onclick="openLightbox('${msgData.image_url}')">`;
                 if (msgData.content) {
                     contentHTML += `<div class="message-content">${formatMessageText(msgData.content)}</div>`;
                 }
@@ -2600,6 +2740,75 @@
                 isSwiping = false;
             }, { passive: true });
         }
+
+        // Delegated click handler: retry failed messages
+        chatHistory.addEventListener('click', function(e) {
+            var bubble = e.target.closest('.message-bubble.message-failed');
+            if (bubble) {
+                var tempId = bubble.getAttribute('data-temp');
+                if (tempId && pendingMessages[tempId]) {
+                    retrySendMessage(tempId);
+                }
+            }
+        });
+
+        // Load older messages pagination
+        var loadingOlder = false;
+        var hasMoreMessages = true;
+        var oldestMessageId = null;
+
+        window.loadOlderMessages = function() {
+            if (loadingOlder || !hasMoreMessages || !activeRecipientId) return;
+            loadingOlder = true;
+            var btn = document.getElementById('load-older-btn');
+            if (btn) {
+                btn.classList.add('loading');
+                btn.textContent = 'Loading...';
+            }
+            var url = '/api/messages/history/' + activeRecipientId;
+            if (oldestMessageId) url += '?before=' + oldestMessageId;
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                var msgs = data.messages || [];
+                if (msgs.length === 0) {
+                    hasMoreMessages = false;
+                    if (btn) btn.textContent = 'No more messages';
+                    loadingOlder = false;
+                    return;
+                }
+                // Get the first visible bubble's data-id to use as insert-after anchor
+                var firstExisting = chatHistory.querySelector('.message-bubble[data-id]');
+                oldestMessageId = msgs[0].id;
+                // Render before existing messages (temporarily disable scroll anchoring)
+                var prevScrollHeight = chatHistory.scrollHeight;
+                var lastSender = null;
+                var prevLastDate = lastMessageDate;
+                // Temporarily save lastMessageDate and override
+                var savedDate = lastMessageDate;
+                lastMessageDate = null;
+                msgs.forEach(function(m) {
+                    appendMessage(m, m.sender_id === currentUserId ? 'sent' : 'received', m.sender_id === lastSender, m.id, m.is_read);
+                    lastSender = m.sender_id;
+                });
+                // Restore lastMessageDate so subsequent new messages still show date dividers correctly
+                lastMessageDate = savedDate;
+                // Preserve scroll position
+                if (firstExisting) {
+                    chatHistory.scrollTop = chatHistory.scrollHeight - prevScrollHeight;
+                }
+                hasMoreMessages = msgs.length >= 50;
+                loadingOlder = false;
+                if (btn) {
+                    btn.classList.remove('loading');
+                    btn.textContent = hasMoreMessages ? 'Load older messages' : 'All messages loaded';
+                }
+            }).catch(function() {
+                loadingOlder = false;
+                if (btn) {
+                    btn.classList.remove('loading');
+                    btn.textContent = 'Error loading. Tap to retry.';
+                }
+            });
+        };
 
         window.scrollToMessage = function (msgId) {
             const el = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
@@ -3101,6 +3310,9 @@
                 document.getElementById('voice-recording-ui').style.display = 'flex';
                 document.getElementById('chat-form').style.display = 'none';
 
+                // Haptic feedback on recording start
+                if (navigator.vibrate) navigator.vibrate(30);
+
                 // Notify recipient we are recording
                 if (activeRecipientId) {
                     socket.emit('recording_audio', { recipient_id: activeRecipientId });
@@ -3148,6 +3360,7 @@
         window.sendVoiceRecording = function () {
             if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
             _voiceRecordingState = 'sending';
+            if (navigator.vibrate) navigator.vibrate(20);
 
             // Notify recipient we stopped recording
             if (activeRecipientId) {
@@ -3201,6 +3414,63 @@
             mediaRecorder.stop();
             clearInterval(recordingTimer);
         };
+
+        // --- Pull-to-refresh prevention: suppress overscroll at body level ---
+        // On mobile, prevent default touchmove that would trigger pull-to-refresh
+        // when already at scroll boundary inside chat-history.
+        document.addEventListener('touchmove', function(e) {
+            if (!document.body.classList.contains('mobile-chat-open')) return;
+            var target = e.target;
+            while (target) {
+                if (target.id === 'chat-history') return; // let chat-history scroll naturally
+                target = target.parentElement;
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        // --- Focus trap utility for modals ---
+        function trapModalFocus(modalEl) {
+            if (!modalEl) return;
+            var focusable = modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            var firstFocusable = focusable[0];
+            var lastFocusable = focusable[focusable.length - 1];
+            function handleTab(e) {
+                if (e.key !== 'Tab') return;
+                if (e.shiftKey) {
+                    if (document.activeElement === firstFocusable) {
+                        e.preventDefault();
+                        lastFocusable.focus();
+                    }
+                } else {
+                    if (document.activeElement === lastFocusable) {
+                        e.preventDefault();
+                        firstFocusable.focus();
+                    }
+                }
+            }
+            modalEl.addEventListener('keydown', handleTab);
+            if (firstFocusable) firstFocusable.focus();
+            // Return cleanup function
+            return function() { modalEl.removeEventListener('keydown', handleTab); };
+        }
+
+        // Apply focus trap to common modals
+        function initModalFocusTraps() {
+            var scheduleOverlay = document.getElementById('schedule-overlay');
+            if (scheduleOverlay && scheduleOverlay.__focusCleanup === undefined) {
+                scheduleOverlay.__focusCleanup = function() {
+                    var origShow = scheduleOverlay.style.display;
+                    var observer = new MutationObserver(function() {
+                        if (scheduleOverlay.style.display !== 'none' && scheduleOverlay.classList.contains('show')) {
+                            trapModalFocus(scheduleOverlay.querySelector('.schedule-modal') || scheduleOverlay);
+                        }
+                    });
+                    observer.observe(scheduleOverlay, { attributes: true, attributeFilter: ['style', 'class'] });
+                };
+                scheduleOverlay.__focusCleanup();
+            }
+        }
+        initModalFocusTraps();
 
         // --- Theme Picker Logic (Premium) ---
         window.openThemePicker = function () {
@@ -3265,16 +3535,31 @@
 
         // Dynamic keyboard Viewport sizing for mobile chat
         if (window.visualViewport) {
+            var _lastVpHeight = window.visualViewport.height;
             function handleViewportResize() {
-                const wrapper = document.querySelector('.messages-wrapper');
+                var vp = window.visualViewport;
+                var wrapper = document.querySelector('.messages-wrapper');
+                var inputArea = document.querySelector('.chat-input-area');
                 if (document.body.classList.contains('mobile-chat-open') && wrapper) {
-                    wrapper.style.height = window.visualViewport.height + 'px';
+                    wrapper.style.height = vp.height + 'px';
+                    if (inputArea) {
+                        inputArea.style.position = 'relative';
+                        inputArea.style.bottom = '0';
+                    }
+                    // Scroll to bottom when keyboard is open and input is focused
                     if (document.activeElement && document.activeElement.id === 'message-input') {
                         scrollToBottom();
                     }
                 } else if (wrapper) {
                     wrapper.style.height = '';
                 }
+                // Detect keyboard closing (viewport returning to full height) — reset any dead space
+                if (vp.height >= _lastVpHeight + 100 || vp.height >= window.screen.height * 0.85) {
+                    document.body.style.height = '';
+                    document.documentElement.style.height = '';
+                    window.scrollTo(0, 0);
+                }
+                _lastVpHeight = vp.height;
             }
             window.visualViewport.addEventListener('resize', handleViewportResize);
             window.visualViewport.addEventListener('scroll', handleViewportResize);
@@ -3877,13 +4162,14 @@
 
     /* --- Whisper Mode Styles --- */
     .whisper-modal-overlay {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        display: none; position: fixed; top: 0; left: 0; width: 100dvw; height: 100dvh;
         background: rgba(0,0,0,0.6); z-index: 1300; align-items: center; justify-content: center;
     }
     .whisper-modal-overlay.active { display: flex; }
     .whisper-modal {
         background: #fff; border-radius: 8px; padding: 1.5rem;
-        max-width: 400px; width: 90%; text-align: center;
+        max-width: 400px; width: min(90%, 400px); max-width: calc(100dvw - 32px); text-align: center;
+        box-sizing: border-box;
     }
     .whisper-modal h3 { color: #2a1810; margin: 0 0 0.5rem; font-size: 1.1rem; }
     .whisper-modal p { color: #666; font-size: 0.85rem; margin: 0.3rem 0; }

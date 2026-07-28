@@ -397,6 +397,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
 }
 
 /* Layout Container Styles */
@@ -404,6 +405,8 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 .container {
@@ -1071,8 +1074,8 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100dvw;
+    height: 100dvh;
     display: none;
     align-items: center;
     justify-content: center;

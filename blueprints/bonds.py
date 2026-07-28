@@ -39,6 +39,63 @@ def _format_datetime(val):
         return res
     return str(val)
 
+# Section names for unread badge tracking
+BOND_SECTIONS = ['mood', 'qotd', 'journal', 'goals', 'habits', 'insights', 'album', 'bucketlist', 'recommendations', 'pulses', 'countdowns']
+
+
+def _new_tracking_dict():
+    """Returns initial section_activity / last_viewed dict with all sections set to now."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return {s: now for s in BOND_SECTIONS}
+
+
+def _update_section_activity(bond_id, section):
+    """Set section_activity.{section} to now. Call after any partner action."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    m.bonds_conf.update_one(
+        {'_id': ObjectId(bond_id)},
+        {'$set': {f'section_activity.{section}': now}}
+    )
+    return now
+
+
+def _get_unread_sections(bond_doc, user_id):
+    """Return dict of section -> bool: True if activity > user's last_viewed."""
+    user_id_str = str(user_id)
+    last_viewed = bond_doc.get('last_viewed', {}).get(user_id_str, {})
+    activity = bond_doc.get('section_activity', {})
+    result = {}
+    for s in BOND_SECTIONS:
+        act = activity.get(s)
+        viewed = last_viewed.get(s)
+        if isinstance(act, datetime.datetime) and act.tzinfo is None:
+            act = act.replace(tzinfo=datetime.timezone.utc)
+        if isinstance(viewed, datetime.datetime) and viewed.tzinfo is None:
+            viewed = viewed.replace(tzinfo=datetime.timezone.utc)
+        result[s] = bool(act and (not viewed or act > viewed))
+    return result
+
+
+def _emit_section_unread(bond_doc, section, performed_by_user_id):
+    """Emit SocketIO bond_unread_update to the other bond participant."""
+    import main as m
+    user_a = str(bond_doc.get('user_a_id', ''))
+    user_b = str(bond_doc.get('user_b_id', ''))
+    other_id = user_b if user_a == str(performed_by_user_id) else user_a
+    if other_id:
+        m.socketio.emit('bond_unread_update', {
+            'bond_id': str(bond_doc['_id']),
+            'section': section
+        }, room=f"user_{other_id}")
+
+
+def _on_bond_action(bond_doc, section, performed_by_user_id):
+    """Combined: update section_activity + emit SocketIO to other user."""
+    _update_section_activity(str(bond_doc['_id']), section)
+    _emit_section_unread(bond_doc, section, performed_by_user_id)
+
+
 # Goal categories
 GOAL_CATEGORIES = [
     'Health', 'Finance', 'Education', 'Relationship',
@@ -546,7 +603,8 @@ def bonds_page():
             'goal_count': goal_count,
             'anniversary': anniversary,
             'streak_shield_used_this_week': streak_shield_used_this_week,
-            'nudge_remaining': nudge_remaining
+            'nudge_remaining': nudge_remaining,
+            'unread_sections': _get_unread_sections(bond, str(current_user.id))
         })
 
     # Get pending received requests
@@ -736,9 +794,12 @@ def api_bond_request(target_user_id):
                 # If the target sent us a request, auto-accept
                 if str(existing['requested_by']) == target_user_id:
                     now = datetime.datetime.now(datetime.timezone.utc)
+                    init_tracking = _new_tracking_dict()
+                    ua = str(existing.get('user_a_id', ''))
+                    ub = str(existing.get('user_b_id', ''))
                     m.bonds_conf.update_one(
                         {'_id': existing['_id']},
-                        {'$set': {'status': 'active', 'accepted_at': now}}
+                        {'$set': {'status': 'active', 'accepted_at': now, 'section_activity': init_tracking, 'last_viewed': {ua: dict(init_tracking), ub: dict(init_tracking)}}}
                     )
                     m.socketio.emit('bond_accepted', {
                         'bond_id': str(existing['_id']),
@@ -840,9 +901,12 @@ def api_bond_respond(bond_id):
         if active_count >= max_bonds:
             return jsonify({'error': f'You already have {max_bonds} active bonds.'}), 400
 
+        init_tracking = _new_tracking_dict()
+        ua = str(bond_doc.get('user_a_id', ''))
+        ub = str(bond_doc.get('user_b_id', ''))
         m.bonds_conf.update_one(
             {'_id': ObjectId(bond_id)},
-            {'$set': {'status': 'active', 'accepted_at': now}}
+            {'$set': {'status': 'active', 'accepted_at': now, 'section_activity': init_tracking, 'last_viewed': {ua: dict(init_tracking), ub: dict(init_tracking)}}}
         )
 
         m.socketio.emit('bond_accepted', {
@@ -1133,6 +1197,8 @@ def api_bond_goal_create(bond_id):
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-goal-{result.inserted_id}'
         )
+
+        _on_bond_action(bond_doc, 'goals', current_user.id)
 
         return jsonify({'success': True, 'goal_id': str(result.inserted_id)})
 
@@ -1587,6 +1653,8 @@ def api_bond_journal_create(bond_id):
             tag=f'bond-journal-{bond_id}'
         )
 
+        _on_bond_action(bond_doc, 'journal', current_user.id)
+
         return jsonify({
             'success': True,
             'entry_id': str(result.inserted_id)
@@ -1787,6 +1855,8 @@ def api_bond_mood_log(bond_id):
                 {'$set': {'mood': bot_mood, 'created_at': now}},
                 upsert=True
             )
+
+        _on_bond_action(bond_doc, 'mood', current_user.id)
 
         partner_mood_doc = m.bond_moods_conf.find_one({
             'bond_id': ObjectId(bond_id),
@@ -2089,6 +2159,8 @@ def api_bond_qotd_answer(bond_id):
         answers = updated_doc.get('answers', {})
         partner_answer = answers.get(partner_id)
         revealed = partner_answer is not None
+
+        _on_bond_action(bond_doc, 'qotd', current_user.id)
 
         result = {
             'success': True,
@@ -2613,6 +2685,8 @@ def api_bond_habit_create(bond_id):
             tag=f'bond-habit-new-{res.inserted_id}'
         )
 
+        _on_bond_action(bond_doc, 'habits', current_user.id)
+
         return jsonify({
             'success': True,
             'habit_id': str(res.inserted_id),
@@ -2687,6 +2761,8 @@ def api_bond_habit_toggle(habit_id):
                 url=url_for('bonds.bonds_page', _external=True),
                 tag=f'bond-habit-toggle-{habit_id}'
             )
+
+        _on_bond_action(bond_doc, 'habits', current_user.id)
 
         return jsonify({'success': True, 'completed': new_status})
 
@@ -2814,9 +2890,35 @@ def api_bond_insights_get(bond_id):
         current_streak = bond_doc.get('streak_count', 0)
         best_streak = bond_doc.get('best_streak', current_streak)
 
+        # --- 3. Anniversary info ---
+        accepted_at = bond_doc.get('accepted_at')
+        anniversary_label = _get_bond_anniversary(accepted_at)
+        days_since = None
+        next_milestone_label = None
+        next_milestone_days = None
+        if accepted_at:
+            if accepted_at.tzinfo is None:
+                accepted_at_dt = accepted_at.replace(tzinfo=datetime.timezone.utc)
+            else:
+                accepted_at_dt = accepted_at
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            days_since = (now_dt.date() - accepted_at_dt.date()).days
+            # Find next milestone
+            for ms_days, ms_label in _ANNIVERSARY_MILESTONES:
+                if ms_days > days_since:
+                    next_milestone_label = ms_label
+                    next_milestone_days = ms_days - days_since
+                    break
+
         return jsonify({
             'partner_username': partner_username,
             'mood_comparison': mood_comparison,
+            'anniversary': {
+                'label': anniversary_label,
+                'days_since': days_since,
+                'next_milestone': next_milestone_label,
+                'next_milestone_days': next_milestone_days
+            },
             'recap': {
                 'month_name': today.strftime('%B %Y'),
                 'current_streak': current_streak,
@@ -2957,6 +3059,8 @@ def api_bond_countdown_create(bond_id):
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-countdown-{res.inserted_id}'
         )
+
+        _on_bond_action(bond_doc, 'countdowns', current_user.id)
 
         return jsonify({
             'success': True,
@@ -3213,6 +3317,8 @@ def api_bond_album_upload(bond_id):
             tag=f'bond-album-{bond_id}'
         )
 
+        _on_bond_action(bond_doc, 'album', current_user.id)
+
         return jsonify({
             'success': True,
             'photos': uploaded_photos,
@@ -3442,6 +3548,8 @@ def api_bond_bucketlist_create(bond_id):
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-bucketlist-{bond_id}'
         )
+
+        _on_bond_action(bond_doc, 'bucketlist', current_user.id)
 
         return jsonify({
             'success': True,
@@ -3673,6 +3781,8 @@ def api_bond_recommendations_create(bond_id):
             tag=f'bond-rec-{bond_id}'
         )
 
+        _on_bond_action(bond_doc, 'recommendations', current_user.id)
+
         return jsonify({
             'success': True,
             'recommendation': {
@@ -3836,6 +3946,8 @@ def api_bond_pulse_send(bond_id):
             tag=f'bond-pulse-{bond_id}'
         )
 
+        _on_bond_action(bond_doc, 'pulses', current_user.id)
+
         return jsonify({'success': True, 'id': str(result.inserted_id)})
     except Exception as e:
         current_app.logger.error(f"Pulse send error: {e}")
@@ -3863,3 +3975,32 @@ def api_bond_dismiss_archive(bond_id):
     except Exception as e:
         current_app.logger.error(f"Dismiss archive error: {e}")
         return jsonify({'error': 'Failed to dismiss past bond'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/view-section', methods=['POST'])
+@login_required
+def api_bond_view_section(bond_id):
+    """Mark a section as viewed by the current user (clears its unread badge)."""
+    import main as m
+    try:
+        data = request.get_json() or {}
+        section = data.get('section', '').strip()
+        if section not in BOND_SECTIONS:
+            return jsonify({'error': 'Invalid section'}), 400
+
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        m.bonds_conf.update_one(
+            {'_id': ObjectId(bond_id)},
+            {'$set': {f'last_viewed.{user_id_str}.{section}': now}}
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"View section error: {e}")
+        return jsonify({'error': 'Failed to mark section as viewed'}), 500

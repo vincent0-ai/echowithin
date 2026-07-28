@@ -612,6 +612,8 @@ def start_guest_tour():
     })
     partner_id = p_res.inserted_id
         
+    section_names = ['mood','qotd','journal','goals','habits','insights','album','bucketlist','recommendations','pulses','countdowns']
+    init_sections = {s: now for s in section_names}
     bond_res = m.bonds_conf.insert_one({
         'user_a_id': guest_id,
         'user_b_id': partner_id,
@@ -621,7 +623,9 @@ def start_guest_tour():
         'created_at': now - datetime.timedelta(days=14),
         'accepted_at': now - datetime.timedelta(days=14),
         'streak_count': 5,
-        'last_streak_date': now
+        'last_streak_date': now,
+        'section_activity': init_sections,
+        'last_viewed': {str(guest_id): dict(init_sections), str(partner_id): dict(init_sections)}
     })
     bond_id = bond_res.inserted_id
     bond_id_str = str(bond_id)

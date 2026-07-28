@@ -602,6 +602,19 @@
         color: #fff;
     }
 
+    /* Unread Badge */
+    .section-badge {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #4caf50;
+        margin-left: 3px;
+        vertical-align: middle;
+        flex-shrink: 0;
+        box-shadow: 0 0 4px rgba(76,175,80,0.5);
+    }
+
     /* Goals */
     .goal-card {
         background: var(--surface-bg);
@@ -1496,47 +1509,47 @@
             <div class="bond-actions">
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('mood-{{ bond.id }}', this); loadMood('{{ bond.id }}')">
-                    Mood
+                    Mood{% if bond.unread_sections.get('mood') %}<span class="section-badge" id="badge-mood-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-mood-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('qotd-{{ bond.id }}', this); loadQotd('{{ bond.id }}')">
-                    Question
+                    Question{% if bond.unread_sections.get('qotd') %}<span class="section-badge" id="badge-qotd-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-qotd-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('goals-{{ bond.id }}', this)">
-                    Goals ({{ bond.goal_count }})
+                    Goals ({{ bond.goal_count }}){% if bond.unread_sections.get('goals') %}<span class="section-badge" id="badge-goals-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-goals-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('journal-{{ bond.id }}', this); loadJournal('{{ bond.id }}')">
-                    Journal
+                    Journal{% if bond.unread_sections.get('journal') %}<span class="section-badge" id="badge-journal-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-journal-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('habits-{{ bond.id }}', this); loadHabits('{{ bond.id }}')">
-                    Habits
+                    Habits{% if bond.unread_sections.get('habits') %}<span class="section-badge" id="badge-habits-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-habits-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('insights-{{ bond.id }}', this); loadInsights('{{ bond.id }}')">
-                    Insights
+                    Insights{% if bond.unread_sections.get('insights') %}<span class="section-badge" id="badge-insights-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-insights-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('countdowns-{{ bond.id }}', this); loadCountdowns('{{ bond.id }}')">
-                    Countdowns
+                    Countdowns{% if bond.unread_sections.get('countdowns') %}<span class="section-badge" id="badge-countdowns-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-countdowns-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('album-{{ bond.id }}', this); loadAlbum('{{ bond.id }}')">
-                    Album
+                    Album{% if bond.unread_sections.get('album') %}<span class="section-badge" id="badge-album-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-album-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('bucketlist-{{ bond.id }}', this); loadBucketlist('{{ bond.id }}')">
-                    Bucket List
+                    Bucket List{% if bond.unread_sections.get('bucketlist') %}<span class="section-badge" id="badge-bucketlist-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-bucketlist-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('recommendations-{{ bond.id }}', this); loadRecommendations('{{ bond.id }}')">
-                    Recs
+                    Recs{% if bond.unread_sections.get('recommendations') %}<span class="section-badge" id="badge-recommendations-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-recommendations-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('pulses-{{ bond.id }}', this); loadPulses('{{ bond.id }}')">
-                    Pulses
+                    Pulses{% if bond.unread_sections.get('pulses') %}<span class="section-badge" id="badge-pulses-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-pulses-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-danger" data-bond-id="{{ bond.id }}" data-partner="{{ bond.partner_username }}" onclick="breakBond(this.dataset.bondId, this.dataset.partner)">
                     End Bond
@@ -2127,11 +2140,29 @@
         if (!isCurrentlyActive) {
             el.classList.add('active');
             if (btn) btn.classList.add('active');
+            // Mark section as read
+            var parts = id.split('-');
+            if (parts.length >= 2) {
+                var sectionName = parts.slice(0, -1).join('-');
+                var bondId = parts[parts.length - 1];
+                markSectionRead(bondId, sectionName);
+            }
             if (id.startsWith('goals-')) {
                 const bondId = id.replace('goals-', '');
                 loadGoals(bondId);
             }
         }
+    }
+
+    // --- Unread Badge Functions ---
+    function markSectionRead(bondId, section) {
+        var badge = document.getElementById('badge-' + section + '-' + bondId);
+        if (badge) badge.style.display = 'none';
+        fetch('/api/bonds/' + bondId + '/view-section', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ section: section })
+        }).catch(function() {});
     }
 
     // --- Goals ---
@@ -3807,8 +3838,23 @@
                     return;
                 }
                 const rcp = d.recap || {};
+                const anni = d.anniversary || {};
 
                 let html = '<div style="display:flex; flex-direction:column; gap:1rem;">';
+
+                // Anniversary Celebration Card
+                if (anni.days_since !== null && anni.days_since !== undefined) {
+                    var anniIcon = '🎉';
+                    if (anni.label && anni.label.indexOf('year') !== -1) anniIcon = '🎊';
+                    else if (anni.label && anni.label.indexOf('month') !== -1) anniIcon = '🥂';
+                    var daysStr = anni.days_since + ' day' + (anni.days_since !== 1 ? 's' : '');
+                    var nextStr = anni.next_milestone_days > 0 ? anni.next_milestone_days + ' day' + (anni.next_milestone_days !== 1 ? 's' : '') + ' to ' + anni.next_milestone : '';
+                    html += '<div style="background:var(--card-bg); border:2px solid var(--primary-color); border-radius:10px; padding:1rem; text-align:center;">' +
+                        '<div style="font-size:2rem; margin-bottom:0.3rem;">' + anniIcon + '</div>' +
+                        '<div style="font-weight:700; font-size:1.15rem; color:var(--primary-dark-color);">' + (anni.label || 'Bond Anniversary') + '</div>' +
+                        '<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">' + daysStr + ' of bonding' + (nextStr ? ' &middot; ' + nextStr : '') + '</div>' +
+                        '</div>';
+                }
 
                 // Monthly Recap Box
                 html += '<div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">' +
@@ -3899,6 +3945,11 @@
         socket.on('bond_pulse_received', function(data) {
             if (window.showCustomToast) showCustomToast(data.emoji + ' ' + data.from_username + ' sent a pulse!', 'success');
             loadPulses(data.bond_id);
+        });
+
+        socket.on('bond_unread_update', function(data) {
+            var badge = document.getElementById('badge-' + data.section + '-' + data.bond_id);
+            if (badge) badge.style.display = '';
         });
     }
 

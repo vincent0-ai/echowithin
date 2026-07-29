@@ -7,21 +7,21 @@
     <div class="floating-tour-tooltip" id="tour-tooltip-messages" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Messaging & Whisper Mode</h4>
-                <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Messages: Chat with Maya</h4>
+                <span style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
             </div>
-            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" style="background: transparent; border: none; font-size: 1.1rem; color: var(--text-muted, #999); cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
-        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
-            Chat securely with contacts or launch Whisper Mode for self-destructing chats with real-time screenshot alerts.
+        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-secondary, #555); line-height: 1.45;">
+            Maya is online and ready to chat. Send her a message and watch for her real-time reply with typing indicators.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-            <div><strong>Direct Messages:</strong> Instant 1-on-1 private messaging.</div>
-            <div><strong>Whisper Mode:</strong> Self-destructing chat with screenshot alerts.</div>
-            <div><strong>Use Case:</strong> Best for private 1-on-1 conversations and sensitive check-ins.</div>
+            <div><strong>Send a Message:</strong> Type anything to Maya and see her auto-reply.</div>
+            <div><strong>Whisper Mode:</strong> Self-destructing chats with screenshot alerts.</div>
+            <div><strong>Real-Time:</strong> Messages deliver instantly with read receipts.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
-            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-messages')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
     <script>
@@ -29,6 +29,10 @@
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
             try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
+            if (id === 'tour-tooltip-messages') {
+                var next = document.getElementById('tour-complete-card');
+                if (next) next.style.display = 'block';
+            }
         }
         (function() {
             try {
@@ -38,6 +42,29 @@
                 }
             } catch(e) {}
         })();
+    </script>
+    {% endif %}
+
+    {% if current_user.is_authenticated and current_user.is_guest %}
+    <div id="tour-complete-card" style="display: none; position: relative; margin-bottom: 1rem; background: var(--card-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <h4 style="margin: 0 0 0.3rem 0; font-size: 0.95rem; color: var(--text-dark-color, #333); font-weight: 700;">You've explored the core features</h4>
+        <p style="margin: 0 0 0.8rem 0; font-size: 0.84rem; color: var(--text-secondary, #555); line-height: 1.45;">
+            You've seen Notes, Bonds, and Messages. Sign up to keep your notes, connect with real people, and unlock sharing, communities, and more.
+        </p>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="/register" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.82rem; padding: 0.4rem 1rem; font-weight: 600; text-decoration: none;">Sign Up Free</a>
+            <button type="button" onclick="this.closest('div[id=tour-complete-card]').style.display='none'" class="btn btn-sm" style="background: transparent; color: var(--text-secondary, #555); border: 1px solid var(--border-color, #ddd); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.75rem; font-weight: 600;">Keep Exploring</button>
+        </div>
+    </div>
+    <script>
+    (function() {
+        try {
+            if (localStorage.getItem('dismissed_tour-tooltip-messages') === '1') {
+                var card = document.getElementById('tour-complete-card');
+                if (card) card.style.display = 'block';
+            }
+        } catch(e) {}
+    })();
     </script>
     {% endif %}
     <div class="messages-wrapper {{ 'chat-view-active' if active_chat else '' }}"

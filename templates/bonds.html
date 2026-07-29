@@ -1365,22 +1365,22 @@
     <div class="floating-tour-tooltip" id="tour-tooltip-bonds" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Bonds & Relationships Space</h4>
-                <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Bonds: Your Shared Space with Maya</h4>
+                <span style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
             </div>
-            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" style="background: transparent; border: none; font-size: 1.1rem; color: var(--text-muted, #999); cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
         </div>
-        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
-            Bonds are dedicated paired spaces for best friends, partners, family members, or close companions to build meaningful connections through shared goals, daily habits, and encrypted memories.
+        <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-secondary, #555); line-height: 1.45;">
+            You're bonded with Maya, your demo partner. Try sending her a Pulse, checking your shared Goals, or writing a Journal entry together.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-            <div><strong>Shared Goals:</strong> Set savings, travel, or project targets with dual contribution bars.</div>
-            <div><strong>Daily Habits:</strong> Track 7-day streaks and daily check-offs together.</div>
-            <div><strong>Daily Question (QotD):</strong> Blind reveal daily prompts with AI generation.</div>
-            <div><strong>Use Case:</strong> Best for building habits, tracking shared goals, and staying connected with friends or partners.</div>
+            <div><strong>Try Pulses:</strong> Send a quick emotional check-in to Maya.</div>
+            <div><strong>Set a Goal:</strong> Start a savings or project target together.</div>
+            <div><strong>Daily Question:</strong> Answer today's prompt and compare with Maya.</div>
+            <div><strong>Shared Album:</strong> Upload a photo memory to your bond.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
-            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
+            <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
     <script>
@@ -1388,16 +1388,34 @@
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
             try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
+            if (id === 'tour-tooltip-bonds') {
+                var next = document.getElementById('explore-next-messages');
+                if (next) next.style.display = 'block';
+            }
         }
         (function() {
             try {
                 if (localStorage.getItem('dismissed_tour-tooltip-bonds') === '1') {
                     var el = document.getElementById('tour-tooltip-bonds');
                     if (el) el.style.display = 'none';
+                    var next = document.getElementById('explore-next-messages');
+                    if (next) next.style.display = 'block';
                 }
             } catch(e) {}
         })();
     </script>
+    {% endif %}
+
+    {% if current_user.is_authenticated and current_user.is_guest %}
+    <div id="explore-next-messages" style="display: none; position: relative; margin-bottom: 1rem; background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #eee); border-radius: 12px; padding: 0.85rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+                <p style="margin: 0 0 0.15rem 0; font-size: 0.82rem; color: var(--text-secondary, #555);">You've explored Bonds.</p>
+                <p style="margin: 0; font-size: 0.88rem; color: var(--text-dark-color, #333); font-weight: 600;">Next: Send Maya a private message</p>
+            </div>
+            <a href="/messages" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 600; text-decoration: none; white-space: nowrap;">Go to Messages</a>
+        </div>
+    </div>
     {% endif %}
 
     {% if has_app_lock and not is_unlocked %}

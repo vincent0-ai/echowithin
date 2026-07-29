@@ -2258,25 +2258,35 @@
         <div class="floating-tour-tooltip" id="tour-tooltip-notes" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Tour: Personal Notes Space</h4>
-                    <span style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
+                    <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-dark-color, #222); font-weight: 700;">Notes: Your Private Encrypted Space</h4>
+                    <span style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 10px; font-weight: 600;">Guest Session</span>
                 </div>
-                <button type="button" onclick="dismissTourTooltip('tour-tooltip-notes')" style="background: transparent; border: none; font-size: 1.1rem; color: #888; cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
+                <button type="button" onclick="dismissTourTooltip('tour-tooltip-notes')" style="background: transparent; border: none; font-size: 1.1rem; color: var(--text-muted, #999); cursor: pointer; padding: 0;" title="Dismiss">&times;</button>
             </div>
-            <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-muted, #666); line-height: 1.4;">
-                Welcome to your private encrypted space. Here you can create confidential notes, lock entries behind an App Lock PIN, or share animated surprise notes with friends.
+            <p style="margin: 0 0 0.6rem 0; font-size: 0.84rem; color: var(--text-secondary, #555); line-height: 1.45;">
+                Try writing a note below — use <code style="font-size: 0.78rem; background: var(--card-bg, #f5f5f5); padding: 0.1rem 0.3rem; border-radius: 3px;">**bold**</code> or <code style="font-size: 0.78rem; background: var(--card-bg, #f5f5f5); padding: 0.1rem 0.3rem; border-radius: 3px;"># heading</code> for formatting. Your pre-seeded notes show what's possible.
             </p>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
-                <div><strong>Write Note:</strong> Create encrypted markdown entries (use **bold**, *italic*, # headings).</div>
-                <div><strong>Lock Note:</strong> Secure private notes with a 4-digit PIN.</div>
-                <div><strong>Share Surprise:</strong> Create animated themed links for celebration or collaboration.</div>
-                <div><strong>Use Case:</strong> Best for private journaling, confidential thoughts, and shared notes.</div>
+                <div><strong>Try Writing:</strong> Use the form below to create your first note.</div>
+                <div><strong>Try Locking:</strong> Click the lock icon on any note to set a PIN.</div>
+                <div><strong>Try Editing:</strong> Click the edit icon to modify a note with markdown.</div>
+                <div><strong>Export:</strong> Download any note as plain text or Word document.</div>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap;">
-                <button type="button" onclick="openInteractiveShareLesson()" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #ffffff; border: 1px solid var(--primary-color, #3e2217); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; box-shadow: 0 2px 6px rgba(62,34,23,0.15);">
-                    Show Me: How Sharing & Surprises Work
+                <button type="button" onclick="openInteractiveShareLesson()" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border: 1px solid var(--primary-color, #3e2217); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem; box-shadow: 0 2px 6px rgba(62,34,23,0.15);">
+                    How Sharing Works
                 </button>
                 <button type="button" onclick="dismissTourTooltip('tour-tooltip-notes')" class="btn btn-sm" style="background: transparent; color: var(--text-dark-color, #222); border: 1px solid var(--border-color, #ccc); border-radius: 6px; font-size: 0.75rem; padding: 0.35rem 0.75rem; font-weight: 600;">Got it</button>
+            </div>
+        </div>
+        <!-- Explore Next: Bonds -->
+        <div id="explore-next-bonds" style="display: none; position: relative; margin-bottom: 1rem; background: var(--card-bg, #ffffff); border: 1px solid var(--border-color, #eee); border-radius: 12px; padding: 0.85rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <p style="margin: 0 0 0.15rem 0; font-size: 0.82rem; color: var(--text-secondary, #555);">You've explored Notes.</p>
+                    <p style="margin: 0; font-size: 0.88rem; color: var(--text-dark-color, #333); font-weight: 600;">Next: Meet Maya, your demo bond partner</p>
+                </div>
+                <a href="/bonds" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.78rem; padding: 0.35rem 0.85rem; font-weight: 600; text-decoration: none; white-space: nowrap;">Go to Bonds</a>
             </div>
         </div>
         <script>
@@ -2284,20 +2294,26 @@
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
                 try { localStorage.setItem('dismissed_' + id, '1'); } catch(e) {}
+                if (id === 'tour-tooltip-notes') {
+                    var next = document.getElementById('explore-next-bonds');
+                    if (next) next.style.display = 'block';
+                }
             }
             (function() {
                 try {
                     if (localStorage.getItem('dismissed_tour-tooltip-notes') === '1') {
                         var el = document.getElementById('tour-tooltip-notes');
                         if (el) el.style.display = 'none';
+                        var next = document.getElementById('explore-next-bonds');
+                        if (next) next.style.display = 'block';
                     }
                 } catch(e) {}
             })();
         </script>
         {% endif %}
 
-        <!-- Feature Tips Card for new users -->
-        <div class="feature-tips-card" id="feature-tips-card">
+        <!-- Feature Tips Card for new users (hidden for guests who already have the tour tooltip) -->
+        <div class="feature-tips-card" id="feature-tips-card" {% if current_user.is_authenticated and current_user.is_guest %}style="display: none;"{% endif %}>
             <div class="feature-tips-header">
                 <span>💡</span>
                 <strong>Quick Tips</strong>
@@ -7954,10 +7970,25 @@
                 }).then(resp => {
                     if (resp.ok) {
                         // Success — set flash and reload to show new note
+                        {% if current_user.is_authenticated and current_user.is_guest %}
+                        if (!localStorage.getItem('ew_guest_first_note')) {
+                            localStorage.setItem('ew_guest_first_note', '1');
+                            sessionStorage.setItem('ew_pending_flash', JSON.stringify({
+                                message: 'Your first note — encrypted and saved securely.',
+                                category: 'success'
+                            }));
+                        } else {
+                            sessionStorage.setItem('ew_pending_flash', JSON.stringify({
+                                message: 'Personal note added securely.',
+                                category: 'success'
+                            }));
+                        }
+                        {% else %}
                         sessionStorage.setItem('ew_pending_flash', JSON.stringify({
                             message: 'Personal note added securely.',
                             category: 'success'
                         }));
+                        {% endif %}
                         window.location.reload();
                     } else {
                         throw new Error('Server error');
@@ -8459,18 +8490,19 @@
         tooltip.id = 'onboarding-tooltip';
         tooltip.style.cssText = `
             position: absolute;
-            background: #2b2b2b;
-            color: #ffffff;
-            padding: 0.7rem 0.9rem;
-            border-radius: 10px;
+            background: var(--card-bg, #ffffff);
+            color: var(--text-dark-color, #333);
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
             font-size: 0.82rem;
-            max-width: 240px;
+            max-width: 260px;
             z-index: 10000;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 18px var(--shadow-color, rgba(0,0,0,0.1));
             pointer-events: auto;
             transition: opacity 0.2s, transform 0.2s;
             opacity: 0;
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid var(--primary-color, #3e2217);
+            font-family: var(--font-family, 'Poppins', sans-serif);
         `;
         document.body.appendChild(tooltip);
 
@@ -8485,8 +8517,8 @@
             const scrollY = window.scrollY || window.pageYOffset;
 
             // Position tooltip below the target, ensuring horizontal fit in viewport
-            tooltip.style.top = (rect.bottom + scrollY + 8) + 'px';
-            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 250, rect.left + scrollX + rect.width / 2 - 120)) + 'px';
+            tooltip.style.top = (rect.bottom + scrollY + 12) + 'px';
+            tooltip.style.left = Math.max(10, Math.min(window.innerWidth - 270, rect.left + scrollX + rect.width / 2 - 130)) + 'px';
         }
 
         function showStep(index) {
@@ -8520,14 +8552,14 @@
 
             tooltip.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.4rem; gap: 0.5rem;">
-                    <div style="line-height: 1.4;">${step.text}</div>
-                    <button id="onboarding-exit" style="background: transparent; border: none; color: #888; font-size: 0.9rem; cursor: pointer; padding: 0; line-height: 1;" title="Exit tour">✕</button>
+                    <div style="line-height: 1.45; color: var(--text-dark-color, #333);">${step.text}</div>
+                    <button id="onboarding-exit" style="background: transparent; border: none; color: var(--text-muted, #999); font-size: 0.9rem; cursor: pointer; padding: 0; line-height: 1;" title="Exit tour">✕</button>
                 </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.4rem;">
-                    <span style="font-size: 0.7rem; color: #888;">${index + 1} of ${steps.length}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; border-top: 1px solid var(--border-color, #ddd); padding-top: 0.45rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted, #999);">${index + 1} of ${steps.length}</span>
                     <div style="display: flex; gap: 0.35rem;">
-                        <button id="onboarding-skip" style="background: transparent; border: 1px solid #555; color: #ccc; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">Skip</button>
-                        <button id="onboarding-next" style="background: var(--primary-color, #3e2217); color: white; border: none; padding: 0.2rem 0.65rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
+                        <button id="onboarding-skip" style="background: transparent; border: 1px solid var(--border-color, #ddd); color: var(--text-secondary, #555); padding: 0.2rem 0.55rem; border-radius: 6px; font-size: 0.72rem; cursor: pointer; font-weight: 600;">Skip</button>
+                        <button id="onboarding-next" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border: none; padding: 0.2rem 0.7rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-weight: 600;">
                             ${index === steps.length - 1 ? 'Done' : 'Next'}
                         </button>
                     </div>
@@ -8966,220 +8998,76 @@
 </script>
 
 <!-- Interactive Studio Modal: Note Sharing & Surprise Links -->
-<div id="share-lesson-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 11000; align-items: center; justify-content: center; padding: 1rem;">
-    <div class="modal-card" style="background: var(--surface-bg, #ffffff); border-radius: 16px; max-width: 620px; width: 100%; max-height: 92vh; overflow-y: auto; box-shadow: 0 12px 48px rgba(0,0,0,0.22); border: 1px solid var(--border-color, #eee); display: flex; flex-direction: column;">
+<!-- Share Feature Overview Modal -->
+<div id="share-lesson-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: var(--modal-overlay, rgba(0,0,0,0.5)); backdrop-filter: blur(4px); z-index: 11000; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="modal-card" style="background: var(--card-bg, #ffffff); border-radius: 16px; max-width: 480px; width: 100%; box-shadow: 0 12px 48px rgba(0,0,0,0.22); border: 1px solid var(--border-color, #eee); display: flex; flex-direction: column;">
         <!-- Modal Header -->
-        <div style="padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--border-color, #eee); display: flex; align-items: center; justify-content: space-between; background: var(--card-bg, #fafafa); border-radius: 16px 16px 0 0;">
-            <div>
-                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-dark-color, #222); font-weight: 700;">Interactive Share & Surprise Studio</h3>
-                <span id="lesson-step-badge" style="font-size: 0.75rem; color: var(--primary-color, #3e2217); font-weight: 600;">Step 1 of 4: Access & Permissions</span>
-            </div>
-            <button type="button" onclick="closeInteractiveShareLesson()" style="background: transparent; border: none; font-size: 1.3rem; color: #888; cursor: pointer; padding: 0;" aria-label="Close">&times;</button>
-        </div>
-
-        <!-- Progress Bar Indicator -->
-        <div style="background: #e0e0e0; height: 4px; width: 100%;">
-            <div id="lesson-progress-bar" style="background: var(--primary-color, #3e2217); height: 4px; width: 25%; transition: width 0.3s ease;"></div>
+        <div style="padding: 1.1rem 1.5rem; border-bottom: 1px solid var(--border-color, #eee); display: flex; align-items: center; justify-content: space-between;">
+            <h3 style="margin: 0; font-size: 1.05rem; color: var(--text-dark-color, #333); font-weight: 700;">How Sharing Works</h3>
+            <button type="button" onclick="closeInteractiveShareLesson()" style="background: transparent; border: none; font-size: 1.2rem; color: var(--text-muted, #999); cursor: pointer; padding: 0;" aria-label="Close">&times;</button>
         </div>
 
         <!-- Modal Body -->
-        <div style="padding: 1.5rem; flex: 1;">
+        <div style="padding: 1.2rem 1.5rem;">
+            <p style="font-size: 0.86rem; color: var(--text-secondary, #555); line-height: 1.5; margin: 0 0 1.1rem 0;">
+                Share any note securely with a link. Here is what you can do:
+            </p>
 
-            <!-- STEP 1: Access & Permissions -->
-            <div id="lesson-step-1" class="lesson-step-slide" style="display: block;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
-                    <span style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">1</span>
-                    <h4 style="margin: 0; font-size: 1.02rem; color: var(--text-dark-color, #222); font-weight: 700;">Set Access & Permission Scope</h4>
-                </div>
-                <p style="font-size: 0.86rem; color: var(--text-muted, #666); line-height: 1.45; margin-bottom: 1rem;">
-                    Click a permission type below to experience how EchoWithin secures shared content:
-                </p>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem;">
-                    <div id="perm-card-readonly" onclick="setLessonPermission('readonly')" style="background: #fff; border: 2px solid var(--primary-color, #3e2217); border-radius: 10px; padding: 0.85rem; cursor: pointer; transition: all 0.2s;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
-                            <strong style="font-size: 0.88rem; color: var(--primary-color, #3e2217);">Read-Only Access</strong>
-                            <span id="perm-radio-readonly" style="font-size: 0.9rem; color: var(--primary-color, #3e2217);">✓</span>
-                        </div>
-                        <span style="font-size: 0.78rem; color: #666; line-height: 1.4; display: block;">Recipients view content securely. Edits are disabled.</span>
-                    </div>
-
-                    <div id="perm-card-edit" onclick="setLessonPermission('edit')" style="background: #fff; border: 1px solid var(--border-color, #ddd); border-radius: 10px; padding: 0.85rem; cursor: pointer; transition: all 0.2s;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.3rem;">
-                            <strong style="font-size: 0.88rem; color: var(--text-dark-color, #222);">Collaborative Edit</strong>
-                            <span id="perm-radio-edit" style="font-size: 0.9rem; color: #ccc;">○</span>
-                        </div>
-                        <span style="font-size: 0.78rem; color: #666; line-height: 1.4; display: block;">Recipients propose edits, updates, and co-write content.</span>
-                    </div>
+            <!-- Feature rows -->
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div style="background: var(--surface-bg, #f9f9f9); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 0.8rem 1rem;">
+                    <strong style="font-size: 0.88rem; color: var(--text-dark-color, #333); display: block; margin-bottom: 0.2rem;">Share with a Link</strong>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary, #555); line-height: 1.4;">Create a secure read-only or collaborative link to any note. Recipients open it in their browser.</span>
                 </div>
 
-                <div style="background: var(--card-bg, #fafafa); border: 1px solid var(--border-color, #eee); border-radius: 8px; padding: 0.75rem; font-size: 0.8rem; color: #444; display: flex; align-items: center; justify-content: space-between;">
-                    <span><strong>Live Comments & Activity:</strong> Enable real-time recipient comments</span>
-                    <input type="checkbox" id="lesson-comments-toggle" checked style="width: 1.1rem; height: 1.1rem; cursor: pointer;">
-                </div>
-            </div>
-
-            <!-- STEP 2: Theme & Animation Studio -->
-            <div id="lesson-step-2" class="lesson-step-slide" style="display: none;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
-                    <span style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">2</span>
-                    <h4 style="margin: 0; font-size: 1.02rem; color: var(--text-dark-color, #222); font-weight: 700;">Select Animated Surprise Theme</h4>
-                </div>
-                <p style="font-size: 0.86rem; color: var(--text-muted, #666); line-height: 1.45; margin-bottom: 0.8rem;">
-                    Click a theme to preview live floating particle animations and ambient sound effects:
-                </p>
-
-                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-                    <button type="button" id="theme-btn-celebration" onclick="selectLessonTheme('celebration')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border: 1px solid var(--primary-color, #3e2217); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 20px; font-weight: 600;">Celebration</button>
-                    <button type="button" id="theme-btn-love" onclick="selectLessonTheme('love')" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--border-color, #ccc); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 20px; font-weight: 600;">Love</button>
-                    <button type="button" id="theme-btn-birthday" onclick="selectLessonTheme('birthday')" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--border-color, #ccc); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 20px; font-weight: 600;">Birthday</button>
-                    <button type="button" id="theme-btn-gratitude" onclick="selectLessonTheme('gratitude')" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--border-color, #ccc); font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 20px; font-weight: 600;">Gratitude</button>
+                <div style="background: var(--surface-bg, #f9f9f9); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 0.8rem 1rem;">
+                    <strong style="font-size: 0.88rem; color: var(--text-dark-color, #333); display: block; margin-bottom: 0.2rem;">Surprise Themes</strong>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary, #555); line-height: 1.4;">Wrap your note in celebration, love, birthday, or gratitude animations with ambient audio.</span>
                 </div>
 
-                <!-- Live Animated Canvas Box -->
-                <div id="lesson-canvas-box" style="position: relative; overflow: hidden; background: #fff; border: 1.5px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1.1rem; min-height: 120px; transition: all 0.3s;">
-                    <div id="lesson-particle-container" style="position: absolute; inset: 0; pointer-events: none; overflow: hidden;"></div>
-                    <div style="position: relative; z-index: 2;">
-                        <strong id="lesson-canvas-title" style="color: var(--primary-color, #3e2217); font-size: 0.92rem; display: block; margin-bottom: 0.3rem;">Celebration Theme Selected</strong>
-                        <p id="lesson-canvas-body" style="margin: 0; font-size: 0.84rem; color: #444; line-height: 1.45;">
-                            "Happy Birthday & Congratulations! Here is a private memory created just for you..."
-                        </p>
-                        <div style="margin-top: 0.6rem; font-size: 0.72rem; color: #777; display: flex; align-items: center; gap: 0.4rem;">
-                            <span style="background: rgba(62,34,23,0.08); padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 600; color: var(--primary-color, #3e2217);">Ambient Audio Enabled</span>
-                            <span>• Typewriter Text Reveal Effect</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- STEP 3: Security & PIN -->
-            <div id="lesson-step-3" class="lesson-step-slide" style="display: none;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
-                    <span style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">3</span>
-                    <h4 style="margin: 0; font-size: 1.02rem; color: var(--text-dark-color, #222); font-weight: 700;">Configure Security & Passcode</h4>
-                </div>
-                <p style="font-size: 0.86rem; color: var(--text-muted, #666); line-height: 1.45; margin-bottom: 1rem;">
-                    Add optional PIN code protection or automatic self-destruct timers:
-                </p>
-
-                <div style="background: var(--card-bg, #fafafa); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-                    <div style="margin-bottom: 0.8rem;">
-                        <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark-color, #222); display: block; margin-bottom: 0.3rem;">4-Digit Passcode Protection (Optional):</label>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <input type="text" id="lesson-pin-input" placeholder="e.g. 1234" maxlength="4" style="width: 110px; font-size: 0.88rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #ccc); border-radius: 6px; text-align: center; letter-spacing: 2px;">
-                            <button type="button" onclick="autoFillLessonPin()" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--primary-color, #3e2217); font-size: 0.78rem; padding: 0.3rem 0.7rem; border-radius: 6px;">Set PIN 1234</button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark-color, #222); display: block; margin-bottom: 0.3rem;">Link Expiration Policy:</label>
-                        <select id="lesson-expiry-select" style="width: 100%; font-size: 0.85rem; padding: 0.4rem; border: 1px solid var(--border-color, #ccc); border-radius: 6px; background: #fff;">
-                            <option value="24h">Expires in 24 Hours</option>
-                            <option value="7d">Expires in 7 Days</option>
-                            <option value="once">Self-Destruct (1-Time Read then Delete)</option>
-                            <option value="never">Never Expires (Manual Revocation Only)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- STEP 4: Interactive Result & Recipient Experience -->
-            <div id="lesson-step-4" class="lesson-step-slide" style="display: none;">
-                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;">
-                    <span style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">4</span>
-                    <h4 style="margin: 0; font-size: 1.02rem; color: var(--text-dark-color, #222); font-weight: 700;">Demo Share Link Generated!</h4>
-                </div>
-                <p style="font-size: 0.86rem; color: var(--text-muted, #666); line-height: 1.45; margin-bottom: 0.8rem;">
-                    Here is your configured interactive demonstration share link:
-                </p>
-
-                <!-- Share Link Result Box -->
-                <div style="background: var(--card-bg, #fafafa); border: 1px solid var(--primary-color, #3e2217); border-radius: 10px; padding: 0.85rem; margin-bottom: 1rem;">
-                    <div style="display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.6rem;">
-                        <input type="text" id="lesson-demo-url" readonly value="https://echowithin.xyz/share/demo/surprisenote_9f82a1" style="flex: 1; font-size: 0.82rem; padding: 0.4rem 0.6rem; border: 1px solid var(--border-color, #ccc); border-radius: 6px; background: #fff; color: var(--primary-color, #3e2217); font-weight: 600;">
-                        <button type="button" onclick="copyLessonDemoUrl()" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 6px; font-weight: 600;">Copy Link</button>
-                    </div>
-
-                    <!-- Interactive Recipient Reveal Simulator Button -->
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button type="button" onclick="toggleLessonRecipientPreview()" class="btn btn-sm" style="background: #fff; color: var(--primary-color, #3e2217); border: 1px solid var(--primary-color, #3e2217); font-size: 0.78rem; padding: 0.35rem 0.8rem; border-radius: 6px; font-weight: 600; width: 100%;">
-                            Test Recipient Reveal Experience
-                        </button>
-                    </div>
-
-                    <!-- In-Modal Recipient Reveal Preview Box -->
-                    <div id="lesson-recipient-preview" style="display: none; margin-top: 0.8rem; padding: 0.8rem; background: #fff; border: 1px dashed var(--primary-color, #3e2217); border-radius: 8px;">
-                        <div style="font-size: 0.75rem; color: #888; margin-bottom: 0.3rem; font-weight: 600;">Recipient View Simulation:</div>
-                        <div id="lesson-recipient-content" style="font-size: 0.84rem; color: #222; line-height: 1.45;"></div>
-                    </div>
+                <div style="background: var(--surface-bg, #f9f9f9); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 0.8rem 1rem;">
+                    <strong style="font-size: 0.88rem; color: var(--text-dark-color, #333); display: block; margin-bottom: 0.2rem;">Security Controls</strong>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary, #555); line-height: 1.4;">Add optional 4-digit passcodes and set self-destruct timers on shared links.</span>
                 </div>
 
-                <!-- Registration Notice Card -->
-                <div style="background: rgba(62,34,23,0.05); border: 1px solid var(--primary-color, #3e2217); border-radius: 10px; padding: 0.9rem; text-align: center;">
-                    <strong style="font-size: 0.88rem; color: var(--primary-color, #3e2217); display: block; margin-bottom: 0.3rem;">Unlock Live Public Links with a Free Account</strong>
-                    <span style="font-size: 0.78rem; color: #555; display: block; margin-bottom: 0.8rem; line-height: 1.4;">
-                        This demo link operates inside your tour sandbox. To generate live public links shareable with real friends, family, and partners, convert your tour session into a permanent account. All your tour notes will be preserved!
-                    </span>
-                    <a href="/register" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 8px; font-size: 0.84rem; padding: 0.5rem 1.2rem; font-weight: 700; text-decoration: none; display: inline-block; box-shadow: 0 2px 6px rgba(62,34,23,0.2);">
-                        Sign Up Free to Unlock Live Public Links
-                    </a>
+                <div style="background: var(--surface-bg, #f9f9f9); border: 1px solid var(--border-color, #eee); border-radius: 10px; padding: 0.8rem 1rem;">
+                    <strong style="font-size: 0.88rem; color: var(--text-dark-color, #333); display: block; margin-bottom: 0.2rem;">Collaborate</strong>
+                    <span style="font-size: 0.8rem; color: var(--text-secondary, #555); line-height: 1.4;">Recipients can propose edits that you review and approve before merging.</span>
                 </div>
             </div>
         </div>
 
-        <!-- Modal Footer Navigation -->
-        <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color, #eee); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; background: var(--card-bg, #fafafa); border-radius: 0 0 16px 16px;">
-            <button type="button" id="lesson-prev-btn" onclick="navLessonStep(-1)" class="btn btn-sm" style="background: var(--surface-bg, #fff); color: var(--text-dark-color, #222); border: 1px solid var(--border-color, #ccc); border-radius: 6px; font-size: 0.8rem; padding: 0.35rem 0.85rem; display: none;">Previous</button>
-            <div style="flex: 1;"></div>
-            <button type="button" id="lesson-next-btn" onclick="navLessonStep(1)" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 6px; font-size: 0.8rem; padding: 0.4rem 1.1rem; font-weight: 600;">Next Step →</button>
+        <!-- Modal Footer -->
+        <div style="padding: 1rem 1.5rem; border-top: 1px solid var(--border-color, #eee); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <button type="button" onclick="closeInteractiveShareLesson()" class="btn btn-sm" style="background: transparent; color: var(--text-secondary, #555); border: 1px solid var(--border-color, #ddd); border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 1rem; font-weight: 600;">Got it</button>
+            <a href="/register" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 1rem; font-weight: 600; text-decoration: none;">Sign Up to Start Sharing</a>
         </div>
     </div>
 </div>
 
 <!-- Guest Share Guard Modal -->
-<div id="guest-share-guard-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 11000; align-items: center; justify-content: center; padding: 1rem;">
-    <div class="modal-card" style="background: var(--surface-bg, #ffffff); border-radius: 16px; max-width: 480px; width: 100%; padding: 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color, #eee); text-align: center;">
-        <div style="width: 44px; height: 44px; border-radius: 50%; background: #f5ebe7; color: var(--primary-color, #3e2217); display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem auto; border: 1px solid var(--primary-color, #3e2217);">
-            <i class="fas fa-lock" style="font-size: 1.1rem; color: var(--primary-color, #3e2217);"></i>
-        </div>
-        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem; color: var(--text-dark-color, #222); font-weight: 700;">Registered Account Feature</h3>
-        <p style="font-size: 0.88rem; color: var(--text-muted, #666); line-height: 1.5; margin-bottom: 1.2rem;">
-            Public note sharing and surprise link generation require a permanent registered account to prevent link abuse. Try our interactive Share & Surprise Studio or sign up for a free account.
+<div id="guest-share-guard-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: var(--modal-overlay, rgba(0,0,0,0.5)); backdrop-filter: blur(4px); z-index: 11000; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="modal-card" style="background: var(--card-bg, #ffffff); border-radius: 16px; max-width: 480px; width: 100%; padding: 1.5rem; box-shadow: 0 10px 40px rgba(0,0,0,0.2); border: 1px solid var(--border-color, #eee); text-align: center;">
+        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.05rem; color: var(--text-dark-color, #333); font-weight: 700;">Registered Account Feature</h3>
+        <p style="font-size: 0.86rem; color: var(--text-secondary, #555); line-height: 1.5; margin-bottom: 1.2rem;">
+            Public note sharing requires a registered account to prevent abuse. See how sharing works or sign up for a free account.
         </p>
         <div style="display: flex; flex-direction: column; gap: 0.6rem;">
-            <button type="button" onclick="closeGuestShareGuardModal(); openInteractiveShareLesson();" class="btn" style="background: var(--surface-bg, #fff); color: var(--primary-color, #3e2217); border: 1.5px solid var(--primary-color, #3e2217); border-radius: 8px; font-weight: 700; font-size: 0.85rem; padding: 0.55rem 1rem;">
-                Try Interactive Share Studio Demo
+            <button type="button" onclick="closeGuestShareGuardModal(); openInteractiveShareLesson();" class="btn" style="background: transparent; color: var(--primary-color, #3e2217); border: 1.5px solid var(--primary-color, #3e2217); border-radius: 8px; font-weight: 600; font-size: 0.85rem; padding: 0.55rem 1rem;">
+                See How Sharing Works
             </button>
-            <a href="/register" class="btn" style="background: var(--primary-color, #3e2217); color: #fff; border-radius: 8px; font-weight: 600; font-size: 0.85rem; padding: 0.55rem 1rem; text-decoration: none;">
-                Sign Up Free to Unlock Live Public Sharing
+            <a href="/register" class="btn" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 8px; font-weight: 600; font-size: 0.85rem; padding: 0.55rem 1rem; text-decoration: none;">
+                Sign Up Free
             </a>
-            <button type="button" onclick="closeGuestShareGuardModal()" style="background: transparent; border: none; color: #888; font-size: 0.8rem; cursor: pointer; margin-top: 0.3rem;">
+            <button type="button" onclick="closeGuestShareGuardModal()" style="background: transparent; border: none; color: var(--text-muted, #999); font-size: 0.8rem; cursor: pointer; margin-top: 0.2rem;">
                 Dismiss
             </button>
         </div>
     </div>
 </div>
 
-<style>
-@keyframes lessonFloatParticle {
-    0% { transform: translateY(0px) rotate(0deg); opacity: 0.8; }
-    50% { transform: translateY(-30px) rotate(15deg); opacity: 1; }
-    100% { transform: translateY(-60px) rotate(-15deg); opacity: 0; }
-}
-.lesson-floating-item {
-    position: absolute;
-    animation: lessonFloatParticle 3s infinite ease-in-out;
-}
-</style>
-
 <script>
-    let currentLessonStep = 1;
-    let selectedLessonPermission = 'readonly';
-    let selectedLessonTheme = 'celebration';
-
     window.openInteractiveShareLesson = function() {
-        currentLessonStep = 1;
-        updateLessonStepUI();
         const modal = document.getElementById('share-lesson-modal');
         if (modal) modal.style.display = 'flex';
     };
@@ -9198,157 +9086,5 @@
         const modal = document.getElementById('guest-share-guard-modal');
         if (modal) modal.style.display = 'none';
     };
-
-    window.navLessonStep = function(dir) {
-        currentLessonStep = Math.min(4, Math.max(1, currentLessonStep + dir));
-        updateLessonStepUI();
-    };
-
-    function updateLessonStepUI() {
-        for (let i = 1; i <= 4; i++) {
-            const slide = document.getElementById('lesson-step-' + i);
-            if (slide) slide.style.display = i === currentLessonStep ? 'block' : 'none';
-        }
-        const badge = document.getElementById('lesson-step-badge');
-        const bar = document.getElementById('lesson-progress-bar');
-        const prevBtn = document.getElementById('lesson-prev-btn');
-        const nextBtn = document.getElementById('lesson-next-btn');
-
-        if (bar) bar.style.width = (currentLessonStep * 25) + '%';
-
-        if (badge) {
-            const stepTitles = [
-                "Step 1 of 4: Access & Permissions",
-                "Step 2 of 4: Animated Surprise Theme",
-                "Step 3 of 4: Security & PIN Code",
-                "Step 4 of 4: Demo Share Studio Result"
-            ];
-            badge.textContent = stepTitles[currentLessonStep - 1];
-        }
-
-        if (prevBtn) prevBtn.style.display = currentLessonStep > 1 ? 'inline-block' : 'none';
-        if (nextBtn) {
-            nextBtn.style.display = currentLessonStep < 4 ? 'inline-block' : 'none';
-            if (currentLessonStep === 3) {
-                nextBtn.textContent = '⚡ Generate Demo Link';
-            } else {
-                nextBtn.textContent = 'Next Step →';
-            }
-        }
-    }
-
-    function setLessonPermission(perm) {
-        selectedLessonPermission = perm;
-        const roCard = document.getElementById('perm-card-readonly');
-        const editCard = document.getElementById('perm-card-edit');
-        const roRadio = document.getElementById('perm-radio-readonly');
-        const editRadio = document.getElementById('perm-radio-edit');
-
-        if (perm === 'readonly') {
-            roCard.style.borderColor = 'var(--primary-color, #3e2217)';
-            roCard.style.borderWidth = '2px';
-            editCard.style.borderColor = 'var(--border-color, #ddd)';
-            editCard.style.borderWidth = '1px';
-            roRadio.textContent = '✓'; roRadio.style.color = 'var(--primary-color, #3e2217)';
-            editRadio.textContent = '○'; editRadio.style.color = '#ccc';
-        } else {
-            editCard.style.borderColor = 'var(--primary-color, #3e2217)';
-            editCard.style.borderWidth = '2px';
-            roCard.style.borderColor = 'var(--border-color, #ddd)';
-            roCard.style.borderWidth = '1px';
-            editRadio.textContent = '✓'; editRadio.style.color = 'var(--primary-color, #3e2217)';
-            roRadio.textContent = '○'; roRadio.style.color = '#ccc';
-        }
-    }
-
-    function selectLessonTheme(theme) {
-        selectedLessonTheme = theme;
-        const themes = ['celebration', 'love', 'birthday', 'gratitude'];
-        themes.forEach(t => {
-            const btn = document.getElementById('theme-btn-' + t);
-            if (btn) {
-                if (t === theme) {
-                    btn.style.background = 'var(--primary-color, #3e2217)';
-                    btn.style.color = '#fff';
-                    btn.style.borderColor = 'var(--primary-color, #3e2217)';
-                } else {
-                    btn.style.background = '#fff';
-                    btn.style.color = 'var(--primary-color, #3e2217)';
-                    btn.style.borderColor = 'var(--border-color, #ccc)';
-                }
-            }
-        });
-
-        const title = document.getElementById('lesson-canvas-title');
-        const body = document.getElementById('lesson-canvas-body');
-        const pContainer = document.getElementById('lesson-particle-container');
-
-        if (title && body) {
-            const themeDetails = {
-                'celebration': { title: '🎉 Celebration Theme Selected', text: '"Congratulations! You are celebrating a huge milestone together..."', emoji: '🎉' },
-                'love': { title: '❤️ Love Theme Selected', text: '"Sending you warmth & love! A special private note just for you..."', emoji: '❤️' },
-                'birthday': { title: '🎂 Birthday Theme Selected', text: '"Happy Birthday! Wishing you a year full of joy, health & happiness..."', emoji: '🎂' },
-                'gratitude': { title: '🎁 Gratitude Theme Selected', text: '"Thank you for being so wonderful! Appreciating our moments together..."', emoji: '✨' }
-            };
-            const d = themeDetails[theme] || themeDetails['celebration'];
-            title.textContent = d.title;
-            body.textContent = d.text;
-
-            // Render live floating particles inside preview box
-            if (pContainer) {
-                pContainer.innerHTML = '';
-                for (let i = 0; i < 6; i++) {
-                    const item = document.createElement('span');
-                    item.className = 'lesson-floating-item';
-                    item.textContent = d.emoji;
-                    item.style.left = (15 + i * 15) + '%';
-                    item.style.bottom = '5px';
-                    item.style.animationDelay = (i * 0.4) + 's';
-                    item.style.fontSize = '1.1rem';
-                    pContainer.appendChild(item);
-                }
-            }
-        }
-    }
-
-    function autoFillLessonPin() {
-        const input = document.getElementById('lesson-pin-input');
-        if (input) {
-            input.value = '1234';
-            if (window.showCustomToast) showCustomToast('Passcode PIN set to 1234! 🔒', 'info');
-        }
-    }
-
-    function copyLessonDemoUrl() {
-        const urlInput = document.getElementById('lesson-demo-url');
-        if (urlInput) {
-            navigator.clipboard.writeText(urlInput.value).then(() => {
-                if (window.showCustomToast) showCustomToast('Demo share link copied! (Works in tour sandbox)', 'success');
-            }).catch(() => {
-                if (window.showCustomToast) showCustomToast('Demo link ready: ' + urlInput.value, 'info');
-            });
-        }
-    }
-
-    function toggleLessonRecipientPreview() {
-        const box = document.getElementById('lesson-recipient-preview');
-        const content = document.getElementById('lesson-recipient-content');
-        if (!box || !content) return;
-        if (box.style.display === 'none') {
-            const pinVal = document.getElementById('lesson-pin-input') ? document.getElementById('lesson-pin-input').value : '';
-            const expVal = document.getElementById('lesson-expiry-select') ? document.getElementById('lesson-expiry-select').value : '24h';
-            let pinNotice = pinVal ? `🔒 Requires 4-Digit Passcode: <strong>${pinVal}</strong>` : '🔓 Open Access (No Passcode Required)';
-            content.innerHTML = `
-                <div style="margin-bottom:0.4rem; padding:0.4rem; background:#fafafa; border-radius:6px; font-size:0.78rem;">
-                    ${pinNotice} • Permission: <strong>${selectedLessonPermission === 'readonly' ? 'Read-Only' : 'Collaborative Edit'}</strong>
-                </div>
-                <div style="font-weight:600; color:var(--primary-color, #3e2217); margin-bottom:0.2rem;">Theme: ${selectedLessonTheme.toUpperCase()}</div>
-                <div style="font-style:italic;">"Happy Birthday & Congratulations! This is how your recipient sees your animated surprise note with floating effects and typewriter reveal."</div>
-            `;
-            box.style.display = 'block';
-        } else {
-            box.style.display = 'none';
-        }
-    }
 </script>
 {% endblock %}

@@ -3709,12 +3709,20 @@ def api_bond_recommendations_list(bond_id):
 
         result = []
         for r in recs:
+            image_url = ''
+            encrypted_img = r.get('image_url', '')
+            if encrypted_img:
+                try:
+                    image_url = m.decrypt_bond_data(encrypted_img, bond_id)
+                except Exception:
+                    image_url = ''
             result.append({
                 'id': str(r['_id']),
                 'title': r.get('title', ''),
                 'media_type': r.get('media_type', 'other'),
                 'link': r.get('link', ''),
                 'note': r.get('note', ''),
+                'image_url': image_url,
                 'recommended_by': str(r.get('recommended_by', '')),
                 'recommended_by_me': str(r.get('recommended_by', '')) == str(current_user.id),
                 'tried_by_partner': r.get('tried_by_partner', False),
@@ -3730,8 +3738,9 @@ def api_bond_recommendations_list(bond_id):
 @login_required
 @limits(calls=20, period=60)
 def api_bond_recommendations_create(bond_id):
-    """Share a media recommendation."""
+    """Share a media recommendation with optional image."""
     import main as m
+    import uuid
     try:
         bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
         if not bond_doc:
@@ -3740,22 +3749,68 @@ def api_bond_recommendations_create(bond_id):
         if not _is_bond_participant(bond_doc, user_id_str):
             return jsonify({'error': 'Not authorized'}), 403
 
-        data = request.get_json(silent=True) or {}
-        title = (data.get('title', '') or '').strip()[:200]
+        # Support both JSON and multipart/form-data
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            title = (request.form.get('title', '') or '').strip()[:200]
+            media_type = (request.form.get('media_type', 'other') or '').strip()
+            link = (request.form.get('link', '') or '').strip()[:500]
+            note = (request.form.get('note', '') or '').strip()[:300]
+        else:
+            data = request.get_json(silent=True) or {}
+            title = (data.get('title', '') or '').strip()[:200]
+            media_type = (data.get('media_type', 'other') or '').strip()
+            link = (data.get('link', '') or '').strip()[:500]
+            note = (data.get('note', '') or '').strip()[:300]
+
         if not title:
             return jsonify({'error': 'Title is required.'}), 400
 
-        media_type = (data.get('media_type', 'other') or '').strip()
         if media_type not in MEDIA_TYPES:
             media_type = 'other'
 
-        link = (data.get('link', '') or '').strip()[:500]
         if link and not (link.startswith('http://') or link.startswith('https://') or link.startswith('//')):
             link = 'https://' + link
-        note = (data.get('note', '') or '').strip()[:300]
+
+        # Handle optional image upload
+        image_url = ''
+        image_file = request.files.get('image') if request.files else None
+        if image_file and image_file.filename:
+            ext = image_file.filename.rsplit('.', 1)[-1].lower() if '.' in image_file.filename else ''
+            if ext in m.ALLOWED_IMAGE_EXTENSIONS:
+                image_file.seek(0, os.SEEK_END)
+                size = image_file.tell()
+                image_file.seek(0)
+                if 0 < size <= m.MAX_IMAGE_SIZE:
+                    # Attempt Cloudinary upload
+                    try:
+                        upload_result = m.cloudinary.uploader.upload(
+                            image_file,
+                            folder='echowithin_bond_recs',
+                            resource_type='image',
+                            transformation=[
+                                {'width': 800, 'height': 800, 'crop': 'limit'},
+                                {'quality': 'auto', 'fetch_format': 'auto'}
+                            ]
+                        )
+                        image_url = upload_result.get('secure_url', '')
+                    except Exception as upload_err:
+                        current_app.logger.warning(f"Cloudinary upload failed for rec image, trying local fallback: {upload_err}")
+                        image_url = ''
+
+                    # Local fallback
+                    if not image_url:
+                        try:
+                            os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
+                            unique_filename = f"bond_rec_{uuid.uuid4().hex[:12]}.{ext}"
+                            image_file.seek(0)
+                            save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
+                            image_file.save(save_path)
+                            image_url = url_for('blog.uploaded_file', filename=unique_filename, _external=True)
+                        except Exception as save_err:
+                            current_app.logger.error(f"Local fallback for rec image failed: {save_err}")
 
         now = datetime.datetime.now(datetime.timezone.utc)
-        result = m.bond_recommendations_conf.insert_one({
+        doc = {
             'bond_id': ObjectId(bond_id),
             'title': title,
             'media_type': media_type,
@@ -3764,7 +3819,11 @@ def api_bond_recommendations_create(bond_id):
             'recommended_by': ObjectId(user_id_str),
             'tried_by_partner': False,
             'created_at': now,
-        })
+        }
+        if image_url:
+            doc['image_url'] = m.encrypt_bond_data(image_url, bond_id)
+
+        result = m.bond_recommendations_conf.insert_one(doc)
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
         m.socketio.emit('bond_recommendation_added', {
@@ -3790,6 +3849,7 @@ def api_bond_recommendations_create(bond_id):
                 'title': title,
                 'media_type': media_type,
                 'recommended_by_me': True,
+                'image_url': image_url,
             }
         })
     except Exception as e:

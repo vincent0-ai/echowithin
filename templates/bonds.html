@@ -1731,6 +1731,17 @@
                     </select>
                     <input type="text" id="rec-link-{{ bond.id }}" placeholder="Link (optional)" maxlength="500" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; margin-bottom:0.4rem;">
                     <input type="text" id="rec-note-{{ bond.id }}" placeholder="Why are you recommending this? (optional)" maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; margin-bottom:0.4rem;">
+                    <div style="margin-bottom:0.4rem;">
+                        <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.8rem; color:var(--text-secondary); padding:0.3rem 0;">
+                            <input type="file" id="rec-image-{{ bond.id }}" accept="image/*" style="display:none;" onchange="previewRecImage('{{ bond.id }}', this)">
+                            <span style="padding:0.2rem 0.5rem; border:1px solid var(--border-color); border-radius:5px; font-size:0.75rem; color:var(--primary-color);">Attach Image</span>
+                            <span id="rec-image-name-{{ bond.id }}" style="font-size:0.72rem; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:140px;"></span>
+                        </label>
+                        <div id="rec-image-preview-{{ bond.id }}" style="display:none; margin-top:0.3rem; position:relative; width:fit-content;">
+                            <img id="rec-image-thumb-{{ bond.id }}" src="" style="max-width:120px; max-height:80px; border-radius:6px; border:1px solid var(--border-color); object-fit:cover;">
+                            <button type="button" onclick="clearRecImage('{{ bond.id }}')" style="position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:var(--text-muted); color:#fff; border:none; font-size:0.7rem; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;">&times;</button>
+                        </div>
+                    </div>
                     <div style="display:flex; gap:0.4rem; justify-content:flex-end;">
                         <button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="hideAddRecommendationForm('{{ bond.id }}')">Cancel</button>
                         <button class="btn btn-bond-primary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="createRecommendation('{{ bond.id }}')">Share</button>
@@ -3555,6 +3566,7 @@
                         + '<div style="flex:1;min-width:0;">'
                         + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
                         + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
+                        + (r.image_url ? '<div style="margin-top:0.3rem;"><img src="' + escHtml(r.image_url) + '" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--border-color);object-fit:cover;cursor:pointer;" onclick="openRecImageFull(this.src)" alt="Recommendation image"></div>' : '')
                         + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
                         + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
                         + '</div>'
@@ -3590,20 +3602,81 @@
         var type = document.getElementById('rec-type-' + bondId);
         var link = document.getElementById('rec-link-' + bondId);
         var note = document.getElementById('rec-note-' + bondId);
+        var imageInput = document.getElementById('rec-image-' + bondId);
         var t = title ? title.value.trim() : '';
         if (!t) { if (window.showCustomAlert) showCustomAlert('Please enter a title.', 'danger'); return; }
-        fetch('/api/bonds/' + bondId + '/recommendations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-            body: JSON.stringify({ title: t, media_type: type ? type.value : 'other', link: link ? link.value.trim() : '', note: note ? note.value.trim() : '' })
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                if (title) title.value = ''; if (link) link.value = ''; if (note) note.value = '';
-                hideAddRecommendationForm(bondId);
-                loadRecommendations(bondId);
-                if (window.showCustomToast) showCustomToast('Recommendation shared!', 'success');
-            } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
-        });
+
+        var hasImage = imageInput && imageInput.files && imageInput.files.length > 0;
+
+        if (hasImage) {
+            var fd = new FormData();
+            fd.append('title', t);
+            fd.append('media_type', type ? type.value : 'other');
+            fd.append('link', link ? link.value.trim() : '');
+            fd.append('note', note ? note.value.trim() : '');
+            fd.append('image', imageInput.files[0]);
+            fetch('/api/bonds/' + bondId + '/recommendations', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+                body: fd
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    if (title) title.value = ''; if (link) link.value = ''; if (note) note.value = '';
+                    clearRecImage(bondId);
+                    hideAddRecommendationForm(bondId);
+                    loadRecommendations(bondId);
+                    if (window.showCustomToast) showCustomToast('Recommendation shared!', 'success');
+                } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+            });
+        } else {
+            fetch('/api/bonds/' + bondId + '/recommendations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ title: t, media_type: type ? type.value : 'other', link: link ? link.value.trim() : '', note: note ? note.value.trim() : '' })
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    if (title) title.value = ''; if (link) link.value = ''; if (note) note.value = '';
+                    hideAddRecommendationForm(bondId);
+                    loadRecommendations(bondId);
+                    if (window.showCustomToast) showCustomToast('Recommendation shared!', 'success');
+                } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+            });
+        }
+    }
+
+    function previewRecImage(bondId, input) {
+        var preview = document.getElementById('rec-image-preview-' + bondId);
+        var thumb = document.getElementById('rec-image-thumb-' + bondId);
+        var nameEl = document.getElementById('rec-image-name-' + bondId);
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                if (thumb) thumb.src = e.target.result;
+                if (preview) preview.style.display = 'block';
+            };
+            reader.readAsDataURL(input.files[0]);
+            if (nameEl) nameEl.textContent = input.files[0].name;
+        }
+    }
+
+    function clearRecImage(bondId) {
+        var input = document.getElementById('rec-image-' + bondId);
+        var preview = document.getElementById('rec-image-preview-' + bondId);
+        var nameEl = document.getElementById('rec-image-name-' + bondId);
+        if (input) input.value = '';
+        if (preview) preview.style.display = 'none';
+        if (nameEl) nameEl.textContent = '';
+    }
+
+    function openRecImageFull(src) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+        overlay.onclick = function() { document.body.removeChild(overlay); };
+        var img = document.createElement('img');
+        img.src = src;
+        img.style.cssText = 'max-width:90vw;max-height:90vh;border-radius:8px;object-fit:contain;';
+        overlay.appendChild(img);
+        document.body.appendChild(overlay);
     }
 
     function toggleTriedRec(recId, bondId) {

@@ -987,9 +987,13 @@ def periodic_guest_cleanup():
 @app.before_request
 def update_last_active():
     """Update a user's last active timestamp with debouncing (every 5 minutes) to reduce DB load."""
-    # Skip high-frequency polling endpoints — they don't represent meaningful user activity
+    # Skip high-frequency polling and background endpoints — they don't represent meaningful user activity
+    # /api/notifications/unread-count is called by the service worker on push events (user may be asleep)
+    # /api/push/ covers subscription status checks
+    # /api/sessions covers the active sessions validation check
     if request.path.startswith(('/api/messages/unread_count', '/api/notifications/badge-counts',
-                                '/socket.io/', '/static/', '/favicon.ico')):
+                                '/api/notifications/unread-count', '/api/push/',
+                                '/api/sessions', '/socket.io/', '/static/', '/favicon.ico')):
         return
     if current_user.is_authenticated:
         user_id = current_user.id

@@ -569,8 +569,8 @@
                 <a href="{{ url_for('bonds.bonds_page') }}" class="{{ 'active' if active_page == 'bonds' }}">Bonds</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
                 {% else %}
-                <a href="{{ url_for('pages.home') }}" class="{{ 'active' if active_page == 'home' }}">Home</a>
-                <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.home')) }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
+                <a href="{{ url_for('pages.dashboard') }}" class="{{ 'active' if active_page == 'home' or active_page == 'dashboard' }}">Home</a>
+                <a href="{{ url_for('auth.login', next=request.path if request.path not in ['/login', '/register', '/logout'] else url_for('pages.dashboard')) }}" class="{{ 'active' if active_page == 'login' }}">Login</a>
                 <a href="{{ url_for('auth.login', next=url_for('notes.personal_space')) }}">Notes</a>
                 <a href="{{ url_for('blog.blog') }}" class="{{ 'active' if active_page == 'blog' }}">Blog</a>
                 <a href="{{ url_for('pages.about') }}" class="{{ 'active' if active_page == 'login' }}">About</a>
@@ -617,7 +617,7 @@
         <footer class="footer">
             <div class="footer-content">
                 <div class="footer-links">
-                    <a href="{{ url_for('pages.home') }}">Home</a> |
+                    <a href="{{ url_for('pages.home') if current_user.is_authenticated else url_for('pages.dashboard') }}">Home</a> |
                     <a href="{{ url_for('blog.blog') }}">Blog</a> |
                     {% if current_user.is_authenticated %}
                     <a href="{{ url_for('notes.personal_space') }}">Notes</a> |

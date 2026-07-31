@@ -2051,9 +2051,21 @@ body {
         background-attachment: scroll;
     }
 
-    .auth-container {
-        width: 95vw;
+    .auth-page-wrapper {
+        padding: 0;
         margin: 1rem auto;
+    }
+
+    .auth-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 auto;
+        border-radius: 12px;
+        box-sizing: border-box;
+    }
+
+    .auth-forms {
+        padding: 1.25rem 1rem 1.5rem 1rem;
     }
 
     .navbar {

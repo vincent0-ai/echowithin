@@ -314,7 +314,7 @@
 
                 <!-- Message Input -->
                 <div class="chat-input-area"
-                    style="padding: 1rem 1.5rem; border-top: 1px solid #f5ebe7; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden;">
+                    style="padding: 1rem 1.5rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f5ebe7; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden; flex-shrink: 0;">
 
                     <!-- Voice Recording UI -->
                     <div id="voice-recording-ui" class="voice-recording-ui" style="display:none;">
@@ -398,6 +398,7 @@
         bottom: 0;
         z-index: 10;
         flex-shrink: 0;
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
     }
 
     /* Contact Items */
@@ -1139,6 +1140,7 @@
 
         .chat-input-area {
             padding: 0.5rem 0.6rem !important;
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
             width: 100% !important;
             box-sizing: border-box !important;
             min-width: 0 !important;
@@ -1192,11 +1194,27 @@
             padding: 3px;
         }
 
-        /* Android keyboard: ensure input bar stays anchored at bottom */
+        /* Mobile keyboard: ensure input bar stays anchored at bottom */
         .chat-input-area {
             position: sticky;
             bottom: 0;
             z-index: 10;
+            flex-shrink: 0;
+        }
+
+        /* iOS Safari: ensure the input area is never clipped */
+        @supports (-webkit-touch-callout: none) {
+            #chat-interface {
+                min-height: 0 !important;
+                height: 100% !important;
+            }
+            .chat-input-area {
+                position: -webkit-sticky;
+                position: sticky;
+                bottom: 0;
+                flex-shrink: 0 !important;
+                z-index: 20 !important;
+            }
         }
     }
 
@@ -3560,9 +3578,10 @@
             }
         });
 
-        // Dynamic keyboard Viewport sizing for mobile chat
+        // Dynamic keyboard Viewport sizing for mobile chat (iOS + Android)
         if (window.visualViewport) {
             var _lastVpHeight = window.visualViewport.height;
+            var _isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             function handleViewportResize() {
                 var vp = window.visualViewport;
                 var wrapper = document.querySelector('.messages-wrapper');
@@ -3570,8 +3589,12 @@
                 if (document.body.classList.contains('mobile-chat-open') && wrapper) {
                     wrapper.style.height = vp.height + 'px';
                     if (inputArea) {
-                        inputArea.style.position = 'relative';
-                        inputArea.style.bottom = '0';
+                        // On iOS, keep sticky positioning — setting position:relative
+                        // was causing the input to scroll off-screen
+                        if (!_isIOS) {
+                            inputArea.style.position = 'relative';
+                            inputArea.style.bottom = '0';
+                        }
                     }
                     // Scroll to bottom when keyboard is open and input is focused
                     if (document.activeElement && document.activeElement.id === 'message-input') {
@@ -3585,11 +3608,41 @@
                     document.body.style.height = '';
                     document.documentElement.style.height = '';
                     window.scrollTo(0, 0);
+                    // On iOS, also reset the wrapper height to prevent stale sizing
+                    if (_isIOS && wrapper) {
+                        wrapper.style.height = '';
+                    }
                 }
                 _lastVpHeight = vp.height;
             }
             window.visualViewport.addEventListener('resize', handleViewportResize);
             window.visualViewport.addEventListener('scroll', handleViewportResize);
+
+            // iOS-specific: handle focus/blur to ensure input stays visible
+            if (_isIOS) {
+                var msgInput = document.getElementById('message-input');
+                if (msgInput) {
+                    msgInput.addEventListener('focus', function() {
+                        // Small delay to let iOS keyboard fully appear
+                        setTimeout(function() {
+                            if (window.visualViewport) {
+                                var w = document.querySelector('.messages-wrapper');
+                                if (w) w.style.height = window.visualViewport.height + 'px';
+                                scrollToBottom();
+                            }
+                        }, 300);
+                    });
+                    msgInput.addEventListener('blur', function() {
+                        setTimeout(function() {
+                            var w = document.querySelector('.messages-wrapper');
+                            if (w && document.body.classList.contains('mobile-chat-open')) {
+                                w.style.height = window.visualViewport ? window.visualViewport.height + 'px' : '';
+                            }
+                            window.scrollTo(0, 0);
+                        }, 100);
+                    });
+                }
+            }
         }
 
         // --- Feature Helper Functions ---

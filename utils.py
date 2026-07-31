@@ -1027,18 +1027,24 @@ def _deliver_scheduled_message(sched_msg):
         _get_socketio().emit('new_dm', payload, room=f"user_{recipient_id_str}")
         _get_socketio().emit('new_dm', payload, room=f"user_{sender_id_str}")
 
-        # Push notification
-        push_body = "📸 Photo" if sched_msg.get('message_type') == 'image' else (plain_content[:100] + ('...' if len(plain_content) > 100 else ''))
-        _get_send_push_notification()(
-            recipient_id_str,
-            f"New message from {sender_username}",
-            push_body,
-            url=url_for('messages_page', _external=True),
-            tag=f'dm-{sender_id_str}'
-        )
+        # Push notification (isolated try/except so push failures don't block status update)
+        try:
+            push_body = "📸 Photo" if sched_msg.get('message_type') == 'image' else (plain_content[:100] + ('...' if len(plain_content) > 100 else ''))
+            _get_send_push_notification()(
+                recipient_id_str,
+                f"New message from {sender_username}",
+                push_body,
+                url=url_for('chat.messages_page', _external=True),
+                tag=f'dm-{sender_id_str}'
+            )
+        except Exception as push_err:
+            _get_app().logger.warning(f"Push notification for scheduled message {sched_msg.get('_id')} failed: {push_err}")
 
         # Invalidate badge cache
-        _invalidate_badge_cache(recipient_id_str)
+        try:
+            _invalidate_badge_cache(recipient_id_str)
+        except Exception:
+            pass
 
         # Mark scheduled message as sent
         database.scheduled_messages_conf.update_one(

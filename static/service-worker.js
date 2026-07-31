@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v25';
-const STATIC_CACHE = 'echowithin-static-v25';
-const PAGES_CACHE = 'echowithin-pages-v25';
-const POSTS_CACHE = 'echowithin-posts-v25';
-const API_CACHE = 'echowithin-api-v25';
+const CACHE_NAME = 'echowithin-v26';
+const STATIC_CACHE = 'echowithin-static-v26';
+const PAGES_CACHE = 'echowithin-pages-v26';
+const POSTS_CACHE = 'echowithin-posts-v26';
+const API_CACHE = 'echowithin-api-v26';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -488,4 +488,19 @@ self.addEventListener('pushsubscriptionchange', event => {
       console.error('Failed to re-subscribe:', err);
     })
   );
+});
+
+// Background Sync: when connectivity is restored, notify all open clients
+// to trigger their pending-notes sync logic. The actual sync is handled by
+// the page JS (personal_space.html) via IndexedDB, not by the SW.
+self.addEventListener('sync', event => {
+  if (event.tag === 'sync-pending-notes') {
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+        windowClients.forEach(client => {
+          client.postMessage({ type: 'SYNC_PENDING_NOTES' });
+        });
+      })
+    );
+  }
 });

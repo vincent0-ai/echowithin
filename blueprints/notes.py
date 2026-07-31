@@ -606,6 +606,7 @@ def create_personal_post():
 
 @bp.route('/personal_post/create_json', methods=['POST'])
 @login_required
+@csrf_exempt
 @limits(calls=10, period=60)
 def create_personal_post_json():
     """Creates a new personal note via JSON API (for offline sync)."""

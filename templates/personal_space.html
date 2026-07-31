@@ -7675,7 +7675,28 @@
         const STORE_NAME = 'pending_notes';
         const CACHED_STORE = 'cached_notes';
         const DB_VERSION = 2;
-        const CSRF = '{{ csrf_token() }}';
+        let CSRF = '{{ csrf_token() }}';
+
+        // Fetch a fresh CSRF token from the server. The page-embedded token
+        // expires after 1 hour (Flask-WTF default) which is long gone when
+        // the user re-opens the app after being offline.
+        async function getFreshCsrf() {
+            try {
+                const resp = await fetch('/personal_space', { credentials: 'same-origin' });
+                if (!resp.ok) return CSRF;
+                const html = await resp.text();
+                const match = html.match(/name="csrf-token"\s+content="([^"]+)"/);
+                if (match && match[1]) {
+                    CSRF = match[1];
+                    // Update the meta tag in current page too
+                    const meta = document.querySelector('meta[name="csrf-token"]');
+                    if (meta) meta.setAttribute('content', CSRF);
+                }
+            } catch (e) {
+                // Network still down — keep existing token
+            }
+            return CSRF;
+        }
 
         // --- IndexedDB Helpers ---
         function openDB() {
@@ -8009,6 +8030,13 @@
                         return getAllPending().then(notes => {
                             setBanner('offline', `You're offline — ${notes.length} note(s) pending sync`);
                             renderPendingNotes(notes);
+                            // Register Background Sync so the browser retries
+                            // when connectivity returns, even if the tab is closed.
+                            if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                                navigator.serviceWorker.ready.then(reg => {
+                                    reg.sync.register('sync-pending-notes').catch(() => {});
+                                });
+                            }
                         });
                     }).catch(err => {
                         console.error('Failed to save offline note:', err);
@@ -8024,39 +8052,53 @@
         }
 
         // --- Sync Logic ---
+        let _syncInProgress = false;
         async function syncPendingNotes() {
-            const pending = await getAllPending();
-            if (!pending.length) return;
+            if (_syncInProgress) return;
+            _syncInProgress = true;
+            try {
+                const pending = await getAllPending();
+                if (!pending.length) return;
 
-            setBanner('syncing');
-            let allSynced = true;
+                setBanner('syncing');
+                // Refresh CSRF token before syncing — the embedded one is
+                // likely expired if the page was loaded from cache.
+                await getFreshCsrf();
+                let allSynced = true;
 
-            for (const note of pending) {
-                try {
-                    const resp = await fetch('/personal_post/create_json', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': CSRF
-                        },
-                        body: JSON.stringify({ content: note.content })
-                    });
-                    if (resp.ok) {
-                        await deletePending(note.id);
-                    } else {
+                for (const note of pending) {
+                    try {
+                        const resp = await fetch('/personal_post/create_json', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': CSRF
+                            },
+                            body: JSON.stringify({
+                                content: note.content,
+                                reference: note.reference || '',
+                                tags: note.tags || ''
+                            })
+                        });
+                        if (resp.ok) {
+                            await deletePending(note.id);
+                        } else {
+                            allSynced = false;
+                        }
+                    } catch {
                         allSynced = false;
                     }
-                } catch {
-                    allSynced = false;
                 }
-            }
 
-            if (allSynced) {
-                setBanner('hidden');
-                // Reload to show the synced notes from server
-                window.location.reload();
-            } else {
-                setBanner('offline', 'Some notes failed to sync. Will retry when connection improves.');
+                if (allSynced) {
+                    setBanner('hidden');
+                    // Reload to show the synced notes from server
+                    window.location.reload();
+                } else {
+                    setBanner('offline', 'Some notes failed to sync. Will retry when connection improves.');
+                }
+            } finally {
+                _syncInProgress = false;
             }
         }
 
@@ -8069,7 +8111,16 @@
                     await syncPendingNotes();
                 }
                 // Refresh cached notes from server data
-                loadAndCacheNotesFromServer();
+                // Re-cache notes from server data on reconnect
+                try {
+                    const domNotes = extractNotesFromDOM();
+                    if (domNotes.length) {
+                        clearCachedNotes().catch(() => {});
+                        saveNotesToCache(domNotes);
+                    }
+                } catch (e) {
+                    console.warn('Failed to re-cache notes from DOM:', e);
+                }
             } else {
                 getAllPending().then(notes => {
                     if (notes.length) {
@@ -8090,6 +8141,26 @@
 
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
+
+        // Sync when user switches back to the app/tab. The 'online' event
+        // does NOT fire if the device was already online when the app resumes
+        // from background, so visibilitychange is essential.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && navigator.onLine) {
+                getAllPending().then(notes => {
+                    if (notes.length) syncPendingNotes();
+                });
+            }
+        });
+
+        // Listen for Background Sync message from the service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', event => {
+                if (event.data && event.data.type === 'SYNC_PENDING_NOTES') {
+                    syncPendingNotes();
+                }
+            });
+        }
 
         // --- Init: cache notes on load and handle offline state ---
         (async function initOfflineSupport() {

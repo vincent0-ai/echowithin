@@ -13,6 +13,107 @@ def csrf_exempt(view):
 bp = Blueprint('auth', __name__, template_folder='templates')
 
 
+# --- Session Tracking Helpers ---
+
+def _geolocate_ip(ip):
+    """Approximate city/country from IP using free ip-api.com (no API key needed).
+    Called once per login, well within the 45 req/min free tier limit."""
+    if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
+        return {'city': 'Local', 'country': ''}
+    try:
+        import urllib.request, json as _json
+        resp = urllib.request.urlopen(
+            f'http://ip-api.com/json/{ip}?fields=city,country,countryCode',
+            timeout=3
+        )
+        data = _json.loads(resp.read())
+        return {
+            'city': data.get('city', ''),
+            'country': data.get('countryCode', ''),
+            'country_name': data.get('country', '')
+        }
+    except Exception:
+        return {'city': '', 'country': ''}
+
+
+def _parse_device_info(ua):
+    """Extract a human-readable device description from User-Agent string."""
+    ua_lower = (ua or '').lower()
+    # Browser detection
+    browser = 'Unknown Browser'
+    if 'echowithinapp' in ua_lower:
+        browser = 'EchoWithin App'
+    elif 'edg/' in ua_lower:
+        browser = 'Edge'
+    elif 'opr/' in ua_lower or 'opera' in ua_lower:
+        browser = 'Opera'
+    elif 'chrome' in ua_lower and 'safari' in ua_lower:
+        browser = 'Chrome'
+    elif 'firefox' in ua_lower:
+        browser = 'Firefox'
+    elif 'safari' in ua_lower:
+        browser = 'Safari'
+    # OS detection
+    os_name = 'Unknown OS'
+    if 'android' in ua_lower:
+        os_name = 'Android'
+    elif 'iphone' in ua_lower:
+        os_name = 'iPhone'
+    elif 'ipad' in ua_lower:
+        os_name = 'iPad'
+    elif 'windows' in ua_lower:
+        os_name = 'Windows'
+    elif 'mac os' in ua_lower or 'macintosh' in ua_lower:
+        os_name = 'macOS'
+    elif 'linux' in ua_lower:
+        os_name = 'Linux'
+    return f'{browser} on {os_name}'
+
+
+def _record_login_session(user_id, login_method='password'):
+    """Records a new session entry in user_sessions on every login.
+    Stores IP, user agent, device info, approximate location, and a unique
+    session token that is saved in the Flask session cookie for revocation."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')
+    if ip and ',' in ip:
+        ip = ip.split(',')[0].strip()
+    ua_string = request.headers.get('User-Agent', 'Unknown')
+    device_info = _parse_device_info(ua_string)
+
+    # Generate a unique session token and store in Flask session
+    session_token = secrets.token_urlsafe(32)
+    session['ew_session_token'] = session_token
+
+    # Approximate location from IP (async-safe, non-blocking with 3s timeout)
+    location = _geolocate_ip(ip)
+
+    try:
+        m.user_sessions_conf.insert_one({
+            'user_id': ObjectId(user_id),
+            'session_token': session_token,
+            'ip_address': ip,
+            'user_agent': ua_string,
+            'device_info': device_info,
+            'location': location,
+            'login_method': login_method,
+            'logged_in_at': now,
+            'last_active': now,
+        })
+    except Exception as e:
+        current_app.logger.warning(f"Failed to record login session: {e}")
+
+    # Update last_login on user document
+    try:
+        m.users_conf.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {'last_login': now, 'last_login_ip': ip}}
+        )
+    except Exception:
+        pass
+
+
 def _user_is_guest(user):
     if not user or not user.is_authenticated:
         return False
@@ -121,6 +222,7 @@ def confirm(email):
                         login_user(user_obj, remember=True)
                         session.pop('is_guest_tour', None)
                         warm_user_fernet(str(user_data['_id']))
+                        _record_login_session(str(user_data['_id']), 'password')
                     flash("Email confirmed! Your account is active and ready.", "success")
                     if next_url and m.is_safe_url(next_url):
                         return redirect(next_url)
@@ -162,7 +264,7 @@ def login():
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
                 warm_user_fernet(str(user_data['_id']))  # Pre-derive Fernet key for notes
-                m.users_conf.update_one({'_id': user_data['_id']}, {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}})
+                _record_login_session(str(user_data['_id']), 'password')
                 cache_key = f"user:{user_data['_id']}"
                 m.user_loader_cache.pop(cache_key, None)
                 flash('Login successful!', 'success')
@@ -288,6 +390,7 @@ def google_callback():
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
         warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
+        _record_login_session(str(user['_id']), 'google')
         flash(f"Welcome back, {user['username']}!", "success")
         platform = session.get('oauth_platform')
         if platform == 'mobile':
@@ -340,6 +443,7 @@ def google_callback():
         user_obj = m.User(user)
         login_user(user_obj, remember=True)
         warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
+        _record_login_session(str(user['_id']), 'google')
         flash(f"Account created successfully! Welcome, {username}!", "success")
         platform = session.pop('oauth_platform', None)
         if platform == 'mobile':
@@ -371,10 +475,18 @@ def logout():
         if _user_is_guest(current_user):
             m.purge_guest_user_data(str(current_user.id))
         m.app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
+        # Remove the current session record
+        token = session.get('ew_session_token')
+        if token:
+            try:
+                m.user_sessions_conf.delete_one({'session_token': token})
+            except Exception:
+                pass
     logout_user()
     session.pop('oauth_state', None)
     session.pop('oauth_platform', None)
     session.pop('is_guest_tour', None)
+    session.pop('ew_session_token', None)
     flash('You have been logged out.', 'info')
     resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
@@ -470,6 +582,7 @@ def mobile_auth():
                 user_obj = m.User(user)
                 login_user(user_obj, remember=True)
                 warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
+                _record_login_session(str(user['_id']), 'mobile_app')
                 _app_token = secrets.token_urlsafe(48)
                 m.app_tokens_conf.insert_one({
                     'token': _app_token,
@@ -515,6 +628,7 @@ def app_reauth():
     user_obj = m.User(user)
     login_user(user_obj, remember=True)
     warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
+    _record_login_session(str(user['_id']), 'app_token')
     return jsonify({'success': True, 'username': user['username']})
 
 
@@ -709,3 +823,177 @@ def start_guest_tour():
     
     flash("Welcome to Tour Mode. You are in an isolated demo session.", "success")
     return redirect(url_for('notes.personal_space'))
+
+
+# --- Active Sessions API ---
+
+def _format_session_dt(val):
+    """Format a datetime value as ISO string with Z suffix per Rule 7."""
+    if val is None:
+        return None
+    if isinstance(val, datetime.datetime):
+        if val.tzinfo is None:
+            val = val.replace(tzinfo=datetime.timezone.utc)
+        return val.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+    return str(val)
+
+
+@bp.route('/api/sessions')
+@login_required
+@csrf_exempt
+def api_list_sessions():
+    """List all active sessions for the current user."""
+    import main as m
+    if _user_is_guest(current_user):
+        return jsonify({'sessions': [], 'last_login': None})
+
+    current_token = session.get('ew_session_token', '')
+    sessions_cursor = m.user_sessions_conf.find(
+        {'user_id': ObjectId(current_user.id)}
+    ).sort('last_active', -1)
+
+    sessions = []
+    for s in sessions_cursor:
+        loc = s.get('location') or {}
+        location_str = ''
+        if loc.get('city') and loc.get('country'):
+            location_str = f"{loc['city']}, {loc['country']}"
+        elif loc.get('city'):
+            location_str = loc['city']
+        elif loc.get('country'):
+            location_str = loc['country']
+
+        sessions.append({
+            'id': str(s['_id']),
+            'device_info': s.get('device_info', 'Unknown device'),
+            'location': location_str,
+            'ip_address': s.get('ip_address', ''),
+            'login_method': s.get('login_method', 'unknown'),
+            'logged_in_at': _format_session_dt(s.get('logged_in_at')),
+            'last_active': _format_session_dt(s.get('last_active')),
+            'is_current': s.get('session_token', '') == current_token
+        })
+
+    user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    last_login = _format_session_dt(user_doc.get('last_login')) if user_doc else None
+
+    return jsonify({'sessions': sessions, 'last_login': last_login})
+
+
+@bp.route('/api/sessions/revoke', methods=['POST'])
+@login_required
+@csrf_exempt
+def api_revoke_session():
+    """Revoke a specific session by its _id. Cannot revoke the current session."""
+    import main as m
+    data = request.get_json() or {}
+    session_id = data.get('session_id', '').strip()
+    if not session_id:
+        return jsonify({'error': 'session_id is required'}), 400
+
+    try:
+        doc = m.user_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'user_id': ObjectId(current_user.id)
+        })
+    except Exception:
+        return jsonify({'error': 'Invalid session ID'}), 400
+
+    if not doc:
+        return jsonify({'error': 'Session not found'}), 404
+
+    current_token = session.get('ew_session_token', '')
+    if doc.get('session_token') == current_token:
+        return jsonify({'error': 'Cannot revoke your current session. Use logout instead.'}), 400
+
+    m.user_sessions_conf.delete_one({'_id': doc['_id']})
+    return jsonify({'success': True})
+
+
+@bp.route('/api/sessions/revoke_all', methods=['POST'])
+@login_required
+@csrf_exempt
+def api_revoke_all_sessions():
+    """Revoke all sessions except the current one."""
+    import main as m
+    current_token = session.get('ew_session_token', '')
+    result = m.user_sessions_conf.delete_many({
+        'user_id': ObjectId(current_user.id),
+        'session_token': {'$ne': current_token}
+    })
+    return jsonify({'success': True, 'revoked_count': result.deleted_count})
+
+
+# --- Session Validation (before_app_request) ---
+# When a user revokes a session from another device, we need to force-logout
+# the revoked session on its next request. This hook checks if the session
+# token still exists in MongoDB. Uses Redis TTL cache (60s) to minimize DB hits.
+
+@bp.before_app_request
+def _validate_session_token():
+    """Check that the current session token hasn't been revoked.
+    Only runs for authenticated non-guest users with a session token."""
+    if not current_user.is_authenticated:
+        return
+    if _user_is_guest(current_user):
+        return
+    token = session.get('ew_session_token')
+    if not token:
+        return
+
+    import main as m
+    # Use Redis as a short-lived cache to avoid hitting MongoDB on every request
+    cache_key = f"sess_valid:{token}"
+    if m.redis_cache:
+        try:
+            cached = m.redis_cache.get(cache_key)
+            if cached == b'1':
+                return  # Session is valid (cached)
+            elif cached == b'0':
+                # Session was revoked — force logout
+                logout_user()
+                session.clear()
+                flash('Your session was ended from another device.', 'info')
+                return redirect(url_for('auth.login'))
+        except Exception:
+            pass
+
+    # Check MongoDB
+    doc = m.user_sessions_conf.find_one({'session_token': token}, {'_id': 1})
+    if doc:
+        # Valid — cache for 60 seconds and update last_active every 5 minutes
+        if m.redis_cache:
+            try:
+                m.redis_cache.setex(cache_key, 60, '1')
+            except Exception:
+                pass
+        # Update last_active periodically (every 5 min) to keep TTL fresh
+        _update_key = f"sess_la:{token}"
+        should_update = True
+        if m.redis_cache:
+            try:
+                if m.redis_cache.get(_update_key):
+                    should_update = False
+                else:
+                    m.redis_cache.setex(_update_key, 300, '1')
+            except Exception:
+                pass
+        if should_update:
+            try:
+                m.user_sessions_conf.update_one(
+                    {'session_token': token},
+                    {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
+                )
+            except Exception:
+                pass
+    else:
+        # Session revoked — force logout
+        if m.redis_cache:
+            try:
+                m.redis_cache.setex(cache_key, 60, '0')
+            except Exception:
+                pass
+        logout_user()
+        session.clear()
+        flash('Your session was ended from another device.', 'info')
+        return redirect(url_for('auth.login'))

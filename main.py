@@ -536,6 +536,12 @@ weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 app_updates_conf = db['app_updates']
 
+# --- User Login Sessions (Active Sessions & Login History) ---
+user_sessions_conf = db['user_sessions']
+user_sessions_conf.create_index('user_id')
+user_sessions_conf.create_index('session_token', unique=True)
+user_sessions_conf.create_index('last_active', expireAfterSeconds=30 * 24 * 3600)  # Auto-expire after 30 days
+
 # Sync update manifest between DB and static file on startup
 # Keeps the latest version (by versionCode) in both places
 def sync_update_manifest():
@@ -810,6 +816,7 @@ database.user_post_views_conf = user_post_views_conf
 database.unlock_notifications_conf = unlock_notifications_conf
 database.weekly_winners_conf = weekly_winners_conf
 database.app_tokens_conf = app_tokens_conf
+database.user_sessions_conf = user_sessions_conf
 database.app_updates_conf = app_updates_conf
 database.communities_conf = communities_conf
 database.community_notes_conf = community_notes_conf

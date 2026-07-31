@@ -21,6 +21,7 @@ user_post_views_conf = None
 unlock_notifications_conf = None
 weekly_winners_conf = None
 app_tokens_conf = None
+user_sessions_conf = None
 app_updates_conf = None
 communities_conf = None
 community_notes_conf = None

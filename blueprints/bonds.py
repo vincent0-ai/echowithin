@@ -1834,9 +1834,10 @@ def api_bond_mood_log(bond_id):
         user_oid = ObjectId(current_user.id)
 
         # Upsert — allows changing mood within the same day
+        encrypted_mood = m.encrypt_bond_data(mood, bond_id) if mood else ''
         m.bond_moods_conf.update_one(
             {'bond_id': ObjectId(bond_id), 'date': today_str, 'user_id': user_oid},
-            {'$set': {'mood': mood, 'created_at': now}},
+            {'$set': {'mood': encrypted_mood, 'encrypted': True, 'created_at': now}},
             upsert=True
         )
 
@@ -1850,9 +1851,10 @@ def api_bond_mood_log(bond_id):
         # Interactive Demo Bot: auto-log mood for Maya_DemoPartner
         if partner_user and (partner_user.get('is_demo_bot') or partner_user.get('username', '').startswith('Maya_DemoPartner')):
             bot_mood = random.choice(['great', 'good', 'okay'])
+            encrypted_bot_mood = m.encrypt_bond_data(bot_mood, bond_id) if bot_mood else ''
             m.bond_moods_conf.update_one(
                 {'bond_id': ObjectId(bond_id), 'date': today_str, 'user_id': ObjectId(partner_id)},
-                {'$set': {'mood': bot_mood, 'created_at': now}},
+                {'$set': {'mood': encrypted_bot_mood, 'encrypted': True, 'created_at': now}},
                 upsert=True
             )
 
@@ -1872,11 +1874,14 @@ def api_bond_mood_log(bond_id):
         }
 
         if revealed:
-            result['partner_mood'] = partner_mood_doc['mood']
+            partner_mood_plain = partner_mood_doc['mood']
+            if partner_mood_doc.get('encrypted'):
+                partner_mood_plain = m.decrypt_bond_data(partner_mood_plain, bond_id)
+            result['partner_mood'] = partner_mood_plain
             # Notify partner that moods are now revealed
             m.socketio.emit('bond_mood_revealed', {
                 'bond_id': bond_id,
-                'your_mood': partner_mood_doc['mood'],
+                'your_mood': partner_mood_plain,
                 'partner_mood': mood,
                 'partner_username': current_user.username
             }, room=f"user_{partner_id}")
@@ -1935,7 +1940,12 @@ def api_bond_mood_status(bond_id):
         })
 
         my_mood = my_mood_doc['mood'] if my_mood_doc else None
+        # Decrypt moods if encrypted
+        if my_mood and my_mood_doc.get('encrypted'):
+            my_mood = m.decrypt_bond_data(my_mood, bond_id)
         partner_mood = partner_mood_doc['mood'] if partner_mood_doc else None
+        if partner_mood and partner_mood_doc.get('encrypted'):
+            partner_mood = m.decrypt_bond_data(partner_mood, bond_id)
         revealed = my_mood is not None and partner_mood is not None
 
         # 14-day history (only show days where both logged — mutual reveal)
@@ -1952,7 +1962,10 @@ def api_bond_mood_status(bond_id):
             if d not in by_date:
                 by_date[d] = {}
             uid = str(md['user_id'])
-            by_date[d][uid] = md['mood']
+            raw_mood = md['mood']
+            if md.get('encrypted'):
+                raw_mood = m.decrypt_bond_data(raw_mood, bond_id)
+            by_date[d][uid] = raw_mood
 
         history = []
         for d in sorted(by_date.keys()):
@@ -2839,6 +2852,8 @@ def api_bond_insights_get(bond_id):
             if d not in mood_map:
                 mood_map[d] = {}
             mood_map[d][u] = me['mood']
+            if me.get('encrypted'):
+                mood_map[d][u] = m.decrypt_bond_data(me['mood'], bond_id)
 
         mood_comparison = []
         for d in last_30_days:
@@ -3165,8 +3180,8 @@ def api_bond_album_list(bond_id):
 
             photo = {
                 'id': str(p['_id']),
-                'title': p.get('title', ''),
-                'description': p.get('description', ''),
+                'title': m.decrypt_bond_data(p.get('title', ''), bond_id) if p.get('encrypted') else p.get('title', ''),
+                'description': m.decrypt_bond_data(p.get('description', ''), bond_id) if p.get('encrypted') else p.get('description', ''),
                 'category': p.get('category', 'other'),
                 'date_taken': _format_datetime(p.get('date_taken')),
                 'url': decrypted_url,
@@ -3276,16 +3291,19 @@ def api_bond_album_upload(bond_id):
                 continue
 
             encrypted_url = m.encrypt_bond_data(photo_url, bond_id)
+            encrypted_title = m.encrypt_bond_data(title, bond_id) if title else ''
+            encrypted_desc = m.encrypt_bond_data(description, bond_id) if description else ''
             db_res = m.bond_album_photos_conf.insert_one({
                 'bond_id': ObjectId(bond_id),
-                'title': title,
-                'description': description,
+                'title': encrypted_title,
+                'description': encrypted_desc,
                 'category': category,
                 'date_taken': date_taken,
                 'url': encrypted_url,
                 'uploaded_by': ObjectId(user_id_str),
                 'uploaded_at': now,
                 'is_pinned': False,
+                'encrypted': True,
             })
 
             uploaded_photos.append({
@@ -3393,9 +3411,10 @@ def api_bond_album_update(photo_id):
             category = 'other'
 
         update_fields = {
-            'title': title,
-            'description': description,
+            'title': m.encrypt_bond_data(title, bond_id) if title else '',
+            'description': m.encrypt_bond_data(description, bond_id) if description else '',
             'category': category,
+            'encrypted': True,
         }
 
         date_taken_str = data.get('date_taken')
@@ -3484,8 +3503,8 @@ def api_bond_bucketlist_list(bond_id):
         for item in items:
             result.append({
                 'id': str(item['_id']),
-                'title': item.get('title', ''),
-                'description': item.get('description', ''),
+                'title': m.decrypt_bond_data(item.get('title', ''), bond_id) if item.get('encrypted') else item.get('title', ''),
+                'description': m.decrypt_bond_data(item.get('description', ''), bond_id) if item.get('encrypted') else item.get('description', ''),
                 'category': item.get('category', 'other'),
                 'status': item.get('status', 'dreamt'),
                 'proposed_by': str(item.get('proposed_by', '')),
@@ -3524,14 +3543,17 @@ def api_bond_bucketlist_create(bond_id):
             category = 'other'
 
         now = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id) if title else ''
+        encrypted_desc = m.encrypt_bond_data(description, bond_id) if description else ''
         item = {
             'bond_id': ObjectId(bond_id),
-            'title': title,
-            'description': description,
+            'title': encrypted_title,
+            'description': encrypted_desc,
             'category': category,
             'status': 'dreamt',
             'proposed_by': ObjectId(user_id_str),
             'created_at': now,
+            'encrypted': True,
         }
         result = m.bond_bucketlist_conf.insert_one(item)
 
@@ -3718,10 +3740,10 @@ def api_bond_recommendations_list(bond_id):
                     image_url = ''
             result.append({
                 'id': str(r['_id']),
-                'title': r.get('title', ''),
+                'title': m.decrypt_bond_data(r.get('title', ''), bond_id) if r.get('encrypted') else r.get('title', ''),
                 'media_type': r.get('media_type', 'other'),
-                'link': r.get('link', ''),
-                'note': r.get('note', ''),
+                'link': m.decrypt_bond_data(r.get('link', ''), bond_id) if r.get('encrypted') else r.get('link', ''),
+                'note': m.decrypt_bond_data(r.get('note', ''), bond_id) if r.get('encrypted') else r.get('note', ''),
                 'image_url': image_url,
                 'recommended_by': str(r.get('recommended_by', '')),
                 'recommended_by_me': str(r.get('recommended_by', '')) == str(current_user.id),
@@ -3812,13 +3834,14 @@ def api_bond_recommendations_create(bond_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         doc = {
             'bond_id': ObjectId(bond_id),
-            'title': title,
+            'title': m.encrypt_bond_data(title, bond_id) if title else '',
             'media_type': media_type,
-            'link': link,
-            'note': note,
+            'link': m.encrypt_bond_data(link, bond_id) if link else '',
+            'note': m.encrypt_bond_data(note, bond_id) if note else '',
             'recommended_by': ObjectId(user_id_str),
             'tried_by_partner': False,
             'created_at': now,
+            'encrypted': True,
         }
         if image_url:
             doc['image_url'] = m.encrypt_bond_data(image_url, bond_id)
@@ -3948,7 +3971,7 @@ def api_bond_pulses_list(bond_id):
                 'user_id': str(p['user_id']),
                 'from_me': str(p['user_id']) == str(current_user.id),
                 'emoji': p.get('emoji', '😊'),
-                'message': p.get('message', ''),
+                'message': m.decrypt_bond_data(p.get('message', ''), bond_id) if p.get('encrypted') else p.get('message', ''),
                 'created_at': _format_datetime(p.get('created_at')),
             })
         return jsonify({'success': True, 'pulses': result})
@@ -3978,12 +4001,14 @@ def api_bond_pulse_send(bond_id):
         message = (data.get('message', '') or '').strip()[:140]
 
         now = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_message = m.encrypt_bond_data(message, bond_id) if message else ''
         result = m.bond_pulses_conf.insert_one({
             'bond_id': ObjectId(bond_id),
             'user_id': ObjectId(user_id_str),
             'emoji': emoji,
-            'message': message,
+            'message': encrypted_message,
             'created_at': now,
+            'encrypted': True,
         })
 
         partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)

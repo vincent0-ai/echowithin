@@ -72,6 +72,9 @@ def profile(username):
         bond_status = _get_bond_status_between(ObjectId(current_user.id), user_id)
     else:
         from blueprints.bonds import BOND_TYPES
+    # Decrypt bio if encrypted
+    if user.get('bio_encrypted') and user.get('bio'):
+        user['bio'] = m.decrypt_note(user['bio'], user_id=str(user['_id']))
     return render_template('profile.html', user=user, user_posts=user_posts, title=page_title, description=page_description, active_page='profile', page=page, total_pages=total_pages, total_posts=total_posts, total_comments=total_comments, user_achievements=m.get_active_achievements(user_id), dm_status=dm_status, bond_status=bond_status, bond_types=BOND_TYPES, user_search_query=user_search_query, user_search_results=user_search_results, profile_is_premium=(m.get_user_tier(user) == 'premium'))
 
 
@@ -135,7 +138,9 @@ def profile_settings(username):
                 return redirect(url_for('profile.profile_settings', username=username))
             update_data['username'] = new_username
             m.posts_conf.update_many({'author_id': user['_id']}, {'$set': {'author': new_username}})
-        update_data['bio'] = request.form.get('bio', '').strip()
+        raw_bio = request.form.get('bio', '').strip()
+        update_data['bio'] = m.encrypt_note(raw_bio, user_id=str(user['_id'])) if raw_bio else ''
+        update_data['bio_encrypted'] = True
         if request.form.get('remove_profile_picture'):
             if user.get('profile_image_public_id'):
                 try:
@@ -178,6 +183,9 @@ def profile_settings(username):
                 flash('Failed to update settings. Please try again later.', 'danger')
         redirect_username = update_data.get('username', username)
         return redirect(url_for('profile.profile_settings', username=redirect_username))
+    # Decrypt bio if encrypted for settings form pre-fill
+    if user.get('bio_encrypted') and user.get('bio'):
+        user['bio'] = m.decrypt_note(user['bio'], user_id=str(user['_id']))
     return render_template('profile_settings.html', user=user, active_page='profile', title=f"Settings - {user.get('username')}")
 
 
@@ -196,7 +204,7 @@ def export_data(username):
         'account': {
             'username': user.get('username'),
             'email': user.get('email'),
-            'bio': user.get('bio', ''),
+            'bio': m.decrypt_note(user.get('bio', ''), user_id=str(user['_id'])) if user.get('bio_encrypted') else user.get('bio', ''),
             'join_date': str(user.get('join_date', '')),
             'notification_preference': user.get('notification_preference', 'weekly'),
             'profile_image_url': user.get('profile_image_url'),

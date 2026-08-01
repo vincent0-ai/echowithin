@@ -208,6 +208,15 @@ def personal_space():
         # many notes, and this guarantees preview text is immediately
         # visible in every note card without waiting for a lazy fetch.
         note['content'] = m._decrypt_note_record(note) or ''
+        # Decrypt reference and tags if encrypted (title_encrypted flag)
+        if note.get('title_encrypted'):
+            uid_str = str(note.get('content_owner_id') or note.get('user_id'))
+            ref = note.get('reference', '')
+            if ref and isinstance(ref, str) and ref.startswith('gAAAAA'):
+                note['reference'] = m.decrypt_note(ref, user_id=uid_str)
+            tags = note.get('tags', [])
+            if tags and isinstance(tags, list):
+                note['tags'] = [m.decrypt_note(t, user_id=uid_str) if (t and isinstance(t, str) and t.startswith('gAAAAA')) else t for t in tags]
         note['content_preview'] = False
         note['lazy_content'] = False
 
@@ -286,10 +295,20 @@ def personal_space():
         for note in locked_notes_raw:
             # OPTIMIZATION: Use reference field when available to skip decryption
             ref = (note.get('reference') or '').strip()
+            # Decrypt reference if encrypted
+            if note.get('title_encrypted') and ref and ref.startswith('gAAAAA'):
+                uid_str = str(note.get('content_owner_id') or note.get('user_id'))
+                ref = m.decrypt_note(ref, user_id=uid_str)
             if ref:
                 note['content'] = ref
             else:
                 note['content'] = m._decrypt_note_record(note)
+            # Decrypt tags if encrypted
+            if note.get('title_encrypted'):
+                uid_str = str(note.get('content_owner_id') or note.get('user_id'))
+                tags = note.get('tags', [])
+                if tags and isinstance(tags, list):
+                    note['tags'] = [m.decrypt_note(t, user_id=uid_str) if (t and isinstance(t, str) and t.startswith('gAAAAA')) else t for t in tags]
             note['update_available'] = False
             if note.get('source_note_id') and note.get('original_doc'):
                 orig = note['original_doc']
@@ -587,13 +606,18 @@ def create_personal_post():
             current_app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {len(raw_content)} -> {max_chars} chars")
         # Encrypt the note content before storing
         encrypted_content = m.encrypt_note(content, user_id=current_user.id)
+        raw_reference = request.form.get('reference', '').strip()[:200]
+        raw_tags = [t.strip() for t in request.form.get('tags', '').split(',') if t.strip()][:10]
+        encrypted_reference = m.encrypt_note(raw_reference, user_id=current_user.id) if raw_reference else ''
+        encrypted_tags = [m.encrypt_note(t, user_id=current_user.id) for t in raw_tags if t] if raw_tags else []
         result = m.personal_posts_conf.insert_one({
             'user_id': ObjectId(current_user.id),
             'content_owner_id': ObjectId(current_user.id),
             'content': encrypted_content,
             'encrypted': True,
-            'reference': request.form.get('reference', '').strip()[:200],
-            'tags': [t.strip() for t in request.form.get('tags', '').split(',') if t.strip()][:10],
+            'title_encrypted': True,
+            'reference': encrypted_reference,
+            'tags': encrypted_tags,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
         # Index decrypted content to Typesense for search
@@ -630,13 +654,18 @@ def create_personal_post_json():
     if raw_len > max_chars:
         current_app.logger.warning(f"Note content truncated for user {current_user.username} (tier={current_user.account_tier}): {raw_len} -> {max_chars} chars")
     encrypted_content = m.encrypt_note(content, user_id=current_user.id)
+    raw_reference = data.get('reference', '').strip()[:200]
+    raw_tags = [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or [])
+    encrypted_reference = m.encrypt_note(raw_reference, user_id=current_user.id) if raw_reference else ''
+    encrypted_tags = [m.encrypt_note(t, user_id=current_user.id) for t in raw_tags if t] if raw_tags else []
     result = m.personal_posts_conf.insert_one({
         'user_id': ObjectId(current_user.id),
         'content_owner_id': ObjectId(current_user.id),
         'content': encrypted_content,
         'encrypted': True,
-        'reference': data.get('reference', '').strip()[:200],
-        'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
+        'title_encrypted': True,
+        'reference': encrypted_reference,
+        'tags': encrypted_tags,
         'created_at': datetime.datetime.now(datetime.timezone.utc)
     })
     # Index decrypted content to Typesense for search
@@ -944,14 +973,19 @@ def edit_personal_post(post_id):
 
         encrypted_content = m.encrypt_note(content, user_id=current_user.id)
         now = datetime.datetime.now(datetime.timezone.utc)
+        raw_reference = data.get('reference', '').strip()[:200]
+        raw_tags = [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or [])
+        encrypted_reference = m.encrypt_note(raw_reference, user_id=current_user.id) if raw_reference else ''
+        encrypted_tags = [m.encrypt_note(t, user_id=current_user.id) for t in raw_tags if t] if raw_tags else []
         m.personal_posts_conf.update_one(
             {'_id': obj_id},
             {'$set': {
                 'content': encrypted_content, 
-                'encrypted': True, 
+                'encrypted': True,
+                'title_encrypted': True,
                 'content_owner_id': ObjectId(current_user.id),
-                'reference': data.get('reference', '').strip()[:200],
-                'tags': [t.strip() for t in data.get('tags', '').split(',') if t.strip()] if isinstance(data.get('tags'), str) else (data.get('tags') or []),
+                'reference': encrypted_reference,
+                'tags': encrypted_tags,
                 'updated_at': now
             }}
         )

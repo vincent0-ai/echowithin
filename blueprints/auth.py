@@ -932,24 +932,35 @@ def api_revoke_all_sessions():
 @bp.before_app_request
 def _validate_session_token():
     """Check that the current session token hasn't been revoked.
-    Only runs for authenticated non-guest users with a session token."""
+    Only runs for authenticated non-guest users."""
     if not current_user.is_authenticated:
         return
     if _user_is_guest(current_user):
         return
+
+    import main as m
     token = session.get('ew_session_token')
+
+    # If restored via remember-me cookie without token in session, link to most recent device session
+    if not token:
+        ua_string = request.headers.get('User-Agent', 'Unknown')
+        latest_sess = m.user_sessions_conf.find_one(
+            {'user_id': ObjectId(current_user.id), 'user_agent': ua_string},
+            sort=[('last_active', -1)]
+        )
+        if latest_sess and latest_sess.get('session_token'):
+            token = latest_sess['session_token']
+            session['ew_session_token'] = token
+
     if not token:
         return
 
-    import main as m
-    # Use Redis as a short-lived cache to avoid hitting MongoDB on every request
+    # Check revocation cache
     cache_key = f"sess_valid:{token}"
     if m.redis_cache:
         try:
             cached = m.redis_cache.get(cache_key)
-            if cached == b'1':
-                return  # Session is valid (cached)
-            elif cached == b'0':
+            if cached == b'0':
                 # Session was revoked — force logout
                 logout_user()
                 session.clear()
@@ -958,36 +969,46 @@ def _validate_session_token():
         except Exception:
             pass
 
-    # Check MongoDB
-    doc = m.user_sessions_conf.find_one({'session_token': token}, {'_id': 1})
-    if doc:
-        # Valid — cache for 60 seconds and update last_active every 5 minutes
-        if m.redis_cache:
-            try:
-                m.redis_cache.setex(cache_key, 60, '1')
-            except Exception:
-                pass
-        # Update last_active periodically (every 5 min) to keep TTL fresh
-        _update_key = f"sess_la:{token}"
-        should_update = True
-        if m.redis_cache:
-            try:
-                if m.redis_cache.get(_update_key):
-                    should_update = False
-                else:
-                    m.redis_cache.setex(_update_key, 300, '1')
-            except Exception:
-                pass
-        if should_update:
-            try:
-                m.user_sessions_conf.update_one(
-                    {'session_token': token},
-                    {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
-                )
-            except Exception:
-                pass
-    else:
-        # Session revoked — force logout
+    # Check MongoDB if valid status is not cached
+    if not (m.redis_cache and m.redis_cache.get(cache_key) == b'1'):
+        doc = m.user_sessions_conf.find_one({'session_token': token}, {'_id': 1})
+        if doc:
+            if m.redis_cache:
+                try:
+                    m.redis_cache.setex(cache_key, 60, '1')
+                except Exception:
+                    pass
+        else:
+            if m.redis_cache:
+                try:
+                    m.redis_cache.setex(cache_key, 300, '0')
+                except Exception:
+                    pass
+            logout_user()
+            session.clear()
+            flash('Your session was ended from another device.', 'info')
+            return redirect(url_for('auth.login'))
+
+    # Update last_active periodically (every 5 min) to keep session TTL fresh
+    _update_key = f"sess_la:{token}"
+    should_update = True
+    if m.redis_cache:
+        try:
+            if m.redis_cache.get(_update_key):
+                should_update = False
+            else:
+                m.redis_cache.setex(_update_key, 300, '1')
+        except Exception:
+            pass
+
+    if should_update:
+        try:
+            m.user_sessions_conf.update_one(
+                {'session_token': token},
+                {'$set': {'last_active': datetime.datetime.now(datetime.timezone.utc)}}
+            )
+        except Exception:
+            pass
         if m.redis_cache:
             try:
                 m.redis_cache.setex(cache_key, 60, '0')

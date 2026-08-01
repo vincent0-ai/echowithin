@@ -373,6 +373,15 @@ def view_shared_note(share_id):
     if current_user.is_authenticated and share['permissions'] == 'edit' and surprise_theme == 'none':
         can_upload_media = current_user.get_limit('note_media_attachments') is True
 
+    # Decrypt reference and tags if encrypted
+    shared_reference = note.get('reference', '')
+    shared_tags = note.get('tags', [])
+    if note.get('title_encrypted'):
+        if shared_reference and isinstance(shared_reference, str) and shared_reference.startswith('gAAAAA'):
+            shared_reference = m.decrypt_note(shared_reference, user_id=note_owner_id)
+        if shared_tags and isinstance(shared_tags, list):
+            shared_tags = [m.decrypt_note(t, user_id=note_owner_id) if (t and isinstance(t, str) and t.startswith('gAAAAA')) else t for t in shared_tags]
+
     return render_template('shared_note.html', 
                            share_id=share_id, 
                            content=content, 
@@ -384,8 +393,8 @@ def view_shared_note(share_id):
                            already_saved=already_saved,
                            has_pending_proposal=has_pending_proposal,
                            surprise_theme=surprise_theme,
-                           reference=note.get('reference', ''),
-                           tags=note.get('tags', []),
+                           reference=shared_reference,
+                           tags=shared_tags,
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=m.decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))),
                            valentine_audio=m.decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))),

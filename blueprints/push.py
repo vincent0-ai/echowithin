@@ -17,7 +17,6 @@ def register_fcm_token():
     import main as m
     try:
         data = request.get_json()
-        data = request.get_json()
         token = data.get('token')
         if not token:
             return jsonify({'error': 'Token is required'}), 400

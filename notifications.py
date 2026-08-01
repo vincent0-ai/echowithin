@@ -441,6 +441,12 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                         platform = 'iOS' if is_ios else 'non-iOS'
                         web_sent += 1
                         _get_app().logger.info(f"Web push delivered ({platform}): status={status}, user={user_id_str}")
+                        # Reset 403 failure counter on success
+                        if sub.get('push_403_count', 0) > 0:
+                            database.push_subscriptions_conf.update_one(
+                                {'_id': sub['_id']},
+                                {'$set': {'push_403_count': 0}}
+                            )
                     except WebPushException as e:
                         status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
                         resp_body = getattr(e.response, 'text', '')[:200] if hasattr(e, 'response') and e.response else ''
@@ -451,9 +457,17 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
                         if status_code in [404, 410]:
                             _remove_stale_push_subscription(sub, platform, user_id_str, f"status={status_code}")
                         elif status_code == 403:
-                            _get_app().logger.warning(
-                                f"Web push unauthorized ({platform}) for user {user_id_str}; kept subscription for retry"
-                            )
+                            fail_count = sub.get('push_403_count', 0) + 1
+                            if fail_count >= 3:
+                                _remove_stale_push_subscription(sub, platform, user_id_str, f"status=403 after {fail_count} consecutive failures")
+                            else:
+                                database.push_subscriptions_conf.update_one(
+                                    {'_id': sub['_id']},
+                                    {'$set': {'push_403_count': fail_count}}
+                                )
+                                _get_app().logger.warning(
+                                    f"Web push unauthorized ({platform}) for user {user_id_str}; 403 failure {fail_count}/3, will remove after 3"
+                                )
                     except Exception as e:
                         web_failed += 1
                         _get_app().logger.error(f"Unexpected error sending push to user {user_id_str}: {e}")
@@ -519,14 +533,24 @@ def send_admin_broadcast_push(title, body, url=None):
                 except WebPushException as e:
                     status_code = getattr(e.response, 'status_code', None) if hasattr(e, 'response') else None
                     is_ios = _is_ios_web_push_subscription(sub)
+                    platform = 'iOS' if is_ios else 'non-iOS'
+                    user_label = str(sub.get('user_id', 'unknown'))
                     if status_code in [404, 410]:
-                        _remove_stale_push_subscription(sub, 'iOS' if is_ios else 'non-iOS', str(sub.get('user_id', 'unknown')), f"status={status_code}")
+                        _remove_stale_push_subscription(sub, platform, user_label, f"status={status_code}")
                         web_failed += 1
                     elif status_code == 403:
                         web_failed += 1
-                        _get_app().logger.warning(
-                            "Broadcast web push unauthorized (status=403); kept subscription for future retry"
-                        )
+                        fail_count = sub.get('push_403_count', 0) + 1
+                        if fail_count >= 3:
+                            _remove_stale_push_subscription(sub, platform, user_label, f"status=403 after {fail_count} consecutive failures")
+                        else:
+                            database.push_subscriptions_conf.update_one(
+                                {'_id': sub['_id']},
+                                {'$set': {'push_403_count': fail_count}}
+                            )
+                            _get_app().logger.warning(
+                                f"Broadcast web push unauthorized ({platform}) for user {user_label}; 403 failure {fail_count}/3"
+                            )
                     else:
                         web_failed += 1
                 except Exception:
@@ -629,9 +653,17 @@ def send_push_notifications_for_new_post(post_id_str):
                     if status_code in [404, 410]:
                         _remove_stale_push_subscription(sub, platform, str(user_id), f"status={status_code}")
                     elif status_code == 403:
-                        _get_app().logger.warning(
-                            f"Web push unauthorized ({platform}) for user {user_id}; kept subscription for retry"
-                        )
+                        fail_count = sub.get('push_403_count', 0) + 1
+                        if fail_count >= 3:
+                            _remove_stale_push_subscription(sub, platform, str(user_id), f"status=403 after {fail_count} consecutive failures")
+                        else:
+                            database.push_subscriptions_conf.update_one(
+                                {'_id': sub['_id']},
+                                {'$set': {'push_403_count': fail_count}}
+                            )
+                            _get_app().logger.warning(
+                                f"Web push unauthorized ({platform}) for user {user_id}; 403 failure {fail_count}/3"
+                            )
                 except Exception as e:
                     failed_count += 1
                     _get_app().logger.error(f"Unexpected push error: {e}")
@@ -674,7 +706,9 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
     try:
         tokens = list(database.fcm_tokens_conf.find({'user_id': ObjectId(user_id_str)}))
         if not tokens:
+            _get_app().logger.info(f"No FCM tokens registered for user {user_id_str}, skipping native push")
             return 0
+        _get_app().logger.info(f"Sending FCM to {len(tokens)} token(s) for user {user_id_str}")
         
         badge_count = _get_user_badge_count(user_id_str)
 
@@ -718,12 +752,14 @@ def send_fcm_notification_to_user(user_id_str, title, body, url=None, data=None)
                 )
                 messaging.send(message)
                 sent_count += 1
+                _get_app().logger.info(f"FCM push delivered to user {user_id_str} (platform={token_doc.get('platform', 'unknown')})")
             except messaging.UnregisteredError:
                 database.fcm_tokens_conf.delete_one({'_id': token_doc['_id']})
-                _get_app().logger.debug(f"Removed invalid FCM token for user {user_id_str}")
+                _get_app().logger.warning(f"Removed unregistered FCM token for user {user_id_str} (platform={token_doc.get('platform', 'unknown')})")
             except Exception as e:
                 _get_app().logger.error(f"FCM send error for user {user_id_str}: {e}")
         
+        _get_app().logger.info(f"FCM push summary for user {user_id_str}: sent={sent_count}, total_tokens={len(tokens)}")
         return sent_count
     except Exception as e:
         _get_app().logger.error(f"Error in send_fcm_notification_to_user: {e}")

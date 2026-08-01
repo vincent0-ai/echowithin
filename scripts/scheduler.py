@@ -2,12 +2,16 @@
 """
 This script acts as a background scheduler.
 It runs continuously and triggers scheduled jobs at their configured times.
+
+On startup, interval-based jobs are offset so they don't all fire immediately
+(preventing a thundering-herd of missed-job replays after a restart).
 """
 
 import schedule
 import time
 import subprocess
 import os
+import datetime
 
 
 def run_schedule_log_email():
@@ -101,32 +105,38 @@ def run_scheduled_messages():
 
 
 if __name__ == '__main__':
-    # Schedule the log email job to run every day at 01:00 AM server time.
+    # ── Fixed-time jobs (no catchup risk) ──────────────────────────
+    # These fire at a specific wall-clock time, so the schedule library
+    # naturally won't replay missed windows.
     schedule.every().day.at("01:00").do(run_schedule_log_email)
-    
-    # Schedule the weekly newsletter to run every Sunday at 09:00 AM server time.
     schedule.every().sunday.at("09:00").do(run_weekly_newsletter)
-    
-    # Schedule auth cleanup to run every hour to remove expired tokens/codes
-    schedule.every().hour.do(run_cleanup_expired_auth)
-
-    # Schedule weekly achievements to run every Monday at 00:01 AM server time
     schedule.every().monday.at("00:01").do(run_weekly_achievements)
 
-    # Schedule Atlas backup to run every 30 minutes
-    schedule.every(30).minutes.do(run_backup_to_atlas)
+    # ── Interval jobs (catchup risk on restart) ────────────────────
+    # The schedule library fires interval jobs immediately on the first
+    # run_pending() call after registration because their next_run is
+    # set to now. We register them and then push their next_run into
+    # the future so a restart doesn't replay all missed windows at once.
 
-    # Process scheduled messages every minute for timely delivery
-    schedule.every(1).minutes.do(run_scheduled_messages)
-    
+    backup_job = schedule.every(30).minutes.do(run_backup_to_atlas)
+    cleanup_job = schedule.every().hour.do(run_cleanup_expired_auth)
+    messages_job = schedule.every(1).minutes.do(run_scheduled_messages)
+
+    # Stagger first runs: backup in 2 min, cleanup in 5 min,
+    # scheduled messages in 1 min (these are short-interval so a brief
+    # initial delay is fine).
+    now = datetime.datetime.now()
+    messages_job.next_run = now + datetime.timedelta(minutes=1)
+    backup_job.next_run = now + datetime.timedelta(minutes=2)
+    cleanup_job.next_run = now + datetime.timedelta(minutes=5)
+
     print("Scheduler started. Waiting for scheduled jobs...")
     print("  - Daily log email: 01:00 AM")
     print("  - Weekly newsletter: Sunday 09:00 AM")
     print("  - Weekly achievements: Monday 00:01 AM")
-    print("  - Auth cleanup: Every hour")
-    print("  - Atlas backup: Every 30 minutes")
-    print("  - Scheduled messages: Every minute")
+    print(f"  - Auth cleanup: Every hour (first run in ~5 min)")
+    print(f"  - Atlas backup: Every 30 minutes (first run in ~2 min)")
+    print(f"  - Scheduled messages: Every minute (first run in ~1 min)")
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every 60 seconds
-

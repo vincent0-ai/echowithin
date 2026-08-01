@@ -2529,6 +2529,7 @@
             document.getElementById('chat-interface').style.display = 'flex';
             document.getElementById('chat-header-actions').style.display = 'flex';
             var whisperBtn = document.getElementById('whisper-invite-btn');
+            if (whisperBtn) whisperBtn.style.display = '';
             const displayUsername = (username && username.startsWith('Maya_DemoPartner')) ? 'Maya (Demo Partner)' : username;
             document.getElementById('active-chat-username').textContent = displayUsername;
 

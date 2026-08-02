@@ -245,10 +245,23 @@ def _linkify_target_blank(attrs, new=False):
     return attrs
 
 
+# PERF: Rendered markdown output is cached because markdown+bleach is CPU-heavy
+# and the same content is re-rendered on every page load (feed cards, notes, etc).
+# Keyed by the raw markdown source; TTL 300s balances freshness with throughput.
+_markdown_cache = TTLCache(maxsize=256, ttl=300)
+
+
 def markdown_filter(text):
     """A Jinja2 filter to convert markdown text to HTML, sanitized to prevent XSS."""
     if not text:
         return ''
+    # Return cached render when available (pure function of the input text)
+    try:
+        cached = _markdown_cache.get(text)
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
     # Convert markdown to HTML
     html = markdown.markdown(text, extensions=['fenced_code', 'nl2br'])
     # Linkify bare URLs into clickable links before sanitizing
@@ -270,7 +283,14 @@ def markdown_filter(text):
         'div': ['class'],
         '*': ['class']
     }
-    return bleach.clean(html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+    result = bleach.clean(html, tags=allowed_tags, attributes=allowed_attrs, strip=True)
+    try:
+        # Only cache reasonably-sized content to bound memory usage
+        if len(text) <= 20000:
+            _markdown_cache[text] = result
+    except Exception:
+        pass
+    return result
 
 
 def from_timestamp_filter(timestamp):

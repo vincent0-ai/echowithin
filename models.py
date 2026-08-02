@@ -34,6 +34,8 @@ class User(UserMixin):
         # Premium tier
         self._user_data_tier = user_data  # cache for tier resolution
         self.account_tier = get_user_tier(user_data)
+        # Theme preference (cached on the user object to avoid a DB query per request)
+        self.theme_preference = user_data.get('theme_preference', 'light')
 
     @property
     def is_guest_expired(self):

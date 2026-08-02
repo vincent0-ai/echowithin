@@ -680,6 +680,7 @@ community_memberships_conf = db['community_memberships']
 # --- Direct Messaging Performance Indexes ---
 direct_messages_conf.create_index([('sender_id', 1), ('recipient_id', 1), ('timestamp', -1)])
 direct_messages_conf.create_index([('recipient_id', 1), ('is_read', 1)])
+direct_messages_conf.create_index([('recipient_id', 1), ('timestamp', -1)])
 
 # --- DM Permissions (Message Request System) ---
 dm_permissions_conf = db['dm_permissions']
@@ -1284,8 +1285,8 @@ def inject_template_globals():
         ctx['user_max_shares'] = current_user.get_limit('max_share_links_per_note')
         ctx['user_max_communities'] = current_user.get_limit('max_communities')
         # Theme preference for dark mode
-        user_doc = users_conf.find_one({'_id': ObjectId(current_user.id)}, {'theme_preference': 1})
-        ctx['theme_preference'] = (user_doc or {}).get('theme_preference', 'light')
+        # PERF: served from the cached User object (no DB round-trip per request)
+        ctx['theme_preference'] = getattr(current_user, 'theme_preference', 'light')
     else:
         ctx['user_is_premium'] = False
         ctx['user_is_trial'] = False

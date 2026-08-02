@@ -37,19 +37,12 @@ def _find_note_page(m, user_id, note_id, per_page=10):
             'updated_at': 1,
             'is_locked': 1
         }},
+        # PERF: use indexed localField/foreignField join instead of a correlated $expr
+        # subquery, which avoids a full scan of personal_posts per matching note.
         {'$lookup': {
             'from': 'personal_posts',
-            'let': {'source_note_id': '$source_note_id'},
-            'pipeline': [
-                {'$match': {'$expr': {'$eq': ['$_id', '$$source_note_id']}}},
-                {'$project': {
-                    'content': 1,
-                    'user_id': 1,
-                    'content_owner_id': 1,
-                    'created_at': 1,
-                    'updated_at': 1
-                }}
-            ],
+            'localField': 'source_note_id',
+            'foreignField': '_id',
             'as': 'original'
         }},
         {'$addFields': {
@@ -156,19 +149,12 @@ def personal_space():
             'updated_at': 1,
             'is_locked': 1
         }},
+        # PERF: use indexed localField/foreignField join instead of a correlated $expr
+        # subquery, which avoids a full scan of personal_posts per matching note.
         {'$lookup': {
             'from': 'personal_posts',
-            'let': {'source_note_id': '$source_note_id'},
-            'pipeline': [
-                {'$match': {'$expr': {'$eq': ['$_id', '$$source_note_id']}}},
-                {'$project': {
-                    'content': 1,
-                    'user_id': 1,
-                    'content_owner_id': 1,
-                    'created_at': 1,
-                    'updated_at': 1
-                }}
-            ],
+            'localField': 'source_note_id',
+            'foreignField': '_id',
             'as': 'original'
         }},
         {'$addFields': {
@@ -1723,7 +1709,7 @@ def api_user_suggest():
 
     cursor = m.users_conf.find(
         filter_query,
-        {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0, 'bio_encrypted': 1}
+        {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0}
     ).sort('username', 1).limit(6)
 
     suggestions = []

@@ -125,6 +125,11 @@ def update_theme():
         {'_id': ObjectId(current_user.id)},
         {'$set': {'theme_preference': theme}}
     )
+    # Invalidate the cached User object so the new theme applies immediately
+    try:
+        m.user_loader_cache.pop(f"user:{current_user.id}", None)
+    except Exception:
+        pass
     return jsonify(success=True)
 
 

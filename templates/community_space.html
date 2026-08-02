@@ -954,7 +954,7 @@
                 {% if resource.resource_type == 'image' %}
                 <img src="{{ resource.file_url }}" alt="{{ resource.title }}" class="resource-thumb" onclick="expandImage(this.src, '{{ resource.title|e }}')" loading="lazy">
                 {% endif %}
-                <a href="{{ resource.file_url }}" target="_blank" class="resource-title" title="{{ resource.title }}">
+                <a href="{{ url_for('communities.download_community_resource', community_id=community._id, resource_id=resource._id) }}" target="_blank" class="resource-title" title="{{ resource.title }}">
                     <i class="fas {{ doc_icon }}" style="margin-right:3px;"></i>
                     {{ resource.title }}
                 </a>

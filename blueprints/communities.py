@@ -1268,6 +1268,50 @@ def api_upload_resource(community_id):
     return redirect(url_for('communities.view_community', community_id=community_id))
 
 
+@bp.route('/community/<community_id>/resource/<resource_id>/download')
+@login_required
+def download_community_resource(community_id, resource_id):
+    """Generates a signed Cloudinary URL to access or download community resources securely without 401 errors."""
+    import main as m
+    import cloudinary.utils
+    try:
+        comm_obj_id = ObjectId(community_id)
+        res_obj_id = ObjectId(resource_id)
+    except Exception:
+        flash('Invalid resource link.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    resource = m.community_resources_conf.find_one({'_id': res_obj_id, 'community_id': comm_obj_id})
+    if not resource:
+        flash('Resource not found.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
+    public_id = resource.get('public_id')
+    file_url = resource.get('file_url', '')
+    resource_type = resource.get('resource_type', 'image')
+
+    if public_id:
+        try:
+            # Generate a signed Cloudinary URL with signature & SSL
+            signed_url, _ = cloudinary.utils.cloudinary_url(
+                public_id,
+                resource_type=resource_type,
+                type='upload',
+                sign_url=True,
+                secure=True
+            )
+            return redirect(signed_url)
+        except Exception as err:
+            current_app.logger.warning(f"Failed to generate signed Cloudinary URL: {err}")
+
+    if file_url:
+        return redirect(file_url)
+
+    flash('Unable to open resource.', 'danger')
+    return redirect(url_for('communities.view_community', community_id=community_id))
+
+
+
 @bp.route('/api/community/<community_id>/resource/<resource_id>/delete', methods=['POST'])
 @login_required
 def api_delete_resource(community_id, resource_id):

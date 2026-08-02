@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from bson.son import SON
 import datetime, math, json, random, os, re
+from security import limits
 bp = Blueprint('blog', __name__, template_folder='templates')
 
 
@@ -976,6 +977,7 @@ def get_post_status(post_id):
 
 @bp.route("/post", methods=['POST', 'GET'])
 @login_required
+@limits(calls=10, period=60)
 def post():
     import main as m
     import secrets
@@ -1137,6 +1139,45 @@ def post():
 def uploaded_file(filename):
     import main as m
     return send_from_directory(m.UPLOAD_FOLDER, filename)
+
+
+@bp.route('/uploads_enc/<filename>')
+def encrypted_uploaded_file(filename):
+    """Serve an encrypt-at-rest local media fallback.
+
+    Files stored via this route are written as Fernet ciphertext on disk and
+    decrypted on read. If the file is not a valid ciphertext (legacy plaintext
+    fallback), it is served as-is so older uploads keep working.
+    """
+    import main as m
+    from flask import send_file
+    import io
+    try:
+        full_path = os.path.join(m.UPLOAD_FOLDER, filename)
+        if not os.path.isfile(full_path):
+            return '', 404
+        with open(full_path, 'rb') as f:
+            raw = f.read()
+        try:
+            plain = m.decrypt_media_bytes(raw)
+            mime = 'application/octet-stream'
+            base, ext = os.path.splitext(filename)
+            ext = ext.lower()
+            if ext in ('.jpg', '.jpeg'):
+                mime = 'image/jpeg'
+            elif ext == '.png':
+                mime = 'image/png'
+            elif ext == '.gif':
+                mime = 'image/gif'
+            elif ext == '.webp':
+                mime = 'image/webp'
+            return send_file(io.BytesIO(plain), mimetype=mime, max_age=0)
+        except Exception:
+            # Not ciphertext -> legacy plaintext file, serve directly.
+            return send_from_directory(m.UPLOAD_FOLDER, filename)
+    except Exception as e:
+        current_app.logger.error(f"Encrypted upload serve error: {e}")
+        return '', 404
 
 
 @bp.route('/post/<slug>')
@@ -1358,6 +1399,7 @@ def view_post(slug):
 
 
 @bp.route('/api/posts/<post_id>/view', methods=['POST'])
+@limits(calls=120, period=60)
 def api_record_post_view(post_id):
     import main as m
     try:
@@ -1365,7 +1407,14 @@ def api_record_post_view(post_id):
             user_identifier = str(current_user.id)
         else:
             visitor_id = request.headers.get('X-Visitor-ID') or request.cookies.get('echowithin_visitor_id')
-            user_identifier = f"visitor:{visitor_id}" if visitor_id else f"ip:{request.remote_addr}"
+            if visitor_id:
+                user_identifier = f"visitor:{visitor_id}"
+            else:
+                # Privacy: do not store raw IP addresses in logs. Hash the IP so
+                # per-visitor dedup still works without persisting PII.
+                import hashlib
+                ip_hash = hashlib.sha256((request.remote_addr or '').encode('utf-8')).hexdigest()[:16]
+                user_identifier = f"iphash:{ip_hash}"
 
         view_record = m.logs_conf.find_one({
             'type': 'post_view',
@@ -1401,6 +1450,7 @@ def api_record_post_view(post_id):
 
 
 @bp.route('/api/posts/<slug>/comments', methods=['GET', 'POST'])
+@limits(calls=20, period=60)
 def api_post_comments(slug):
     import main as m
     import redis
@@ -1445,7 +1495,7 @@ def api_post_comments(slug):
             reply_agg = list(m.comments_conf.aggregate(reply_pipeline))
             r_counts = {str(doc['_id']): doc['count'] for doc in reply_agg}
 
-            comments = [ m._serialize_comment(c, r_counts) for c in comments_list ]
+            comments = [ m._serialize_comment(c, r_counts, getattr(current_user, 'id', None)) for c in comments_list ]
             has_more = total > page * per_page
             return jsonify({'comments': comments, 'total': total, 'page': page, 'per_page': per_page, 'has_more': has_more})
         except Exception as e:
@@ -1524,7 +1574,7 @@ def api_post_comments(slug):
         except Exception as e:
             current_app.logger.error(f"Failed to enqueue push notification for comment: {e}")
 
-        return jsonify(m._serialize_comment(comment)), 201
+        return jsonify(m._serialize_comment(comment, current_user_id=getattr(current_user, 'id', None))), 201
     except Exception as e:
         current_app.logger.error(f"Failed to create comment for {slug}: {e}")
         return jsonify({'error': 'Failed to create comment'}), 500
@@ -1532,6 +1582,7 @@ def api_post_comments(slug):
 
 @bp.route('/api/comments/<comment_id>', methods=['DELETE'])
 @login_required
+@limits(calls=20, period=60)
 def api_delete_comment(comment_id):
     import main as m
     try:
@@ -1571,6 +1622,7 @@ def api_delete_comment(comment_id):
 
 @bp.route('/api/comments/<comment_id>', methods=['PUT', 'PATCH'])
 @login_required
+@limits(calls=20, period=60)
 def api_edit_comment(comment_id):
     """Edit a comment. Only the author or an admin may edit."""
     import main as m
@@ -1598,7 +1650,7 @@ def api_edit_comment(comment_id):
             m.comment_count_cache.clear()
         except Exception:
             pass
-        return jsonify(m._serialize_comment(updated))
+        return jsonify(m._serialize_comment(updated, current_user_id=getattr(current_user, 'id', None)))
     except Exception as e:
         current_app.logger.error(f"Failed to edit comment {comment_id}: {e}")
         return jsonify({'error': 'Failed to edit comment'}), 500
@@ -1606,6 +1658,7 @@ def api_edit_comment(comment_id):
 
 @bp.route('/api/comments/<comment_id>/vote', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_vote_comment(comment_id):
     """Upvote or remove an upvote from a comment."""
     import main as m
@@ -1662,6 +1715,7 @@ def edit_post(post_id):
 
 @bp.route('/update_post/<post_id>', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def update_post(post_id):
     import main as m
     import secrets
@@ -1836,6 +1890,7 @@ def update_post(post_id):
 
 @bp.route('/delete_post/<post_id>', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def delete_post(post_id):
     import main as m
     post_to_delete = m.posts_conf.find_one({'_id': ObjectId(post_id)})
@@ -1882,6 +1937,7 @@ def delete_post(post_id):
 
 @bp.route('/post/<post_id>/react', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def toggle_reaction_post(post_id):
     import main as m
     if getattr(current_user, 'is_guest', False):
@@ -1960,6 +2016,7 @@ def toggle_reaction_post(post_id):
 
 @bp.route('/post/<post_id>/toggle_save', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def toggle_save_post(post_id):
     import main as m
     try:
@@ -1997,6 +2054,7 @@ def toggle_save_post(post_id):
 
 
 @bp.route('/post/<post_id>/share', methods=['POST'])
+@limits(calls=10, period=60)
 def share_post(post_id):
     import main as m
     try:

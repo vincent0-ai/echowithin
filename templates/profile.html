@@ -254,6 +254,43 @@
             </script>
             {% endif %}
             {% endif %}
+            {% if current_user.is_authenticated and current_user.username != user.username %}
+            <button class="btn" onclick="blockThisUser('{{ user._id }}')" id="block-user-btn"
+                style="width: 100%; margin-top: 0.5rem; background-color: #f1f1f1; color: #c62828; text-align: center; display: block; padding: 10px; border-radius: 5px; border: 1px solid #e0e0e0; cursor: pointer; box-shadow: none; font-weight: 600;">
+                <i class="fas fa-ban"></i> Block User
+            </button>
+            <script nonce="{{ csp_nonce }}">
+                function blockThisUser(userId) {
+                    if (window.showCustomConfirm) {
+                        window.showCustomConfirm('Block this user? Blocked users cannot message you, send bond requests, or interact with you.', function (confirmed) {
+                            if (confirmed) doBlockUser(userId);
+                        });
+                    } else if (confirm('Block this user? They will no longer be able to message or interact with you.')) {
+                        doBlockUser(userId);
+                    }
+                }
+                function doBlockUser(userId) {
+                    const btn = document.getElementById('block-user-btn');
+                    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Blocking...'; }
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                    fetch('/api/users/block', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                        body: JSON.stringify({ user_id: userId })
+                    }).then(r => r.json()).then(d => {
+                        if (d.success) {
+                            if (window.showCustomAlert) window.showCustomAlert(d.blocked + ' has been blocked.', 'success');
+                            setTimeout(function () { window.location.reload(); }, 600);
+                        } else if (window.showCustomAlert) {
+                            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Block User'; }
+                            window.showCustomAlert(d.error || 'Could not block user.', 'danger');
+                        }
+                    }).catch(() => {
+                        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-ban"></i> Block User'; }
+                    });
+                }
+            </script>
+            {% endif %}
             <div class="profile-user-search">
                 <form method="get" action="{{ url_for('profile.profile', username=user.username) }}"
                     class="profile-user-search-form">

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os, hmac
-from security import limits, warm_user_fernet, generate_user_envelope_keys
+from security import limits, warm_user_fernet, generate_user_envelope_keys, hash_app_token, create_app_token
 from config import TIME
 
 def csrf_exempt(view):
@@ -470,7 +470,9 @@ def logout():
     import main as m
     app_token = request.cookies.get('x_app_token')
     if app_token:
-        m.app_tokens_conf.delete_one({'token': app_token})
+        # SECURITY: delete by hash (with legacy plaintext fallback).
+        token_hash = hash_app_token(app_token)
+        m.app_tokens_conf.delete_many({'$or': [{'token_hash': token_hash}, {'token': app_token}]})
     if current_user.is_authenticated:
         if _user_is_guest(current_user):
             m.purge_guest_user_data(str(current_user.id))
@@ -583,12 +585,7 @@ def mobile_auth():
                 login_user(user_obj, remember=True)
                 warm_user_fernet(str(user['_id']))  # Pre-derive Fernet key for notes
                 _record_login_session(str(user['_id']), 'mobile_app')
-                _app_token = secrets.token_urlsafe(48)
-                m.app_tokens_conf.insert_one({
-                    'token': _app_token,
-                    'user_id': user['_id'],
-                    'created_at': datetime.datetime.now(datetime.timezone.utc)
-                })
+                _app_token = create_app_token(user['_id'])
                 current_app.logger.info(f"Successfully bridged mobile session for user {user['username']} via OTLT.")
                 flash(f"Welcome back to the app, {user['username']}!", "success")
                 resp = redirect(url_for('pages.home'))
@@ -615,7 +612,9 @@ def app_reauth():
         token = request.cookies.get('x_app_token', '').strip()
     if not token:
         return jsonify({'error': 'No token'}), 400
-    doc = m.app_tokens_conf.find_one({'token': token})
+    # SECURITY: match by hashed token with legacy plaintext fallback.
+    token_hash = hash_app_token(token)
+    doc = m.app_tokens_conf.find_one({'$or': [{'token_hash': token_hash}, {'token': token}]})
     if not doc:
         return jsonify({'error': 'Invalid token'}), 401
     user = m.users_conf.find_one({'_id': doc['user_id']})

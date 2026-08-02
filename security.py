@@ -8,6 +8,7 @@ import re
 import hmac
 import time as _time
 import secrets as _secrets
+import threading
 from functools import wraps
 from urllib.parse import urlparse, urljoin, quote
 
@@ -17,12 +18,16 @@ from bson.objectid import ObjectId
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from ratelimit import limits as _limits_base, RateLimitException
+from ratelimit import RateLimitException
 from config import BYPASS_RATE_LIMIT, _NOTES_KDF_ITERATIONS, _NOTES_V1_SALT, get_env_variable, FIREBASE_AVAILABLE
 import database
 from cachetools import TTLCache
 
 _APP = None
+
+# Per-IP in-memory rate-limit fallback store: key -> (window_start, count)
+_RATE_LIMIT_LOCK = threading.Lock()
+_RATE_LIMIT_MEMORY = {}
 
 def _get_app():
     global _APP
@@ -137,12 +142,58 @@ def get_active_achievements(user_id):
 
 
 def limits(calls, period):
-    """Conditional rate limiter that respects BYPASS_RATE_LIMIT for testing."""
+    """Conditional rate limiter that respects BYPASS_RATE_LIMIT for testing.
+
+    SECURITY: rate limiting is enforced PER-CLIENT-IP using a fixed-window
+    Redis counter (with an in-memory fallback). This replaces the previous
+    implementation that used the `ratelimit` package's single shared counter
+    per function, which meant one client exhausting the budget caused 429s
+    for every user on the platform (cross-user DoS).
+    """
     if BYPASS_RATE_LIMIT:
         def noop_decorator(func):
             return func
         return noop_decorator
-    return _limits_base(calls=calls, period=period)
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            ip = request.remote_addr or 'unknown'
+            key = "rl:%s.%s:%s" % (func.__module__, func.__name__, ip)
+            window = int(_time.time() // period)
+            try:
+                if database.redis_cache is not None:
+                    rkey = "%s:%d" % (key, window)
+                    pipe = database.redis_cache.pipeline()
+                    pipe.incr(rkey)
+                    pipe.expire(rkey, period + 1)
+                    count = pipe.execute()[0]
+                    if count > calls:
+                        period_remaining = period - (_time.time() % period)
+                        raise RateLimitException('too many calls', period_remaining)
+                    return func(*args, **kwargs)
+            except RateLimitException:
+                raise
+            except Exception:
+                # Redis unavailable -> fall back to in-memory counting below.
+                pass
+            # In-memory fallback (per-process). Sliding window per client IP.
+            with _RATE_LIMIT_LOCK:
+                now = _time.time()
+                window_start = now - now % period
+                entry = _RATE_LIMIT_MEMORY.get(key)
+                if entry is None or entry[0] != window_start:
+                    _RATE_LIMIT_MEMORY[key] = (window_start, 1)
+                    entry = _RATE_LIMIT_MEMORY[key]
+                else:
+                    entry = (window_start, entry[1] + 1)
+                    _RATE_LIMIT_MEMORY[key] = entry
+                if entry[1] > calls:
+                    period_remaining = period - (now % period)
+                    raise RateLimitException('too many calls', period_remaining)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # --- Encryption utilities for personal notes ---
@@ -770,6 +821,28 @@ _CACHE_DECRYPT_TTL = 300
 def _decrypted_cache_key(note_id):
     return f"decrypted_note:{note_id}"
 
+
+def _cache_encrypt_value(plain_text):
+    """Encrypt cached plaintext before storing in Redis (defense at rest)."""
+    try:
+        return get_notes_fernet().encrypt(plain_text.encode('utf-8'))
+    except Exception:
+        return plain_text.encode('utf-8')
+
+
+def _cache_decrypt_value(cipher_bytes):
+    """Decrypt a Redis-cached note value. Returns plaintext or None on failure."""
+    try:
+        if cipher_bytes is None:
+            return None
+        return get_notes_fernet().decrypt(cipher_bytes).decode('utf-8')
+    except Exception:
+        # Fall back: value may be a legacy unencrypted cache entry.
+        try:
+            return cipher_bytes.decode('utf-8')
+        except Exception:
+            return None
+
 def _invalidate_decrypted_cache(note_id):
     """Remove the decrypted cache entry for a note when it's edited."""
     note_id_str = str(note_id) if not isinstance(note_id, str) else note_id
@@ -807,11 +880,12 @@ def _decrypt_note_record(note, share=None, max_preview_chars=None):
             try:
                 cached = database.redis_cache.get(_decrypted_cache_key(note_id_str))
                 if cached is not None:
-                    decrypted_content = cached.decode('utf-8')
-                    try:
-                        database._decrypted_notes_memory_cache[note_id_str] = decrypted_content
-                    except Exception:
-                        pass
+                    decrypted_content = _cache_decrypt_value(cached)
+                    if decrypted_content is not None:
+                        try:
+                            database._decrypted_notes_memory_cache[note_id_str] = decrypted_content
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
@@ -837,7 +911,7 @@ def _decrypt_note_record(note, share=None, max_preview_chars=None):
                 database.redis_cache.setex(
                     _decrypted_cache_key(note_id_str),
                     _CACHE_DECRYPT_TTL,
-                    decrypted
+                    _cache_encrypt_value(decrypted)
                 )
             except Exception:
                 pass
@@ -998,3 +1072,35 @@ def owner_required(f):
 def invalidate_note_decryption_cache(note_id):
     """Public helper to invalidate the decryption cache for a note."""
     _invalidate_decrypted_cache(note_id)
+
+
+def hash_app_token(token):
+    """Return the SHA-256 digest of an app token.
+
+    SECURITY: app tokens are stored hashed at rest (never plaintext) so a
+    database read cannot be used to impersonate a mobile session. Legacy
+    plaintext-stored tokens remain valid until they expire naturally.
+    """
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def create_app_token(user_id, token=None):
+    """Create a new app token document storing ONLY the hash.
+
+    Returns the raw token (to hand to the client) and inserts a document
+    with the hashed form. Legacy lookups (models.load_user_from_request)
+    match against both `token_hash` and the old `token` field.
+    """
+    import database as _db
+    raw = token or _secrets.token_urlsafe(48)
+    doc = {
+        'token_hash': hash_app_token(raw),
+        'user_id': user_id,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+    }
+    # Only store the legacy plaintext field when we are explicitly migrating
+    # an existing token; new tokens are hash-only.
+    if token is not None:
+        doc['token'] = raw
+    _db.app_tokens_conf.insert_one(doc)
+    return raw

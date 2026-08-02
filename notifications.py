@@ -5,6 +5,7 @@ import time
 import hashlib
 import hmac
 import secrets
+import re
 
 from flask import render_template, url_for
 from flask_mail import Mail, Message
@@ -905,6 +906,16 @@ def send_log_email_job():
         return
 
     try:
+        with open(log_file_path, 'r', encoding='utf-8', errors='replace') as f:
+            raw_log = f.read()
+
+        # PRIVACY: redact emails, bearer tokens, and other PII before this log
+        # leaves the server. Raw application logs must not be emailed verbatim.
+        redacted = re.sub(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[EMAIL REDACTED]', raw_log)
+        redacted = re.sub(r'(Bearer\s+)[A-Za-z0-9._\-]+', r'\1[TOKEN REDACTED]', redacted)
+        redacted = re.sub(r'(x_app_token[=: ]+)[A-Za-z0-9]+', r'\1[TOKEN REDACTED]', redacted, flags=re.IGNORECASE)
+        redacted = re.sub(r'(secret[=: ]+)[A-Za-z0-9._\-]+', r'\1[SECRET REDACTED]', redacted, flags=re.IGNORECASE)
+
         with _get_app().app_context():
             developer_email = get_env_variable('MY_EMAIL')
             msg = Message(
@@ -912,14 +923,13 @@ def send_log_email_job():
                 sender=get_env_variable('MAIL_USERNAME'),
                 recipients=[developer_email]
             )
-            msg.body = "Attached is the latest log file from the EchoWithin application."
+            msg.body = "Attached is the latest log file from the EchoWithin application (PII redacted)."
 
-            with open(log_file_path, 'rb') as f:
-                msg.attach(
-                    "echowithin.log",
-                    "text/plain",
-                    f.read()
-                )
+            msg.attach(
+                "echowithin.log",
+                "text/plain",
+                redacted.encode('utf-8')
+            )
 
             _get_mail().send(msg)
             _get_app().logger.info(f"Log file email sent to {developer_email}.")

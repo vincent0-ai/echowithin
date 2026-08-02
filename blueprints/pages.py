@@ -247,7 +247,13 @@ def serve_update_manifest():
     try:
         db_manifest = m.app_updates_conf.find_one({'key': 'latest'})
         if db_manifest:
-            return jsonify({"versionCode": db_manifest.get('versionCode'), "versionName": db_manifest.get('versionName'), "apkUrl": db_manifest.get('apkUrl'), "changelog": db_manifest.get('changelog')})
+            return jsonify({
+                "versionCode": db_manifest.get('versionCode'),
+                "versionName": db_manifest.get('versionName'),
+                "apkUrl": db_manifest.get('apkUrl'),
+                "changelog": db_manifest.get('changelog'),
+                "sha256": db_manifest.get('sha256')
+            })
     except Exception as e:
         current_app.logger.error(f"Error querying update manifest from DB: {e}")
     manifest_path = os.path.join(current_app.static_folder, 'update-manifest.json')

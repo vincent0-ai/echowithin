@@ -1,5 +1,6 @@
 import datetime
 import os
+import hashlib
 from bson.objectid import ObjectId
 from flask_login import UserMixin, current_user
 from flask import request
@@ -141,7 +142,11 @@ def load_user_from_request(req):
     if _REQ_LOADER_DEBUG:
         print(f"[DEBUG REQ_LOADER] Path: {req.path}. Token found in {token_src}: '{token[:12]}...'", flush=True)
 
-    doc = database.app_tokens_conf.find_one({'token': token})
+    # SECURITY: tokens are stored HASHED at rest (SHA-256). Look up by hash,
+    # but also accept legacy plaintext-stored tokens so existing sessions are
+    # not invalidated by the migration (they expire naturally after 90 days).
+    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+    doc = database.app_tokens_conf.find_one({'$or': [{'token_hash': token_hash}, {'token': token}]})
     if not doc:
         if _REQ_LOADER_DEBUG:
             print(f"[DEBUG REQ_LOADER] Token '{token[:12]}...' NOT found in app_tokens collection.", flush=True)

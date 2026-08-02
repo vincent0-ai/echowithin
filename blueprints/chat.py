@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, json, os, re, secrets
+import pymongo
 from security import limits, generate_conversation_envelope_keys
 
 def csrf_exempt(view):
@@ -95,7 +96,10 @@ def messages_page():
         except Exception:
             pass
         if target_oid and not m.hidden_chats_conf.find_one({'user_id': current_user_oid, 'partner_id': target_oid}):
-            active_chat = m.users_conf.find_one({'_id': target_oid}, {'username': 1, 'last_active': 1})
+            # SECURITY: only expose last_active/online for users with an actual
+            # DM relationship, not for arbitrary enumerated user IDs.
+            if m.can_dm(current_user.id, target_user_id):
+                active_chat = m.users_conf.find_one({'_id': target_oid}, {'username': 1, 'last_active': 1})
     pending_request_count = m.dm_permissions_conf.count_documents({'target_id': ObjectId(current_user.id), 'status': 'pending'})
     return render_template('messages.html', active_page='messages', contacts=contacts, active_chat=active_chat, pending_request_count=pending_request_count)
 
@@ -111,6 +115,11 @@ def api_message_history(other_user_id):
     other_user = m.users_conf.find_one({'_id': other_id}, {'username': 1, 'last_active': 1})
     if not other_user:
         return jsonify({'error': 'User not found'}), 404
+    # SECURITY: only reveal activity/presence when an actual DM relationship
+    # exists (accepted request, prior history, or demo bot). Prevents arbitrary
+    # user-ID enumeration of last_active / online status.
+    if not m.can_dm(current_user.id, other_user_id):
+        return jsonify({'error': 'Not authorized'}), 403
     if m.hidden_chats_conf.find_one({'user_id': ObjectId(current_user.id), 'partner_id': other_id}):
         return jsonify({'messages': []})
     before_id = request.args.get('before')
@@ -261,6 +270,9 @@ def api_send_dm_request(target_user_id):
         if target_user.get('dm_privacy') == 'nobody':
             return jsonify({'error': 'This user has disabled direct messages.'}), 403
 
+        if m.is_blocked_by(target_user_id, str(sender_id)):
+            return jsonify({'error': 'This user is not accepting messages from you.'}), 403
+
         if m.can_dm(str(sender_id), target_user_id):
             return jsonify({'status': 'already_accepted', 'redirect': url_for('chat.messages_page', user_id=target_user_id)})
         
@@ -330,6 +342,7 @@ def api_send_dm_request(target_user_id):
 
 @bp.route('/api/messages/request/<request_id>/accept', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_accept_dm_request(request_id):
     import main as m
     try:
@@ -363,6 +376,7 @@ def api_accept_dm_request(request_id):
 
 @bp.route('/api/messages/request/<request_id>/reject', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_reject_dm_request(request_id):
     import main as m
     try:
@@ -440,6 +454,7 @@ def api_dm_status(target_user_id):
 
 @bp.route('/api/messages/upload_image', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_upload_dm_image():
     import main as m
     if 'image' not in request.files:
@@ -467,6 +482,7 @@ def api_upload_dm_image():
 
 @bp.route('/api/messages/upload_voice', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_upload_dm_voice():
     import main as m
     if not current_user.get_limit('voice_messages'):
@@ -495,6 +511,7 @@ def api_upload_dm_voice():
 
 @bp.route('/api/messages/react/<message_id>', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_react_message(message_id):
     import main as m
     try:
@@ -574,6 +591,7 @@ def api_search_messages(other_user_id):
 
 @bp.route('/api/messages/edit/<message_id>', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_edit_message(message_id):
     import main as m
     try:
@@ -602,6 +620,7 @@ def api_edit_message(message_id):
 
 @bp.route('/api/messages/delete/<message_id>', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_delete_message(message_id):
     import main as m
     try:
@@ -623,6 +642,7 @@ def api_delete_message(message_id):
 
 @bp.route('/api/messages/chat/delete/<other_user_id>', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_delete_chat(other_user_id):
     import main as m
     try:
@@ -838,6 +858,7 @@ def api_list_scheduled_messages(other_user_id):
 
 @bp.route('/api/messages/schedule/<msg_id>/cancel', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_schedule_cancel(msg_id):
     import main as m
     try:
@@ -862,6 +883,7 @@ def api_schedule_cancel(msg_id):
 
 @bp.route('/api/messages/schedule/<msg_id>/send-now', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_schedule_send_now(msg_id):
     import main as m
     try:
@@ -889,18 +911,49 @@ def api_schedule_send_now(msg_id):
 def api_process_scheduled_messages():
     import main as m
     auth_header = request.headers.get('X-Scheduler-Secret', '')
-    expected_secret = os.environ.get('SCHEDULER_SECRET') or os.environ.get('SECRET') or current_app.config.get('SECRET_KEY', '')
+    # SECURITY: require a dedicated SCHEDULER_SECRET. Never fall back to
+    # SECRET_KEY (which protects all user data) — fail closed instead.
+    expected_secret = os.environ.get('SCHEDULER_SECRET')
     if not auth_header or not expected_secret or not secrets.compare_digest(auth_header, expected_secret):
         return jsonify({'error': 'Unauthorized'}), 403
     now = datetime.datetime.now(datetime.timezone.utc)
-    due_messages = list(m.scheduled_messages_conf.find({
-        'scheduled_at': {'$lte': now}, 'status': 'pending'
-    }).limit(50))
+    # SECURITY/idempotency: atomically claim each due message (pending ->
+    # processing) so concurrent scheduler runs or manual retries can never
+    # double-deliver the same message.
     delivered = 0
     failed = 0
-    for msg in due_messages:
-        if m._deliver_scheduled_message(msg):
-            delivered += 1
-        else:
+    total = 0
+    for _ in range(50):
+        msg = m.scheduled_messages_conf.find_one_and_update(
+            {
+                'scheduled_at': {'$lte': now},
+                'status': 'pending'
+            },
+            {'$set': {'status': 'processing', 'claimed_at': now}},
+            sort=[('scheduled_at', 1)],
+            return_document=pymongo.ReturnDocument.AFTER
+        )
+        if not msg:
+            break
+        total += 1
+        try:
+            if m._deliver_scheduled_message(msg):
+                delivered += 1
+            else:
+                # Delivery failed — release the claim so it can be retried
+                # later without risking double delivery.
+                m.scheduled_messages_conf.update_one(
+                    {'_id': msg['_id'], 'status': 'processing'},
+                    {'$set': {'status': 'pending'}, '$unset': {'claimed_at': ''}}
+                )
+                failed += 1
+        except Exception:
+            try:
+                m.scheduled_messages_conf.update_one(
+                    {'_id': msg['_id'], 'status': 'processing'},
+                    {'$set': {'status': 'pending'}, '$unset': {'claimed_at': ''}}
+                )
+            except Exception:
+                pass
             failed += 1
-    return jsonify({'delivered': delivered, 'failed': failed, 'total': len(due_messages)})
+    return jsonify({'delivered': delivered, 'failed': failed, 'total': total})

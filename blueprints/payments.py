@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, os, hashlib, hmac, requests
 from urllib.parse import urljoin
+from security import limits
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""
@@ -10,6 +11,9 @@ def csrf_exempt(view):
     return view
 
 bp = Blueprint('payments', __name__, template_folder='templates')
+
+# Premium grant period in days
+PREMIUM_GRANT_DAYS = 31
 
 
 def _is_donation(metadata):
@@ -25,8 +29,75 @@ def _is_donation(metadata):
     return str(val).strip().lower() in ('true', '1', 'yes')
 
 
+def _grant_premium(user_id, reference, amount_ksh):
+    """Idempotently grant premium for a verified Paystack transaction.
+
+    Returns True if the grant was applied (or already applied for this
+    reference), False if the reference was already consumed for a
+    different purpose.
+
+    Security notes:
+      - Every grant is recorded in payment_grants keyed by the Paystack
+        `reference` (unique index) so a single payment can never be
+        replayed to extend premium indefinitely.
+      - Only non-donation transactions that match the premium price are
+        granted here; the caller is responsible for amount verification.
+    """
+    import main as m
+
+    reference = str(reference or '').strip()
+    if not reference:
+        return False
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    try:
+        m.payment_grants_conf.insert_one({
+            'reference': reference,
+            'user_id': user_id,
+            'grant_type': 'premium',
+            'amount_ksh': amount_ksh,
+            'created_at': now,
+        })
+    except Exception:
+        # Reference already recorded -> this is a replay. Idempotent:
+        # check whether the same user already holds this grant, and if so
+        # treat it as a success (no-op) rather than extending premium again.
+        existing = m.payment_grants_conf.find_one({'reference': reference})
+        if existing and existing.get('grant_type') == 'premium' and str(existing.get('user_id')) == str(user_id):
+            return True
+        # Reference consumed by a different transaction/user -> refuse.
+        return False
+
+    result = m.users_conf.update_one(
+        {'_id': ObjectId(user_id)},
+        {'$set': {
+            'account_tier': 'premium',
+            'premium_until': now + datetime.timedelta(days=PREMIUM_GRANT_DAYS),
+            'last_payment_reference': reference
+        }}
+    )
+    return result.modified_count >= 0 or result.acknowledged
+
+
+def _verify_amount_ksh(amount_kobo, is_donation):
+    """Verify the paid amount matches expectations.
+
+    Donations accept any amount (already bounded client-side). Premium
+    purchases must exactly equal the premium price in KSH.
+    """
+    import main as m
+    amount_ksh = int(amount_kobo or 0) // 100
+    if is_donation:
+        return True, amount_ksh
+    if amount_ksh == m.PREMIUM_PRICE_KSH:
+        return True, amount_ksh
+    return False, amount_ksh
+
+
 @bp.route('/api/paystack/initialize', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def paystack_initialize():
     import main as m
     data_in = request.get_json() or {}
@@ -94,21 +165,34 @@ def paystack_callback():
         result = response.json()
         if result.get('status') and result['data']['status'] == 'success':
             metadata = result['data'].get('metadata', {})
-            if _is_donation(metadata):
-                amount_kobo = result['data'].get('amount', 0)
-                amount_ksh = amount_kobo // 100
+            is_donation = _is_donation(metadata)
+            amount_ksh_ok, amount_ksh = _verify_amount_ksh(result['data'].get('amount', 0), is_donation)
+
+            # SECURITY: verify the transaction actually belongs to this user.
+            tx_user_id = metadata.get('user_id')
+            if str(tx_user_id) != str(current_user.id):
+                current_app.logger.warning(
+                    f"Paystack callback ownership mismatch: reference={reference} "
+                    f"session_user={current_user.id} tx_user={tx_user_id}"
+                )
+                flash("This payment is not associated with your account.", "danger")
+                return redirect(url_for('profile.profile_settings', username=current_user.username))
+
+            if is_donation:
                 flash(f"Thank you for your generous donation of KSH {amount_ksh:,}! Your support keeps EchoWithin running.", "success")
             else:
-                result = m.users_conf.update_one(
-                    {'_id': ObjectId(current_user.id)},
-                    {'$set': {
-                        'account_tier': 'premium',
-                        'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
-                    }}
-                )
-                if result.modified_count == 0:
-                    current_app.logger.error(f"Premium activation failed: user {current_user.id} not updated")
-                flash("Payment successful! You are now a Premium member.", "success")
+                if not amount_ksh_ok:
+                    current_app.logger.warning(
+                        f"Paystack callback amount mismatch: reference={reference} paid_ksh={amount_ksh} expected_ksh={m.PREMIUM_PRICE_KSH}"
+                    )
+                    flash("Payment verification failed: amount does not match the premium plan.", "danger")
+                    return redirect(url_for('profile.profile_settings', username=current_user.username))
+
+                granted = _grant_premium(current_user.id, reference, amount_ksh)
+                if granted:
+                    flash("Payment successful! You are now a Premium member.", "success")
+                else:
+                    flash("This payment reference has already been used.", "warning")
         else:
             flash(f"Payment verification failed: {result.get('message', 'Unknown error')}", "danger")
     except Exception as e:
@@ -127,7 +211,8 @@ def paystack_webhook():
     signature = request.headers.get('x-paystack-signature')
     payload = request.get_data()
     hash_sign = hmac.new(secret_key.encode('utf-8'), payload, hashlib.sha512).hexdigest()
-    if hash_sign != signature:
+    # SECURITY: constant-time signature comparison
+    if not signature or not hmac.compare_digest(hash_sign, signature):
         return 'Invalid signature', 400
     try:
         event = request.json
@@ -136,20 +221,25 @@ def paystack_webhook():
         if event_type == 'charge.success':
             email = data.get('customer', {}).get('email')
             metadata = data.get('metadata', {})
+            reference = data.get('reference')
             user_id_str = metadata.get('user_id')
             user = None
             if user_id_str:
-                user = m.users_conf.find_one({'_id': ObjectId(user_id_str)})
+                try:
+                    user = m.users_conf.find_one({'_id': ObjectId(user_id_str)})
+                except Exception:
+                    user = None
             elif email:
                 user = m.users_conf.find_one({'email': email})
             if user and not _is_donation(metadata):
-                m.users_conf.update_one(
-                    {'_id': user['_id']},
-                    {'$set': {
-                        'account_tier': 'premium',
-                        'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=31)
-                    }}
-                )
+                is_donation = False
+                amount_ksh_ok, amount_ksh = _verify_amount_ksh(data.get('amount', 0), is_donation)
+                if amount_ksh_ok:
+                    _grant_premium(user['_id'], reference, amount_ksh)
+                else:
+                    current_app.logger.warning(
+                        f"Paystack webhook amount mismatch: reference={reference} paid_ksh={amount_ksh} expected_ksh={m.PREMIUM_PRICE_KSH}"
+                    )
         return '', 200
     except Exception as e:
         current_app.logger.error(f"Paystack webhook error: {str(e)}")

@@ -397,8 +397,8 @@ def view_shared_note(share_id):
                            reference=shared_reference,
                            tags=shared_tags,
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=m.decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))),
-                           valentine_audio=m.decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))),
+                           valentine_photo=_resolve_surprise_media_url(share, 'valentine_photo', 'image/jpeg'),
+                           valentine_audio=_resolve_surprise_media_url(share, 'valentine_audio', 'audio/mpeg'),
                            use_typewriter=use_typewriter,
                            owner_max_chars=owner_max_chars,
                            note_attachments=note_attachments_list,
@@ -406,6 +406,30 @@ def view_shared_note(share_id):
 
 
 # --- Note Attachment APIs (images & voice notes on collaborative notes) ---
+
+
+def _resolve_surprise_media_url(share, field_prefix, default_mime):
+    """Return a working media URL for a surprise-note media field.
+
+    New uploads store an encrypted-at-rest Cloudinary raw asset plus a public_id.
+    Re-sign a fresh short-lived serve URL at render time; fall back to the stored
+    URL for legacy plaintext uploads.
+    """
+    import main as m
+    if not share:
+        return None
+    stored_url = share.get(field_prefix)
+    public_id = share.get(field_prefix + '_public_id')
+    owner_id = str(share.get('owner_id') or share.get('user_id') or '')
+    try:
+        stored_plain = m.decrypt_note(stored_url, user_id=owner_id) if stored_url else None
+    except Exception:
+        stored_plain = None
+    if public_id:
+        signed = m.build_media_serve_url(public_id, share.get(field_prefix + '_mime', default_mime))
+        if signed:
+            return signed
+    return stored_plain
 
 
 @bp.route('/share/note/<share_id>/upload', methods=['POST'])
@@ -670,6 +694,10 @@ def api_save_shared_note(share_id):
         'valentine_audio': m.encrypt_note(m.decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_audio') else None,
         'valentine_photo_hash': share.get('valentine_photo_hash'),
         'valentine_audio_hash': share.get('valentine_audio_hash'),
+        'valentine_photo_public_id': share.get('valentine_photo_public_id', ''),
+        'valentine_audio_public_id': share.get('valentine_audio_public_id', ''),
+        'valentine_photo_mime': share.get('valentine_photo_mime', 'image/jpeg'),
+        'valentine_audio_mime': share.get('valentine_audio_mime', 'audio/mpeg'),
         'use_typewriter': share.get('use_typewriter', False),
         'permissions': share.get('permissions', 'view')
     })
@@ -708,8 +736,8 @@ def view_saved_note(note_id):
                            reference=note.get('reference', ''),
                            tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=m.decrypt_note(note.get('valentine_photo'), user_id=str(note.get('user_id', ''))),
-                           valentine_audio=m.decrypt_note(note.get('valentine_audio'), user_id=str(note.get('user_id', ''))),
+                           valentine_photo=_resolve_surprise_media_url(note, 'valentine_photo', 'image/jpeg'),
+                           valentine_audio=_resolve_surprise_media_url(note, 'valentine_audio', 'audio/mpeg'),
                            use_typewriter=note.get('use_typewriter', False),
                            note_attachments=[],
                            can_upload_media=False)
@@ -779,6 +807,23 @@ def api_edit_shared_note(share_id):
         if current_user.is_authenticated:
             editor_name = current_user.username if hasattr(current_user, 'username') else str(current_user.id)
             editor_id = ObjectId(current_user.id)
+
+        # Server-side per-token/IP proposal rate limit to prevent anonymous spam.
+        proposal_bucket = request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or 'unknown'
+        if not current_user.is_authenticated:
+            proposal_key = f"proposal_rate_{share_id}:{proposal_bucket}"
+            if m.redis_cache:
+                proposal_count = m.redis_cache.incr(proposal_key)
+                if proposal_count == 1:
+                    m.redis_cache.expire(proposal_key, 600)
+                if proposal_count > 5:
+                    return jsonify({'error': 'Too many proposal attempts. Please try again later.'}), 429
+            else:
+                proposal_session_key = f"proposal_count_{share_id}_{proposal_bucket}"
+                proposal_session_val = int(session.get(proposal_session_key, 0))
+                if proposal_session_val >= 5:
+                    return jsonify({'error': 'Too many proposal attempts. Please try again later.'}), 429
+                session[proposal_session_key] = proposal_session_val + 1
 
         m.note_versions_conf.insert_one({
             'note_id': share['note_id'],
@@ -1015,18 +1060,8 @@ def share_settings_page(share_id):
         return redirect(url_for('notes.personal_space'))
 
     # Decrypt media URLs for display
-    valentine_photo = None
-    valentine_audio = None
-    if share.get('valentine_photo'):
-        try:
-            valentine_photo = m.decrypt_note(share['valentine_photo'], user_id=current_user.id)
-        except Exception:
-            pass
-    if share.get('valentine_audio'):
-        try:
-            valentine_audio = m.decrypt_note(share['valentine_audio'], user_id=current_user.id)
-        except Exception:
-            pass
+    valentine_photo = _resolve_surprise_media_url(share, 'valentine_photo', 'image/jpeg')
+    valentine_audio = _resolve_surprise_media_url(share, 'valentine_audio', 'audio/mpeg')
 
     share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
 
@@ -1131,10 +1166,23 @@ def api_update_share_settings(share_id):
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
                 if ext in m.ALLOWED_IMAGE_EXTENSIONS:
                     try:
-                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
-                        photo_url = upload_result.get('secure_url')
+                        # SECURITY: encrypt bytes at rest before uploading to
+                        # Cloudinary (authenticated raw type, same as note
+                        # attachments), not a public plaintext image.
+                        photo_file.seek(0)
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(photo_file.read()),
+                            folder="echowithin_valentine",
+                            resource_type="raw",
+                            type="authenticated"
+                        )
+                        photo_public_id = upload_result.get('public_id', '')
+                        photo_url = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
                         update_fields['valentine_photo'] = m.encrypt_note(photo_url, user_id=current_user.id)
                         update_fields['valentine_photo_hash'] = hashlib.sha256(photo_url.encode()).hexdigest()
+                        update_fields['valentine_photo_public_id'] = photo_public_id
+                        update_fields['valentine_photo_mime'] = (photo_file.mimetype or 'image/jpeg')[:200]
+                        update_fields['valentine_photo_encrypted'] = True
                     except Exception as e:
                         current_app.logger.error(f"Share settings photo upload failed: {e}")
 
@@ -1142,11 +1190,21 @@ def api_update_share_settings(share_id):
                 ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
                 if ext in m.ALLOWED_AUDIO_EXTENSIONS:
                     try:
+                        # SECURITY: encrypt audio bytes at rest before upload.
                         audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
-                        audio_url = upload_result.get('secure_url')
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(audio_file.read()),
+                            resource_type="raw",
+                            type="authenticated",
+                            folder="echowithin_valentine"
+                        )
+                        audio_public_id = upload_result.get('public_id', '')
+                        audio_url = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
                         update_fields['valentine_audio'] = m.encrypt_note(audio_url, user_id=current_user.id)
                         update_fields['valentine_audio_hash'] = hashlib.sha256(audio_url.encode()).hexdigest()
+                        update_fields['valentine_audio_public_id'] = audio_public_id
+                        update_fields['valentine_audio_mime'] = (audio_file.mimetype or 'audio/mpeg')[:200]
+                        update_fields['valentine_audio_encrypted'] = True
                     except Exception as e:
                         current_app.logger.error(f"Share settings audio upload failed: {e}")
 
@@ -1358,7 +1416,7 @@ def api_restore_note_version(post_id, version_id):
         current_user.id
     )
     plain = m._decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or m.decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
-    m.index_note_to_typesense(post_id, decrypted_content=plain)
+    m.index_note_to_typesense(str(obj_id), decrypted_content=plain)
 
     return jsonify({'success': True, 'content': plain, 'updated_at': now.isoformat().replace('+00:00', 'Z')})
 
@@ -1534,6 +1592,19 @@ def api_get_note_comments(share_id):
     if not share:
         return jsonify([]), 404
 
+    # SECURITY: mirror the access checks used by view_shared_note so expired,
+    # deactivated, or access-code-gated shares don't enumerate comments.
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify([]), 410
+    if share.get('deactivated'):
+        return jsonify([]), 410
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
+
     # Fetch all comments for this share
     all_comments = list(m.note_discussions_conf.find({
         'share_id': share_id
@@ -1589,6 +1660,19 @@ def api_post_note_comment(share_id):
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
         return jsonify({'error': 'Share not found'}), 404
+
+    # SECURITY: enforce the same expiry/deactivation/access-code gates as other
+    # share endpoints so stale links can't be used to post comments.
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return jsonify({'error': 'Link expired'}), 410
+    if share.get('deactivated'):
+        return jsonify({'error': 'Link unavailable'}), 410
+    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+        return jsonify({'error': 'Access code required'}), 401
 
     data = request.get_json() or {}
     content = data.get('content', '').strip()

@@ -333,6 +333,28 @@ def _is_bond_participant(bond_doc, user_id_str):
     return user_id_str in (str(bond_doc['user_a_id']), str(bond_doc['user_b_id']))
 
 
+def _ai_consent_status(bond_doc, user_id_str):
+    """Return dict describing AI QotD consent for this bond.
+
+    Privacy: sending the relationship label + recent questions to an external
+    AI provider (JigsawStack/Gemini) requires explicit consent from BOTH bond
+    participants. Consent is stored per-user on the bond document; absence of
+    the flag means no consent (fail closed).
+    """
+    consent_map = bond_doc.get('ai_qotd_consent') or {}
+    a_id = str(bond_doc['user_a_id'])
+    b_id = str(bond_doc['user_b_id'])
+    a_consent = bool(consent_map.get(a_id))
+    b_consent = bool(consent_map.get(b_id))
+    return {
+        'a_consented': a_consent,
+        'b_consented': b_consent,
+        'all_consented': a_consent and b_consent,
+        'i_consented': bool(consent_map.get(user_id_str)),
+        'i_am_a': user_id_str == a_id,
+    }
+
+
 def _get_bond_status_between(user_a_oid, user_b_oid):
     """Get bond status between two users. Returns dict with status info."""
     import main as m
@@ -1502,16 +1524,17 @@ def api_bond_goal_complete(goal_id):
         )
 
         partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        goal_title = m.decrypt_bond_data(goal.get('title', ''), goal['bond_id'])
         m.socketio.emit('bond_goal_completed', {
             'goal_id': goal_id,
-            'title': goal['title'],
+            'title': goal_title,
             'completed_by': current_user.username
         }, room=f"user_{partner_id}")
 
         m.send_push_notification_to_user(
             partner_id,
             "Goal completed!",
-            f'"{goal["title"]}" has been marked as completed.',
+            f'"{goal_title}" has been marked as completed.',
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-goal-complete-{goal_id}'
         )
@@ -1546,9 +1569,10 @@ def api_bond_goal_abandon(goal_id):
         )
 
         partner_id = _get_partner_id_from_bond(bond, str(current_user.id))
+        goal_title = m.decrypt_bond_data(goal.get('title', ''), goal['bond_id'])
         m.socketio.emit('bond_goal_abandoned', {
             'goal_id': goal_id,
-            'title': goal['title'],
+            'title': goal_title,
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
@@ -2248,6 +2272,16 @@ def api_bond_qotd_generate_ai(bond_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         today_str = now.date().isoformat()
 
+        # Privacy consent gate: AI question generation sends the relationship
+        # label and recent questions to an external AI provider. Require both
+        # bond participants to have explicitly opted in.
+        consent = _ai_consent_status(bond_doc, user_id_str)
+        if not consent['all_consented']:
+            return jsonify({
+                'error': 'Both bond partners must opt in to AI-generated questions before the AI can create one.',
+                'consent': consent
+            }), 428
+
         # Check if answers already submitted today
         existing_qotd = m.bond_qotd_conf.find_one({'bond_id': ObjectId(bond_id), 'date': today_str})
         if existing_qotd and existing_qotd.get('answers'):
@@ -2368,6 +2402,47 @@ def api_bond_qotd_generate_ai(bond_id):
     except Exception as e:
         current_app.logger.error(f"Bond QotD AI generation error: {e}")
         return jsonify({'error': 'Failed to generate AI question'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/ai_consent', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_qotd_ai_consent(bond_id):
+    """Toggle the current user's consent to AI-generated questions for a bond.
+
+    Body: {"consent": true|false}
+    AI generation is only permitted once BOTH participants have consented.
+    """
+    import main as m
+
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        consent = bool(data.get('consent', True))
+
+        consent_map = bond_doc.get('ai_qotd_consent') or {}
+        if consent:
+            consent_map[user_id_str] = True
+        else:
+            consent_map[user_id_str] = False
+
+        m.bonds_conf.update_one(
+            {'_id': ObjectId(bond_id)},
+            {'$set': {'ai_qotd_consent': consent_map}}
+        )
+        bond_doc['ai_qotd_consent'] = consent_map
+        status = _ai_consent_status(bond_doc, user_id_str)
+        return jsonify({'success': True, 'consent': status})
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD AI consent toggle error: {e}")
+        return jsonify({'error': 'Failed to update AI consent'}), 500
 
 
 @bp.route('/api/bonds/<bond_id>/qotd/custom', methods=['POST'])
@@ -3243,8 +3318,24 @@ def api_bond_album_upload(bond_id):
         if not files and request.files.get('file'):
             files = [request.files.get('file')]
 
-        if not files or not any(f and f.filename for f in files):
+        # SECURITY/perf: cap the number of files per request and total bytes so
+        # a single request can't exhaust server memory (each file is read into
+        # memory for encryption before upload).
+        MAX_FILES_PER_UPLOAD = 10
+        MAX_TOTAL_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+        valid_files = [f for f in files if f and f.filename]
+        if not valid_files:
             return jsonify({'error': 'No photo files provided.'}), 400
+        if len(valid_files) > MAX_FILES_PER_UPLOAD:
+            return jsonify({'error': f'You can upload at most {MAX_FILES_PER_UPLOAD} photos at once.'}), 400
+        total_size = 0
+        for f in valid_files:
+            f.seek(0, os.SEEK_END)
+            total_size += f.tell()
+            f.seek(0)
+        if total_size > MAX_TOTAL_UPLOAD_BYTES:
+            return jsonify({'error': 'Total upload size exceeds the 50 MB limit.'}), 400
+        files = valid_files
 
         now = datetime.datetime.now(datetime.timezone.utc)
         uploaded_photos = []
@@ -3283,15 +3374,17 @@ def api_bond_album_upload(bond_id):
                 current_app.logger.warning(f"Cloudinary upload failed for bond album, trying local fallback: {upload_err}")
                 photo_url = None
 
-            # Resilient Local File Storage Fallback
+            # Resilient Local File Storage Fallback (encrypt-at-rest)
             if not photo_url:
                 try:
                     os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
                     unique_filename = f"bond_album_{uuid.uuid4().hex[:12]}.{ext}"
                     file.seek(0)
+                    ciphertext = m.encrypt_media_bytes(file.read())
                     save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
-                    file.save(save_path)
-                    photo_url = url_for('blog.uploaded_file', filename=unique_filename, _external=True)
+                    with open(save_path, 'wb') as f:
+                        f.write(ciphertext)
+                    photo_url = url_for('blog.encrypted_uploaded_file', filename=unique_filename, _external=True)
                 except Exception as save_err:
                     current_app.logger.error(f"Local file fallback upload failed: {save_err}")
                     continue
@@ -3677,10 +3770,11 @@ def api_bond_bucketlist_done(item_id):
             'by_username': current_user.username
         }, room=f"user_{partner_id}")
 
+        item_title = m.decrypt_bond_data(item.get('title', ''), item['bond_id']) if item.get('encrypted') else item.get('title', '')
         m.send_push_notification_to_user(
             partner_id,
             "Bucket list item completed!",
-            f'"{item.get("title", "")}" has been marked done.',
+            f'"{item_title}" has been marked done.',
             url=url_for('bonds.bonds_page', _external=True),
             tag=f'bond-bucketlist-done-{item_id}'
         )
@@ -3847,15 +3941,17 @@ def api_bond_recommendations_create(bond_id):
                         current_app.logger.warning(f"Cloudinary upload failed for rec image, trying local fallback: {upload_err}")
                         image_url = ''
 
-                    # Local fallback
+                    # Local fallback (encrypt-at-rest)
                     if not image_url:
                         try:
                             os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
                             unique_filename = f"bond_rec_{uuid.uuid4().hex[:12]}.{ext}"
                             image_file.seek(0)
+                            ciphertext = m.encrypt_media_bytes(image_file.read())
                             save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
-                            image_file.save(save_path)
-                            image_url = url_for('blog.uploaded_file', filename=unique_filename, _external=True)
+                            with open(save_path, 'wb') as f:
+                                f.write(ciphertext)
+                            image_url = url_for('blog.encrypted_uploaded_file', filename=unique_filename, _external=True)
                         except Exception as save_err:
                             current_app.logger.error(f"Local fallback for rec image failed: {save_err}")
 

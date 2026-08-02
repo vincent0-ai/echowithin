@@ -137,6 +137,16 @@
         </div>
       </div>
 
+      <!-- Blocked Users Section -->
+      <div class="form-group" id="blocked-users-section">
+        <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">Blocked Users</label>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">Blocked users cannot message you, send you bond
+          requests, or interact with you. Existing conversations with them stop.</p>
+        <div id="blocked-users-list" style="display: flex; flex-direction: column; gap: 0.6rem;">
+          <p style="font-size: 0.9rem; color: #666;">Loading blocked users...</p>
+        </div>
+      </div>
+
 
 
       <!-- Push Notifications Section -->
@@ -1254,7 +1264,60 @@
     } else {
       checkPushStatus();
     }
+    loadBlockedUsers();
   });
+
+  // Load and render the current user's blocked users list
+  window.loadBlockedUsers = function () {
+    const container = document.getElementById('blocked-users-list');
+    if (!container) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    const headers = { 'X-CSRFToken': csrfToken ? csrfToken.getAttribute('content') : '' };
+    fetch('/api/users/blocked', { headers: headers, credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        const blocked = (data && data.blocked) || [];
+        if (!blocked.length) {
+          container.innerHTML = '<p style="font-size: 0.9rem; color: #666;">You have not blocked any users.</p>';
+          return;
+        }
+        container.innerHTML = blocked.map(u =>
+          '<div style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem; border:1px solid var(--border-color,#ddd); border-radius:8px;">' +
+          '<img src="' + (u.profile_image_url || '/static/default_avatar.png') + '" alt="" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">' +
+          '<span style="flex:1; font-weight:500;">' + escapeHtml(u.username) + '</span>' +
+          '<button type="button" class="btn" style="padding:0.25rem 0.6rem; font-size:0.8rem;" onclick="unblockUser(\'' + u.user_id + '\')">Unblock</button>' +
+          '</div>'
+        ).join('');
+      })
+      .catch(() => {
+        container.innerHTML = '<p style="font-size: 0.9rem; color: #666;">Could not load blocked users.</p>';
+      });
+  };
+
+  window.unblockUser = function (userId) {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]');
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken ? csrfToken.getAttribute('content') : ''
+    };
+    fetch('/api/users/unblock', {
+      method: 'POST',
+      headers: headers,
+      credentials: 'same-origin',
+      body: JSON.stringify({ user_id: userId })
+    }).then(r => r.json()).then(d => {
+      if (d && d.success) {
+        loadBlockedUsers();
+        if (window.showCustomToast) showCustomToast('User unblocked.', 'success');
+      } else if (window.showCustomAlert) showCustomAlert((d && d.error) || 'Could not unblock user.', 'danger');
+    });
+  };
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
 
   // Utility function to convert base64 to Uint8Array for VAPID key
   function urlBase64ToUint8Array(base64String) {

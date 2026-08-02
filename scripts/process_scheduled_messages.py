@@ -46,7 +46,12 @@ def process_via_api():
     handles the actual message insertion and broadcast.
     """
     app_url = get_app_url()
-    secret_key = os.environ.get('SCHEDULER_SECRET') or get_env_variable('SECRET')
+    # SECURITY: the scheduler must be configured with a dedicated SCHEDULER_SECRET.
+    # Fail closed (skip this run) rather than leaking SECRET_KEY.
+    secret_key = os.environ.get('SCHEDULER_SECRET')
+    if not secret_key:
+        print("[scheduler] SCHEDULER_SECRET not configured; skipping scheduled-message run.")
+        return
     
     try:
         response = requests.post(

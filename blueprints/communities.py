@@ -7,6 +7,37 @@ from config import TIME
 bp = Blueprint('communities', __name__, template_folder='templates')
 
 
+def _apply_voucher_premium(m, user_id_obj, voucher):
+    """Grant voucher premium WITHOUT shrinking an existing paid subscription.
+
+    SECURITY: a voucher must never overwrite a longer `premium_until` with a
+    shorter one (which previously degraded paid users). Only extends when the
+    voucher grant expires later than the user's current premium end date.
+    """
+    grant_days = voucher.get('duration_days', 30)
+    new_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=grant_days)
+    user_doc = m.users_conf.find_one({'_id': user_id_obj}, {'premium_until': 1, 'account_tier': 1})
+    current_until = user_doc.get('premium_until') if user_doc else None
+    if current_until is None:
+        # No existing expiry -> grant fresh
+        m.users_conf.update_one(
+            {'_id': user_id_obj},
+            {'$set': {'account_tier': 'premium', 'premium_until': new_until}}
+        )
+    elif isinstance(current_until, datetime.datetime):
+        if current_until.tzinfo is None:
+            current_until = current_until.replace(tzinfo=datetime.timezone.utc)
+        if new_until > current_until:
+            m.users_conf.update_one(
+                {'_id': user_id_obj},
+                {'$set': {'account_tier': 'premium', 'premium_until': new_until}}
+            )
+    m.community_premium_vouchers_conf.update_one(
+        {'_id': voucher['_id']},
+        {'$addToSet': {'claimed_by': user_id_obj}}
+    )
+
+
 @bp.route('/communities', methods=['GET'])
 @login_required
 def communities_page():
@@ -318,17 +349,7 @@ def join_community_link(invite_code):
                 break
     if voucher:
         grant_days = voucher.get('duration_days', 30)
-        m.users_conf.update_one(
-            {'_id': user_id_obj},
-            {'$set': {
-                'account_tier': 'premium',
-                'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=grant_days)
-            }}
-        )
-        m.community_premium_vouchers_conf.update_one(
-            {'_id': voucher['_id']},
-            {'$addToSet': {'claimed_by': user_id_obj}}
-        )
+        _apply_voucher_premium(m, user_id_obj, voucher)
         flash(f'Community voucher applied — {grant_days} days of premium granted!', 'success')
 
     flash(f'Successfully joined {community.get("name")}!', 'success')
@@ -389,17 +410,7 @@ def api_join_public_community(community_id):
                     break
         if voucher:
             grant_days = voucher.get('duration_days', 30)
-            m.users_conf.update_one(
-                {'_id': user_id_obj},
-                {'$set': {
-                    'account_tier': 'premium',
-                    'premium_until': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=grant_days)
-                }}
-            )
-            m.community_premium_vouchers_conf.update_one(
-                {'_id': voucher['_id']},
-                {'$addToSet': {'claimed_by': user_id_obj}}
-            )
+            _apply_voucher_premium(m, user_id_obj, voucher)
             flash(f'Community voucher applied — {grant_days} days of premium granted!', 'success')
 
         flash(f'Successfully joined {community.get("name")}!', 'success')
@@ -409,6 +420,7 @@ def api_join_public_community(community_id):
 
 @bp.route('/api/community/<community_id>/settings', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_update_community(community_id):
     """Update community settings (Admin only)."""
     import main as m
@@ -440,6 +452,7 @@ def api_update_community(community_id):
 
 @bp.route('/api/community/<community_id>/regenerate-invite', methods=['POST'])
 @login_required
+@limits(calls=5, period=3600)
 def api_regenerate_invite(community_id):
     """Regenerate invite link (Admin only)."""
     import main as m
@@ -464,6 +477,7 @@ def api_regenerate_invite(community_id):
 
 @bp.route('/api/community/<community_id>/leave', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_leave_community(community_id):
     """Leave a community."""
     import main as m
@@ -492,6 +506,7 @@ def api_leave_community(community_id):
 
 @bp.route('/api/community/<community_id>/remove-member', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_remove_member(community_id):
     """Remove a member (Admin only)."""
     import main as m
@@ -578,6 +593,8 @@ def api_create_community_note(community_id):
     # Handle media uploads (premium gated, same as personal shared notes)
     valentine_photo = None
     valentine_audio = None
+    valentine_photo_public_id = ''
+    valentine_audio_public_id = ''
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     
     if surprise_theme != 'none':
@@ -593,8 +610,16 @@ def api_create_community_note(community_id):
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
                 if ext in m.ALLOWED_IMAGE_EXTENSIONS:
                     try:
-                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_community")
-                        valentine_photo = upload_result.get('secure_url')
+                        # SECURITY: encrypt bytes at rest (authenticated raw).
+                        photo_file.seek(0)
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(photo_file.read()),
+                            folder="echowithin_community",
+                            resource_type="raw",
+                            type="authenticated"
+                        )
+                        valentine_photo_public_id = upload_result.get('public_id', '')
+                        valentine_photo = m.build_media_serve_url(valentine_photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
                     except Exception as e:
                         current_app.logger.error(f"Community note photo upload failed: {e}")
             
@@ -602,9 +627,16 @@ def api_create_community_note(community_id):
                 ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
                 if ext in m.ALLOWED_AUDIO_EXTENSIONS:
                     try:
+                        # SECURITY: encrypt audio bytes at rest (authenticated raw).
                         audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_community")
-                        valentine_audio = upload_result.get('secure_url')
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(audio_file.read()),
+                            resource_type="raw",
+                            type="authenticated",
+                            folder="echowithin_community"
+                        )
+                        valentine_audio_public_id = upload_result.get('public_id', '')
+                        valentine_audio = m.build_media_serve_url(valentine_audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
                     except Exception as e:
                         current_app.logger.error(f"Community note audio upload failed: {e}")
     
@@ -630,6 +662,10 @@ def api_create_community_note(community_id):
         'use_typewriter': use_typewriter,
         'valentine_photo': valentine_photo,
         'valentine_audio': valentine_audio,
+        'valentine_photo_public_id': valentine_photo_public_id,
+        'valentine_audio_public_id': valentine_audio_public_id,
+        'valentine_photo_mime': (photo_file.mimetype if photo_file and photo_file.mimetype else 'image/jpeg')[:200] if valentine_photo_public_id else '',
+        'valentine_audio_mime': (audio_file.mimetype if audio_file and audio_file.mimetype else 'audio/mpeg')[:200] if valentine_audio_public_id else '',
         'reactions': {'heart': 0, 'fire': 0, 'laugh': 0, 'wow': 0, 'pray': 0},
         'reaction_count': 0,
         'view_count': 0,
@@ -704,9 +740,17 @@ def api_react_community_note(note_id):
     note = m.community_notes_conf.find_one({'_id': note_obj_id})
     if not note:
         return jsonify({'error': 'Not found'}), 404
-        
+
+    # SECURITY: require community membership before reacting to a note.
+    community = m.communities_conf.find_one({'_id': note.get('community_id')}, {'members': 1, 'visibility': 1})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
     user_id_obj = ObjectId(current_user.id)
-    
+    is_member = user_id_obj in community.get('members', [])
+    is_site_admin = getattr(current_user, 'is_admin', False)
+    if not is_member and not is_site_admin:
+        return jsonify({'error': 'You must be a member of this community to react to notes.'}), 403
+
     # Check existing reaction
     existing = m.community_reactions_conf.find_one({
         'note_id': note_obj_id,
@@ -811,6 +855,7 @@ def api_react_community_note(note_id):
 
 @bp.route('/api/community/note/<note_id>/delete', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_delete_community_note(note_id):
     """Delete a community note (Author or Admin only)."""
     import main as m
@@ -897,8 +942,8 @@ def view_shared_community_note(share_id):
                            reference='',
                            tags=note.get('tags', []),
                            is_valentine=(surprise_theme != 'none'),
-                           valentine_photo=note.get('valentine_photo'),
-                           valentine_audio=note.get('valentine_audio'),
+                           valentine_photo=m._resolve_surprise_media_url(note, 'valentine_photo', 'image/jpeg') if hasattr(m, '_resolve_surprise_media_url') else note.get('valentine_photo'),
+                           valentine_audio=m._resolve_surprise_media_url(note, 'valentine_audio', 'audio/mpeg') if hasattr(m, '_resolve_surprise_media_url') else note.get('valentine_audio'),
                            use_typewriter=note.get('use_typewriter', False),
                            owner_max_chars=m.get_limit(m.users_conf.find_one({'_id': note.get('author_id')}), 'max_chars_per_note'),
                            note_attachments=[],
@@ -909,6 +954,7 @@ def view_shared_community_note(share_id):
 
 @bp.route('/api/community/note/<note_id>/save', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_save_community_note(note_id):
     """Save a community note to user's personal notes."""
     import main as m
@@ -922,9 +968,17 @@ def api_save_community_note(note_id):
     note = m.community_notes_conf.find_one({'_id': note_obj_id})
     if not note:
         return jsonify({'error': 'Note not found'}), 404
-        
+
+    # SECURITY: require community membership before saving (exfil) a note.
+    community = m.communities_conf.find_one({'_id': note.get('community_id')}, {'members': 1})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
     user_id_obj = ObjectId(current_user.id)
-    
+    is_member = user_id_obj in community.get('members', [])
+    is_site_admin = getattr(current_user, 'is_admin', False)
+    if not is_member and not is_site_admin:
+        return jsonify({'error': 'You must be a member of this community to save its notes.'}), 403
+
     # Check if already saved
     existing = m.personal_posts_conf.find_one({
         'user_id': user_id_obj,
@@ -1056,6 +1110,7 @@ def api_create_challenge(community_id):
 
 @bp.route('/api/community/<community_id>/challenge/<challenge_id>/end', methods=['POST'])
 @login_required
+@limits(calls=5, period=3600)
 def api_end_challenge(community_id, challenge_id):
     """End a challenge and pick the winner (highest reaction_count). Admin only."""
     import main as m
@@ -1160,6 +1215,7 @@ def api_create_poll(community_id):
 
 @bp.route('/api/community/<community_id>/poll/<poll_id>/vote', methods=['POST'])
 @login_required
+@limits(calls=30, period=60)
 def api_vote_poll(community_id, poll_id):
     import main as m
     if getattr(current_user, 'is_guest', False):
@@ -1180,6 +1236,16 @@ def api_vote_poll(community_id, poll_id):
     poll = m.community_polls_conf.find_one({'_id': poll_obj_id, 'community_id': comm_obj_id, 'status': 'active'})
     if not poll:
         return jsonify({'error': 'Poll not found or closed'}), 404
+
+    # SECURITY: require community membership before voting in a poll.
+    community = m.communities_conf.find_one({'_id': comm_obj_id}, {'members': 1})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+    is_member = ObjectId(current_user.id) in community.get('members', [])
+    is_site_admin = getattr(current_user, 'is_admin', False)
+    if not is_member and not is_site_admin:
+        return jsonify({'error': 'You must be a member of this community to vote in polls.'}), 403
+
     if option_idx < 0 or option_idx >= len(poll.get('options', [])):
         return jsonify({'error': 'Invalid option'}), 400
     existing = m.community_poll_votes_conf.find_one({'poll_id': poll_obj_id, 'user_id': ObjectId(current_user.id)})
@@ -1212,6 +1278,7 @@ def api_vote_poll(community_id, poll_id):
 
 @bp.route('/api/community/<community_id>/poll/<poll_id>/close', methods=['POST'])
 @login_required
+@limits(calls=5, period=3600)
 def api_close_poll(community_id, poll_id):
     import main as m
     try:
@@ -1339,6 +1406,7 @@ def download_community_resource(community_id, resource_id):
 
 @bp.route('/api/community/<community_id>/resource/<resource_id>/delete', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_delete_resource(community_id, resource_id):
     import main as m
     try:
@@ -1425,6 +1493,7 @@ def api_checkin_trends(community_id):
 
 @bp.route('/api/community/<community_id>/welcome', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_set_welcome(community_id):
     import main as m
     try:
@@ -1449,6 +1518,7 @@ def api_set_welcome(community_id):
 
 @bp.route('/api/community/<community_id>/welcome/dismiss', methods=['POST'])
 @login_required
+@limits(calls=20, period=60)
 def api_dismiss_welcome(community_id):
     import main as m
     try:

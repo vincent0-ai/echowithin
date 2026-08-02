@@ -6,11 +6,21 @@ from security import limits
 from config import TIME
 bp = Blueprint('profile', __name__, template_folder='templates')
 
+# PUBLIC_PROFILE_PROJECTION: explicit allowlist of fields exposed on the
+# public profile page. New sensitive user fields will NOT be auto-exposed
+# because this is an allowlist (not a denylist). Tier fields are included so
+# get_user_tier() can compute premium status for the UI crown badge.
+PUBLIC_PROFILE_PROJECTION = {
+    '_id': 1, 'username': 1, 'bio': 1, 'bio_encrypted': 1,
+    'profile_image_url': 1, 'join_date': 1, 'dm_privacy': 1,
+    'is_admin': 1, 'account_tier': 1, 'premium_until': 1
+}
+
 
 @bp.route('/profile/<username>')
 def profile(username):
     import main as m
-    user = m.users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
+    user = m.users_conf.find_one({'username': username}, PUBLIC_PROFILE_PROJECTION)
     if not user:
         flash("User not found.", "danger")
         return redirect(url_for('pages.home'))
@@ -18,7 +28,7 @@ def profile(username):
     user_search_query = request.args.get('user_q', '').strip()
     user_search_results = []
     if user_search_query:
-        search_projection = {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0}
+        search_projection = PUBLIC_PROFILE_PROJECTION
         safe_query = m.re.escape(user_search_query)
         user_search_cursor = m.users_conf.find(
             {'username': {'$regex': safe_query, '$options': 'i'}},
@@ -81,7 +91,7 @@ def profile(username):
 @bp.route('/profile/<username>/posts')
 def user_posts_page(username):
     import main as m
-    user = m.users_conf.find_one({'username': username}, {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0})
+    user = m.users_conf.find_one({'username': username}, PUBLIC_PROFILE_PROJECTION)
     if not user:
         flash("User not found.", "danger")
         return redirect(url_for('pages.home'))
@@ -326,30 +336,79 @@ def delete_account(username):
     user_id = user['_id']
     app_token = request.cookies.get('x_app_token')
     if app_token:
-        m.app_tokens_conf.delete_one({'token': app_token})
-    m.app_tokens_conf.delete_many({'user_id': user_id})
-    m.fcm_tokens_conf.delete_many({'user_id': user_id})
-    m.push_subscriptions_conf.delete_many({'user_id': user_id})
-    m.personal_posts_conf.delete_many({'user_id': user_id})
-    m.note_shares_conf.delete_many({'$or': [{'owner_id': user_id}, {'collaborator_ids': user_id}]})
-    m.dm_permissions_conf.delete_many({'$or': [{'requester_id': user_id}, {'target_id': user_id}]})
-    m.direct_messages_conf.delete_many({'$or': [{'sender_id': user_id}, {'recipient_id': user_id}]})
-    m.scheduled_messages_conf.delete_many({'sender_id': user_id})
-    m.note_versions_conf.delete_many({'author_id': user_id})
-    m.note_discussions_conf.delete_many({'author_id': user_id})
-    m.newsletter_conf.delete_many({'email': user.get('email')})
-    m.bonds_conf.delete_many({'$or': [{'user_a_id': user_id}, {'user_b_id': user_id}]})
-    m.bond_goals_conf.delete_many({'proposed_by': user_id})
-    m.bond_journal_conf.delete_many({'user_id': user_id})
-    m.bond_moods_conf.delete_many({'user_id': user_id})
-    m.communities_conf.update_many({'admin_id': user_id}, {'$set': {'admin_id': None}})
-    m.communities_conf.update_many({}, {'$pull': {'members': user_id, 'moderators': user_id}})
-    m.community_notes_conf.delete_many({'author_id': user_id})
-    m.community_reactions_conf.delete_many({'user_id': user_id})
-    m.auth_conf.delete_many({'email': user.get('email')})
-    m.users_conf.delete_one({'_id': user_id})
+        from security import hash_app_token
+        token_hash = hash_app_token(app_token)
+        m.app_tokens_conf.delete_many({'$or': [{'token_hash': token_hash}, {'token': app_token}]})
+    # GDPR-complete cascade: every collection owned by this user is removed.
+    m.cascade_delete_user_data(user_id)
     m.logout_user()
     flash('Your account has been permanently deleted.', 'info')
     resp = redirect(url_for('pages.dashboard'))
     resp.delete_cookie('x_app_token')
     return resp
+
+
+@bp.route('/api/users/block', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_block_user():
+    """Block a user: prevents them from DM-ing you, bonding with you, or interacting."""
+    import main as m
+    data = request.get_json(silent=True) or {}
+    target_id = data.get('user_id')
+    if not target_id:
+        return jsonify({'error': 'User ID required'}), 400
+    target_oid = ObjectId(target_id)
+    my_oid = ObjectId(current_user.id)
+    if target_oid == my_oid:
+        return jsonify({'error': 'You cannot block yourself.'}), 400
+    target = m.users_conf.find_one({'_id': target_oid}, {'username': 1})
+    if not target:
+        return jsonify({'error': 'User not found'}), 404
+    m.users_conf.update_one(
+        {'_id': my_oid},
+        {'$addToSet': {'blocked_user_ids': target_oid}}
+    )
+    # Also revoke any accepted DM permission / pending request to/from them.
+    m.dm_permissions_conf.delete_many({
+        '$or': [
+            {'requester_id': my_oid, 'target_id': target_oid},
+            {'requester_id': target_oid, 'target_id': my_oid}
+        ]
+    })
+    m._invalidate_badge_cache(str(current_user.id))
+    return jsonify({'success': True, 'blocked': target.get('username', '')})
+
+
+@bp.route('/api/users/unblock', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_unblock_user():
+    """Unblock a previously blocked user."""
+    import main as m
+    data = request.get_json(silent=True) or {}
+    target_id = data.get('user_id')
+    if not target_id:
+        return jsonify({'error': 'User ID required'}), 400
+    target_oid = ObjectId(target_id)
+    m.users_conf.update_one(
+        {'_id': ObjectId(current_user.id)},
+        {'$pull': {'blocked_user_ids': target_oid}}
+    )
+    return jsonify({'success': True})
+
+
+@bp.route('/api/users/blocked')
+@login_required
+@limits(calls=30, period=60)
+def api_list_blocked():
+    """List the current user's blocked users."""
+    import main as m
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'blocked_user_ids': 1})
+    blocked_ids = user.get('blocked_user_ids') or [] if user else []
+    result = []
+    for bid in blocked_ids:
+        u = m.users_conf.find_one({'_id': bid}, {'username': 1, 'profile_image_url': 1})
+        if u:
+            result.append({'user_id': str(bid), 'username': u.get('username', ''), 'profile_image_url': u.get('profile_image_url', '')})
+    return jsonify({'blocked': result})

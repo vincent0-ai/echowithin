@@ -7,7 +7,7 @@ import hashlib
 import os
 import socket
 import ipaddress
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from io import BytesIO
 
 from flask import url_for
@@ -363,6 +363,40 @@ def cleanup_share_media(share):
         media_hash = share.get(hash_field)
         encrypted_url = share.get(field)
         if not encrypted_url:
+            continue
+
+        # New encrypted-at-rest uploads store a public_id directly.
+        direct_public_id = share.get(field + '_public_id')
+        if direct_public_id:
+            try:
+                other_usage = None
+                other_post = None
+                if media_hash:
+                    other_usage = database.note_shares_conf.find_one({
+                        hash_field: media_hash,
+                        '_id': {'$ne': share['_id']}
+                    })
+                    other_post = database.personal_posts_conf.find_one({
+                        hash_field: media_hash
+                    })
+                else:
+                    other_usage = database.note_shares_conf.find_one({
+                        field: encrypted_url,
+                        '_id': {'$ne': share['_id']}
+                    })
+                    other_post = database.personal_posts_conf.find_one({
+                        field: encrypted_url
+                    })
+                if not other_usage and not other_post:
+                    cloudinary.uploader.destroy(
+                        direct_public_id,
+                        resource_type="raw",
+                        type="authenticated",
+                        invalidate=True
+                    )
+                    _get_app().logger.info(f"Deleted orphaned encrypted media: {direct_public_id}")
+            except Exception as e:
+                _get_app().logger.warning(f"Failed to delete encrypted media {direct_public_id}: {e}")
             continue
 
         # Decrypt URL to get the actual Cloudinary URL for deletion
@@ -721,7 +755,7 @@ def calculate_hot_score(post, comment_count):
     return log_score * decay_factor * recency_boost
 
 
-def _serialize_comment(doc, reply_counts=None):
+def _serialize_comment(doc, reply_counts=None, current_user_id=None):
     if reply_counts is None: reply_counts = {}
     raw_content = doc.get('content') or ''
     content_html = markdown_filter(raw_content) if raw_content else ''
@@ -733,19 +767,29 @@ def _serialize_comment(doc, reply_counts=None):
             dt = dt.replace(tzinfo=datetime.timezone.utc)
         return dt.isoformat().replace('+00:00', 'Z')
 
+    # PRIVACY: do not expose the full voter-ID list. Only report whether the
+    # current viewer has voted; keep the count for everyone.
+    voter_ids = doc.get('upvoted_by') or []
+    voted_by_me = False
+    if current_user_id:
+        try:
+            cur_uid = str(current_user_id)
+        except Exception:
+            cur_uid = current_user_id
+        voted_by_me = any(str(v) == cur_uid for v in voter_ids)
+
     return {
         'id': str(doc.get('_id')),
         'post_slug': doc.get('post_slug'),
         'author_id': str(doc.get('author_id')) if doc.get('author_id') else None,
         'author_username': doc.get('author_username') or doc.get('author'),
-        'content': raw_content,
         'content_html': content_html,
         'created_at': _fmt_iso(doc.get('created_at')),
         'edited_at': _fmt_iso(doc.get('edited_at')),
         'is_deleted': doc.get('is_deleted', False),
         'parent_id': str(doc.get('parent_id')) if doc.get('parent_id') else None,
         'upvote_count': doc.get('upvote_count', 0),
-        'upvoted_by': [str(uid) for uid in doc.get('upvoted_by', [])],
+        'voted_by_me': voted_by_me,
         'reply_count': reply_counts.get(str(doc.get('_id')), 0),
     }
 
@@ -820,12 +864,119 @@ def _has_active_auto_approve(share_id, editor_id):
         return str(editor_id) in [str(uid) for uid in auto_approved]
 
 
+def cascade_delete_user_data(user_id):
+    """Permanently delete every data record owned by a user (GDPR-complete).
+
+    Covers blog posts/comments/votes/views, community content, whisper data,
+    bonds + all bond sub-collections, DMs, notes, shares, sessions, and logs.
+    Messages received from other users are redacted in place rather than deleted
+    so the other party's conversation history is not destroyed.
+    """
+    import main as m
+    uid = ObjectId(user_id)
+    user_doc = m.users_conf.find_one({'_id': uid}) or {}
+    user_email = user_doc.get('email')
+
+    # Auth / sessions / tokens
+    m.auth_conf.delete_many({'$or': [{'user_id': uid}, {'email': user_email}]} if user_email else {'user_id': uid})
+    m.user_sessions_conf.delete_many({'user_id': uid})
+    m.app_tokens_conf.delete_many({'user_id': uid})
+    m.fcm_tokens_conf.delete_many({'user_id': uid})
+    m.push_subscriptions_conf.delete_many({'user_id': uid})
+
+    # Blog content
+    my_posts = list(m.posts_conf.find({'author_id': uid}, {'_id': 1, 'image_public_id': 1, 'image_public_ids': 1, 'video_public_id': 1}))
+    m.posts_conf.delete_many({'author_id': uid})
+    for p in my_posts:
+        for pid in [p.get('image_public_id')] + list(p.get('image_public_ids', [])):
+            if pid:
+                try:
+                    m.cloudinary.uploader.destroy(pid, resource_type='image')
+                except Exception:
+                    pass
+        if p.get('video_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(p['video_public_id'], resource_type='video')
+            except Exception:
+                pass
+    m.comments_conf.delete_many({'author_id': uid})
+    m.comment_votes_conf.delete_many({'user_id': uid})
+    m.user_post_views_conf.delete_many({'user_id': uid})
+    m.unlock_notifications_conf.delete_many({'user_id': uid})
+
+    # Private notes & shares
+    m.personal_posts_conf.delete_many({'user_id': uid})
+    m.note_attachments_conf.delete_many({'uploader_id': uid})
+    m.note_shares_conf.delete_many({'$or': [{'owner_id': uid}, {'collaborator_ids': uid}]})
+    m.note_versions_conf.delete_many({'author_id': uid})
+    m.note_discussions_conf.delete_many({'author_id': uid})
+
+    # Messaging: delete what the user sent; redact messages others sent to them.
+    m.direct_messages_conf.delete_many({'sender_id': uid})
+    m.direct_messages_conf.update_many(
+        {'recipient_id': uid},
+        {'$set': {'sender_id': None, 'content': '', 'image_url': '', 'image_public_id': '', 'link_preview': {}, 'deleted_for_recipient': True}}
+    )
+    m.dm_permissions_conf.delete_many({'$or': [{'requester_id': uid}, {'target_id': uid}]})
+    m.scheduled_messages_conf.delete_many({'sender_id': uid})
+    m.hidden_chats_conf.delete_many({'user_id': uid})
+
+    # Whisper data
+    my_whisper_sessions = list(m.whisper_sessions_conf.find({'$or': [{'initiator_id': uid}, {'partner_id': uid}]}, {'_id': 1}))
+    m.whisper_sessions_conf.delete_many({'$or': [{'initiator_id': uid}, {'partner_id': uid}]})
+    if my_whisper_sessions:
+        m.whisper_messages_conf.delete_many({'session_id': {'$in': [s['_id'] for s in my_whisper_sessions]}})
+    else:
+        m.whisper_messages_conf.delete_many({'sender_id': uid})
+
+    # Bonds + sub-collections
+    my_bonds = list(m.bonds_conf.find({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]}, {'_id': 1}))
+    m.bonds_conf.delete_many({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]})
+    bond_ids = [b['_id'] for b in my_bonds]
+    if bond_ids:
+        m.bond_goals_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_journal_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_moods_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_qotd_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_habits_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_countdowns_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_album_photos_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_bucketlist_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_recommendations_conf.delete_many({'bond_id': {'$in': bond_ids}})
+        m.bond_pulses_conf.delete_many({'bond_id': {'$in': bond_ids}})
+
+    # Communities
+    m.communities_conf.update_many({'admin_id': uid}, {'$set': {'admin_id': None}})
+    m.communities_conf.update_many({}, {'$pull': {'members': uid, 'moderators': uid}})
+    m.community_memberships_conf.delete_many({'user_id': uid})
+    m.community_notes_conf.delete_many({'author_id': uid})
+    m.community_reactions_conf.delete_many({'user_id': uid})
+    m.community_reports_conf.delete_many({'reporter_id': uid})
+    m.community_poll_votes_conf.delete_many({'user_id': uid})
+    m.community_checkins_conf.delete_many({'user_id': uid})
+
+    # Logs & activities
+    m.logs_conf.delete_many({'user_identifier': str(user_id)})
+    m.activities_conf.delete_many({'user_id': uid})
+    m.activity_read_conf.delete_many({'user_id': uid})
+
+    # Payments / misc
+    m.payment_grants_conf.delete_many({'user_id': uid})
+    if user_email:
+        m.newsletter_conf.delete_many({'email': user_email})
+
+    # The user document itself (last, so lookups above still work)
+    m.users_conf.delete_one({'_id': uid})
+
+
 def can_dm(user_a_id, user_b_id):
     """Check if two users are allowed to exchange DMs.
     Returns True if:
       - Either user is a demo bot (is_demo_bot or Maya_DemoPartner)
       - An accepted dm_permission exists between them (either direction), OR
       - They have prior message history (grandfathered conversations)
+    Blocks override all other checks: if either user has blocked the other,
+    DMs are never allowed.
     """
     try:
         a_oid = ObjectId(user_a_id)
@@ -834,11 +985,15 @@ def can_dm(user_a_id, user_b_id):
         return False
     
     # Always allow DMs with demo bots (e.g. Maya_DemoPartner)
-    u_a = database.users_conf.find_one({'_id': a_oid}, {'is_demo_bot': 1, 'username': 1})
-    u_b = database.users_conf.find_one({'_id': b_oid}, {'is_demo_bot': 1, 'username': 1})
+    u_a = database.users_conf.find_one({'_id': a_oid}, {'is_demo_bot': 1, 'username': 1, 'blocked_user_ids': 1})
+    u_b = database.users_conf.find_one({'_id': b_oid}, {'is_demo_bot': 1, 'username': 1, 'blocked_user_ids': 1})
     if (u_a and (u_a.get('is_demo_bot') or u_a.get('username', '').startswith('Maya_DemoPartner'))) or \
        (u_b and (u_b.get('is_demo_bot') or u_b.get('username', '').startswith('Maya_DemoPartner'))):
         return True
+
+    # Blocked users can never DM, regardless of history or accepted permissions.
+    if _is_blocked(u_a, b_oid) or _is_blocked(u_b, a_oid):
+        return False
 
     # Check for accepted permission in either direction
     perm = database.dm_permissions_conf.find_one({
@@ -858,6 +1013,35 @@ def can_dm(user_a_id, user_b_id):
         ]
     })
     return existing is not None
+
+
+def _is_blocked(user_doc, other_oid):
+    """Return True if user_doc's block list contains other_oid."""
+    if not user_doc:
+        return False
+    blocked = user_doc.get('blocked_user_ids') or []
+    try:
+        return other_oid in blocked
+    except Exception:
+        return str(other_oid) in [str(bid) for bid in blocked]
+
+
+def is_blocked_by(user_id, other_id):
+    """Return True if `other_id` has blocked `user_id` (i.e. user_id cannot
+    message/interact with other_id). Loads fresh docs for both directions."""
+    try:
+        user_oid = ObjectId(user_id)
+        other_oid = ObjectId(other_id)
+    except Exception:
+        return False
+    if str(user_oid) == str(other_oid):
+        return False
+    other_doc = database.users_conf.find_one(
+        {'_id': other_oid}, {'blocked_user_ids': 1}
+    )
+    if other_doc and _is_blocked(other_doc, user_oid):
+        return True
+    return False
 
 
 def is_safe_fetch_url(url):
@@ -888,14 +1072,42 @@ def is_safe_fetch_url(url):
 
 
 def fetch_link_preview(url):
-    """Fetches OpenGraph metadata from a URL for a link preview card."""
+    """Fetches OpenGraph metadata from a URL for a link preview card.
+
+    SECURITY: redirects are followed manually (up to 5 hops), re-validating
+    each hop with is_safe_fetch_url() so a redirect chain cannot pivot to a
+    private/internal/cloud-metadata address (SSRF). DNS resolution is also
+    re-checked for the final host.
+    """
     if not is_safe_fetch_url(url):
         return None
     try:
-        response = requests.get(url, timeout=3, stream=True)
+        response = requests.get(url, timeout=3, stream=True, allow_redirects=False)
+
+        # SECURITY: manually walk the redirect chain, validating every hop.
+        hops = 0
+        while response.status_code in (301, 302, 303, 307, 308):
+            hops += 1
+            if hops > 5:
+                _get_app().logger.warning(f"Link preview blocked: too many redirects for {url}")
+                response.close()
+                return None
+            location = response.headers.get('Location')
+            response.close()
+            if not location:
+                return None
+            next_url = urljoin(url, location)
+            # SECURITY: reject any redirect that no longer passes the SSRF check.
+            if not is_safe_fetch_url(next_url):
+                _get_app().logger.warning(f"Link preview blocked: unsafe redirect target {next_url}")
+                return None
+            url = next_url
+            response = requests.get(url, timeout=3, stream=True, allow_redirects=False)
+
         # Read only a small chunk to prevent memory issues with large files
         chunk = next(response.iter_content(chunk_size=50000))
         html_content = chunk.decode('utf-8', errors='ignore')
+        response.close()
         
         # Simple regex parsing (avoids pulling in bs4 just for this)
         title_match = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)

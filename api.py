@@ -1,6 +1,7 @@
 import datetime
 import secrets
 import hashlib
+import hmac
 from flask import Blueprint, request, jsonify, session, url_for, make_response
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
@@ -36,18 +37,18 @@ def api_register():
         return jsonify({'error': 'Username, email, and password are required.'}), 400
 
     if m.users_conf.find_one({'username': username}):
-        return jsonify({'error': 'This username is already taken.'}), 400
+        return jsonify({'error': 'Registration could not be completed. That username or email may already be in use.'}), 400
 
     existing_user_by_email = m.users_conf.find_one({'email': email})
     if existing_user_by_email:
         if existing_user_by_email.get('is_confirmed'):
-            return jsonify({'error': 'This email is already registered.'}), 400
+            return jsonify({'error': 'Registration could not be completed. That username or email may already be in use.'}), 400
         else:
             # Resend confirmation code
             gen_code = str(secrets.randbelow(10**6)).zfill(6)
             hashed = hashlib.sha256(gen_code.encode()).hexdigest()
             code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-            m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+            m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
             m.send_code(email, gen_code)
             return jsonify({'success': True, 'confirmed': False, 'email': email, 'message': 'New confirmation code sent.'})
 
@@ -67,7 +68,7 @@ def api_register():
     gen_code = str(secrets.randbelow(10**6)).zfill(6)
     hashed = hashlib.sha256(gen_code.encode()).hexdigest()
     code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-    m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+    m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
     m.send_code(email, gen_code)
 
     return jsonify({
@@ -78,6 +79,7 @@ def api_register():
     })
 
 @api_bp.route('/confirm/<email>', methods=['POST'])
+@limits(calls=20, period=60)
 def api_confirm(email):
     import main as m
     email = email.strip().lower()
@@ -86,7 +88,7 @@ def api_confirm(email):
 
     user = m.users_conf.find_one({"email": email})
     if not user:
-        return jsonify({'error': 'User not found.'}), 404
+        return jsonify({'error': 'Invalid confirmation request.'}), 404
 
     if user.get('is_confirmed'):
         return jsonify({'error': 'Email is already confirmed.'}), 400
@@ -98,17 +100,26 @@ def api_confirm(email):
     if not hashed_obj:
         return jsonify({'error': 'No confirmation code found for this email.'}), 400
 
+    # SECURITY: limit online guessing attempts per email before locking out.
+    MAX_CONFIRM_ATTEMPTS = 10
+    attempts = int(hashed_obj.get('attempt_count', 0) or 0)
+    if attempts >= MAX_CONFIRM_ATTEMPTS:
+        return jsonify({'error': 'Too many failed attempts. Please register again to receive a new code.'}), 429
+
     code_exp = hashed_obj.get('code_expiry')
     if code_exp and code_exp.tzinfo is None:
         code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
     if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
         return jsonify({'error': 'This confirmation code has expired. Please register again.'}), 400
 
-    if hashed_obj['hashed_code'] == hashlib.sha256(confirm_code.encode()).hexdigest():
+    # SECURITY: constant-time comparison of the SHA-256 digests.
+    provided_hash = hashlib.sha256(confirm_code.encode()).hexdigest()
+    if hmac.compare_digest(hashed_obj['hashed_code'], provided_hash):
         m.users_conf.update_one({'email': email}, {'$set': {'is_confirmed': True}})
         m.auth_conf.delete_one({'email': email})
         return jsonify({'success': True, 'message': 'Email confirmed successfully.'})
     else:
+        m.auth_conf.update_one({'email': email}, {'$set': {'attempt_count': attempts + 1}})
         return jsonify({'error': 'The confirmation code is incorrect.'}), 400
 
 @api_bp.route('/login', methods=['POST'])
@@ -128,7 +139,7 @@ def api_login():
     })
 
     if user and user.get('password') is None:
-        return jsonify({'error': 'This account was created with Google. Please use Google Login.'}), 400
+        return jsonify({'error': 'Invalid username/email or password.'}), 401
 
     if user:
         is_correct = check_password_hash(user["password"], password)
@@ -137,7 +148,7 @@ def api_login():
                 gen_code = str(secrets.randbelow(10**6)).zfill(6)
                 hashed = hashlib.sha256(gen_code.encode()).hexdigest()
                 code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-                m.auth_conf.update_one({'email': user['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+                m.auth_conf.update_one({'email': user['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
                 m.send_code(user['email'], gen_code)
                 return jsonify({
                     'success': False,
@@ -155,13 +166,10 @@ def api_login():
             # Clear app lock state on fresh login
             session.pop('app_lock_unlocked_at', None)
 
-            # Generate persistent token for native app session revival
-            _app_token = secrets.token_urlsafe(48)
-            m.app_tokens_conf.insert_one({
-                'token': _app_token,
-                'user_id': user['_id'],
-                'created_at': datetime.datetime.now(datetime.timezone.utc)
-            })
+            # Generate persistent token for native app session revival.
+            # SECURITY: only the SHA-256 hash is stored at rest.
+            from security import create_app_token, hash_app_token
+            _app_token = create_app_token(user['_id'])
 
             resp = make_response(jsonify({
                 'success': True,
@@ -183,9 +191,12 @@ def api_login():
 @api_bp.route('/logout', methods=['POST', 'GET'])
 def api_logout():
     import main as m
+    from security import hash_app_token
     app_token = request.cookies.get('x_app_token') or request.headers.get('Authorization', '').replace('Bearer ', '').strip()
     if app_token:
-        m.app_tokens_conf.delete_one({'token': app_token})
+        # SECURITY: delete by hash (with legacy plaintext fallback).
+        token_hash = hash_app_token(app_token)
+        m.app_tokens_conf.delete_many({'$or': [{'token_hash': token_hash}, {'token': app_token}]})
     if current_user.is_authenticated:
         m.app_tokens_conf.delete_many({'user_id': ObjectId(current_user.id)})
     logout_user()
@@ -461,17 +472,23 @@ def api_edit_note(note_id):
 @login_required
 def api_activate_premium():
     import main as m
-    # Grant premium for 30 days
-    new_until = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
-    m.users_conf.update_one(
-        {'_id': ObjectId(current_user.id)},
-        {'$set': {'account_tier': 'premium', 'premium_until': new_until}}
-    )
+    # SECURITY: Premium can ONLY be granted by a verified Paystack payment
+    # (callback/webhook). This endpoint no longer self-grants premium for
+    # free. If the user is already premium we just report current status;
+    # otherwise we refuse and direct them through the payment flow.
+    user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+    tier = m.get_user_tier(user) if user else 'free'
+    if tier == 'premium':
+        return jsonify({
+            'success': True,
+            'message': 'Premium is active on this account.',
+            'premium_until': (user.get('premium_until').isoformat() if user.get('premium_until') else None)
+        })
     return jsonify({
-        'success': True,
-        'message': 'Premium activated successfully!',
-        'premium_until': new_until.isoformat()
-    })
+        'success': False,
+        'error': 'Premium activation requires a completed payment. Please activate via the website checkout.',
+        'code': 'PAYMENT_REQUIRED'
+    }), 403
 
 # --- APP LOCK ENDPOINTS ---
 
@@ -494,6 +511,7 @@ def api_app_lock_setup():
 
 @api_bp.route('/app_lock/verify', methods=['POST'])
 @login_required
+@limits(calls=10, period=60)
 def api_app_lock_verify():
     import main as m
     data = request.get_json(silent=True) or {}
@@ -761,6 +779,8 @@ def api_create_note_share(post_id):
     surprise_theme = 'none'
     valentine_photo = None
     valentine_audio = None
+    valentine_photo_public_id = ''
+    valentine_audio_public_id = ''
     use_typewriter = False
     auto_approve = False
 
@@ -811,8 +831,18 @@ def api_create_note_share(post_id):
                 ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
                 if ext in m.ALLOWED_IMAGE_EXTENSIONS:
                     try:
-                        upload_result = m.cloudinary.uploader.upload(photo_file, folder="echowithin_valentine")
-                        valentine_photo = upload_result.get('secure_url')
+                        # SECURITY: encrypt bytes at rest (authenticated raw),
+                        # same as collaborative note attachments.
+                        photo_file.seek(0)
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(photo_file.read()),
+                            folder="echowithin_valentine",
+                            resource_type="raw",
+                            type="authenticated"
+                        )
+                        photo_public_id = upload_result.get('public_id', '')
+                        valentine_photo = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
+                        valentine_photo_public_id = photo_public_id
                     except Exception as e:
                         m.app.logger.error(f"Valentine photo upload failed: {e}")
 
@@ -820,9 +850,17 @@ def api_create_note_share(post_id):
                 ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
                 if ext in m.ALLOWED_AUDIO_EXTENSIONS:
                     try:
+                        # SECURITY: encrypt audio bytes at rest (authenticated raw).
                         audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(audio_file, resource_type="auto", folder="echowithin_valentine")
-                        valentine_audio = upload_result.get('secure_url')
+                        upload_result = m.cloudinary.uploader.upload(
+                            m.encrypt_media_bytes(audio_file.read()),
+                            resource_type="raw",
+                            type="authenticated",
+                            folder="echowithin_valentine"
+                        )
+                        audio_public_id = upload_result.get('public_id', '')
+                        valentine_audio = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
+                        valentine_audio_public_id = audio_public_id
                     except Exception as e:
                         m.app.logger.error(f"Valentine audio upload failed: {e}")
 
@@ -871,6 +909,10 @@ def api_create_note_share(post_id):
         'valentine_audio': m.encrypt_note(valentine_audio, user_id=current_user.id) if valentine_audio else None,
         'valentine_photo_hash': hashlib.sha256(valentine_photo.encode()).hexdigest() if valentine_photo else None,
         'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
+        'valentine_photo_public_id': valentine_photo_public_id if valentine_photo_public_id else '',
+        'valentine_audio_public_id': valentine_audio_public_id if valentine_audio_public_id else '',
+        'valentine_photo_mime': (photo_file.mimetype if photo_file and photo_file.mimetype else 'image/jpeg')[:200] if valentine_photo_public_id else '',
+        'valentine_audio_mime': (audio_file.mimetype if audio_file and audio_file.mimetype else 'audio/mpeg')[:200] if valentine_audio_public_id else '',
         'use_typewriter': use_typewriter,
         'auto_approve': auto_approve,
         'access_code_hash': access_code_hash,
@@ -1035,7 +1077,7 @@ def api_restore_note_version(post_id, version_id):
         current_user.id
     )
     plain = m._decrypt_with_candidate_ids(version.get('content', ''), restore_candidates) or m.decrypt_note(version.get('content', ''), user_id=str(version.get('content_owner_id') or current_user.id))
-    m.index_note_to_typesense(post_id, decrypted_content=plain)
+    m.index_note_to_typesense(str(post_obj_id), decrypted_content=plain)
 
     return jsonify({'success': True, 'message': 'Note restored to specified version.'})
 
@@ -1337,7 +1379,7 @@ def api_badge_counts():
     import main as m
     try:
         user_oid = ObjectId(current_user.id)
-        notif_count = m.activity_read_conf.count_documents({'user_id': user_oid, 'read_at': None}) if False else 0
+        notif_count = m.activity_read_conf.count_documents({'user_id': user_oid, 'read_at': None})
     except Exception:
         notif_count = 0
     return jsonify({'notif_count': notif_count, 'msg_count': 0})
@@ -1782,7 +1824,7 @@ def api_sync_note(note_id):
 
             # Re-index clone in Typesense
             decrypted = pull_decrypted if (pull_decrypted and pull_decrypted != '[Content unavailable \u2014 decryption error]') else m._decrypt_note_record(original_note, share)
-            m.index_note_to_typesense(note_id, decrypted_content=decrypted)
+            m.index_note_to_typesense(str(obj_id), decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER
             m.socketio.emit('note_changed', {

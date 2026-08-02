@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
-import datetime, math, hashlib, secrets, requests
+import datetime, math, hashlib, hmac, secrets, requests
 from security import limits
 from config import get_env_variable
 
@@ -539,6 +539,7 @@ def api_activity_feed():
 @bp.route('/api/activity/mark_read', methods=['POST'])
 @login_required
 @csrf_exempt
+@limits(calls=20, period=60)
 def api_mark_activity_read():
     """Marks all unread note activity as read for the current user."""
     import main as m
@@ -788,6 +789,7 @@ def search_personal_notes():
 
 @bp.route('/personal_post/reindex_notes', methods=['POST'])
 @login_required
+@limits(calls=5, period=3600)
 def reindex_my_notes():
     """Reindex the current user's notes into Typesense."""
     import main as m
@@ -1002,7 +1004,7 @@ def edit_personal_post(post_id):
             warn_msg = None
 
         # Re-index with updated decrypted content
-        m.index_note_to_typesense(post_id, decrypted_content=content)
+        m.index_note_to_typesense(str(obj_id), decrypted_content=content)
 
         # Invalidate decryption cache so next load gets fresh content
         m.invalidate_note_decryption_cache(post_id)
@@ -1193,12 +1195,25 @@ def sync_personal_post(post_id):
                         m.note_versions_conf.delete_one({'_id': old_ver['_id']})
 
             # Push clone content to original
+            # SECURITY/INTEGRITY: never re-key the owner's note with the
+            # collaborator's encryption. Decrypt the clone's content and
+            # re-encrypt it with the ORIGINAL owner's key, preserving the
+            # owner's content_owner_id so the owner can always decrypt it.
+            if not original_owner_id:
+                original_owner_id = str(original_note.get('content_owner_id') or original_note.get('user_id') or '')
+            push_plain = clone_decrypted
+            if not push_plain:
+                try:
+                    push_plain = m._decrypt_note_record(note)
+                except Exception:
+                    push_plain = ''
+            reencrypted_content = m.encrypt_note(push_plain, user_id=original_owner_id) if push_plain else ''
             m.personal_posts_conf.update_one(
                 {'_id': source_note_id},
                 {'$set': {
-                    'content': note.get('content'),
-                    'encrypted': note.get('encrypted', True),
-                    'content_owner_id': note.get('content_owner_id', note.get('user_id')),
+                    'content': reencrypted_content or note.get('content'),
+                    'encrypted': True,
+                    'content_owner_id': ObjectId(original_owner_id) if original_owner_id else note.get('content_owner_id', note.get('user_id')),
                     'reference': note.get('reference', ''),
                     'tags': note.get('tags', []),
                     'updated_at': now
@@ -1254,7 +1269,7 @@ def sync_personal_post(post_id):
 
             # Re-index clone in Typesense
             decrypted = m._decrypt_note_record(original_note)
-            m.index_note_to_typesense(post_id, decrypted_content=decrypted)
+            m.index_note_to_typesense(str(obj_id), decrypted_content=decrypted)
 
             # Broadcast to other sessions of the SAME USER for real-time sync
             m.socketio.emit('note_changed', {
@@ -1520,7 +1535,8 @@ def app_lock_forgot():
         {'email': email},
         {'$set': {
             'pin_reset_code': hashed_code,
-            'pin_reset_expiry': expiry
+            'pin_reset_expiry': expiry,
+            'pin_reset_attempts': 0
         }},
         upsert=True
     )
@@ -1538,9 +1554,10 @@ def app_lock_forgot():
         msg.html = render_template("pin_reset_email.html", code=gen_code)
         msg.body = f"Your EchoWithin App Lock PIN reset code is: {gen_code}\n\nThis code expires in 15 minutes. If you didn't request this, please ignore this email."
         _get_mail().send(msg)
-        current_app.logger.info(f"PIN reset code sent to {email}. DEV CODE: {gen_code}")
+        # SECURITY: never log the verification code itself.
+        current_app.logger.info(f"PIN reset code sent to masked account.")
     except Exception as e:
-        current_app.logger.error(f"Failed to send PIN reset email to {email}: {e}")
+        current_app.logger.error(f"Failed to send PIN reset email to masked account: {e}")
         return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500
 
     # Mask email for display (e.g., u***r@example.com)
@@ -1591,9 +1608,17 @@ def app_lock_reset_verify():
             m.auth_conf.update_one({'email': email}, {'$unset': {'pin_reset_code': '', 'pin_reset_expiry': ''}})
             return jsonify({'error': 'Reset code has expired. Please request a new one.'}), 400
 
-    # Verify the code
+    # SECURITY: limit online guessing attempts before invalidating the code.
+    MAX_PIN_RESET_ATTEMPTS = 10
+    attempts = int(auth_record.get('pin_reset_attempts', 0) or 0)
+    if attempts >= MAX_PIN_RESET_ATTEMPTS:
+        m.auth_conf.update_one({'email': email}, {'$unset': {'pin_reset_code': '', 'pin_reset_expiry': ''}})
+        return jsonify({'error': 'Too many failed attempts. Please request a new code.'}), 429
+
+    # Verify the code — SECURITY: constant-time comparison of digests.
     hashed_input = hashlib.sha256(code.encode()).hexdigest()
-    if hashed_input != auth_record.get('pin_reset_code'):
+    if not hmac.compare_digest(hashed_input, auth_record.get('pin_reset_code', '')):
+        m.auth_conf.update_one({'email': email}, {'$inc': {'pin_reset_attempts': 1}})
         return jsonify({'error': 'Incorrect verification code'}), 403
 
     # Code is valid — update the PIN

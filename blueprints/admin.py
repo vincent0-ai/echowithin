@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from bson.son import SON
-import datetime, os, json, csv
+import datetime, os, json, csv, re
 from io import StringIO
 from urllib.parse import urljoin
 from security import admin_required
@@ -56,12 +56,21 @@ def admin_upload_apk():
         os.makedirs(downloads_dir, exist_ok=True)
         apk_path = os.path.join(downloads_dir, 'app-debug.apk')
         apk_file.save(apk_path)
+        # SECURITY: compute a SHA-256 integrity hash so clients can verify
+        # the APK they download matches what the admin published.
+        import hashlib as _hashlib
+        sha256_hash = ""
+        with open(apk_path, 'rb') as f:
+            h = _hashlib.sha256()
+            for block in iter(lambda: f.read(65536), b''):
+                h.update(block)
+            sha256_hash = h.hexdigest()
         apk_url = url_for('static', filename='downloads/app-debug.apk', _external=True)
-        manifest_payload = {"versionCode": int(version_code_str), "versionName": version_name, "apkUrl": apk_url, "changelog": changelog}
+        manifest_payload = {"versionCode": int(version_code_str), "versionName": version_name, "apkUrl": apk_url, "changelog": changelog, "sha256": sha256_hash}
         manifest_path = os.path.join(current_app.static_folder, 'update-manifest.json')
         with open(manifest_path, 'w', encoding='utf-8') as f:
             json.dump(manifest_payload, f, indent=2)
-        m.app_updates_conf.update_one({'key': 'latest'}, {'$set': {'versionCode': int(version_code_str), 'versionName': version_name, 'apkUrl': apk_url, 'changelog': changelog}}, upsert=True)
+        m.app_updates_conf.update_one({'key': 'latest'}, {'$set': {'versionCode': int(version_code_str), 'versionName': version_name, 'apkUrl': apk_url, 'changelog': changelog, 'sha256': sha256_hash}}, upsert=True)
         flash("Android OTA app update published successfully!", "success")
     except Exception as e:
         current_app.logger.error(f"Failed to upload APK and write manifest: {e}")
@@ -431,10 +440,13 @@ def admin_premium_users():
     query = request.args.get('query')
     projection = {'password': 0, 'email_verification_token': 0, 'reset_password_token': 0}
     if query:
+        # SECURITY: escape regex metacharacters so admin search terms are treated
+        # as plain text (no ReDoS / unexpected regex matching).
+        escaped = re.escape(query)
         users = m.users_conf.find({
             '$or': [
-                {'username': {'$regex': query, '$options': 'i'}},
-                {'email': {'$regex': query, '$options': 'i'}}
+                {'username': {'$regex': escaped, '$options': 'i'}},
+                {'email': {'$regex': escaped, '$options': 'i'}}
             ]
         }, projection).sort('username', 1)
     else:
@@ -594,7 +606,8 @@ def delete_user(user_id):
                 m.cloudinary.uploader.destroy(user['profile_image_public_id'])
             except Exception:
                 pass
-        m.users_conf.delete_one({'_id': ObjectId(user_id)})
+        # GDPR-complete cascade deletion of all user-owned data.
+        m.cascade_delete_user_data(user['_id'])
         flash(f'User {user.get("username")} deleted.', 'info')
     else:
         flash('User not found.', 'danger')

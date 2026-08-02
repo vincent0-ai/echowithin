@@ -2,5 +2,6 @@
   "versionCode": 35,
   "versionName": "1.10.1",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.1 ⚡ Performance & Stability:\n• Smoother list scrolling (memoized date formatting, derivedStateOf, DB indexes)\n• Shimmer skeleton loader on note detail screen\n• Fixed keyboard hiding editor content (adjustResize)\n• Fixed PIN creation crash in guest/offline mode"
+  "changelog": "v1.10.1 ⚡ Performance & Stability:\n• Smoother list scrolling (memoized date formatting, derivedStateOf, DB indexes)\n• Shimmer skeleton loader on note detail screen\n• Fixed keyboard hiding editor content (adjustResize)\n• Fixed PIN creation crash in guest/offline mode",
+  "sha256": "F807F5E621D49783C029EABC8D01430BDB1D57C9921A5A0CE9232C5184584372"
 }

@@ -113,7 +113,7 @@ from utils import (linkify_filter, _linkify_target_blank, markdown_filter,
     calculate_hot_score, _serialize_comment, _get_user_badge_count,
     _invalidate_badge_cache, _has_active_auto_approve,
     can_dm, fetch_link_preview, _deliver_scheduled_message,
-    _nlp_suggest_tags, get_zen_quote)
+    _nlp_suggest_tags, get_zen_quote, is_blocked_by)
 from models import User, load_user, load_user_from_request
 # Import and register blueprints
 from blueprints.pages import bp as pages_bp
@@ -207,7 +207,26 @@ def serve_encrypted_media(public_id):
     Media is encrypted at rest with a server-side key before upload, so Cloudinary
     account holders/staff can never read the plaintext content.
     """
-    mime = (request.args.get('mime') or 'application/octet-stream')[:200]
+    # SECURITY: validate/allowlist the served MIME type instead of echoing the
+    # caller-supplied value verbatim (stored-XSS hardening under CSP).
+    _mime_allowlist = {
+        'image/jpeg': ('.jpg', '.jpeg'),
+        'image/png': ('.png',),
+        'image/gif': ('.gif',),
+        'image/webp': ('.webp',),
+        'audio/mpeg': ('.mp3',),
+        'audio/ogg': ('.ogg', '.oga'),
+        'audio/wav': ('.wav',),
+        'audio/webm': ('.webm',),
+        'audio/mp4': ('.m4a',),
+        'video/mp4': ('.mp4',),
+        'video/webm': ('.webm',),
+        'application/pdf': ('.pdf',),
+        'text/plain': ('.txt',),
+        'application/octet-stream': (),
+    }
+    requested_mime = (request.args.get('mime') or 'application/octet-stream').split(';')[0].strip().lower()
+    mime = requested_mime if requested_mime in _mime_allowlist else 'application/octet-stream'
     expires = request.args.get('expires', type=int)
     sig = request.args.get('sig', '')
     if not media_serve_token_valid(public_id, expires, sig):
@@ -228,6 +247,7 @@ def serve_encrypted_media(public_id):
     resp = Response(plain, mimetype=mime)
     resp.headers['Cache-Control'] = 'private, max-age=300'
     resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['Content-Disposition'] = 'inline'
     return resp
 
 # CSRF exemptions — these routes accept external/API requests without CSRF tokens
@@ -479,6 +499,14 @@ redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
 
 app.config['RQ_REDIS_URL'] = redis_url
 
+
+def _sanitize_redis_url(url):
+    """Redact the password from a redis:// URL before it reaches logs/traces."""
+    if not url:
+        return url
+    return re.sub(r'(redis://)([^:@/]+:)([^@/]+)@', r'\1\2<redacted>@', url)
+
+
 # Initialize Flask-RQ2 AFTER redis URL is configured
 # This must happen after RQ_REDIS_URL is set, otherwise it defaults to localhost:6379
 rq = RQ(app)
@@ -501,7 +529,7 @@ try:
     socketio.init_app(app, message_queue=socketio_redis_url)
     app.logger.info('Socket.IO initialized with Redis message queue')
 except Exception as e:
-    app.logger.warning(f'Redis cache not available, using in-memory cache: {e}')
+    app.logger.warning(f'Redis cache not available, using in-memory cache: {_sanitize_redis_url(str(e))}')
     redis_cache = None
     socketio.init_app(app)
     app.logger.info('Socket.IO initialized in fallback in-memory mode')
@@ -608,7 +636,8 @@ def sync_update_manifest():
                         'versionCode': static_manifest.get('versionCode'),
                         'versionName': static_manifest.get('versionName'),
                         'apkUrl': static_manifest.get('apkUrl'),
-                        'changelog': static_manifest.get('changelog', '')
+                        'changelog': static_manifest.get('changelog', ''),
+                        'sha256': static_manifest.get('sha256', '')
                     }},
                     upsert=True
                 )
@@ -622,7 +651,8 @@ def sync_update_manifest():
                             'versionCode': db_manifest.get('versionCode'),
                             'versionName': db_manifest.get('versionName'),
                             'apkUrl': db_manifest.get('apkUrl'),
-                            'changelog': db_manifest.get('changelog', '')
+                            'changelog': db_manifest.get('changelog', ''),
+                            'sha256': db_manifest.get('sha256', '')
                         }, f, indent=2)
                     app.logger.info(f"Update manifest synced: DB v{db_manifest.get('versionName')} (code {db_code}) -> static")
                 except Exception as e:
@@ -746,6 +776,11 @@ hidden_chats_conf.create_index([('user_id', 1), ('partner_id', 1)], unique=True)
 
 deleted_items_conf = db['deleted_items']
 deleted_items_conf.create_index('expires_at', expireAfterSeconds=0)
+
+# --- Paystack payment grants (idempotency + audit for premium activation) ---
+payment_grants_conf = db['payment_grants']
+payment_grants_conf.create_index('reference', unique=True)
+payment_grants_conf.create_index('user_id')
 
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
@@ -962,6 +997,7 @@ def cleanup_expired_guest_sessions():
     except Exception as e:
         app.logger.error(f"Error during expired guest cleanup: {e}")
 database.deleted_items_conf = deleted_items_conf
+database.payment_grants_conf = payment_grants_conf
 database.redis_cache = redis_cache
 
 # --- Encryption utilities for personal notes ---
@@ -1114,7 +1150,11 @@ def add_security_headers(response):
     # Note: microphone is NOT blocked here so the PWA can request it for voice messages (user consent via browser prompt)
     response.headers['Permissions-Policy'] = 'geolocation=()'
     # HSTS - enforce HTTPS (1 year) with preload
-    if request.is_secure:
+    # Emit on every HTTPS response (including /api, /static, /socket.io),
+    # not just when request.is_secure is set by the WSGI server, because
+    # reverse-proxied requests carry the real scheme in X-Forwarded-Proto.
+    effective_scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+    if request.is_secure or effective_scheme == 'https':
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains; preload'
     # Content-Security-Policy — mitigates XSS, data injection, and click-jacking
     # NOTE: nonce infrastructure (g.csp_nonce, context processor, base.html nonce
@@ -1399,6 +1439,29 @@ def authenticated_only(f):
     return wrapped
 
 
+def _note_share_access(share_id):
+    """Return the share doc if a logged-in user may access this note room.
+
+    The share_id doubles as the secret link, but rooms must still only be
+    joinable when the share actually exists and hasn't expired/deactivated,
+    otherwise any authenticated user could join rooms for guessed share_ids.
+    """
+    if not share_id:
+        return None
+    share = note_shares_conf.find_one({'share_id': share_id})
+    if not share:
+        return None
+    if share.get('deactivated'):
+        return None
+    if share.get('expires_at'):
+        expires_at = share['expires_at']
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+            return None
+    return share
+
+
 # --- WebSocket Real-time collaboration ---
 @socketio.on('join_note')
 @authenticated_only
@@ -1408,6 +1471,12 @@ def handle_join_note(data):
     user_id = str(current_user.id)
     
     if share_id:
+        # SECURITY: only allow joining the room if the share exists and hasn't
+        # expired or been deactivated (share_id doubles as the secret link).
+        share = _note_share_access(share_id)
+        if not share:
+            emit('join_note_denied', {'message': 'This shared note is no longer available.'}, room=request.sid)
+            return
         join_room(share_id)
         
         # Track presence
@@ -1463,6 +1532,16 @@ def handle_acquire_lock(data):
     
     if not share_id: return
 
+    # SECURITY: only holders with edit permission (or the owner) may acquire
+    # the edit lock; view-only collaborators must not be able to lock a note.
+    share = _note_share_access(share_id)
+    if not share:
+        emit('lock_denied', {'message': 'This shared note is no longer available.'}, room=request.sid)
+        return
+    if str(share.get('owner_id', '')) != user_id and share.get('permissions') != 'edit':
+        emit('lock_denied', {'message': 'You have view-only access to this note.'}, room=request.sid)
+        return
+
     now = time.time()
     existing_lock = note_locks.get(share_id)
     
@@ -1490,6 +1569,9 @@ def handle_release_lock(data):
     share_id = data.get('share_id')
     user_id = str(current_user.id)
     
+    if not share_id: return
+    if _note_share_access(share_id) is None:
+        return
     if share_id in note_locks and note_locks[share_id]['user_id'] == user_id:
         note_locks.pop(share_id)
         emit('lock_released', {'share_id': share_id}, room=share_id)
@@ -1499,7 +1581,16 @@ def handle_release_lock(data):
 def handle_note_update(data):
     share_id = data.get('share_id')
     content = data.get('content')
+    user_id = str(current_user.id)
     if share_id and content:
+        # SECURITY: view-only users must not broadcast content edits. Only the
+        # owner or edit-permission holders may push note changes to the room.
+        share = _note_share_access(share_id)
+        if not share:
+            return
+        if str(share.get('owner_id', '')) != user_id and share.get('permissions') != 'edit':
+            emit('note_update_denied', {'message': 'You have view-only access to this note.'}, room=request.sid)
+            return
         # Broadcast the update to others in the same room
         emit('note_changed', {'content': content}, room=share_id, include_self=False)
 
@@ -2018,12 +2109,21 @@ def internal_server_error(e):
     try:
         # Log the original error first
         app.logger.error(f"Internal Server Error on {request.path}: {e}", exc_info=True)
+        # Redact sensitive path components (share IDs, media public_ids, tokens)
+        # before the path leaves the platform via ntfy.
+        _redacted_path = re.sub(
+            r'(/(?:share/note|uploads?|uploads_enc|personal_post)/)[^/\s]+',
+            r'\1<redacted>',
+            request.path
+        )
+        _redacted_path = re.sub(r'(/api/)[^/]+', r'\1<id>', _redacted_path)
+        _redacted_message = f"A 500 error occurred on endpoint {_redacted_path}. Check logs for details."
         try:
-            send_ntfy_notification.queue(f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+            send_ntfy_notification.queue(_redacted_message, "Application Error (500)", "warning")
         except redis.exceptions.ConnectionError as ntfy_e:
             app.logger.warning(f"Redis connection failed. Falling back to thread for 500 error ntfy notification. Error: {ntfy_e}")
             with app.app_context():
-                executor.submit(send_ntfy_notification, f"A 500 error occurred on endpoint {request.path}. Check logs for details.", "Application Error (500)", "warning")
+                executor.submit(send_ntfy_notification, _redacted_message, "Application Error (500)", "warning")
         except Exception as ntfy_e:
             app.logger.error(f"Failed to enqueue ntfy notification for 500 error: {ntfy_e}")
     except Exception as log_e:

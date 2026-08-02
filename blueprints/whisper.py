@@ -84,7 +84,7 @@ def _get_active_session(user_oid):
         if now >= expires_at:
             m.whisper_sessions_conf.update_one(
                 {'_id': session['_id']},
-                {'$set': {'status': 'expired'}}
+                {'$set': {'status': 'expired', 'pending_extension': None}}
             )
             m.whisper_messages_conf.delete_many({'session_id': session['_id']})
             return None
@@ -406,6 +406,20 @@ def api_whisper_extend(session_id):
             return jsonify({'error': f'Cannot extend beyond {max_duration} minutes total.'}), 400
 
         if action == 'request':
+            # Persist the extension request so only the partner can approve it.
+            existing = session_doc.get('pending_extension')
+            if existing:
+                return jsonify({'error': 'An extension request is already pending. Wait for your partner to approve it.'}), 409
+            m.whisper_sessions_conf.update_one(
+                {'_id': session_doc['_id']},
+                {'$set': {
+                    'pending_extension': {
+                        'requested_by': ObjectId(user_id_str),
+                        'extra_minutes': extra_minutes,
+                        'at': datetime.datetime.now(datetime.timezone.utc)
+                    }
+                }}
+            )
             m.socketio.emit('whisper_extend_request', {
                 'session_id': session_id,
                 'requested_by': user_id_str,
@@ -415,7 +429,18 @@ def api_whisper_extend(session_id):
             return jsonify({'success': True, 'status': 'requested'})
 
         elif action == 'approve':
+            pending_extension = session_doc.get('pending_extension')
+            if not pending_extension:
+                return jsonify({'error': 'No pending extension request to approve.'}), 409
+            # SECURITY: the requester must NOT be allowed to approve their own request.
+            if str(pending_extension.get('requested_by')) == user_id_str:
+                return jsonify({'error': 'You cannot approve your own extension request.'}), 403
+            # Only the partner of the requester may approve.
+            if str(pending_extension.get('requested_by')) != partner_id:
+                return jsonify({'error': 'Only the partner who received the request can approve it.'}), 403
+
             now = datetime.datetime.now(datetime.timezone.utc)
+            extra_minutes = int(pending_extension.get('extra_minutes', extra_minutes))
             new_expires = current_expires + datetime.timedelta(minutes=extra_minutes)
 
             # Also extend TTL on whisper messages
@@ -427,9 +452,9 @@ def api_whisper_extend(session_id):
             m.whisper_sessions_conf.update_one(
                 {'_id': ObjectId(session_id)},
                 {
-                    '$set': {'expires_at': new_expires},
+                    '$set': {'expires_at': new_expires, 'pending_extension': None},
                     '$push': {'extensions': {
-                        'requested_by': ObjectId(partner_id),
+                        'requested_by': pending_extension['requested_by'],
                         'approved_by': ObjectId(user_id_str),
                         'extra_minutes': extra_minutes,
                         'at': now
@@ -510,7 +535,8 @@ def api_whisper_end(session_id):
             {'$set': {
                 'status': final_status,
                 'ended_by': ObjectId(user_id_str),
-                'expires_at': datetime.datetime.now(datetime.timezone.utc)
+                'expires_at': datetime.datetime.now(datetime.timezone.utc),
+                'pending_extension': None
             }}
         )
 

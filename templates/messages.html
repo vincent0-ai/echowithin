@@ -1876,6 +1876,10 @@
             document.body.classList.add('mobile-chat-open');
         }
         let lastMessageDate = null;
+        // When set, appendMessage() inserts new messages before this element
+        // instead of appending to the end of chatHistory. Used by
+        // loadOlderMessages() to prepend older messages at the top.
+        let messageInsertAnchor = null;
         let typingTimeout = null;
         let remoteTypingClearTimer = null;
         let chatSyncIntervalId = null;
@@ -2648,12 +2652,21 @@
                 const ts = msgData.timestamp || new Date().toISOString();
                 const d = window.parseServerTime(ts) || new Date();
                 const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                chatHistory.insertAdjacentHTML('beforeend', `
-                    <div style="text-align: center; margin: 1rem 0; position: relative;" class="date-divider">
-                        <hr style="border: 0; border-top: 1px solid #d4b8a8; position: absolute; width: 100%; top: 50%;">
-                        <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${escapeHtml(msgData.content || '')} — ${time}</span>
-                    </div>
-                `);
+                if (messageInsertAnchor) {
+                    messageInsertAnchor.insertAdjacentHTML('beforebegin', `
+                        <div style="text-align: center; margin: 1rem 0; position: relative;" class="date-divider">
+                            <hr style="border: 0; border-top: 1px solid #d4b8a8; position: absolute; width: 100%; top: 50%;">
+                            <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${escapeHtml(msgData.content || '')} — ${time}</span>
+                        </div>
+                    `);
+                } else {
+                    chatHistory.insertAdjacentHTML('beforeend', `
+                        <div style="text-align: center; margin: 1rem 0; position: relative;" class="date-divider">
+                            <hr style="border: 0; border-top: 1px solid #d4b8a8; position: absolute; width: 100%; top: 50%;">
+                            <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${escapeHtml(msgData.content || '')} — ${time}</span>
+                        </div>
+                    `);
+                }
                 if (resolvedId) renderedMessageIds.add(resolvedId);
                 return;
             }
@@ -2664,12 +2677,21 @@
 
             if (dateString !== lastMessageDate) {
                 const displayDate = messageDate.toLocaleDateString();
-                chatHistory.insertAdjacentHTML('beforeend', `
-                    <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
-                        <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
-                        <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
-                    </div>
-                `);
+                if (messageInsertAnchor) {
+                    messageInsertAnchor.insertAdjacentHTML('beforebegin', `
+                        <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
+                            <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
+                            <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
+                        </div>
+                    `);
+                } else {
+                    chatHistory.insertAdjacentHTML('beforeend', `
+                        <div style="text-align: center; margin: 1.5rem 0; position: relative;" class="date-divider">
+                            <hr style="border: 0; border-top: 1px solid #eee; position: absolute; width: 100%; top: 50%;">
+                            <span style="background: #fafafa; padding: 0 1rem; position: relative; font-size: 0.75rem; color: #999; font-weight: 600;">${displayDate}</span>
+                        </div>
+                    `);
+                }
                 lastMessageDate = dateString;
             }
 
@@ -2746,8 +2768,12 @@
                     </div>
                 </div>`;
 
-            chatHistory.insertAdjacentHTML('beforeend', html);
-            const newBubble = chatHistory.lastElementChild;
+            if (messageInsertAnchor) {
+                messageInsertAnchor.insertAdjacentHTML('beforebegin', html);
+            } else {
+                chatHistory.insertAdjacentHTML('beforeend', html);
+            }
+            const newBubble = messageInsertAnchor ? messageInsertAnchor.previousElementSibling : chatHistory.lastElementChild;
             if (resolvedId) renderedMessageIds.add(resolvedId);
 
             if (msgData.reactions) updateReactions(newBubble, msgData.reactions);
@@ -2845,23 +2871,25 @@
                 // Get the first visible bubble's data-id to use as insert-after anchor
                 var firstExisting = chatHistory.querySelector('.message-bubble[data-id]');
                 oldestMessageId = msgs[0].id;
-                // Render before existing messages (temporarily disable scroll anchoring)
-                var prevScrollHeight = chatHistory.scrollHeight;
+                // Prepend the older messages directly before the existing content
+                // (messageInsertAnchor makes appendMessage insert before this node).
                 var lastSender = null;
-                var prevLastDate = lastMessageDate;
                 // Temporarily save lastMessageDate and override
                 var savedDate = lastMessageDate;
                 lastMessageDate = null;
+                messageInsertAnchor = firstExisting;
                 msgs.forEach(function(m) {
                     appendMessage(m, m.sender_id === currentUserId ? 'sent' : 'received', m.sender_id === lastSender, m.id, m.is_read);
                     lastSender = m.sender_id;
                 });
+                messageInsertAnchor = null;
                 // Restore lastMessageDate so subsequent new messages still show date dividers correctly
                 lastMessageDate = savedDate;
-                // Preserve scroll position
-                if (firstExisting) {
-                    chatHistory.scrollTop = chatHistory.scrollHeight - prevScrollHeight;
-                }
+                // The user triggered this from the top (the load-older button is the
+                // first element), so keep the viewport anchored at the top to reveal
+                // the newly loaded older messages instead of jumping back to the
+                // previously visible content.
+                chatHistory.scrollTop = 0;
                 hasMoreMessages = msgs.length >= 50;
                 loadingOlder = false;
                 if (btn) {

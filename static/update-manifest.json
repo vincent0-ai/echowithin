@@ -1,7 +1,7 @@
 {
-  "versionCode": 35,
-  "versionName": "1.10.1",
+  "versionCode": 36,
+  "versionName": "1.10.2",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.1 ⚡ Performance & Stability:\n• Smoother list scrolling (memoized date formatting, derivedStateOf, DB indexes)\n• Shimmer skeleton loader on note detail screen\n• Fixed keyboard hiding editor content (adjustResize)\n• Fixed PIN creation crash in guest/offline mode",
-  "sha256": "F807F5E621D49783C029EABC8D01430BDB1D57C9921A5A0CE9232C5184584372"
+  "changelog": "v1.10.2 \u26a1 Fixes:\n\u2022 Autosave: notes now save locally while you type, so crashes no longer lose your work\n\u2022 Note editor saves your draft when the app is backgrounded\n\u2022 Home list keeps its scroll position across tabs and when returning from a note",
+  "sha256": "4C026CC4514E68ADADD2931F7EB432143D6FE02D24D741B105AD082A257B4955"
 }

@@ -35,6 +35,10 @@ def profile(username):
             search_projection
         ).sort('username', 1).limit(10)
         user_search_results = [candidate for candidate in user_search_cursor if str(candidate.get('_id')) != str(user_id)]
+        # Decrypt bio for each search result (bio is stored encrypted at rest)
+        for candidate in user_search_results:
+            if candidate.get('bio_encrypted') and candidate.get('bio'):
+                candidate['bio'] = m.decrypt_note(candidate['bio'], user_id=str(candidate['_id']))
     page = request.args.get('page', 1, type=int)
     posts_per_page = 5
     stats_cache_key = f"profile_stats:{user_id}"

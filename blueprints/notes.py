@@ -1723,16 +1723,19 @@ def api_user_suggest():
 
     cursor = m.users_conf.find(
         filter_query,
-        {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0}
+        {'password': 0, 'email': 0, 'notification_preference': 0, 'last_active': 0, 'bio_encrypted': 1}
     ).sort('username', 1).limit(6)
 
     suggestions = []
     for candidate in cursor:
         if exclude_username and candidate.get('username') == exclude_username:
             continue
+        candidate_bio = candidate.get('bio', '')
+        if candidate.get('bio_encrypted') and candidate_bio:
+            candidate_bio = m.decrypt_note(candidate_bio, user_id=str(candidate.get('_id')))
         suggestions.append({
             'username': candidate.get('username'),
-            'bio': candidate.get('bio', ''),
+            'bio': candidate_bio,
             'profile_image_url': candidate.get('profile_image_url') or url_for('static', filename='default_avatar.png'),
             'profile_url': url_for('profile.profile', username=candidate.get('username')),
         })

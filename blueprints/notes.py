@@ -22,7 +22,6 @@ def _find_note_page(m, user_id, note_id, per_page=10):
     pipeline = [
         {'$match': {'user_id': ObjectId(user_id), 'is_locked': {'$ne': True}}},
         {'$project': {
-            'content': 1,
             'encrypted': 1,
             'user_id': 1,
             'content_owner_id': 1,
@@ -31,14 +30,14 @@ def _find_note_page(m, user_id, note_id, per_page=10):
             'saved_from_owner_id': 1,
             'source_note_id': 1,
             'source_share_id': 1,
-            'reference': 1,
-            'tags': 1,
             'created_at': 1,
             'updated_at': 1,
             'is_locked': 1
         }},
         # PERF: use indexed localField/foreignField join instead of a correlated $expr
         # subquery, which avoids a full scan of personal_posts per matching note.
+        # PERF: project the join down to lightweight fields (timestamps + owner ids
+        # needed for the sort key) so full original content never crosses the wire.
         {'$lookup': {
             'from': 'personal_posts',
             'localField': 'source_note_id',
@@ -47,6 +46,28 @@ def _find_note_page(m, user_id, note_id, per_page=10):
         }},
         {'$addFields': {
             'original_doc': {'$arrayElemAt': ['$original', 0]}
+        }},
+        # Strip heavy/sensitive joined subfields before the in-memory sort.
+        {'$project': {
+            'encrypted': 1,
+            'user_id': 1,
+            'content_owner_id': 1,
+            'owner_id': 1,
+            'source_owner_id': 1,
+            'saved_from_owner_id': 1,
+            'source_note_id': 1,
+            'source_share_id': 1,
+            'created_at': 1,
+            'updated_at': 1,
+            'is_locked': 1,
+            'original_doc.user_id': 1,
+            'original_doc.content_owner_id': 1,
+            'original_doc.owner_id': 1,
+            'original_doc.source_owner_id': 1,
+            'original_doc.saved_from_owner_id': 1,
+            'original_doc.source_note_id': 1,
+            'original_doc.created_at': 1,
+            'original_doc.updated_at': 1
         }},
         {'$addFields': {
             '_sort_ts': {
@@ -130,11 +151,13 @@ def personal_space():
     total_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
     skip_notes = (notes_page - 1) * per_page
 
-    # OPTIMIZATION: Use projection to only fetch needed fields (exclude heavy 'content' field)
+    # OPTIMIZATION: Use projection to only fetch needed fields.
+    # 'content'/'reference'/'tags' are EXCLUDED here so heavy ciphertext does not
+    # flow through the in-memory $sort. The 10 visible notes on this page get their
+    # full fields back via a separate indexed _id fetch below.
     personal_posts_raw = list(m.personal_posts_conf.aggregate([
         {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}}},
         {'$project': {
-            'content': 1,
             'encrypted': 1,
             'user_id': 1,
             'content_owner_id': 1,
@@ -143,14 +166,15 @@ def personal_space():
             'saved_from_owner_id': 1,
             'source_note_id': 1,
             'source_share_id': 1,
-            'reference': 1,
-            'tags': 1,
             'created_at': 1,
             'updated_at': 1,
             'is_locked': 1
         }},
         # PERF: use indexed localField/foreignField join instead of a correlated $expr
         # subquery, which avoids a full scan of personal_posts per matching note.
+        # PERF: project the join down to lightweight fields (timestamps + owner ids
+        # needed for the sort key) so full original content never crosses the wire
+        # or flows through the in-memory sort.
         {'$lookup': {
             'from': 'personal_posts',
             'localField': 'source_note_id',
@@ -168,6 +192,30 @@ def personal_space():
         }},
         {'$addFields': {
             'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
+        }},
+        # Strip heavy/sensitive joined subfields before the in-memory sort.
+        {'$project': {
+            'encrypted': 1,
+            'user_id': 1,
+            'content_owner_id': 1,
+            'owner_id': 1,
+            'source_owner_id': 1,
+            'saved_from_owner_id': 1,
+            'source_note_id': 1,
+            'source_share_id': 1,
+            'created_at': 1,
+            'updated_at': 1,
+            'is_locked': 1,
+            'original_doc.user_id': 1,
+            'original_doc.content_owner_id': 1,
+            'original_doc.owner_id': 1,
+            'original_doc.source_owner_id': 1,
+            'original_doc.saved_from_owner_id': 1,
+            'original_doc.source_note_id': 1,
+            'original_doc.created_at': 1,
+            'original_doc.updated_at': 1,
+            'original_user_doc.username': 1,
+            'original_user_doc.display_name': 1
         }},
         {'$addFields': {
             '_sort_ts': {
@@ -187,8 +235,20 @@ def personal_space():
         {'$skip': skip_notes},
         {'$limit': per_page}
     ]))
+    # Re-attach the full note fields (content, reference, tags) for the page's
+    # visible notes only, using the indexed _id lookup.
     personal_posts = []
+    page_note_ids = [note['_id'] for note in personal_posts_raw]
+    if page_note_ids:
+        full_page_notes = {d['_id']: d for d in m.personal_posts_conf.find({'_id': {'$in': page_note_ids}})}
+    else:
+        full_page_notes = {}
     for note in personal_posts_raw:
+        full = full_page_notes.get(note['_id'])
+        if full:
+            note['content'] = full.get('content')
+            note['reference'] = full.get('reference')
+            note['tags'] = full.get('tags')
         # Decrypt note content on the server side.  _decrypt_note_record
         # uses Redis caching so repeated page loads are fast even with
         # many notes, and this guarantees preview text is immediately
@@ -237,6 +297,21 @@ def personal_space():
     if is_unlocked and locked_notes_count > 0:
         locked_notes_raw = list(m.personal_posts_conf.aggregate([
             {'$match': {'user_id': ObjectId(current_user.id), 'is_locked': True}},
+            # PERF: lightweight projection — heavy ciphertext is excluded from the
+            # in-memory $sort and re-attached below for the limited results only.
+            {'$project': {
+                'encrypted': 1,
+                'user_id': 1,
+                'content_owner_id': 1,
+                'owner_id': 1,
+                'source_owner_id': 1,
+                'saved_from_owner_id': 1,
+                'source_note_id': 1,
+                'source_share_id': 1,
+                'created_at': 1,
+                'updated_at': 1,
+                'is_locked': 1
+            }},
             {'$lookup': {
                 'from': 'personal_posts',
                 'localField': 'source_note_id',
@@ -255,6 +330,30 @@ def personal_space():
             {'$addFields': {
                 'original_user_doc': {'$arrayElemAt': ['$original_user', 0]}
             }},
+            # Strip heavy/sensitive joined subfields before the in-memory sort.
+            {'$project': {
+                'encrypted': 1,
+                'user_id': 1,
+                'content_owner_id': 1,
+                'owner_id': 1,
+                'source_owner_id': 1,
+                'saved_from_owner_id': 1,
+                'source_note_id': 1,
+                'source_share_id': 1,
+                'created_at': 1,
+                'updated_at': 1,
+                'is_locked': 1,
+                'original_doc.user_id': 1,
+                'original_doc.content_owner_id': 1,
+                'original_doc.owner_id': 1,
+                'original_doc.source_owner_id': 1,
+                'original_doc.saved_from_owner_id': 1,
+                'original_doc.source_note_id': 1,
+                'original_doc.created_at': 1,
+                'original_doc.updated_at': 1,
+                'original_user_doc.username': 1,
+                'original_user_doc.display_name': 1
+            }},
             {'$addFields': {
                 '_sort_ts': {
                     '$cond': {
@@ -272,7 +371,18 @@ def personal_space():
             {'$sort': {'_sort_ts': -1, 'created_at': -1}},
             {'$limit': 50}
         ]))
+        # Re-attach full fields for the (≤50) locked notes shown, via indexed _id fetch.
+        locked_page_ids = [note['_id'] for note in locked_notes_raw]
+        if locked_page_ids:
+            locked_full = {d['_id']: d for d in m.personal_posts_conf.find({'_id': {'$in': locked_page_ids}})}
+        else:
+            locked_full = {}
         for note in locked_notes_raw:
+            full = locked_full.get(note['_id'])
+            if full:
+                note['content'] = full.get('content')
+                note['reference'] = full.get('reference')
+                note['tags'] = full.get('tags')
             m._decrypt_note_metadata(note)
             ref = (note.get('reference') or '').strip()
             if ref:
@@ -382,6 +492,15 @@ def personal_space():
     ).sort('created_at', -1))
     
     activity_notifications = []
+    # PERF: Batch-fetch original note dates in one indexed $in query instead of an
+    # N+1 find_one loop over each activity item.
+    activity_note_ids = list({item['note_id'] for item in activity_raw if item.get('note_id')})
+    activity_note_dates = {}
+    if activity_note_ids:
+        for ndoc in m.personal_posts_conf.find(
+            {'_id': {'$in': activity_note_ids}}, {'created_at': 1}
+        ):
+            activity_note_dates[ndoc['_id']] = ndoc.get('created_at')
     for item in activity_raw:
         # Decrypt necessary fields for the preview if it's a proposal
         if item.get('event_type') == 'proposal':
@@ -394,8 +513,8 @@ def personal_space():
             item['proposed_content_plain'] = m._decrypt_with_candidate_ids(item.get('proposed_content', ''), candidates) or '[Content unavailable \u2014 decryption error]'
         
         # Fetch original note basic info
-        note_info = m.personal_posts_conf.find_one({'_id': item['note_id']}, {'created_at': 1})
-        item['original_note_date'] = note_info.get('created_at') if note_info else None
+        note_info_date = activity_note_dates.get(item.get('note_id'))
+        item['original_note_date'] = note_info_date
         activity_notifications.append(item)
 
     # Build a per-note map of pending proposals for badge display on note cards

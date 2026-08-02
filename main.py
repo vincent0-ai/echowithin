@@ -835,7 +835,24 @@ note_versions_conf.create_index([('note_id', 1), ('created_at', -1)])
 note_discussions_conf.create_index([('share_id', 1), ('created_at', -1)])
 # TTL index to auto-expire app tokens after 90 days
 app_tokens_conf.create_index('created_at', expireAfterSeconds=90*24*3600)
-app_tokens_conf.create_index('token', unique=True)
+# Unique 'token' index MUST be sparse: new app tokens store only a hash
+# (no plaintext 'token' field). A non-sparse unique index indexes missing
+# fields as null, so only ONE hash-only token could ever be inserted
+# (E11000 duplicate key { token: null }). Sparse exempts hash-only docs
+# while still enforcing uniqueness among legacy plaintext tokens.
+try:
+    _tok_indexes = {idx['name']: idx for idx in app_tokens_conf.list_indexes()}
+    _tok_old = _tok_indexes.get('token_1')
+    if _tok_old and not _tok_old.get('sparse'):
+        app_tokens_conf.drop_index('token_1')
+except Exception:
+    pass
+app_tokens_conf.create_index('token', unique=True, sparse=True)
+# Enforce uniqueness on the hashed token for hash-only app tokens.
+try:
+    app_tokens_conf.create_index('token_hash', unique=True, sparse=True)
+except Exception:
+    pass
 app_tokens_conf.create_index('user_id')
 
 # --- Community Notes Performance Indexes ---

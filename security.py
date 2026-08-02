@@ -711,6 +711,32 @@ def _decrypt_note_record(note, share=None, max_preview_chars=None):
     return preview
 
 
+def _decrypt_note_metadata(note, share=None):
+    """Decrypt reference and tags fields of a note record in-place."""
+    if not note or not isinstance(note, dict):
+        return note
+    candidates = _note_decryption_candidates(note, share)
+
+    ref = note.get('reference')
+    if ref and isinstance(ref, str) and ref.startswith('gAAAAA'):
+        dec_ref = _decrypt_with_candidate_ids(ref, candidates)
+        if dec_ref is not None:
+            note['reference'] = dec_ref
+
+    tags = note.get('tags')
+    if tags and isinstance(tags, list):
+        dec_tags = []
+        for t in tags:
+            if t and isinstance(t, str) and t.startswith('gAAAAA'):
+                dec_t = _decrypt_with_candidate_ids(t, candidates)
+                dec_tags.append(dec_t if dec_t is not None else t)
+            else:
+                dec_tags.append(t)
+        note['tags'] = dec_tags
+    return note
+
+
+
 # --- Community Encryption Utilities ---
 
 # Community encryption version:

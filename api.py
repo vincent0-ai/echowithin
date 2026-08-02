@@ -238,6 +238,7 @@ def api_get_notes():
                         except Exception:
                             update_available = True
 
+        m._decrypt_note_metadata(note)
         formatted_notes.append({
             'id': str(note['_id']),
             'content': content_plain,
@@ -297,6 +298,7 @@ def api_get_note(note_id):
                     except Exception:
                         update_available = True
 
+    m._decrypt_note_metadata(note)
     return jsonify({
         'id': str(note['_id']),
         'content': content_plain,

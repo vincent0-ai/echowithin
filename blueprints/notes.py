@@ -208,15 +208,9 @@ def personal_space():
         # many notes, and this guarantees preview text is immediately
         # visible in every note card without waiting for a lazy fetch.
         note['content'] = m._decrypt_note_record(note) or ''
-        # Decrypt reference and tags if encrypted (title_encrypted flag)
-        if note.get('title_encrypted'):
-            uid_str = str(note.get('content_owner_id') or note.get('user_id'))
-            ref = note.get('reference', '')
-            if ref and isinstance(ref, str) and ref.startswith('gAAAAA'):
-                note['reference'] = m.decrypt_note(ref, user_id=uid_str)
-            tags = note.get('tags', [])
-            if tags and isinstance(tags, list):
-                note['tags'] = [m.decrypt_note(t, user_id=uid_str) if (t and isinstance(t, str) and t.startswith('gAAAAA')) else t for t in tags]
+        # Decrypt reference and tags if encrypted
+        m._decrypt_note_metadata(note)
+
         note['content_preview'] = False
         note['lazy_content'] = False
 
@@ -293,22 +287,13 @@ def personal_space():
             {'$limit': 50}
         ]))
         for note in locked_notes_raw:
-            # OPTIMIZATION: Use reference field when available to skip decryption
+            m._decrypt_note_metadata(note)
             ref = (note.get('reference') or '').strip()
-            # Decrypt reference if encrypted
-            if note.get('title_encrypted') and ref and ref.startswith('gAAAAA'):
-                uid_str = str(note.get('content_owner_id') or note.get('user_id'))
-                ref = m.decrypt_note(ref, user_id=uid_str)
             if ref:
                 note['content'] = ref
             else:
                 note['content'] = m._decrypt_note_record(note)
-            # Decrypt tags if encrypted
-            if note.get('title_encrypted'):
-                uid_str = str(note.get('content_owner_id') or note.get('user_id'))
-                tags = note.get('tags', [])
-                if tags and isinstance(tags, list):
-                    note['tags'] = [m.decrypt_note(t, user_id=uid_str) if (t and isinstance(t, str) and t.startswith('gAAAAA')) else t for t in tags]
+
             note['update_available'] = False
             if note.get('source_note_id') and note.get('original_doc'):
                 orig = note['original_doc']

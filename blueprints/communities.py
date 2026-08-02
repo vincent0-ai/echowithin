@@ -205,6 +205,7 @@ def api_share_note_to_community(post_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         share_id = secrets.token_urlsafe(16)
 
+        m._decrypt_note_metadata(note)
         community_note = {
             'community_id': comm_id,
             'author_id': ObjectId(current_user.id),
@@ -871,6 +872,7 @@ def view_shared_community_note(share_id):
             'saved_from_community_note': str(note['_id'])
         }))
     
+    m._decrypt_note_metadata(note)
     return render_template('shared_note.html',
                            share_id=share_id,
                            content=content,

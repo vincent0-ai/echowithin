@@ -358,6 +358,11 @@ def view_shared_note(share_id):
     for att in raw_attachments:
         decrypted_url = m.decrypt_note(att.get('url'), user_id=note_owner_id)
         if decrypted_url:
+            if att.get('media_encrypted'):
+                decrypted_url = m.build_media_serve_url(att.get('public_id', ''), att.get('mime_type', 'application/octet-stream')) or decrypted_url
+            else:
+                res_type = 'video' if att.get('file_type') == 'audio' else 'image'
+                decrypted_url = m.re_sign_cloudinary_url(att.get('public_id', ''), resource_type=res_type, delivery_type='authenticated', fallback_url=decrypted_url or '') or decrypted_url
             note_attachments_list.append({
                 'id': str(att['_id']),
                 'file_type': att.get('file_type', 'image'),
@@ -471,18 +476,20 @@ def api_upload_note_attachment(share_id):
     except Exception:
         size = 0
 
-    # Upload to Cloudinary
+    # Upload to Cloudinary (server-side encrypted at rest so Cloudinary staff can't read it)
     try:
-        resource_type = 'auto' if file_type == 'audio' else 'image'
-        upload_opts = {'folder': 'echowithin_note_media', 'resource_type': resource_type}
-        if file_type == 'image':
-            upload_opts['transformation'] = [
-                {'width': 1600, 'height': 1600, 'crop': 'limit'},
-                {'quality': 'auto', 'fetch_format': 'auto'}
-            ]
-        upload_result = m.cloudinary.uploader.upload(file, **upload_opts)
-        plaintext_url = upload_result.get('secure_url')
-        public_id = upload_result.get('public_id')
+        mime_type = (file.mimetype or 'image/jpeg')[:200]
+        if file_type == 'audio':
+            mime_type = (file.mimetype or 'audio/webm')[:200]
+        upload_result = m.cloudinary.uploader.upload(
+            m.encrypt_media_bytes(file.read()),
+            folder='echowithin_note_media',
+            resource_type='raw',
+            type='authenticated'
+        )
+        public_id = upload_result.get('public_id', '')
+        plaintext_url = m.build_media_serve_url(public_id, mime_type) or upload_result.get('secure_url', '')
+        media_encrypted = bool(public_id)
     except Exception as e:
         current_app.logger.error(f"Note attachment upload failed: {e}")
         return jsonify({'error': 'Failed to upload file'}), 500
@@ -503,6 +510,9 @@ def api_upload_note_attachment(share_id):
         'url': encrypted_url,
         'url_hash': url_hash,
         'public_id': public_id,
+        'media_encrypted': media_encrypted,
+        'mime_type': mime_type,
+        'storage_resource_type': 'raw' if media_encrypted else 'image',
         'filename': sanitized_filename,
         'size_bytes': size,
         'created_at': now
@@ -550,6 +560,11 @@ def api_list_note_attachments(share_id):
     for att in raw_attachments:
         decrypted_url = m.decrypt_note(att.get('url'), user_id=owner_id_str)
         if decrypted_url:
+            if att.get('media_encrypted'):
+                decrypted_url = m.build_media_serve_url(att.get('public_id', ''), att.get('mime_type', 'application/octet-stream')) or decrypted_url
+            else:
+                res_type = 'video' if att.get('file_type') == 'audio' else 'image'
+                decrypted_url = m.re_sign_cloudinary_url(att.get('public_id', ''), resource_type=res_type, delivery_type='authenticated', fallback_url=decrypted_url or '') or decrypted_url
             attachments.append({
                 'id': str(att['_id']),
                 'file_type': att.get('file_type', 'image'),
@@ -590,8 +605,8 @@ def api_delete_note_attachment(share_id, attachment_id):
     # Delete from Cloudinary
     if att.get('public_id'):
         try:
-            res_type = 'video' if att.get('file_type') == 'audio' else 'image'
-            m.cloudinary.uploader.destroy(att['public_id'], resource_type=res_type)
+            res_type = att.get('storage_resource_type', 'video' if att.get('file_type') == 'audio' else 'image')
+            m.cloudinary.uploader.destroy(att['public_id'], resource_type=res_type, type='authenticated')
         except Exception as e:
             current_app.logger.error(f"Failed to delete note attachment from Cloudinary: {e}")
 

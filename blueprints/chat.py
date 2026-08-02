@@ -136,7 +136,14 @@ def api_message_history(other_user_id):
         msg_data = {'id': str(msg['_id']), 'sender_id': str(msg['sender_id']), 'content': content, 'timestamp': (msg['timestamp'].replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z') if msg['timestamp'].tzinfo is None else msg['timestamp'].isoformat().replace('+00:00', 'Z')), 'is_read': msg.get('is_read', False), 'message_type': msg.get('message_type', 'text')}
         if 'image_url' in msg:
             raw_img = msg['image_url']
-            msg_data['image_url'] = m.decrypt_dm(raw_img, str(current_user.id), str(other_id)) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+            plain_url = m.decrypt_dm(raw_img, str(current_user.id), str(other_id)) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+            raw_pub = msg.get('image_public_id', '')
+            plain_pub = m.decrypt_dm(raw_pub, str(current_user.id), str(other_id)) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+            if msg.get('media_encrypted'):
+                msg_data['image_url'] = m.build_media_serve_url(plain_pub, msg.get('mime_type', 'application/octet-stream')) or plain_url
+            else:
+                res_type = msg.get('image_resource_type', 'image')
+                msg_data['image_url'] = m.re_sign_cloudinary_url(plain_pub, resource_type=res_type, delivery_type='authenticated', fallback_url=plain_url)
         if 'reply_to_id' in msg:
             msg_data['reply_to_id'] = str(msg['reply_to_id'])
             raw_rtp = msg.get('reply_to_preview', '')
@@ -447,10 +454,12 @@ def api_upload_dm_image():
         if size > current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024):
             return jsonify({'error': 'Image exceeds 5MB limit'}), 400
         upload_result = m.cloudinary.uploader.upload(
-            file, folder='dm_images',
-            transformation=[{'width': 1200, 'height': 1200, 'crop': 'limit'}, {'quality': 'auto', 'fetch_format': 'auto'}]
+            m.encrypt_media_bytes(file.read()), folder='dm_images', resource_type='raw', type='authenticated'
         )
-        return jsonify({'success': True, 'url': upload_result.get('secure_url')})
+        public_id = upload_result.get('public_id')
+        mime_type = (file.mimetype or 'image/jpeg')[:200]
+        serve_url = m.build_media_serve_url(public_id, mime_type) if public_id else ''
+        return jsonify({'success': True, 'url': serve_url or upload_result.get('secure_url'), 'public_id': public_id, 'mime_type': mime_type, 'media_encrypted': True})
     except Exception as e:
         current_app.logger.error(f'Image upload failed for DM: {e}')
         return jsonify({'error': 'Failed to upload image'}), 500
@@ -473,11 +482,15 @@ def api_upload_dm_voice():
         file.seek(0)
         if size > 10 * 1024 * 1024:
             return jsonify({'error': 'Voice note exceeds 10MB limit'}), 400
-        upload_result = m.cloudinary.uploader.upload(file, folder='dm_voice', resource_type='auto')
-        return jsonify({'success': True, 'url': upload_result.get('secure_url')})
+        upload_result = m.cloudinary.uploader.upload(m.encrypt_media_bytes(file.read()), folder='dm_voice', resource_type='raw', type='authenticated')
+        public_id = upload_result.get('public_id')
+        mime_type = (file.mimetype or 'audio/webm')[:200]
+        serve_url = m.build_media_serve_url(public_id, mime_type) if public_id else ''
+        return jsonify({'success': True, 'url': serve_url or upload_result.get('secure_url'), 'public_id': public_id, 'mime_type': mime_type, 'media_encrypted': True})
     except Exception as e:
         current_app.logger.error(f'Voice upload failed for DM: {e}')
         return jsonify({'error': 'Failed to upload voice note'}), 500
+
 
 
 @bp.route('/api/messages/react/<message_id>', methods=['POST'])
@@ -671,6 +684,10 @@ def api_schedule_message():
         content = data.get('content', '')
         scheduled_at_str = data.get('scheduled_at')
         image_url = data.get('image_url')
+        image_public_id = data.get('image_public_id')
+        image_resource_type = data.get('image_resource_type', 'image')
+        mime_type = data.get('mime_type')
+        media_encrypted = bool(mime_type) or bool(data.get('media_encrypted')) or m.is_media_proxy_url(image_url or '')
         reply_to_id = data.get('reply_to_id')
         message_type = data.get('message_type', 'text')
         if not recipient_id_str or not scheduled_at_str:
@@ -741,6 +758,12 @@ def api_schedule_message():
         }
         if image_url:
             sched_doc['image_url'] = m.encrypt_dm(image_url, sender_id_str, recipient_id_str)
+        if image_public_id:
+            sched_doc['image_public_id'] = m.encrypt_dm(str(image_public_id), sender_id_str, recipient_id_str)
+            sched_doc['image_resource_type'] = 'video' if message_type == 'audio' else 'image'
+        if media_encrypted:
+            sched_doc['media_encrypted'] = True
+            sched_doc['mime_type'] = mime_type or ('audio/webm' if message_type == 'audio' else 'image/jpeg')
         if reply_to_id:
             sched_doc['reply_to_id'] = ObjectId(reply_to_id)
             sched_doc['reply_to_preview'] = m.encrypt_dm(reply_to_preview, sender_id_str, recipient_id_str) if reply_to_preview else reply_to_preview
@@ -799,7 +822,14 @@ def api_list_scheduled_messages(other_user_id):
             }
             if msg.get('image_url'):
                 raw_img = msg['image_url']
-                entry['image_url'] = m.decrypt_dm(raw_img, str(current_user.id), other_user_id) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+                plain_img = m.decrypt_dm(raw_img, str(current_user.id), other_user_id) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+                raw_pub = msg.get('image_public_id', '')
+                plain_pub = m.decrypt_dm(raw_pub, str(current_user.id), other_user_id) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+                if msg.get('media_encrypted'):
+                    entry['image_url'] = m.build_media_serve_url(plain_pub, msg.get('mime_type', 'application/octet-stream')) or plain_img
+                else:
+                    res_type = msg.get('image_resource_type', 'image')
+                    entry['image_url'] = m.re_sign_cloudinary_url(plain_pub, resource_type=res_type, delivery_type='authenticated', fallback_url=plain_img)
             result.append(entry)
         return jsonify({'scheduled_messages': result})
     except Exception as e:

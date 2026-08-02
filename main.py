@@ -65,7 +65,7 @@ import sys
 import time
 import threading
 
-from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, send_from_directory, send_file, abort
+from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, Response, send_from_directory, send_file, abort
 import logging
 import math
 import redis
@@ -90,7 +90,8 @@ from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
     limits, safe_object_id, admin_required, owner_required,
     _derive_fernet_key, _get_notes_encryption_key, get_notes_fernet,
     _get_user_fernet, _get_dm_fernet, encrypt_dm, decrypt_dm,
-    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, _candidate_user_ids,
+    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, generate_signed_cloudinary_url, re_sign_cloudinary_url, _candidate_user_ids,
+    encrypt_media_bytes, decrypt_media_bytes, build_media_serve_url, media_serve_token_valid, is_media_proxy_url,
     _decrypt_with_candidate_ids, _note_decryption_candidates,
     _decrypt_note_record, _decrypt_note_metadata, _get_community_fernet,
     encrypt_community_note, decrypt_community_note,
@@ -196,6 +197,38 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
+
+
+@app.route('/media/<path:public_id>')
+def serve_encrypted_media(public_id):
+    """Streams decrypted private media fetched from Cloudinary raw storage.
+
+    The URL carries a short-lived HMAC capability token (see security.build_media_serve_url).
+    Media is encrypted at rest with a server-side key before upload, so Cloudinary
+    account holders/staff can never read the plaintext content.
+    """
+    mime = (request.args.get('mime') or 'application/octet-stream')[:200]
+    expires = request.args.get('expires', type=int)
+    sig = request.args.get('sig', '')
+    if not media_serve_token_valid(public_id, expires, sig):
+        return abort(403)
+    try:
+        signed_raw = generate_signed_cloudinary_url(public_id, resource_type='raw', delivery_type='authenticated')
+        if not signed_raw:
+            app.logger.error(f"No Cloudinary raw URL available for encrypted media {public_id}")
+            return abort(404)
+        r = requests.get(signed_raw, timeout=30)
+        if r.status_code != 200:
+            app.logger.error(f"Cloudinary fetch failed for encrypted media {public_id}: HTTP {r.status_code}")
+            return abort(404)
+        plain = decrypt_media_bytes(r.content)
+    except Exception as e:
+        app.logger.error(f"Media serve error for {public_id}: {e}")
+        return abort(404)
+    resp = Response(plain, mimetype=mime)
+    resp.headers['Cache-Control'] = 'private, max-age=300'
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
 
 # CSRF exemptions — these routes accept external/API requests without CSRF tokens
 csrf.exempt(api_bp)  # Entire API blueprint (mobile app, external clients)
@@ -1549,6 +1582,10 @@ def handle_send_dm(data):
     content = data.get('content', '')
     reply_to_id = data.get('reply_to_id')
     image_url = data.get('image_url')
+    image_public_id = data.get('image_public_id')
+    image_resource_type = data.get('image_resource_type', 'image')
+    mime_type = data.get('mime_type')
+    media_encrypted = is_media_proxy_url(image_url)
     message_type = data.get('message_type', 'text')
     
     if not recipient_id_str or (not content and not image_url):
@@ -1629,6 +1666,12 @@ def handle_send_dm(data):
         }
         
         if image_url: message_doc['image_url'] = encrypt_dm(image_url, sender_id_str, recipient_id_str)
+        if media_encrypted:
+            message_doc['media_encrypted'] = True
+            message_doc['mime_type'] = mime_type or ('audio/webm' if message_type == 'audio' else 'image/jpeg')
+        if image_public_id:
+            message_doc['image_public_id'] = encrypt_dm(str(image_public_id), sender_id_str, recipient_id_str)
+            message_doc['image_resource_type'] = 'video' if message_type == 'audio' else 'image'
         if reply_to_id:
             message_doc['reply_to_id'] = ObjectId(reply_to_id)
             message_doc['reply_to_preview'] = encrypt_dm(reply_to_preview, sender_id_str, recipient_id_str) if reply_to_preview else reply_to_preview
@@ -1658,7 +1701,19 @@ def handle_send_dm(data):
             'is_read': is_actively_reading,
             'message_type': message_type
         }
-        if image_url: payload['image_url'] = image_url
+        if image_url:
+            if is_media_proxy_url(image_url):
+                payload['image_url'] = image_url
+                payload['media_encrypted'] = True
+            else:
+                fresh_image_url = re_sign_cloudinary_url(
+                    image_public_id,
+                    resource_type='video' if message_type == 'audio' else 'image',
+                    delivery_type='authenticated',
+                    fallback_url=image_url
+                )
+                payload['image_url'] = fresh_image_url
+            payload['image_public_id'] = image_public_id or ''
         if reply_to_id:
             payload['reply_to_id'] = str(reply_to_id)
             payload['reply_to_preview'] = reply_to_preview

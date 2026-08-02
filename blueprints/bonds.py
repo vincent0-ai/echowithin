@@ -3169,6 +3169,12 @@ def api_bond_album_list(bond_id):
             except Exception:
                 decrypted_url = None
 
+            pub_id = p.get('public_id', '')
+            if p.get('media_encrypted'):
+                decrypted_url = m.build_media_serve_url(pub_id, p.get('mime_type', 'application/octet-stream')) or decrypted_url
+            else:
+                decrypted_url = m.re_sign_cloudinary_url(pub_id, resource_type='image', delivery_type='authenticated', fallback_url=decrypted_url or '') or decrypted_url
+
             uploaded_by_id = str(p.get('uploaded_by', ''))
             uploader_name = 'Partner'
             if uploaded_by_id == user_id_str:
@@ -3258,18 +3264,21 @@ def api_bond_album_upload(bond_id):
                 continue
 
             photo_url = None
-            # Attempt Cloudinary upload first
+            photo_public_id = ''
+            photo_mime = ''
+            media_encrypted = False
+            # Attempt Cloudinary upload first (server-side encrypted at rest)
             try:
+                photo_mime = (file.mimetype or 'image/jpeg')[:200]
                 upload_result = m.cloudinary.uploader.upload(
-                    file,
+                    m.encrypt_media_bytes(file.read()),
                     folder='echowithin_bond_album',
-                    resource_type='image',
-                    transformation=[
-                        {'width': 1600, 'height': 1600, 'crop': 'limit'},
-                        {'quality': 'auto', 'fetch_format': 'auto'}
-                    ]
+                    resource_type='raw',
+                    type='authenticated'
                 )
-                photo_url = upload_result.get('secure_url', '')
+                photo_public_id = upload_result.get('public_id', '')
+                photo_url = m.build_media_serve_url(photo_public_id, photo_mime) or upload_result.get('secure_url', '')
+                media_encrypted = bool(photo_public_id)
             except Exception as upload_err:
                 current_app.logger.warning(f"Cloudinary upload failed for bond album, trying local fallback: {upload_err}")
                 photo_url = None
@@ -3300,6 +3309,10 @@ def api_bond_album_upload(bond_id):
                 'category': category,
                 'date_taken': date_taken,
                 'url': encrypted_url,
+                'public_id': photo_public_id if photo_public_id else '',
+                'resource_type': 'raw' if media_encrypted else 'image',
+                'media_encrypted': media_encrypted,
+                'mime_type': photo_mime or 'image/jpeg',
                 'uploaded_by': ObjectId(user_id_str),
                 'uploaded_at': now,
                 'is_pinned': False,
@@ -3461,6 +3474,13 @@ def api_bond_album_delete(photo_id):
 
         if str(photo['uploaded_by']) != user_id_str:
             return jsonify({'error': 'Only the uploader can delete this photo.'}), 403
+
+        # Remove the private asset from Cloudinary (authenticated delivery type)
+        if photo.get('public_id'):
+            try:
+                m.cloudinary.uploader.destroy(photo['public_id'], resource_type=photo.get('resource_type', 'image'), type='authenticated')
+            except Exception as del_err:
+                current_app.logger.warning(f"Cloudinary destroy failed for album photo {photo_id}: {del_err}")
 
         m.bond_album_photos_conf.delete_one({'_id': ObjectId(photo_id)})
 
@@ -3738,6 +3758,10 @@ def api_bond_recommendations_list(bond_id):
                     image_url = m.decrypt_bond_data(encrypted_img, bond_id)
                 except Exception:
                     image_url = ''
+            if r.get('media_encrypted'):
+                image_url = m.build_media_serve_url(r.get('image_public_id', ''), r.get('mime_type', 'application/octet-stream')) or image_url
+            else:
+                image_url = m.re_sign_cloudinary_url(r.get('image_public_id', ''), resource_type=r.get('image_resource_type', 'image'), delivery_type='authenticated', fallback_url=image_url or '') or image_url
             result.append({
                 'id': str(r['_id']),
                 'title': m.decrypt_bond_data(r.get('title', ''), bond_id) if r.get('encrypted') else r.get('title', ''),
@@ -3803,18 +3827,22 @@ def api_bond_recommendations_create(bond_id):
                 size = image_file.tell()
                 image_file.seek(0)
                 if 0 < size <= m.MAX_IMAGE_SIZE:
-                    # Attempt Cloudinary upload
+                    # Attempt Cloudinary upload (server-side encrypted at rest)
+                    image_url = ''
+                    image_public_id = ''
+                    image_mime = ''
+                    media_encrypted = False
                     try:
+                        image_mime = (image_file.mimetype or 'image/jpeg')[:200]
                         upload_result = m.cloudinary.uploader.upload(
-                            image_file,
+                            m.encrypt_media_bytes(image_file.read()),
                             folder='echowithin_bond_recs',
-                            resource_type='image',
-                            transformation=[
-                                {'width': 800, 'height': 800, 'crop': 'limit'},
-                                {'quality': 'auto', 'fetch_format': 'auto'}
-                            ]
+                            resource_type='raw',
+                            type='authenticated'
                         )
-                        image_url = upload_result.get('secure_url', '')
+                        image_public_id = upload_result.get('public_id', '')
+                        image_url = m.build_media_serve_url(image_public_id, image_mime) or upload_result.get('secure_url', '')
+                        media_encrypted = bool(image_public_id)
                     except Exception as upload_err:
                         current_app.logger.warning(f"Cloudinary upload failed for rec image, trying local fallback: {upload_err}")
                         image_url = ''
@@ -3845,6 +3873,11 @@ def api_bond_recommendations_create(bond_id):
         }
         if image_url:
             doc['image_url'] = m.encrypt_bond_data(image_url, bond_id)
+            if image_public_id:
+                doc['image_public_id'] = image_public_id
+                doc['image_resource_type'] = 'raw' if media_encrypted else 'image'
+                doc['media_encrypted'] = media_encrypted
+                doc['mime_type'] = image_mime or 'image/jpeg'
 
         result = m.bond_recommendations_conf.insert_one(doc)
 
@@ -3933,6 +3966,13 @@ def api_bond_recommendations_delete(rec_id):
 
         if str(rec['recommended_by']) != user_id_str:
             return jsonify({'error': 'Only the recommender can delete this.'}), 403
+
+        # Remove the private asset from Cloudinary (authenticated delivery type)
+        if rec.get('image_public_id'):
+            try:
+                m.cloudinary.uploader.destroy(rec['image_public_id'], resource_type=rec.get('image_resource_type', 'image'), type='authenticated')
+            except Exception as del_err:
+                current_app.logger.warning(f"Cloudinary destroy failed for rec image {rec_id}: {del_err}")
 
         m.bond_recommendations_conf.delete_one({'_id': ObjectId(rec_id)})
         return jsonify({'success': True})

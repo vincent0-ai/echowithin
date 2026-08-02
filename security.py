@@ -5,9 +5,11 @@ import datetime
 import difflib
 import os
 import re
+import hmac
+import time as _time
 import secrets as _secrets
 from functools import wraps
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse, urljoin, quote
 
 from flask import request, flash, redirect, url_for
 from flask_login import current_user
@@ -242,6 +244,144 @@ def decrypt_bond_data(encrypted_content: str, bond_id: str) -> str:
             return encrypted_content
         _get_app().logger.warning(f"Bond data decryption failed for bond {bond_id}")
         return '[Content unavailable — decryption error]'
+
+
+def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 900) -> str:
+    """Generates a short-lived signed Cloudinary URL for private/authenticated assets.
+
+    URLs expire after ``expires_in`` seconds (default 15 minutes). Because stored
+    URLs can expire, callers MUST store the ``public_id`` alongside and re-sign at
+    read/serve time via :func:`re_sign_cloudinary_url`.
+    """
+    if not public_id:
+        return ''
+    try:
+        import time
+        import cloudinary.utils
+        signed_url, _ = cloudinary.utils.cloudinary_url(
+            public_id,
+            resource_type=resource_type or 'image',
+            type=delivery_type or 'authenticated',
+            sign_url=True,
+            secure=True,
+            expires_at=int(time.time()) + max(60, int(expires_in))
+        )
+        return signed_url
+    except Exception as e:
+        _get_app().logger.error(f"Failed to generate signed Cloudinary URL for {public_id}: {e}")
+        return ''
+
+
+def re_sign_cloudinary_url(public_id, resource_type='image', delivery_type='authenticated', expires_in=900, fallback_url=''):
+    """Returns a fresh signed URL for a private Cloudinary asset.
+
+    Falls back to ``fallback_url`` (e.g. a stored legacy URL) if no ``public_id``
+    is available or signing fails. Never raises.
+    """
+    if public_id:
+        signed = generate_signed_cloudinary_url(public_id, resource_type=resource_type or 'image', delivery_type=delivery_type or 'authenticated', expires_in=expires_in)
+        if signed:
+            return signed
+    return fallback_url or ''
+
+
+# ---------------------------------------------------------------------------
+# SERVER-SIDE MEDIA ENCRYPTION-AT-REST
+# ---------------------------------------------------------------------------
+# Threat model: Cloudinary account holders / Cloudinary staff must NOT be able
+# to read private media (even through the Cloudinary portal). All private media
+# is therefore encrypted with a server-side key BEFORE upload to Cloudinary and
+# stored there as opaque `raw` ciphertext. Media is served back through a Flask
+# proxy endpoint that fetches the ciphertext, decrypts it, and streams it with
+# the correct MIME type.
+#
+# The proxy uses a short-lived HMAC-signed capability URL (validated with
+# SECRET_KEY), so possession of a URL grants access only until it expires —
+# mirroring the expiring signed-Cloudinary-URL behaviour for legacy assets.
+# ---------------------------------------------------------------------------
+
+_MEDIA_FERNET_CACHE = {}
+
+
+def _get_media_fernet():
+    """Fernet instance used to encrypt/decrypt private media bytes at rest."""
+    if 'instance' in _MEDIA_FERNET_CACHE:
+        return _MEDIA_FERNET_CACHE['instance']
+    app = _get_app()
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    key = _derive_fernet_key(secret, b'echowithin_media_at_rest_v1', _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    _MEDIA_FERNET_CACHE['instance'] = f
+    return f
+
+
+def encrypt_media_bytes(data):
+    """Encrypts raw media bytes for storage. Accepts bytes/bytearray or a file-like object."""
+    if data is None:
+        return None
+    if hasattr(data, 'read'):
+        data = data.read()
+    if isinstance(data, bytearray):
+        data = bytes(data)
+    if not isinstance(data, bytes):
+        data = str(data).encode('utf-8')
+    return _get_media_fernet().encrypt(data)
+
+
+def decrypt_media_bytes(token_bytes):
+    """Decrypts media ciphertext bytes. Returns plaintext bytes. Raises on tamper."""
+    if token_bytes is None:
+        raise ValueError('No media ciphertext provided')
+    if isinstance(token_bytes, bytearray):
+        token_bytes = bytes(token_bytes)
+    return _get_media_fernet().decrypt(token_bytes)
+
+
+def _media_signature(public_id, expires_at):
+    """HMAC-SHA256 capability signature for the media proxy URL."""
+    app = _get_app()
+    secret = app.config["SECRET_KEY"].encode() if isinstance(app.config["SECRET_KEY"], str) else app.config["SECRET_KEY"]
+    msg = (f"{public_id}|{int(expires_at)}").encode('utf-8')
+    return hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
+
+
+def build_media_serve_url(public_id, mime_type='application/octet-stream', expires_in=900):
+    """Builds a short-lived capability URL for the encrypted-media proxy.
+
+    Must be called inside an active request/app context (uses ``url_for``).
+    Returns '' on failure.
+    """
+    if not public_id:
+        return ''
+    try:
+        expires_at = int(_time.time()) + max(60, int(expires_in))
+        sig = _media_signature(public_id, expires_at)
+        return url_for('serve_encrypted_media', public_id=public_id, mime=quote(str(mime_type or 'application/octet-stream')), expires=expires_at, sig=sig, _external=True)
+    except Exception as e:
+        _get_app().logger.error(f"Failed to build media serve URL for {public_id}: {e}")
+        return ''
+
+
+def media_serve_token_valid(public_id, expires_at, sig):
+    """Validates a media proxy capability token (expiry + HMAC)."""
+    try:
+        expires_at = int(expires_at)
+    except (TypeError, ValueError):
+        return False
+    if _time.time() > expires_at:
+        return False
+    if not sig or not public_id:
+        return False
+    expected = _media_signature(public_id, expires_at)
+    return hmac.compare_digest(expected, sig)
+
+
+def is_media_proxy_url(url):
+    """True if the URL points at our encrypted-media proxy (not a Cloudinary URL)."""
+    if not url:
+        return False
+    return '/media/' in url or '/__media/' in url
+
 
 
 

@@ -104,6 +104,16 @@ def view_community(community_id):
     resources = list(m.community_resources_conf.find({
         'community_id': comm_obj_id
     }).sort('created_at', -1).limit(50))
+    for res in resources:
+        if res.get('media_encrypted'):
+            res['file_url'] = m.build_media_serve_url(res.get('public_id', ''), res.get('mime_type', 'application/octet-stream')) or res.get('file_url', '')
+        else:
+            res['file_url'] = m.re_sign_cloudinary_url(
+                res.get('public_id', ''),
+                resource_type=res.get('resource_type', 'image'),
+                delivery_type='authenticated',
+                fallback_url=res.get('file_url', '')
+            ) or res.get('file_url', '')
 
     # Check-in: did user check in today?
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1243,10 +1253,12 @@ def api_upload_resource(community_id):
     import cloudinary.uploader
     import cloudinary
     try:
-        result = cloudinary.uploader.upload(uploaded_file, resource_type='auto', folder=f'community_resources/{community_id}')
-        file_url = result.get('secure_url', '')
+        mime_type = (uploaded_file.mimetype or 'application/octet-stream')[:200]
+        result = cloudinary.uploader.upload(m.encrypt_media_bytes(uploaded_file.read()), resource_type='raw', type='authenticated', folder=f'community_resources/{community_id}')
         public_id = result.get('public_id', '')
-        resource_type = result.get('resource_type', 'image')
+        resource_type = 'raw'
+        media_encrypted = bool(public_id)
+        file_url = m.build_media_serve_url(public_id, mime_type) or result.get('secure_url', '')
     except Exception as e:
         current_app.logger.error(f"Resource upload error: {e}")
         flash('Upload failed. Please try again.', 'danger')
@@ -1261,6 +1273,8 @@ def api_upload_resource(community_id):
         'file_url': file_url,
         'public_id': public_id,
         'resource_type': resource_type,
+        'media_encrypted': media_encrypted,
+        'mime_type': mime_type,
         'file_name': uploaded_file.filename,
         'created_at': now
     })
@@ -1273,7 +1287,6 @@ def api_upload_resource(community_id):
 def download_community_resource(community_id, resource_id):
     """Generates a signed Cloudinary URL to access or download community resources securely without 401 errors."""
     import main as m
-    import cloudinary.utils
     try:
         comm_obj_id = ObjectId(community_id)
         res_obj_id = ObjectId(resource_id)
@@ -1286,21 +1299,33 @@ def download_community_resource(community_id, resource_id):
         flash('Resource not found.', 'danger')
         return redirect(url_for('communities.view_community', community_id=community_id))
 
+    community = m.communities_conf.find_one({'_id': comm_obj_id})
+    if not community:
+        flash('Community not found.', 'danger')
+        return redirect(url_for('communities.communities_page'))
+    is_member = ObjectId(current_user.id) in community.get('members', [])
+    is_admin = str(community.get('admin_id')) == str(current_user.id)
+    is_site_admin = getattr(current_user, 'is_admin', False)
+    if not is_member and not is_admin and not is_site_admin:
+        flash('You must be a member to download community resources.', 'danger')
+        return redirect(url_for('communities.view_community', community_id=community_id))
+
     public_id = resource.get('public_id')
     file_url = resource.get('file_url', '')
     resource_type = resource.get('resource_type', 'image')
 
+    if resource.get('media_encrypted') and public_id:
+        serve_url = m.build_media_serve_url(public_id, resource.get('mime_type', 'application/octet-stream'))
+        if serve_url:
+            return redirect(serve_url)
+        return redirect(file_url or url_for('communities.view_community', community_id=community_id))
+
     if public_id:
         try:
-            # Generate a signed Cloudinary URL with signature & SSL
-            signed_url, _ = cloudinary.utils.cloudinary_url(
-                public_id,
-                resource_type=resource_type,
-                type='upload',
-                sign_url=True,
-                secure=True
-            )
-            return redirect(signed_url)
+            # Generate a signed Cloudinary URL with signature & SSL for private/authenticated assets
+            signed_url = m.generate_signed_cloudinary_url(public_id, resource_type=resource_type, delivery_type='authenticated')
+            if signed_url:
+                return redirect(signed_url)
         except Exception as err:
             current_app.logger.warning(f"Failed to generate signed Cloudinary URL: {err}")
 
@@ -1332,7 +1357,7 @@ def api_delete_resource(community_id, resource_id):
     try:
         import cloudinary.uploader
         if resource.get('public_id'):
-            cloudinary.uploader.destroy(resource['public_id'])
+            cloudinary.uploader.destroy(resource['public_id'], resource_type=resource.get('resource_type', 'image'), type='authenticated')
     except Exception:
         pass
     m.community_resources_conf.delete_one({'_id': res_obj_id})

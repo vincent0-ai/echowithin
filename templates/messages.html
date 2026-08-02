@@ -341,6 +341,9 @@
                             <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
                             <input type="hidden" id="reply-parent-id" value="">
                             <input type="hidden" id="pending-image-url" value="">
+                            <input type="hidden" id="pending-image-public-id" value="">
+                            <input type="hidden" id="pending-image-resource-type" value="image">
+                            <input type="hidden" id="pending-image-mime" value="">
 
                             <!-- Image Upload Button -->
                             <button type="button" class="action-btn"
@@ -2410,6 +2413,9 @@
                 e.preventDefault();
                 const content = messageInput.value.trim();
                 const pendingUrl = document.getElementById('pending-image-url').value;
+                const pendingPubId = document.getElementById('pending-image-public-id').value;
+                const pendingResType = document.getElementById('pending-image-resource-type').value || 'image';
+                const pendingMime = document.getElementById('pending-image-mime').value;
                 const replyParentId = document.getElementById('reply-parent-id').value;
 
                 if (!content && !pendingUrl) return;
@@ -2432,6 +2438,11 @@
                 if (pendingUrl) {
                     payload.image_url = pendingUrl;
                     msgData.image_url = pendingUrl;
+                    if (pendingPubId) {
+                        payload.image_public_id = pendingPubId;
+                        payload.image_resource_type = pendingResType;
+                    }
+                    if (pendingMime) payload.mime_type = pendingMime;
                 }
 
                 if (replyParentId) {
@@ -3453,6 +3464,9 @@
                         socket.emit('send_dm', {
                             recipient_id: activeRecipientId,
                             image_url: d.url,
+                            image_public_id: d.public_id || '',
+                            image_resource_type: 'video',
+                            mime_type: 'audio/webm',
                             message_type: 'audio',
                             temp_id: tempId
                         });
@@ -3697,6 +3711,9 @@
             }).then(r => r.json()).then(d => {
                 if (d.success) {
                     document.getElementById('pending-image-url').value = d.url;
+                    document.getElementById('pending-image-public-id').value = d.public_id || '';
+                    document.getElementById('pending-image-resource-type').value = 'image';
+                    document.getElementById('pending-image-mime').value = d.mime_type || '';
                     document.getElementById('image-upload-spinner').style.display = 'none';
                     document.getElementById('image-upload-status').textContent = 'Ready to send';
                 } else {
@@ -3715,6 +3732,9 @@
 
         window.cancelImageUpload = function () {
             document.getElementById('pending-image-url').value = '';
+            document.getElementById('pending-image-public-id').value = '';
+            document.getElementById('pending-image-resource-type').value = 'image';
+            document.getElementById('pending-image-mime').value = '';
             document.getElementById('image-upload-banner').style.display = 'none';
         };
 
@@ -4012,6 +4032,9 @@
 
             const content = messageInput.value.trim();
             const pendingUrl = document.getElementById('pending-image-url').value;
+            const pendingPubId = document.getElementById('pending-image-public-id').value;
+            const pendingResType = document.getElementById('pending-image-resource-type').value || 'image';
+            const pendingMime = document.getElementById('pending-image-mime').value;
             const replyParentId = document.getElementById('reply-parent-id').value;
             const msgType = pendingUrl ? 'image' : 'text';
 
@@ -4021,7 +4044,14 @@
                 scheduled_at: scheduledDatetime.toISOString(),
                 message_type: msgType
             };
-            if (pendingUrl) payload.image_url = pendingUrl;
+            if (pendingUrl) {
+                payload.image_url = pendingUrl;
+                if (pendingPubId) {
+                    payload.image_public_id = pendingPubId;
+                    payload.image_resource_type = pendingResType;
+                }
+                if (pendingMime) payload.mime_type = pendingMime;
+            }
             if (replyParentId) payload.reply_to_id = replyParentId;
 
             document.getElementById('schedule-confirm-btn').disabled = true;

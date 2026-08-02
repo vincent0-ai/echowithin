@@ -23,7 +23,7 @@ from bson.objectid import ObjectId
 
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS, _TAG_KEYWORDS
 import database
-from security import decrypt_note, get_active_achievements, decrypt_dm
+from security import decrypt_note, get_active_achievements, decrypt_dm, re_sign_cloudinary_url, build_media_serve_url
 
 _APP = None
 _T = None
@@ -948,6 +948,12 @@ def _deliver_scheduled_message(sched_msg):
 
         if sched_msg.get('image_url'):
             message_doc['image_url'] = sched_msg['image_url']
+        if sched_msg.get('image_public_id'):
+            message_doc['image_public_id'] = sched_msg['image_public_id']
+            message_doc['image_resource_type'] = sched_msg.get('image_resource_type', 'image')
+        if sched_msg.get('media_encrypted'):
+            message_doc['media_encrypted'] = True
+            message_doc['mime_type'] = sched_msg.get('mime_type', 'application/octet-stream')
         if sched_msg.get('reply_to_id'):
             message_doc['reply_to_id'] = sched_msg['reply_to_id']
             message_doc['reply_to_preview'] = sched_msg.get('reply_to_preview')
@@ -1016,7 +1022,18 @@ def _deliver_scheduled_message(sched_msg):
             'message_type': sched_msg.get('message_type', 'text')
         }
         if plain_image:
-            payload['image_url'] = plain_image
+            if sched_msg.get('media_encrypted'):
+                raw_pub = sched_msg.get('image_public_id', '')
+                plain_pub = decrypt_dm(raw_pub, sender_id_str, recipient_id_str) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+                payload['image_url'] = build_media_serve_url(plain_pub, sched_msg.get('mime_type', 'application/octet-stream')) or plain_image
+                payload['media_encrypted'] = True
+            elif sched_msg.get('image_public_id'):
+                raw_pub = sched_msg['image_public_id']
+                plain_pub = decrypt_dm(raw_pub, sender_id_str, recipient_id_str) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+                res_type = sched_msg.get('image_resource_type', 'image')
+                payload['image_url'] = re_sign_cloudinary_url(plain_pub, resource_type=res_type, delivery_type='authenticated', fallback_url=plain_image)
+            else:
+                payload['image_url'] = plain_image
         if sched_msg.get('reply_to_id'):
             payload['reply_to_id'] = str(sched_msg['reply_to_id'])
             payload['reply_to_preview'] = plain_reply_preview

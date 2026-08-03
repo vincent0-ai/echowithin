@@ -2093,6 +2093,10 @@ def api_bond_qotd_get(bond_id):
             'is_archived_bond': is_broken
         }
 
+        # Expose AI QotD consent so the frontend can render an opt-in prompt.
+        # Old/new bonds that predate the feature have no consent map (fail closed).
+        result['ai_consent'] = _ai_consent_status(bond_doc, user_id_str)
+
         if qotd_doc.get('set_by'):
             set_by_user = m.users_conf.find_one({'_id': qotd_doc['set_by']}, {'username': 1})
             if set_by_user:
@@ -2966,7 +2970,17 @@ def api_bond_insights_get(bond_id):
 
         # Top mood for each partner this month
         def _get_top_mood(uid):
-            month_moods = [me['mood'] for me in mood_entries if str(me['user_id']) == uid and me['date'] >= first_of_month]
+            month_moods = []
+            for me in mood_entries:
+                if str(me['user_id']) == uid and me['date'] >= first_of_month:
+                    mood_val = me['mood']
+                    if me.get('encrypted'):
+                        try:
+                            mood_val = m.decrypt_bond_data(mood_val, bond_id)
+                        except Exception:
+                            continue
+                    if mood_val and mood_val in BOND_MOODS:
+                        month_moods.append(mood_val)
             if not month_moods:
                 return None
             counts = {}

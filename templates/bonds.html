@@ -2847,6 +2847,20 @@
             html += '<button class="btn btn-bond-primary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="generateAiQotd(\'' + bondId + '\')">Generate AI Question</button>';
             html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Write Custom Question</button>';
             html += '</div>';
+            // AI QotD privacy opt-in. Bonds created before this feature have no
+            // consent map (fail closed), so surface an explicit opt-in control.
+            if (data.ai_consent) {
+                if (data.ai_consent.i_consented) {
+                    if (!data.ai_consent.all_consented) {
+                        html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">AI questions enabled for you \u2014 waiting for your partner to enable them too.</div>';
+                    }
+                } else {
+                    html += '<div style="text-align:center; margin-bottom:0.8rem; padding:0.5rem 0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
+                    html += '<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:0.4rem;">AI questions send your bond type and recent questions to an external AI provider. Both partners must enable them.</div>';
+                    html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.6rem;" onclick="toggleAiConsent(\'' + bondId + '\', true)">Enable AI Questions</button>';
+                    html += '</div>';
+                }
+            }
             html += '<div id="qotd-custom-form-' + bondId + '" style="display:none; margin-bottom:0.8rem; padding:0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
             html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px;"></textarea>';
             html += '<div style="display:flex; gap:0.4rem; justify-content:flex-end; margin-top:0.4rem;">';
@@ -2882,6 +2896,23 @@
         html += '<div id="qotd-history-' + bondId + '" style="display:none; margin-top:0.8rem;"></div>';
 
         container.innerHTML = html;
+    }
+
+    function toggleAiConsent(bondId, consent) {
+        fetch('/api/bonds/' + bondId + '/qotd/ai_consent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ consent: !!consent })
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast(consent ? 'AI questions enabled.' : 'AI questions disabled.', 'success');
+                loadQotd(bondId);
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to update AI consent.', 'danger');
+            }
+        }).catch(() => {
+            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+        });
     }
 
     function generateAiQotd(bondId) {

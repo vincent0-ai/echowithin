@@ -124,6 +124,11 @@ def personal_space():
         saved_page = max(1, int(request.args.get('saved_page', 1)))
     except ValueError:
         saved_page = 1
+        
+    try:
+        locked_page = max(1, int(request.args.get('locked_page', 1)))
+    except ValueError:
+        locked_page = 1
 
     # If target_note_id is provided, calculate which page it's on
     if target_note_id:

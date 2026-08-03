@@ -77,6 +77,21 @@ a {
     text-decoration: none;
 }
 
+/* Touch-action hygiene: on iOS Safari interactive elements without touch-action:
+   manipulation go through double-tap-zoom disambiguation, which can swallow the first
+   tap or mis-register it on a neighboring element. Opt interactive elements out of
+   pinch/double-tap zoom interpretation so taps land exactly where the user aims. */
+button,
+[type="button"],
+[type="submit"],
+[role="button"],
+a,
+.contact-item,
+.clickable,
+.btn {
+    touch-action: manipulation;
+}
+
 /* General Main Content Styles */
 main {
     display: flex;
@@ -395,6 +410,9 @@ body {
     color: var(--text-dark-color);
     line-height: 1.6;
     min-height: 100vh;
+    /* Dynamic viewport unit fallback: on iOS 100vh reflects the collapsed URL bar.
+       Use 100dvh so fixed-height layouts stay within the visible area. */
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow-x: hidden;
@@ -405,6 +423,7 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
     max-width: 100%;
 }
@@ -415,7 +434,12 @@ body {
     /* Add padding for content */
 }
 
-/* Flashed Messages Container */
+/* Flashed Messages Container
+   NOTE: This container is position:fixed and sits at the top-right corner even when
+   empty. Without pointer-events:none it forms an invisible ~padding-sized box that can
+   intercept iOS Safari taps meant for the navbar (logout/socials) on the top-right,
+   causing "tap registers on adjacent element" bugs. Re-enable on toasts if they gain
+   dismiss controls. */
 .flash-messages {
     padding: 1rem;
     list-style: none;
@@ -423,6 +447,11 @@ body {
     top: 10px;
     right: 10px;
     z-index: 1000;
+    pointer-events: none;
+}
+
+.flash-messages .alert {
+    pointer-events: auto;
 }
 
 /* Alert Styles */

@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="messages-container"
-    style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); display: flex; flex-direction: column;">
+    style="max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; height: calc(100vh - 120px); height: calc(100dvh - 120px); display: flex; flex-direction: column;">
     {% if current_user.is_authenticated and current_user.is_guest %}
     <div class="floating-tour-tooltip" id="tour-tooltip-messages" style="position: relative; margin-bottom: 1rem; background: var(--surface-bg, #ffffff); border: 1px solid var(--primary-color, #3e2217); border-radius: 12px; padding: 1rem 1.2rem; box-shadow: 0 4px 18px rgba(0,0,0,0.08); z-index: 100;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.4rem;">
@@ -348,7 +348,7 @@
                             <!-- Image Upload Button -->
                             <button type="button" class="action-btn"
                                 onclick="document.getElementById('dm-image-upload').click()"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; flex: 0 0 auto;">
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; flex: 0 0 auto; touch-action: manipulation;">
                                 <i class="fas fa-paperclip"></i>
                             </button>
                             <input type="file" id="dm-image-upload" accept="image/*" style="display: none;"
@@ -363,19 +363,19 @@
                             <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn"
                                 onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
                                 title="Hold to record voice message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 auto;">
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 auto; touch-action: manipulation;">
                                 <i class="fas fa-microphone"></i>
                             </button>
 
                             <!-- Schedule Button -->
                             <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
                                 title="Schedule message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 auto;">
+                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 auto; touch-action: manipulation;">
                                 <i class="far fa-clock"></i>
                             </button>
 
                             <button type="submit" class="btn" id="send-btn"
-                                style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 auto;">
+                                style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 auto; touch-action: manipulation;">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </form>
@@ -476,8 +476,10 @@
         transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
         margin-bottom: 1px;
         animation: msgAppear 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        content-visibility: auto;
-        contain-intrinsic-size: 60px;
+        /* content-visibility:auto + fixed contain-intrinsic-size:60px inside an iOS
+           -webkit-overflow-scrolling:touch scroller skews WebKit's scroll/hit-test
+           geometry because bubbles are variable height, causing taps to register on
+           adjacent bubbles. Removed for correct hit-testing. */
     }
 
     @keyframes msgAppear {
@@ -1227,6 +1229,24 @@
                 bottom: 0;
                 flex-shrink: 0 !important;
                 z-index: 20 !important;
+                /* Force the sticky bottom assembly onto its own composited layer so
+                   WebKit keeps the render layer and the hit-test/touch layer in sync
+                   while the page/keyboard scrolls. Without this, the bar's buttons
+                   (send/attach/voice/schedule) hit box drifts from the visuals. */
+                -webkit-transform: translateZ(0);
+                transform: translateZ(0);
+                -webkit-backface-visibility: hidden;
+                backface-visibility: hidden;
+                will-change: transform;
+                touch-action: manipulation;
+            }
+            /* backdrop-filter promotes .chat-header to a separate layer on iOS; pin
+               its compositing origins so taps on header action buttons stay aligned. */
+            .chat-header {
+                -webkit-transform: translateZ(0);
+                transform: translateZ(0);
+                -webkit-backface-visibility: hidden;
+                backface-visibility: hidden;
             }
         }
     }
@@ -3640,7 +3660,19 @@
                 var wrapper = document.querySelector('.messages-wrapper');
                 var bottomWrapper = document.getElementById('chat-bottom-wrapper') || document.querySelector('.chat-input-area');
                 if (document.body.classList.contains('mobile-chat-open') && wrapper) {
-                    wrapper.style.height = vp.height + 'px';
+                    // On iOS the page can be auto-scrolled (vp.offsetTop > 0) when the
+                    // focused input is brought into view. The wrapper height must account
+                    // for this offset so the sticky .chat-bottom-wrapper and its buttons
+                    // remain hit-aligned with the visual layer. On iOS we also re-anchor
+                    // the page scroll to (0,0) after the keyboard opens so the wrapper
+                    // sits at the visual top and the sticky bottom is exactly at the
+                    // visual bottom above the keyboard.
+                    if (_isIOS && vp.offsetTop > 0) {
+                        wrapper.style.height = (vp.height + vp.offsetTop) + 'px';
+                        window.scrollTo(0, 0);
+                    } else {
+                        wrapper.style.height = vp.height + 'px';
+                    }
                     if (bottomWrapper && !_isIOS) {
                         bottomWrapper.style.position = 'relative';
                         bottomWrapper.style.bottom = '0';

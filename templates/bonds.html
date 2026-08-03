@@ -200,6 +200,11 @@
         font-size: 0.7rem;
         backdrop-filter: blur(4px);
         z-index: 2;
+        /* Layer sync for backdrop-filter on iOS */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
     }
     .album-cat-badge {
         position: absolute;
@@ -214,6 +219,11 @@
         text-transform: capitalize;
         backdrop-filter: blur(4px);
         z-index: 2;
+        /* Layer sync for backdrop-filter on iOS */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
     }
 
     /* Photo Lightbox Overlay */
@@ -231,6 +241,12 @@
         justify-content: center;
         padding: 1rem;
         box-sizing: border-box;
+        /* Force composited layer sync on iOS: backdrop-filter + fixed positioning
+           can desync the render layer from the hit-test layer. */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
     }
     .bond-lightbox-container {
         background: var(--card-bg);
@@ -238,7 +254,7 @@
         border-radius: 12px;
         max-width: 900px;
         width: 95%;
-        max-height: 90vh;
+        max-height: 90dvh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -258,7 +274,7 @@
         justify-content: center;
         position: relative;
         min-height: 300px;
-        max-height: 70vh;
+        max-height: 70dvh;
         user-select: none;
     }
     .bond-lightbox-media img {
@@ -292,6 +308,7 @@
         justify-content: center;
         transition: background 0.2s;
         z-index: 5;
+        touch-action: manipulation;
     }
     .lightbox-nav-btn:hover {
         background: rgba(0, 0, 0, 0.85);
@@ -903,6 +920,11 @@
         z-index: 1200;
         align-items: center;
         justify-content: center;
+        /* Layer sync for iOS fixed modal overlays */
+        -webkit-transform: translateZ(0);
+        transform: translateZ(0);
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
     }
 
     .bond-modal-overlay.active {
@@ -1661,26 +1683,26 @@
                         <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Shared Album</strong>
                         <span id="album-count-{{ bond.id }}" style="font-size: 0.75rem; color: var(--text-muted); background: var(--surface-bg); border: 1px solid var(--border-color); padding: 0.1rem 0.4rem; border-radius: 12px;">0 photos</span>
                     </div>
-                    <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.7rem; border-radius: 6px;" onclick="openAlbumUploadModal('{{ bond.id }}')">+ Add Photos</button>
+                    <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.7rem; border-radius: 6px; touch-action: manipulation;" onclick="openAlbumUploadModal('{{ bond.id }}')">+ Add Photos</button>
                 </div>
 
                 <!-- Album Toolbar: Category Chips & Sort Selector -->
                 <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.4rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
                     <!-- Category Filter Chips -->
                     <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;" id="album-cat-chips-{{ bond.id }}">
-                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)">All</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)">Memories</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)">Milestones</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)">Fun</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)">Travel</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)">Special</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)">Other</button>
+                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)" style="touch-action: manipulation;">All</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)" style="touch-action: manipulation;">Memories</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)" style="touch-action: manipulation;">Milestones</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)" style="touch-action: manipulation;">Fun</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)" style="touch-action: manipulation;">Travel</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)" style="touch-action: manipulation;">Special</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)" style="touch-action: manipulation;">Other</button>
                     </div>
 
                     <!-- Sort Arrangement Selector -->
                     <div style="display: flex; align-items: center; gap: 0.4rem;">
                         <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Sort:</label>
-                        <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer;">
+                        <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
                             <option value="date_desc">Date Taken (Newest)</option>
                             <option value="date_asc">Date Taken (Oldest)</option>
                             <option value="uploaded_desc">Latest Uploaded</option>
@@ -2038,7 +2060,7 @@
 <div id="bond-album-lightbox-modal" class="bond-lightbox-backdrop" style="display:none;" onclick="if(event.target===this) closeBondPhotoLightbox()">
     <div class="bond-lightbox-container">
         <!-- Close Button -->
-        <button type="button" onclick="closeBondPhotoLightbox()" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.6); color:#fff; border:none; width:32px; height:32px; border-radius:50%; font-size:1.2rem; cursor:pointer; z-index:20; display:flex; align-items:center; justify-content:center;">&times;</button>
+        <button type="button" onclick="closeBondPhotoLightbox()" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.6); color:#fff; border:none; width:32px; height:32px; border-radius:50%; font-size:1.2rem; cursor:pointer; z-index:20; display:flex; align-items:center; justify-content:center; touch-action: manipulation;">&times;</button>
 
         <!-- Media View with Prev/Next Navigation -->
         <div class="bond-lightbox-media">
@@ -2053,7 +2075,7 @@
                 <!-- Category & Pinned Badges -->
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem;">
                     <span id="lightbox-cat-badge" style="font-size: 0.72rem; font-weight: 600; text-transform: uppercase; background: var(--surface-bg); border: 1px solid var(--border-color); color: var(--primary-color); padding: 0.2rem 0.6rem; border-radius: 12px;">Memory</span>
-                    <button type="button" id="lightbox-pin-btn" onclick="toggleLightboxPhotoPin()" style="background: none; border: 1px solid var(--border-color); padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.3rem;">
+                    <button type="button" id="lightbox-pin-btn" onclick="toggleLightboxPhotoPin()" style="background: none; border: 1px solid var(--border-color); padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.3rem; touch-action: manipulation;">
                         <i class="fas fa-thumbtack"></i> <span id="lightbox-pin-label">Pin</span>
                     </button>
                 </div>
@@ -2072,13 +2094,13 @@
 
             <!-- Action Toolbar (Download, Edit, Delete) -->
             <div style="display: flex; gap: 0.5rem; margin-top: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1;" onclick="downloadLightboxPhoto()">
+                <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1; touch-action: manipulation;" onclick="downloadLightboxPhoto()">
                     <i class="fas fa-download"></i> Download
                 </button>
-                <button type="button" id="lightbox-edit-btn" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1;" onclick="openLightboxPhotoEdit()">
+                <button type="button" id="lightbox-edit-btn" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; flex: 1; touch-action: manipulation;" onclick="openLightboxPhotoEdit()">
                     <i class="fas fa-edit"></i> Edit
                 </button>
-                <button type="button" id="lightbox-delete-btn" class="btn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; background: #c62828; color: #fff; border: none; border-radius: 6px; cursor: pointer; flex: 1;" onclick="deleteLightboxPhoto()">
+                <button type="button" id="lightbox-delete-btn" class="btn" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; background: #c62828; color: #fff; border: none; border-radius: 6px; cursor: pointer; flex: 1; touch-action: manipulation;" onclick="deleteLightboxPhoto()">
                     <i class="fas fa-trash"></i> Delete
                 </button>
             </div>

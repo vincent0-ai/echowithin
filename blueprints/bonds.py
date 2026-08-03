@@ -2944,36 +2944,65 @@ def api_bond_insights_get(bond_id):
                 'partner_mood': m_partner
             })
 
-        # --- 2. Monthly Recap Stats ("Echo Together") ---
-        # Current month start datetime
-        month_start_dt = datetime.datetime.combine(today.replace(day=1), datetime.time.min, tzinfo=datetime.timezone.utc)
+        # --- 2. 30-Day Recap Stats ("Echo Together") ---
+        import security
+        thirty_days_ago = today - datetime.timedelta(days=30)
+        thirty_days_ago_str = thirty_days_ago.isoformat()
+        thirty_days_ago_dt = datetime.datetime.combine(thirty_days_ago, datetime.time.min, tzinfo=datetime.timezone.utc)
 
-        # Completed goals this month
-        goals_completed = m.bond_goals_conf.count_documents({
+        # Completed goals in the 30-day window (or total bond completed goals)
+        completed_goal_docs = list(m.bond_goals_conf.find({
             'bond_id': ObjectId(bond_id),
-            'status': 'completed',
-            'completed_at': {'$gte': month_start_dt}
-        })
-
-        # QotD answered together this month
-        qotd_entries = list(m.bond_qotd_conf.find({
-            'bond_id': ObjectId(bond_id),
-            'date': {'$gte': first_of_month}
+            'status': 'completed'
         }))
-        qotd_answered = sum(1 for q in qotd_entries if len(q.get('answers', {})) == 2)
+        goals_completed = 0
+        for g in completed_goal_docs:
+            cat = g.get('completed_at')
+            if not cat:
+                goals_completed += 1
+            else:
+                try:
+                    dt = cat if isinstance(cat, datetime.datetime) else security.parse_iso_utc(str(cat))
+                    if dt and (dt.tzinfo is None or dt >= thirty_days_ago_dt):
+                        goals_completed += 1
+                except Exception:
+                    goals_completed += 1
 
-        # Journal entries this month
-        journal_count = m.bond_journal_conf.count_documents({
-            'bond_id': ObjectId(bond_id),
-            'created_at': {'$gte': month_start_dt}
-        })
+        # QotD answered in the 30-day window
+        all_qotd = list(m.bond_qotd_conf.find({
+            'bond_id': ObjectId(bond_id)
+        }))
+        qotd_answered = 0
+        for q in all_qotd:
+            q_date = q.get('date')
+            answers = q.get('answers', {})
+            if answers and len(answers) >= 1:
+                if not q_date or q_date >= thirty_days_ago_str:
+                    qotd_answered += 1
 
-        # Top mood for each partner this month
+        # Journal entries in the 30-day window
+        all_journals = list(m.bond_journal_conf.find({
+            'bond_id': ObjectId(bond_id)
+        }))
+        journal_count = 0
+        for j in all_journals:
+            cat = j.get('created_at')
+            if not cat:
+                journal_count += 1
+            else:
+                try:
+                    dt = cat if isinstance(cat, datetime.datetime) else security.parse_iso_utc(str(cat))
+                    if dt and (dt.tzinfo is None or dt >= thirty_days_ago_dt):
+                        journal_count += 1
+                except Exception:
+                    journal_count += 1
+
+        # Top mood for each partner over the 30-day window
         def _get_top_mood(uid):
             month_moods = []
             for me in mood_entries:
-                if str(me['user_id']) == uid and me['date'] >= first_of_month:
-                    mood_val = me['mood']
+                if str(me.get('user_id')) == uid and me.get('date') in last_30_days:
+                    mood_val = me.get('mood')
                     if me.get('encrypted'):
                         try:
                             mood_val = m.decrypt_bond_data(mood_val, bond_id)
@@ -3024,7 +3053,7 @@ def api_bond_insights_get(bond_id):
                 'next_milestone_days': next_milestone_days
             },
             'recap': {
-                'month_name': today.strftime('%B %Y'),
+                'month_name': f"Last 30 Days ({today.strftime('%B %Y')})",
                 'current_streak': current_streak,
                 'best_streak': best_streak,
                 'goals_completed': goals_completed,

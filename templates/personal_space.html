@@ -1358,6 +1358,12 @@
             left: 0;
             width: 100vw;
             height: 100vh;
+            /* Dynamic viewport fallback: on iOS 100vh is the large viewport (URL bar
+               collapsed). Using 100dvh keeps the fullscreen editor within the visible
+               area so toolbar/save buttons don't get pushed off-screen when the URL
+               bar expands or keyboard overlays. */
+            width: 100dvw;
+            height: 100dvh;
             z-index: 10000;
             margin: 0;
             border-radius: 0;
@@ -3752,6 +3758,7 @@
         overflow: hidden;
         min-height: 0;
         max-height: calc(100vh - 3rem);
+        max-height: calc(100dvh - 3rem);
     }
 
     .note-preview-body {
@@ -4014,6 +4021,7 @@
             margin: 0;
             border-radius: 0;
             max-height: 100vh;
+            max-height: 100dvh;
         }
 
         .note-preview-body {

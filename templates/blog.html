@@ -371,14 +371,33 @@
                 });
         }
 
-        function fetchMyCommentedPosts() {
+        let cachedActivityData = null;
+        let lastActivityFetch = 0;
+
+        function fetchMyCommentedPosts(force = false) {
             const container = document.getElementById('activity-list');
             const controls = document.getElementById('activity-controls');
+
+            if (!force && cachedActivityData && Date.now() - lastActivityFetch < 30000) {
+                renderActivityData(cachedActivityData, container, controls);
+                return;
+            }
 
             fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
                 .then(r => r.json())
                 .then(data => {
-                    const posts = data.posts || [];
+                    cachedActivityData = data;
+                    lastActivityFetch = Date.now();
+                    renderActivityData(data, container, controls);
+                })
+                .catch(err => {
+                    console.error(err);
+                    container.innerHTML = '<p>Unable to load your activity.</p>';
+                });
+        }
+
+        function renderActivityData(data, container, controls) {
+            const posts = data.posts || [];
 
                     // Toggle "Mark all as read" button visibility
                     if (data.unread_count && data.unread_count > 0) {
@@ -438,11 +457,6 @@
                     } else {
                         badge.style.display = 'none';
                     }
-                })
-                .catch(err => {
-                    console.error(err);
-                    container.innerHTML = '<p>Unable to load your activity.</p>';
-                });
         }
 
         // Immediate UI feedback for clicking activities
@@ -488,7 +502,7 @@
                     .then(res => {
                         if (res.success) {
                             // Refresh the list to remove unread indicators
-                            fetchMyCommentedPosts();
+                            fetchMyCommentedPosts(true);
                             btn.innerHTML = '<i class="fa-solid fa-check"></i> Done!';
                             setTimeout(() => {
                                 btn.disabled = false;
@@ -512,7 +526,7 @@
         // and set up periodic polling
         {% if current_user.is_authenticated %}
         function loadUnreadBadge() {
-            fetch('{{ url_for("blog.get_my_commented_posts_json") }}')
+            fetch('{{ url_for("blog.get_my_commented_posts_json") }}?count_only=1')
                 .then(r => r.json())
                 .then(data => {
                     const badge = document.getElementById('my-commented-badge');

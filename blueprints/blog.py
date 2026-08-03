@@ -544,6 +544,7 @@ def get_my_commented_posts_json():
     import main as m
     try:
         user_id = ObjectId(current_user.id)
+        count_only = request.args.get('count_only') == '1'
 
         # Get the timestamp when user last clicked "Mark all as read" (or default to old date)
         # IMPORTANT: Query directly from DB to avoid stale cached values in current_user
@@ -590,38 +591,52 @@ def get_my_commented_posts_json():
             {'$sort': {'latest_activity': -1}},
             {'$limit': 50}
         ]
+        
+        if count_only:
+            own_posts_pipeline.append({'$project': {'_id': 1, 'slug': 1, 'author_id': 1, 'latest_activity': 1, 'post_comments.created_at': 1}})
+            
         own_posts = list(m.posts_conf.aggregate(own_posts_pipeline))
 
         for p in own_posts:
             p['activity_type'] = 'comment_on_my_post'
 
         # --- 2. Fetch Posts where others replied to User's comments ---
-        # A. Find all comment IDs authored by current user
-        my_comments = list(m.comments_conf.find({'author_id': user_id}, {'_id': 1}))
-        my_comment_ids = [c['_id'] for c in my_comments]
-
         relevant_replies = []
-        if my_comment_ids:
-            # B. Find replies to those comments (where author is NOT me)
-            pipeline_replies = [
-                {'$match': {
-                    'parent_id': {'$in': my_comment_ids},
-                    'author_id': {'$ne': user_id},
-                    'is_deleted': {'$ne': True}
-                }},
-                {'$sort': {'created_at': -1}},
-                {'$group': {
-                    '_id': '$post_slug',
-                    'latest_reply': {'$first': '$created_at'},
-                    'reply_count': {'$sum': 1}
-                }}
-            ]
-            replies_grouped = list(m.comments_conf.aggregate(pipeline_replies))
+        pipeline_replies = [
+            {'$match': {'author_id': user_id}},
+            {'$lookup': {
+                'from': 'comments',
+                'localField': '_id',
+                'foreignField': 'parent_id',
+                'as': 'replies'
+            }},
+            {'$unwind': '$replies'},
+            {'$match': {
+                'replies.author_id': {'$ne': user_id},
+                'replies.is_deleted': {'$ne': True}
+            }},
+            {'$group': {
+                '_id': '$post_slug',
+                'latest_reply': {'$max': '$replies.created_at'},
+                'reply_count': {'$sum': 1}
+            }}
+        ]
+        replies_grouped = list(m.comments_conf.aggregate(pipeline_replies))
 
-            # C. Fetch the actual posts with comment counts
-            slugs = [g['_id'] for g in replies_grouped]
-            if slugs:
-                # Use aggregation to fetch posts AND count their comments
+        slugs = [g['_id'] for g in replies_grouped]
+        if slugs:
+            if count_only:
+                reply_map = {g['_id']: g for g in replies_grouped}
+                light_posts = list(m.posts_conf.find({'slug': {'$in': slugs}}, {'_id': 1, 'slug': 1, 'author_id': 1}))
+                for p in light_posts:
+                    if str(p.get('author_id')) == current_user.id:
+                        continue
+                    reply_data = reply_map.get(p['slug'])
+                    p['latest_activity'] = reply_data['latest_reply']
+                    p['activity_type'] = 'reply_to_my_comment'
+                    relevant_replies.append(p)
+            else:
+                # C. Fetch the actual posts with comment counts
                 replies_pipeline = [
                     {'$match': {'slug': {'$in': slugs}}},
                     {'$lookup': {
@@ -665,13 +680,13 @@ def get_my_commented_posts_json():
         # instead of individual find_one() calls per notification
         _unlock_user_ids = list(set(ObjectId(n['unlocked_by']) for n in unlock_notifs if n.get('unlocked_by')))
         _unlock_users_map = {}
-        if _unlock_user_ids:
+        if not count_only and _unlock_user_ids:
             for u in m.users_conf.find({'_id': {'$in': _unlock_user_ids}}, {'username': 1}):
                 _unlock_users_map[str(u['_id'])] = u.get('username', 'Someone')
 
         _unlock_note_ids = list(set(n['note_id'] for n in unlock_notifs if n.get('note_id')))
         _unlock_notes_map = {}
-        if _unlock_note_ids:
+        if not count_only and _unlock_note_ids:
             for n in m.personal_posts_conf.find(
                 {'_id': {'$in': _unlock_note_ids}},
                 {'reference': 1, 'content': 1, 'user_id': 1, 'content_owner_id': 1, 'owner_id': 1, 'source_owner_id': 1, 'saved_from_owner_id': 1, 'source_note_id': 1}
@@ -839,6 +854,8 @@ def get_my_commented_posts_json():
             
             unread_count += post_unread_count
 
+            if count_only:
+                continue
 
             post_data = {
                 '_id': str(post['_id']),
@@ -862,11 +879,17 @@ def get_my_commented_posts_json():
             }
             result_posts.append(post_data)
 
-        response = jsonify({
-            'posts': result_posts,
-            'unread_count': unread_count,
-            'last_checked': last_check.isoformat()
-        })
+        if count_only:
+            response = jsonify({
+                'unread_count': unread_count,
+                'last_checked': last_check.isoformat()
+            })
+        else:
+            response = jsonify({
+                'posts': result_posts,
+                'unread_count': unread_count,
+                'last_checked': last_check.isoformat()
+            })
         # Add headers to prevent caching
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"

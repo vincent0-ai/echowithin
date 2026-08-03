@@ -291,6 +291,8 @@ def personal_space():
             # Auto-expire: clear stale unlock
             session.pop('app_lock_unlocked_at', None)
     locked_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': True})
+    total_locked_pages = math.ceil(locked_notes_count / per_page) if per_page else 0
+    skip_locked = (locked_page - 1) * per_page
     locked_notes = []
     locked_shares_map = {}
     locked_clones_map = {}
@@ -369,7 +371,8 @@ def personal_space():
                 }
             }},
             {'$sort': {'_sort_ts': -1, 'created_at': -1}},
-            {'$limit': 50}
+            {'$skip': skip_locked},
+            {'$limit': per_page}
         ]))
         # Re-attach full fields for the (≤50) locked notes shown, via indexed _id fetch.
         locked_page_ids = [note['_id'] for note in locked_notes_raw]
@@ -537,8 +540,10 @@ def personal_space():
         'description': page_description,
         'notes_page': notes_page,
         'saved_page': saved_page,
+        'locked_page': locked_page,
         'total_notes_pages': total_notes_pages,
         'total_saved_pages': total_saved_pages,
+        'total_locked_pages': total_locked_pages,
         'total_notes_count': total_notes_count,
         'total_saved': total_saved,
         'has_app_lock': has_app_lock,

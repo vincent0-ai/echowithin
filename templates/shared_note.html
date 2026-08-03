@@ -2702,7 +2702,7 @@
 
         // Full Math Auto-Detection Function (Synced from personal_space.html)
         function autoDetectMath(text) {
-            if (!text) return text;
+            if (!text || !/[\$\^_\/±ℏÅ°≠≤≥≈|⟩⟨∈∉⊂⊆⊃⊇∪∩∅∀∃→←↔⇒⇐⇔↑↓∂∇∫∬∭∮∑∏∞α-ωΓ-Ω×÷]/.test(text)) return text;
 
             // Protect code blocks
             const codeBlocks = [];

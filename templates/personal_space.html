@@ -2192,7 +2192,7 @@
                 {% if saved_page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', saved_page=saved_page-1, notes_page=notes_page) }}">Previous</a>
+                        href="{{ url_for('notes.personal_space', saved_page=saved_page-1, notes_page=notes_page, locked_page=locked_page) }}#saved">Previous</a>
                 </li>
                 {% endif %}
 
@@ -2200,7 +2200,7 @@
                 {% for p in range(1, [max_visible + 1, total_saved_pages + 1] | min) %}
                 <li class="page-item {% if p == saved_page %}active{% endif %}">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page) }}">{{
+                        href="{{ url_for('notes.personal_space', saved_page=p, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2212,14 +2212,14 @@
                     {% if max_visible < total_saved_pages %} <li
                         class="page-item {% if total_saved_pages == saved_page %}active{% endif %}">
                         <a class="page-link"
-                            href="{{ url_for('notes.personal_space', saved_page=total_saved_pages, notes_page=notes_page) }}">{{
+                            href="{{ url_for('notes.personal_space', saved_page=total_saved_pages, notes_page=notes_page, locked_page=locked_page) }}#saved">{{
                             total_saved_pages }}</a>
                         </li>
                         {% endif %}
 
                         {% if saved_page < total_saved_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="{{ url_for('notes.personal_space', saved_page=saved_page+1, notes_page=notes_page) }}">Next</a>
+                                href="{{ url_for('notes.personal_space', saved_page=saved_page+1, notes_page=notes_page, locked_page=locked_page) }}#saved">Next</a>
                             </li>
                             {% endif %}
             </ul>
@@ -2652,7 +2652,7 @@
                 {% if notes_page > 1 %}
                 <li class="page-item">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', notes_page=notes_page-1, saved_page=saved_page) }}">Previous</a>
+                        href="{{ url_for('notes.personal_space', notes_page=notes_page-1, saved_page=saved_page, locked_page=locked_page) }}">Previous</a>
                 </li>
                 {% endif %}
 
@@ -2660,7 +2660,7 @@
                 {% for p in range(1, [max_visible + 1, total_notes_pages + 1] | min) %}
                 <li class="page-item {% if p == notes_page %}active{% endif %}">
                     <a class="page-link"
-                        href="{{ url_for('notes.personal_space', notes_page=p, saved_page=saved_page) }}">{{
+                        href="{{ url_for('notes.personal_space', notes_page=p, saved_page=saved_page, locked_page=locked_page) }}">{{
                         p }}</a>
                 </li>
                 {% endfor %}
@@ -2672,14 +2672,14 @@
                     {% if max_visible < total_notes_pages %} <li
                         class="page-item {% if total_notes_pages == notes_page %}active{% endif %}">
                         <a class="page-link"
-                            href="{{ url_for('notes.personal_space', notes_page=total_notes_pages, saved_page=saved_page) }}">{{
+                            href="{{ url_for('notes.personal_space', notes_page=total_notes_pages, saved_page=saved_page, locked_page=locked_page) }}">{{
                             total_notes_pages }}</a>
                         </li>
                         {% endif %}
 
                         {% if notes_page < total_notes_pages %} <li class="page-item">
                             <a class="page-link"
-                                href="{{ url_for('notes.personal_space', notes_page=notes_page+1, saved_page=saved_page) }}">Next</a>
+                                href="{{ url_for('notes.personal_space', notes_page=notes_page+1, saved_page=saved_page, locked_page=locked_page) }}">Next</a>
                             </li>
                             {% endif %}
             </ul>
@@ -3110,6 +3110,47 @@
             </div>
             {% endfor %}
         </div>
+        
+        <!-- Pagination for Locked Notes -->
+        {% if total_locked_pages > 1 %}
+        <nav class="pagination-nav" style="margin-top: 2rem;">
+            <ul class="pagination">
+                {% if locked_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', locked_page=locked_page-1, notes_page=notes_page, saved_page=saved_page) }}#locked">Previous</a>
+                </li>
+                {% endif %}
+
+                {% set max_visible = [8, locked_page + 1] | max %}
+                {% for p in range(1, [max_visible + 1, total_locked_pages + 1] | min) %}
+                <li class="page-item {% if p == locked_page %}active{% endif %}">
+                    <a class="page-link"
+                        href="{{ url_for('notes.personal_space', locked_page=p, notes_page=notes_page, saved_page=saved_page) }}#locked">{{
+                        p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if max_visible < total_locked_pages - 1 %} <li class="page-item disabled"><span
+                        class="page-link">...</span></li>
+                    {% endif %}
+
+                    {% if max_visible < total_locked_pages %} <li
+                        class="page-item {% if total_locked_pages == locked_page %}active{% endif %}">
+                        <a class="page-link"
+                            href="{{ url_for('notes.personal_space', locked_page=total_locked_pages, notes_page=notes_page, saved_page=saved_page) }}#locked">{{
+                            total_locked_pages }}</a>
+                        </li>
+                        {% endif %}
+
+                        {% if locked_page < total_locked_pages %} <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('notes.personal_space', locked_page=locked_page+1, notes_page=notes_page, saved_page=saved_page) }}#locked">Next</a>
+                            </li>
+                            {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
         {% else %}
         <div class="empty-state">
             <i class="fas fa-lock" style="opacity: 0.4;"></i>
@@ -5779,7 +5820,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         // Function to auto-detect and convert common math patterns to LaTeX
         function autoDetectMath(text) {
-            if (!text) return text;
+            if (!text || !/[\$\^_\/±ℏÅ°≠≤≥≈|⟩⟨∈∉⊂⊆⊃⊇∪∩∅∀∃→←↔⇒⇐⇔↑↓∂∇∫∬∭∮∑∏∞α-ωΓ-Ω×÷]/.test(text)) return text;
 
 
 
@@ -6310,11 +6351,13 @@
                 // Skip lazy-loaded notes – their content is fetched asynchronously
                 // and replacing the shimmer placeholder early would blank the card.
                 if (el.dataset.lazy === 'true') return;
+                if (el.children.length > 0 || el.dataset.rendered === 'true') return;
                 const rawContent = el.dataset.raw || '';
                 const textarea = document.createElement('textarea');
                 textarea.innerHTML = rawContent;
                 const decoded = textarea.value;
                 el.innerHTML = renderMarkdownWithMath(decoded);
+                el.dataset.rendered = 'true';
             });
         }
 
@@ -6322,14 +6365,23 @@
         const COLLAPSE_THRESHOLD = 200; // px
 
         function initCollapsibleNotes() {
-            document.querySelectorAll('.note-card .note-content.rendered-note').forEach(el => {
-                // Skip if already processed
-                if (el.dataset.collapseInit) return;
-                el.dataset.collapseInit = '1';
+            const elements = Array.from(document.querySelectorAll('.note-card .note-content.rendered-note'))
+                .filter(el => !el.dataset.collapseInit);
 
-                // Measure height or check if note is a truncated preview
+            // Pass 1: Measure
+            const measures = elements.map(el => {
+                el.dataset.collapseInit = '1';
                 const isPreview = el.dataset.preview === 'true';
-                if (el.scrollHeight > COLLAPSE_THRESHOLD + 40 || isPreview) {
+                return {
+                    el,
+                    isPreview,
+                    needsCollapse: isPreview || (el.scrollHeight > COLLAPSE_THRESHOLD + 40)
+                };
+            });
+
+            // Pass 2: Mutate
+            measures.forEach(({ el, isPreview, needsCollapse }) => {
+                if (needsCollapse) {
                     el.classList.add('note-collapsed');
 
                     // Create toggle button — clicking it now opens the dedicated
@@ -8176,8 +8228,13 @@
             if (document.querySelectorAll('.note-card[data-note-id]:not(.pending-note)').length > 0) {
                 const domNotes = extractNotesFromDOM();
                 if (domNotes.length) {
-                    clearCachedNotes().catch(() => { });
-                    saveNotesToCache(domNotes);
+                    const cachedNotes = await getCachedNotes();
+                    const cacheSig = cachedNotes.map(n => n.id + (n.updated_at || n.created_at)).join('|');
+                    const domSig = domNotes.map(n => n.id + (n.updated_at || n.created_at)).join('|');
+                    if (cacheSig !== domSig) {
+                        clearCachedNotes().catch(() => { });
+                        saveNotesToCache(domNotes);
+                    }
                 }
             }
 

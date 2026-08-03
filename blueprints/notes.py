@@ -479,7 +479,6 @@ def personal_space():
             has_clones_map[str(doc['_id'])] = doc['count']
 
     # Pagination metadata
-    import math
     total_notes_pages = math.ceil(total_notes_count / per_page) if per_page else 0
     total_saved_pages = math.ceil(total_saved / per_page) if per_page else 0
 

@@ -1174,6 +1174,7 @@ def api_app_reauth():
     """Re-authenticate a native app user using a persistent token.
     Accepts token from JSON body, Authorization header, or httpOnly cookie."""
     import main as m
+    from security import hash_app_token
     data = request.get_json(silent=True) or {}
     token = data.get('token', '').strip()
 
@@ -1194,7 +1195,10 @@ def api_app_reauth():
     if not token:
         return jsonify({'error': 'No token'}), 400
 
-    doc = m.app_tokens_conf.find_one({'token': token})
+    # SECURITY: tokens are stored HASHED at rest. Match by hash with a
+    # legacy plaintext fallback so old sessions stay valid until expiry.
+    token_hash = hash_app_token(token)
+    doc = m.app_tokens_conf.find_one({'$or': [{'token_hash': token_hash}, {'token': token}]})
     if not doc:
         return jsonify({'error': 'Invalid token'}), 401
 
@@ -1210,6 +1214,50 @@ def api_app_reauth():
     user_obj = m.User(user)
     login_user(user_obj, remember=True)
     return jsonify({'success': True, 'username': user['username']})
+
+
+@api_bp.route('/auth/refresh', methods=['POST'])
+def api_auth_refresh():
+    """Rotate the native-app persistent token on a 401 (session expiry).
+
+    The Android app calls POST /api/v1/auth/refresh whenever the server
+    returns a 401, then retries the original request with the fresh token.
+    Without this endpoint the 401-recovery path in ApiClient falls through
+    to a full logout — the "I keep being logged out" bug. The old token is
+    revoked and replaced so a leaked/stale token cannot keep authenticating.
+    """
+    import main as m
+    from security import hash_app_token, create_app_token
+    token = request.headers.get('X-App-Token', '').strip()
+    if not token:
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:].strip()
+    if not token:
+        token = request.cookies.get('x_app_token', '').strip()
+    if not token:
+        return jsonify({'error': 'No token'}), 401
+
+    token_hash = hash_app_token(token)
+    doc = m.app_tokens_conf.find_one({'$or': [{'token_hash': token_hash}, {'token': token}]})
+    if not doc:
+        return jsonify({'error': 'Invalid token'}), 401
+
+    user = m.users_conf.find_one({'_id': doc['user_id']})
+    if not user:
+        m.app_tokens_conf.delete_one({'_id': doc['_id']})
+        return jsonify({'error': 'User not found'}), 401
+    if user.get('is_banned'):
+        m.app_tokens_conf.delete_many({'user_id': doc['user_id']})
+        return jsonify({'error': 'Account suspended'}), 403
+
+    # Revoke the presented token and issue a fresh one (rotation).
+    m.app_tokens_conf.delete_one({'_id': doc['_id']})
+    new_token = create_app_token(user['_id'])
+
+    user_obj = m.User(user)
+    login_user(user_obj, remember=True)
+    return jsonify({'success': True, 'username': user['username'], 'x_app_token': new_token})
 
 
 @api_bp.route('/notes/toggle_lock/<post_id>', methods=['POST'])

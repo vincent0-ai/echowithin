@@ -1780,8 +1780,15 @@ def api_delete_note_comment(share_id, comment_id):
     if not comment:
         return jsonify({'error': 'Comment not found'}), 404
 
-    # Allow delete if user is the comment author or an admin
-    can_delete = str(comment.get('author_id')) == current_user.id or getattr(current_user, 'is_admin', False)
+    # Allow delete if user is the comment author or the note owner
+    can_delete = str(comment.get('author_id')) == current_user.id or str(share.get('owner_id')) == current_user.id
+
+    # Allow community admin to delete if note belongs to a community
+    if not can_delete and share.get('community_id'):
+        community = m.communities_conf.find_one({'_id': m.safe_object_id(share.get('community_id'))})
+        if community and str(community.get('admin_id')) == current_user.id:
+            can_delete = True
+
     if not can_delete:
         return jsonify({'error': 'Unauthorized to delete this comment'}), 403
 

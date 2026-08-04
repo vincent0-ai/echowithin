@@ -899,6 +899,9 @@
                 </div>
 
                 <div class="util-actions">
+                    <button class="util-btn" onclick="toggleCommunityComments('{{ note.share_id }}')" title="Comments">
+                        <i class="far fa-comment"></i> <span id="comm-comment-count-{{ note.share_id }}"></span>
+                    </button>
                     <a href="{{ url_for('communities.view_shared_community_note', share_id=note.share_id) }}" target="_blank" class="util-btn" title="Open note">
                         <i class="fas fa-external-link-alt"></i>
                     </a>
@@ -910,6 +913,15 @@
                         <i class="fas fa-trash"></i>
                     </button>
                     {% endif %}
+                </div>
+            </div>
+
+            <!-- Inline Comments -->
+            <div id="inline-comments-{{ note.share_id }}" data-owner-id="{{ note.author_id|string }}" class="inline-comments" style="display: none; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #f0f0f0;">
+                <div id="comments-list-{{ note.share_id }}" style="margin-bottom: 0.5rem;"></div>
+                <div style="display: flex; gap: 0.4rem; align-items: flex-start;">
+                    <textarea id="comment-input-{{ note.share_id }}" placeholder="Add a comment..." style="flex: 1; padding: 0.35rem 0.5rem; font-size: 0.78rem; border: 1px solid #ddd; border-radius: 6px; resize: vertical; min-height: 32px; font-family: inherit;"></textarea>
+                    <button type="button" class="btn-sm primary" onclick="postCommunityComment('{{ note.share_id }}')" style="padding: 0.35rem 0.7rem; font-size: 0.75rem;">Post</button>
                 </div>
             </div>
         </div>
@@ -1232,6 +1244,172 @@
             text.textContent = 'Processing...';
         }, 8000);
     }
+
+    // --- Inline Community Comments ---
+    const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
+    const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
+    const IS_COMMUNITY_ADMIN = {{ 'true' if is_admin else 'false' }};
+    const CURRENT_USER_ID = "{{ current_user.id if current_user.is_authenticated else '' }}";
+
+    function timeAgoSmall(dateStr) {
+        if (!dateStr) return '';
+        const d = (window.parseServerTime && window.parseServerTime(dateStr)) || new Date(dateStr);
+        const now = new Date();
+        const diff = Math.max(0, Math.floor((now - d) / 1000));
+        if (diff < 60) return 'now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+        return d.toLocaleDateString();
+    }
+
+    function createSmallCommentHTML(comment, noteOwnerId, depth = 0) {
+        const repliesHTML = (comment.replies || []).map(r => createSmallCommentHTML(r, noteOwnerId, depth + 1)).join('');
+        const isReply = depth > 0;
+        const canDelete = IS_AUTHENTICATED && (comment.author_id === CURRENT_USER_ID || IS_COMMUNITY_ADMIN || CURRENT_USER_ID === noteOwnerId);
+        const isDeleted = comment.deleted || false;
+        
+        let authorText = isDeleted ? '<em>[deleted]</em>' : (comment.author_name || 'Unknown');
+        let bodyText = isDeleted ? '<em>Comment deleted</em>' : comment.content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safeId = comment._id || '';
+
+        return `
+            <div class="comm-comment" style="margin-left: ${isReply ? '12px' : '0'}; margin-bottom: 0.4rem; padding-left: ${isReply ? '8px' : '0'}; border-left: ${isReply ? '2px solid #eee' : 'none'};">
+                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.1rem;">
+                    <strong style="font-size: 0.75rem; color: #3e2217;">${authorText}</strong>
+                    <span style="font-size: 0.65rem; color: #999;">${timeAgoSmall(comment.created_at)}</span>
+                </div>
+                <div style="font-size: 0.75rem; color: #444; margin-bottom: 0.2rem;">${bodyText}</div>
+                ${!isDeleted && IS_AUTHENTICATED ? `
+                <div style="display: flex; gap: 8px;">
+                    <button type="button" onclick="toggleSmallReplyForm(this)" style="background:none; border:none; color:#888; font-size:0.65rem; padding:0; cursor:pointer;">Reply</button>
+                    ${canDelete ? `<button type="button" onclick="deleteCommunityComment('${comment.share_id}', '${safeId}')" style="background:none; border:none; color:#c62828; font-size:0.65rem; padding:0; cursor:pointer;">Delete</button>` : ''}
+                </div>
+                <div class="comm-reply-form" style="display:none; margin-top:0.3rem; flex-direction: column; gap: 0.3rem;">
+                    <textarea placeholder="Reply..." style="width:100%; padding:0.25rem 0.4rem; font-size:0.75rem; border:1px solid #ddd; border-radius:4px; min-height:24px; resize:vertical; font-family:inherit;"></textarea>
+                    <div style="display:flex; justify-content:flex-end; gap:0.3rem;">
+                        <button type="button" onclick="this.parentElement.parentElement.style.display='none'" style="background:none; border:none; color:#888; font-size:0.7rem; cursor:pointer;">Cancel</button>
+                        <button type="button" class="btn-sm primary" onclick="postCommunityReply('${comment.share_id}', '${safeId}', this)" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Reply</button>
+                    </div>
+                </div>
+                ` : ''}
+                ${repliesHTML ? `<div style="margin-top:0.3rem;">${repliesHTML}</div>` : ''}
+            </div>
+        `;
+    }
+
+    window.toggleSmallReplyForm = function(btn) {
+        const form = btn.parentElement.nextElementSibling;
+        if (form.style.display === 'none') {
+            form.style.display = 'flex';
+            form.querySelector('textarea').focus();
+        } else {
+            form.style.display = 'none';
+        }
+    };
+
+    window.toggleCommunityComments = function(shareId) {
+        const section = document.getElementById(`inline-comments-${shareId}`);
+        if (!section) return;
+        if (section.style.display === 'none') {
+            section.style.display = 'block';
+            loadCommunityComments(shareId);
+        } else {
+            section.style.display = 'none';
+        }
+    };
+
+    window.loadCommunityComments = async function(shareId) {
+        const list = document.getElementById(`comments-list-${shareId}`);
+        const countBadge = document.getElementById(`comm-comment-count-${shareId}`);
+        list.innerHTML = '<div style="font-size:0.75rem; color:#888; text-align:center;">Loading...</div>';
+        try {
+            const resp = await fetch(`/share/note/${shareId}/comments`);
+            const comments = await resp.json();
+            
+            let totalCount = comments.length;
+            comments.forEach(c => totalCount += (c.replies || []).length);
+            if (countBadge) countBadge.textContent = totalCount > 0 ? totalCount : '';
+
+            const container = document.getElementById(`inline-comments-${shareId}`);
+            const noteOwnerId = container ? container.dataset.ownerId : '';
+
+            if (comments.length === 0) {
+                list.innerHTML = '<div style="font-size:0.75rem; color:#aaa; text-align:center; padding:0.5rem 0;">No comments yet.</div>';
+            } else {
+                list.innerHTML = comments.map(c => createSmallCommentHTML(c, noteOwnerId)).join('');
+            }
+        } catch(e) {
+            list.innerHTML = '<div style="font-size:0.75rem; color:#c62828;">Failed to load.</div>';
+        }
+    };
+
+    window.postCommunityComment = async function(shareId) {
+        const input = document.getElementById(`comment-input-${shareId}`);
+        const content = input.value.trim();
+        if (!content) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        try {
+            const resp = await fetch(`/share/note/${shareId}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ content: content })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                input.value = '';
+                loadCommunityComments(shareId);
+            } else {
+                showToast(data.error || 'Failed to post comment.');
+            }
+        } catch (e) {
+            showToast('Network error.');
+        }
+    };
+
+    window.postCommunityReply = async function(shareId, commentId, btn) {
+        const form = btn.parentElement.parentElement;
+        const textarea = form.querySelector('textarea');
+        const content = textarea.value.trim();
+        if (!content) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        btn.disabled = true;
+        try {
+            const resp = await fetch(`/share/note/${shareId}/comments/${commentId}/replies`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ content: content })
+            });
+            const data = await resp.json();
+            if (data.success) {
+                textarea.value = '';
+                loadCommunityComments(shareId);
+            } else {
+                showToast(data.error || 'Failed to post reply.');
+            }
+        } catch (e) {
+            showToast('Network error.');
+        }
+        btn.disabled = false;
+    };
+
+    window.deleteCommunityComment = async function(shareId, commentId) {
+        if (!confirm('Delete this comment?')) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+        try {
+            const resp = await fetch(`/share/note/${shareId}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': csrfToken }
+            });
+            const data = await resp.json();
+            if (data.success) {
+                loadCommunityComments(shareId);
+            } else {
+                showToast(data.error || 'Failed to delete comment.');
+            }
+        } catch (e) {
+            showToast('Network error.');
+        }
+    };
 </script>
 
 <!-- Admin Settings Modal -->

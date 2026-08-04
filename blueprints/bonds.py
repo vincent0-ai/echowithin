@@ -49,13 +49,17 @@ def _new_tracking_dict():
     return {s: now for s in BOND_SECTIONS}
 
 
-def _update_section_activity(bond_id, section):
+def _update_section_activity(bond_id, section, performed_by_user_id=None):
     """Set section_activity.{section} to now. Call after any partner action."""
     import main as m
     now = datetime.datetime.now(datetime.timezone.utc)
+    update_fields = {f'section_activity.{section}': now}
+    if performed_by_user_id:
+        update_fields[f'last_viewed.{performed_by_user_id}.{section}'] = now
+        
     m.bonds_conf.update_one(
         {'_id': ObjectId(bond_id)},
-        {'$set': {f'section_activity.{section}': now}}
+        {'$set': update_fields}
     )
     return now
 
@@ -92,7 +96,7 @@ def _emit_section_unread(bond_doc, section, performed_by_user_id):
 
 def _on_bond_action(bond_doc, section, performed_by_user_id):
     """Combined: update section_activity + emit SocketIO to other user."""
-    _update_section_activity(str(bond_doc['_id']), section)
+    _update_section_activity(str(bond_doc['_id']), section, performed_by_user_id)
     _emit_section_unread(bond_doc, section, performed_by_user_id)
 
 

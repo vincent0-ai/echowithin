@@ -1588,22 +1588,27 @@ def api_decide_note_proposal(version_id):
 def api_get_note_comments(share_id):
     """Fetch all comments for a shared note, organized into a recursive tree."""
     import main as m
+    is_community = False
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        return jsonify([]), 404
+        share = m.community_notes_conf.find_one({'share_id': share_id})
+        if not share:
+            return jsonify([]), 404
+        is_community = True
 
-    # SECURITY: mirror the access checks used by view_shared_note so expired,
-    # deactivated, or access-code-gated shares don't enumerate comments.
-    if share.get('expires_at'):
-        expires_at = share['expires_at']
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
-        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+    if not is_community:
+        # SECURITY: mirror the access checks used by view_shared_note so expired,
+        # deactivated, or access-code-gated shares don't enumerate comments.
+        if share.get('expires_at'):
+            expires_at = share['expires_at']
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+            if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+                return jsonify([]), 410
+        if share.get('deactivated'):
             return jsonify([]), 410
-    if share.get('deactivated'):
-        return jsonify([]), 410
-    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
-        return jsonify({'error': 'Access code required'}), 401
+        if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+            return jsonify({'error': 'Access code required'}), 401
 
     # Fetch all comments for this share
     all_comments = list(m.note_discussions_conf.find({
@@ -1657,22 +1662,27 @@ def api_get_note_comments(share_id):
 def api_post_note_comment(share_id):
     """Post a new comment on a shared note (login required)."""
     import main as m
+    is_community = False
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        return jsonify({'error': 'Share not found'}), 404
+        share = m.community_notes_conf.find_one({'share_id': share_id})
+        if not share:
+            return jsonify({'error': 'Share not found'}), 404
+        is_community = True
 
-    # SECURITY: enforce the same expiry/deactivation/access-code gates as other
-    # share endpoints so stale links can't be used to post comments.
-    if share.get('expires_at'):
-        expires_at = share['expires_at']
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
-        if datetime.datetime.now(datetime.timezone.utc) > expires_at:
-            return jsonify({'error': 'Link expired'}), 410
-    if share.get('deactivated'):
-        return jsonify({'error': 'Link unavailable'}), 410
-    if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
-        return jsonify({'error': 'Access code required'}), 401
+    if not is_community:
+        # SECURITY: enforce the same expiry/deactivation/access-code gates as other
+        # share endpoints so stale links can't be used to post comments.
+        if share.get('expires_at'):
+            expires_at = share['expires_at']
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+            if datetime.datetime.now(datetime.timezone.utc) > expires_at:
+                return jsonify({'error': 'Link expired'}), 410
+        if share.get('deactivated'):
+            return jsonify({'error': 'Link unavailable'}), 410
+        if share.get('access_code_hash') and not session.get(f'unlocked_{share_id}'):
+            return jsonify({'error': 'Access code required'}), 401
 
     data = request.get_json() or {}
     content = data.get('content', '').strip()
@@ -1684,7 +1694,7 @@ def api_post_note_comment(share_id):
 
     comment = {
         'share_id': share_id,
-        'note_id': share['note_id'],
+        'note_id': share.get('note_id', share['_id']),
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
         'content': m.encrypt_note(content, user_id=str(current_user.id)),
@@ -1718,7 +1728,9 @@ def api_post_note_reply(share_id, comment_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        return jsonify({'error': 'Share not found'}), 404
+        share = m.community_notes_conf.find_one({'share_id': share_id})
+        if not share:
+            return jsonify({'error': 'Share not found'}), 404
 
     parent_id = m.safe_object_id(comment_id)
     if not parent_id:
@@ -1737,7 +1749,7 @@ def api_post_note_reply(share_id, comment_id):
 
     reply = {
         'share_id': share_id,
-        'note_id': share['note_id'],
+        'note_id': share.get('note_id', share['_id']),
         'author_name': current_user.username if hasattr(current_user, 'username') else 'User',
         'author_id': ObjectId(current_user.id),
         'content': m.encrypt_note(content, user_id=str(current_user.id)),
@@ -1770,7 +1782,9 @@ def api_delete_note_comment(share_id, comment_id):
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share:
-        return jsonify({'error': 'Share not found'}), 404
+        share = m.community_notes_conf.find_one({'share_id': share_id})
+        if not share:
+            return jsonify({'error': 'Share not found'}), 404
 
     target_id = m.safe_object_id(comment_id)
     if not target_id:
@@ -1781,7 +1795,7 @@ def api_delete_note_comment(share_id, comment_id):
         return jsonify({'error': 'Comment not found'}), 404
 
     # Allow delete if user is the comment author or the note owner
-    can_delete = str(comment.get('author_id')) == current_user.id or str(share.get('owner_id')) == current_user.id
+    can_delete = str(comment.get('author_id')) == current_user.id or str(share.get('owner_id', share.get('author_id'))) == current_user.id
 
     # Allow community admin to delete if note belongs to a community
     if not can_delete and share.get('community_id'):

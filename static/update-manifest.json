@@ -1,7 +1,7 @@
 {
-  "versionCode": 36,
-  "versionName": "1.10.2",
+  "versionCode": 37,
+  "versionName": "1.10.3",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.2 \u26a1 Fixes:\n\u2022 Autosave: notes now save locally while you type, so crashes no longer lose your work\n\u2022 Note editor saves your draft when the app is backgrounded\n\u2022 Home list keeps its scroll position across tabs and when returning from a note",
-  "sha256": "4C026CC4514E68ADADD2931F7EB432143D6FE02D24D741B105AD082A257B4955"
+  "changelog": "v1.10.3 \u26a1 Fixes:\n\u2022 Biometric unlock now asks for your PIN before enabling\n\u2022 You stay on the same tab (e.g. Locked) after opening a note and going back\n\u2022 You no longer get logged out when reopening the app",
+  "sha256": "EDB2762B209CE0D83B65D9EDCF0DAFD070853B7C957979457131CA63751AE634"
 }

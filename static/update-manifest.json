@@ -1,7 +1,7 @@
 {
-  "versionCode": 37,
-  "versionName": "1.10.3",
+  "versionCode": 38,
+  "versionName": "1.10.4",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.3 \u26a1 Fixes:\n\u2022 Biometric unlock now asks for your PIN before enabling\n\u2022 You stay on the same tab (e.g. Locked) after opening a note and going back\n\u2022 You no longer get logged out when reopening the app",
-  "sha256": "EDB2762B209CE0D83B65D9EDCF0DAFD070853B7C957979457131CA63751AE634"
+  "changelog": "v1.10.4 \u26a1 Fixes:\n\u2022 Shared Links tab now always refreshes when you open it, so newly created or revoked links appear right away\n\u2022 Share cards are shown even when the note isn't cached on this device",
+  "sha256": "701BDA2E281CFC4682E394E0B3105915752831966B7AC0C9EA73205C33ACE496"
 }

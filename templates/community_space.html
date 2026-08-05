@@ -1262,8 +1262,8 @@
         return d.toLocaleDateString();
     }
 
-    function createSmallCommentHTML(comment, noteOwnerId, depth = 0) {
-        const repliesHTML = (comment.replies || []).map(r => createSmallCommentHTML(r, noteOwnerId, depth + 1)).join('');
+    function createSmallCommentHTML(comment, noteOwnerId, shareId, depth = 0) {
+        const repliesHTML = (comment.replies || []).map(r => createSmallCommentHTML(r, noteOwnerId, shareId, depth + 1)).join('');
         const isReply = depth > 0;
         const canDelete = IS_AUTHENTICATED && (comment.author_id === CURRENT_USER_ID || IS_COMMUNITY_ADMIN || CURRENT_USER_ID === noteOwnerId);
         const isDeleted = comment.deleted || false;
@@ -1282,13 +1282,13 @@
                 ${!isDeleted && IS_AUTHENTICATED ? `
                 <div style="display: flex; gap: 8px;">
                     <button type="button" onclick="toggleSmallReplyForm(this)" style="background:none; border:none; color:#888; font-size:0.65rem; padding:0; cursor:pointer;">Reply</button>
-                    ${canDelete ? `<button type="button" onclick="deleteCommunityComment('${comment.share_id}', '${safeId}')" style="background:none; border:none; color:#c62828; font-size:0.65rem; padding:0; cursor:pointer;">Delete</button>` : ''}
+                    ${canDelete ? `<button type="button" onclick="deleteCommunityComment('${shareId}', '${safeId}')" style="background:none; border:none; color:#c62828; font-size:0.65rem; padding:0; cursor:pointer;">Delete</button>` : ''}
                 </div>
                 <div class="comm-reply-form" style="display:none; margin-top:0.3rem; flex-direction: column; gap: 0.3rem;">
                     <textarea placeholder="Reply..." style="width:100%; padding:0.25rem 0.4rem; font-size:0.75rem; border:1px solid #ddd; border-radius:4px; min-height:24px; resize:vertical; font-family:inherit;"></textarea>
                     <div style="display:flex; justify-content:flex-end; gap:0.3rem;">
                         <button type="button" onclick="this.parentElement.parentElement.style.display='none'" style="background:none; border:none; color:#888; font-size:0.7rem; cursor:pointer;">Cancel</button>
-                        <button type="button" class="btn-sm primary" onclick="postCommunityReply('${comment.share_id}', '${safeId}', this)" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Reply</button>
+                        <button type="button" class="btn-sm primary" onclick="postCommunityReply('${shareId}', '${safeId}', this)" style="padding: 0.2rem 0.5rem; font-size: 0.7rem;">Reply</button>
                     </div>
                 </div>
                 ` : ''}
@@ -1336,7 +1336,7 @@
             if (comments.length === 0) {
                 list.innerHTML = '<div style="font-size:0.75rem; color:#aaa; text-align:center; padding:0.5rem 0;">No comments yet.</div>';
             } else {
-                list.innerHTML = comments.map(c => createSmallCommentHTML(c, noteOwnerId)).join('');
+                list.innerHTML = comments.map(c => createSmallCommentHTML(c, noteOwnerId, shareId)).join('');
             }
         } catch(e) {
             list.innerHTML = '<div style="font-size:0.75rem; color:#c62828;">Failed to load.</div>';

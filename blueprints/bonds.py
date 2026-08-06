@@ -152,6 +152,26 @@ QUESTION_BANK = {
         "What's a memory that always makes you laugh?",
         "What does success mean to you?",
         "What's something about you that most people don't know?",
+        "What's a fear you've overcome, and how did you do it?",
+        "If you could instantly master one musical instrument, which would it be?",
+        "What's the most beautiful place you've ever been?",
+        "What would your perfect day look like from morning to night?",
+        "If you could witness any historical event firsthand, which would it be?",
+        "What's a compliment you received that you still think about?",
+        "If your life had a soundtrack, what genre would it be?",
+        "What's a habit you're proud of building?",
+        "What would you do if you knew you couldn't fail?",
+        "What's something you've changed your mind about recently?",
+        "If you could have any superpower for just one day, what would you pick?",
+        "What's the kindest thing a stranger has ever done for you?",
+        "What smell instantly takes you back to a specific memory?",
+        "If you had to teach a class on anything, what would it be?",
+        "What's a risk you're glad you took?",
+        "What's something ordinary that you find deeply satisfying?",
+        "If you could send a message to your younger self, what would it say?",
+        "What's a question you wish people asked you more often?",
+        "What's a tradition you'd like to start?",
+        "If you could swap lives with someone for a week, who would it be?",
     ],
     'partner': [
         "What's your favourite memory of us together?",
@@ -169,6 +189,16 @@ QUESTION_BANK = {
         "What's something about our future that excites you?",
         "What's a little thing I do that means a lot to you?",
         "What does a perfect evening together look like for you?",
+        "When did you first realize you had feelings for me?",
+        "What's something about me that surprised you over time?",
+        "What's a date we haven't been on that you'd love to try?",
+        "If we could learn something together, what would it be?",
+        "What does 'home' feel like to you?",
+        "What moment between us do you wish you could relive?",
+        "What's something you admire about how I handle difficult situations?",
+        "What's a goal we should work toward together this year?",
+        "How do you want us to celebrate our next milestone?",
+        "What's the silliest thing we've ever done together?",
     ],
     'friend': [
         "What's the funniest thing that's happened to you recently?",
@@ -186,6 +216,16 @@ QUESTION_BANK = {
         "What's the best concert or event you've ever been to?",
         "What's a life lesson you learned the hard way?",
         "What three words would your other friends use to describe you?",
+        "What's an inside joke between us that still makes you laugh?",
+        "If we had a podcast together, what would it be about?",
+        "What's the weirdest food combination you secretly enjoy?",
+        "If you could bring back one cancelled TV show, which would it be?",
+        "What's something you've never told me but have always wanted to?",
+        "What's the most useless fact you know?",
+        "If our friendship was a movie, what genre would it be?",
+        "What's a trip or experience on your bucket list?",
+        "What's the most embarrassing thing that's happened to you in public?",
+        "If you could only listen to one artist for the rest of your life, who?",
     ],
     'study_mate': [
         "What's the most interesting thing you've learned recently?",
@@ -200,6 +240,14 @@ QUESTION_BANK = {
         "What career path are you most excited about?",
         "What's a topic you could talk about for hours?",
         "How do you handle academic pressure or deadlines?",
+        "What's the most mind-blowing concept you've encountered in your studies?",
+        "If you could study under any expert alive today, who would it be?",
+        "What's a study habit you want to build or break?",
+        "How do you reward yourself after a tough study session?",
+        "What's a skill outside your field that you think would help your career?",
+        "If you could design your own course, what would you teach?",
+        "What's the biggest mistake you've made in your studies and what did it teach you?",
+        "How do you explain your field to someone who knows nothing about it?",
     ],
     'family': [
         "What's a family tradition you love most?",
@@ -212,6 +260,16 @@ QUESTION_BANK = {
         "What's a lesson a family member taught you that stuck?",
         "If we could plan a family trip, where would you want to go?",
         "What's something you appreciate about our family that you didn't when you were younger?",
+        "What's a family photo or video you'd love to recreate?",
+        "What family meal brings back the most memories?",
+        "If you could pass one piece of wisdom to future generations, what would it be?",
+        "What's a family tradition you'd like to start that we don't have yet?",
+        "What's the funniest family moment you remember?",
+        "How has your relationship with family changed as you've gotten older?",
+        "What's a quality that runs in our family that you're proud of?",
+        "If we could all learn something together as a family, what would it be?",
+        "What's a holiday memory that stands out the most to you?",
+        "What does family mean to you in one sentence?",
     ],
     'accountability': [
         "What's the one goal you're most focused on right now?",
@@ -226,8 +284,17 @@ QUESTION_BANK = {
         "What's one area of your life that needs the most attention right now?",
         "What motivates you to keep going when things get hard?",
         "What's a boundary you need to set to protect your goals?",
+        "What's the hardest part about being accountable to yourself?",
+        "What would you attempt if you had unlimited energy?",
+        "What's a small win you had today?",
+        "What does your ideal evening routine look like?",
+        "What's one thing you keep procrastinating on and why?",
+        "How do you recover after a day where nothing went right?",
+        "What's a distraction you need to eliminate?",
+        "What would your future self thank you for starting today?",
     ],
 }
+
 
 # Bond anniversary milestones (days -> label)
 _ANNIVERSARY_MILESTONES = [
@@ -2242,6 +2309,17 @@ def api_bond_qotd_get(bond_id):
             result['partner_answer'] = partner_ans_text
             result['partner_username'] = partner_user['username'] if partner_user else 'Partner'
 
+            # Reactions
+            reactions = qotd_doc.get('reactions', {})
+            my_react = reactions.get(user_id_str, {})
+            partner_react = reactions.get(partner_id, {})
+            result['my_reaction'] = my_react.get('emoji', '')
+            result['partner_reaction'] = partner_react.get('emoji', '')
+
+        # Skip metadata
+        result['skip_count'] = qotd_doc.get('skip_count', 0)
+        result['skips_remaining'] = max(0, 3 - qotd_doc.get('skip_count', 0))
+
         return jsonify(result)
 
     except Exception as e:
@@ -2538,6 +2616,192 @@ def api_bond_qotd_generate_ai(bond_id):
         current_app.logger.error(f"Bond QotD AI generation error: {e}")
         return jsonify({'error': 'Failed to generate AI question'}), 500
 
+
+# Valid QotD reaction emojis
+QOTD_REACTIONS = ['❤️', '😂', '🥺', '🤔', '🔥', '💯']
+
+# Valid skip reasons
+QOTD_SKIP_REASONS = ['too_personal', 'already_discussed', 'not_relevant', 'boring']
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/react', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_qotd_react(bond_id):
+    """React to a revealed QotD answer with an emoji.
+
+    Body: {"reaction": "❤️"}
+    Only allowed after both partners have answered (revealed state).
+    Each user can change their reaction; only one reaction per user.
+    """
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        reaction = (data.get('reaction') or '').strip()
+        if reaction not in QOTD_REACTIONS:
+            return jsonify({'error': f'Invalid reaction. Use one of: {", ".join(QOTD_REACTIONS)}'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
+
+        qotd_doc = m.bond_qotd_conf.find_one({
+            'bond_id': ObjectId(bond_id),
+            'date': today_str
+        })
+        if not qotd_doc:
+            return jsonify({'error': 'No question found for today'}), 404
+
+        # Verify both answers exist (revealed)
+        answers = qotd_doc.get('answers', {})
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        if not answers.get(user_id_str) or not answers.get(partner_id):
+            return jsonify({'error': 'Both partners must answer before reacting'}), 400
+
+        # Store reaction
+        reaction_key = f'reactions.{user_id_str}'
+        m.bond_qotd_conf.update_one(
+            {'_id': qotd_doc['_id']},
+            {'$set': {reaction_key: {'emoji': reaction, 'reacted_at': now}}}
+        )
+
+        # Notify partner
+        m.socketio.emit('bond_qotd_reaction', {
+            'bond_id': bond_id,
+            'by_username': current_user.username,
+            'reaction': reaction,
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True, 'reaction': reaction})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD react error: {e}")
+        return jsonify({'error': 'Failed to save reaction'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/qotd/skip', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_qotd_skip(bond_id):
+    """Skip today's question with a reason and get a new one.
+
+    Body: {"reason": "too_personal"|"already_discussed"|"not_relevant"|"boring"}
+    Only allowed before either partner has answered.
+    Replaces the current question with a new deterministic pick.
+    Max 3 skips per bond per day.
+    """
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json() or {}
+        reason = (data.get('reason') or '').strip().lower()
+        if reason not in QOTD_SKIP_REASONS:
+            return jsonify({'error': f'Invalid reason. Use one of: {", ".join(QOTD_SKIP_REASONS)}'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today_str = now.date().isoformat()
+
+        qotd_doc = m.bond_qotd_conf.find_one({
+            'bond_id': ObjectId(bond_id),
+            'date': today_str
+        })
+
+        if qotd_doc:
+            # Can't skip if someone already answered
+            answers = qotd_doc.get('answers', {})
+            if answers:
+                return jsonify({'error': "Can't skip after an answer has been submitted"}), 400
+
+            # Max 3 skips per day
+            skip_count = qotd_doc.get('skip_count', 0)
+            if skip_count >= 3:
+                return jsonify({'error': 'Maximum 3 skips per day reached. Answer this question or write a custom one.'}), 429
+
+        # Log the skip
+        skip_entry = {
+            'by': ObjectId(current_user.id),
+            'reason': reason,
+            'skipped_at': now,
+        }
+
+        # Generate a new question by appending skip count to the hash seed
+        skip_num = (qotd_doc.get('skip_count', 0) + 1) if qotd_doc else 1
+        bond_type = bond_doc.get('bond_type', 'custom')
+        type_questions = QUESTION_BANK.get(bond_type, [])
+        universal = QUESTION_BANK.get('universal', [])
+        pool = type_questions + type_questions + universal
+        if not pool:
+            pool = universal or ["What's on your mind today?"]
+
+        # Use bond_id:date:skip_num as the hash seed for the replacement
+        hash_input = f"{bond_id}:{today_str}:skip{skip_num}"
+        hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
+        idx = hash_val % len(pool)
+        new_question = pool[idx]
+        new_category = BOND_TYPES.get(bond_type, {}).get('label', 'Custom') if new_question in type_questions else 'Universal'
+
+        encrypted_question = m.encrypt_bond_data(new_question, bond_id)
+
+        if qotd_doc:
+            m.bond_qotd_conf.update_one(
+                {'_id': qotd_doc['_id']},
+                {
+                    '$set': {
+                        'question_text': encrypted_question,
+                        'question_category': new_category,
+                        'encrypted': True,
+                        'source': 'preset',
+                    },
+                    '$inc': {'skip_count': 1},
+                    '$push': {'skips': skip_entry},
+                }
+            )
+        else:
+            m.bond_qotd_conf.insert_one({
+                'bond_id': ObjectId(bond_id),
+                'date': today_str,
+                'question_text': encrypted_question,
+                'question_category': new_category,
+                'encrypted': True,
+                'source': 'preset',
+                'answers': {},
+                'created_at': now,
+                'skip_count': 1,
+                'skips': [skip_entry],
+            })
+
+        # Notify partner
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_qotd_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username,
+            'source': 'skipped',
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'question': new_question,
+            'category': new_category,
+            'skips_remaining': 3 - skip_num,
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond QotD skip error: {e}")
+        return jsonify({'error': 'Failed to skip question'}), 500
 
 @bp.route('/api/bonds/<bond_id>/qotd/ai_consent', methods=['POST'])
 @login_required

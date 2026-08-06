@@ -2897,6 +2897,22 @@
             html += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div>';
             html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(data.partner_username) + '</div><div class="answer">' + escHtml(data.partner_answer) + '</div></div>';
             html += '</div>';
+
+            // Reaction buttons
+            var reactions = ['❤️', '😂', '🥺', '🤔', '🔥', '💯'];
+            html += '<div style="text-align:center;margin-top:0.6rem;">';
+            html += '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:0.3rem;">React</div>';
+            html += '<div style="display:flex;gap:0.3rem;justify-content:center;flex-wrap:wrap;">';
+            reactions.forEach(function(emoji) {
+                var isSelected = data.my_reaction === emoji;
+                var selectedStyle = isSelected ? 'background:var(--primary-color);color:#fff;' : 'background:var(--surface-bg);';
+                html += '<button style="border:1px solid var(--border-color);border-radius:6px;padding:0.2rem 0.4rem;font-size:1rem;cursor:pointer;' + selectedStyle + '" onclick="reactToQotd(\'' + bondId + '\', \'' + emoji + '\')">' + emoji + '</button>';
+            });
+            html += '</div>';
+            if (data.partner_reaction) {
+                html += '<div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem;">' + escHtml(data.partner_username) + ' reacted ' + data.partner_reaction + '</div>';
+            }
+            html += '</div>';
         } else if (data.my_answered) {
             // I answered, waiting for partner
             html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div></div>';
@@ -2912,6 +2928,19 @@
             if (data.partner_answered) {
                 html += '<div class="qotd-waiting">Your partner has already answered. Submit yours to reveal both!</div>';
             }
+            // Skip button (only if neither answered and skips remaining)
+            if (!data.partner_answered && data.skips_remaining > 0) {
+                html += '<div style="text-align:center;margin-top:0.6rem;">';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip Question (' + data.skips_remaining + ' left)</button>';
+                html += '<div id="skip-options-' + bondId + '" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;">';
+                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Why skip?</div>';
+                html += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;">';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'already_discussed\')">Already Discussed</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'not_relevant\')">Not Relevant</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'boring\')">Boring</button>';
+                html += '</div></div></div>';
+            }
         }
 
         html += '<div style="margin-top:0.8rem;text-align:center;"><button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="toggleQotdHistory(\'' + bondId + '\')">Past Questions</button></div>';
@@ -2919,6 +2948,49 @@
 
         container.innerHTML = html;
     }
+
+    function showSkipOptions(bondId) {
+        var el = document.getElementById('skip-options-' + bondId);
+        if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function skipQotd(bondId, reason) {
+        var container = document.getElementById('qotd-content-' + bondId);
+        if (container) container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Getting new question...</div>';
+        fetch('/api/bonds/' + bondId + '/qotd/skip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ reason: reason })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                if (window.showCustomToast) showCustomToast('New question loaded!', 'success');
+                loadQotd(bondId);
+            } else {
+                if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to skip.', 'danger');
+                loadQotd(bondId);
+            }
+        }).catch(function() {
+            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+            loadQotd(bondId);
+        });
+    }
+
+    function reactToQotd(bondId, emoji) {
+        fetch('/api/bonds/' + bondId + '/qotd/react', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ reaction: emoji })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                loadQotd(bondId);
+            } else if (window.showCustomAlert) {
+                showCustomAlert(d.error || 'Failed to react.', 'danger');
+            }
+        }).catch(function() {
+            if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
+        });
+    }
+
 
     function toggleAiConsent(bondId, consent) {
         fetch('/api/bonds/' + bondId + '/qotd/ai_consent', {

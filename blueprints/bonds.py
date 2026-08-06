@@ -460,11 +460,13 @@ def _get_bond_status_between(user_a_oid, user_b_oid):
 _MAX_AI_GENERATIONS_PER_BOND_PER_DAY = 3
 
 
-def _get_recent_qotd_questions(bond_id, limit=15):
+def _get_recent_qotd_questions(bond_id, limit=60):
     """Fetch recently asked QOTD questions for a bond (decrypted).
 
     Used to provide the AI with context about what not to repeat.
     Returns a list of question strings (most recent first).
+    Limit raised to 60 to prevent long-running bonds from cycling
+    through the same questions when the avoidance window was too small.
     """
     import main as m
     recent = list(m.bond_qotd_conf.find(
@@ -496,7 +498,9 @@ def _build_qotd_ai_prompt(relationship_label, recent_questions):
         f"You are a creative relationship & connection assistant. "
         f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
         f"The question should inspire reflection, bonding, or a lighthearted conversation. "
-        f"Be original — the question must be unique and different from any previously asked questions. "
+        f"Be HIGHLY original — the question must be completely unique in topic, angle, and phrasing. "
+        f"Do NOT repeat themes, scenarios, or rephrase ideas from previously asked questions. "
+        f"Explore fresh angles like hypothetical scenarios, childhood memories, future dreams, quirky preferences, moral dilemmas, sensory experiences, or creative what-ifs. "
     )
 
     if recent_questions:
@@ -564,29 +568,50 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None):
 
 
 def _get_community_bank_question(bond_type, bond_id):
-    """Pick a random question from the community bank that this bond hasn't used recently.
+    """Pick a random question from the community bank that this bond hasn't used.
+
+    Excludes questions by both community_question_id AND question_text hash
+    so that AI-generated questions that were stored without a bank link are
+    also filtered out.
 
     Returns (question_text, question_id) or (None, None) if no suitable question found.
     """
     import main as m
 
-    # Get questions this bond used in the last 30 days to avoid repeats
-    thirty_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+    # Get ALL questions this bond has ever used (not just 30 days)
+    # to prevent any repeat for the lifetime of the bond.
     recent_qotds = list(m.bond_qotd_conf.find(
-        {'bond_id': ObjectId(bond_id), 'source': {'$in': ['ai', 'community_bank']}},
-        {'community_question_id': 1}
-    ).sort('created_at', -1).limit(60))
+        {'bond_id': ObjectId(bond_id)},
+        {'community_question_id': 1, 'question_text': 1, 'encrypted': 1}
+    ))
 
     used_ids = set()
+    used_hashes = set()
     for q in recent_qotds:
         cq_id = q.get('community_question_id')
         if cq_id:
             used_ids.add(cq_id)
+        # Also hash the question text to catch questions not linked to bank
+        qt = q.get('question_text', '')
+        if qt:
+            try:
+                if q.get('encrypted'):
+                    qt = m.decrypt_bond_data(qt, str(bond_id))
+            except Exception:
+                pass
+            if qt and qt.strip():
+                used_hashes.add(hashlib.sha256(qt.strip().lower().encode()).hexdigest())
 
-    # Find a question from the bank that hasn't been used recently
-    query = {'bond_type': bond_type}
+    # Build exclusion query: exclude by _id and by question_hash
+    exclude_conditions = []
     if used_ids:
-        query['_id'] = {'$nin': list(used_ids)}
+        exclude_conditions.append({'_id': {'$nin': list(used_ids)}})
+    if used_hashes:
+        exclude_conditions.append({'question_hash': {'$nin': list(used_hashes)}})
+
+    query = {'bond_type': bond_type}
+    if exclude_conditions:
+        query = {'$and': [query] + exclude_conditions}
 
     # Use aggregation $sample for random selection
     pipeline = [{'$match': query}, {'$sample': {'size': 1}}]

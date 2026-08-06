@@ -1519,7 +1519,7 @@
         </div>
         {% endif %}
         {% for bond in bonds %}
-        <div class="bond-card" id="bond-{{ bond.id }}"{% if not loop.first %} style="display:none;"{% endif %}>
+        <div class="bond-card" id="bond-{{ bond.id }}" data-bond-type="{{ bond.bond_type }}"{% if not loop.first %} style="display:none;"{% endif %}>
             <div class="bond-card-header">
                 {% if bond.partner_avatar %}
                 <img src="{{ bond.partner_avatar }}" class="bond-avatar" alt="{{ bond.partner_username }}">
@@ -4417,5 +4417,390 @@
             if (window.showCustomAlert) showCustomAlert('Failed to remove past bond from archive.', 'danger');
         });
     }
+
+    // ========================================================================
+    // OFFLINE BONDS SYSTEM
+    // Queues journal, mood, QotD, and habit actions to IndexedDB when offline.
+    // Syncs all queued actions via /api/bonds/<bond_id>/offline-sync on reconnect.
+    // ========================================================================
+    (function() {
+        var ODB_NAME = 'BondOfflineQueue';
+        var ODB_VERSION = 1;
+        var ODB_STORE = 'actions';
+
+        // Question bank injected from server (same data as backend)
+        var QUESTION_BANK = {{ question_bank | tojson }};
+        var BOND_TYPES_DATA = {{ bond_types | tojson }};
+
+        // SHA-256 for deterministic question selection (matches Python hashlib.sha256)
+        function sha256Hex(str) {
+            var encoder = new TextEncoder();
+            var data = encoder.encode(str);
+            return crypto.subtle.digest('SHA-256', data).then(function(buf) {
+                var arr = Array.from(new Uint8Array(buf));
+                return arr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+            });
+        }
+
+        // Convert full hex hash to index via BigInt modulo (matches Python int(hex,16) % n)
+        function hexToIndex(hexStr, poolLen) {
+            // BigInt handles the full 256-bit value exactly like Python's int()
+            var bigVal = BigInt('0x' + hexStr);
+            return Number(bigVal % BigInt(poolLen));
+        }
+
+        // Deterministic daily question — mirrors _get_daily_question in bonds.py
+        function getOfflineQuestion(bondId, bondType, dateStr) {
+            var typeQuestions = QUESTION_BANK[bondType] || [];
+            var universal = QUESTION_BANK['universal'] || [];
+            var pool = typeQuestions.concat(typeQuestions).concat(universal);
+            if (pool.length === 0) pool = universal.length ? universal : ["What's on your mind today?"];
+
+            var hashInput = bondId + ':' + dateStr;
+            return sha256Hex(hashInput).then(function(hexStr) {
+                var idx = hexToIndex(hexStr, pool.length);
+                var question = pool[idx];
+                var category = (typeQuestions.indexOf(question) !== -1)
+                    ? (BOND_TYPES_DATA[bondType] || {}).label || 'Custom'
+                    : 'Universal';
+                return { question: question, category: category };
+            });
+        }
+
+        // --- IndexedDB helpers ---
+        function openOfflineDB() {
+            return new Promise(function(resolve, reject) {
+                var req = indexedDB.open(ODB_NAME, ODB_VERSION);
+                req.onupgradeneeded = function(e) {
+                    var db = e.target.result;
+                    if (!db.objectStoreNames.contains(ODB_STORE)) {
+                        var store = db.createObjectStore(ODB_STORE, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('bondId', 'bondId', { unique: false });
+                        store.createIndex('date', 'date', { unique: false });
+                    }
+                };
+                req.onsuccess = function() { resolve(req.result); };
+                req.onerror = function() { reject(req.error); };
+            });
+        }
+
+        function addOfflineAction(action) {
+            return openOfflineDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction(ODB_STORE, 'readwrite');
+                    var store = tx.objectStore(ODB_STORE);
+                    var r = store.add(action);
+                    r.onsuccess = function() { resolve(r.result); };
+                    r.onerror = function() { reject(r.error); };
+                });
+            });
+        }
+
+        function getOfflineActions(bondId) {
+            return openOfflineDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction(ODB_STORE, 'readonly');
+                    var store = tx.objectStore(ODB_STORE);
+                    var idx = store.index('bondId');
+                    var r = idx.getAll(bondId);
+                    r.onsuccess = function() { resolve(r.result); };
+                    r.onerror = function() { reject(r.error); };
+                });
+            });
+        }
+
+        function getAllOfflineActions() {
+            return openOfflineDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction(ODB_STORE, 'readonly');
+                    var store = tx.objectStore(ODB_STORE);
+                    var r = store.getAll();
+                    r.onsuccess = function() { resolve(r.result); };
+                    r.onerror = function() { reject(r.error); };
+                });
+            });
+        }
+
+        function clearOfflineActions(bondId) {
+            return openOfflineDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction(ODB_STORE, 'readwrite');
+                    var store = tx.objectStore(ODB_STORE);
+                    var idx = store.index('bondId');
+                    var req = idx.openCursor(bondId);
+                    req.onsuccess = function(e) {
+                        var cursor = e.target.result;
+                        if (cursor) { cursor.delete(); cursor.continue(); }
+                        else resolve();
+                    };
+                    req.onerror = function() { reject(req.error); };
+                });
+            });
+        }
+
+        function clearAllOfflineActions() {
+            return openOfflineDB().then(function(db) {
+                return new Promise(function(resolve, reject) {
+                    var tx = db.transaction(ODB_STORE, 'readwrite');
+                    var store = tx.objectStore(ODB_STORE);
+                    var r = store.clear();
+                    r.onsuccess = function() { resolve(); };
+                    r.onerror = function() { reject(r.error); };
+                });
+            });
+        }
+
+        // --- Offline detection ---
+        function isOffline() {
+            return !navigator.onLine;
+        }
+
+        // Today's date string in UTC (YYYY-MM-DD)
+        function todayUTC() {
+            var d = new Date();
+            return d.getUTCFullYear() + '-' +
+                String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                String(d.getUTCDate()).padStart(2, '0');
+        }
+
+        // --- Offline banner ---
+        var _bannerEl = null;
+        function showOfflineBanner() {
+            if (_bannerEl) return;
+            _bannerEl = document.createElement('div');
+            _bannerEl.id = 'offline-bonds-banner';
+            _bannerEl.style.cssText = 'background:var(--card-bg);border:1px solid var(--border-color);color:var(--text-dark-color);padding:0.5rem 1rem;font-size:0.82rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;';
+            _bannerEl.textContent = 'Offline Mode — your bond activities will sync when you\u2019re back online';
+            var container = document.querySelector('.bonds-page');
+            if (container) container.insertBefore(_bannerEl, container.firstChild);
+        }
+
+        function hideOfflineBanner() {
+            if (_bannerEl) { _bannerEl.remove(); _bannerEl = null; }
+        }
+
+        // --- Pending count badge ---
+        function updatePendingBadge() {
+            getAllOfflineActions().then(function(actions) {
+                var badge = document.getElementById('offline-pending-badge');
+                if (actions.length > 0) {
+                    var dates = {};
+                    actions.forEach(function(a) { dates[a.date] = true; });
+                    var dayCount = Object.keys(dates).length;
+                    var text = dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ' pending sync (' + actions.length + ' action' + (actions.length !== 1 ? 's' : '') + ')';
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.id = 'offline-pending-badge';
+                        badge.style.cssText = 'background:var(--card-bg);border:1px solid var(--primary-color);color:var(--primary-color);padding:0.35rem 0.8rem;font-size:0.78rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;font-weight:500;';
+                        var container = document.querySelector('.bonds-page');
+                        if (container) container.insertBefore(badge, container.firstChild);
+                    }
+                    badge.textContent = text;
+                } else if (badge) {
+                    badge.remove();
+                }
+            }).catch(function() {});
+        }
+
+        // --- Sync engine ---
+        var _syncing = false;
+        function syncOfflineActions() {
+            if (_syncing || isOffline()) return Promise.resolve();
+            _syncing = true;
+
+            return getAllOfflineActions().then(function(actions) {
+                if (actions.length === 0) { _syncing = false; return; }
+
+                // Group by bond
+                var byBond = {};
+                actions.forEach(function(a) {
+                    if (!byBond[a.bondId]) byBond[a.bondId] = [];
+                    byBond[a.bondId].push(a);
+                });
+
+                var bondIds = Object.keys(byBond);
+                var chain = Promise.resolve();
+                bondIds.forEach(function(bondId) {
+                    chain = chain.then(function() {
+                        var bondActions = byBond[bondId].map(function(a) {
+                            var payload = { type: a.type, date: a.date };
+                            if (a.type === 'journal') payload.content = a.content;
+                            if (a.type === 'mood') payload.mood = a.mood;
+                            if (a.type === 'qotd') payload.answer = a.answer;
+                            if (a.type === 'habit_toggle') payload.habit_id = a.habitId;
+                            return payload;
+                        });
+
+                        var token = document.querySelector('meta[name="csrf-token"]');
+                        var csrf = token ? token.getAttribute('content') : csrfToken;
+
+                        return fetch('/api/bonds/' + bondId + '/offline-sync', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ actions: bondActions })
+                        }).then(function(r) { return r.json(); })
+                          .then(function(d) {
+                            if (d.success) {
+                                return clearOfflineActions(bondId).then(function() {
+                                    if (d.streak && d.streak.streak_count !== undefined) {
+                                        var streakEl = document.querySelector('#bond-' + bondId + ' .bond-streak');
+                                        if (streakEl) streakEl.textContent = d.streak.streak_count + ' day streak';
+                                    }
+                                    if (window.showCustomToast) {
+                                        showCustomToast('Synced ' + d.synced + ' offline action' + (d.synced !== 1 ? 's' : '') + '.', 'success');
+                                    }
+                                });
+                            }
+                        }).catch(function(err) {
+                            console.warn('Offline sync failed for bond ' + bondId + ':', err);
+                        });
+                    });
+                });
+
+                return chain.then(function() {
+                    _syncing = false;
+                    updatePendingBadge();
+                    hideOfflineBanner();
+                }).catch(function() { _syncing = false; });
+            }).catch(function() { _syncing = false; });
+        }
+
+        // --- Override existing action handlers to support offline ---
+        // Store originals
+        var _origCreateJournalEntry = window.createJournalEntry || createJournalEntry;
+        var _origSelectAndLogMood = window.selectAndLogMood || selectAndLogMood;
+        var _origSubmitQotdAnswer = window.submitQotdAnswer || submitQotdAnswer;
+        var _origToggleHabit = window.toggleHabit || toggleHabit;
+
+        // Wrap: createJournalEntry
+        window.createJournalEntry = function(bondId) {
+            if (!isOffline()) return _origCreateJournalEntry(bondId);
+            var textarea = document.getElementById('journal-input-' + bondId);
+            var content = textarea ? textarea.value.trim() : '';
+            if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
+            addOfflineAction({
+                bondId: bondId,
+                type: 'journal',
+                date: todayUTC(),
+                content: content,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                textarea.value = '';
+                if (window.showCustomToast) showCustomToast('Journal entry saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+            });
+        };
+
+        // Wrap: selectAndLogMood
+        window.selectAndLogMood = function(bondId, mood, btn) {
+            if (!isOffline()) return _origSelectAndLogMood(bondId, mood, btn);
+            var picker = document.getElementById('mood-picker-' + bondId);
+            if (picker) {
+                picker.querySelectorAll('.mood-btn').forEach(function(b) { b.classList.remove('selected'); b.disabled = true; });
+                btn.classList.add('selected');
+            }
+            addOfflineAction({
+                bondId: bondId,
+                type: 'mood',
+                date: todayUTC(),
+                mood: mood,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Mood saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+            });
+        };
+
+        // Wrap: submitQotdAnswer
+        window.submitQotdAnswer = function(bondId) {
+            if (!isOffline()) return _origSubmitQotdAnswer(bondId);
+            var textarea = document.getElementById('qotd-input-' + bondId);
+            var answer = textarea ? textarea.value.trim() : '';
+            if (!answer) { if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger'); return; }
+            addOfflineAction({
+                bondId: bondId,
+                type: 'qotd',
+                date: todayUTC(),
+                answer: answer,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                textarea.value = '';
+                // Show confirmation inline
+                var container = document.getElementById('qotd-content-' + bondId);
+                if (container) {
+                    container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-dark-color);font-size:0.9rem;">Answer saved offline. Will sync and reveal when you\'re back online.</div>';
+                }
+                if (window.showCustomToast) showCustomToast('QotD answer saved offline.', 'success');
+                updatePendingBadge();
+            });
+        };
+
+        // Wrap: toggleHabit
+        window.toggleHabit = function(habitId, bondId) {
+            if (!isOffline()) return _origToggleHabit(habitId, bondId);
+            addOfflineAction({
+                bondId: bondId,
+                type: 'habit_toggle',
+                date: todayUTC(),
+                habitId: habitId,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Habit saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+            });
+        };
+
+        // --- QotD offline rendering ---
+        // When offline and QotD fails to load, show the deterministic question
+        var _origLoadQotd = window.loadQotd || loadQotd;
+        window.loadQotd = function(bondId) {
+            if (!isOffline()) return _origLoadQotd(bondId);
+            // Get bond type from the card data attribute or fall back
+            var bondCard = document.getElementById('bond-' + bondId);
+            var bondType = bondCard ? (bondCard.getAttribute('data-bond-type') || 'custom') : 'custom';
+            var dateStr = todayUTC();
+            var container = document.getElementById('qotd-content-' + bondId);
+            if (!container) return;
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;">Loading question...</div>';
+            getOfflineQuestion(bondId, bondType, dateStr).then(function(q) {
+                var html = '<div class="qotd-category">' + escHtml(q.category) + '</div>';
+                html += '<div class="qotd-question">"' + escHtml(q.question) + '"</div>';
+                html += '<div style="margin-top:0.6rem;">';
+                html += '<textarea id="qotd-input-' + bondId + '" placeholder="Your answer..." style="width:100%;min-height:60px;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;font-size:0.88rem;resize:vertical;background:var(--card-bg);color:var(--text-dark-color);box-sizing:border-box;" maxlength="1000"></textarea>';
+                html += '<button class="btn btn-bond-primary" style="margin-top:0.4rem;font-size:0.82rem;padding:0.35rem 0.8rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">Save Answer Offline</button>';
+                html += '</div>';
+                container.innerHTML = html;
+            });
+        };
+
+        // --- Lifecycle hooks ---
+        window.addEventListener('online', function() {
+            hideOfflineBanner();
+            syncOfflineActions();
+        });
+
+        window.addEventListener('offline', function() {
+            showOfflineBanner();
+        });
+
+        // Sync on visibility change (tab re-focus)
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && !isOffline()) {
+                syncOfflineActions();
+            }
+        });
+
+        // Initial state
+        if (isOffline()) showOfflineBanner();
+        updatePendingBadge();
+        // Try to sync any leftover offline actions on page load
+        if (!isOffline()) syncOfflineActions();
+
+        // Expose for external use
+        window.__bondOfflineSync = syncOfflineActions;
+        window.__bondGetOfflineQuestion = getOfflineQuestion;
+    })();
+
 </script>
 {% endblock %}

@@ -316,6 +316,76 @@ def _update_bond_streak(bond_doc):
         )
 
 
+def _update_bond_streak_for_date(bond_id, activity_date):
+    """Update streak count for a bond for a specific (possibly past) date.
+
+    Used by the offline-sync endpoint to backdate streak activity.
+    All datetimes are timezone-aware UTC per project convention.
+
+    Args:
+        bond_id: ObjectId or str of the bond
+        activity_date: datetime.date for the day being credited
+    """
+    import main as m
+    bond_oid = ObjectId(bond_id) if not isinstance(bond_id, ObjectId) else bond_id
+    # Re-read the bond to get the latest streak state (important when
+    # processing multiple days in sequence).
+    bond_doc = m.bonds_conf.find_one({'_id': bond_oid})
+    if not bond_doc:
+        return
+
+    # Build a timezone-aware UTC datetime at noon for this date
+    activity_dt = datetime.datetime(
+        activity_date.year, activity_date.month, activity_date.day,
+        12, 0, 0, tzinfo=datetime.timezone.utc
+    )
+
+    last_streak = bond_doc.get('last_streak_date')
+    if last_streak:
+        if isinstance(last_streak, datetime.datetime):
+            if last_streak.tzinfo is None:
+                last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+            last_date = last_streak.date()
+        else:
+            last_date = last_streak
+
+        if last_date >= activity_date:
+            return  # Already counted for this day or later
+        elif last_date == activity_date - datetime.timedelta(days=1):
+            # Consecutive day — increment streak
+            m.bonds_conf.update_one(
+                {'_id': bond_oid},
+                {'$inc': {'streak_count': 1}, '$set': {'last_streak_date': activity_dt}}
+            )
+        else:
+            # Gap detected — reset streak to 1
+            m.bonds_conf.update_one(
+                {'_id': bond_oid},
+                {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}}
+            )
+    else:
+        # No streak yet — start at 1
+        m.bonds_conf.update_one(
+            {'_id': bond_oid},
+            {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}}
+        )
+
+
+def _bridge_offline_streak(bond_id, dates):
+    """Process a sorted list of offline activity dates to maintain streak continuity.
+
+    Args:
+        bond_id: ObjectId or str of the bond
+        dates: iterable of datetime.date objects, must be in chronological order
+    """
+    seen = set()
+    for d in sorted(dates):
+        if d in seen:
+            continue
+        seen.add(d)
+        _update_bond_streak_for_date(bond_id, d)
+
+
 def _get_user_bonds(user_oid, status='active'):
     """Get all bonds for a user with a given status."""
     import main as m
@@ -746,6 +816,7 @@ def bonds_page():
                            goal_categories=GOAL_CATEGORIES,
                            bond_types=BOND_TYPES,
                            bond_moods=BOND_MOODS,
+                           question_bank=QUESTION_BANK,
                            user_tier=user_tier,
                            has_app_lock=has_app_lock,
                            is_unlocked=is_unlocked)
@@ -4272,3 +4343,265 @@ def api_bond_view_section(bond_id):
     except Exception as e:
         current_app.logger.error(f"View section error: {e}")
         return jsonify({'error': 'Failed to mark section as viewed'}), 500
+
+
+# --- Offline Sync ---
+
+@bp.route('/api/bonds/<bond_id>/offline-sync', methods=['POST'])
+@login_required
+@limits(calls=5, period=60)
+def api_bond_offline_sync(bond_id):
+    """Batch-sync offline bond actions (journal, mood, QotD, habit_toggle).
+
+    Accepts an array of actions, each tagged with a UTC date string.
+    Actions are processed in chronological order; the streak is bridged
+    across all offline days.  Duplicates (e.g. mood already logged for
+    that date online) are silently skipped.
+
+    All datetimes are timezone-aware UTC.
+    """
+    import main as m
+    from security import parse_iso_utc
+
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        actions = data.get('actions')
+        if not actions or not isinstance(actions, list):
+            return jsonify({'error': 'No actions provided'}), 400
+
+        # Safety limits
+        MAX_ACTIONS = 120   # ~4 actions/day * 30 days
+        MAX_BACKDATE_DAYS = 30
+        if len(actions) > MAX_ACTIONS:
+            return jsonify({'error': f'Too many actions (max {MAX_ACTIONS})'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        today = now.date()
+        earliest_allowed = today - datetime.timedelta(days=MAX_BACKDATE_DAYS)
+
+        results = []
+        streak_dates = set()
+        user_oid = ObjectId(current_user.id)
+
+        # Sort actions chronologically by date
+        def _parse_action_date(action):
+            d = action.get('date', '')
+            try:
+                return datetime.date.fromisoformat(str(d))
+            except (ValueError, TypeError):
+                return today
+
+        actions_sorted = sorted(actions, key=_parse_action_date)
+
+        for action in actions_sorted:
+            action_type = (action.get('type') or '').strip().lower()
+            date_str = (action.get('date') or '').strip()
+
+            # Parse and validate date
+            try:
+                action_date = datetime.date.fromisoformat(date_str)
+            except (ValueError, TypeError):
+                results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'invalid date'})
+                continue
+
+            if action_date > today:
+                results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'future date'})
+                continue
+            if action_date < earliest_allowed:
+                results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'too far back'})
+                continue
+
+            # Build a timezone-aware UTC datetime at noon for this date
+            action_dt = datetime.datetime(
+                action_date.year, action_date.month, action_date.day,
+                12, 0, 0, tzinfo=datetime.timezone.utc
+            )
+
+            try:
+                if action_type == 'journal':
+                    content = (action.get('content') or '').strip()
+                    if not content or len(content) > 5000:
+                        results.append({'type': 'journal', 'date': date_str, 'status': 'error', 'reason': 'content required (max 5000)'})
+                        continue
+                    encrypted_content = m.encrypt_bond_data(content, bond_id)
+                    m.bond_journal_conf.insert_one({
+                        'bond_id': ObjectId(bond_id),
+                        'author_id': user_oid,
+                        'content': encrypted_content,
+                        'encrypted': True,
+                        'created_at': action_dt,
+                        'updated_at': action_dt,
+                        'offline_sync': True,
+                    })
+                    streak_dates.add(action_date)
+                    results.append({'type': 'journal', 'date': date_str, 'status': 'synced'})
+
+                elif action_type == 'mood':
+                    mood = (action.get('mood') or '').strip()
+                    if mood not in BOND_MOODS:
+                        results.append({'type': 'mood', 'date': date_str, 'status': 'error', 'reason': 'invalid mood'})
+                        continue
+                    # Skip if mood already logged for this date
+                    existing = m.bond_moods_conf.find_one({
+                        'bond_id': ObjectId(bond_id),
+                        'date': date_str,
+                        'user_id': user_oid,
+                    })
+                    if existing:
+                        results.append({'type': 'mood', 'date': date_str, 'status': 'skipped', 'reason': 'already logged'})
+                        streak_dates.add(action_date)
+                        continue
+                    encrypted_mood = m.encrypt_bond_data(mood, bond_id)
+                    m.bond_moods_conf.insert_one({
+                        'bond_id': ObjectId(bond_id),
+                        'date': date_str,
+                        'user_id': user_oid,
+                        'mood': encrypted_mood,
+                        'encrypted': True,
+                        'created_at': action_dt,
+                        'offline_sync': True,
+                    })
+                    streak_dates.add(action_date)
+                    results.append({'type': 'mood', 'date': date_str, 'status': 'synced'})
+
+                elif action_type == 'qotd':
+                    answer = (action.get('answer') or '').strip()
+                    if not answer or len(answer) > 1000:
+                        results.append({'type': 'qotd', 'date': date_str, 'status': 'error', 'reason': 'answer required (max 1000)'})
+                        continue
+                    # Ensure question doc exists for this date
+                    qotd_doc = m.bond_qotd_conf.find_one({
+                        'bond_id': ObjectId(bond_id),
+                        'date': date_str,
+                    })
+                    if not qotd_doc:
+                        question_text, question_category = _get_daily_question(bond_doc)
+                        # Override with the correct date's question using the
+                        # deterministic hash
+                        hash_input = f"{bond_id}:{date_str}"
+                        bond_type = bond_doc.get('bond_type', 'custom')
+                        type_questions = QUESTION_BANK.get(bond_type, [])
+                        universal = QUESTION_BANK.get('universal', [])
+                        pool = type_questions + type_questions + universal
+                        if not pool:
+                            pool = universal or ["What's on your mind today?"]
+                        hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
+                        idx = hash_val % len(pool)
+                        question_text = pool[idx]
+                        question_category = BOND_TYPES.get(bond_type, {}).get('label', 'Custom') if pool[idx] in type_questions else 'Universal'
+
+                        qotd_doc = {
+                            'bond_id': ObjectId(bond_id),
+                            'date': date_str,
+                            'question_text': question_text,
+                            'question_category': question_category,
+                            'answers': {},
+                            'created_at': action_dt,
+                        }
+                        try:
+                            m.bond_qotd_conf.insert_one(qotd_doc)
+                        except Exception:
+                            qotd_doc = m.bond_qotd_conf.find_one({
+                                'bond_id': ObjectId(bond_id),
+                                'date': date_str,
+                            })
+
+                    # Check if user already answered
+                    answer_key = f'answers.{user_id_str}'
+                    if qotd_doc and qotd_doc.get('answers', {}).get(user_id_str):
+                        results.append({'type': 'qotd', 'date': date_str, 'status': 'skipped', 'reason': 'already answered'})
+                        streak_dates.add(action_date)
+                        continue
+
+                    encrypted_ans = m.encrypt_bond_data(answer, bond_id)
+                    m.bond_qotd_conf.update_one(
+                        {'bond_id': ObjectId(bond_id), 'date': date_str},
+                        {'$set': {answer_key: {'answer': encrypted_ans, 'encrypted': True, 'answered_at': action_dt, 'offline_sync': True}}},
+                        upsert=True
+                    )
+                    streak_dates.add(action_date)
+                    results.append({'type': 'qotd', 'date': date_str, 'status': 'synced'})
+
+                elif action_type == 'habit_toggle':
+                    habit_id = action.get('habit_id', '')
+                    if not habit_id:
+                        results.append({'type': 'habit_toggle', 'date': date_str, 'status': 'error', 'reason': 'habit_id required'})
+                        continue
+                    habit = m.bond_habits_conf.find_one({'_id': ObjectId(habit_id)})
+                    if not habit or str(habit.get('bond_id')) != bond_id:
+                        results.append({'type': 'habit_toggle', 'date': date_str, 'status': 'error', 'reason': 'habit not found'})
+                        continue
+                    log_key = f'logs.{date_str}.{user_id_str}'
+                    m.bond_habits_conf.update_one(
+                        {'_id': ObjectId(habit_id)},
+                        {'$set': {log_key: {'completed': True, 'completed_at': action_dt, 'offline_sync': True}}}
+                    )
+                    streak_dates.add(action_date)
+                    results.append({'type': 'habit_toggle', 'date': date_str, 'status': 'synced'})
+
+                else:
+                    results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'unknown action type'})
+
+            except Exception as e:
+                current_app.logger.error(f"Offline sync action error ({action_type}, {date_str}): {e}")
+                results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'server error'})
+
+        # Bridge streak across all offline dates
+        if streak_dates:
+            _bridge_offline_streak(bond_id, streak_dates)
+
+        # Notify partner about synced activity
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        synced_count = sum(1 for r in results if r.get('status') == 'synced')
+        if synced_count > 0:
+            synced_dates = sorted(set(r['date'] for r in results if r.get('status') == 'synced'))
+            day_label = f"{len(synced_dates)} day{'s' if len(synced_dates) != 1 else ''}"
+
+            m.socketio.emit('bond_offline_synced', {
+                'bond_id': bond_id,
+                'by_username': current_user.username,
+                'synced_count': synced_count,
+                'synced_dates': synced_dates,
+            }, room=f"user_{partner_id}")
+
+            m.send_push_notification_to_user(
+                partner_id,
+                f"{current_user.username} synced {day_label} of bond activity",
+                "Check your bond for new journal entries, moods, and more.",
+                url=url_for('bonds.bonds_page', _external=True),
+                tag=f'bond-offline-sync-{bond_id}'
+            )
+
+            # Update section activity for sections that received data
+            synced_types = set(r['type'] for r in results if r.get('status') == 'synced')
+            section_map = {'journal': 'journal', 'mood': 'mood', 'qotd': 'qotd', 'habit_toggle': 'habits'}
+            for atype in synced_types:
+                section = section_map.get(atype)
+                if section:
+                    _on_bond_action(bond_doc, section, current_user.id)
+
+        # Re-read updated streak to return
+        updated_bond = m.bonds_conf.find_one({'_id': ObjectId(bond_id)}, {'streak_count': 1, 'last_streak_date': 1})
+        streak_info = {
+            'streak_count': updated_bond.get('streak_count', 0) if updated_bond else 0,
+        }
+
+        return jsonify({
+            'success': True,
+            'synced': synced_count,
+            'total': len(results),
+            'results': results,
+            'streak': streak_info,
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Offline sync error for bond {bond_id}: {e}")
+        return jsonify({'error': 'Failed to sync offline actions'}), 500

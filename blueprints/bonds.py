@@ -372,18 +372,49 @@ def _update_bond_streak_for_date(bond_id, activity_date):
 
 
 def _bridge_offline_streak(bond_id, dates):
-    """Process a sorted list of offline activity dates to maintain streak continuity.
+    """Process offline activity dates and fill gaps to maintain streak continuity.
+
+    Two-phase bridge:
+    1. Connect the existing streak to the first offline date (fills any gap
+       between the last online activity and the first offline action).
+    2. Fill every day from first to last offline activity date (inclusive),
+       so skipped days within the offline period don't break the streak.
 
     Args:
         bond_id: ObjectId or str of the bond
-        dates: iterable of datetime.date objects, must be in chronological order
+        dates: iterable of datetime.date objects
     """
-    seen = set()
-    for d in sorted(dates):
-        if d in seen:
-            continue
-        seen.add(d)
-        _update_bond_streak_for_date(bond_id, d)
+    import main as m
+    sorted_dates = sorted(set(dates))
+    if not sorted_dates:
+        return
+
+    first_date = sorted_dates[0]
+    last_date = sorted_dates[-1]
+
+    # Phase 1: Bridge from last online streak date to first offline date
+    bond_oid = ObjectId(bond_id) if not isinstance(bond_id, ObjectId) else bond_id
+    bond_doc = m.bonds_conf.find_one({'_id': bond_oid}, {'last_streak_date': 1})
+    if bond_doc and bond_doc.get('last_streak_date'):
+        last_streak = bond_doc['last_streak_date']
+        if isinstance(last_streak, datetime.datetime):
+            if last_streak.tzinfo is None:
+                last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+            last_online_date = last_streak.date()
+        else:
+            last_online_date = last_streak
+
+        # Fill from day after last online activity to day before first offline action
+        bridge_day = last_online_date + datetime.timedelta(days=1)
+        while bridge_day < first_date:
+            _update_bond_streak_for_date(bond_id, bridge_day)
+            bridge_day += datetime.timedelta(days=1)
+
+    # Phase 2: Fill every day from first to last offline activity (inclusive)
+    current = first_date
+    while current <= last_date:
+        _update_bond_streak_for_date(bond_id, current)
+        current += datetime.timedelta(days=1)
 
 
 def _get_user_bonds(user_oid, status='active'):

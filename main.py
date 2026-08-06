@@ -262,6 +262,20 @@ csrf.exempt(app.view_functions['notes.api_mark_activity_read'])
 csrf.exempt(app.view_functions['chat.api_process_scheduled_messages'])
 csrf.exempt(app.view_functions['pages.unsubscribe'])
 
+
+@app.route('/api/csrf-token')
+@login_required
+def get_csrf_token():
+    """Lightweight endpoint returning a fresh CSRF token.
+
+    Used by the client-side auto-refresh module in base.html so that
+    long-lived pages always have a valid token without scraping entire
+    HTML pages.  GET-only, requires authentication.
+    """
+    from flask_wtf.csrf import generate_csrf
+    return jsonify({'csrf_token': generate_csrf()})
+
+
 # Register template filters
 app.add_template_filter(linkify_filter, 'linkify')
 app.add_template_filter(markdown_filter, 'markdown')
@@ -395,6 +409,12 @@ app.config['REMEMBER_COOKIE_NAME'] = 'echowithin_remember'  # Custom name for re
 
 # Session cookie name - helps with PWA cookie isolation
 app.config['SESSION_COOKIE_NAME'] = 'echowithin_session'
+
+# CSRF token lifetime: tie tokens to the session instead of a fixed clock.
+# Without this, Flask-WTF defaults to 3600s and tokens baked into rendered
+# HTML expire server-side while the user is still on the page, causing
+# "Network Error" on every form/AJAX submit after ~1 hour of idle time.
+app.config['WTF_CSRF_TIME_LIMIT'] = None  # valid for full session lifetime
 
 # Make all sessions permanent by default for better PWA experience
 @app.before_request

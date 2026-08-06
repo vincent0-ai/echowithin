@@ -7737,20 +7737,20 @@
         const DB_VERSION = 2;
         let CSRF = '{{ csrf_token() }}';
 
-        // Fetch a fresh CSRF token from the server. The page-embedded token
-        // expires after 1 hour (Flask-WTF default) which is long gone when
-        // the user re-opens the app after being offline.
+        // Fetch a fresh CSRF token from the lightweight API endpoint.
+        // Falls back to the global auto-refresh helper added in base.html.
         async function getFreshCsrf() {
             try {
-                const resp = await fetch('/personal_space', { credentials: 'same-origin' });
+                const resp = await fetch('/api/csrf-token', { credentials: 'same-origin' });
                 if (!resp.ok) return CSRF;
-                const html = await resp.text();
-                const match = html.match(/name="csrf-token"\s+content="([^"]+)"/);
-                if (match && match[1]) {
-                    CSRF = match[1];
-                    // Update the meta tag in current page too
+                const data = await resp.json();
+                if (data && data.csrf_token) {
+                    CSRF = data.csrf_token;
+                    // Update the meta tag and hidden inputs on the page
                     const meta = document.querySelector('meta[name="csrf-token"]');
                     if (meta) meta.setAttribute('content', CSRF);
+                    const inputs = document.querySelectorAll('input[name="csrf_token"]');
+                    inputs.forEach(function(el){ el.value = CSRF; });
                 }
             } catch (e) {
                 // Network still down — keep existing token

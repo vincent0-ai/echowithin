@@ -498,6 +498,57 @@
         }
     })();
     </script>
+    <!-- CSRF Token Auto-Refresh: keeps the token alive on long-lived pages -->
+    <script nonce="{{ csp_nonce }}">
+    (function(){
+        if (document.body.getAttribute('data-user-logged-in') !== 'true') return;
+
+        var REFRESH_INTERVAL = 45 * 60 * 1000; // 45 minutes
+        var IDLE_THRESHOLD   = 2  * 60 * 1000;  // 2 minutes idle triggers refresh on tab focus
+        var _lastRefresh = Date.now();
+        var _refreshing  = false;
+
+        function updateAllCsrfTokens(token) {
+            // Update <meta name="csrf-token">
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            if (meta) meta.setAttribute('content', token);
+            // Update all <input name="csrf_token"> hidden fields
+            var inputs = document.querySelectorAll('input[name="csrf_token"]');
+            for (var i = 0; i < inputs.length; i++) inputs[i].value = token;
+        }
+
+        function refreshCsrfToken() {
+            if (_refreshing) return Promise.resolve();
+            _refreshing = true;
+            return fetch('/api/csrf-token', { credentials: 'same-origin' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error('csrf refresh ' + r.status);
+                    return r.json();
+                })
+                .then(function(data) {
+                    if (data && data.csrf_token) {
+                        updateAllCsrfTokens(data.csrf_token);
+                        _lastRefresh = Date.now();
+                    }
+                })
+                .catch(function(){})
+                .finally(function(){ _refreshing = false; });
+        }
+
+        // Periodic refresh
+        setInterval(refreshCsrfToken, REFRESH_INTERVAL);
+
+        // Refresh when tab becomes visible after being idle
+        document.addEventListener('visibilitychange', function(){
+            if (document.visibilityState === 'visible' && (Date.now() - _lastRefresh) > IDLE_THRESHOLD) {
+                refreshCsrfToken();
+            }
+        });
+
+        // Expose for use by other scripts (e.g. offline sync)
+        window.__echoRefreshCsrf = refreshCsrfToken;
+    })();
+    </script>
     <!-- Inject reload button IMMEDIATELY — runs before any page content downloads -->
     <script nonce="{{ csp_nonce }}">
     (function(){

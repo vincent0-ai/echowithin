@@ -919,7 +919,7 @@
       const payload = { is_donation: isDonation };
       if (isDonation) payload.amount = selectedDonateAmount;
 
-      const resp = await fetch('/api/paystack/initialize', {
+      const resp = await echoFetch('/api/paystack/initialize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -951,7 +951,7 @@
 
   async function verifyCurrentPin(pin) {
     try {
-      const resp = await fetch('/api/app_lock/verify', {
+      const resp = await echoFetch('/api/app_lock/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -965,7 +965,7 @@
 
   async function savePin(pin, oldPin) {
     try {
-      const resp = await fetch('/api/app_lock/setup', {
+      const resp = await echoFetch('/api/app_lock/setup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -988,7 +988,7 @@
 
   async function removePin(pin) {
     try {
-      const resp = await fetch('/api/app_lock/remove', {
+      const resp = await echoFetch('/api/app_lock/remove', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1039,7 +1039,7 @@
     resetPendingPin = '';
 
     try {
-      const resp = await fetch('/api/app_lock/forgot', {
+      const resp = await echoFetch('/api/app_lock/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
       });
@@ -1062,7 +1062,7 @@
     const resetError = document.getElementById('pin-reset-error');
     if (resetError) resetError.textContent = '';
     try {
-      const resp = await fetch('/api/app_lock/forgot', {
+      const resp = await echoFetch('/api/app_lock/forgot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() }
       });
@@ -1180,7 +1180,7 @@
   async function finalizeResetPin(code, newPin) {
     const errorEl = document.getElementById('pin-reset-newpin-error');
     try {
-      const resp = await fetch('/api/app_lock/reset_verify', {
+      const resp = await echoFetch('/api/app_lock/reset_verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
         body: JSON.stringify({ code: code, new_pin: newPin })
@@ -1273,7 +1273,7 @@
     if (!container) return;
     const csrfToken = document.querySelector('meta[name="csrf-token"]');
     const headers = { 'X-CSRFToken': csrfToken ? csrfToken.getAttribute('content') : '' };
-    fetch('/api/users/blocked', { headers: headers, credentials: 'same-origin' })
+    echoFetch('/api/users/blocked', { headers: headers, credentials: 'same-origin' })
       .then(r => r.json())
       .then(data => {
         const blocked = (data && data.blocked) || [];
@@ -1300,7 +1300,7 @@
       'Content-Type': 'application/json',
       'X-CSRFToken': csrfToken ? csrfToken.getAttribute('content') : ''
     };
-    fetch('/api/users/unblock', {
+    echoFetch('/api/users/unblock', {
       method: 'POST',
       headers: headers,
       credentials: 'same-origin',
@@ -1427,7 +1427,7 @@
         if (subscription) {
           // Already subscribed, verify with server
           try {
-            const serverStatus = await fetch('/api/push/status', {
+            const serverStatus = await echoFetch('/api/push/status', {
               method: 'GET',
               headers: { 'Content-Type': 'application/json' }
             });
@@ -1471,7 +1471,7 @@
     try {
       // Get VAPID key
 
-      const vapidResponse = await fetch('/api/push/vapid-public-key');
+      const vapidResponse = await echoFetch('/api/push/vapid-public-key');
       if (!vapidResponse.ok) {
         statusText.textContent = 'Push notifications not configured on server.';
         statusText.style.color = '#666';
@@ -1576,7 +1576,7 @@
       // Send to server
 
       const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-      const subResponse = await fetch('/api/push/subscribe', {
+      const subResponse = await echoFetch('/api/push/subscribe', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1663,7 +1663,7 @@
 
           const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
           // Notify server
-          await fetch('/api/push/unsubscribe', {
+          await echoFetch('/api/push/unsubscribe', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1774,7 +1774,7 @@
       }
     }
 
-    fetch('/api/sessions', { credentials: 'same-origin' })
+    echoFetch('/api/sessions', { credentials: 'same-origin' })
       .then(r => r.json())
       .then(data => {
         if (loadingEl) loadingEl.remove();
@@ -1792,7 +1792,7 @@
     window.revokeSession = function(sessionId, btn) {
       if (!confirm('Revoke this session? The device will be signed out.')) return;
       if (btn) { btn.disabled = true; btn.textContent = '...'; }
-      fetch('/api/sessions/revoke', {
+      echoFetch('/api/sessions/revoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -1821,7 +1821,7 @@
       if (!confirm('Sign out all other sessions? All other devices will be logged out.')) return;
       const btn = document.getElementById('revoke-all-btn');
       if (btn) { btn.disabled = true; btn.textContent = 'Signing out...'; }
-      fetch('/api/sessions/revoke_all', {
+      echoFetch('/api/sessions/revoke_all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin'

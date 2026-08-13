@@ -276,7 +276,7 @@
                 suggestBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Thinking...';
 
                 try {
-                    const response = await fetch('/api/ai/suggest-tags', {
+                    const response = await echoFetch('/api/ai/suggest-tags', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

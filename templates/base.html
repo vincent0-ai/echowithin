@@ -549,6 +549,138 @@
         window.__echoRefreshCsrf = refreshCsrfToken;
     })();
     </script>
+    <!-- Resilient fetch wrapper: auto-retry with CSRF refresh + offline banner -->
+    <script nonce="{{ csp_nonce }}">
+    (function(){
+        var MAX_RETRIES = 2;
+        var RETRY_DELAYS = [500, 1500];
+        var _offlineBanner = null;
+        var _bannerTimeout = null;
+
+        function getOfflineBanner() {
+            if (!_offlineBanner) {
+                _offlineBanner = document.getElementById('echo-offline-banner');
+            }
+            return _offlineBanner;
+        }
+
+        function showOfflineBanner() {
+            var banner = getOfflineBanner();
+            if (banner) {
+                banner.style.display = 'block';
+                // Clear any pending hide
+                if (_bannerTimeout) { clearTimeout(_bannerTimeout); _bannerTimeout = null; }
+            }
+        }
+
+        function hideOfflineBanner() {
+            var banner = getOfflineBanner();
+            if (banner) {
+                _bannerTimeout = setTimeout(function() {
+                    banner.style.display = 'none';
+                    _bannerTimeout = null;
+                }, 600);
+            }
+        }
+
+        function getCsrfToken() {
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            return meta ? meta.getAttribute('content') : '';
+        }
+
+        function refreshCsrf() {
+            if (window.__echoRefreshCsrf) return window.__echoRefreshCsrf();
+            return Promise.resolve();
+        }
+
+        function isRetryable(err, response) {
+            // Network error (no response)
+            if (!response && err) return true;
+            // Server overloaded / gateway errors
+            if (response && (response.status === 502 || response.status === 503 || response.status === 504)) return true;
+            return false;
+        }
+
+        function sleep(ms) {
+            return new Promise(function(resolve) { setTimeout(resolve, ms); });
+        }
+
+        /**
+         * Resilient fetch wrapper with automatic retry and CSRF refresh.
+         *
+         * Usage: window.echoFetch(url, options)
+         *   - Same signature as native fetch()
+         *   - Automatically injects X-CSRFToken header for non-GET requests
+         *   - Retries up to 2 times on network errors and 502/503/504
+         *   - Refreshes CSRF token before each retry
+         *   - Shows/hides connection lost banner
+         *
+         * Returns: Promise<Response> (same as fetch)
+         */
+        window.echoFetch = function(url, options) {
+            options = options || {};
+            var attempt = 0;
+
+            function injectCsrf(opts) {
+                // Only inject for non-GET requests, skip if caller already set it
+                var method = (opts.method || 'GET').toUpperCase();
+                if (method === 'GET' || method === 'HEAD') return opts;
+
+                // Don't inject into FormData bodies (they use form field)
+                if (opts.body instanceof FormData) return opts;
+
+                var headers = opts.headers;
+                if (headers instanceof Headers) {
+                    if (!headers.has('X-CSRFToken')) headers.set('X-CSRFToken', getCsrfToken());
+                } else if (typeof headers === 'object' && headers !== null) {
+                    if (!headers['X-CSRFToken']) headers['X-CSRFToken'] = getCsrfToken();
+                } else {
+                    opts.headers = Object.assign({}, headers || {}, { 'X-CSRFToken': getCsrfToken() });
+                }
+                return opts;
+            }
+
+            function doFetch() {
+                injectCsrf(options);
+                return fetch(url, options).then(function(response) {
+                    if (isRetryable(null, response) && attempt < MAX_RETRIES) {
+                        attempt++;
+                        showOfflineBanner();
+                        return refreshCsrf().then(function() {
+                            return sleep(RETRY_DELAYS[attempt - 1] || 1500);
+                        }).then(function() {
+                            return doFetch();
+                        });
+                    }
+                    hideOfflineBanner();
+                    return response;
+                }).catch(function(err) {
+                    if (attempt < MAX_RETRIES) {
+                        attempt++;
+                        showOfflineBanner();
+                        return refreshCsrf().then(function() {
+                            return sleep(RETRY_DELAYS[attempt - 1] || 1500);
+                        }).then(function() {
+                            return doFetch();
+                        });
+                    }
+                    hideOfflineBanner();
+                    throw err;
+                });
+            }
+
+            return doFetch();
+        };
+
+        // Listen for online/offline events
+        window.addEventListener('offline', showOfflineBanner);
+        window.addEventListener('online', function() {
+            hideOfflineBanner();
+            // Refresh CSRF after coming back online
+            refreshCsrf();
+        });
+    })();
+    </script>
     <!-- Inject reload button IMMEDIATELY — runs before any page content downloads -->
     <script nonce="{{ csp_nonce }}">
     (function(){
@@ -663,6 +795,11 @@
         <!-- Toast container for custom alerts -->
         <div id="custom-toast-container"
             style="position: fixed; top: 20px; right: 20px; z-index:200000; display:flex; flex-direction:column; gap:10px;">
+        </div>
+        <!-- Connection lost banner (hidden by default) -->
+        <div id="echo-offline-banner"
+            style="display:none; position:fixed; top:0; left:0; right:0; z-index:200001; background:#8b0000; color:#fff; text-align:center; padding:8px 14px; font-size:0.9rem; font-family:inherit;">
+            Connection lost. Retrying...
         </div>
 
         <footer class="footer">
@@ -881,7 +1018,7 @@
                 window.Capacitor.Plugins.PushNotifications.addListener('registration', function (token) {
                     console.log('Push registration successful, token:', token.value);
                     // Send token to backend
-                    fetch('/api/fcm/register', {
+                    echoFetch('/api/fcm/register', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1322,7 +1459,7 @@
             const csrfMeta = document.querySelector('meta[name="csrf-token"]');
             const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
             // Send subscription to server
-            const subResponse = await fetch('/api/push/subscribe', {
+            const subResponse = await echoFetch('/api/push/subscribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1357,7 +1494,7 @@
 
                 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                 // Notify server
-                await fetch('/api/push/unsubscribe', {
+                await echoFetch('/api/push/unsubscribe', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1536,7 +1673,7 @@
         async function handleReaction(postId, reactionType, btn) {
             try {
                 const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                const response = await fetch(`/post/${postId}/react`, {
+                const response = await echoFetch(`/post/${postId}/react`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1681,7 +1818,7 @@
             const visitorId = getOrCreateVisitorId();
             // Track views per user per day in the database
             // Send a request to the server to increment the view count
-            fetch(`/api/posts/${postId}/view`, {
+            echoFetch(`/api/posts/${postId}/view`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': csrfToken,
@@ -1811,7 +1948,7 @@
 
             try {
                 // Fetch share data from server
-                const response = await fetch(`/api/post/${postId}/share-data`);
+                const response = await echoFetch(`/api/post/${postId}/share-data`);
                 const data = await response.json();
 
                 if (data.error) {
@@ -1829,7 +1966,7 @@
                         });
                         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                         // Track the share
-                        await fetch(`/post/${postId}/share`, {
+                        await echoFetch(`/post/${postId}/share`, {
                             method: 'POST',
                             headers: { 'X-CSRFToken': csrfToken }
                         });
@@ -1933,7 +2070,7 @@
 
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
                     // Track the share when copying link
-                    await fetch(`/post/${postId}/share`, {
+                    await echoFetch(`/post/${postId}/share`, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
                     });
@@ -1959,7 +2096,7 @@
             modal.querySelectorAll('.share-platform-btn').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    await fetch(`/post/${postId}/share`, {
+                    await echoFetch(`/post/${postId}/share`, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
                     });
@@ -2017,7 +2154,7 @@
         async function checkUnreadCount() {
             try {
                 // Combined endpoint: fetches both notification + DM counts in one request
-                const resp = await fetch('/api/notifications/badge-counts');
+                const resp = await echoFetch('/api/notifications/badge-counts');
                 if (!resp.ok) return;
                 const data = await resp.json();
                 const notifCount = data.notif_count || 0;
@@ -2086,7 +2223,7 @@
 
                 try {
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    const response = await fetch('/api/newsletter/subscribe', {
+                    const response = await echoFetch('/api/newsletter/subscribe', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

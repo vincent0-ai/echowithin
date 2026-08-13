@@ -1074,7 +1074,7 @@
             countSpan.textContent = Math.max(0, count - 1);
         }
 
-        fetch(`/api/community/note/${noteId}/react`, {
+        echoFetch(`/api/community/note/${noteId}/react`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1136,7 +1136,7 @@
     function deleteCommunityNote(noteId, communityId) {
         if (!confirm('Delete this note?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        fetch(`/api/community/note/${noteId}/delete`, {
+        echoFetch(`/api/community/note/${noteId}/delete`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken
@@ -1161,7 +1161,7 @@
     // Welcome banner dismiss
     function dismissWelcome(communityId) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        fetch(`/api/community/${communityId}/welcome/dismiss`, {
+        echoFetch(`/api/community/${communityId}/welcome/dismiss`, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(() => {
@@ -1173,7 +1173,7 @@
     // Poll voting
     function votePoll(pollId, optionIndex) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        fetch('/api/community/{{ community._id }}/poll/' + pollId + '/vote', {
+        echoFetch('/api/community/{{ community._id }}/poll/' + pollId + '/vote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ option_index: optionIndex })
@@ -1186,7 +1186,7 @@
     // Mood check-in
     function checkin(mood, btn) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        fetch('/api/community/{{ community._id }}/checkin', {
+        echoFetch('/api/community/{{ community._id }}/checkin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ mood: mood })
@@ -1207,7 +1207,7 @@
     function deleteResource(resourceId, communityId) {
         if (!confirm('Delete this resource?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
-        fetch(`/api/community/${communityId}/resource/${resourceId}/delete`, {
+        echoFetch(`/api/community/${communityId}/resource/${resourceId}/delete`, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(res => res.json()).then(data => {
@@ -1637,7 +1637,7 @@
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
 
-        fetch('/api/community/{{ community._id }}/report', {
+        echoFetch('/api/community/{{ community._id }}/report', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

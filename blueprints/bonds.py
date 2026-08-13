@@ -353,6 +353,44 @@ def _get_daily_question(bond_doc):
     return question, category
 
 
+def _get_effective_streak(bond_doc):
+    """Return the effective streak count for display, accounting for missed days.
+
+    The stored streak_count is only updated on activity. If no activity happened
+    yesterday (and no streak shield is active), the streak is broken and this
+    returns 0.  This prevents stale streak counts from being displayed.
+    """
+    streak_count = bond_doc.get('streak_count', 0)
+    if streak_count == 0:
+        return 0
+
+    last_streak = bond_doc.get('last_streak_date')
+    if not last_streak:
+        return 0
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today = now.date()
+
+    if isinstance(last_streak, datetime.datetime):
+        if last_streak.tzinfo is None:
+            last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+        last_date = last_streak.date()
+    else:
+        last_date = last_streak
+
+    # Activity was today or yesterday — streak is alive
+    if last_date >= today - datetime.timedelta(days=1):
+        return streak_count
+
+    # Check if a streak shield bridges the gap (shield sets last_streak_date
+    # to yesterday, so if that already passed the check above we're fine).
+    # If the shield was used but more than 1 day has passed since last_streak_date,
+    # the streak is still broken.
+
+    # More than 1 day gap — streak is broken
+    return 0
+
+
 def _update_bond_streak(bond_doc):
     """Update streak count for a bond based on today's activity.
     Called from any activity endpoint (checkin, journal, mood, qotd, nudge).
@@ -818,7 +856,7 @@ def bonds_page():
             'bond_type_label': type_info['label'],
             'bond_type_icon': type_info['icon'],
             'accepted_at': bond.get('accepted_at'),
-            'streak_count': bond.get('streak_count', 0),
+            'streak_count': _get_effective_streak(bond),
             'goal_count': goal_count,
             'anniversary': anniversary,
             'streak_shield_used_this_week': streak_shield_used_this_week,
@@ -1241,7 +1279,7 @@ def api_bonds_active():
                     'partner_avatar': partner.get('profile_image_url'),
                     'label': bond.get('label', ''),
                     'accepted_at': _format_datetime(bond.get('accepted_at')),
-                    'streak_count': bond.get('streak_count', 0)
+                    'streak_count': _get_effective_streak(bond)
                 })
         return jsonify({'bonds': result})
     except Exception as e:
@@ -3023,7 +3061,32 @@ def api_bond_streak_shield(bond_id):
         if shield_data and shield_data.get('week_iso') == current_week:
             return jsonify({'error': 'Streak shield already used this week.'}), 429
 
-        # Shield restores a broken streak: set last_streak_date to yesterday
+        # Verify the streak is actually at risk (missed yesterday but not more)
+        last_streak = bond_doc.get('last_streak_date')
+        effective = _get_effective_streak(bond_doc)
+        stored_count = bond_doc.get('streak_count', 0)
+        today = now.date()
+
+        if stored_count == 0 or not last_streak:
+            return jsonify({'error': 'No active streak to shield.'}), 400
+
+        if isinstance(last_streak, datetime.datetime):
+            if last_streak.tzinfo is None:
+                last_streak = last_streak.replace(tzinfo=datetime.timezone.utc)
+            last_date = last_streak.date()
+        else:
+            last_date = last_streak
+
+        days_gap = (today - last_date).days
+
+        if days_gap <= 1:
+            # Streak is still alive (today or yesterday) — no shield needed
+            return jsonify({'error': 'Your streak is still active, no shield needed.'}), 400
+        elif days_gap > 2:
+            # More than 1 day missed — shield can only bridge a single day gap
+            return jsonify({'error': 'Streak was broken more than a day ago. Shield cannot restore it.'}), 400
+
+        # Shield bridges the 1-day gap: set last_streak_date to yesterday
         # so the next activity continues the streak instead of resetting
         yesterday = now - datetime.timedelta(days=1)
         m.bonds_conf.update_one(

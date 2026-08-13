@@ -233,7 +233,7 @@
                     return;
                 }
 
-                fetch(`/api/posts/${postId}/status`)
+                echoFetch(`/api/posts/${postId}/status`)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error('Network response was not ok');

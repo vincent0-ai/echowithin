@@ -162,7 +162,7 @@
         modal.style.display = 'flex';
 
         try {
-            const res = await fetch(`/api/admin/community/${communityId}/reports`);
+            const res = await echoFetch(`/api/admin/community/${communityId}/reports`);
             const data = await res.json();
 
             if (!data.reports || data.reports.length === 0) {
@@ -221,7 +221,7 @@
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         try {
-            const res = await fetch(`/api/admin/reports/${reportId}/dismiss`, {
+            const res = await echoFetch(`/api/admin/reports/${reportId}/dismiss`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             });

@@ -3710,7 +3710,7 @@
         btn.disabled = true;
 
         try {
-            const resp = await fetch(`/api/share/${shareId}/ping`, {
+            const resp = await echoFetch(`/api/share/${shareId}/ping`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
             });
@@ -4505,7 +4505,7 @@
         aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Merging...';
         
         try {
-            const response = await fetch('/api/merge/ai', {
+            const response = await echoFetch('/api/merge/ai', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4907,7 +4907,7 @@
             historyList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading access history...</div>';
 
             try {
-                const resp = await fetch(`/api/share/${SHARE_ID}/history`);
+                const resp = await echoFetch(`/api/share/${SHARE_ID}/history`);
                 const data = await resp.json();
 
                 if (data.error) {

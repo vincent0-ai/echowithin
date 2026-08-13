@@ -2606,7 +2606,7 @@
             hasMoreMessages = true;
             oldestMessageId = null;
             pendingMessages = {};
-            fetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
+            echoFetch(`/api/messages/history/${userId}`).then(r => r.json()).then(data => {
                 chatHistory.innerHTML = ''; // Clean start
                 const messages = data.messages || [];
                 if (messages.length === 0) {
@@ -2639,7 +2639,7 @@
 
         function syncActiveChatHistory() {
             if (!activeRecipientId) return;
-            fetch(`/api/messages/history/${activeRecipientId}`).then(r => r.json()).then(data => {
+            echoFetch(`/api/messages/history/${activeRecipientId}`).then(r => r.json()).then(data => {
                 const messages = data.messages || [];
                 let appendedAny = false;
                 let lastSender = null;
@@ -3138,7 +3138,7 @@
                 e.stopPropagation();
                 const newVal = textarea.value.trim();
                 if (newVal && newVal !== oldVal) {
-                    fetch(`/api/messages/edit/${msgId}`, {
+                    echoFetch(`/api/messages/edit/${msgId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                         body: JSON.stringify({ content: newVal })
@@ -3158,7 +3158,7 @@
 
         window.deleteMessage = function (msgId) {
             if (confirm("Delete this message?")) {
-                fetch(`/api/messages/delete/${msgId}`, {
+                echoFetch(`/api/messages/delete/${msgId}`, {
                     method: 'POST',
                     headers: { 'X-CSRFToken': csrfToken }
                 }).then(r => r.json()).then(d => {
@@ -3177,7 +3177,7 @@
 
         window.deleteChat = function () {
             if (confirm("Delete this conversation for you? The other person will still see the messages.")) {
-                fetch(`/api/messages/chat/delete/${activeRecipientId}`, {
+                echoFetch(`/api/messages/chat/delete/${activeRecipientId}`, {
                     method: 'POST',
                     headers: { 'X-CSRFToken': csrfToken }
                 }).then(r => r.json()).then(d => {
@@ -3496,7 +3496,7 @@
                     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
                 }
 
-                fetch('/api/messages/upload_voice', {
+                echoFetch('/api/messages/upload_voice', {
                     method: 'POST',
                     headers: { 'X-CSRFToken': csrfToken },
                     body: fd
@@ -3764,7 +3764,7 @@
             const fd = new FormData();
             fd.append('image', file);
 
-            fetch('/api/messages/upload_image', {
+            echoFetch('/api/messages/upload_image', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken },
                 body: fd
@@ -3819,7 +3819,7 @@
             if (!query || query.length < 2) return;
 
             searchDebounceId = setTimeout(() => {
-                fetch(`/api/messages/search/${activeRecipientId}?q=${encodeURIComponent(query)}`)
+                echoFetch(`/api/messages/search/${activeRecipientId}?q=${encodeURIComponent(query)}`)
                     .then(r => r.json()).then(d => {
                         if (d.success && d.match_ids.length > 0) {
                             d.match_ids.forEach(id => {
@@ -3836,7 +3836,7 @@
 
         window.reactToMessage = function (msgId, emoji) {
             if (navigator.vibrate) navigator.vibrate(12);
-            fetch(`/api/messages/react/${msgId}`, {
+            echoFetch(`/api/messages/react/${msgId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({ emoji: emoji })
@@ -3877,7 +3877,7 @@
         function loadRequestsList() {
             const list = document.getElementById('requests-list');
             list.innerHTML = '<div style="padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-            fetch('/api/messages/requests').then(r => r.json()).then(data => {
+            echoFetch('/api/messages/requests').then(r => r.json()).then(data => {
                 const requests = data.requests || [];
                 if (requests.length === 0) {
                     list.innerHTML = '<div style="padding: 1rem; text-align: center; color: #999; font-size: 0.85rem;">No pending requests</div>';
@@ -3909,7 +3909,7 @@
         }
 
         window.acceptRequest = function (requestId) {
-            fetch(`/api/messages/request/${requestId}/accept`, {
+            echoFetch(`/api/messages/request/${requestId}/accept`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             }).then(r => r.json()).then(d => {
@@ -3926,7 +3926,7 @@
         };
 
         window.rejectRequest = function (requestId) {
-            fetch(`/api/messages/request/${requestId}/reject`, {
+            echoFetch(`/api/messages/request/${requestId}/reject`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             }).then(r => r.json()).then(d => {
@@ -4117,7 +4117,7 @@
             document.getElementById('schedule-confirm-btn').disabled = true;
             document.getElementById('schedule-confirm-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scheduling...';
 
-            fetch('/api/messages/schedule', {
+            echoFetch('/api/messages/schedule', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify(payload)
@@ -4142,7 +4142,7 @@
 
         function loadScheduledMessages(userId) {
             if (!userId) return;
-            fetch(`/api/messages/scheduled/${userId}`).then(r => r.json()).then(data => {
+            echoFetch(`/api/messages/scheduled/${userId}`).then(r => r.json()).then(data => {
                 const msgs = data.scheduled_messages || [];
                 const banner = document.getElementById('scheduled-banner');
                 const list = document.getElementById('scheduled-list');
@@ -4181,7 +4181,7 @@
 
         window.sendScheduledNow = function (msgId) {
             if (!confirm('Send this message now?')) return;
-            fetch(`/api/messages/schedule/${msgId}/send-now`, {
+            echoFetch(`/api/messages/schedule/${msgId}/send-now`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             }).then(r => r.json()).then(d => {
@@ -4200,7 +4200,7 @@
 
         window.cancelScheduled = function (msgId) {
             if (!confirm('Cancel this scheduled message?')) return;
-            fetch(`/api/messages/schedule/${msgId}/cancel`, {
+            echoFetch(`/api/messages/schedule/${msgId}/cancel`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             }).then(r => r.json()).then(d => {
@@ -4569,7 +4569,7 @@
     // --- Invite Flow ---
     window.openWhisperInvite = function() {
         if (whisperState.active) return;
-        fetch('/api/whisper/durations').then(r => r.json()).then(data => {
+        echoFetch('/api/whisper/durations').then(r => r.json()).then(data => {
             const container = document.getElementById('whisper-duration-options');
             container.innerHTML = '';
             const durations = data.durations || [15, 30];
@@ -4600,7 +4600,7 @@
         btn.disabled = true;
         btn.textContent = 'Sending...';
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        fetch('/api/whisper/invite', {
+        echoFetch('/api/whisper/invite', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ recipient_id: recipientId, duration: whisperState.selectedDuration })
@@ -4620,7 +4620,7 @@
     window.respondWhisperInvite = function(action) {
         if (!whisperState.pendingInviteSessionId) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        fetch('/api/whisper/respond/' + whisperState.pendingInviteSessionId, {
+        echoFetch('/api/whisper/respond/' + whisperState.pendingInviteSessionId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ action: action })
@@ -4650,7 +4650,7 @@
         document.getElementById('whisper-input').focus();
 
         // Load history for reconnection
-        fetch('/api/whisper/history/' + data.session_id)
+        echoFetch('/api/whisper/history/' + data.session_id)
         .then(r => r.json()).then(hist => {
             if (hist.messages) {
                 hist.messages.forEach(m => appendWhisperMessage(m));
@@ -4742,7 +4742,7 @@
 
     function doEndWhisper() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        fetch('/api/whisper/end/' + whisperState.sessionId, {
+        echoFetch('/api/whisper/end/' + whisperState.sessionId, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => {
@@ -4774,7 +4774,7 @@
     window.requestWhisperExtend = function() {
         if (!whisperState.sessionId) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        fetch('/api/whisper/extend/' + whisperState.sessionId, {
+        echoFetch('/api/whisper/extend/' + whisperState.sessionId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ action: 'request', extra_minutes: 15 })
@@ -4790,7 +4790,7 @@
     window.approveExtend = function() {
         if (!whisperState.pendingExtendData) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        fetch('/api/whisper/extend/' + whisperState.sessionId, {
+        echoFetch('/api/whisper/extend/' + whisperState.sessionId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ action: 'approve', extra_minutes: whisperState.pendingExtendData.extra_minutes, requested_by: whisperState.pendingExtendData.requested_by })
@@ -4920,14 +4920,14 @@
     }
 
     // Check for active session on page load
-    fetch('/api/whisper/active').then(r => r.json()).then(data => {
+    echoFetch('/api/whisper/active').then(r => r.json()).then(data => {
         if (data.active && data.status === 'active') {
             startWhisperSession(data);
         }
     });
 
     // Check for pending invites on page load (missed socketio event)
-    fetch('/api/whisper/pending').then(r => r.json()).then(data => {
+    echoFetch('/api/whisper/pending').then(r => r.json()).then(data => {
         if (data.has_pending && data.direction === 'incoming') {
             whisperState.pendingInviteSessionId = data.session_id;
             document.getElementById('whisper-incoming-text').textContent =

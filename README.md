@@ -1,6 +1,6 @@
 # EchoWithin — Secure Notes, Community, Bonds & Collaboration Platform
 
-EchoWithin is a comprehensive platform that combines blogging, encrypted personal notes, collaborative note sharing, pair relationship spaces ("Bonds & Echo Together"), direct messaging with ephemeral Whisper Mode, and premium-tier power features. It is built with a Python/Flask backend, MongoDB, real-time WebSocket communication, and ships as both a Progressive Web App (PWA) and a native Android application.
+EchoWithin is a comprehensive platform that combines blogging, encrypted personal notes, collaborative note sharing, pair relationship spaces ("Bonds & Echo Together"), direct messaging with ephemeral Whisper Mode, and premium-tier power features. It is built with a Python/Flask backend, MongoDB, real-time WebSocket communication, and ships as both a Progressive Web App (PWA) and a native Android Note application.
 
 ---
 
@@ -141,7 +141,7 @@ All new accounts receive a **1-day free trial** of premium features. Payments pr
 | **Email**              | Flask-Mail (SMTP) with List-Unsubscribe headers                                |
 | **Authentication**     | Flask-Login, Google OAuth2 (requests-oauthlib)                                 |
 | **Encryption**         | Fernet (cryptography 46), PBKDF2-HMAC-SHA256                                   |
-| **AI / Moderation**    | JigsawStack (NSFW detection, AI QotD generation, tag suggestions)             |
+| **AI / Moderation**    | JigsawStack (NSFW detection, AI QotD generation, tag suggestions)              |
 | **Markdown**           | Python-Markdown 3.10 + Bleach 6.3 sanitization                                 |
 | **Payments**           | Paystack                                                                       |
 | **Frontend**           | Jinja2 templates, vanilla JS, CSS                                              |
@@ -269,26 +269,26 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
 
 A REST API is available at `/api/v1/*` for mobile/native app clients. Key endpoint groups:
 
-| Group                 | Endpoints                                                                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Auth**              | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`                                                                                         |
-| **Notes**             | `GET /notes`, `GET /notes/<id>`, `GET /notes/content/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>`                                                 |
-| **Note Shares**       | `GET /notes/shares`, `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/share/<id>/auto_approve`, `POST /notes/revoke_share/<id>`                                     |
-| **Note Previews**     | `POST /notes/previews`                                                                                                                                                                |
-| **Note Dedup**        | `POST /notes/dedup`                                                                                                                                                                   |
-| **Versions**          | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                                                                                                  |
-| **Proposals**         | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                                                                                                          |
-| **Sync**              | `POST /notes/<id>/sync`                                                                                                                                                               |
-| **Lock**              | `POST /notes/toggle_lock/<id>`                                                                                                                                                        |
-| **App Lock**          | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`                                                                               |
-| **Bonds & Habits**    | `POST /api/bonds/request/<user_id>`, `POST /api/bonds/accept/<id>`, `POST /api/bonds/break/<id>`, `GET /api/bonds/<id>/habits`, `POST /api/bonds/<id>/habits`, `POST /api/bonds/habits/<id>/toggle` |
-| **Countdowns & Recap**| `GET /api/bonds/<id>/countdowns`, `POST /api/bonds/<id>/countdowns`, `DELETE /api/bonds/countdowns/<id>`, `GET /api/bonds/<id>/insights`                                              |
-| **Bond Goals & QotD** | `GET /api/bonds/<id>/goals`, `POST /api/bonds/<id>/goals`, `POST /api/bonds/goals/<id>/approve`, `GET /api/bonds/<id>/qotd`, `POST /api/bonds/<id>/qotd/answer`, `POST /api/bonds/<id>/qotd/generate_ai` |
-| **Activity**          | `GET /posts/my-commented`, `POST /posts/mark-all-read`, `POST /activity/mark_read`, `GET /notifications/badge-counts`                                                                 |
-| **FCM**               | `POST /fcm/register`, `POST /fcm/unregister`                                                                                                                                          |
-| **Premium**           | `POST /premium/activate`                                                                                                                                                              |
-| **Profile**           | `GET /profile`                                                                                                                                                                        |
-| **Collaboration**     | `GET /notes/share/<id>/attachments`                                                                                                                                                   |
+| Group                  | Endpoints                                                                                                                                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auth**               | `POST /register`, `POST /confirm/<email>`, `POST /login`, `POST /logout`, `POST /app_reauth`                                                                                                             |
+| **Notes**              | `GET /notes`, `GET /notes/<id>`, `GET /notes/content/<id>`, `POST /notes/create`, `POST /notes/edit/<id>`, `POST /notes/delete/<id>`                                                                     |
+| **Note Shares**        | `GET /notes/shares`, `GET /notes/shares/<id>`, `POST /notes/share/<id>`, `POST /notes/share/<id>/auto_approve`, `POST /notes/revoke_share/<id>`                                                          |
+| **Note Previews**      | `POST /notes/previews`                                                                                                                                                                                   |
+| **Note Dedup**         | `POST /notes/dedup`                                                                                                                                                                                      |
+| **Versions**           | `GET /notes/versions/<id>`, `POST /notes/version/restore/<id>/<ver>`                                                                                                                                     |
+| **Proposals**          | `GET /notes/proposals`, `POST /notes/proposal/<id>/decision`                                                                                                                                             |
+| **Sync**               | `POST /notes/<id>/sync`                                                                                                                                                                                  |
+| **Lock**               | `POST /notes/toggle_lock/<id>`                                                                                                                                                                           |
+| **App Lock**           | `POST /app_lock/setup`, `POST /app_lock/verify`, `GET /app_lock/check_status`, `POST /app_lock/remove`                                                                                                   |
+| **Bonds & Habits**     | `POST /api/bonds/request/<user_id>`, `POST /api/bonds/accept/<id>`, `POST /api/bonds/break/<id>`, `GET /api/bonds/<id>/habits`, `POST /api/bonds/<id>/habits`, `POST /api/bonds/habits/<id>/toggle`      |
+| **Countdowns & Recap** | `GET /api/bonds/<id>/countdowns`, `POST /api/bonds/<id>/countdowns`, `DELETE /api/bonds/countdowns/<id>`, `GET /api/bonds/<id>/insights`                                                                 |
+| **Bond Goals & QotD**  | `GET /api/bonds/<id>/goals`, `POST /api/bonds/<id>/goals`, `POST /api/bonds/goals/<id>/approve`, `GET /api/bonds/<id>/qotd`, `POST /api/bonds/<id>/qotd/answer`, `POST /api/bonds/<id>/qotd/generate_ai` |
+| **Activity**           | `GET /posts/my-commented`, `POST /posts/mark-all-read`, `POST /activity/mark_read`, `GET /notifications/badge-counts`                                                                                    |
+| **FCM**                | `POST /fcm/register`, `POST /fcm/unregister`                                                                                                                                                             |
+| **Premium**            | `POST /premium/activate`                                                                                                                                                                                 |
+| **Profile**            | `GET /profile`                                                                                                                                                                                           |
+| **Collaboration**      | `GET /notes/share/<id>/attachments`                                                                                                                                                                      |
 
 ---
 

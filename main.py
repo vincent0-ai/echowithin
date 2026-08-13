@@ -1223,7 +1223,7 @@ def add_security_headers(response):
         "img-src 'self' https: data:; "
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com; "
         "media-src 'self' https://res.cloudinary.com; "
-        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net; "
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com wss://echowithin.xyz https://cdn.socket.io https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
         "frame-ancestors 'self'; "
         "base-uri 'self'; "
         "form-action 'self' https://accounts.google.com;"
@@ -2140,6 +2140,26 @@ def handle_ratelimit_exception(e):
     period_remaining = math.ceil(e.period_remaining)
     app.logger.warning(f"Rate limit exceeded for IP {request.remote_addr}. Blocked for {period_remaining} seconds.")
     return render_template('429.html', period_remaining=period_remaining), 429
+
+@app.errorhandler(OSError)
+def handle_client_disconnect(e):
+    """Gracefully handle client disconnects mid-request (truncated uploads).
+
+    When gevent reports 'unexpected end of file while reading request',
+    the client dropped the connection (network glitch, user navigated away,
+    mobile browser suspended). This is NOT a server bug and should not
+    trigger 500 ntfy alerts.
+    """
+    if 'unexpected end of file' in str(e).lower():
+        app.logger.info(f"Client disconnected mid-request on {request.path}: {e}")
+        is_api = (request.is_json
+                  or request.headers.get('X-App-Token')
+                  or request.path.startswith('/api/'))
+        if is_api:
+            return jsonify({'error': 'Upload interrupted. Please try again.'}), 499
+        return render_template("500.html"), 499
+    # For any other OSError, fall through to the normal 500 handler
+    raise e
 
 @app.errorhandler(500)
 def internal_server_error(e):

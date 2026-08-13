@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v26';
-const STATIC_CACHE = 'echowithin-static-v26';
-const PAGES_CACHE = 'echowithin-pages-v26';
-const POSTS_CACHE = 'echowithin-posts-v26';
-const API_CACHE = 'echowithin-api-v26';
+const CACHE_NAME = 'echowithin-v27';
+const STATIC_CACHE = 'echowithin-static-v27';
+const PAGES_CACHE = 'echowithin-pages-v27';
+const POSTS_CACHE = 'echowithin-posts-v27';
+const API_CACHE = 'echowithin-api-v27';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -150,11 +150,51 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Skip external requests — let the browser handle them natively.
-  // The browser uses style-src/img-src/font-src CSP directives for these,
-  // but the SW's fetch() is governed by connect-src which doesn't include
-  // these origins (Font Awesome, Google Fonts, Cloudinary, etc.).
+  // CDN resources (fonts, icons, socket.io, choices.js): Cache-first so
+  // offline pages that extend base.html still load correctly.
+  const CACHEABLE_CDN_ORIGINS = [
+    'https://fonts.googleapis.com',
+    'https://fonts.gstatic.com',
+    'https://cdnjs.cloudflare.com',
+    'https://cdn.socket.io',
+    'https://cdn.jsdelivr.net'
+  ];
+
   if (url.origin !== location.origin) {
+    if (CACHEABLE_CDN_ORIGINS.includes(url.origin)) {
+      event.respondWith(
+        caches.match(request).then(cachedResponse => {
+          if (cachedResponse) {
+            // Serve from cache, update in background
+            event.waitUntil(
+              fetch(request).then(response => {
+                if (response && response.ok) {
+                  caches.open(STATIC_CACHE).then(cache => {
+                    cache.put(request, response);
+                  });
+                }
+              }).catch(() => { })
+            );
+            return cachedResponse;
+          }
+          // Not cached yet — fetch and cache
+          return fetch(request).then(response => {
+            if (response && response.ok) {
+              const respClone = response.clone();
+              caches.open(STATIC_CACHE).then(cache => {
+                cache.put(request, respClone);
+              });
+            }
+            return response;
+          }).catch(() => {
+            // CDN unreachable and not cached — return empty to avoid page break
+            return new Response('', { status: 408, statusText: 'Offline' });
+          });
+        })
+      );
+      return;
+    }
+    // Other external origins — let the browser handle natively
     return;
   }
 

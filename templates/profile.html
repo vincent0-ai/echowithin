@@ -144,7 +144,7 @@
                     btn.disabled = true;
                     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    fetch('/api/messages/request/' + userId, {
+                    echoFetch('/api/messages/request/' + userId, {
                         method: 'POST',
                         headers: { 'X-CSRFToken': csrfToken }
                     }).then(r => r.json()).then(d => {
@@ -228,7 +228,7 @@
                     confirmBtn.disabled = true;
                     confirmBtn.innerHTML = 'Sending...';
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    fetch('/api/bonds/request/' + userId, {
+                    echoFetch('/api/bonds/request/' + userId, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                         body: JSON.stringify({ bond_type: selectedBondType })
@@ -273,7 +273,7 @@
                     const btn = document.getElementById('block-user-btn');
                     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Blocking...'; }
                     const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-                    fetch('/api/users/block', {
+                    echoFetch('/api/users/block', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                         body: JSON.stringify({ user_id: userId })

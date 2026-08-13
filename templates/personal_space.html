@@ -2924,7 +2924,7 @@
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') {
                         // Re-check with server whether session is still valid
-                        fetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
+                        echoFetch('/api/app_lock/check_status').then(r => r.json()).then(d => {
                             if (!d.unlocked) {
                                 clearInterval(interval);
                                 window.location.hash = 'locked';
@@ -4282,7 +4282,7 @@
                 }
             }
 
-            const resp = await fetch('/api/app_lock/verify', {
+            const resp = await echoFetch('/api/app_lock/verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4370,7 +4370,7 @@
         resetStep = 'code';
 
         try {
-            const resp = await fetch('/api/app_lock/forgot', {
+            const resp = await echoFetch('/api/app_lock/forgot', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4397,7 +4397,7 @@
         const resetError = document.getElementById('pin-reset-error');
         if (resetError) resetError.textContent = '';
         try {
-            const resp = await fetch('/api/app_lock/forgot', {
+            const resp = await echoFetch('/api/app_lock/forgot', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4524,7 +4524,7 @@
     async function finalizeResetPin(code, newPin) {
         const errorEl = document.getElementById('pin-reset-newpin-error');
         try {
-            const resp = await fetch('/api/app_lock/reset_verify', {
+            const resp = await echoFetch('/api/app_lock/reset_verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -5026,7 +5026,7 @@
             aiBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Merging...';
 
             try {
-                const response = await fetch('/api/merge/ai', {
+                const response = await echoFetch('/api/merge/ai', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -5382,7 +5382,7 @@
                     editBtn.disabled = true;
 
                     try {
-                        const res = await fetch(`/api/note/content/${noteId}`);
+                        const res = await echoFetch(`/api/note/content/${noteId}`);
                         const data = await res.json();
                         if (data.success && data.content) {
                             rawContent = data.content;
@@ -6399,7 +6399,7 @@
                         if (el.dataset.preview === 'true') {
                             toggleBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
                             try {
-                                const res = await fetch(`/api/note/content/${noteId}`);
+                                const res = await echoFetch(`/api/note/content/${noteId}`);
                                 const data = await res.json();
                                 if (data.success && data.content) {
                                     el.dataset.raw = data.content;
@@ -6472,7 +6472,7 @@
 
         window.relockSession = async function (silent = false) {
             try {
-                const resp = await fetch('/api/app_lock/relock', {
+                const resp = await echoFetch('/api/app_lock/relock', {
                     method: 'POST',
                     headers: { 'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value }
                 });
@@ -7031,7 +7031,7 @@
             // batched endpoint the page uses and update those rows when ready.
             if (loadingRows.length) {
                 const loadingIds = loadingRows.map(r => r.noteId);
-                fetch('/api/v1/notes/previews', {
+                echoFetch('/api/v1/notes/previews', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ids: loadingIds })
@@ -7741,7 +7741,7 @@
         // Falls back to the global auto-refresh helper added in base.html.
         async function getFreshCsrf() {
             try {
-                const resp = await fetch('/api/csrf-token', { credentials: 'same-origin' });
+                const resp = await echoFetch('/api/csrf-token', { credentials: 'same-origin' });
                 if (!resp.ok) return CSRF;
                 const data = await resp.json();
                 if (data && data.csrf_token) {
@@ -8385,7 +8385,7 @@
             list.innerHTML = '<div style="text-align: center; padding: 1rem; color: #999; font-size: 0.85rem;">Loading...</div>';
             if (empty) empty.style.display = 'none';
 
-            fetch('/api/communities/mine')
+            echoFetch('/api/communities/mine')
                 .then(r => r.json())
                 .then(data => {
                     if (!data.success || !data.communities || data.communities.length === 0) {
@@ -8426,7 +8426,7 @@
             const list = document.getElementById('community-picker-list');
             if (list) list.innerHTML = '<div style="text-align: center; padding: 1rem; color: #666; font-size: 0.85rem;">Sharing to ' + communityName + '...</div>';
 
-            fetch(`/api/personal_post/${noteId}/share-to-community`, {
+            echoFetch(`/api/personal_post/${noteId}/share-to-community`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -8758,7 +8758,7 @@
     // Clear notifications — defined globally so the button always works
     window.markAllActivityRead = async function (reload = false) {
         try {
-            const response = await fetch('/api/activity/mark_read', {
+            const response = await echoFetch('/api/activity/mark_read', {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value,
@@ -9076,7 +9076,7 @@
         }
 
         // Try API first, fall back to IndexedDB
-        fetch('/api/v1/notes/previews', {
+        echoFetch('/api/v1/notes/previews', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ids: noteIds })

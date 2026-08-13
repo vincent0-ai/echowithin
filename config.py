@@ -79,7 +79,7 @@ _NOTES_V1_SALT = b'echowithin_notes_salt_v1'  # legacy global salt
 
 TIER_LIMITS = {
     'free': {
-        'max_notes': 50,
+        'max_notes': 500,
         'max_chars_per_note': 20000,
         'max_share_links_per_note': 3,
         'max_surprise_notes': 20,         # total surprise notes (shared with theme)

@@ -640,7 +640,7 @@
             if (typeof window.showCustomConfirm === 'function') {
                 window.showCustomConfirm('Delete this comment?', async (confirmed) => {
                     if (!confirmed) return;
-                    const resp = await fetch('/api/comments/' + id, {
+                    const resp = await echoFetch('/api/comments/' + id, {
                         method: 'DELETE',
                         headers: { 'X-CSRFToken': csrfToken }
                     });
@@ -692,7 +692,7 @@
             e.preventDefault();
             const button = e.target.closest('.upvote-btn');
             const id = button.getAttribute('data-id');
-            const resp = await fetch('/api/comments/' + id + '/vote', {
+            const resp = await echoFetch('/api/comments/' + id + '/vote', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken }
             });
@@ -829,7 +829,7 @@
                 ev.preventDefault();
                 const newContent = editForm.querySelector('.edit-content').value;
                 if (!newContent || !newContent.trim()) return;
-                const resp = await fetch('/api/comments/' + cid, {
+                const resp = await echoFetch('/api/comments/' + cid, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',

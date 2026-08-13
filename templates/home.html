@@ -181,7 +181,7 @@
         const content = document.getElementById('zen-quote-content');
         const author = document.getElementById('zen-quote-author');
 
-        fetch('/api/quote')
+        echoFetch('/api/quote')
             .then(response => {
                 if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();

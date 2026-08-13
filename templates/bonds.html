@@ -4396,7 +4396,7 @@
     }
 
     function verifyPin(pin) {
-        echoFetch(app_lock/verify', {
+        echoFetch('/api/app_lock/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
@@ -4412,7 +4412,7 @@
     }
 
     function submitPinSetup(pin) {
-        echoFetch(app_lock/setup', {
+        echoFetch('/api/app_lock/setup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })

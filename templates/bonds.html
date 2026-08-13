@@ -2209,7 +2209,7 @@
     function markSectionRead(bondId, section) {
         var badge = document.getElementById('badge-' + section + '-' + bondId);
         if (badge) badge.style.display = 'none';
-        echoFetch(bonds/' + bondId + '/view-section', {
+        echoFetch('/api/bonds/' + bondId + '/view-section', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ section: section })
@@ -2220,7 +2220,7 @@
     function loadGoals(bondId) {
         const container = document.getElementById('goals-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/goals')
+        echoFetch('/api/bonds/' + bondId + '/goals')
             .then(r => r.json())
             .then(data => {
                 const el = document.getElementById('goals-list-' + bondId);
@@ -2450,7 +2450,7 @@
             milestones: milestones
         };
 
-        echoFetch(bonds/' + bondId + '/goals', {
+        echoFetch('/api/bonds/' + bondId + '/goals', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify(body)
@@ -2466,7 +2466,7 @@
     }
 
     function approveGoal(goalId, bondId) {
-        echoFetch(bonds/goals/' + goalId + '/approve', {
+        echoFetch('/api/bonds/goals/' + goalId + '/approve', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -2483,7 +2483,7 @@
     function submitCheckin(goalId, bondId) {
         const value = parseFloat(document.getElementById('checkin-value-' + goalId).value) || 0;
         const note = document.getElementById('checkin-note-' + goalId).value.trim();
-        echoFetch(bonds/goals/' + goalId + '/checkin', {
+        echoFetch('/api/bonds/goals/' + goalId + '/checkin', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ value, note })
@@ -2496,7 +2496,7 @@
     }
 
     function toggleMilestone(goalId, idx) {
-        echoFetch(bonds/goals/' + goalId + '/milestone/' + idx + '/toggle', {
+        echoFetch('/api/bonds/goals/' + goalId + '/milestone/' + idx + '/toggle', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -2512,7 +2512,7 @@
         } else doCompleteGoal(goalId, bondId);
     }
     function doCompleteGoal(goalId, bondId) {
-        echoFetch(bonds/goals/' + goalId + '/complete', {
+        echoFetch('/api/bonds/goals/' + goalId + '/complete', {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) { loadGoals(bondId); if (window.showCustomToast) showCustomToast('Goal completed!', 'success'); }
@@ -2528,7 +2528,7 @@
         } else doAbandonGoal(goalId, bondId);
     }
     function doAbandonGoal(goalId, bondId) {
-        echoFetch(bonds/goals/' + goalId + '/abandon', {
+        echoFetch('/api/bonds/goals/' + goalId + '/abandon', {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) { loadGoals(bondId); }
@@ -2549,7 +2549,7 @@
         const deadlineVal = document.getElementById('edit-goal-deadline-' + goalId).value;
         const deadline = deadlineVal ? new Date(deadlineVal).toISOString() : null;
 
-        echoFetch(bonds/goals/' + goalId + '/edit', {
+        echoFetch('/api/bonds/goals/' + goalId + '/edit', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ title, description, target_value, unit, deadline })
@@ -2565,7 +2565,7 @@
     function loadJournal(bondId) {
         const container = document.getElementById('journal-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/journal')
+        echoFetch('/api/bonds/' + bondId + '/journal')
             .then(r => r.json())
             .then(data => {
                 const el = document.getElementById('journal-list-' + bondId);
@@ -2611,7 +2611,7 @@
         const textarea = document.getElementById('journal-input-' + bondId);
         const content = textarea.value.trim();
         if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
-        echoFetch(bonds/' + bondId + '/journal', {
+        echoFetch('/api/bonds/' + bondId + '/journal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ content })
@@ -2632,7 +2632,7 @@
         } else doDeleteEntry(entryId, bondId);
     }
     function doDeleteEntry(entryId, bondId) {
-        echoFetch(bonds/journal/' + entryId, {
+        echoFetch('/api/bonds/journal/' + entryId, {
             method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) loadJournal(bondId);
@@ -2664,7 +2664,7 @@
         const input = document.getElementById('journal-edit-input-' + entryId);
         const content = input ? input.value.trim() : '';
         if (!content) { if (window.showCustomAlert) showCustomAlert('Content cannot be empty.', 'danger'); return; }
-        echoFetch(bonds/journal/' + entryId + '/edit', {
+        echoFetch('/api/bonds/journal/' + entryId + '/edit', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ content })
@@ -2678,7 +2678,7 @@
 
     // --- Bond Actions ---
     function respondBond(bondId, action) {
-        echoFetch(bonds/respond/' + bondId, {
+        echoFetch('/api/bonds/respond/' + bondId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ action })
@@ -2706,7 +2706,7 @@
         } else doBreakBond(bondId);
     }
     function doBreakBond(bondId) {
-        echoFetch(bonds/break/' + bondId, {
+        echoFetch('/api/bonds/break/' + bondId, {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) {
@@ -2728,7 +2728,7 @@
     function loadMood(bondId) {
         const container = document.getElementById('mood-content-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/mood')
+        echoFetch('/api/bonds/' + bondId + '/mood')
             .then(r => r.json())
             .then(data => {
                 const el = document.getElementById('mood-content-' + bondId);
@@ -2806,7 +2806,7 @@
         });
         btn.classList.add('selected');
         
-        echoFetch(bonds/' + bondId + '/mood', {
+        echoFetch('/api/bonds/' + bondId + '/mood', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ mood })
@@ -2830,7 +2830,7 @@
     function loadQotd(bondId) {
         const container = document.getElementById('qotd-content-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/qotd')
+        echoFetch('/api/bonds/' + bondId + '/qotd')
             .then(r => r.json())
             .then(data => {
                 const el = document.getElementById('qotd-content-' + bondId);
@@ -2957,7 +2957,7 @@
     function skipQotd(bondId, reason) {
         var container = document.getElementById('qotd-content-' + bondId);
         if (container) container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Getting new question...</div>';
-        echoFetch(bonds/' + bondId + '/qotd/skip', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/skip', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ reason: reason })
@@ -2976,7 +2976,7 @@
     }
 
     function reactToQotd(bondId, emoji) {
-        echoFetch(bonds/' + bondId + '/qotd/react', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/react', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ reaction: emoji })
@@ -2993,7 +2993,7 @@
 
 
     function toggleAiConsent(bondId, consent) {
-        echoFetch(bonds/' + bondId + '/qotd/ai_consent', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/ai_consent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ consent: !!consent })
@@ -3012,7 +3012,7 @@
     function generateAiQotd(bondId) {
         const container = document.getElementById('qotd-content-' + bondId);
         container.innerHTML = '<div style="color:#999; font-size:0.85rem; text-align:center; padding:0.8rem;">Generating AI Question...</div>';
-        echoFetch(bonds/' + bondId + '/qotd/generate_ai', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/generate_ai', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -3046,7 +3046,7 @@
             if (window.showCustomAlert) showCustomAlert('Please enter a question.', 'danger');
             return;
         }
-        echoFetch(bonds/' + bondId + '/qotd/custom', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/custom', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ question })
@@ -3067,7 +3067,7 @@
             if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger');
             return;
         }
-        echoFetch(bonds/' + bondId + '/qotd', {
+        echoFetch('/api/bonds/' + bondId + '/qotd', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ answer })
@@ -3084,7 +3084,7 @@
         if (!historyContainer) return;
         historyContainer.style.display = 'block';
         historyContainer.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Loading history...</div>';
-        echoFetch(bonds/' + bondId + '/qotd/history')
+        echoFetch('/api/bonds/' + bondId + '/qotd/history')
             .then(r => r.json())
             .then(d => {
                 const el = document.getElementById('qotd-history-' + bondId);
@@ -3153,7 +3153,7 @@
 
         container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
 
-        echoFetch(bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort)
+        echoFetch('/api/bonds/' + bondId + '/album/photos?category=' + cat + '&sort=' + sort)
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 var el = document.getElementById('album-grid-' + bondId);
@@ -3277,7 +3277,7 @@
             fd.append('date_taken', new Date(dateVal).toISOString());
         }
 
-        echoFetch(bonds/' + bondId + '/album/upload', {
+        echoFetch('/api/bonds/' + bondId + '/album/upload', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken },
             body: fd
@@ -3376,7 +3376,7 @@
         if (!photos || !photos[index]) return;
 
         var p = photos[index];
-        echoFetch(bonds/album/photo/' + p.id + '/pin', {
+        echoFetch('/api/bonds/album/photo/' + p.id + '/pin', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(function(r) { return r.json(); }).then(function(d) {
@@ -3450,7 +3450,7 @@
             date_taken: dateVal ? new Date(dateVal).toISOString() : null
         };
 
-        echoFetch(bonds/album/photo/' + photoId, {
+        echoFetch('/api/bonds/album/photo/' + photoId, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -3499,7 +3499,7 @@
     }
 
     function doDeletePhoto(photoId, bondId) {
-        echoFetch(bonds/album/photo/' + photoId, {
+        echoFetch('/api/bonds/album/photo/' + photoId, {
             method: 'DELETE',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(function(r) { return r.json(); }).then(function(d) {
@@ -3554,7 +3554,7 @@
     function loadBucketlist(bondId) {
         var container = document.getElementById('bucketlist-container-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/bucketlist')
+        echoFetch('/api/bonds/' + bondId + '/bucketlist')
             .then(r => r.json())
             .then(d => {
                 var el = document.getElementById('bucketlist-container-' + bondId);
@@ -3613,7 +3613,7 @@
         var cat = document.getElementById('bucketlist-cat-' + bondId);
         var t = title ? title.value.trim() : '';
         if (!t) { if (window.showCustomAlert) showCustomAlert('Please enter a title.', 'danger'); return; }
-        echoFetch(bonds/' + bondId + '/bucketlist', {
+        echoFetch('/api/bonds/' + bondId + '/bucketlist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ title: t, description: desc ? desc.value.trim() : '', category: cat ? cat.value : 'other' })
@@ -3628,7 +3628,7 @@
     }
 
     function agreeBucketlistItem(itemId, bondId) {
-        echoFetch(bonds/bucketlist/' + itemId + '/agree', {
+        echoFetch('/api/bonds/bucketlist/' + itemId + '/agree', {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) { loadBucketlist(bondId); if (window.showCustomToast) showCustomToast('Agreed! Now plan to make it happen.', 'success'); }
@@ -3637,7 +3637,7 @@
     }
 
     function doneBucketlistItem(itemId, bondId) {
-        echoFetch(bonds/bucketlist/' + itemId + '/done', {
+        echoFetch('/api/bonds/bucketlist/' + itemId + '/done', {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) { loadBucketlist(bondId); if (window.showCustomToast) showCustomToast('Bucket list item completed!', 'success'); }
@@ -3649,7 +3649,7 @@
         if (window.showCustomConfirm) {
             showCustomConfirm('Remove this bucket list item?', function(ok) {
                 if (ok) {
-                    echoFetch(bonds/bucketlist/' + itemId, {
+                    echoFetch('/api/bonds/bucketlist/' + itemId, {
                         method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
                     }).then(r => r.json()).then(d => {
                         if (d.success) { loadBucketlist(bondId); if (window.showCustomToast) showCustomToast('Item removed.', 'success'); }
@@ -3666,7 +3666,7 @@
     function loadRecommendations(bondId) {
         var container = document.getElementById('recs-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/recommendations')
+        echoFetch('/api/bonds/' + bondId + '/recommendations')
             .then(r => r.json())
             .then(d => {
                 var el = document.getElementById('recs-list-' + bondId);
@@ -3740,7 +3740,7 @@
             fd.append('link', link ? link.value.trim() : '');
             fd.append('note', note ? note.value.trim() : '');
             fd.append('image', imageInput.files[0]);
-            echoFetch(bonds/' + bondId + '/recommendations', {
+            echoFetch('/api/bonds/' + bondId + '/recommendations', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': csrfToken },
                 body: fd
@@ -3754,7 +3754,7 @@
                 } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
             });
         } else {
-            echoFetch(bonds/' + bondId + '/recommendations', {
+            echoFetch('/api/bonds/' + bondId + '/recommendations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
                 body: JSON.stringify({ title: t, media_type: type ? type.value : 'other', link: link ? link.value.trim() : '', note: note ? note.value.trim() : '' })
@@ -3805,7 +3805,7 @@
     }
 
     function toggleTriedRec(recId, bondId) {
-        echoFetch(bonds/recommendations/' + recId + '/tried', {
+        echoFetch('/api/bonds/recommendations/' + recId + '/tried', {
             method: 'POST', headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
             if (d.success) { loadRecommendations(bondId); }
@@ -3817,7 +3817,7 @@
         if (window.showCustomConfirm) {
             showCustomConfirm('Remove this recommendation?', function(ok) {
                 if (ok) {
-                    echoFetch(bonds/recommendations/' + recId, {
+                    echoFetch('/api/bonds/recommendations/' + recId, {
                         method: 'DELETE', headers: { 'X-CSRFToken': csrfToken }
                     }).then(r => r.json()).then(d => {
                         if (d.success) { loadRecommendations(bondId); if (window.showCustomToast) showCustomToast('Removed.', 'success'); }
@@ -3834,7 +3834,7 @@
     function loadPulses(bondId) {
         var container = document.getElementById('pulses-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/pulses')
+        echoFetch('/api/bonds/' + bondId + '/pulses')
             .then(r => r.json())
             .then(d => {
                 var el = document.getElementById('pulses-list-' + bondId);
@@ -3863,7 +3863,7 @@
     }
 
     function sendPulse(bondId, emoji) {
-        echoFetch(bonds/' + bondId + '/pulse', {
+        echoFetch('/api/bonds/' + bondId + '/pulse', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ emoji: emoji, message: '' })
@@ -3895,7 +3895,7 @@
         const countSpan = btn.querySelector('.nudge-count');
         const origIcon = iconSpan.innerHTML;
         iconSpan.innerHTML = '⌛';
-        echoFetch(bonds/' + bondId + '/nudge', {
+        echoFetch('/api/bonds/' + bondId + '/nudge', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json().then(data => ({ status: r.status, body: data }))).then(res => {
@@ -3930,7 +3930,7 @@
         } else doStreakShield(bondId);
     }
     function doStreakShield(bondId) {
-        echoFetch(bonds/' + bondId + '/streak/shield', {
+        echoFetch('/api/bonds/' + bondId + '/streak/shield', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -3944,7 +3944,7 @@
     function loadHabits(bondId) {
         const container = document.getElementById('habits-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/habits')
+        echoFetch('/api/bonds/' + bondId + '/habits')
             .then(r => r.json())
             .then(d => {
                 const el = document.getElementById('habits-list-' + bondId);
@@ -3993,7 +3993,7 @@
             if (window.showCustomAlert) showCustomAlert('Please enter a habit title.', 'danger');
             return;
         }
-        echoFetch(bonds/' + bondId + '/habits', {
+        echoFetch('/api/bonds/' + bondId + '/habits', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ title: title })
@@ -4008,7 +4008,7 @@
     }
 
     function toggleHabit(habitId, bondId) {
-        echoFetch(bonds/habits/' + habitId + '/toggle', {
+        echoFetch('/api/bonds/habits/' + habitId + '/toggle', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -4027,7 +4027,7 @@
     }
 
     function doDeleteHabit(habitId, bondId) {
-        echoFetch(bonds/habits/' + habitId, {
+        echoFetch('/api/bonds/habits/' + habitId, {
             method: 'DELETE',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -4044,7 +4044,7 @@
     function loadInsights(bondId) {
         const container = document.getElementById('insights-content-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/insights')
+        echoFetch('/api/bonds/' + bondId + '/insights')
             .then(r => r.json())
             .then(d => {
                 const el = document.getElementById('insights-content-' + bondId);
@@ -4185,7 +4185,7 @@
     function loadCountdowns(bondId) {
         var container = document.getElementById('countdowns-list-' + bondId);
         if (!container) return;
-        echoFetch(bonds/' + bondId + '/countdowns')
+        echoFetch('/api/bonds/' + bondId + '/countdowns')
             .then(function(r) { return r.json(); })
             .then(function(d) {
                 var el = document.getElementById('countdowns-list-' + bondId);
@@ -4248,7 +4248,7 @@
             if (window.showCustomAlert) showCustomAlert('Please pick a date.', 'danger');
             return;
         }
-        echoFetch(bonds/' + bondId + '/countdowns', {
+        echoFetch('/api/bonds/' + bondId + '/countdowns', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ title: title, event_date: eventDate })
@@ -4274,7 +4274,7 @@
     }
 
     function doDeleteCountdown(countdownId, bondId) {
-        echoFetch(bonds/countdowns/' + countdownId, {
+        echoFetch('/api/bonds/countdowns/' + countdownId, {
             method: 'DELETE',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {
@@ -4470,7 +4470,7 @@
     };
 
     function doDismissPastBond(bondId) {
-        echoFetch(bonds/' + bondId + '/dismiss_archive', {
+        echoFetch('/api/bonds/' + bondId + '/dismiss_archive', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(function(r) { return r.json(); }).then(function(d) {
@@ -4706,7 +4706,7 @@
                         var token = document.querySelector('meta[name="csrf-token"]');
                         var csrf = token ? token.getAttribute('content') : csrfToken;
 
-                        return echoFetch(bonds/' + bondId + '/offline-sync', {
+                        return echoFetch('/api/bonds/' + bondId + '/offline-sync', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
                             credentials: 'same-origin',

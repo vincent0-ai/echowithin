@@ -16,8 +16,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link rel="stylesheet" href="{{ url_for('static', filename='custom_styles.css') }}?v=1.0.1">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=1.0.1">
-    <!-- Choices.js CSS for custom dropdowns -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    {% block extra_head_css %}{% endblock %}
     <script nonce="{{ csp_nonce }}">
     (function(){
         var s=localStorage.getItem('echowithin-theme');
@@ -68,42 +67,48 @@
     <meta name="twitter:image" content="{{ meta_image|default(url_for('static', filename='logo-512.png', _external=True)) }}" />
     {% endblock %}
 
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    {% if current_user.is_authenticated %}
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" async></script>
     <script nonce="{{ csp_nonce }}">
-        // Global Socket.IO instance
-        window.socket = io({
-            reconnection: true,
-            reconnectionDelay: 500,
-            reconnectionDelayMax: 4000,
-            timeout: 10000,
-            transports: ['websocket', 'polling']
-        });
-        window.socket.on('connect', () => {
-            console.log('Connected to real-time server');
-            window.socket.emit('join_inbox');
-        });
-        // Global Whisper handlers for redirection/prompt when not on messages page
-        window.socket.on('whisper_accept', (data) => {
-            if (!window.location.pathname.startsWith('/messages')) {
-                window.location.href = '/messages?user_id=' + data.partner_id;
-            }
-        });
-        window.socket.on('whisper_invite_received', (data) => {
-            if (!window.location.pathname.startsWith('/messages')) {
-                if (window.showCustomConfirm) {
-                    window.showCustomConfirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?', (confirmed) => {
-                        if (confirmed) {
+        // Deferred Socket.IO init — waits for async script to load
+        function _initSocket() {
+            if (typeof io === 'undefined') { setTimeout(_initSocket, 50); return; }
+            window.socket = io({
+                reconnection: true,
+                reconnectionDelay: 500,
+                reconnectionDelayMax: 4000,
+                timeout: 10000,
+                transports: ['websocket', 'polling']
+            });
+            window.socket.on('connect', () => {
+                console.log('Connected to real-time server');
+                window.socket.emit('join_inbox');
+            });
+            // Global Whisper handlers for redirection/prompt when not on messages page
+            window.socket.on('whisper_accept', (data) => {
+                if (!window.location.pathname.startsWith('/messages')) {
+                    window.location.href = '/messages?user_id=' + data.partner_id;
+                }
+            });
+            window.socket.on('whisper_invite_received', (data) => {
+                if (!window.location.pathname.startsWith('/messages')) {
+                    if (window.showCustomConfirm) {
+                        window.showCustomConfirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?', (confirmed) => {
+                            if (confirmed) {
+                                window.location.href = '/messages?user_id=' + data.from_user_id;
+                            }
+                        });
+                    } else {
+                        if (confirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?')) {
                             window.location.href = '/messages?user_id=' + data.from_user_id;
                         }
-                    });
-                } else {
-                    if (confirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?')) {
-                        window.location.href = '/messages?user_id=' + data.from_user_id;
                     }
                 }
-            }
-        });
+            });
+        }
+        _initSocket();
     </script>
+    {% endif %}
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
     <script src="{{ url_for('static', filename='capacitor.js') }}"></script>
@@ -709,8 +714,7 @@
     })();
     </script>
     <div class="page-container">
-        <!-- Choices.js SCRIPT for custom dropdowns -->
-        <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+        {% block extra_body_js %}{% endblock %}
 
         <div class="navbar">
             <div class="nav-left">
@@ -1207,6 +1211,21 @@
                     console.log('Service worker registered with scope:', reg.scope);
                     // Initialize push notifications after service worker is ready
                     initPushNotifications(reg);
+
+                    // Detect SW updates and notify the user
+                    reg.addEventListener('updatefound', function () {
+                        var newWorker = reg.installing;
+                        if (newWorker) {
+                            newWorker.addEventListener('statechange', function () {
+                                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                                    // New SW activated while an old one was controlling
+                                    if (window.showCustomAlert) {
+                                        window.showCustomAlert('A new version is available. Tap to refresh.', 'info', 8000);
+                                    }
+                                }
+                            });
+                        }
+                    });
                 })
                 .catch(function (err) { console.warn('Service worker registration failed:', err); });
         });

@@ -5,6 +5,14 @@
 <meta name="description" content="{{ description }}">
 {% endblock %}
 
+{% block extra_head_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+{% endblock %}
+
+{% block extra_body_js %}
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="content-wrapper">
     <!-- Edit Post Form -->

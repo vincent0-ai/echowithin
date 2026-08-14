@@ -2402,6 +2402,11 @@
         return d.innerHTML;
     }
 
+    function nl2br(s) {
+        // HTML-escape then convert newlines to <br> for multi-line content
+        return escHtml(s).replace(/\n/g, '<br>');
+    }
+
     function showGoalModal(bondId) {
         document.getElementById('goal-modal-bond-id').value = bondId;
         document.getElementById('goal-title').value = '';
@@ -2592,7 +2597,7 @@
                     return '<div class="journal-entry" id="journal-entry-container-' + e.id + '"><div class="journal-entry-header">' +
                         '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
                         '<span style="display:flex;align-items:center;gap:0.4rem;"><span class="journal-date">' + dateStr + editedTag + '</span>' + actionBtns + '</span>' +
-                        '</div><div class="journal-content" id="journal-content-' + e.id + '">' + escHtml(e.content) + '</div>' +
+                        '</div><div class="journal-content" id="journal-content-' + e.id + '">' + nl2br(e.content) + '</div>' +
                         '<div class="journal-edit-form" id="journal-edit-form-' + e.id + '" style="display:none;margin-top:0.5rem;">' +
                         '<textarea id="journal-edit-input-' + e.id + '" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;min-height:60px;font-family:inherit;font-size:0.9rem;resize:vertical;"></textarea>' +
                         '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.4rem;">' +
@@ -2894,8 +2899,8 @@
         if (data.revealed) {
             // Both answered — show both
             html += '<div class="qotd-reveal">';
-            html += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div>';
-            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(data.partner_username) + '</div><div class="answer">' + escHtml(data.partner_answer) + '</div></div>';
+            html += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(data.my_answer) + '</div></div>';
+            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(data.partner_username) + '</div><div class="answer">' + nl2br(data.partner_answer) + '</div></div>';
             html += '</div>';
 
             // Reaction buttons
@@ -2915,7 +2920,7 @@
             html += '</div>';
         } else if (data.my_answered) {
             // I answered, waiting for partner
-            html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + escHtml(data.my_answer) + '</div></div></div>';
+            html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(data.my_answer) + '</div></div></div>';
             html += '<div class="qotd-waiting">Waiting for your partner to answer for the reveal...</div>';
         } else if (data.is_archived_bond) {
             html += '<div class="qotd-waiting" style="color:var(--text-muted);">This bond has ended and is in read-only memory archive.</div>';
@@ -2930,10 +2935,13 @@
             }
             // Skip button (only if neither answered and skips remaining)
             if (!data.partner_answered && data.skips_remaining > 0) {
-                html += '<div style="text-align:center;margin-top:0.6rem;">';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.6rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip Question (' + data.skips_remaining + ' left)</button>';
+                html += '<div style="margin-top:1rem; padding-top:0.8rem; border-top:1px solid var(--border-color);">';
+                html += '<div style="text-align:center; margin-bottom:0.4rem;">';
+                html += '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.3rem;">Not feeling this question?</div>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.3rem 0.8rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip and get a new one (' + data.skips_remaining + ' left today)</button>';
+                html += '</div>';
                 html += '<div id="skip-options-' + bondId + '" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;">';
-                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Why skip?</div>';
+                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Tell us why so we can pick better questions for you</div>';
                 html += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;">';
                 html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
                 html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'already_discussed\')">Already Discussed</button>';
@@ -3121,8 +3129,8 @@
                     html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' · ' + escHtml(item.category) + '</div>';
                     html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
                     html += '<div class="qotd-reveal">';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + escHtml(myAns) + '</div></div>';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + escHtml(partnerAns) + '</div></div>';
+                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + nl2br(myAns) + '</div></div>';
+                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + nl2br(partnerAns) + '</div></div>';
                     html += '</div></div>';
                 });
                 el.innerHTML = html;

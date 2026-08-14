@@ -325,7 +325,13 @@ def _get_bond_anniversary(accepted_at):
 
 
 def _get_daily_question(bond_doc):
-    """Deterministic daily question selection based on bond type + date."""
+    """Deterministic daily question selection based on bond type + date.
+
+    Uses skip feedback history to deprioritize question types that the bond's
+    users have repeatedly skipped (e.g., marking questions as 'too_personal').
+    """
+    import main as m
+
     bond_type = bond_doc.get('bond_type', 'custom')
     today_str = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
     bond_id_str = str(bond_doc['_id'])
@@ -337,6 +343,57 @@ def _get_daily_question(bond_doc):
     pool = type_questions + type_questions + universal
     if not pool:
         pool = universal or ["What's on your mind today?"]
+
+    # --- Skip-feedback weighting ---
+    # Gather skip reasons from the last 30 days to learn user preferences
+    thirty_days_ago = (datetime.datetime.now(datetime.timezone.utc)
+                       - datetime.timedelta(days=30)).isoformat()
+    try:
+        recent_skips = list(m.bond_qotd_conf.find(
+            {
+                'bond_id': bond_doc['_id'],
+                'skips': {'$exists': True, '$ne': []},
+                'date': {'$gte': thirty_days_ago[:10]}
+            },
+            {'skips': 1}
+        ))
+        # Count reasons
+        reason_counts = {}
+        for doc in recent_skips:
+            for skip in doc.get('skips', []):
+                r = skip.get('reason', '')
+                if r:
+                    reason_counts[r] = reason_counts.get(r, 0) + 1
+
+        # If users frequently skip as 'not_relevant' or 'boring', we reduce
+        # universal questions. If 'too_personal', we reduce type-specific ones.
+        # Threshold: 3+ skips of the same reason triggers deprioritization.
+        personal_skips = reason_counts.get('too_personal', 0)
+        boring_skips = reason_counts.get('boring', 0) + reason_counts.get('not_relevant', 0)
+
+        if personal_skips >= 3 and boring_skips < 3:
+            # Reduce type-specific weight: use 1:2 ratio instead of 2:1
+            pool = type_questions + universal + universal
+        elif boring_skips >= 3 and personal_skips < 3:
+            # Boost type-specific weight: use 3:1 ratio
+            pool = type_questions + type_questions + type_questions + universal
+        # If both are high, keep default ratio — they may just skip a lot
+
+        if not pool:
+            pool = type_questions + universal or ["What's on your mind today?"]
+
+        # Also try to avoid repeating recently-skipped questions
+        skipped_questions = set()
+        for doc in recent_skips:
+            q = doc.get('question_text', '')
+            if q and not doc.get('encrypted'):
+                skipped_questions.add(q)
+        if skipped_questions and len(pool) > len(skipped_questions):
+            filtered = [q for q in pool if q not in skipped_questions]
+            if filtered:
+                pool = filtered
+    except Exception:
+        pass  # If skip query fails, proceed with default pool
 
     # Deterministic selection
     hash_input = f"{bond_id_str}:{today_str}"

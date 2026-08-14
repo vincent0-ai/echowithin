@@ -405,9 +405,13 @@ def _update_bond_streak(bond_doc):
         if last_date == today:
             return  # Already counted today
         elif last_date == today - datetime.timedelta(days=1):
+            new_count = bond_doc.get('streak_count', 0) + 1
             m.bonds_conf.update_one(
                 {'_id': bond_doc['_id']},
-                {'$inc': {'streak_count': 1}, '$set': {'last_streak_date': now}}
+                {
+                    '$set': {'streak_count': new_count, 'last_streak_date': now},
+                    '$max': {'best_streak': new_count}
+                }
             )
         else:
             m.bonds_conf.update_one(
@@ -458,9 +462,13 @@ def _update_bond_streak_for_date(bond_id, activity_date):
             return  # Already counted for this day or later
         elif last_date == activity_date - datetime.timedelta(days=1):
             # Consecutive day — increment streak
+            new_count = bond_doc.get('streak_count', 0) + 1
             m.bonds_conf.update_one(
                 {'_id': bond_oid},
-                {'$inc': {'streak_count': 1}, '$set': {'last_streak_date': activity_dt}}
+                {
+                    '$set': {'streak_count': new_count, 'last_streak_date': activity_dt},
+                    '$max': {'best_streak': new_count}
+                }
             )
         else:
             # Gap detected — reset streak to 1
@@ -3478,8 +3486,8 @@ def api_bond_insights_get(bond_id):
         my_top_mood = _get_top_mood(user_id_str)
         partner_top_mood = _get_top_mood(partner_id)
 
-        current_streak = bond_doc.get('streak_count', 0)
-        best_streak = bond_doc.get('best_streak', current_streak)
+        current_streak = _get_effective_streak(bond_doc)
+        best_streak = max(bond_doc.get('best_streak', 0), current_streak)
 
         # --- 3. Anniversary info ---
         accepted_at = bond_doc.get('accepted_at')

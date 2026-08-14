@@ -1975,10 +1975,22 @@ def handle_stop_recording(data):
 @socketio.on('whisper_message')
 @authenticated_only
 def handle_whisper_message(data):
-    """Handle sending a message within an active whisper session."""
+    """Handle sending a message within an active whisper session.
+    
+    Supports text and image messages. Image URLs are encrypted at rest
+    just like text content, and auto-delete with the session TTL.
+    """
     session_id = data.get('session_id')
     content = data.get('content', '').strip()
-    if not session_id or not content:
+    message_type = data.get('message_type', 'text')  # 'text' or 'image'
+    image_url = data.get('image_url', '').strip()
+
+    # Require content for text messages, image_url for image messages
+    if not session_id:
+        return
+    if message_type == 'image' and not image_url:
+        return
+    if message_type == 'text' and not content:
         return
 
     try:
@@ -2014,38 +2026,53 @@ def handle_whisper_message(data):
                      room=f"user_{initiator_str}")
                 emit('whisper_expired', {'session_id': session_id, 'reason': 'timeout'},
                      room=f"user_{recipient_str}")
-                # Insert DM system message
+                # Insert single DM system message (from initiator to recipient)
                 now_str = now.isoformat().replace('+00:00', 'Z')
                 end_content = 'Whisper session ended (timeout)'
-                for (s_oid, r_oid) in [(ObjectId(initiator_str), ObjectId(recipient_str)), (ObjectId(recipient_str), ObjectId(initiator_str))]:
-                    d = {'sender_id': s_oid, 'recipient_id': r_oid, 'content': end_content, 'encrypted': False, 'timestamp': now, 'is_read': False, 'message_type': 'whisper_system'}
-                    r = direct_messages_conf.insert_one(d)
-                    emit('new_dm', {'id': str(r.inserted_id), 'sender_id': str(s_oid), 'content': end_content, 'timestamp': now_str, 'message_type': 'whisper_system'}, room=f"user_{str(r_oid)}")
+                d = {'sender_id': ObjectId(initiator_str), 'recipient_id': ObjectId(recipient_str), 'content': end_content, 'encrypted': False, 'timestamp': now, 'is_read': False, 'message_type': 'whisper_system'}
+                r = direct_messages_conf.insert_one(d)
+                dm_payload = {'id': str(r.inserted_id), 'sender_id': initiator_str, 'content': end_content, 'timestamp': now_str, 'message_type': 'whisper_system'}
+                emit('new_dm', dm_payload, room=f"user_{initiator_str}")
+                emit('new_dm', dm_payload, room=f"user_{recipient_str}")
                 return
 
         partner_id = recipient_str if user_id_str == initiator_str else initiator_str
 
         # Store message encrypted at rest with TTL
         msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
-        encrypted_content = encrypt_dm(content, user_id_str, partner_id)
+
+        # Encrypt content (text or image URL)
+        if message_type == 'image':
+            encrypted_image_url = encrypt_dm(image_url, user_id_str, partner_id)
+            encrypted_content = encrypt_dm(content or '[Photo]', user_id_str, partner_id)
+        else:
+            encrypted_image_url = None
+            encrypted_content = encrypt_dm(content, user_id_str, partner_id)
+
         msg_doc = {
             'session_id': ObjectId(session_id),
             'sender_id': ObjectId(current_user.id),
             'content': encrypted_content,
             'timestamp': now,
             'expires_at': msg_expires,
-            'is_system': False
+            'is_system': False,
+            'message_type': message_type
         }
+        if encrypted_image_url:
+            msg_doc['image_url'] = encrypted_image_url
         whisper_messages_conf.insert_one(msg_doc)
 
         payload = {
             'id': str(msg_doc['_id']),
             'session_id': session_id,
             'sender_id': user_id_str,
-            'content': content,
+            'content': content or '[Photo]',
             'timestamp': now.isoformat().replace('+00:00', 'Z'),
-            'temp_id': data.get('temp_id')
+            'temp_id': data.get('temp_id'),
+            'message_type': message_type
         }
+        if message_type == 'image':
+            payload['image_url'] = image_url
 
         emit('whisper_new_message', payload, room=f"user_{partner_id}")
         emit('whisper_message_confirmed', payload, room=f"user_{user_id_str}")
@@ -2075,6 +2102,43 @@ def handle_whisper_stop_typing(data):
         emit('whisper_user_stop_typing', {
             'sender_id': str(current_user.id)
         }, room=f"user_{partner_id}")
+
+
+@socketio.on('whisper_read')
+@authenticated_only
+def handle_whisper_read(data):
+    """Mark whisper messages as read and notify the sender."""
+    session_id = data.get('session_id')
+    if not session_id:
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            return
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+        # Mark unread messages from partner as read
+        whisper_messages_conf.update_many(
+            {
+                'session_id': ObjectId(session_id),
+                'sender_id': ObjectId(partner_id),
+                'is_read': {'$ne': True}
+            },
+            {'$set': {'is_read': True}}
+        )
+        emit('whisper_read_receipt', {
+            'session_id': session_id,
+            'reader_id': user_id_str
+        }, room=f"user_{partner_id}")
+    except Exception as e:
+        app.logger.error(f"Whisper read error: {e}")
 
 
 @socketio.on('whisper_screenshot_alert')
@@ -2126,6 +2190,43 @@ def handle_whisper_screenshot(data):
 
     except Exception as e:
         app.logger.error(f"Whisper screenshot alert error: {e}")
+
+
+@socketio.on('whisper_react')
+@authenticated_only
+def handle_whisper_react(data):
+    """Handle emoji reaction on a whisper message."""
+    session_id = data.get('session_id')
+    message_id = data.get('message_id')
+    emoji = data.get('emoji', '')
+    if not session_id or not message_id or not emoji:
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            return
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+        # Store reaction on the message (ephemeral, deleted with session)
+        whisper_messages_conf.update_one(
+            {'_id': ObjectId(message_id), 'session_id': ObjectId(session_id)},
+            {'$set': {f'reactions.{user_id_str}': emoji}}
+        )
+        emit('whisper_reaction', {
+            'session_id': session_id,
+            'message_id': message_id,
+            'emoji': emoji,
+            'reactor_id': user_id_str
+        }, room=f"user_{partner_id}")
+    except Exception as e:
+        app.logger.error(f"Whisper react error: {e}")
 
 
 # Handles any possible errors

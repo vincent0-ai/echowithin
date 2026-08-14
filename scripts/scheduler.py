@@ -119,12 +119,28 @@ def run_streak_decay():
         print(f"Error: The script at {script_path} was not found.")
 
 
+def run_anniversary_check():
+    """
+    Runs the anniversary_check.py script to send bond milestone push notifications.
+    """
+    script_path = os.path.join(os.path.dirname(__file__), 'anniversary_check.py')
+    try:
+        subprocess.run(['python', script_path], check=True, timeout=120)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing anniversary_check.py: {e}")
+    except subprocess.TimeoutExpired:
+        print("Warning: anniversary_check.py timed out after 120 seconds")
+    except FileNotFoundError:
+        print(f"Error: The script at {script_path} was not found.")
+
+
 if __name__ == '__main__':
     # ── Fixed-time jobs (no catchup risk) ──────────────────────────
     # These fire at a specific wall-clock time, so the schedule library
     # naturally won't replay missed windows.
     schedule.every().day.at("01:00").do(run_schedule_log_email)
     schedule.every().day.at("02:00").do(run_streak_decay)
+    schedule.every().day.at("08:00").do(run_anniversary_check)
     schedule.every().sunday.at("09:00").do(run_weekly_newsletter)
     schedule.every().monday.at("00:01").do(run_weekly_achievements)
 
@@ -149,6 +165,7 @@ if __name__ == '__main__':
     print("Scheduler started. Waiting for scheduled jobs...")
     print("  - Daily log email: 01:00 AM")
     print("  - Daily streak decay: 02:00 AM")
+    print("  - Daily anniversary check: 08:00 AM")
     print("  - Weekly newsletter: Sunday 09:00 AM")
     print("  - Weekly achievements: Monday 00:01 AM")
     print(f"  - Auth cleanup: Every hour (first run in ~5 min)")

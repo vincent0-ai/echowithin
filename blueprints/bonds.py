@@ -473,12 +473,12 @@ def _update_bond_streak(bond_doc):
         else:
             m.bonds_conf.update_one(
                 {'_id': bond_doc['_id']},
-                {'$set': {'streak_count': 1, 'last_streak_date': now}}
+                {'$set': {'streak_count': 1, 'last_streak_date': now}, '$max': {'best_streak': 1}}
             )
     else:
         m.bonds_conf.update_one(
             {'_id': bond_doc['_id']},
-            {'$set': {'streak_count': 1, 'last_streak_date': now}}
+            {'$set': {'streak_count': 1, 'last_streak_date': now}, '$max': {'best_streak': 1}}
         )
 
 
@@ -531,13 +531,13 @@ def _update_bond_streak_for_date(bond_id, activity_date):
             # Gap detected — reset streak to 1
             m.bonds_conf.update_one(
                 {'_id': bond_oid},
-                {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}}
+                {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}, '$max': {'best_streak': 1}}
             )
     else:
         # No streak yet — start at 1
         m.bonds_conf.update_one(
             {'_id': bond_oid},
-            {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}}
+            {'$set': {'streak_count': 1, 'last_streak_date': activity_dt}, '$max': {'best_streak': 1}}
         )
 
 
@@ -689,35 +689,123 @@ def _get_recent_qotd_questions(bond_id, limit=60):
     return questions
 
 
-def _build_qotd_ai_prompt(relationship_label, recent_questions):
-    """Build the AI prompt for QOTD generation.
+def _get_bond_skip_insights(bond_id):
+    """Gather skip feedback insights for this bond to tune AI generation."""
+    import main as m
+    try:
+        recent_skips = list(m.bond_qotd_conf.find(
+            {
+                'bond_id': ObjectId(bond_id),
+                'skips': {'$exists': True, '$ne': []}
+            },
+            {'skips': 1}
+        ).limit(30))
+        reason_counts = {}
+        for doc in recent_skips:
+            for skip in doc.get('skips', []):
+                r = skip.get('reason', '')
+                if r:
+                    reason_counts[r] = reason_counts.get(r, 0) + 1
+        return reason_counts
+    except Exception:
+        return {}
 
-    Includes recently asked questions so the model knows what to avoid,
-    plus a creativity directive to discourage repetition.
-    """
-    base = (
-        f"You are a creative relationship & connection assistant. "
-        f"Generate ONE engaging, meaningful, open-ended question for two people who have a '{relationship_label}' relationship. "
-        f"The question should inspire reflection, bonding, or a lighthearted conversation. "
-        f"Be HIGHLY original — the question must be completely unique in topic, angle, and phrasing. "
-        f"Do NOT repeat themes, scenarios, or rephrase ideas from previously asked questions. "
-        f"Explore fresh angles like hypothetical scenarios, childhood memories, future dreams, quirky preferences, moral dilemmas, sensory experiences, or creative what-ifs. "
-    )
+
+def _clean_ai_question(text):
+    """Sanitize, clean, and format raw AI question text."""
+    if not text:
+        return None
+    text = text.strip().strip('"\'`*')
+    # Strip common AI preambles
+    for prefix in ['Question:', 'Q:', "Here's a question:", "Here is a question:", "Today's question:", "Daily Question:"]:
+        if text.lower().startswith(prefix.lower()):
+            text = text[len(prefix):].strip().strip('"\'`*')
+    # If the text has newlines or multiple paragraphs, take the first non-empty line
+    lines = [line.strip().strip('"\'`*') for line in text.split('\n') if line.strip()]
+    if lines:
+        text = lines[0]
+    # Ensure it ends with ?
+    if text and not text.endswith('?'):
+        if text.endswith('.'):
+            text = text[:-1] + '?'
+        else:
+            text = text + '?'
+    return text if len(text) >= 10 and len(text) <= 250 else None
+
+
+def _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=None):
+    """Build a prompt for high-quality, natural, human, and grounded QotD generation."""
+    rel_lower = relationship_label.lower()
+    if 'love' in rel_lower or 'partner' in rel_lower:
+        tone_guide = (
+            "Focus on warm, romantic, cute, and grounded couple topics: "
+            "everyday appreciation, favorite shared memories, cozy date ideas, cute habits, "
+            "future travel or home dreams, how you support each other, or fun relationship debates."
+        )
+    elif 'friend' in rel_lower:
+        tone_guide = (
+            "Focus on fun, loyal, and nostalgic friend topics: "
+            "hilarious shared memories, fun hypothetical debates, bucket list adventures, "
+            "favorite hobbies/music/food, childhood throwback memories, or loyal encouragement."
+        )
+    elif 'study' in rel_lower:
+        tone_guide = (
+            "Focus on motivating and practical study partner topics: "
+            "study routines, handling exam stress, celebrating milestones, favorite subjects, or study breaks."
+        )
+    elif 'family' in rel_lower:
+        tone_guide = (
+            "Focus on heartfelt family topics: "
+            "family traditions, childhood memories, heartfelt appreciation, or meaningful life updates."
+        )
+    elif 'accountability' in rel_lower:
+        tone_guide = (
+            "Focus on growth and habit building: "
+            "daily routines, overcoming obstacles, celebrating small wins, weekly priorities, or mindset shifts."
+        )
+    else:
+        tone_guide = (
+            "Focus on warm, engaging, and meaningful connection: "
+            "personal goals, interesting perspectives, daily joys, or fun debates."
+        )
+
+    skip_instructions = []
+    if skip_insights:
+        if skip_insights.get('too_personal', 0) >= 2:
+            skip_instructions.append("Keep the question casual, lighthearted, and easygoing. Avoid heavy, intensely vulnerable, or overly invasive emotional topics.")
+        if (skip_insights.get('boring', 0) + skip_insights.get('not_relevant', 0)) >= 2:
+            skip_instructions.append("Make the question especially sparky, witty, or intriguing.")
+
+    prompt_lines = [
+        f"You are a thoughtful connection assistant creating a daily Question of the Day for two people who have a '{relationship_label}' bond.",
+        tone_guide,
+        "",
+        "STRICT GUIDELINES:",
+        "- GROUNDED & NATURAL: Write like a real person warmly chatting with their partner or friend. Use clear, simple, conversational English.",
+        "- CONCISE: Exactly ONE question. Maximum 1-2 short sentences. Under 25 words total.",
+        "- NO WEIRD SCI-FI / SURREAL POETRY: Absolutely DO NOT write abstract, philosophical metaphors (e.g. NEVER ask about 'physical manifestations of laughter', 'colors beyond physics', 'laughter artifacts', 'cosmic dimensions', or 'tasting sounds').",
+        "- ACTIONABLE & RELATABLE: Ask something specific that's easy and enjoyable to answer.",
+    ]
+
+    if skip_instructions:
+        prompt_lines.append("ADAPTATION: " + " ".join(skip_instructions))
 
     if recent_questions:
-        avoid_block = "DO NOT repeat or rephrase any of these recently used questions:\n"
-        avoid_block += "\n".join(f"- {q}" for q in recent_questions)
-        return base + avoid_block + "\n\nReturn ONLY the new question text. Do not include quotes, intro, or explanation."
+        prompt_lines.append("\nDO NOT repeat or rephrase any of these recent questions:")
+        for q in recent_questions[:25]:
+            prompt_lines.append(f"- {q}")
 
-    return base + "Return ONLY the question text. Do not include quotes, intro, or explanation."
+    prompt_lines.append("\nReturn ONLY the single question text in plain text. No quotes, intro, explanation, or commentary.")
+
+    return "\n".join(prompt_lines)
 
 
-def _generate_ai_question_gemini(relationship_label, recent_questions=None):
+def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip_insights=None):
     """Generate a QotD question using Gemini API (fallback when JigsawStack is unavailable).
 
     Supports multiple comma-separated API keys in GEMINI_API_KEY env var.
     Rotates through keys on 429 quota errors.
-    Returns the question text string, or None on failure.
+    Returns the cleaned question text string, or None on failure.
     """
     import os
     import json
@@ -733,10 +821,14 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None):
     if not keys:
         return None
 
-    prompt = _build_qotd_ai_prompt(relationship_label, recent_questions or [])
+    prompt = _build_qotd_ai_prompt(relationship_label, recent_questions or [], skip_insights=skip_insights)
 
     payload = json.dumps({
-        'contents': [{'parts': [{'text': prompt}]}]
+        'contents': [{'parts': [{'text': prompt}]}],
+        'generationConfig': {
+            'temperature': 0.7,
+            'maxOutputTokens': 100
+        }
     }).encode('utf-8')
 
     # Try each key; skip to next on 429 quota errors
@@ -746,12 +838,13 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None):
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-                text = (data.get('candidates', [{}])[0]
-                        .get('content', {})
-                        .get('parts', [{}])[0]
-                        .get('text', '')).strip().strip('"\'')
-                if text:
-                    return text
+                raw_text = (data.get('candidates', [{}])[0]
+                            .get('content', {})
+                            .get('parts', [{}])[0]
+                            .get('text', '')).strip()
+                cleaned = _clean_ai_question(raw_text)
+                if cleaned:
+                    return cleaned
         except urllib.error.HTTPError as e:
             status_code = e.code
             if status_code == 429:
@@ -2003,6 +2096,11 @@ def api_bond_journal_edit(entry_id):
         if str(entry['author_id']) != str(current_user.id):
             return jsonify({'error': 'Can only edit your own entries'}), 403
 
+        # Verify the bond is still active
+        bond_doc = m.bonds_conf.find_one({'_id': entry['bond_id']})
+        if not bond_doc or bond_doc.get('status') not in ('active',):
+            return jsonify({'error': 'This bond is no longer active'}), 403
+
         # Check if within 24 hours
         created_at = entry.get('created_at')
         if not created_at:
@@ -2619,6 +2717,7 @@ def api_bond_qotd_generate_ai(bond_id):
 
         # Fetch recent questions so the AI knows what to avoid repeating
         recent_questions = _get_recent_qotd_questions(bond_id)
+        skip_insights = _get_bond_skip_insights(bond_id)
 
         # --- Step 1: Check community question bank (free, zero API cost) ---
         if not force_new:
@@ -2635,7 +2734,7 @@ def api_bond_qotd_generate_ai(bond_id):
                 from jigsawstack import JigsawStack
                 api_key = get_env_variable('JIGSAW_API_KEY')
 
-                prompt = _build_qotd_ai_prompt(relationship_label, recent_questions)
+                prompt = _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=skip_insights)
 
                 client = JigsawStack(api_key=api_key)
                 res_data = client.prompt_engine.run_prompt_direct({
@@ -2646,8 +2745,9 @@ def api_bond_qotd_generate_ai(bond_id):
 
                 if res_data and isinstance(res_data, dict):
                     result_text = res_data.get('result', '').strip()
-                    if result_text:
-                        ai_question = result_text.strip('"\'')
+                    cleaned = _clean_ai_question(result_text)
+                    if cleaned:
+                        ai_question = cleaned
                         source = 'ai'
                         current_app.logger.info(f'QotD generated via JigsawStack for bond {bond_id}')
             except Exception as jigsaw_err:
@@ -2655,7 +2755,7 @@ def api_bond_qotd_generate_ai(bond_id):
 
         # --- Step 3: Fall back to Gemini API ---
         if not ai_question:
-            gemini_result = _generate_ai_question_gemini(relationship_label, recent_questions)
+            gemini_result = _generate_ai_question_gemini(relationship_label, recent_questions, skip_insights=skip_insights)
             if gemini_result:
                 ai_question = gemini_result
                 source = 'ai_gemini'
@@ -3591,6 +3691,190 @@ def api_bond_insights_get(bond_id):
         current_app.logger.error(f"Bond insights error: {e}")
         return jsonify({'error': 'Failed to fetch insights'}), 500
 
+
+@bp.route('/api/bonds/<bond_id>/timeline', methods=['GET'])
+@login_required
+def api_bond_timeline(bond_id):
+    """Unified timeline combining journal, QOTD, mood, goals, and photos.
+
+    Returns a chronological feed (newest first) with pagination.
+    Each item has a 'type' field: 'journal', 'qotd', 'mood', 'goal', 'photo'.
+    """
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)}, {'username': 1})
+        partner_username = _clean_username(partner_user['username'] if partner_user else 'Partner')
+        my_username = _clean_username(current_user.username)
+
+        page = max(1, int(request.args.get('page', 1)))
+        per_page = 20
+        items = []
+
+        bond_oid = ObjectId(bond_id)
+
+        # --- Journal entries ---
+        for j in m.bond_journal_conf.find({'bond_id': bond_oid}).sort('created_at', -1).limit(100):
+            content = j.get('content', '')
+            if j.get('encrypted') and content:
+                try:
+                    content = m.decrypt_bond_data(content, bond_id)
+                except Exception:
+                    content = '[Encrypted]'
+            author_name = my_username if str(j.get('author_id')) == user_id_str else partner_username
+            ts = j.get('created_at')
+            items.append({
+                'type': 'journal',
+                'id': str(j['_id']),
+                'timestamp': ts,
+                'author': author_name,
+                'content': content[:200] + ('...' if len(content) > 200 else '')
+            })
+
+        # --- QOTD (answered/revealed only) ---
+        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'revealed': True}).sort('date', -1).limit(100):
+            question_text = q.get('question_text', '')
+            if q.get('encrypted') and question_text:
+                try:
+                    question_text = m.decrypt_bond_data(question_text, bond_id)
+                except Exception:
+                    question_text = '[Encrypted]'
+            answers = q.get('answers', {})
+            my_answer = answers.get(user_id_str, {}).get('text', '')
+            partner_answer = answers.get(partner_id, {}).get('text', '')
+            if q.get('encrypted'):
+                try:
+                    if my_answer:
+                        my_answer = m.decrypt_bond_data(my_answer, bond_id)
+                    if partner_answer:
+                        partner_answer = m.decrypt_bond_data(partner_answer, bond_id)
+                except Exception:
+                    pass
+            # Build timestamp from date string
+            date_str = q.get('date', '')
+            ts = None
+            if date_str:
+                try:
+                    ts = datetime.datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
+                except Exception:
+                    pass
+            items.append({
+                'type': 'qotd',
+                'id': str(q['_id']),
+                'timestamp': ts,
+                'question': question_text,
+                'my_answer': (my_answer[:150] + '...') if len(my_answer) > 150 else my_answer,
+                'partner_answer': (partner_answer[:150] + '...') if len(partner_answer) > 150 else partner_answer,
+                'my_username': my_username,
+                'partner_username': partner_username
+            })
+
+        # --- Mood entries ---
+        for me in m.bond_moods_conf.find({'bond_id': bond_oid}).sort('date', -1).limit(60):
+            mood_val = me.get('mood', '')
+            if me.get('encrypted') and mood_val:
+                try:
+                    mood_val = m.decrypt_bond_data(mood_val, bond_id)
+                except Exception:
+                    mood_val = ''
+            mood_info = BOND_MOODS.get(mood_val, {})
+            author_name = my_username if str(me.get('user_id')) == user_id_str else partner_username
+            date_str = me.get('date', '')
+            ts = None
+            if date_str:
+                try:
+                    ts = datetime.datetime.strptime(date_str, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
+                except Exception:
+                    pass
+            items.append({
+                'type': 'mood',
+                'id': str(me['_id']),
+                'timestamp': ts,
+                'author': author_name,
+                'mood': mood_val,
+                'emoji': mood_info.get('emoji', ''),
+                'label': mood_info.get('label', mood_val)
+            })
+
+        # --- Completed goals ---
+        for g in m.bond_goals_conf.find({'bond_id': bond_oid, 'status': 'completed'}).limit(50):
+            title = g.get('title', '')
+            if g.get('encrypted') and title:
+                try:
+                    title = m.decrypt_bond_data(title, bond_id)
+                except Exception:
+                    title = '[Encrypted]'
+            ts = g.get('completed_at') or g.get('created_at')
+            items.append({
+                'type': 'goal',
+                'id': str(g['_id']),
+                'timestamp': ts,
+                'title': title,
+                'category': g.get('category', '')
+            })
+
+        # --- Album photos ---
+        for p in m.bond_album_conf.find({'bond_id': bond_oid}).sort('date_taken', -1).limit(50):
+            ts = p.get('date_taken') or p.get('uploaded_at')
+            items.append({
+                'type': 'photo',
+                'id': str(p['_id']),
+                'timestamp': ts,
+                'url': p.get('serve_url', '') or p.get('url', ''),
+                'title': p.get('title', ''),
+                'uploader': my_username if str(p.get('uploaded_by')) == user_id_str else partner_username
+            })
+
+        # Sort all items by timestamp (newest first), handling None timestamps
+        def _sort_key(item):
+            ts = item.get('timestamp')
+            if ts is None:
+                return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+            if isinstance(ts, datetime.datetime):
+                if ts.tzinfo is None:
+                    return ts.replace(tzinfo=datetime.timezone.utc)
+                return ts
+            return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+        items.sort(key=_sort_key, reverse=True)
+
+        # Paginate
+        total = len(items)
+        start = (page - 1) * per_page
+        end = start + per_page
+        page_items = items[start:end]
+
+        # Convert timestamps to ISO strings for JSON
+        for item in page_items:
+            ts = item.get('timestamp')
+            if isinstance(ts, datetime.datetime):
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=datetime.timezone.utc)
+                item['timestamp'] = ts.isoformat().replace('+00:00', 'Z')
+            elif ts is not None:
+                item['timestamp'] = str(ts)
+            else:
+                item['timestamp'] = None
+
+        return jsonify({
+            'items': page_items,
+            'page': page,
+            'total': total,
+            'has_more': end < total
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Bond timeline error: {e}")
+        return jsonify({'error': 'Failed to fetch timeline'}), 500
+
 @bp.route('/api/bonds/<bond_id>/countdowns', methods=['GET'])
 @login_required
 def api_bond_countdowns_list(bond_id):
@@ -4008,6 +4292,7 @@ def api_bond_album_upload(bond_id):
         )
 
         _on_bond_action(bond_doc, 'album', current_user.id)
+        _update_bond_streak(bond_doc)
 
         return jsonify({
             'success': True,
@@ -5053,3 +5338,123 @@ def api_bond_offline_sync(bond_id):
     except Exception as e:
         current_app.logger.error(f"Offline sync error for bond {bond_id}: {e}")
         return jsonify({'error': 'Failed to sync offline actions'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/export', methods=['GET'])
+@login_required
+@limits(calls=10, period=60)
+def api_bond_export(bond_id):
+    """Export a complete Memory Book of the bond in structured JSON format.
+
+    Decrypts all memories (Q&As, journals, goals, countdowns, bucket list)
+    and returns a clean, personal archive.
+    """
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        partner_user = m.users_conf.find_one({'_id': ObjectId(partner_id)}, {'username': 1})
+        partner_username = _clean_username(partner_user['username'] if partner_user else 'Partner')
+        my_username = _clean_username(current_user.username)
+
+        bond_oid = ObjectId(bond_id)
+
+        # 1. Journals
+        journals = []
+        for j in m.bond_journal_conf.find({'bond_id': bond_oid}).sort('created_at', 1):
+            content = j.get('content', '')
+            if j.get('encrypted') and content:
+                try:
+                    content = m.decrypt_bond_data(content, bond_id)
+                except Exception:
+                    content = '[Encrypted]'
+            journals.append({
+                'date': _format_datetime(j.get('created_at')),
+                'author': my_username if str(j.get('author_id')) == user_id_str else partner_username,
+                'content': content
+            })
+
+        # 2. Q&As
+        qotds = []
+        for q in m.bond_qotd_conf.find({'bond_id': bond_oid, 'revealed': True}).sort('date', 1):
+            q_text = q.get('question_text', '')
+            if q.get('encrypted') and q_text:
+                try:
+                    q_text = m.decrypt_bond_data(q_text, bond_id)
+                except Exception:
+                    pass
+            answers = q.get('answers', {})
+            my_ans = answers.get(user_id_str, {}).get('text', '')
+            partner_ans = answers.get(partner_id, {}).get('text', '')
+            if q.get('encrypted'):
+                try:
+                    if my_ans:
+                        my_ans = m.decrypt_bond_data(my_ans, bond_id)
+                    if partner_ans:
+                        partner_ans = m.decrypt_bond_data(partner_ans, bond_id)
+                except Exception:
+                    pass
+            qotds.append({
+                'date': q.get('date', ''),
+                'question': q_text,
+                'my_answer': my_ans,
+                'partner_answer': partner_ans
+            })
+
+        # 3. Goals
+        goals = []
+        for g in m.bond_goals_conf.find({'bond_id': bond_oid}).sort('created_at', 1):
+            title = g.get('title', '')
+            if g.get('encrypted') and title:
+                try:
+                    title = m.decrypt_bond_data(title, bond_id)
+                except Exception:
+                    pass
+            goals.append({
+                'title': title,
+                'category': g.get('category', 'Custom'),
+                'status': g.get('status', 'active'),
+                'created_at': _format_datetime(g.get('created_at')),
+                'completed_at': _format_datetime(g.get('completed_at')) if g.get('completed_at') else None
+            })
+
+        # 4. Countdowns & Milestones
+        countdowns = []
+        for c in m.bond_countdowns_conf.find({'bond_id': bond_oid}).sort('target_date', 1):
+            title = c.get('title', '')
+            if c.get('encrypted') and title:
+                try:
+                    title = m.decrypt_bond_data(title, bond_id)
+                except Exception:
+                    pass
+            countdowns.append({
+                'title': title,
+                'target_date': str(c.get('target_date', ''))
+            })
+
+        export_data = {
+            'bond_title': f"{my_username} & {partner_username}'s Memory Book",
+            'relationship_type': BOND_TYPES.get(bond_doc.get('bond_type', 'custom'), {}).get('label', 'Bond'),
+            'bonded_since': _format_datetime(bond_doc.get('accepted_at') or bond_doc.get('created_at')),
+            'current_streak': bond_doc.get('streak_count', 0),
+            'best_streak': bond_doc.get('best_streak', 0),
+            'exported_at': datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+            'journals': journals,
+            'daily_questions': qotds,
+            'goals': goals,
+            'countdowns': countdowns
+        }
+
+        return jsonify({'success': True, 'data': export_data})
+
+    except Exception as e:
+        current_app.logger.error(f"Bond export error for {bond_id}: {e}")
+        return jsonify({'error': 'Failed to export memories'}), 500
+

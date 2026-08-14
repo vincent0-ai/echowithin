@@ -2241,10 +2241,15 @@
         });
 
         socket.on('message_reacted', (data) => {
-            console.log("Sync: message_reacted", data);
-            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
-            if (bubble) {
-                updateReactions(bubble, data.reactions);
+            if (data.id) {
+                const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+                if (bubble) updateReactions(bubble, data.reactions);
+            }
+        });
+
+        socket.on('message_pinned', (data) => {
+            if (data.id) {
+                updatePinVisual(data.id, data.is_pinned);
             }
         });
 
@@ -2798,6 +2803,9 @@
 
             if (msgData.reactions) updateReactions(newBubble, msgData.reactions);
             if (resolvedId) addMessageActions(newBubble, resolvedId, type);
+            if (msgData.is_pinned) updatePinVisual(resolvedId, true);
+            const audioPlayer = newBubble.querySelector('.audio-player');
+            if (audioPlayer && window.initAudioPlayer) window.initAudioPlayer(audioPlayer);
 
             // Long press for mobile
             newBubble.addEventListener('touchstart', (e) => startPressTimer(e, resolvedId, type), { passive: true });
@@ -2934,24 +2942,45 @@
             }
         };
 
-        window.toggleAudio = function (btn) {
-            const player = btn.closest('.audio-player');
+        window.initAudioPlayer = function (player) {
             const src = player.getAttribute('data-src');
-            const icon = btn.querySelector('i');
-            const progress = player.querySelector('.audio-progress-fill');
             const timeEl = player.querySelector('.audio-time');
-
-            if (!player.audio) {
+            if (!player.audio && src) {
                 player.audio = new Audio(src);
+                player.audio.preload = 'metadata';
+                player.audio.onloadedmetadata = () => {
+                    if (player.audio.duration && !isNaN(player.audio.duration) && isFinite(player.audio.duration)) {
+                        timeEl.textContent = formatTime(player.audio.duration);
+                    }
+                };
                 player.audio.ontimeupdate = () => {
-                    const pct = (player.audio.currentTime / player.audio.duration) * 100;
-                    progress.style.width = pct + '%';
-                    timeEl.textContent = formatTime(player.audio.currentTime);
+                    const progress = player.querySelector('.audio-progress-fill');
+                    if (player.audio.duration && isFinite(player.audio.duration)) {
+                        const pct = (player.audio.currentTime / player.audio.duration) * 100;
+                        if (progress) progress.style.width = pct + '%';
+                        timeEl.textContent = formatTime(player.audio.currentTime) + ' / ' + formatTime(player.audio.duration);
+                    } else {
+                        timeEl.textContent = formatTime(player.audio.currentTime);
+                    }
                 };
                 player.audio.onended = () => {
-                    icon.className = 'fas fa-play';
-                    progress.style.width = '0%';
+                    const icon = player.querySelector('.audio-play-btn i');
+                    if (icon) icon.className = 'fas fa-play';
+                    const progress = player.querySelector('.audio-progress-fill');
+                    if (progress) progress.style.width = '0%';
+                    if (player.audio.duration && isFinite(player.audio.duration)) {
+                        timeEl.textContent = formatTime(player.audio.duration);
+                    }
                 };
+            }
+        };
+
+        window.toggleAudio = function (btn) {
+            const player = btn.closest('.audio-player');
+            const icon = btn.querySelector('i');
+
+            if (!player.audio) {
+                initAudioPlayer(player);
             }
 
             if (player.audio.paused) {
@@ -2959,7 +2988,8 @@
                 document.querySelectorAll('.audio-player').forEach(p => {
                     if (p.audio && !p.audio.paused) {
                         p.audio.pause();
-                        p.querySelector('i').className = 'fas fa-play';
+                        const pIcon = p.querySelector('.audio-play-btn i');
+                        if (pIcon) pIcon.className = 'fas fa-play';
                     }
                 });
                 player.audio.play();
@@ -3016,6 +3046,9 @@
                 <div class="mobile-action-item" onclick="closeMobileActions(); replyToMessage('${msgId}', '${preview}', true)">
                     <i class="fas fa-reply"></i> Reply
                 </div>
+                <div class="mobile-action-item" onclick="closeMobileActions(); togglePinMessage('${msgId}')">
+                    <i class="fas fa-thumbtack"></i> Pin / Unpin
+                </div>
                 <div class="mobile-action-item" onclick="closeMobileActions(); copyMessageText('${msgId}')">
                     <i class="fas fa-copy"></i> Copy Text
                 </div>
@@ -3045,6 +3078,41 @@
             const text = bubble.querySelector('.message-content').textContent;
             navigator.clipboard.writeText(text).then(() => showToast("Copied to clipboard"));
         };
+
+        window.togglePinMessage = function (msgId) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            echoFetch('/api/messages/pin/' + msgId, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken }
+            }).then(r => r.json()).then(d => {
+                if (d.success) {
+                    updatePinVisual(msgId, d.is_pinned);
+                    if (window.showToast) showToast(d.is_pinned ? "Message pinned" : "Message unpinned");
+                } else {
+                    if (window.showToast) showToast(d.error || "Failed to pin message");
+                }
+            }).catch(err => {
+                console.error('Pin error:', err);
+            });
+        };
+
+        function updatePinVisual(msgId, isPinned) {
+            const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
+            if (!bubble) return;
+            let pinBadge = bubble.querySelector('.message-pin-badge');
+            if (isPinned) {
+                if (!pinBadge) {
+                    pinBadge = document.createElement('span');
+                    pinBadge.className = 'message-pin-badge';
+                    pinBadge.style.cssText = 'font-size:0.7rem; color:var(--primary-color); margin-left:4px;';
+                    pinBadge.innerHTML = '<i class="fas fa-thumbtack"></i>';
+                    const meta = bubble.querySelector('.message-meta');
+                    if (meta) meta.appendChild(pinBadge);
+                }
+            } else {
+                if (pinBadge) pinBadge.remove();
+            }
+        }
 
         function updateReactions(bubble, reactions) {
             const container = bubble.querySelector('.reaction-badges');
@@ -4470,7 +4538,7 @@
         <p style="font-weight: 500; margin-top: 0.5rem;">Choose duration:</p>
         <div class="whisper-duration-options" id="whisper-duration-options"></div>
         <div class="whisper-consent-text">
-            Both parties must consent. Messages are text-only, cannot be copied, and are never backed up.
+            Both parties must consent. Messages and photos are permanently deleted when time runs out and are never backed up.
             Screen capture attempts will alert both participants.
         </div>
         <div class="whisper-modal-actions">
@@ -4509,7 +4577,14 @@
     </div>
     <div class="whisper-messages" id="whisper-messages"></div>
     <div class="whisper-typing-indicator" id="whisper-typing"></div>
+    <div id="whisper-image-preview" style="display:none;padding:0.4rem;background:rgba(255,255,255,0.1);margin:0 0.5rem;border-radius:6px;position:relative;">
+        <img id="whisper-image-preview-img" src="" style="max-height:120px;border-radius:4px;" />
+        <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
+        <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
+    </div>
     <div class="whisper-input-area">
+        <input type="file" id="whisper-image-input" accept="image/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
+        <button onclick="document.getElementById('whisper-image-input').click()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo"><i class="fas fa-camera"></i></button>
         <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
         <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
     </div>
@@ -4702,7 +4777,36 @@
         } else {
             const isSent = msg.sender_id === currentUserId;
             div.className = 'whisper-msg ' + (isSent ? 'whisper-msg-sent' : 'whisper-msg-received');
-            div.textContent = msg.content;
+            if (msg.id) div.setAttribute('data-msg-id', msg.id);
+            var contentDiv = document.createElement('div');
+            if (msg.message_type === 'image' && msg.image_url) {
+                const img = document.createElement('img');
+                img.src = msg.image_url;
+                img.style.cssText = 'max-width:220px;max-height:200px;border-radius:6px;cursor:pointer;display:block;';
+                img.onclick = function() { if (window.openLightbox) openLightbox(msg.image_url); };
+                contentDiv.appendChild(img);
+                if (msg.content && msg.content !== '[Photo]') {
+                    const caption = document.createElement('div');
+                    caption.style.cssText = 'font-size:0.82rem;margin-top:0.3rem;';
+                    caption.textContent = msg.content;
+                    contentDiv.appendChild(caption);
+                }
+            } else {
+                contentDiv.textContent = msg.content;
+            }
+            div.appendChild(contentDiv);
+            // Reaction badge area
+            var reactBadge = document.createElement('div');
+            reactBadge.className = 'whisper-reaction-badge';
+            reactBadge.style.cssText = 'font-size:0.85rem;margin-top:0.15rem;';
+            div.appendChild(reactBadge);
+            // Add reaction tap for received messages
+            if (!isSent && msg.id) {
+                div.ondblclick = function() { showWhisperReactionPicker(msg.id, div); };
+                var tapTimer = null;
+                div.ontouchstart = function() { tapTimer = setTimeout(function() { showWhisperReactionPicker(msg.id, div); }, 500); };
+                div.ontouchend = function() { clearTimeout(tapTimer); };
+            }
             const time = document.createElement('div');
             time.className = 'whisper-msg-time';
             const d = window.parseServerTime ? window.parseServerTime(msg.timestamp) : new Date(msg.timestamp);
@@ -4713,24 +4817,122 @@
         container.scrollTop = container.scrollHeight;
     };
 
+    var _whisperReactPicker = null;
+    function showWhisperReactionPicker(msgId, el) {
+        if (_whisperReactPicker) _whisperReactPicker.remove();
+        var picker = document.createElement('div');
+        picker.style.cssText = 'display:flex;gap:0.3rem;background:rgba(30,30,30,0.95);border-radius:20px;padding:0.3rem 0.5rem;position:absolute;z-index:10;';
+        var emojis = ['❤️', '😂', '😮', '😢', '🔥', '👍'];
+        emojis.forEach(function(e) {
+            var btn = document.createElement('button');
+            btn.textContent = e;
+            btn.style.cssText = 'background:none;border:none;font-size:1.1rem;cursor:pointer;padding:0.1rem;';
+            btn.onclick = function() {
+                reactToWhisperMessage(msgId, e);
+                picker.remove();
+                _whisperReactPicker = null;
+            };
+            picker.appendChild(btn);
+        });
+        el.style.position = 'relative';
+        el.appendChild(picker);
+        _whisperReactPicker = picker;
+        setTimeout(function() { if (_whisperReactPicker) { _whisperReactPicker.remove(); _whisperReactPicker = null; } }, 5000);
+    }
+
+    function reactToWhisperMessage(msgId, emoji) {
+        if (!window.socket || !whisperState.sessionId) return;
+        socket.emit('whisper_react', {
+            session_id: whisperState.sessionId,
+            message_id: msgId,
+            emoji: emoji
+        });
+        // Optimistically show the reaction
+        var container = document.getElementById('whisper-messages');
+        if (container) {
+            var el = container.querySelector('[data-msg-id="' + msgId + '"]');
+            if (el) {
+                var badge = el.querySelector('.whisper-reaction-badge');
+                if (badge) badge.textContent = emoji;
+            }
+        }
+    }
+
     window.sendWhisperMessage = function() {
         const input = document.getElementById('whisper-input');
         const content = input.value.trim();
-        if (!content || !whisperState.sessionId) return;
+        const pendingImgUrl = window._whisperPendingImageUrl || '';
+        if (!content && !pendingImgUrl) return;
+        if (!whisperState.sessionId) return;
         input.value = '';
         const tempId = 'wt-' + Date.now();
-        appendWhisperMessage({ sender_id: currentUserId, content: content, timestamp: new Date().toISOString(), is_system: false });
+        const msgType = pendingImgUrl ? 'image' : 'text';
+        const localMsg = { sender_id: currentUserId, content: content || '[Photo]', timestamp: new Date().toISOString(), is_system: false, message_type: msgType };
+        if (pendingImgUrl) localMsg.image_url = pendingImgUrl;
+        appendWhisperMessage(localMsg);
         if (window.socket) {
-            socket.emit('whisper_message', {
+            const payload = {
                 session_id: whisperState.sessionId,
                 content: content,
-                temp_id: tempId
-            });
+                temp_id: tempId,
+                message_type: msgType
+            };
+            if (pendingImgUrl) payload.image_url = pendingImgUrl;
+            socket.emit('whisper_message', payload);
         }
+        // Clear pending image
+        window._whisperPendingImageUrl = '';
+        cancelWhisperImage();
         // Typing stop
         if (window.socket && whisperState.partnerId) {
             socket.emit('whisper_stop_typing', { partner_id: whisperState.partnerId });
         }
+    };
+
+    window.handleWhisperImageUpload = function(input) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Image must be under 5MB');
+            input.value = '';
+            return;
+        }
+        // Show preview
+        const preview = document.getElementById('whisper-image-preview');
+        const previewImg = document.getElementById('whisper-image-preview-img');
+        const uploading = document.getElementById('whisper-image-uploading');
+        preview.style.display = 'block';
+        uploading.style.display = 'block';
+        previewImg.src = URL.createObjectURL(file);
+
+        // Upload to existing DM image endpoint
+        const fd = new FormData();
+        fd.append('image', file);
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        echoFetch('/api/messages/upload_image', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: fd
+        }).then(r => r.json()).then(d => {
+            uploading.style.display = 'none';
+            if (d.success && d.url) {
+                window._whisperPendingImageUrl = d.url;
+            } else {
+                cancelWhisperImage();
+                alert(d.error || 'Upload failed');
+            }
+        }).catch(err => {
+            uploading.style.display = 'none';
+            cancelWhisperImage();
+            console.error('Whisper image upload error:', err);
+        });
+        input.value = '';
+    };
+
+    window.cancelWhisperImage = function() {
+        window._whisperPendingImageUrl = '';
+        document.getElementById('whisper-image-preview').style.display = 'none';
+        document.getElementById('whisper-image-preview-img').src = '';
     };
 
     window.endWhisperSession = function() {
@@ -4872,6 +5074,10 @@
 
         socket.on('whisper_new_message', function(data) {
             appendWhisperMessage(data);
+            // Emit read receipt for incoming messages
+            if (data.sender_id !== currentUserId && whisperState.sessionId) {
+                socket.emit('whisper_read', { session_id: whisperState.sessionId });
+            }
         });
 
         socket.on('whisper_message_confirmed', function(data) {
@@ -4904,6 +5110,32 @@
                 is_system: true,
                 content: data.username + ' may have captured the screen'
             });
+        });
+
+        socket.on('whisper_read_receipt', function(data) {
+            // Mark all sent whisper messages as read with a tick
+            var container = document.getElementById('whisper-messages');
+            if (!container) return;
+            var sentMsgs = container.querySelectorAll('.whisper-msg-sent');
+            sentMsgs.forEach(function(el) {
+                if (!el.querySelector('.whisper-read-tick')) {
+                    var tick = document.createElement('span');
+                    tick.className = 'whisper-read-tick';
+                    tick.textContent = 'Read';
+                    tick.style.cssText = 'font-size:0.65rem;color:rgba(255,255,255,0.5);display:block;text-align:right;margin-top:0.1rem;';
+                    el.appendChild(tick);
+                }
+            });
+        });
+
+        socket.on('whisper_reaction', function(data) {
+            var container = document.getElementById('whisper-messages');
+            if (!container) return;
+            var el = container.querySelector('[data-msg-id="' + data.message_id + '"]');
+            if (el) {
+                var badge = el.querySelector('.whisper-reaction-badge');
+                if (badge) badge.textContent = data.emoji;
+            }
         });
 
         socket.on('whisper_user_typing', function(data) {

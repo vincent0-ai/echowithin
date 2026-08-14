@@ -246,3 +246,32 @@ def get_unread_notification_count():
     except Exception as e:
         current_app.logger.error(f"Failed to compute unread count: {e}")
         return jsonify({'unread_count': 0})
+
+
+@bp.route('/api/push/preferences', methods=['GET', 'POST'])
+@login_required
+def api_push_preferences():
+    """Get or update granular push notification preferences."""
+    import main as m
+    DEFAULT_PREFS = {
+        'dms': True,
+        'bonds': True,
+        'anniversaries': True,
+        'whispers': True,
+    }
+    user_oid = ObjectId(current_user.id)
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        new_prefs = {}
+        for key in DEFAULT_PREFS:
+            if key in data:
+                new_prefs[key] = bool(data[key])
+        m.users_conf.update_one(
+            {'_id': user_oid},
+            {'$set': {'notification_preferences': new_prefs}}
+        )
+        return jsonify({'success': True, 'preferences': {**DEFAULT_PREFS, **new_prefs}})
+
+    user_doc = m.users_conf.find_one({'_id': user_oid}, {'notification_preferences': 1})
+    saved_prefs = user_doc.get('notification_preferences') or {} if user_doc else {}
+    return jsonify({'preferences': {**DEFAULT_PREFS, **saved_prefs}})

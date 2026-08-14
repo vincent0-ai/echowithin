@@ -408,6 +408,24 @@ def send_weekly_newsletter():
 def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None, extra_data=None):
     """Send a push notification (Web Push and FCM) to all devices of a user."""
     try:
+        # Check granular notification preferences if set
+        user_doc = database.users_conf.find_one({'_id': ObjectId(user_id_str)}, {'notification_preferences': 1})
+        if user_doc and 'notification_preferences' in user_doc:
+            prefs = user_doc.get('notification_preferences') or {}
+            tag_str = str(tag or '').lower()
+            if 'dm' in tag_str or 'message' in tag_str:
+                if prefs.get('dms') is False:
+                    return
+            elif 'anniversary' in tag_str or 'milestone' in tag_str:
+                if prefs.get('anniversaries') is False:
+                    return
+            elif 'whisper' in tag_str:
+                if prefs.get('whispers') is False:
+                    return
+            elif 'bond' in tag_str:
+                if prefs.get('bonds') is False:
+                    return
+
         if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
             subscriptions = list(database.push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))
             if subscriptions:

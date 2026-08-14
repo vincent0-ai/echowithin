@@ -1800,6 +1800,18 @@
                 <div id="insights-content-{{ bond.id }}">
                     <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading relationship insights...</div>
                 </div>
+                <div style="margin-top:1rem;padding-top:0.8rem;border-top:1px solid var(--border-color);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                        <div style="font-weight:600;font-size:0.95rem;color:var(--text-dark-color);">Memory Timeline</div>
+                        <button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="exportMemoryBook('{{ bond.id }}')">Export Memory Book</button>
+                    </div>
+                    <div id="timeline-content-{{ bond.id }}">
+                        <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading timeline...</div>
+                    </div>
+                    <div id="timeline-load-more-{{ bond.id }}" style="display:none;text-align:center;margin-top:0.5rem;">
+                        <button class="btn btn-bond-secondary" style="font-size:0.78rem;padding:0.3rem 0.8rem;">Load more</button>
+                    </div>
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -2862,9 +2874,7 @@
         html += '<div class="qotd-category">' + escHtml(data.category) + '</div>';
         html += '<div class="qotd-question">"' + escHtml(data.question) + '"</div>';
 
-        if (data.source === 'ai') {
-            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">AI Generated</div>';
-        } else if (data.source === 'custom' && data.set_by_username) {
+        if (data.source === 'custom' && data.set_by_username && (!data.category || !data.category.includes('Asked by'))) {
             html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">Asked by ' + escHtml(data.set_by_username) + '</div>';
         }
 
@@ -4119,10 +4129,113 @@
 
                 html += '</div>';
                 el.innerHTML = html;
+                // Also load the timeline
+                loadTimeline(bondId);
             })
             .catch(() => {
                 const el = document.getElementById('insights-content-' + bondId);
                 if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load insights.</div>';
+            });
+    }
+
+    // --- Memory Timeline ---
+    var _timelinePages = {};
+    function loadTimeline(bondId, page) {
+        page = page || 1;
+        const container = document.getElementById('timeline-content-' + bondId);
+        const loadMore = document.getElementById('timeline-load-more-' + bondId);
+        if (!container) return;
+        if (page === 1) {
+            container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.5rem;">Loading timeline...</div>';
+        }
+        echoFetch('/api/bonds/' + bondId + '/timeline?page=' + page)
+            .then(r => r.json())
+            .then(d => {
+                if (d.error) {
+                    container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;">' + escHtml(d.error) + '</div>';
+                    return;
+                }
+                if (!d.items || d.items.length === 0) {
+                    if (page === 1) container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No memories yet. Start journaling, answering QOTD, or sharing photos.</div>';
+                    return;
+                }
+                var html = page === 1 ? '' : container.innerHTML;
+                // Remove the "load more clicked" state
+                if (page > 1) {
+                    // Remove existing load more placeholder if present
+                }
+                d.items.forEach(function(item) {
+                    var dateStr = '';
+                    if (item.timestamp) {
+                        var dt = window.parseServerTime ? window.parseServerTime(item.timestamp) : new Date(item.timestamp);
+                        if (dt) dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+                    }
+                    html += '<div style="display:flex;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">';
+                    // Type indicator
+                    var icon = '';
+                    if (item.type === 'journal') icon = '📝';
+                    else if (item.type === 'qotd') icon = '💬';
+                    else if (item.type === 'mood') icon = item.emoji || '😊';
+                    else if (item.type === 'goal') icon = '🎯';
+                    else if (item.type === 'photo') icon = '📷';
+                    html += '<div style="font-size:1.2rem;min-width:1.5rem;text-align:center;padding-top:0.1rem;">' + icon + '</div>';
+                    html += '<div style="flex:1;min-width:0;">';
+                    html += '<div style="font-size:0.72rem;color:var(--text-muted);">' + dateStr + '</div>';
+                    if (item.type === 'journal') {
+                        html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.author) + '</div>';
+                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);margin-top:0.15rem;">' + nl2br(item.content) + '</div>';
+                    } else if (item.type === 'qotd') {
+                        html += '<div style="font-size:0.82rem;color:var(--text-secondary);font-style:italic;">"' + escHtml(item.question) + '"</div>';
+                        if (item.my_answer) html += '<div style="font-size:0.82rem;margin-top:0.15rem;"><strong>' + escHtml(item.my_username) + ':</strong> ' + nl2br(item.my_answer) + '</div>';
+                        if (item.partner_answer) html += '<div style="font-size:0.82rem;margin-top:0.1rem;"><strong>' + escHtml(item.partner_username) + ':</strong> ' + nl2br(item.partner_answer) + '</div>';
+                    } else if (item.type === 'mood') {
+                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">' + escHtml(item.author) + ' felt <strong>' + escHtml(item.label) + '</strong></div>';
+                    } else if (item.type === 'goal') {
+                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">Completed goal: <strong>' + escHtml(item.title) + '</strong></div>';
+                    } else if (item.type === 'photo') {
+                        if (item.title) html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.uploader) + ': ' + escHtml(item.title) + '</div>';
+                        if (item.url) html += '<img src="' + escHtml(item.url) + '" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:0.2rem;cursor:pointer;" onclick="if(window.openLightbox)openLightbox(\'' + escHtml(item.url) + '\')" loading="lazy">';
+                    }
+                    html += '</div></div>';
+                });
+                container.innerHTML = html;
+                // Load more button
+                _timelinePages[bondId] = page;
+                if (d.has_more && loadMore) {
+                    loadMore.style.display = 'block';
+                    loadMore.querySelector('button').onclick = function() { loadTimeline(bondId, page + 1); };
+                } else if (loadMore) {
+                    loadMore.style.display = 'none';
+                }
+            })
+            .catch(function() {
+                if (page === 1) container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;">Failed to load timeline.</div>';
+            });
+    }
+
+    function exportMemoryBook(bondId) {
+        if (window.showCustomToast) showCustomToast('Preparing your Memory Book...', 'info');
+        echoFetch('/api/bonds/' + bondId + '/export')
+            .then(r => r.json())
+            .then(d => {
+                if (d.error || !d.data) {
+                    if (window.showCustomToast) showCustomToast(d.error || 'Failed to export memories', 'error');
+                    return;
+                }
+                const blob = new Blob([JSON.stringify(d.data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = (d.data.bond_title || 'Memory_Book').replace(/[^a-zA-Z0-9_-]/g, '_') + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                if (window.showCustomToast) showCustomToast('Memory Book downloaded!', 'success');
+            })
+            .catch(err => {
+                console.error('Export error:', err);
+                if (window.showCustomToast) showCustomToast('Failed to download Memory Book', 'error');
             });
     }
 

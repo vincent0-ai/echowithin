@@ -165,6 +165,8 @@ def api_message_history(other_user_id):
                 msg_data['link_preview'] = {'url': m.decrypt_dm(lp.get('url', ''), u1, u2) if lp.get('url', '').startswith('gAAAAA') else lp.get('url', ''), 'title': m.decrypt_dm(lp.get('title', ''), u1, u2) if lp.get('title', '').startswith('gAAAAA') else lp.get('title', ''), 'description': m.decrypt_dm(lp.get('description', ''), u1, u2) if lp.get('description', '').startswith('gAAAAA') else lp.get('description', ''), 'image': m.decrypt_dm(lp.get('image', ''), u1, u2) if lp.get('image', '').startswith('gAAAAA') else lp.get('image', '')}
         if 'reactions' in msg:
             msg_data['reactions'] = msg['reactions']
+        if msg.get('is_pinned'):
+            msg_data['is_pinned'] = True
         formatted_messages.append(msg_data)
         
     # Socket alert for real-time double checkmarks
@@ -543,7 +545,47 @@ def api_react_message(message_id):
         m.socketio.emit('message_reacted', payload, room=f"user_{msg['recipient_id']}")
         return jsonify({'success': True, 'reactions': reactions})
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        current_app.logger.error(f"React message error: {e}")
+        return jsonify({'error': 'Failed to react'}), 500
+
+
+@bp.route('/api/messages/pin/<message_id>', methods=['POST'])
+@login_required
+@limits(calls=30, period=60)
+def api_pin_message(message_id):
+    """Toggle pinned status for a direct message."""
+    import main as m
+    try:
+        msg = m.direct_messages_conf.find_one({'_id': ObjectId(message_id)})
+        if not msg:
+            return jsonify({'error': 'Message not found'}), 404
+        user_id_str = str(current_user.id)
+        sender_id_str = str(msg['sender_id'])
+        recipient_id_str = str(msg['recipient_id'])
+        if user_id_str not in (sender_id_str, recipient_id_str):
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        is_pinned = not msg.get('is_pinned', False)
+        update_doc = {'is_pinned': is_pinned}
+        if is_pinned:
+            update_doc['pinned_by'] = ObjectId(user_id_str)
+            update_doc['pinned_at'] = datetime.datetime.now(datetime.timezone.utc)
+        else:
+            update_doc['pinned_by'] = None
+            update_doc['pinned_at'] = None
+
+        m.direct_messages_conf.update_one({'_id': ObjectId(message_id)}, {'$set': update_doc})
+        payload = {
+            'id': message_id,
+            'is_pinned': is_pinned,
+            'pinned_by': user_id_str if is_pinned else None
+        }
+        m.socketio.emit('message_pinned', payload, room=f"user_{sender_id_str}")
+        m.socketio.emit('message_pinned', payload, room=f"user_{recipient_id_str}")
+        return jsonify({'success': True, 'is_pinned': is_pinned})
+    except Exception as e:
+        current_app.logger.error(f"Pin message error: {e}")
+        return jsonify({'error': 'Failed to toggle pin'}), 500
 
 
 @bp.route('/api/messages/search/<other_user_id>', methods=['GET'])

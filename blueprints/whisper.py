@@ -499,17 +499,10 @@ def api_whisper_end(session_id):
 
         partner_id = _get_partner_id(session_doc, user_id_str)
 
-        # Insert "Session ended" system message before cleanup
+        # Emit "Session ended" via SocketIO for real-time display
+        # (Not inserted into whisper_messages since they're all deleted below)
         now = datetime.datetime.now(datetime.timezone.utc)
         ended_msg = f'Session ended by {current_user.username}'
-        m.whisper_messages_conf.insert_one({
-            'session_id': ObjectId(session_id),
-            'sender_id': ObjectId(user_id_str),
-            'content': ended_msg,
-            'timestamp': now,
-            'expires_at': now + datetime.timedelta(minutes=5),
-            'is_system': True
-        })
         m.socketio.emit('whisper_new_message', {
             'session_id': session_id,
             'sender_id': user_id_str,
@@ -641,18 +634,31 @@ def api_whisper_history(session_id):
         formatted = []
         for msg in messages:
             content = msg.get('content', '')
-            if not msg.get('is_system') and content and content.startswith('gAAAAA'):
-                try:
-                    content = m.decrypt_dm(content, user_id_str, partner_id)
-                except Exception as err:
-                    current_app.logger.warning(f"Whisper message decryption error: {err}")
-            formatted.append({
+            image_url = msg.get('image_url', '')
+            msg_type = msg.get('message_type', 'text')
+            if not msg.get('is_system'):
+                if content and content.startswith('gAAAAA'):
+                    try:
+                        content = m.decrypt_dm(content, user_id_str, partner_id)
+                    except Exception as err:
+                        current_app.logger.warning(f"Whisper message decryption error: {err}")
+                if image_url and image_url.startswith('gAAAAA'):
+                    try:
+                        image_url = m.decrypt_dm(image_url, user_id_str, partner_id)
+                    except Exception as err:
+                        current_app.logger.warning(f"Whisper image URL decryption error: {err}")
+                        image_url = ''
+            entry = {
                 'id': str(msg['_id']),
                 'sender_id': str(msg['sender_id']),
                 'content': content,
                 'timestamp': _utc_iso(msg.get('timestamp')),
-                'is_system': msg.get('is_system', False)
-            })
+                'is_system': msg.get('is_system', False),
+                'message_type': msg_type
+            }
+            if msg_type == 'image' and image_url:
+                entry['image_url'] = image_url
+            formatted.append(entry)
 
         return jsonify({'messages': formatted})
 

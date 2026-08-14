@@ -3748,12 +3748,17 @@ def api_bond_timeline(bond_id):
                 except Exception:
                     question_text = '[Encrypted]'
             answers = q.get('answers', {})
-            my_answer = answers.get(user_id_str, {}).get('text', '')
-            partner_answer = answers.get(partner_id, {}).get('text', '')
+            my_ans_data = answers.get(user_id_str, {})
+            my_answer = my_ans_data.get('answer', '') if isinstance(my_ans_data, dict) else (my_ans_data.get('text', '') if isinstance(my_ans_data, dict) else str(my_ans_data or ''))
+            partner_ans_data = answers.get(partner_id, {})
+            partner_answer = partner_ans_data.get('answer', '') if isinstance(partner_ans_data, dict) else (partner_ans_data.get('text', '') if isinstance(partner_ans_data, dict) else str(partner_ans_data or ''))
             if q.get('encrypted'):
                 try:
                     if my_answer:
                         my_answer = m.decrypt_bond_data(my_answer, bond_id)
+                except Exception:
+                    pass
+                try:
                     if partner_answer:
                         partner_answer = m.decrypt_bond_data(partner_answer, bond_id)
                 except Exception:
@@ -3822,14 +3827,26 @@ def api_bond_timeline(bond_id):
             })
 
         # --- Album photos ---
-        for p in m.bond_album_conf.find({'bond_id': bond_oid}).sort('date_taken', -1).limit(50):
+        for p in m.bond_album_photos_conf.find({'bond_id': bond_oid}).sort('date_taken', -1).limit(50):
+            photo_title = p.get('title', '')
+            if p.get('encrypted') and photo_title:
+                try:
+                    photo_title = m.decrypt_bond_data(photo_title, bond_id)
+                except Exception:
+                    photo_title = ''
+            photo_url = p.get('serve_url', '') or p.get('url', '')
+            if p.get('encrypted') and photo_url and not p.get('serve_url'):
+                try:
+                    photo_url = m.decrypt_bond_data(photo_url, bond_id)
+                except Exception:
+                    pass
             ts = p.get('date_taken') or p.get('uploaded_at')
             items.append({
                 'type': 'photo',
                 'id': str(p['_id']),
                 'timestamp': ts,
-                'url': p.get('serve_url', '') or p.get('url', ''),
-                'title': p.get('title', ''),
+                'url': photo_url,
+                'title': photo_title,
                 'uploader': my_username if str(p.get('uploaded_by')) == user_id_str else partner_username
             })
 
@@ -3841,7 +3858,11 @@ def api_bond_timeline(bond_id):
             if isinstance(ts, datetime.datetime):
                 if ts.tzinfo is None:
                     return ts.replace(tzinfo=datetime.timezone.utc)
-                return ts
+                return ts.astimezone(datetime.timezone.utc)
+            if isinstance(ts, str):
+                parsed = m.parse_iso_utc(ts)
+                if parsed:
+                    return parsed
             return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
         items.sort(key=_sort_key, reverse=True)
@@ -3858,7 +3879,15 @@ def api_bond_timeline(bond_id):
             if isinstance(ts, datetime.datetime):
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=datetime.timezone.utc)
+                else:
+                    ts = ts.astimezone(datetime.timezone.utc)
                 item['timestamp'] = ts.isoformat().replace('+00:00', 'Z')
+            elif isinstance(ts, str):
+                parsed = m.parse_iso_utc(ts)
+                if parsed:
+                    item['timestamp'] = parsed.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+                else:
+                    item['timestamp'] = ts
             elif ts is not None:
                 item['timestamp'] = str(ts)
             else:

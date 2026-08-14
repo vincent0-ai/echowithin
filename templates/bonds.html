@@ -1405,7 +1405,7 @@
             <button type="button" onclick="dismissTourTooltip('tour-tooltip-bonds')" class="btn btn-sm" style="background: var(--primary-color, #3e2217); color: var(--text-light-color, #fff); border-radius: 6px; font-size: 0.75rem; padding: 0.25rem 0.75rem; font-weight: 600;">Got it</button>
         </div>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce }}">
         function dismissTourTooltip(id) {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
@@ -2170,7 +2170,8 @@
 </div>
 
 <script nonce="{{ csp_nonce }}">
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta ? (csrfMeta.getAttribute('content') || csrfMeta.content || '') : '{{ csrf_token() }}';
     const currentUserId = '{{ current_user.id }}';
 
     // Bond selector – show one bond at a time
@@ -2182,6 +2183,7 @@
         document.querySelectorAll('.bond-tab').forEach(function(t) { t.classList.remove('active'); });
         if (btn) btn.classList.add('active');
     }
+    window.switchBond = switchBond;
 
     function toggleSection(id, btn) {
         const el = document.getElementById(id);

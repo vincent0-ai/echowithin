@@ -5254,6 +5254,14 @@
         }
     }
 
+    window.handlePinKey = function(key) {
+        if (key === 'backspace') {
+            window.deletePinDigit();
+        } else {
+            window.enterPinDigit(key);
+        }
+    };
+
     window.enterPinDigit = function(digit) {
         if (currentPin.length < 4) {
             currentPin += digit;
@@ -5306,7 +5314,7 @@
     }
 
     function verifyPin(pin) {
-        echoFetch('/api/bonds/app-lock/verify', {
+        echoFetch('/api/app_lock/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
@@ -5322,7 +5330,7 @@
     }
 
     function savePin(pin) {
-        echoFetch('/api/bonds/app-lock/setup', {
+        echoFetch('/api/app_lock/setup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })

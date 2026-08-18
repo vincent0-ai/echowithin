@@ -1411,15 +1411,23 @@ def delete_personal_post(post_id):
     """Deletes a personal note/post with mode support (me/everyone)."""
     import main as m
     try:
-        mode = request.form.get('mode', 'me')  # Default to 'me' for safety
+        if request.is_json:
+            data = request.get_json() or {}
+            mode = data.get('mode', 'me')
+        else:
+            mode = request.form.get('mode', 'me')  # Default to 'me' for safety
         obj_id = m.safe_object_id(post_id)
         if not obj_id:
+            if request.is_json:
+                return jsonify({'error': 'Invalid note ID'}), 400
             flash('Invalid note ID.', 'danger')
             return redirect(url_for('notes.personal_space'))
 
         # Fetch the note to verify ownership
         note = m.personal_posts_conf.find_one({'_id': obj_id, 'user_id': ObjectId(current_user.id)})
         if not note:
+            if request.is_json:
+                return jsonify({'error': 'Note not found or unauthorized'}), 404
             flash('Note not found or unauthorized.', 'danger')
             return redirect(url_for('notes.personal_space'))
 
@@ -1471,9 +1479,13 @@ def delete_personal_post(post_id):
             backup_before_delete('personal_posts', note_doc, current_user.id)
         m.personal_posts_conf.delete_many({'_id': {'$in': target_ids}})
 
+        if request.is_json:
+            return jsonify({'success': True, 'message': f'Personal note {msg_suffix}'})
         flash(f'Personal note {msg_suffix}', 'success')
     except Exception as e:
         current_app.logger.error(f"Error deleting personal post {post_id} (Mode: {mode}): {e}")
+        if request.is_json:
+            return jsonify({'error': 'Could not delete note'}), 500
         flash('Could not delete note.', 'danger')
     return redirect(url_for('notes.personal_space'))
 

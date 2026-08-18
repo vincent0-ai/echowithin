@@ -4838,8 +4838,10 @@
         window.currentEditNoteId = null;
         window.currentEditBaseUpdatedAt = null;
         window.currentEditDraftKey = null;
+        window.currentEditIsPending = false;
+        window.currentEditPendingId = null;
 
-        window.openEditModal = function (noteId, content, reference = '', tags = [], updatedAt = '') {
+        window.openEditModal = function (noteId, content, reference = '', tags = [], updatedAt = '', isPending = false, pendingId = null) {
             const modal = document.getElementById('edit-note-modal');
             const textarea = document.getElementById('edit-note-content');
             const refInput = document.getElementById('edit-note-reference');
@@ -4851,6 +4853,8 @@
                 window.currentEditNoteId = noteId;
                 window.currentEditBaseUpdatedAt = updatedAt || null;
                 window.currentEditDraftKey = draftKey;
+                window.currentEditIsPending = !!isPending;
+                window.currentEditPendingId = pendingId;
                 textarea.value = content;
                 if (refInput) refInput.value = reference || '';
                 if (tagsInput) tagsInput.value = Array.isArray(tags) ? tags.join(', ') : (tags || '');
@@ -4896,6 +4900,8 @@
                 window.currentEditNoteId = null;
                 window.currentEditBaseUpdatedAt = null;
                 window.currentEditDraftKey = null;
+                window.currentEditIsPending = false;
+                window.currentEditPendingId = null;
                 document.removeEventListener('keydown', window.handleEditModalEsc);
             }
         };
@@ -5451,24 +5457,45 @@
             }
 
             // Delete Confirmations (Delegated)
-            if (e.target.closest('#confirm-delete-me') && window.pendingDeleteForm) {
+            const isDeleteMe = !!e.target.closest('#confirm-delete-me');
+            const isDeleteEveryone = !!e.target.closest('#confirm-delete-everyone');
+            if ((isDeleteMe || isDeleteEveryone) && window.pendingDeleteForm) {
+                const mode = isDeleteEveryone ? 'everyone' : 'me';
+                const form = window.pendingDeleteForm;
+                const noteCard = form.closest('.note-card');
+                const noteId = form.action ? form.action.split('/').pop() : (noteCard ? noteCard.getAttribute('data-note-id') : null);
                 window.closeDeleteModal();
+
+                if (!navigator.onLine) {
+                    if (noteId && typeof window.addPending === 'function') {
+                        window.addPending({
+                            type: 'delete',
+                            noteId: noteId,
+                            mode: mode,
+                            queued_at: new Date().toISOString()
+                        }).then(() => {
+                            if (noteCard) noteCard.remove();
+                            if (typeof window.getAllPending === 'function' && typeof window.setOfflineBannerState === 'function') {
+                                window.getAllPending().then(p => {
+                                    window.setOfflineBannerState('offline', `You're offline — ${p.length} note(s) pending sync`);
+                                });
+                            }
+                            if (window.showCustomToast) {
+                                window.showCustomToast('Note deleted offline. Will sync when back online.', 'info');
+                            }
+                        });
+                    } else if (noteCard) {
+                        noteCard.remove();
+                    }
+                    return;
+                }
+
                 const modeInput = document.createElement('input');
                 modeInput.type = 'hidden';
                 modeInput.name = 'mode';
-                modeInput.value = 'me';
-                window.pendingDeleteForm.appendChild(modeInput);
-                window.pendingDeleteForm.submit();
-                return;
-            }
-            if (e.target.closest('#confirm-delete-everyone') && window.pendingDeleteForm) {
-                window.closeDeleteModal();
-                const modeInput = document.createElement('input');
-                modeInput.type = 'hidden';
-                modeInput.name = 'mode';
-                modeInput.value = 'everyone';
-                window.pendingDeleteForm.appendChild(modeInput);
-                window.pendingDeleteForm.submit();
+                modeInput.value = mode;
+                form.appendChild(modeInput);
+                form.submit();
                 return;
             }
 
@@ -5570,6 +5597,104 @@
 
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            if (window.currentEditIsPending && window.currentEditPendingId) {
+                try {
+                    if (typeof window.updatePending === 'function') {
+                        await window.updatePending(window.currentEditPendingId, {
+                            content: content,
+                            reference: reference,
+                            tags: tags,
+                            updated_at: new Date().toISOString()
+                        });
+                    }
+                    if (typeof window.getAllPending === 'function' && typeof window.renderPendingNotes === 'function') {
+                        const pending = await window.getAllPending();
+                        window.renderPendingNotes(pending);
+                    }
+                    clearCurrentEditDraft();
+                    window.closeEditModal();
+                    if (window.showCustomToast) {
+                        window.showCustomToast('Pending note updated.', 'success');
+                    }
+                } catch (e) {
+                    console.error('Failed to update pending note:', e);
+                    alert('Failed to update pending note.');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                }
+                return;
+            }
+
+            const saveOfflineEdit = async () => {
+                if (typeof window.getAllPending === 'function' && typeof window.addPending === 'function') {
+                    const pending = await window.getAllPending();
+                    const existingEdit = pending.find(p => p.type === 'edit' && p.noteId === noteId);
+                    if (existingEdit && typeof window.updatePending === 'function') {
+                        await window.updatePending(existingEdit.id, {
+                            content: content,
+                            reference: reference,
+                            tags: tags,
+                            edit_summary: editSummary,
+                            queued_at: new Date().toISOString()
+                        });
+                    } else {
+                        await window.addPending({
+                            type: 'edit',
+                            noteId: noteId,
+                            content: content,
+                            reference: reference,
+                            tags: tags,
+                            edit_summary: editSummary,
+                            base_updated_at: window.currentEditBaseUpdatedAt,
+                            queued_at: new Date().toISOString()
+                        });
+                    }
+                }
+                // Update note card DOM in-place
+                const noteCard = document.querySelector(`.note-card[data-note-id="${noteId}"]`);
+                if (noteCard) {
+                    const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                    if (contentEl) {
+                        contentEl.setAttribute('data-raw', content);
+                        if (typeof renderMarkdownWithMath === 'function') {
+                            contentEl.innerHTML = renderMarkdownWithMath(content);
+                        } else {
+                            contentEl.textContent = content;
+                        }
+                    }
+                    const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                    if (editBtnEl) {
+                        const tmp = document.createElement('textarea');
+                        tmp.textContent = content;
+                        editBtnEl.dataset.raw = tmp.innerHTML;
+                    }
+                    const copyBtnEl = noteCard.querySelector('.copy-btn');
+                    if (copyBtnEl) copyBtnEl.dataset.copyText = content;
+
+                    const dateEl = noteCard.querySelector('.note-date');
+                    if (dateEl) {
+                        dateEl.innerHTML = '<i class="far fa-clock"></i> Edited offline <span class="pending-badge" style="display:inline-flex;align-items:center;gap:0.2rem;background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:12px;font-size:0.65rem;border:1px solid #ffe0b2;margin-left:0.3rem;"><i class="fas fa-clock"></i> Edit pending sync</span>';
+                    }
+                }
+                clearCurrentEditDraft();
+                window.closeEditModal();
+                if (typeof window.getAllPending === 'function' && typeof window.setOfflineBannerState === 'function') {
+                    const allPending = await window.getAllPending();
+                    window.setOfflineBannerState('offline', `You're offline — ${allPending.length} note(s) pending sync`);
+                }
+                if (window.showCustomToast) {
+                    window.showCustomToast('Edit saved offline. Will sync when back online.', 'info');
+                }
+            };
+
+            if (!navigator.onLine) {
+                await saveOfflineEdit();
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+                return;
+            }
 
             try {
                 const csrfMeta = document.querySelector('meta[name="csrf-token"]');
@@ -5709,8 +5834,8 @@
                     alert(result.error || 'Failed to save changes.');
                 }
             } catch (err) {
-                console.error('Edit failed:', err);
-                alert('Network error. Please try again.');
+                console.warn('Online edit failed, falling back to offline edit:', err);
+                await saveOfflineEdit();
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
@@ -7500,6 +7625,77 @@
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
+        const saveInlineOffline = async () => {
+            if (typeof window.getAllPending === 'function' && typeof window.addPending === 'function') {
+                const pending = await window.getAllPending();
+                const existingEdit = pending.find(p => p.type === 'edit' && p.noteId === activePreviewNoteId);
+                if (existingEdit && typeof window.updatePending === 'function') {
+                    await window.updatePending(existingEdit.id, {
+                        content: content,
+                        reference: reference,
+                        tags: tags,
+                        edit_summary: editSummary,
+                        queued_at: new Date().toISOString()
+                    });
+                } else {
+                    await window.addPending({
+                        type: 'edit',
+                        noteId: activePreviewNoteId,
+                        content: content,
+                        reference: reference,
+                        tags: tags,
+                        edit_summary: editSummary,
+                        base_updated_at: activePreviewBaseUpdatedAt,
+                        queued_at: new Date().toISOString()
+                    });
+                }
+            }
+            const noteCard = activePreviewCard;
+            if (noteCard) {
+                const contentEl = noteCard.querySelector('.note-content.rendered-note');
+                if (contentEl) {
+                    contentEl.setAttribute('data-raw', content);
+                    contentEl.innerHTML = window.renderMarkdownWithMath
+                        ? window.renderMarkdownWithMath(content)
+                        : htmlEscape(content);
+                }
+                const editBtnEl = noteCard.querySelector('.edit-note-btn');
+                if (editBtnEl) {
+                    const tmp = document.createElement('textarea');
+                    tmp.textContent = content;
+                    editBtnEl.dataset.raw = tmp.innerHTML;
+                    editBtnEl.dataset.reference = reference;
+                    editBtnEl.dataset.tags = JSON.stringify(tags);
+                }
+                const copyBtnEl = noteCard.querySelector('.copy-btn');
+                if (copyBtnEl) copyBtnEl.dataset.copyText = content;
+                const dateEl = noteCard.querySelector('.note-date');
+                if (dateEl) {
+                    dateEl.innerHTML = '<i class="far fa-clock"></i> Edited offline <span class="pending-badge" style="display:inline-flex;align-items:center;gap:0.2rem;background:#fff3e0;color:#e65100;padding:2px 8px;border-radius:12px;font-size:0.65rem;border:1px solid #ffe0b2;margin-left:0.3rem;"><i class="fas fa-clock"></i> Edit pending sync</span>';
+                }
+            }
+            if (notePreviewContentEl) {
+                notePreviewContentEl.innerHTML = renderPreviewBody(content, reference, tags);
+            }
+            exitInlineEditMode(true);
+            if (typeof window.getAllPending === 'function' && typeof window.setOfflineBannerState === 'function') {
+                const allPending = await window.getAllPending();
+                window.setOfflineBannerState('offline', `You're offline — ${allPending.length} note(s) pending sync`);
+            }
+            if (typeof window.showToast === 'function') {
+                window.showToast('Note saved offline. Will sync when online.');
+            }
+        };
+
+        if (!navigator.onLine) {
+            await saveInlineOffline();
+            if (notePreviewEditSaveBtn) {
+                notePreviewEditSaveBtn.disabled = false;
+                notePreviewEditSaveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+            }
+            return;
+        }
+
         try {
             const response = await fetch(`/personal_post/edit/${activePreviewNoteId}`, {
                 method: 'POST',
@@ -7583,8 +7779,8 @@
                 }
             }
         } catch (err) {
-            console.error('Inline edit save failed:', err);
-            if (notePreviewEditStatus) notePreviewEditStatus.textContent = 'Network error while saving.';
+            console.warn('Inline edit save failed over network, saving offline:', err);
+            await saveInlineOffline();
         } finally {
             if (notePreviewEditSaveBtn) {
                 notePreviewEditSaveBtn.disabled = false;
@@ -7801,6 +7997,28 @@
             });
         }
 
+        function updatePending(id, data) {
+            return openDB().then(db => {
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction(STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME);
+                    const getReq = store.get(id);
+                    getReq.onsuccess = () => {
+                        const existing = getReq.result;
+                        if (!existing) {
+                            resolve();
+                            return;
+                        }
+                        const updated = { ...existing, ...data };
+                        const putReq = store.put(updated);
+                        putReq.onsuccess = () => resolve(updated);
+                        putReq.onerror = () => reject(putReq.error);
+                    };
+                    getReq.onerror = () => reject(getReq.error);
+                });
+            });
+        }
+
         function deletePending(id) {
             return openDB().then(db => {
                 return new Promise((resolve, reject) => {
@@ -7824,6 +8042,14 @@
                 });
             });
         }
+
+        // Export helper functions to window for global access
+        window.openOfflineDB = openDB;
+        window.getAllPending = getAllPending;
+        window.addPending = addPending;
+        window.updatePending = updatePending;
+        window.deletePending = deletePending;
+        window.clearAllPending = clearAllPending;
 
         // --- Cached Notes Mirror (IndexedDB) ---
         // Saves server-rendered notes to IndexedDB for offline access
@@ -7950,13 +8176,18 @@
                     <div class="note-card cached-note${pinClass}" data-note-id="${note.noteId}" style="opacity:0.85;">
                         <div class="note-content rendered-note" ${rawAttr}>${note.renderedHtml || (note.content ? note.content.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '')}</div>
                         ${metaHtml}
-                        <div class="note-footer">
+                        <div class="note-footer" style="display:flex;justify-content:space-between;align-items:center;">
                             <span class="note-date">
                                 <i class="far fa-clock"></i> ${note.updatedAt}
                                 <span class="cached-badge" style="display:inline-flex;align-items:center;gap:0.2rem;background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:12px;font-size:0.65rem;border:1px solid #c8e6c9;margin-left:0.3rem;">
                                     <i class="fas fa-database"></i> Cached
                                 </span>
                             </span>
+                            <div class="note-actions">
+                                <button type="button" class="btn-icon edit-note-btn" title="Edit note" data-id="${note.noteId}" data-reference="${(note.reference || '').replace(/"/g, '&quot;')}" data-tags="${JSON.stringify(note.tags || []).replace(/"/g, '&quot;')}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.85rem;">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -7975,46 +8206,118 @@
             banner.className = 'offline-banner';
             if (state === 'offline') {
                 banner.classList.add('offline');
-                banner.querySelector('i').className = 'fas fa-wifi';
+                const icon = banner.querySelector('i');
+                if (icon) icon.className = 'fas fa-wifi';
                 bannerText.textContent = extraMsg || "You're offline — viewing cached notes";
                 banner.style.display = 'flex';
             } else if (state === 'offline-empty') {
                 banner.classList.add('offline');
-                banner.querySelector('i').className = 'fas fa-wifi';
+                const icon = banner.querySelector('i');
+                if (icon) icon.className = 'fas fa-wifi';
                 bannerText.textContent = "You're offline — no cached notes available. Connect to the internet to load your notes.";
                 banner.style.display = 'flex';
             } else if (state === 'syncing') {
                 banner.classList.add('syncing');
-                banner.querySelector('i').className = 'fas fa-sync fa-spin';
+                const icon = banner.querySelector('i');
+                if (icon) icon.className = 'fas fa-sync fa-spin';
                 bannerText.textContent = 'Syncing your offline notes...';
                 banner.style.display = 'flex';
             } else {
                 banner.style.display = 'none';
             }
         }
+        window.setOfflineBannerState = setBanner;
 
         function renderPendingNotes(notes) {
-            if (!notes.length) {
+            if (!notes || !notes.length) {
                 pendingContainer.innerHTML = '';
                 return;
             }
             pendingContainer.innerHTML = notes.map(n => {
                 const escaped = (n.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const preview = escaped.substring(0, 300) + (escaped.length > 300 ? '...' : '');
-                const ts = (window.parseServerTime(n.created_at) || new Date()).toLocaleString();
+                const rawDate = n.created_at || n.queued_at || new Date().toISOString();
+                const ts = (window.parseServerTime ? window.parseServerTime(rawDate) : new Date(rawDate)).toLocaleString();
+                const typeLabel = n.type === 'edit' ? 'Pending edit' : (n.type === 'delete' ? 'Pending deletion' : 'Pending sync');
+                const badgeColor = n.type === 'edit' ? '#e65100' : (n.type === 'delete' ? '#c62828' : '#e65100');
+                const badgeBg = n.type === 'edit' ? '#fff3e0' : (n.type === 'delete' ? '#ffebee' : '#fff3e0');
+                const badgeBorder = n.type === 'edit' ? '#ffe0b2' : (n.type === 'delete' ? '#ffcdd2' : '#ffe0b2');
+
+                let actionBtns = '';
+                if (n.type !== 'delete') {
+                    actionBtns = `
+                        <div class="note-actions" style="display:flex;gap:0.3rem;align-items:center;">
+                            <button type="button" class="btn-icon edit-pending-btn" title="Edit pending note" onclick="window.editPendingNote(${n.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.85rem;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn-icon delete-pending-btn" title="Discard pending note" onclick="window.deletePendingNote(${n.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.85rem;">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    actionBtns = `
+                        <div class="note-actions" style="display:flex;gap:0.3rem;align-items:center;">
+                            <button type="button" class="btn-icon delete-pending-btn" title="Undo pending deletion" onclick="window.deletePendingNote(${n.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 6px;border-radius:4px;font-size:0.85rem;">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+
                 return `
-                    <div class="note-card pending-note">
+                    <div class="note-card pending-note" id="pending-note-${n.id}">
                         <div class="note-content"><pre style="white-space:pre-wrap;margin:0;font-family:inherit;">${preview}</pre></div>
-                        <div class="note-footer">
+                        <div class="note-footer" style="display:flex;justify-content:space-between;align-items:center;">
                             <span class="note-date">
                                 <i class="far fa-clock"></i> ${ts}
-                                <span class="pending-badge"><i class="fas fa-spinner"></i> Pending sync</span>
+                                <span class="pending-badge" style="display:inline-flex;align-items:center;gap:0.2rem;background:${badgeBg};color:${badgeColor};padding:2px 8px;border-radius:12px;font-size:0.65rem;border:1px solid ${badgeBorder};margin-left:0.3rem;">
+                                    <i class="fas fa-spinner fa-spin"></i> ${typeLabel}
+                                </span>
                             </span>
+                            ${actionBtns}
                         </div>
                     </div>
                 `;
             }).join('');
         }
+        window.renderPendingNotes = renderPendingNotes;
+
+        window.editPendingNote = async function(id) {
+            const all = await getAllPending();
+            const note = all.find(n => n.id === id);
+            if (!note) return;
+            window.openEditModal(
+                note.noteId || ('pending_' + note.id),
+                note.content || '',
+                note.reference || '',
+                note.tags || [],
+                '',
+                true,
+                id
+            );
+        };
+
+        window.deletePendingNote = async function(id) {
+            if (confirm('Discard this pending note action?')) {
+                await deletePending(id);
+                const pending = await getAllPending();
+                renderPendingNotes(pending);
+                if (pending.length) {
+                    setBanner('offline', `You're offline — ${pending.length} note(s) pending sync`);
+                } else {
+                    const cachedNotes = await getCachedNotes();
+                    if (cachedNotes.length) {
+                        setBanner('offline', `You're offline — viewing ${cachedNotes.length} cached note(s)`);
+                    } else {
+                        setBanner('offline-empty');
+                    }
+                }
+                if (window.showCustomToast) {
+                    window.showCustomToast('Pending note discarded.', 'info');
+                }
+            }
+        };
 
         // --- Form Intercept ---
         // Always intercept form submission and use fetch + offline fallback.
@@ -8077,6 +8380,7 @@
                 }).catch(() => {
                     // Network failed — save offline
                     const note = {
+                        type: 'create',
                         content: content,
                         reference: refInput ? refInput.value.trim() : '',
                         tags: tagsInput ? tagsInput.value.trim() : '',
@@ -8128,22 +8432,61 @@
 
                 for (const note of pending) {
                     try {
-                        const resp = await fetch('/personal_post/create_json', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': CSRF
-                            },
-                            body: JSON.stringify({
-                                content: note.content,
-                                reference: note.reference || '',
-                                tags: note.tags || ''
-                            })
-                        });
-                        if (resp.ok) {
-                            await deletePending(note.id);
+                        if (note.type === 'edit') {
+                            const resp = await fetch(`/personal_post/edit/${note.noteId}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': CSRF
+                                },
+                                body: JSON.stringify({
+                                    content: note.content,
+                                    reference: note.reference || '',
+                                    tags: note.tags || [],
+                                    edit_summary: note.edit_summary || '',
+                                    base_updated_at: note.base_updated_at || null,
+                                    force_overwrite: false
+                                })
+                            });
+                            if (resp.ok || resp.status === 404) {
+                                await deletePending(note.id);
+                            } else {
+                                allSynced = false;
+                            }
+                        } else if (note.type === 'delete') {
+                            const resp = await fetch(`/personal_post/delete/${note.noteId}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': CSRF,
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({ mode: note.mode || 'me' })
+                            });
+                            if (resp.ok || resp.status === 404 || resp.redirected) {
+                                await deletePending(note.id);
+                            } else {
+                                allSynced = false;
+                            }
                         } else {
-                            allSynced = false;
+                            // Default: create
+                            const resp = await fetch('/personal_post/create_json', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': CSRF
+                                },
+                                body: JSON.stringify({
+                                    content: note.content,
+                                    reference: note.reference || '',
+                                    tags: note.tags || ''
+                                })
+                            });
+                            if (resp.ok) {
+                                await deletePending(note.id);
+                            } else {
+                                allSynced = false;
+                            }
                         }
                     } catch {
                         allSynced = false;

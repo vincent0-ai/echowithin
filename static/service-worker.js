@@ -2,11 +2,11 @@
 // Provides offline support, faster loads via caching, and push notifications
 // Note: iOS has limited push notification support (requires iOS 16.4+ and user interaction)
 
-const CACHE_NAME = 'echowithin-v27';
-const STATIC_CACHE = 'echowithin-static-v27';
-const PAGES_CACHE = 'echowithin-pages-v27';
-const POSTS_CACHE = 'echowithin-posts-v27';
-const API_CACHE = 'echowithin-api-v27';
+const CACHE_NAME = 'echowithin-v28';
+const STATIC_CACHE = 'echowithin-static-v28';
+const PAGES_CACHE = 'echowithin-pages-v28';
+const POSTS_CACHE = 'echowithin-posts-v28';
+const API_CACHE = 'echowithin-api-v28';
 
 // Static assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -27,7 +27,8 @@ const PAGES_TO_CACHE = [
   '/',
   '/offline',
   '/blog',
-  '/about'
+  '/about',
+  '/bonds'
 ];
 
 // Minimal offline HTML served when /offline isn't cached
@@ -123,9 +124,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // API requests: Network-first with cache fallback for note data
-  // This enables full offline browsing of notes even when the page HTML isn't cached
-  if (url.origin === location.origin && (url.pathname.startsWith('/api/notes') || url.pathname.startsWith('/api/v1/notes'))) {
+  // API requests: Network-first with cache fallback for notes and bonds data
+  // This enables full offline browsing of notes and bonds even when the network is unavailable
+  if (url.origin === location.origin && (url.pathname.startsWith('/api/notes') || url.pathname.startsWith('/api/v1/notes') || url.pathname.startsWith('/api/bonds'))) {
     event.respondWith(
       fetch(request.clone())
         .then(response => {
@@ -236,7 +237,7 @@ self.addEventListener('fetch', event => {
   // Key pages: Network-first with cache fallback.
   // Always fetch fresh HTML so auth state (logged-in navbar) is correct,
   // but cache responses for offline access.
-  const KEY_PAGES = ['/blog', '/home', '/personal_space', '/'];
+  const KEY_PAGES = ['/blog', '/home', '/personal_space', '/bonds', '/'];
   if (KEY_PAGES.includes(url.pathname) && !url.search) {
     event.respondWith(
       fetch(request)

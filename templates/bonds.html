@@ -499,21 +499,33 @@
     }
 
     .btn-bond-primary {
-        background: var(--primary-color);
+        background: var(--primary-color) !important;
+        color: #ffffff !important;
+        border: none;
+        cursor: pointer;
     }
 
     .btn-bond-primary:hover {
-        background: var(--primary-dark-color);
+        background: var(--primary-dark-color) !important;
+        color: #ffffff !important;
     }
 
     .btn-bond-primary.active {
-        background: var(--primary-dark-color);
+        background: var(--primary-dark-color) !important;
+        color: #ffffff !important;
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn-bond-primary:disabled,
+    #album-upload-submit-btn:disabled {
+        opacity: 0.8 !important;
+        color: #ffffff !important;
+        cursor: not-allowed;
     }
 
     /* Section toggle buttons — outlined chip style for readability */
     .btn-bond-section {
-        background: transparent !important;
+        background: var(--card-bg) !important;
         color: var(--primary-color) !important;
         border: 1.5px solid var(--primary-color) !important;
         font-weight: 600;
@@ -522,36 +534,49 @@
 
     .btn-bond-section:hover {
         background: rgba(62, 34, 23, 0.08) !important;
+        color: var(--primary-color) !important;
     }
 
     .btn-bond-section.active {
         background: var(--primary-color) !important;
-        color: #fff !important;
+        color: #ffffff !important;
         box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .btn-bond-danger {
-        background: var(--danger-color);
+        background: var(--danger-color) !important;
+        color: #ffffff !important;
+        border: none;
+        cursor: pointer;
     }
 
     .btn-bond-danger:hover {
-        background: #da190b;
+        background: #da190b !important;
+        color: #ffffff !important;
     }
 
     .btn-bond-success {
-        background: var(--success-color);
+        background: var(--success-color) !important;
+        color: #ffffff !important;
+        border: none;
+        cursor: pointer;
     }
 
     .btn-bond-success:hover {
-        background: #45a049;
+        background: #45a049 !important;
+        color: #ffffff !important;
     }
 
     .btn-bond-secondary {
-        background: var(--text-muted);
+        background: var(--surface-bg) !important;
+        color: var(--text-dark-color) !important;
+        border: 1px solid var(--border-color) !important;
+        cursor: pointer;
     }
 
     .btn-bond-secondary:hover {
-        background: #666;
+        background: var(--hover-bg) !important;
+        color: var(--primary-color) !important;
     }
 
     .bond-expand-section {
@@ -2174,6 +2199,329 @@
     const csrfToken = csrfMeta ? (csrfMeta.getAttribute('content') || csrfMeta.content || '') : '{{ csrf_token() }}';
     const currentUserId = '{{ current_user.id }}';
 
+    // ========================================================================
+    // CORE OFFLINE BONDS STORAGE & CACHING SYSTEM
+    // ========================================================================
+    const ODB_NAME = 'BondOfflineQueue';
+    const ODB_VERSION = 2;
+    const ODB_STORE = 'actions';
+    const ODB_CACHE = 'cached_sections';
+
+    // Injected question bank and bond types for offline QotD generation
+    const QUESTION_BANK = {{ question_bank | tojson }};
+    const BOND_TYPES_DATA = {{ bond_types | tojson }};
+
+    function isOffline() {
+        return !navigator.onLine;
+    }
+
+    function todayUTC() {
+        const d = new Date();
+        return d.getUTCFullYear() + '-' +
+            String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+            String(d.getUTCDate()).padStart(2, '0');
+    }
+
+    function sha256Hex(str) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(str);
+        return crypto.subtle.digest('SHA-256', data).then(function(buf) {
+            const arr = Array.from(new Uint8Array(buf));
+            return arr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+        });
+    }
+
+    function hexToIndex(hexStr, poolLen) {
+        const bigVal = BigInt('0x' + hexStr);
+        return Number(bigVal % BigInt(poolLen));
+    }
+
+    function getOfflineQuestion(bondId, bondType, dateStr) {
+        const typeQuestions = QUESTION_BANK[bondType] || [];
+        const universal = QUESTION_BANK['universal'] || [];
+        let pool = typeQuestions.concat(typeQuestions).concat(universal);
+        if (pool.length === 0) pool = universal.length ? universal : ["What's on your mind today?"];
+
+        const hashInput = bondId + ':' + dateStr;
+        return sha256Hex(hashInput).then(function(hexStr) {
+            const idx = hexToIndex(hexStr, pool.length);
+            const question = pool[idx];
+            const category = (typeQuestions.indexOf(question) !== -1)
+                ? (BOND_TYPES_DATA[bondType] || {}).label || 'Custom'
+                : 'Universal';
+            return { question: question, category: category };
+        });
+    }
+
+    function openOfflineDB() {
+        return new Promise(function(resolve, reject) {
+            const req = indexedDB.open(ODB_NAME, ODB_VERSION);
+            req.onupgradeneeded = function(e) {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(ODB_STORE)) {
+                    const store = db.createObjectStore(ODB_STORE, { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('bondId', 'bondId', { unique: false });
+                    store.createIndex('date', 'date', { unique: false });
+                }
+                if (!db.objectStoreNames.contains(ODB_CACHE)) {
+                    db.createObjectStore(ODB_CACHE, { keyPath: 'key' });
+                }
+            };
+            req.onsuccess = function() { resolve(req.result); };
+            req.onerror = function() { reject(req.error); };
+        });
+    }
+
+    function setBondCache(key, data) {
+        try {
+            localStorage.setItem('bond_cache_' + key, JSON.stringify(data));
+        } catch (e) {}
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve) {
+                try {
+                    const tx = db.transaction(ODB_CACHE, 'readwrite');
+                    const store = tx.objectStore(ODB_CACHE);
+                    store.put({ key: key, data: data, cachedAt: new Date().toISOString() });
+                    tx.oncomplete = function() { resolve(); };
+                    tx.onerror = function() { resolve(); };
+                } catch (err) { resolve(); }
+            });
+        }).catch(function() {});
+    }
+
+    function getBondCache(key) {
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve) {
+                try {
+                    const tx = db.transaction(ODB_CACHE, 'readonly');
+                    const store = tx.objectStore(ODB_CACHE);
+                    const req = store.get(key);
+                    req.onsuccess = function() {
+                        if (req.result && req.result.data) {
+                            resolve(req.result.data);
+                        } else {
+                            try {
+                                const ls = localStorage.getItem('bond_cache_' + key);
+                                resolve(ls ? JSON.parse(ls) : null);
+                            } catch (e) { resolve(null); }
+                        }
+                    };
+                    req.onerror = function() {
+                        try {
+                            const ls = localStorage.getItem('bond_cache_' + key);
+                            resolve(ls ? JSON.parse(ls) : null);
+                        } catch (e) { resolve(null); }
+                    };
+                } catch (err) {
+                    try {
+                        const ls = localStorage.getItem('bond_cache_' + key);
+                        resolve(ls ? JSON.parse(ls) : null);
+                    } catch (e) { resolve(null); }
+                }
+            });
+        }).catch(function() {
+            try {
+                const ls = localStorage.getItem('bond_cache_' + key);
+                return ls ? JSON.parse(ls) : null;
+            } catch (e) { return null; }
+        });
+    }
+
+    function addOfflineAction(action) {
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                const tx = db.transaction(ODB_STORE, 'readwrite');
+                const store = tx.objectStore(ODB_STORE);
+                const r = store.add(action);
+                r.onsuccess = function() { resolve(r.result); };
+                r.onerror = function() { reject(r.error); };
+            });
+        });
+    }
+
+    function getOfflineActions(bondId) {
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                const tx = db.transaction(ODB_STORE, 'readonly');
+                const store = tx.objectStore(ODB_STORE);
+                const idx = store.index('bondId');
+                const r = idx.getAll(bondId);
+                r.onsuccess = function() { resolve(r.result); };
+                r.onerror = function() { reject(r.error); };
+            });
+        });
+    }
+
+    function getAllOfflineActions() {
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                const tx = db.transaction(ODB_STORE, 'readonly');
+                const store = tx.objectStore(ODB_STORE);
+                const r = store.getAll();
+                r.onsuccess = function() { resolve(r.result); };
+                r.onerror = function() { reject(r.error); };
+            });
+        });
+    }
+
+    function clearOfflineActions(bondId) {
+        return openOfflineDB().then(function(db) {
+            return new Promise(function(resolve, reject) {
+                const tx = db.transaction(ODB_STORE, 'readwrite');
+                const store = tx.objectStore(ODB_STORE);
+                const idx = store.index('bondId');
+                const req = idx.openCursor(bondId);
+                req.onsuccess = function(e) {
+                    const cursor = e.target.result;
+                    if (cursor) { cursor.delete(); cursor.continue(); }
+                    else resolve();
+                };
+                req.onerror = function() { reject(req.error); };
+            });
+        });
+    }
+
+    let _bannerEl = null;
+    function showOfflineBanner() {
+        if (_bannerEl) return;
+        _bannerEl = document.createElement('div');
+        _bannerEl.id = 'offline-bonds-banner';
+        _bannerEl.style.cssText = 'background:var(--card-bg);border:1px solid var(--border-color);color:var(--text-dark-color);padding:0.5rem 1rem;font-size:0.82rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;';
+        _bannerEl.textContent = 'Offline Mode — your bond activities will sync when you\u2019re back online';
+        const container = document.querySelector('.bonds-page');
+        if (container) container.insertBefore(_bannerEl, container.firstChild);
+    }
+
+    function hideOfflineBanner() {
+        if (_bannerEl) { _bannerEl.remove(); _bannerEl = null; }
+    }
+
+    function updatePendingBadge() {
+        getAllOfflineActions().then(function(actions) {
+            let badge = document.getElementById('offline-pending-badge');
+            if (actions.length > 0) {
+                const dates = {};
+                actions.forEach(function(a) { dates[a.date] = true; });
+                const dayCount = Object.keys(dates).length;
+                const text = dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ' pending sync (' + actions.length + ' action' + (actions.length !== 1 ? 's' : '') + ')';
+                if (!badge) {
+                    badge = document.createElement('div');
+                    badge.id = 'offline-pending-badge';
+                    badge.style.cssText = 'background:var(--card-bg);border:1px solid var(--primary-color);color:var(--primary-color);padding:0.35rem 0.8rem;font-size:0.78rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;font-weight:500;';
+                    const container = document.querySelector('.bonds-page');
+                    if (container) container.insertBefore(badge, container.firstChild);
+                }
+                badge.textContent = text;
+            } else if (badge) {
+                badge.remove();
+            }
+        }).catch(function() {});
+    }
+
+    function refreshActiveBondSection(bondId) {
+        if (!bondId) return;
+        const bondCard = document.getElementById('bond-' + bondId);
+        if (!bondCard) return;
+        const activeSection = bondCard.querySelector('.bond-expand-section.active');
+        if (!activeSection) return;
+        const secId = activeSection.id;
+        if (secId.startsWith('mood-')) loadMood(bondId);
+        else if (secId.startsWith('qotd-')) loadQotd(bondId);
+        else if (secId.startsWith('goals-')) loadGoals(bondId);
+        else if (secId.startsWith('journal-')) loadJournal(bondId);
+        else if (secId.startsWith('habits-')) loadHabits(bondId);
+        else if (secId.startsWith('insights-')) loadInsights(bondId);
+        else if (secId.startsWith('countdowns-')) loadCountdowns(bondId);
+        else if (secId.startsWith('album-')) loadAlbum(bondId);
+        else if (secId.startsWith('bucketlist-')) loadBucketlist(bondId);
+        else if (secId.startsWith('recommendations-')) loadRecommendations(bondId);
+        else if (secId.startsWith('pulses-')) loadPulses(bondId);
+    }
+
+    let _syncing = false;
+    function syncOfflineActions() {
+        if (_syncing || isOffline()) return Promise.resolve();
+        _syncing = true;
+
+        return getAllOfflineActions().then(function(actions) {
+            if (actions.length === 0) { _syncing = false; return; }
+
+            const byBond = {};
+            actions.forEach(function(a) {
+                if (!byBond[a.bondId]) byBond[a.bondId] = [];
+                byBond[a.bondId].push(a);
+            });
+
+            const bondIds = Object.keys(byBond);
+            let chain = Promise.resolve();
+            bondIds.forEach(function(bondId) {
+                chain = chain.then(function() {
+                    const bondActions = byBond[bondId].map(function(a) {
+                        const payload = { type: a.type, date: a.date };
+                        if (a.type === 'journal') payload.content = a.content;
+                        if (a.type === 'mood') payload.mood = a.mood;
+                        if (a.type === 'qotd') payload.answer = a.answer;
+                        if (a.type === 'habit_toggle') payload.habit_id = a.habitId;
+                        return payload;
+                    });
+
+                    const token = document.querySelector('meta[name="csrf-token"]');
+                    const csrf = token ? token.getAttribute('content') : csrfToken;
+
+                    return echoFetch('/api/bonds/' + bondId + '/offline-sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ actions: bondActions })
+                    }).then(function(r) { return r.json(); })
+                      .then(function(d) {
+                        if (d.success) {
+                            return clearOfflineActions(bondId).then(function() {
+                                if (d.streak && d.streak.streak_count !== undefined) {
+                                    const streakEl = document.querySelector('#bond-' + bondId + ' .bond-streak');
+                                    if (streakEl) streakEl.textContent = d.streak.streak_count + ' day streak';
+                                }
+                                if (window.showCustomToast) {
+                                    showCustomToast('Synced ' + d.synced + ' offline action' + (d.synced !== 1 ? 's' : '') + '.', 'success');
+                                }
+                                refreshActiveBondSection(bondId);
+                            });
+                        }
+                    }).catch(function(err) {
+                        console.warn('Offline sync failed for bond ' + bondId + ':', err);
+                    });
+                });
+            });
+
+            return chain.then(function() {
+                _syncing = false;
+                updatePendingBadge();
+                hideOfflineBanner();
+            }).catch(function() { _syncing = false; });
+        }).catch(function() { _syncing = false; });
+    }
+
+    // Lifecycle hooks for offline/online
+    window.addEventListener('online', function() {
+        hideOfflineBanner();
+        syncOfflineActions();
+    });
+
+    window.addEventListener('offline', function() {
+        showOfflineBanner();
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible' && !isOffline()) {
+            syncOfflineActions();
+        }
+    });
+
+    // Initial check
+    if (isOffline()) showOfflineBanner();
+    updatePendingBadge();
+    if (!isOffline()) syncOfflineActions();
+
     // Bond selector – show one bond at a time
     function switchBond(bondId, btn) {
         var allCards = document.querySelectorAll('.bonds-section > .bond-card');
@@ -2237,6 +2585,9 @@
         echoFetch('/api/bonds/' + bondId + '/goals')
             .then(r => r.json())
             .then(data => {
+                if (data && data.goals) {
+                    setBondCache(bondId + ':goals', data);
+                }
                 const el = document.getElementById('goals-list-' + bondId);
                 if (!el) return;
                 if (!data.goals || data.goals.length === 0) {
@@ -2247,7 +2598,16 @@
             })
             .catch(() => {
                 const el = document.getElementById('goals-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load goals.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':goals').then(cached => {
+                    if (cached && cached.goals && cached.goals.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached goals</div>' + cached.goals.map(g => renderGoalCard(g, bondId)).join('');
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared goals will load once you are back online. Propose a goal above anytime!</div>';
+                    }
+                }).catch(() => {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared goals will load once you are back online.</div>';
+                });
             });
     }
 
@@ -2581,55 +2941,111 @@
     }
 
     // --- Journal ---
+    function renderJournalListHtml(entries, bondId) {
+        if (!entries || entries.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No journal entries yet. Write the first one above!</div>';
+        }
+        return entries.map(e => {
+            const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
+            const dateStr = date && !isNaN(date) ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : (e.created_at || '');
+            const isAuthor = e.author_id === currentUserId;
+            const within24h = date && !isNaN(date) && (Date.now() - date.getTime()) < 86400000;
+            const editedTag = e.edited ? ' <span style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">(edited)</span>' : '';
+            const pendingTag = e.isPending ? ' <span style="font-size:0.72rem; color:var(--primary-color); font-weight:600;"><i class="fas fa-clock"></i> (Pending sync)</span>' : '';
+            let actionBtns = '';
+            if (isAuthor && !e.isPending) {
+                actionBtns += '<span style="display:flex;gap:0.4rem;">';
+                if (within24h) {
+                    actionBtns += '<button class="btn btn-bond-secondary" style="font-size:0.65rem;padding:0.1rem 0.4rem;background:none;color:var(--text-muted);border:none;cursor:pointer;" onclick="showJournalEditForm(\'' + e.id + '\')">Edit</button>';
+                }
+                actionBtns += '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>';
+                actionBtns += '</span>';
+            }
+            return '<div class="journal-entry" id="journal-entry-container-' + e.id + '"><div class="journal-entry-header">' +
+                '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
+                '<span style="display:flex;align-items:center;gap:0.4rem;"><span class="journal-date">' + dateStr + editedTag + pendingTag + '</span>' + actionBtns + '</span>' +
+                '</div><div class="journal-content" id="journal-content-' + e.id + '">' + nl2br(e.content) + '</div>' +
+                (!e.isPending ? '<div class="journal-edit-form" id="journal-edit-form-' + e.id + '" style="display:none;margin-top:0.5rem;">' +
+                '<textarea id="journal-edit-input-' + e.id + '" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;min-height:60px;font-family:inherit;font-size:0.9rem;resize:vertical;background:var(--card-bg);color:var(--text-dark-color);"></textarea>' +
+                '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.4rem;">' +
+                '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="hideJournalEditForm(\'' + e.id + '\')">Cancel</button>' +
+                '<button class="btn btn-bond-primary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="submitJournalEdit(\'' + e.id + '\', \'' + bondId + '\')">Save</button>' +
+                '</div></div>' : '') + '</div>';
+        }).join('');
+    }
+
     function loadJournal(bondId) {
         const container = document.getElementById('journal-list-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/journal')
             .then(r => r.json())
             .then(data => {
+                if (data && data.entries) {
+                    setBondCache(bondId + ':journal', data);
+                }
                 const el = document.getElementById('journal-list-' + bondId);
                 if (!el) return;
-                if (!data.entries || data.entries.length === 0) {
-                    el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:1rem;">No journal entries yet. Write the first one.</div>';
-                    return;
-                }
-                el.innerHTML = data.entries.map(e => {
-                    const date = window.parseServerTime ? window.parseServerTime(e.created_at) : new Date(e.created_at);
-                    const dateStr = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-                    const isAuthor = e.author_id === currentUserId;
-                    const within24h = (Date.now() - date.getTime()) < 86400000;
-                    const editedTag = e.edited ? ' <span style="font-size:0.7rem; color:var(--text-muted); font-style:italic;">(edited)</span>' : '';
-                    let actionBtns = '';
-                    if (isAuthor) {
-                        actionBtns += '<span style="display:flex;gap:0.4rem;">';
-                        if (within24h) {
-                            actionBtns += '<button class="btn btn-bond-secondary" style="font-size:0.65rem;padding:0.1rem 0.4rem;background:none;color:var(--text-muted);border:none;cursor:pointer;" onclick="showJournalEditForm(\'' + e.id + '\')">Edit</button>';
-                        }
-                        actionBtns += '<button class="journal-delete" onclick="deleteJournalEntry(\'' + e.id + '\', \'' + bondId + '\')">&times;</button>';
-                        actionBtns += '</span>';
-                    }
-                    return '<div class="journal-entry" id="journal-entry-container-' + e.id + '"><div class="journal-entry-header">' +
-                        '<span class="journal-author">' + escHtml(e.author_username) + '</span>' +
-                        '<span style="display:flex;align-items:center;gap:0.4rem;"><span class="journal-date">' + dateStr + editedTag + '</span>' + actionBtns + '</span>' +
-                        '</div><div class="journal-content" id="journal-content-' + e.id + '">' + nl2br(e.content) + '</div>' +
-                        '<div class="journal-edit-form" id="journal-edit-form-' + e.id + '" style="display:none;margin-top:0.5rem;">' +
-                        '<textarea id="journal-edit-input-' + e.id + '" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;min-height:60px;font-family:inherit;font-size:0.9rem;resize:vertical;"></textarea>' +
-                        '<div style="display:flex;gap:0.4rem;justify-content:flex-end;margin-top:0.4rem;">' +
-                        '<button class="btn btn-bond-secondary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="hideJournalEditForm(\'' + e.id + '\')">Cancel</button>' +
-                        '<button class="btn btn-bond-primary" style="font-size:0.75rem;padding:0.2rem 0.5rem;" onclick="submitJournalEdit(\'' + e.id + '\', \'' + bondId + '\')">Save</button>' +
-                        '</div></div></div>';
-                }).join('');
+                getOfflineActions(bondId).then(actions => {
+                    const pendingJournal = (actions || []).filter(a => a.type === 'journal').map(a => ({
+                        id: 'offline-' + a.id,
+                        author_id: currentUserId,
+                        author_username: 'You',
+                        created_at: a.queuedAt || new Date().toISOString(),
+                        content: a.content,
+                        isPending: true
+                    }));
+                    const allEntries = pendingJournal.concat(data.entries || []);
+                    el.innerHTML = renderJournalListHtml(allEntries, bondId);
+                }).catch(() => {
+                    el.innerHTML = renderJournalListHtml(data.entries || [], bondId);
+                });
             })
             .catch(() => {
                 const el = document.getElementById('journal-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">Failed to load journal.</div>';
+                if (!el) return;
+                Promise.all([getBondCache(bondId + ':journal'), getOfflineActions(bondId)]).then(([cached, actions]) => {
+                    const pendingJournal = (actions || []).filter(a => a.type === 'journal').map(a => ({
+                        id: 'offline-' + a.id,
+                        author_id: currentUserId,
+                        author_username: 'You',
+                        created_at: a.queuedAt || new Date().toISOString(),
+                        content: a.content,
+                        isPending: true
+                    }));
+                    const cachedEntries = (cached && cached.entries) ? cached.entries : [];
+                    const allEntries = pendingJournal.concat(cachedEntries);
+                    if (allEntries.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached entries</div>' + renderJournalListHtml(allEntries, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared journal entries will load once online. You can still write and save entries offline!</div>';
+                    }
+                }).catch(() => {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared journal entries will load once online.</div>';
+                });
             });
     }
 
     function createJournalEntry(bondId) {
         const textarea = document.getElementById('journal-input-' + bondId);
-        const content = textarea.value.trim();
+        const content = textarea ? textarea.value.trim() : '';
         if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
+
+        if (isOffline()) {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'journal',
+                date: todayUTC(),
+                content: content,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                textarea.value = '';
+                loadJournal(bondId);
+                if (window.showCustomToast) showCustomToast('Journal entry saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+            });
+            return;
+        }
+
         echoFetch('/api/bonds/' + bondId + '/journal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2640,6 +3056,19 @@
                 loadJournal(bondId);
                 if (window.showCustomToast) showCustomToast('Entry added!', 'success');
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        }).catch(function() {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'journal',
+                date: todayUTC(),
+                content: content,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                textarea.value = '';
+                loadJournal(bondId);
+                if (window.showCustomToast) showCustomToast('Journal entry saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+            });
         });
     }
 
@@ -2750,12 +3179,38 @@
         echoFetch('/api/bonds/' + bondId + '/mood')
             .then(r => r.json())
             .then(data => {
+                if (data) {
+                    setBondCache(bondId + ':mood', data);
+                }
                 const el = document.getElementById('mood-content-' + bondId);
-                if (el) renderMoodSection(bondId, el, data);
+                if (!el) return;
+                getOfflineActions(bondId).then(actions => {
+                    const today = todayUTC();
+                    const pendingMood = (actions || []).find(a => a.type === 'mood' && a.date === today);
+                    if (pendingMood) {
+                        data.my_mood = pendingMood.mood;
+                        data.offline_saved = true;
+                    }
+                    renderMoodSection(bondId, el, data);
+                }).catch(() => {
+                    renderMoodSection(bondId, el, data);
+                });
             })
             .catch(() => {
                 const el = document.getElementById('mood-content-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load mood.</div>';
+                if (!el) return;
+                Promise.all([getBondCache(bondId + ':mood'), getOfflineActions(bondId)]).then(([cached, actions]) => {
+                    const today = todayUTC();
+                    const pendingMood = (actions || []).find(a => a.type === 'mood' && a.date === today);
+                    let moodData = cached || { my_mood: null, partner_logged: false, revealed: false, history: [] };
+                    if (pendingMood) {
+                        moodData.my_mood = pendingMood.mood;
+                        moodData.offline_saved = true;
+                    }
+                    renderMoodSection(bondId, el, moodData);
+                }).catch(() => {
+                    renderMoodSection(bondId, el, { my_mood: null, partner_logged: false, revealed: false, history: [] });
+                });
             });
     }
 
@@ -2774,7 +3229,11 @@
         if (!container) return;
         let html = '';
 
-        if (data.my_mood && data.revealed) {
+        if (data.offline_saved) {
+            const myInfo = getMoodInfo(data.my_mood);
+            html += '<div class="mood-result"><div class="mood-result-card"><div class="label">You</div><div class="emoji">' + myInfo.emoji + '</div><div class="label">' + myInfo.label + '</div></div></div>';
+            html += '<div class="mood-reveal-note" style="color:var(--primary-color); font-weight:600;"><i class="fas fa-clock"></i> Mood saved offline — will sync and reveal when you\'re back online.</div>';
+        } else if (data.my_mood && data.revealed) {
             // Both logged — show result
             const myInfo = getMoodInfo(data.my_mood);
             const partnerInfo = getMoodInfo(data.partner_mood);
@@ -2798,6 +3257,8 @@
             html += '</div>';
             if (data.partner_logged) {
                 html += '<div class="mood-reveal-note">Your partner already logged their mood today.</div>';
+            } else if (isOffline()) {
+                html += '<div class="mood-reveal-note" style="font-size:0.78rem;">Log your mood offline — it will sync automatically when reconnected.</div>';
             }
         }
 
@@ -2818,13 +3279,29 @@
 
     function selectAndLogMood(bondId, mood, btn) {
         const picker = document.getElementById('mood-picker-' + bondId);
-        if (!picker) return;
-        picker.querySelectorAll('.mood-btn').forEach(b => {
-            b.classList.remove('selected');
-            b.disabled = true;
-        });
-        btn.classList.add('selected');
-        
+        if (picker) {
+            picker.querySelectorAll('.mood-btn').forEach(b => {
+                b.classList.remove('selected');
+                b.disabled = true;
+            });
+        }
+        if (btn) btn.classList.add('selected');
+
+        if (isOffline()) {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'mood',
+                date: todayUTC(),
+                mood: mood,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Mood saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadMood(bondId);
+            });
+            return;
+        }
+
         echoFetch('/api/bonds/' + bondId + '/mood', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -2839,9 +3316,21 @@
                 if (p) p.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
             }
         }).catch(() => {
-            if (window.showCustomAlert) showCustomAlert('Failed to log mood.', 'danger');
-            const p = document.getElementById('mood-picker-' + bondId);
-            if (p) p.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
+            addOfflineAction({
+                bondId: bondId,
+                type: 'mood',
+                date: todayUTC(),
+                mood: mood,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Mood saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadMood(bondId);
+            }).catch(function() {
+                if (window.showCustomAlert) showCustomAlert('Failed to log mood.', 'danger');
+                const p = document.getElementById('mood-picker-' + bondId);
+                if (p) p.querySelectorAll('.mood-btn').forEach(b => b.disabled = false);
+            });
         });
     }
 
@@ -2852,12 +3341,63 @@
         echoFetch('/api/bonds/' + bondId + '/qotd')
             .then(r => r.json())
             .then(data => {
+                if (data) {
+                    setBondCache(bondId + ':qotd', data);
+                }
                 const el = document.getElementById('qotd-content-' + bondId);
-                if (el) renderQotdSection(bondId, el, data);
+                if (!el) return;
+                getOfflineActions(bondId).then(actions => {
+                    const today = todayUTC();
+                    const pendingQotd = (actions || []).find(a => a.type === 'qotd' && a.date === today);
+                    if (pendingQotd) {
+                        data.my_answered = true;
+                        data.my_answer = pendingQotd.answer;
+                        data.offline_saved = true;
+                    }
+                    renderQotdSection(bondId, el, data);
+                }).catch(() => {
+                    renderQotdSection(bondId, el, data);
+                });
             })
             .catch(() => {
                 const el = document.getElementById('qotd-content-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#999;font-size:0.85rem;">Failed to load question.</div>';
+                if (!el) return;
+                const bondCard = document.getElementById('bond-' + bondId);
+                const bondType = bondCard ? (bondCard.getAttribute('data-bond-type') || 'custom') : 'custom';
+                const dateStr = todayUTC();
+
+                Promise.all([
+                    getBondCache(bondId + ':qotd'),
+                    getOfflineActions(bondId),
+                    getOfflineQuestion(bondId, bondType, dateStr)
+                ]).then(([cached, actions, offlineQ]) => {
+                    const pendingQotd = (actions || []).find(a => a.type === 'qotd' && a.date === dateStr);
+                    let qData = cached || {
+                        question: offlineQ.question,
+                        category: offlineQ.category,
+                        has_question: true,
+                        my_answered: false,
+                        partner_answered: false,
+                        revealed: false
+                    };
+                    if (pendingQotd) {
+                        qData.my_answered = true;
+                        qData.my_answer = pendingQotd.answer;
+                        qData.offline_saved = true;
+                    }
+                    renderQotdSection(bondId, el, qData);
+                }).catch(() => {
+                    getOfflineQuestion(bondId, bondType, dateStr).then(offlineQ => {
+                        renderQotdSection(bondId, el, {
+                            question: offlineQ.question,
+                            category: offlineQ.category,
+                            has_question: true,
+                            my_answered: false,
+                            partner_answered: false,
+                            revealed: false
+                        });
+                    });
+                });
             });
     }
 
@@ -2880,14 +3420,12 @@
             html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-bottom:0.8rem;">Asked by ' + escHtml(data.set_by_username) + '</div>';
         }
 
-        // Action controls for AI & Custom question (only available before answers are submitted AND for active bonds)
-        if (!data.is_archived_bond && !data.my_answered && !data.partner_answered) {
+        // Action controls for AI & Custom question (only available online and before answers are submitted AND for active bonds)
+        if (!isOffline() && !data.is_archived_bond && !data.my_answered && !data.partner_answered) {
             html += '<div style="display:flex; gap:0.5rem; justify-content:center; margin-bottom:0.8rem; flex-wrap:wrap;">';
             html += '<button class="btn btn-bond-primary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="generateAiQotd(\'' + bondId + '\')">Generate AI Question</button>';
             html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.25rem 0.6rem;" onclick="showCustomQotdInput(\'' + bondId + '\')">Write Custom Question</button>';
             html += '</div>';
-            // AI QotD privacy opt-in. Bonds created before this feature have no
-            // consent map (fail closed), so surface an explicit opt-in control.
             if (data.ai_consent) {
                 if (data.ai_consent.i_consented) {
                     if (!data.ai_consent.all_consented) {
@@ -2901,14 +3439,17 @@
                 }
             }
             html += '<div id="qotd-custom-form-' + bondId + '" style="display:none; margin-bottom:0.8rem; padding:0.6rem; background:var(--surface-bg); border-radius:6px; border:1px solid var(--border-color);">';
-            html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px;"></textarea>';
+            html += '<textarea id="qotd-custom-input-' + bondId + '" placeholder="Type a custom question for your partner..." maxlength="300" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; min-height:50px; background:var(--card-bg); color:var(--text-dark-color);"></textarea>';
             html += '<div style="display:flex; gap:0.4rem; justify-content:flex-end; margin-top:0.4rem;">';
             html += '<button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="hideCustomQotdInput(\'' + bondId + '\')">Cancel</button>';
             html += '<button class="btn btn-bond-primary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="submitCustomQotd(\'' + bondId + '\')">Set Question</button>';
             html += '</div></div>';
         }
 
-        if (data.revealed) {
+        if (data.offline_saved) {
+            html += '<div class="qotd-reveal"><div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(data.my_answer) + '</div></div></div>';
+            html += '<div class="qotd-waiting" style="color:var(--primary-color); font-weight:600;"><i class="fas fa-clock"></i> Answer saved offline — will sync and reveal when you\'re back online.</div>';
+        } else if (data.revealed) {
             // Both answered — show both
             html += '<div class="qotd-reveal">';
             html += '<div class="qotd-reveal-card"><div class="author">You</div><div class="answer">' + nl2br(data.my_answer) + '</div></div>';
@@ -2939,14 +3480,14 @@
         } else {
             // Active bond & haven't answered yet
             html += '<div class="qotd-answer-area">';
-            html += '<textarea id="qotd-input-' + bondId + '" placeholder="Share your thoughts..." maxlength="1000"></textarea>';
-            html += '<button class="btn btn-bond-primary" style="margin-top: 0.4rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">Submit Answer</button>';
+            html += '<textarea id="qotd-input-' + bondId + '" placeholder="Share your thoughts..." maxlength="1000" style="background:var(--card-bg);color:var(--text-dark-color);"></textarea>';
+            html += '<button class="btn btn-bond-primary" style="margin-top: 0.4rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">' + (isOffline() ? 'Save Answer Offline' : 'Submit Answer') + '</button>';
             html += '</div>';
             if (data.partner_answered) {
                 html += '<div class="qotd-waiting">Your partner has already answered. Submit yours to reveal both!</div>';
             }
-            // Skip button (only if neither answered and skips remaining)
-            if (!data.partner_answered && data.skips_remaining > 0) {
+            // Skip button (only if neither answered and skips remaining and online)
+            if (!isOffline() && !data.partner_answered && data.skips_remaining > 0) {
                 html += '<div style="margin-top:1rem; padding-top:0.8rem; border-top:1px solid var(--border-color);">';
                 html += '<div style="text-align:center; margin-bottom:0.4rem;">';
                 html += '<div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.3rem;">Not feeling this question?</div>';
@@ -3010,7 +3551,6 @@
             if (window.showCustomAlert) showCustomAlert('Network error.', 'danger');
         });
     }
-
 
     function toggleAiConsent(bondId, consent) {
         echoFetch('/api/bonds/' + bondId + '/qotd/ai_consent', {
@@ -3087,6 +3627,23 @@
             if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger');
             return;
         }
+
+        if (isOffline()) {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'qotd',
+                date: todayUTC(),
+                answer: answer,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (textarea) textarea.value = '';
+                if (window.showCustomToast) showCustomToast('QotD answer saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadQotd(bondId);
+            });
+            return;
+        }
+
         echoFetch('/api/bonds/' + bondId + '/qotd', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -3096,7 +3653,72 @@
                 if (window.showCustomToast) showCustomToast('Answer submitted!', 'success');
                 loadQotd(bondId);
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        }).catch(() => {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'qotd',
+                date: todayUTC(),
+                answer: answer,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (textarea) textarea.value = '';
+                if (window.showCustomToast) showCustomToast('QotD answer saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadQotd(bondId);
+            }).catch(function() {
+                if (window.showCustomAlert) showCustomAlert('Failed to submit answer.', 'danger');
+            });
         });
+    }
+
+    function toggleQotdHistory(bondId) {
+        const historyContainer = document.getElementById('qotd-history-' + bondId);
+        if (!historyContainer) return;
+        if (historyContainer.style.display === 'none' || !historyContainer.style.display) {
+            historyContainer.style.display = 'block';
+            loadQotdHistory(bondId);
+        } else {
+            historyContainer.style.display = 'none';
+        }
+    }
+
+    function renderQotdHistoryItems(history, bondId) {
+        if (!history || history.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">No past questions found in history.</div>';
+        }
+        let html = '';
+        history.forEach(item => {
+            const dObj = window.parseServerTime ? window.parseServerTime(item.date) : new Date(item.date);
+            const formattedDate = dObj && !isNaN(dObj) ? dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : item.date;
+
+            let myUser = item.my_username || 'You';
+            let myAns = item.my_answer || '';
+            let partnerUser = item.partner_username || 'Partner';
+            let partnerAns = item.partner_answer || '';
+
+            if (item.answers) {
+                if (item.answers[currentUserId]) {
+                    myUser = item.answers[currentUserId].username || myUser;
+                    myAns = item.answers[currentUserId].text || myAns;
+                }
+                for (const k in item.answers) {
+                    if (k !== currentUserId) {
+                        partnerUser = item.answers[k].username || partnerUser;
+                        partnerAns = item.answers[k].text || partnerAns;
+                        break;
+                    }
+                }
+            }
+
+            html += '<div class="qotd-history-item">';
+            html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' · ' + escHtml(item.category) + '</div>';
+            html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
+            html += '<div class="qotd-reveal">';
+            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + nl2br(myAns) + '</div></div>';
+            html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + nl2br(partnerAns) + '</div></div>';
+            html += '</div></div>';
+        });
+        return html;
     }
 
     function loadQotdHistory(bondId) {
@@ -3107,48 +3729,24 @@
         echoFetch('/api/bonds/' + bondId + '/qotd/history')
             .then(r => r.json())
             .then(d => {
+                if (d && d.history) {
+                    setBondCache(bondId + ':qotd_history', d);
+                }
                 const el = document.getElementById('qotd-history-' + bondId);
                 if (!el) return;
-                if (!d.history || d.history.length === 0) {
-                    el.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No past questions found in history.</div>';
-                    return;
-                }
-                let html = '';
-                d.history.forEach(item => {
-                    const dObj = window.parseServerTime ? window.parseServerTime(item.date) : new Date(item.date);
-                    const formattedDate = dObj && !isNaN(dObj) ? dObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : item.date;
-
-                    let myUser = item.my_username || 'You';
-                    let myAns = item.my_answer || '';
-                    let partnerUser = item.partner_username || 'Partner';
-                    let partnerAns = item.partner_answer || '';
-
-                    if (item.answers) {
-                        if (item.answers[currentUserId]) {
-                            myUser = item.answers[currentUserId].username || myUser;
-                            myAns = item.answers[currentUserId].text || myAns;
-                        }
-                        for (const k in item.answers) {
-                            if (k !== currentUserId) {
-                                partnerUser = item.answers[k].username || partnerUser;
-                                partnerAns = item.answers[k].text || partnerAns;
-                                break;
-                            }
-                        }
-                    }
-
-                    html += '<div class="qotd-history-item">';
-                    html += '<div style="font-size:0.75rem; color:var(--text-muted); text-align:center;">' + escHtml(formattedDate) + ' · ' + escHtml(item.category) + '</div>';
-                    html += '<div style="font-size:0.9rem; font-weight:500; margin:0.3rem 0; text-align:center; color:var(--text-dark-color);">"' + escHtml(item.question) + '"</div>';
-                    html += '<div class="qotd-reveal">';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(myUser) + '</div><div class="answer">' + nl2br(myAns) + '</div></div>';
-                    html += '<div class="qotd-reveal-card"><div class="author">' + escHtml(partnerUser) + '</div><div class="answer">' + nl2br(partnerAns) + '</div></div>';
-                    html += '</div></div>';
-                });
-                el.innerHTML = html;
+                el.innerHTML = renderQotdHistoryItems(d.history, bondId);
             }).catch(function () {
                 const el = document.getElementById('qotd-history-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load QotD history.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':qotd_history').then(cached => {
+                    if (cached && cached.history && cached.history.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached history</div>' + renderQotdHistoryItems(cached.history, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
+                    }
+                }).catch(() => {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">Past Q&A memory lane will load when back online.</div>';
+                });
             });
     }
 
@@ -3157,6 +3755,32 @@
     // ===================================================================
     var bondAlbumState = {}; // Stores { category: 'all', sort: 'date_desc', photos: [] } per bondId
     var currentLightboxState = { bondId: null, index: -1 };
+
+    function renderAlbumGridHtml(bondId, photos) {
+        if (!photos || photos.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
+        }
+        var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
+        photos.forEach(function(p, idx) {
+            var title = p.title ? escHtml(p.title) : 'Untitled';
+            var dateObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+            var dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+            var catLabel = p.category ? (p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Memory';
+
+            html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
+            if (p.is_pinned) {
+                html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
+            }
+            html += '<div class="album-cat-badge">' + escHtml(catLabel) + '</div>';
+            html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy">';
+            html += '<div style="padding:0.4rem 0.5rem;">';
+            html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+            html += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + (dateStr ? dateStr : 'No date') + ' · ' + escHtml(p.uploaded_by_name) + '</div>';
+            html += '</div></div>';
+        });
+        html += '</div>';
+        return html;
+    }
 
     function loadAlbum(bondId, catOverride, sortOverride) {
         var container = document.getElementById('album-grid-' + bondId);
@@ -3170,6 +3794,7 @@
 
         var cat = bondAlbumState[bondId].category;
         var sort = bondAlbumState[bondId].sort;
+        var cacheKey = bondId + ':album:' + cat + ':' + sort;
 
         container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
 
@@ -3178,6 +3803,9 @@
             .then(function(d) {
                 var el = document.getElementById('album-grid-' + bondId);
                 if (!el) return;
+                if (d && d.success && d.photos) {
+                    setBondCache(cacheKey, d);
+                }
                 if (!d.success || !d.photos || d.photos.length === 0) {
                     bondAlbumState[bondId].photos = [];
                     var countEl = document.getElementById('album-count-' + bondId);
@@ -3190,30 +3818,25 @@
                 var countEl = document.getElementById('album-count-' + bondId);
                 if (countEl) countEl.textContent = d.photos.length + ' photo' + (d.photos.length > 1 ? 's' : '');
 
-                var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
-                d.photos.forEach(function(p, idx) {
-                    var title = p.title ? escHtml(p.title) : 'Untitled';
-                    var dateObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
-                    var dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-                    var catLabel = p.category ? (p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Memory';
-
-                    html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
-                    if (p.is_pinned) {
-                        html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
-                    }
-                    html += '<div class="album-cat-badge">' + escHtml(catLabel) + '</div>';
-                    html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy">';
-                    html += '<div style="padding:0.4rem 0.5rem;">';
-                    html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
-                    html += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + (dateStr ? dateStr : 'No date') + ' · ' + escHtml(p.uploaded_by_name) + '</div>';
-                    html += '</div></div>';
-                });
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderAlbumGridHtml(bondId, d.photos);
             })
             .catch(function() {
                 var el = document.getElementById('album-grid-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828;font-size:0.85rem;text-align:center;padding:0.6rem;">Failed to load album photos.</div>';
+                if (!el) return;
+                getBondCache(cacheKey).then(function(cached) {
+                    if (cached && cached.photos && cached.photos.length > 0) {
+                        bondAlbumState[bondId].photos = cached.photos;
+                        var countEl = document.getElementById('album-count-' + bondId);
+                        if (countEl) countEl.textContent = cached.photos.length + ' photo' + (cached.photos.length > 1 ? 's' : '');
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached photos</div>' + renderAlbumGridHtml(bondId, cached.photos);
+                    } else {
+                        var countEl = document.getElementById('album-count-' + bondId);
+                        if (countEl) countEl.textContent = 'Offline';
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared album photos will load once you are back online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Shared album photos will load once you are back online.</div>';
+                });
             });
     }
 
@@ -3233,6 +3856,10 @@
 
     // Modal Upload
     function openAlbumUploadModal(bondId) {
+        if (isOffline()) {
+            if (window.showCustomAlert) showCustomAlert('Photo upload requires an active internet connection.', 'danger');
+            return;
+        }
         var modal = document.getElementById('bond-album-upload-modal');
         if (!modal) return;
         document.getElementById('upload-bond-id').value = bondId;
@@ -3273,6 +3900,10 @@
 
     function submitAlbumUploadModal(e) {
         e.preventDefault();
+        if (isOffline()) {
+            if (window.showCustomAlert) showCustomAlert('Photo upload requires an active internet connection.', 'danger');
+            return;
+        }
         var bondId = document.getElementById('upload-bond-id').value;
         var fileInput = document.getElementById('album-file-input');
         if (!fileInput.files || fileInput.files.length === 0) {
@@ -3314,7 +3945,7 @@
         }).catch(function() {
             btn.disabled = false;
             btn.textContent = 'Upload Photos';
-            if (window.showCustomAlert) showCustomAlert('Upload failed. Please try again.', 'danger');
+            if (window.showCustomAlert) showCustomAlert('Upload failed. Please check your connection.', 'danger');
         });
     }
 
@@ -3571,50 +4202,65 @@
     // ===================================================================
     // Bucket List Functions
     // ===================================================================
+    function renderBucketlistItemsHtml(items, bondId) {
+        if (!items || items.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No bucket list items yet. Dream up something to do together above!</div>';
+        }
+        var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
+        items.forEach(function(item) {
+            var statusColor = item.status === 'done' ? '#2e7d32' : item.status === 'agreed' ? '#1565c0' : '#888';
+            var statusBg = item.status === 'done' ? '#e8f5e9' : item.status === 'agreed' ? '#e3f2fd' : '#f5f5f5';
+            var statusText = item.status === 'done' ? 'Done' : item.status === 'agreed' ? 'Planned' : 'Dreaming';
+            var bObj = item.completed_at ? (window.parseServerTime ? window.parseServerTime(item.completed_at) : new Date(item.completed_at)) : (item.created_at ? (window.parseServerTime ? window.parseServerTime(item.created_at) : new Date(item.created_at)) : null);
+            var bDateStr = bObj && !isNaN(bObj) ? (item.completed_at ? ' · Completed ' : ' · ') + bObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+            html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">'
+                + '<div style="flex:1;min-width:0;">'
+                + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(item.title) + '</div>'
+                + '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + (item.description ? escHtml(item.description) + bDateStr : bDateStr.replace(/^ · /, '')) + '</div>'
+                + '</div>'
+                + '<div style="display:flex;align-items:center;gap:0.3rem;flex-shrink:0;">'
+                + '<span style="font-size:0.65rem;padding:0.15rem 0.4rem;border-radius:10px;background:' + statusBg + ';color:' + statusColor + ';font-weight:600;">' + statusText + '</span>';
+            if (!item.proposed_by_me && item.status === 'dreamt') {
+                html += '<button onclick="agreeBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:var(--primary-color);color:#fff;border:none;border-radius:5px;padding:0.2rem 0.4rem;font-size:0.65rem;cursor:pointer;">Agree</button>';
+            }
+            if (item.status === 'agreed') {
+                html += '<button onclick="doneBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:#2e7d32;color:#fff;border:none;border-radius:5px;padding:0.2rem 0.4rem;font-size:0.65rem;cursor:pointer;">Done</button>';
+            }
+            if (item.proposed_by_me && item.status !== 'done') {
+                html += '<button onclick="deleteBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.85rem;padding:0;">&times;</button>';
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     function loadBucketlist(bondId) {
         var container = document.getElementById('bucketlist-container-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/bucketlist')
             .then(r => r.json())
             .then(d => {
+                if (d && d.items) {
+                    setBondCache(bondId + ':bucketlist', d);
+                }
                 var el = document.getElementById('bucketlist-container-' + bondId);
                 if (!el) return;
-                if (!d.items || d.items.length === 0) {
-                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No bucket list items yet. Dream up something to do together!</div>';
-                    return;
-                }
-                var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
-                d.items.forEach(function(item) {
-                    var statusColor = item.status === 'done' ? '#2e7d32' : item.status === 'agreed' ? '#1565c0' : '#888';
-                    var statusBg = item.status === 'done' ? '#e8f5e9' : item.status === 'agreed' ? '#e3f2fd' : '#f5f5f5';
-                    var statusText = item.status === 'done' ? 'Done' : item.status === 'agreed' ? 'Planned' : 'Dreaming';
-                    var bObj = item.completed_at ? (window.parseServerTime ? window.parseServerTime(item.completed_at) : new Date(item.completed_at)) : (item.created_at ? (window.parseServerTime ? window.parseServerTime(item.created_at) : new Date(item.created_at)) : null);
-                    var bDateStr = bObj && !isNaN(bObj) ? (item.completed_at ? ' · Completed ' : ' · ') + bObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-
-                    html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;">'
-                        + '<div style="flex:1;min-width:0;">'
-                        + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(item.title) + '</div>'
-                        + '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + (item.description ? escHtml(item.description) + bDateStr : bDateStr.replace(/^ · /, '')) + '</div>'
-                        + '</div>'
-                        + '<div style="display:flex;align-items:center;gap:0.3rem;flex-shrink:0;">'
-                        + '<span style="font-size:0.65rem;padding:0.15rem 0.4rem;border-radius:10px;background:' + statusBg + ';color:' + statusColor + ';font-weight:600;">' + statusText + '</span>';
-                    if (!item.proposed_by_me && item.status === 'dreamt') {
-                        html += '<button onclick="agreeBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:var(--primary-color);color:#fff;border:none;border-radius:5px;padding:0.2rem 0.4rem;font-size:0.65rem;cursor:pointer;">Agree</button>';
-                    }
-                    if (item.status === 'agreed') {
-                        html += '<button onclick="doneBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:#2e7d32;color:#fff;border:none;border-radius:5px;padding:0.2rem 0.4rem;font-size:0.65rem;cursor:pointer;">Done</button>';
-                    }
-                    if (item.proposed_by_me && item.status !== 'done') {
-                        html += '<button onclick="deleteBucketlistItem(\'' + item.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.85rem;padding:0;">&times;</button>';
-                    }
-                    html += '</div></div>';
-                });
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderBucketlistItemsHtml(d.items, bondId);
             })
             .catch(function() {
                 var el = document.getElementById('bucketlist-container-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load bucket list.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':bucketlist').then(function(cached) {
+                    if (cached && cached.items && cached.items.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached bucket list</div>' + renderBucketlistItemsHtml(cached.items, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Bucket list items will load once online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Bucket list items will load once online.</div>';
+                });
             });
     }
 
@@ -3683,53 +4329,68 @@
     // ===================================================================
     // Media Recommendations Functions
     // ===================================================================
+    function renderRecommendationsItemsHtml(recommendations, bondId) {
+        if (!recommendations || recommendations.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No recommendations yet. Share something you love above!</div>';
+        }
+        var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
+        recommendations.forEach(function(r) {
+            var iconMap = { book:'📚', song:'🎵', podcast:'🎙️', movie:'🎬', show:'📺', game:'🎮', other:'📌' };
+            var icon = iconMap[r.media_type] || '📌';
+            var rObj = r.created_at ? (window.parseServerTime ? window.parseServerTime(r.created_at) : new Date(r.created_at)) : null;
+            var rDateStr = rObj && !isNaN(rObj) ? ' · ' + rObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+            var hrefUrl = r.link ? r.link.trim() : '';
+            if (hrefUrl && !/^https?:\/\//i.test(hrefUrl) && !hrefUrl.startsWith('//')) {
+                hrefUrl = 'https://' + hrefUrl;
+            }
+
+            html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:flex-start;gap:0.5rem;">'
+                + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
+                + '<div style="flex:1;min-width:0;">'
+                + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
+                + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
+                + (r.image_url ? '<div style="margin-top:0.3rem;"><img src="' + escHtml(r.image_url) + '" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--border-color);object-fit:cover;cursor:pointer;" onclick="openRecImageFull(this.src)" alt="Recommendation image"></div>' : '')
+                + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
+                + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
+                + '</div>'
+                + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';
+            if (!r.recommended_by_me) {
+                html += '<button onclick="toggleTriedRec(\'' + r.id + '\',\'' + bondId + '\')" style="font-size:0.68rem;padding:0.2rem 0.5rem;border-radius:5px;cursor:pointer;' + (r.tried_by_partner ? 'background:#c8e6c9;color:#2e7d32;border:1px solid #a5d6a7;' : 'background:transparent;color:#888;border:1px solid var(--border-color);') + '">' + (r.tried_by_partner ? 'Tried it' : 'Tried?') + '</button>';
+            }
+            if (r.recommended_by_me) {
+                html += '<button onclick="deleteRecommendation(\'' + r.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.8rem;padding:0;">&times;</button>';
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     function loadRecommendations(bondId) {
         var container = document.getElementById('recs-list-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/recommendations')
             .then(r => r.json())
             .then(d => {
+                if (d && d.recommendations) {
+                    setBondCache(bondId + ':recommendations', d);
+                }
                 var el = document.getElementById('recs-list-' + bondId);
                 if (!el) return;
-                if (!d.recommendations || d.recommendations.length === 0) {
-                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No recommendations yet. Share something you love!</div>';
-                    return;
-                }
-                var html = '<div style="display:flex;flex-direction:column;gap:0.35rem;">';
-                d.recommendations.forEach(function(r) {
-                    var iconMap = { book:'📚', song:'🎵', podcast:'🎙️', movie:'🎬', show:'📺', game:'🎮', other:'📌' };
-                    var icon = iconMap[r.media_type] || '📌';
-                    var rObj = r.created_at ? (window.parseServerTime ? window.parseServerTime(r.created_at) : new Date(r.created_at)) : null;
-                    var rDateStr = rObj && !isNaN(rObj) ? ' · ' + rObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
-                    var hrefUrl = r.link ? r.link.trim() : '';
-                    if (hrefUrl && !/^https?:\/\//i.test(hrefUrl) && !hrefUrl.startsWith('//')) {
-                        hrefUrl = 'https://' + hrefUrl;
-                    }
-
-                    html += '<div style="padding:0.55rem;background:var(--card-bg);border:1px solid var(--border-color);border-radius:8px;display:flex;align-items:flex-start;gap:0.5rem;">'
-                        + '<span style="font-size:1.3rem;flex-shrink:0;">' + icon + '</span>'
-                        + '<div style="flex:1;min-width:0;">'
-                        + '<div style="font-size:0.85rem;font-weight:600;color:var(--text-dark-color);">' + escHtml(r.title) + '</div>'
-                        + (r.note ? '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.1rem;">' + escHtml(r.note) + '</div>' : '')
-                        + (r.image_url ? '<div style="margin-top:0.3rem;"><img src="' + escHtml(r.image_url) + '" style="max-width:100%;max-height:200px;border-radius:6px;border:1px solid var(--border-color);object-fit:cover;cursor:pointer;" onclick="openRecImageFull(this.src)" alt="Recommendation image"></div>' : '')
-                        + (hrefUrl ? '<a href="' + escHtml(hrefUrl) + '" target="_blank" rel="noopener noreferrer" style="font-size:0.68rem;color:var(--primary-color);">Open link</a>' : '')
-                        + '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.2rem;">' + (r.recommended_by_me ? 'You' : 'Partner') + ' · ' + escHtml(r.media_type) + rDateStr + '</div>'
-                        + '</div>'
-                        + '<div style="display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex-shrink:0;">';
-                    if (!r.recommended_by_me) {
-                        html += '<button onclick="toggleTriedRec(\'' + r.id + '\',\'' + bondId + '\')" style="font-size:0.68rem;padding:0.2rem 0.5rem;border-radius:5px;cursor:pointer;' + (r.tried_by_partner ? 'background:#c8e6c9;color:#2e7d32;border:1px solid #a5d6a7;' : 'background:transparent;color:#888;border:1px solid var(--border-color);') + '">' + (r.tried_by_partner ? 'Tried it' : 'Tried?') + '</button>';
-                    }
-                    if (r.recommended_by_me) {
-                        html += '<button onclick="deleteRecommendation(\'' + r.id + '\',\'' + bondId + '\')" style="background:none;border:none;color:#c62828;cursor:pointer;font-size:0.8rem;padding:0;">&times;</button>';
-                    }
-                    html += '</div></div>';
-                });
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderRecommendationsItemsHtml(d.recommendations, bondId);
             })
             .catch(function() {
                 var el = document.getElementById('recs-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load recommendations.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':recommendations').then(function(cached) {
+                    if (cached && cached.recommendations && cached.recommendations.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached recommendations</div>' + renderRecommendationsItemsHtml(cached.recommendations, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Recommendations will load once online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Recommendations will load once online.</div>';
+                });
             });
     }
 
@@ -3851,34 +4512,49 @@
     // ===================================================================
     // Quick Pulse Functions
     // ===================================================================
+    function renderPulsesListHtml(pulses, bondId) {
+        if (!pulses || pulses.length === 0) {
+            return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.6rem;">No pulses yet. Send one anytime!</div>';
+        }
+        var html = '<div style="display:flex;flex-wrap:wrap;gap:0.35rem;">';
+        pulses.forEach(function(p) {
+            var timeObj = p.created_at ? (window.parseServerTime ? window.parseServerTime(p.created_at) : new Date(p.created_at)) : null;
+            var timeStr = timeObj && !isNaN(timeObj) ? timeObj.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+            html += '<div style="display:flex;align-items:center;gap:0.25rem;padding:0.3rem 0.55rem;background:' + (p.from_me ? 'var(--surface-bg)' : '#e8f5e9') + ';border:1px solid var(--border-color);border-radius:20px;font-size:0.78rem;">'
+                + '<span style="font-size:1rem;">' + p.emoji + '</span>'
+                + (p.message ? '<span style="color:var(--text-dark-color);">' + escHtml(p.message) + '</span>' : '')
+                + '<span style="font-size:0.6rem;color:var(--text-muted);">' + timeStr + '</span>'
+                + '</div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     function loadPulses(bondId) {
         var container = document.getElementById('pulses-list-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/pulses')
             .then(r => r.json())
             .then(d => {
+                if (d && d.pulses) {
+                    setBondCache(bondId + ':pulses', d);
+                }
                 var el = document.getElementById('pulses-list-' + bondId);
                 if (!el) return;
-                if (!d.pulses || d.pulses.length === 0) {
-                    el.innerHTML = '<div style="color:#888;font-size:0.85rem;text-align:center;padding:0.6rem;">No pulses yet. Send one anytime!</div>';
-                    return;
-                }
-                var html = '<div style="display:flex;flex-wrap:wrap;gap:0.35rem;">';
-                d.pulses.forEach(function(p) {
-                    var timeObj = p.created_at ? (window.parseServerTime ? window.parseServerTime(p.created_at) : new Date(p.created_at)) : null;
-                    var timeStr = timeObj && !isNaN(timeObj) ? timeObj.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
-                    html += '<div style="display:flex;align-items:center;gap:0.25rem;padding:0.3rem 0.55rem;background:' + (p.from_me ? 'var(--surface-bg)' : '#e8f5e9') + ';border:1px solid var(--border-color);border-radius:20px;font-size:0.78rem;">'
-                        + '<span style="font-size:1rem;">' + p.emoji + '</span>'
-                        + (p.message ? '<span style="color:var(--text-dark-color);">' + escHtml(p.message) + '</span>' : '')
-                        + '<span style="font-size:0.6rem;color:var(--text-muted);">' + timeStr + '</span>'
-                        + '</div>';
-                });
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderPulsesListHtml(d.pulses, bondId);
             })
             .catch(function() {
                 var el = document.getElementById('pulses-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828;">Failed to load pulses.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':pulses').then(function(cached) {
+                    if (cached && cached.pulses && cached.pulses.length > 0) {
+                        el.innerHTML = renderPulsesListHtml(cached.pulses, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.6rem;">Pulses will update once you are back online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.6rem;">Pulses will update once you are back online.</div>';
+                });
             });
     }
 
@@ -3961,38 +4637,84 @@
     }
 
     // --- Daily Habits JS ---
+    function renderHabitsListHtml(habits, bondId) {
+        if (!habits || habits.length === 0) {
+            return '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">No active habits yet. Add a daily habit above to build consistency together!</div>';
+        }
+        let html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
+        habits.forEach(h => {
+            const pendingTag = h.isPending ? ' <span style="font-size:0.7rem; color:var(--primary-color); font-weight:600;"><i class="fas fa-clock"></i> (Pending sync)</span>' : '';
+            html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem; background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px;">' +
+                '<div style="display:flex; align-items:center; gap:0.6rem; flex:1;">' +
+                '<input type="checkbox" ' + (h.my_completed ? 'checked' : '') + ' onchange="toggleHabit(\'' + h.id + '\', \'' + bondId + '\')" style="width:1.1rem; height:1.1rem; cursor:pointer;">' +
+                '<span style="font-size:0.9rem; color:var(--text-dark-color); ' + (h.my_completed ? 'text-decoration:line-through; opacity:0.7;' : '') + '">' + escHtml(h.title) + 
+                ' <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(You: ' + (h.my_7d_count || 0) + '/7 · Partner: ' + (h.partner_7d_count || 0) + '/7)' + pendingTag + '</span></span>' +
+                '</div>' +
+                '<div style="display:flex; align-items:center; gap:0.5rem;">' +
+                '<span style="font-size:0.75rem; padding:0.15rem 0.4rem; background:var(--hover-bg); border-radius:4px; color:var(--text-secondary);" title="Partner completed today">' + (h.partner_completed ? 'Partner ✓' : 'Partner ○') + '</span>' +
+                '<button onclick="deleteHabit(\'' + h.id + '\', \'' + bondId + '\')" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:0.9rem; padding:0 0.2rem;" title="Archive habit">&times;</button>' +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function applyOfflineHabitToggles(habits, actions) {
+        if (!habits) return [];
+        const today = todayUTC();
+        const toggles = (actions || []).filter(a => a.type === 'habit_toggle' && a.date === today);
+        const toggleCounts = {};
+        toggles.forEach(t => {
+            toggleCounts[t.habitId] = (toggleCounts[t.habitId] || 0) + 1;
+        });
+
+        return habits.map(h => {
+            const count = toggleCounts[h.id] || 0;
+            if (count % 2 === 1) {
+                return Object.assign({}, h, {
+                    my_completed: !h.my_completed,
+                    isPending: true
+                });
+            }
+            if (count > 0) {
+                return Object.assign({}, h, { isPending: true });
+            }
+            return h;
+        });
+    }
+
     function loadHabits(bondId) {
         const container = document.getElementById('habits-list-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/habits')
             .then(r => r.json())
             .then(d => {
+                if (d && d.habits) {
+                    setBondCache(bondId + ':habits', d);
+                }
                 const el = document.getElementById('habits-list-' + bondId);
                 if (!el) return;
-                if (!d.habits || d.habits.length === 0) {
-                    el.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No active habits yet. Add a daily habit above to build consistency together!</div>';
-                    return;
-                }
-                let html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
-                d.habits.forEach(h => {
-                    html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem; background:var(--card-bg); border:1px solid var(--card-border); border-radius:6px;">' +
-                        '<div style="display:flex; align-items:center; gap:0.6rem; flex:1;">' +
-                        '<input type="checkbox" ' + (h.my_completed ? 'checked' : '') + ' onchange="toggleHabit(\'' + h.id + '\', \'' + bondId + '\')" style="width:1.1rem; height:1.1rem; cursor:pointer;">' +
-                        '<span style="font-size:0.9rem; color:var(--text-dark-color); ' + (h.my_completed ? 'text-decoration:line-through; opacity:0.7;' : '') + '">' + escHtml(h.title) + 
-                        ' <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(You: ' + (h.my_7d_count || 0) + '/7 · Partner: ' + (h.partner_7d_count || 0) + '/7)</span></span>' +
-                        '</div>' +
-                        '<div style="display:flex; align-items:center; gap:0.5rem;">' +
-                        '<span style="font-size:0.75rem; padding:0.15rem 0.4rem; background:var(--hover-bg); border-radius:4px; color:var(--text-secondary);" title="Partner completed today">' + (h.partner_completed ? 'Partner ✓' : 'Partner ○') + '</span>' +
-                        '<button onclick="deleteHabit(\'' + h.id + '\', \'' + bondId + '\')" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:0.9rem; padding:0 0.2rem;" title="Archive habit">&times;</button>' +
-                        '</div>' +
-                        '</div>';
+                getOfflineActions(bondId).then(actions => {
+                    const adjusted = applyOfflineHabitToggles(d.habits || [], actions);
+                    el.innerHTML = renderHabitsListHtml(adjusted, bondId);
+                }).catch(() => {
+                    el.innerHTML = renderHabitsListHtml(d.habits || [], bondId);
                 });
-                html += '</div>';
-                el.innerHTML = html;
             })
             .catch(() => {
                 const el = document.getElementById('habits-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load habits.</div>';
+                if (!el) return;
+                Promise.all([getBondCache(bondId + ':habits'), getOfflineActions(bondId)]).then(([cached, actions]) => {
+                    if (cached && cached.habits && cached.habits.length > 0) {
+                        const adjusted = applyOfflineHabitToggles(cached.habits, actions);
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached habits</div>' + renderHabitsListHtml(adjusted, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Daily habits will load once online. You can still add habits above!</div>';
+                    }
+                }).catch(() => {
+                    el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Daily habits will load once online.</div>';
+                });
             });
     }
 
@@ -4028,6 +4750,21 @@
     }
 
     function toggleHabit(habitId, bondId) {
+        if (isOffline()) {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'habit_toggle',
+                date: todayUTC(),
+                habitId: habitId,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Habit saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadHabits(bondId);
+            });
+            return;
+        }
+
         echoFetch('/api/bonds/habits/' + habitId + '/toggle', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
@@ -4035,6 +4772,20 @@
             if (d.success) {
                 loadHabits(bondId);
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        }).catch(() => {
+            addOfflineAction({
+                bondId: bondId,
+                type: 'habit_toggle',
+                date: todayUTC(),
+                habitId: habitId,
+                queuedAt: new Date().toISOString()
+            }).then(function() {
+                if (window.showCustomToast) showCustomToast('Habit saved offline. Will sync when online.', 'success');
+                updatePendingBadge();
+                loadHabits(bondId);
+            }).catch(function() {
+                if (window.showCustomAlert) showCustomAlert('Failed to toggle habit.', 'danger');
+            });
         });
     }
 
@@ -4061,147 +4812,166 @@
     // --- Relationship Insights & Monthly Recap ("Echo Together") ---
     const MOOD_EMOJIS = { 'great': '😁', 'good': '😊', 'okay': '😐', 'down': '😔', 'tough': '😫' };
 
+    function renderInsightsHtml(d, bondId) {
+        const rcp = d.recap || {};
+        const anni = d.anniversary || {};
+
+        let html = '<div style="display:flex; flex-direction:column; gap:1rem;">';
+
+        // Anniversary Celebration Card
+        if (anni.days_since !== null && anni.days_since !== undefined) {
+            var anniIcon = '🎉';
+            if (anni.label && anni.label.indexOf('year') !== -1) anniIcon = '🎊';
+            else if (anni.label && anni.label.indexOf('month') !== -1) anniIcon = '🥂';
+            var daysStr = anni.days_since + ' day' + (anni.days_since !== 1 ? 's' : '');
+            var nextStr = anni.next_milestone_days > 0 ? anni.next_milestone_days + ' day' + (anni.next_milestone_days !== 1 ? 's' : '') + ' to ' + anni.next_milestone : '';
+            html += '<div style="background:var(--card-bg); border:2px solid var(--primary-color); border-radius:10px; padding:1rem; text-align:center;">' +
+                '<div style="font-size:2rem; margin-bottom:0.3rem;">' + anniIcon + '</div>' +
+                '<div style="font-weight:700; font-size:1.15rem; color:var(--primary-dark-color);">' + (anni.label || 'Bond Anniversary') + '</div>' +
+                '<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">' + daysStr + ' of bonding' + (nextStr ? ' &middot; ' + nextStr : '') + '</div>' +
+                '</div>';
+        }
+
+        // Monthly Recap Box
+        html += '<div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">' +
+            '<div style="font-weight:600; font-size:1rem; color:var(--primary-dark-color); margin-bottom:0.6rem;">Echo Together — ' + escHtml(rcp.month_name || 'This Month') + '</div>' +
+            '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem; text-align:center;">' +
+            '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--border-color);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.current_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Current Streak</div></div>' +
+            '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--border-color);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.best_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Best Streak</div></div>' +
+            '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--border-color);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.goals_completed || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Goals Completed</div></div>' +
+            '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--border-color);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.qotd_answered || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">QotD Answered</div></div>' +
+            '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--border-color);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.journal_count || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Journal Entries</div></div>' +
+            '</div>';
+
+        if (rcp.my_top_mood || rcp.partner_top_mood) {
+            html += '<div style="margin-top:0.8rem; font-size:0.85rem; color:var(--text-dark-color); border-top:1px solid var(--border-color); padding-top:0.6rem; display:flex; justify-content:space-around;">' +
+                '<div><strong>Your Top Mood:</strong> ' + (rcp.my_top_mood ? (MOOD_EMOJIS[rcp.my_top_mood] || rcp.my_top_mood) : 'None yet') + '</div>' +
+                '<div><strong>' + escHtml(d.partner_username || 'Partner') + '\'s Top Mood:</strong> ' + (rcp.partner_top_mood ? (MOOD_EMOJIS[rcp.partner_top_mood] || rcp.partner_top_mood) : 'None yet') + '</div>' +
+                '</div>';
+        }
+        html += '</div>';
+
+        // 30-Day Mood Comparison Strip
+        if (d.mood_comparison && d.mood_comparison.length > 0) {
+            html += '<div>' +
+                '<strong style="font-size:0.9rem; color:var(--primary-dark-color); display:block; margin-bottom:0.4rem;">30-Day Mood History</strong>' +
+                '<div style="display:flex; gap:0.25rem; overflow-x:auto; padding-bottom:0.4rem;">';
+            d.mood_comparison.forEach(m => {
+                const myIcon = MOOD_EMOJIS[m.my_mood] || '·';
+                const pIcon = MOOD_EMOJIS[m.partner_mood] || '·';
+                const dtShort = m.date.slice(5);
+                html += '<div style="min-width:32px; text-align:center; padding:0.2rem; background:var(--surface-bg); border-radius:4px; font-size:0.7rem;" title="' + m.date + '">\n' +
+                    '<div style="font-size:0.65rem; color:var(--text-muted);">' + dtShort + '</div>' +
+                    '<div>' + myIcon + '</div>' +
+                    '<div>' + pIcon + '</div>' +
+                    '</div>';
+            });
+            html += '</div></div>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
     function loadInsights(bondId) {
         const container = document.getElementById('insights-content-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/insights')
             .then(r => r.json())
             .then(d => {
+                if (d && !d.error) {
+                    setBondCache(bondId + ':insights', d);
+                }
                 const el = document.getElementById('insights-content-' + bondId);
                 if (!el) return;
                 if (d.error) {
                     el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">' + escHtml(d.error) + '</div>';
                     return;
                 }
-                const rcp = d.recap || {};
-                const anni = d.anniversary || {};
-
-                let html = '<div style="display:flex; flex-direction:column; gap:1rem;">';
-
-                // Anniversary Celebration Card
-                if (anni.days_since !== null && anni.days_since !== undefined) {
-                    var anniIcon = '🎉';
-                    if (anni.label && anni.label.indexOf('year') !== -1) anniIcon = '🎊';
-                    else if (anni.label && anni.label.indexOf('month') !== -1) anniIcon = '🥂';
-                    var daysStr = anni.days_since + ' day' + (anni.days_since !== 1 ? 's' : '');
-                    var nextStr = anni.next_milestone_days > 0 ? anni.next_milestone_days + ' day' + (anni.next_milestone_days !== 1 ? 's' : '') + ' to ' + anni.next_milestone : '';
-                    html += '<div style="background:var(--card-bg); border:2px solid var(--primary-color); border-radius:10px; padding:1rem; text-align:center;">' +
-                        '<div style="font-size:2rem; margin-bottom:0.3rem;">' + anniIcon + '</div>' +
-                        '<div style="font-weight:700; font-size:1.15rem; color:var(--primary-dark-color);">' + (anni.label || 'Bond Anniversary') + '</div>' +
-                        '<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.25rem;">' + daysStr + ' of bonding' + (nextStr ? ' &middot; ' + nextStr : '') + '</div>' +
-                        '</div>';
-                }
-
-                // Monthly Recap Box
-                html += '<div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:8px; padding:1rem;">' +
-                    '<div style="font-weight:600; font-size:1rem; color:var(--primary-dark-color); margin-bottom:0.6rem;">Echo Together — ' + escHtml(rcp.month_name) + '</div>' +
-                    '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem; text-align:center;">' +
-                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.current_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Current Streak</div></div>' +
-                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.best_streak || 0) + 'd</div><div style="font-size:0.75rem; color:var(--text-secondary);">Best Streak</div></div>' +
-                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.goals_completed || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Goals Completed</div></div>' +
-                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.qotd_answered || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">QotD Answered</div></div>' +
-                    '<div style="background:var(--card-bg); padding:0.6rem; border-radius:6px; border:1px solid var(--card-border);"><div style="font-size:1.2rem; font-weight:700; color:var(--primary-dark-color);">' + (rcp.journal_count || 0) + '</div><div style="font-size:0.75rem; color:var(--text-secondary);">Journal Entries</div></div>' +
-                    '</div>';
-
-                if (rcp.my_top_mood || rcp.partner_top_mood) {
-                    html += '<div style="margin-top:0.8rem; font-size:0.85rem; color:var(--text-dark-color); border-top:1px solid var(--border-color); padding-top:0.6rem; display:flex; justify-content:space-around;">' +
-                        '<div><strong>Your Top Mood:</strong> ' + (rcp.my_top_mood ? (MOOD_EMOJIS[rcp.my_top_mood] || rcp.my_top_mood) : 'None yet') + '</div>' +
-                        '<div><strong>' + escHtml(d.partner_username) + '\'s Top Mood:</strong> ' + (rcp.partner_top_mood ? (MOOD_EMOJIS[rcp.partner_top_mood] || rcp.partner_top_mood) : 'None yet') + '</div>' +
-                        '</div>';
-                }
-                html += '</div>';
-
-                // 30-Day Mood Comparison Strip
-                if (d.mood_comparison && d.mood_comparison.length > 0) {
-                    html += '<div>' +
-                        '<strong style="font-size:0.9rem; color:var(--primary-dark-color); display:block; margin-bottom:0.4rem;">30-Day Mood History</strong>' +
-                        '<div style="display:flex; gap:0.25rem; overflow-x:auto; padding-bottom:0.4rem;">';
-                    d.mood_comparison.forEach(m => {
-                        const myIcon = MOOD_EMOJIS[m.my_mood] || '·';
-                        const pIcon = MOOD_EMOJIS[m.partner_mood] || '·';
-                        const dtShort = m.date.slice(5);
-                        html += '<div style="min-width:32px; text-align:center; padding:0.2rem; background:var(--surface-bg); border-radius:4px; font-size:0.7rem;" title="' + m.date + '">\n' +
-                            '<div style="font-size:0.65rem; color:#888;">' + dtShort + '</div>' +
-                            '<div>' + myIcon + '</div>' +
-                            '<div>' + pIcon + '</div>' +
-                            '</div>';
-                    });
-                    html += '</div></div>';
-                }
-
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderInsightsHtml(d, bondId);
                 // Also load the timeline
                 loadTimeline(bondId);
             })
             .catch(() => {
                 const el = document.getElementById('insights-content-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load insights.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':insights').then(function(cached) {
+                    if (cached && !cached.error) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached insights</div>' + renderInsightsHtml(cached, bondId);
+                        loadTimeline(bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:1rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Insights and recaps will update once you are back online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:1rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Insights and recaps will update once you are back online.</div>';
+                });
             });
     }
 
     // --- Memory Timeline ---
     var _timelinePages = {};
+    function renderTimelineHtml(items) {
+        var html = '';
+        items.forEach(function(item) {
+            var dateStr = '';
+            if (item.timestamp) {
+                var dt = window.parseServerTime ? window.parseServerTime(item.timestamp) : new Date(item.timestamp);
+                if (dt) dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+            html += '<div style="display:flex;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">';
+            var icon = '';
+            if (item.type === 'journal') icon = '📝';
+            else if (item.type === 'qotd') icon = '💬';
+            else if (item.type === 'mood') icon = item.emoji || '😊';
+            else if (item.type === 'goal') icon = '🎯';
+            else if (item.type === 'photo') icon = '📷';
+            html += '<div style="font-size:1.2rem;min-width:1.5rem;text-align:center;padding-top:0.1rem;">' + icon + '</div>';
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="font-size:0.72rem;color:var(--text-muted);">' + dateStr + '</div>';
+            if (item.type === 'journal') {
+                html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.author) + '</div>';
+                html += '<div style="font-size:0.85rem;color:var(--text-dark-color);margin-top:0.15rem;">' + nl2br(item.content) + '</div>';
+            } else if (item.type === 'qotd') {
+                html += '<div style="font-size:0.82rem;color:var(--text-secondary);font-style:italic;">"' + escHtml(item.question) + '"</div>';
+                if (item.my_answer) html += '<div style="font-size:0.82rem;margin-top:0.15rem;"><strong>' + escHtml(item.my_username) + ':</strong> ' + nl2br(item.my_answer) + '</div>';
+                if (item.partner_answer) html += '<div style="font-size:0.82rem;margin-top:0.1rem;"><strong>' + escHtml(item.partner_username) + ':</strong> ' + nl2br(item.partner_answer) + '</div>';
+            } else if (item.type === 'mood') {
+                html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">' + escHtml(item.author) + ' felt <strong>' + escHtml(item.label) + '</strong></div>';
+            } else if (item.type === 'goal') {
+                html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">Completed goal: <strong>' + escHtml(item.title) + '</strong></div>';
+            } else if (item.type === 'photo') {
+                if (item.title) html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.uploader) + ': ' + escHtml(item.title) + '</div>';
+                if (item.url) html += '<img src="' + escHtml(item.url) + '" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:0.2rem;cursor:pointer;" onclick="if(window.openLightbox)openLightbox(\'' + escHtml(item.url) + '\')" loading="lazy">';
+            }
+            html += '</div></div>';
+        });
+        return html;
+    }
+
     function loadTimeline(bondId, page) {
         page = page || 1;
         const container = document.getElementById('timeline-content-' + bondId);
         const loadMore = document.getElementById('timeline-load-more-' + bondId);
         if (!container) return;
         if (page === 1) {
-            container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.5rem;">Loading timeline...</div>';
+            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.5rem;">Loading timeline...</div>';
         }
         echoFetch('/api/bonds/' + bondId + '/timeline?page=' + page)
             .then(r => r.json())
             .then(d => {
+                if (d && !d.error) {
+                    setBondCache(bondId + ':timeline:' + page, d);
+                }
                 if (d.error) {
                     container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;">' + escHtml(d.error) + '</div>';
                     return;
                 }
                 if (!d.items || d.items.length === 0) {
-                    if (page === 1) container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;">No memories yet. Start journaling, answering QOTD, or sharing photos.</div>';
+                    if (page === 1) container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;">No memories yet. Start journaling, answering QOTD, or sharing photos.</div>';
                     return;
                 }
-                var html = page === 1 ? '' : container.innerHTML;
-                // Remove the "load more clicked" state
-                if (page > 1) {
-                    // Remove existing load more placeholder if present
-                }
-                d.items.forEach(function(item) {
-                    var dateStr = '';
-                    if (item.timestamp) {
-                        var dt = window.parseServerTime ? window.parseServerTime(item.timestamp) : new Date(item.timestamp);
-                        if (dt) dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-                    }
-                    html += '<div style="display:flex;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border-color);">';
-                    // Type indicator
-                    var icon = '';
-                    if (item.type === 'journal') icon = '📝';
-                    else if (item.type === 'qotd') icon = '💬';
-                    else if (item.type === 'mood') icon = item.emoji || '😊';
-                    else if (item.type === 'goal') icon = '🎯';
-                    else if (item.type === 'photo') icon = '📷';
-                    html += '<div style="font-size:1.2rem;min-width:1.5rem;text-align:center;padding-top:0.1rem;">' + icon + '</div>';
-                    html += '<div style="flex:1;min-width:0;">';
-                    html += '<div style="font-size:0.72rem;color:var(--text-muted);">' + dateStr + '</div>';
-                    if (item.type === 'journal') {
-                        html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.author) + '</div>';
-                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);margin-top:0.15rem;">' + nl2br(item.content) + '</div>';
-                    } else if (item.type === 'qotd') {
-                        html += '<div style="font-size:0.82rem;color:var(--text-secondary);font-style:italic;">"' + escHtml(item.question) + '"</div>';
-                        if (item.my_answer) html += '<div style="font-size:0.82rem;margin-top:0.15rem;"><strong>' + escHtml(item.my_username) + ':</strong> ' + nl2br(item.my_answer) + '</div>';
-                        if (item.partner_answer) html += '<div style="font-size:0.82rem;margin-top:0.1rem;"><strong>' + escHtml(item.partner_username) + ':</strong> ' + nl2br(item.partner_answer) + '</div>';
-                    } else if (item.type === 'mood') {
-                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">' + escHtml(item.author) + ' felt <strong>' + escHtml(item.label) + '</strong></div>';
-                    } else if (item.type === 'goal') {
-                        html += '<div style="font-size:0.85rem;color:var(--text-dark-color);">Completed goal: <strong>' + escHtml(item.title) + '</strong></div>';
-                    } else if (item.type === 'photo') {
-                        if (item.title) html += '<div style="font-size:0.82rem;color:var(--text-secondary);">' + escHtml(item.uploader) + ': ' + escHtml(item.title) + '</div>';
-                        if (item.url) html += '<img src="' + escHtml(item.url) + '" style="max-width:180px;max-height:140px;border-radius:6px;margin-top:0.2rem;cursor:pointer;" onclick="if(window.openLightbox)openLightbox(\'' + escHtml(item.url) + '\')" loading="lazy">';
-                    }
-                    html += '</div></div>';
-                });
+                var html = (page === 1 ? '' : container.innerHTML) + renderTimelineHtml(d.items);
                 container.innerHTML = html;
-                // Load more button
                 _timelinePages[bondId] = page;
                 if (d.has_more && loadMore) {
                     loadMore.style.display = 'block';
@@ -4211,7 +4981,16 @@
                 }
             })
             .catch(function() {
-                if (page === 1) container.innerHTML = '<div style="color:#c62828;font-size:0.85rem;">Failed to load timeline.</div>';
+                getBondCache(bondId + ':timeline:' + page).then(function(cached) {
+                    if (cached && cached.items && cached.items.length > 0) {
+                        var html = (page === 1 ? '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached timeline</div>' : container.innerHTML) + renderTimelineHtml(cached.items);
+                        container.innerHTML = html;
+                    } else if (page === 1) {
+                        container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Timeline will load once online.</div>';
+                    }
+                }).catch(function() {
+                    if (page === 1) container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:0.8rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">Timeline will load once online.</div>';
+                });
             });
     }
 
@@ -4296,7 +5075,6 @@
     function showAddCountdownForm(bondId) {
         var form = document.getElementById('add-countdown-form-' + bondId);
         if (form) form.style.display = 'block';
-        // Set min date to today
         var dateInput = document.getElementById('countdown-date-input-' + bondId);
         if (dateInput) dateInput.min = new Date().toISOString().split('T')[0];
     }
@@ -4305,56 +5083,71 @@
         if (form) form.style.display = 'none';
     }
 
+    function renderCountdownsListHtml(countdowns, bondId) {
+        if (!countdowns || countdowns.length === 0) {
+            return '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">No countdowns yet. Add one to start counting down together!</div>';
+        }
+        var html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
+        var today = new Date();
+        today.setHours(0,0,0,0);
+        countdowns.forEach(function(c) {
+            var eventDate = new Date(c.event_date + 'T00:00:00');
+            var diffTime = eventDate.getTime() - today.getTime();
+            var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            var label = '';
+            var labelColor = 'var(--primary-color)';
+            if (diffDays < 0) {
+                label = Math.abs(diffDays) + ' day' + (Math.abs(diffDays) !== 1 ? 's' : '') + ' ago';
+                labelColor = 'var(--text-muted)';
+            } else if (diffDays === 0) {
+                label = 'Today!';
+                labelColor = 'var(--success-color)';
+            } else if (diffDays === 1) {
+                label = 'Tomorrow!';
+                labelColor = 'var(--success-color)';
+            } else {
+                label = diffDays + ' days left';
+            }
+            html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem; background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px;">' +
+                '<div style="flex:1;">' +
+                '<div style="font-size:0.9rem; color:var(--text-dark-color); font-weight:500;">' + escHtml(c.title) + '</div>' +
+                '<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.15rem;">' + eventDate.toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) + '</div>' +
+                '</div>' +
+                '<div style="display:flex; align-items:center; gap:0.5rem;">' +
+                '<span style="font-size:0.85rem; font-weight:600; color:' + labelColor + ';">' + label + '</span>' +
+                '<button onclick="deleteCountdown(\'' + c.id + '\', \'' + bondId + '\')" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:0.9rem; padding:0 0.2rem;" title="Remove countdown">&times;</button>' +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
     function loadCountdowns(bondId) {
         var container = document.getElementById('countdowns-list-' + bondId);
         if (!container) return;
         echoFetch('/api/bonds/' + bondId + '/countdowns')
             .then(function(r) { return r.json(); })
             .then(function(d) {
+                if (d && d.countdowns) {
+                    setBondCache(bondId + ':countdowns', d);
+                }
                 var el = document.getElementById('countdowns-list-' + bondId);
                 if (!el) return;
-                if (!d.countdowns || d.countdowns.length === 0) {
-                    el.innerHTML = '<div style="color:#888; font-size:0.85rem; text-align:center; padding:0.6rem;">No countdowns yet. Add one to start counting down together!</div>';
-                    return;
-                }
-                var html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
-                var today = new Date();
-                today.setHours(0,0,0,0);
-                d.countdowns.forEach(function(c) {
-                    var eventDate = new Date(c.event_date + 'T00:00:00');
-                    var diffTime = eventDate.getTime() - today.getTime();
-                    var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    var label = '';
-                    var labelColor = 'var(--primary-color)';
-                    if (diffDays < 0) {
-                        label = Math.abs(diffDays) + ' day' + (Math.abs(diffDays) !== 1 ? 's' : '') + ' ago';
-                        labelColor = 'var(--text-muted)';
-                    } else if (diffDays === 0) {
-                        label = 'Today!';
-                        labelColor = 'var(--success-color)';
-                    } else if (diffDays === 1) {
-                        label = 'Tomorrow!';
-                        labelColor = 'var(--success-color)';
-                    } else {
-                        label = diffDays + ' days left';
-                    }
-                    html += '<div style="display:flex; align-items:center; justify-content:space-between; padding:0.6rem; background:var(--card-bg); border:1px solid var(--card-border); border-radius:6px;">' +
-                        '<div style="flex:1;">' +
-                        '<div style="font-size:0.9rem; color:var(--text-dark-color); font-weight:500;">' + escHtml(c.title) + '</div>' +
-                        '<div style="font-size:0.75rem; color:var(--text-secondary); margin-top:0.15rem;">' + eventDate.toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) + '</div>' +
-                        '</div>' +
-                        '<div style="display:flex; align-items:center; gap:0.5rem;">' +
-                        '<span style="font-size:0.85rem; font-weight:600; color:' + labelColor + ';">' + label + '</span>' +
-                        '<button onclick="deleteCountdown(\'' + c.id + '\', \'' + bondId + '\')" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:0.9rem; padding:0 0.2rem;" title="Remove countdown">&times;</button>' +
-                        '</div>' +
-                        '</div>';
-                });
-                html += '</div>';
-                el.innerHTML = html;
+                el.innerHTML = renderCountdownsListHtml(d.countdowns, bondId);
             })
             .catch(function() {
                 var el = document.getElementById('countdowns-list-' + bondId);
-                if (el) el.innerHTML = '<div style="color:#c62828; font-size:0.85rem;">Failed to load countdowns.</div>';
+                if (!el) return;
+                getBondCache(bondId + ':countdowns').then(function(cached) {
+                    if (cached && cached.countdowns && cached.countdowns.length > 0) {
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached countdowns</div>' + renderCountdownsListHtml(cached.countdowns, bondId);
+                    } else {
+                        el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Countdowns will load once online.</div>';
+                    }
+                }).catch(function() {
+                    el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Countdowns will load once online.</div>';
+                });
             });
     }
 
@@ -4453,34 +5246,34 @@
 
     function handlePinModalKey(e) {
         if (e.key >= '0' && e.key <= '9') {
-            handlePinKey(e.key);
+            enterPinDigit(e.key);
         } else if (e.key === 'Backspace') {
-            handlePinKey('backspace');
+            deletePinDigit();
         } else if (e.key === 'Escape') {
             closePinModal();
         }
     }
 
-    window.handlePinKey = function(key) {
-        const error = document.getElementById('pin-error');
-        if (error) error.textContent = '';
+    window.enterPinDigit = function(digit) {
+        if (currentPin.length < 4) {
+            currentPin += digit;
+            updatePinDots();
+            if (currentPin.length === 4) {
+                processPin();
+            }
+        }
+    };
 
-        if (key === 'backspace') {
+    window.deletePinDigit = function() {
+        if (currentPin.length > 0) {
             currentPin = currentPin.slice(0, -1);
             updatePinDots();
-        } else if (currentPin.length < 4) {
-            currentPin += key;
-            updatePinDots();
-
-            if (currentPin.length === 4) {
-                setTimeout(processPin, 200);
-            }
         }
     };
 
     function updatePinDots() {
         const dots = document.querySelectorAll('#pin-dots .pin-dot');
-        dots.forEach(function(dot, index) {
+        dots.forEach((dot, index) => {
             if (index < currentPin.length) {
                 dot.classList.add('filled');
             } else {
@@ -4497,29 +5290,23 @@
                 setupPinFirst = currentPin;
                 currentPin = '';
                 updatePinDots();
-                const title = document.getElementById('pin-modal-title');
                 const desc = document.getElementById('pin-modal-desc');
-                if (title) title.textContent = 'Confirm PIN';
-                if (desc) desc.textContent = 'Re-enter your 4-digit PIN';
+                if (desc) desc.textContent = 'Confirm your 4-digit PIN';
             } else {
-                if (currentPin !== setupPinFirst) {
+                if (currentPin === setupPinFirst) {
+                    savePin(currentPin);
+                } else {
                     handlePinError('PINs do not match');
                     setupPinFirst = '';
-                    setTimeout(function() {
-                        const title = document.getElementById('pin-modal-title');
-                        const desc = document.getElementById('pin-modal-desc');
-                        if (title) title.textContent = 'Set New PIN';
-                        if (desc) desc.textContent = 'Create a 4-digit PIN for privacy';
-                    }, 600);
-                } else {
-                    submitPinSetup(currentPin);
+                    const desc = document.getElementById('pin-modal-desc');
+                    if (desc) desc.textContent = 'Create a 4-digit PIN for privacy';
                 }
             }
         }
     }
 
     function verifyPin(pin) {
-        echoFetch('/api/app_lock/verify', {
+        echoFetch('/api/bonds/app-lock/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
@@ -4534,15 +5321,16 @@
         });
     }
 
-    function submitPinSetup(pin) {
-        echoFetch('/api/app_lock/setup', {
+    function savePin(pin) {
+        echoFetch('/api/bonds/app-lock/setup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ pin: pin })
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
-                if (window.showCustomToast) showCustomToast('App lock PIN created!', 'success');
-                handlePinSuccess();
+                if (window.showCustomToast) showCustomToast('PIN set successfully!', 'success');
+                closePinModal();
+                window.location.reload();
             } else {
                 handlePinError(d.error || 'Failed to set PIN');
             }
@@ -4612,390 +5400,6 @@
             if (window.showCustomAlert) showCustomAlert('Failed to remove past bond from archive.', 'danger');
         });
     }
-
-    // ========================================================================
-    // OFFLINE BONDS SYSTEM
-    // Queues journal, mood, QotD, and habit actions to IndexedDB when offline.
-    // Syncs all queued actions via /api/bonds/<bond_id>/offline-sync on reconnect.
-    // ========================================================================
-    (function() {
-        var ODB_NAME = 'BondOfflineQueue';
-        var ODB_VERSION = 1;
-        var ODB_STORE = 'actions';
-
-        // Question bank injected from server (same data as backend)
-        var QUESTION_BANK = {{ question_bank | tojson }};
-        var BOND_TYPES_DATA = {{ bond_types | tojson }};
-
-        // SHA-256 for deterministic question selection (matches Python hashlib.sha256)
-        function sha256Hex(str) {
-            var encoder = new TextEncoder();
-            var data = encoder.encode(str);
-            return crypto.subtle.digest('SHA-256', data).then(function(buf) {
-                var arr = Array.from(new Uint8Array(buf));
-                return arr.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-            });
-        }
-
-        // Convert full hex hash to index via BigInt modulo (matches Python int(hex,16) % n)
-        function hexToIndex(hexStr, poolLen) {
-            // BigInt handles the full 256-bit value exactly like Python's int()
-            var bigVal = BigInt('0x' + hexStr);
-            return Number(bigVal % BigInt(poolLen));
-        }
-
-        // Deterministic daily question — mirrors _get_daily_question in bonds.py
-        function getOfflineQuestion(bondId, bondType, dateStr) {
-            var typeQuestions = QUESTION_BANK[bondType] || [];
-            var universal = QUESTION_BANK['universal'] || [];
-            var pool = typeQuestions.concat(typeQuestions).concat(universal);
-            if (pool.length === 0) pool = universal.length ? universal : ["What's on your mind today?"];
-
-            var hashInput = bondId + ':' + dateStr;
-            return sha256Hex(hashInput).then(function(hexStr) {
-                var idx = hexToIndex(hexStr, pool.length);
-                var question = pool[idx];
-                var category = (typeQuestions.indexOf(question) !== -1)
-                    ? (BOND_TYPES_DATA[bondType] || {}).label || 'Custom'
-                    : 'Universal';
-                return { question: question, category: category };
-            });
-        }
-
-        // --- IndexedDB helpers ---
-        function openOfflineDB() {
-            return new Promise(function(resolve, reject) {
-                var req = indexedDB.open(ODB_NAME, ODB_VERSION);
-                req.onupgradeneeded = function(e) {
-                    var db = e.target.result;
-                    if (!db.objectStoreNames.contains(ODB_STORE)) {
-                        var store = db.createObjectStore(ODB_STORE, { keyPath: 'id', autoIncrement: true });
-                        store.createIndex('bondId', 'bondId', { unique: false });
-                        store.createIndex('date', 'date', { unique: false });
-                    }
-                };
-                req.onsuccess = function() { resolve(req.result); };
-                req.onerror = function() { reject(req.error); };
-            });
-        }
-
-        function addOfflineAction(action) {
-            return openOfflineDB().then(function(db) {
-                return new Promise(function(resolve, reject) {
-                    var tx = db.transaction(ODB_STORE, 'readwrite');
-                    var store = tx.objectStore(ODB_STORE);
-                    var r = store.add(action);
-                    r.onsuccess = function() { resolve(r.result); };
-                    r.onerror = function() { reject(r.error); };
-                });
-            });
-        }
-
-        function getOfflineActions(bondId) {
-            return openOfflineDB().then(function(db) {
-                return new Promise(function(resolve, reject) {
-                    var tx = db.transaction(ODB_STORE, 'readonly');
-                    var store = tx.objectStore(ODB_STORE);
-                    var idx = store.index('bondId');
-                    var r = idx.getAll(bondId);
-                    r.onsuccess = function() { resolve(r.result); };
-                    r.onerror = function() { reject(r.error); };
-                });
-            });
-        }
-
-        function getAllOfflineActions() {
-            return openOfflineDB().then(function(db) {
-                return new Promise(function(resolve, reject) {
-                    var tx = db.transaction(ODB_STORE, 'readonly');
-                    var store = tx.objectStore(ODB_STORE);
-                    var r = store.getAll();
-                    r.onsuccess = function() { resolve(r.result); };
-                    r.onerror = function() { reject(r.error); };
-                });
-            });
-        }
-
-        function clearOfflineActions(bondId) {
-            return openOfflineDB().then(function(db) {
-                return new Promise(function(resolve, reject) {
-                    var tx = db.transaction(ODB_STORE, 'readwrite');
-                    var store = tx.objectStore(ODB_STORE);
-                    var idx = store.index('bondId');
-                    var req = idx.openCursor(bondId);
-                    req.onsuccess = function(e) {
-                        var cursor = e.target.result;
-                        if (cursor) { cursor.delete(); cursor.continue(); }
-                        else resolve();
-                    };
-                    req.onerror = function() { reject(req.error); };
-                });
-            });
-        }
-
-        function clearAllOfflineActions() {
-            return openOfflineDB().then(function(db) {
-                return new Promise(function(resolve, reject) {
-                    var tx = db.transaction(ODB_STORE, 'readwrite');
-                    var store = tx.objectStore(ODB_STORE);
-                    var r = store.clear();
-                    r.onsuccess = function() { resolve(); };
-                    r.onerror = function() { reject(r.error); };
-                });
-            });
-        }
-
-        // --- Offline detection ---
-        function isOffline() {
-            return !navigator.onLine;
-        }
-
-        // Today's date string in UTC (YYYY-MM-DD)
-        function todayUTC() {
-            var d = new Date();
-            return d.getUTCFullYear() + '-' +
-                String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
-                String(d.getUTCDate()).padStart(2, '0');
-        }
-
-        // --- Offline banner ---
-        var _bannerEl = null;
-        function showOfflineBanner() {
-            if (_bannerEl) return;
-            _bannerEl = document.createElement('div');
-            _bannerEl.id = 'offline-bonds-banner';
-            _bannerEl.style.cssText = 'background:var(--card-bg);border:1px solid var(--border-color);color:var(--text-dark-color);padding:0.5rem 1rem;font-size:0.82rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;';
-            _bannerEl.textContent = 'Offline Mode — your bond activities will sync when you\u2019re back online';
-            var container = document.querySelector('.bonds-page');
-            if (container) container.insertBefore(_bannerEl, container.firstChild);
-        }
-
-        function hideOfflineBanner() {
-            if (_bannerEl) { _bannerEl.remove(); _bannerEl = null; }
-        }
-
-        // --- Pending count badge ---
-        function updatePendingBadge() {
-            getAllOfflineActions().then(function(actions) {
-                var badge = document.getElementById('offline-pending-badge');
-                if (actions.length > 0) {
-                    var dates = {};
-                    actions.forEach(function(a) { dates[a.date] = true; });
-                    var dayCount = Object.keys(dates).length;
-                    var text = dayCount + ' day' + (dayCount !== 1 ? 's' : '') + ' pending sync (' + actions.length + ' action' + (actions.length !== 1 ? 's' : '') + ')';
-                    if (!badge) {
-                        badge = document.createElement('div');
-                        badge.id = 'offline-pending-badge';
-                        badge.style.cssText = 'background:var(--card-bg);border:1px solid var(--primary-color);color:var(--primary-color);padding:0.35rem 0.8rem;font-size:0.78rem;text-align:center;border-radius:6px;margin:0 auto 0.8rem;max-width:800px;font-weight:500;';
-                        var container = document.querySelector('.bonds-page');
-                        if (container) container.insertBefore(badge, container.firstChild);
-                    }
-                    badge.textContent = text;
-                } else if (badge) {
-                    badge.remove();
-                }
-            }).catch(function() {});
-        }
-
-        // --- Sync engine ---
-        var _syncing = false;
-        function syncOfflineActions() {
-            if (_syncing || isOffline()) return Promise.resolve();
-            _syncing = true;
-
-            return getAllOfflineActions().then(function(actions) {
-                if (actions.length === 0) { _syncing = false; return; }
-
-                // Group by bond
-                var byBond = {};
-                actions.forEach(function(a) {
-                    if (!byBond[a.bondId]) byBond[a.bondId] = [];
-                    byBond[a.bondId].push(a);
-                });
-
-                var bondIds = Object.keys(byBond);
-                var chain = Promise.resolve();
-                bondIds.forEach(function(bondId) {
-                    chain = chain.then(function() {
-                        var bondActions = byBond[bondId].map(function(a) {
-                            var payload = { type: a.type, date: a.date };
-                            if (a.type === 'journal') payload.content = a.content;
-                            if (a.type === 'mood') payload.mood = a.mood;
-                            if (a.type === 'qotd') payload.answer = a.answer;
-                            if (a.type === 'habit_toggle') payload.habit_id = a.habitId;
-                            return payload;
-                        });
-
-                        var token = document.querySelector('meta[name="csrf-token"]');
-                        var csrf = token ? token.getAttribute('content') : csrfToken;
-
-                        return echoFetch('/api/bonds/' + bondId + '/offline-sync', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
-                            credentials: 'same-origin',
-                            body: JSON.stringify({ actions: bondActions })
-                        }).then(function(r) { return r.json(); })
-                          .then(function(d) {
-                            if (d.success) {
-                                return clearOfflineActions(bondId).then(function() {
-                                    if (d.streak && d.streak.streak_count !== undefined) {
-                                        var streakEl = document.querySelector('#bond-' + bondId + ' .bond-streak');
-                                        if (streakEl) streakEl.textContent = d.streak.streak_count + ' day streak';
-                                    }
-                                    if (window.showCustomToast) {
-                                        showCustomToast('Synced ' + d.synced + ' offline action' + (d.synced !== 1 ? 's' : '') + '.', 'success');
-                                    }
-                                });
-                            }
-                        }).catch(function(err) {
-                            console.warn('Offline sync failed for bond ' + bondId + ':', err);
-                        });
-                    });
-                });
-
-                return chain.then(function() {
-                    _syncing = false;
-                    updatePendingBadge();
-                    hideOfflineBanner();
-                }).catch(function() { _syncing = false; });
-            }).catch(function() { _syncing = false; });
-        }
-
-        // --- Override existing action handlers to support offline ---
-        // Store originals
-        var _origCreateJournalEntry = window.createJournalEntry || createJournalEntry;
-        var _origSelectAndLogMood = window.selectAndLogMood || selectAndLogMood;
-        var _origSubmitQotdAnswer = window.submitQotdAnswer || submitQotdAnswer;
-        var _origToggleHabit = window.toggleHabit || toggleHabit;
-
-        // Wrap: createJournalEntry
-        window.createJournalEntry = function(bondId) {
-            if (!isOffline()) return _origCreateJournalEntry(bondId);
-            var textarea = document.getElementById('journal-input-' + bondId);
-            var content = textarea ? textarea.value.trim() : '';
-            if (!content) { if (window.showCustomAlert) showCustomAlert('Write something first.', 'danger'); return; }
-            addOfflineAction({
-                bondId: bondId,
-                type: 'journal',
-                date: todayUTC(),
-                content: content,
-                queuedAt: new Date().toISOString()
-            }).then(function() {
-                textarea.value = '';
-                if (window.showCustomToast) showCustomToast('Journal entry saved offline. Will sync when online.', 'success');
-                updatePendingBadge();
-            });
-        };
-
-        // Wrap: selectAndLogMood
-        window.selectAndLogMood = function(bondId, mood, btn) {
-            if (!isOffline()) return _origSelectAndLogMood(bondId, mood, btn);
-            var picker = document.getElementById('mood-picker-' + bondId);
-            if (picker) {
-                picker.querySelectorAll('.mood-btn').forEach(function(b) { b.classList.remove('selected'); b.disabled = true; });
-                btn.classList.add('selected');
-            }
-            addOfflineAction({
-                bondId: bondId,
-                type: 'mood',
-                date: todayUTC(),
-                mood: mood,
-                queuedAt: new Date().toISOString()
-            }).then(function() {
-                if (window.showCustomToast) showCustomToast('Mood saved offline. Will sync when online.', 'success');
-                updatePendingBadge();
-            });
-        };
-
-        // Wrap: submitQotdAnswer
-        window.submitQotdAnswer = function(bondId) {
-            if (!isOffline()) return _origSubmitQotdAnswer(bondId);
-            var textarea = document.getElementById('qotd-input-' + bondId);
-            var answer = textarea ? textarea.value.trim() : '';
-            if (!answer) { if (window.showCustomAlert) showCustomAlert('Please write an answer.', 'danger'); return; }
-            addOfflineAction({
-                bondId: bondId,
-                type: 'qotd',
-                date: todayUTC(),
-                answer: answer,
-                queuedAt: new Date().toISOString()
-            }).then(function() {
-                textarea.value = '';
-                // Show confirmation inline
-                var container = document.getElementById('qotd-content-' + bondId);
-                if (container) {
-                    container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text-dark-color);font-size:0.9rem;">Answer saved offline. Will sync and reveal when you\'re back online.</div>';
-                }
-                if (window.showCustomToast) showCustomToast('QotD answer saved offline.', 'success');
-                updatePendingBadge();
-            });
-        };
-
-        // Wrap: toggleHabit
-        window.toggleHabit = function(habitId, bondId) {
-            if (!isOffline()) return _origToggleHabit(habitId, bondId);
-            addOfflineAction({
-                bondId: bondId,
-                type: 'habit_toggle',
-                date: todayUTC(),
-                habitId: habitId,
-                queuedAt: new Date().toISOString()
-            }).then(function() {
-                if (window.showCustomToast) showCustomToast('Habit saved offline. Will sync when online.', 'success');
-                updatePendingBadge();
-            });
-        };
-
-        // --- QotD offline rendering ---
-        // When offline and QotD fails to load, show the deterministic question
-        var _origLoadQotd = window.loadQotd || loadQotd;
-        window.loadQotd = function(bondId) {
-            if (!isOffline()) return _origLoadQotd(bondId);
-            // Get bond type from the card data attribute or fall back
-            var bondCard = document.getElementById('bond-' + bondId);
-            var bondType = bondCard ? (bondCard.getAttribute('data-bond-type') || 'custom') : 'custom';
-            var dateStr = todayUTC();
-            var container = document.getElementById('qotd-content-' + bondId);
-            if (!container) return;
-            container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;">Loading question...</div>';
-            getOfflineQuestion(bondId, bondType, dateStr).then(function(q) {
-                var html = '<div class="qotd-category">' + escHtml(q.category) + '</div>';
-                html += '<div class="qotd-question">"' + escHtml(q.question) + '"</div>';
-                html += '<div style="margin-top:0.6rem;">';
-                html += '<textarea id="qotd-input-' + bondId + '" placeholder="Your answer..." style="width:100%;min-height:60px;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;font-size:0.88rem;resize:vertical;background:var(--card-bg);color:var(--text-dark-color);box-sizing:border-box;" maxlength="1000"></textarea>';
-                html += '<button class="btn btn-bond-primary" style="margin-top:0.4rem;font-size:0.82rem;padding:0.35rem 0.8rem;" onclick="submitQotdAnswer(\'' + bondId + '\')">Save Answer Offline</button>';
-                html += '</div>';
-                container.innerHTML = html;
-            });
-        };
-
-        // --- Lifecycle hooks ---
-        window.addEventListener('online', function() {
-            hideOfflineBanner();
-            syncOfflineActions();
-        });
-
-        window.addEventListener('offline', function() {
-            showOfflineBanner();
-        });
-
-        // Sync on visibility change (tab re-focus)
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible' && !isOffline()) {
-                syncOfflineActions();
-            }
-        });
-
-        // Initial state
-        if (isOffline()) showOfflineBanner();
-        updatePendingBadge();
-        // Try to sync any leftover offline actions on page load
-        if (!isOffline()) syncOfflineActions();
-
-        // Expose for external use
-        window.__bondOfflineSync = syncOfflineActions;
-        window.__bondGetOfflineQuestion = getOfflineQuestion;
-    })();
 
 </script>
 {% endblock %}

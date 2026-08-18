@@ -3163,6 +3163,7 @@
 
             let actions = `<div class="message-actions">`;
             actions += `<button class="action-btn" onclick="replyToMessage('${msgId}', '${previewText.replace(/'/g, "\\'")}', false, '${senderName.replace(/'/g, "\\'")}')" title="Reply"><i class="fas fa-reply"></i></button>`;
+            actions += `<button class="action-btn" onclick="togglePinMessage('${msgId}')" title="Pin / Unpin"><i class="fas fa-thumbtack"></i></button>`;
 
             if (isSent) {
                 actions += `

@@ -231,7 +231,13 @@
         position: fixed;
         top: 0;
         left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        width: 100vw;
         width: 100dvw;
+        height: 100%;
+        height: 100vh;
         height: 100dvh;
         background: rgba(0, 0, 0, 0.85);
         backdrop-filter: blur(8px);
@@ -239,8 +245,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 1rem;
+        padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
         box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
         /* Force composited layer sync on iOS: backdrop-filter + fixed positioning
            can desync the render layer from the hit-test layer. */
         -webkit-transform: translateZ(0);
@@ -939,12 +946,21 @@
         position: fixed;
         top: 0;
         left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        width: 100vw;
         width: 100dvw;
+        height: 100%;
+        height: 100vh;
         height: 100dvh;
         background: var(--modal-overlay);
         z-index: 1200;
         align-items: center;
         justify-content: center;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+        padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
         /* Layer sync for iOS fixed modal overlays */
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
@@ -3180,6 +3196,7 @@
             .then(r => r.json())
             .then(data => {
                 if (data) {
+                    data.date = todayUTC();
                     setBondCache(bondId + ':mood', data);
                 }
                 const el = document.getElementById('mood-content-' + bondId);
@@ -3202,7 +3219,16 @@
                 Promise.all([getBondCache(bondId + ':mood'), getOfflineActions(bondId)]).then(([cached, actions]) => {
                     const today = todayUTC();
                     const pendingMood = (actions || []).find(a => a.type === 'mood' && a.date === today);
-                    let moodData = cached || { my_mood: null, partner_logged: false, revealed: false, history: [] };
+                    let moodData = { my_mood: null, partner_logged: false, revealed: false, history: [] };
+                    if (cached) {
+                        moodData.history = cached.history || [];
+                        if (cached.date === today) {
+                            moodData.my_mood = cached.my_mood;
+                            moodData.partner_logged = cached.partner_logged;
+                            moodData.partner_mood = cached.partner_mood;
+                            moodData.revealed = cached.revealed;
+                        }
+                    }
                     if (pendingMood) {
                         moodData.my_mood = pendingMood.mood;
                         moodData.offline_saved = true;
@@ -3342,6 +3368,7 @@
             .then(r => r.json())
             .then(data => {
                 if (data) {
+                    data.date = todayUTC();
                     setBondCache(bondId + ':qotd', data);
                 }
                 const el = document.getElementById('qotd-content-' + bondId);
@@ -3372,14 +3399,26 @@
                     getOfflineQuestion(bondId, bondType, dateStr)
                 ]).then(([cached, actions, offlineQ]) => {
                     const pendingQotd = (actions || []).find(a => a.type === 'qotd' && a.date === dateStr);
-                    let qData = cached || {
-                        question: offlineQ.question,
-                        category: offlineQ.category,
+                    let qData = {
+                        question: (offlineQ && offlineQ.question) || "What's on your mind today?",
+                        category: (offlineQ && offlineQ.category) || 'Daily',
                         has_question: true,
                         my_answered: false,
                         partner_answered: false,
                         revealed: false
                     };
+                    if (cached && cached.date === dateStr) {
+                        qData.question = cached.question || qData.question;
+                        qData.category = cached.category || qData.category;
+                        qData.has_question = cached.has_question !== undefined ? cached.has_question : true;
+                        qData.my_answered = !!cached.my_answered;
+                        qData.my_answer = cached.my_answer;
+                        qData.partner_answered = !!cached.partner_answered;
+                        qData.partner_answer = cached.partner_answer;
+                        qData.revealed = !!cached.revealed;
+                        qData.source = cached.source;
+                        qData.set_by_username = cached.set_by_username;
+                    }
                     if (pendingQotd) {
                         qData.my_answered = true;
                         qData.my_answer = pendingQotd.answer;
@@ -4691,6 +4730,7 @@
             .then(r => r.json())
             .then(d => {
                 if (d && d.habits) {
+                    d.date = todayUTC();
                     setBondCache(bondId + ':habits', d);
                 }
                 const el = document.getElementById('habits-list-' + bondId);
@@ -4707,7 +4747,15 @@
                 if (!el) return;
                 Promise.all([getBondCache(bondId + ':habits'), getOfflineActions(bondId)]).then(([cached, actions]) => {
                     if (cached && cached.habits && cached.habits.length > 0) {
-                        const adjusted = applyOfflineHabitToggles(cached.habits, actions);
+                        const today = todayUTC();
+                        const isCachedToday = cached.date === today;
+                        const habitsForToday = cached.habits.map(h => {
+                            if (!isCachedToday) {
+                                return Object.assign({}, h, { my_completed: false, partner_completed: false });
+                            }
+                            return Object.assign({}, h);
+                        });
+                        const adjusted = applyOfflineHabitToggles(habitsForToday, actions);
                         el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached habits</div>' + renderHabitsListHtml(adjusted, bondId);
                     } else {
                         el.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px dashed var(--border-color);">Daily habits will load once online. You can still add habits above!</div>';

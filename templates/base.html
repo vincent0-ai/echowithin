@@ -68,50 +68,81 @@
     {% endblock %}
 
     {% if current_user.is_authenticated %}
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js" async></script>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script nonce="{{ csp_nonce }}">
-        // Deferred Socket.IO init — waits for async script to load
-        function _initSocket() {
-            if (typeof io === 'undefined') { setTimeout(_initSocket, 50); return; }
-            window.socket = io({
-                reconnection: true,
-                reconnectionDelay: 500,
-                reconnectionDelayMax: 4000,
-                timeout: 10000,
-                transports: ['websocket', 'polling']
-            });
-            window.socket.on('connect', () => {
-                console.log('Connected to real-time server');
-                window.socket.emit('join_inbox');
-            });
-            // Global Whisper handlers for redirection/prompt when not on messages page
-            window.socket.on('whisper_accept', (data) => {
-                if (!window.location.pathname.startsWith('/messages')) {
-                    window.location.href = '/messages?user_id=' + data.partner_id;
+        (function() {
+            window.__socketReadyCallbacks = window.__socketReadyCallbacks || [];
+            window.getEchoSocket = function(cb) {
+                if (window.socket) {
+                    if (cb) cb(window.socket);
+                    return window.socket;
                 }
-            });
-            window.socket.on('whisper_invite_received', (data) => {
-                if (!window.location.pathname.startsWith('/messages')) {
-                    if (window.showCustomConfirm) {
-                        window.showCustomConfirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?', (confirmed) => {
-                            if (confirmed) {
-                                window.location.href = '/messages?user_id=' + data.from_user_id;
-                            }
-                        });
-                    } else {
-                        if (confirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?')) {
-                            window.location.href = '/messages?user_id=' + data.from_user_id;
+                if (cb) window.__socketReadyCallbacks.push(cb);
+                return null;
+            };
+            window.safeSocketEmit = function(event, data) {
+                if (window.socket && typeof window.socket.emit === 'function') {
+                    window.socket.emit(event, data);
+                }
+            };
+
+            function _initSocket() {
+                if (typeof io === 'undefined') {
+                    setTimeout(_initSocket, 50);
+                    return;
+                }
+                try {
+                    window.socket = io({
+                        reconnection: true,
+                        reconnectionDelay: 500,
+                        reconnectionDelayMax: 4000,
+                        timeout: 10000,
+                        transports: ['websocket', 'polling']
+                    });
+                    window.socket.on('connect', () => {
+                        console.log('Connected to real-time server');
+                        window.socket.emit('join_inbox');
+                    });
+                    // Global Whisper handlers for redirection/prompt when not on messages page
+                    window.socket.on('whisper_accept', (data) => {
+                        if (!window.location.pathname.startsWith('/messages')) {
+                            window.location.href = '/messages?user_id=' + data.partner_id;
                         }
+                    });
+                    window.socket.on('whisper_invite_received', (data) => {
+                        if (!window.location.pathname.startsWith('/messages')) {
+                            if (window.showCustomConfirm) {
+                                window.showCustomConfirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?', (confirmed) => {
+                                    if (confirmed) {
+                                        window.location.href = '/messages?user_id=' + data.from_user_id;
+                                    }
+                                });
+                            } else {
+                                if (confirm(data.from_username + ' wants to start a Whisper session. Go to Messages to respond?')) {
+                                    window.location.href = '/messages?user_id=' + data.from_user_id;
+                                }
+                            }
+                        }
+                    });
+
+                    // Flush any pending socket callbacks and fire global ready event
+                    while (window.__socketReadyCallbacks.length > 0) {
+                        var cb = window.__socketReadyCallbacks.shift();
+                        try { cb(window.socket); } catch(e) { console.error('Socket ready cb error:', e); }
                     }
+                    try {
+                        window.dispatchEvent(new CustomEvent('echosocketready', { detail: window.socket }));
+                    } catch(e) {}
+                } catch(e) {
+                    console.error('Failed to initialize Socket.IO client:', e);
                 }
-            });
-        }
-        _initSocket();
+            }
+            _initSocket();
+        })();
     </script>
     {% endif %}
     <script src="{{ url_for('static', filename='script.js') }}" defer></script>
     <script src="{{ url_for('static', filename='ios-notification-helper.js') }}" defer></script>
-    <script src="{{ url_for('static', filename='capacitor.js') }}"></script>
     <style>
         /* Comment counter styles (server-provided counts shown via .comment-count-display) */
         .comment-count-display {
@@ -124,12 +155,18 @@
             margin-left: 6px;
         }
 
-        /* Custom Modal Styles */
+        /* Custom Modal Styles with iOS Safari & iPhone XR Viewport Compatibility */
         .custom-modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            width: 100vw;
             width: 100dvw;
+            height: 100%;
+            height: 100vh;
             height: 100dvh;
             background-color: var(--modal-overlay);
             display: none;
@@ -139,21 +176,30 @@
             /* Higher than full-screen lightboxes & overlays (10000+) so confirmation modals
                always render above photo lightboxes, previews, and dialogs. */
             z-index: 200000;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+            padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
         }
 
         .custom-modal {
             background: var(--modal-bg);
             padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.3);
             width: min(90%, 400px);
+            max-width: calc(100vw - 32px);
             max-width: calc(100dvw - 32px);
             text-align: center;
-            max-height: 90dvh;
+            max-height: calc(100vh - 40px);
+            max-height: calc(100dvh - 40px);
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             display: flex;
             flex-direction: column;
             box-sizing: border-box;
+            position: relative;
+            z-index: 200001;
+            margin: auto;
         }
 
         .custom-modal-content p {
@@ -173,6 +219,21 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        /* Prevent auto-zooming on input focus on iOS Safari */
+        @media screen and (max-width: 768px) {
+            input[type="text"],
+            input[type="number"],
+            input[type="email"],
+            input[type="tel"],
+            input[type="password"],
+            input[type="search"],
+            select,
+            textarea {
+                font-size: 16px !important;
+            }
         }
 
         /* Tag Styles */
@@ -690,8 +751,7 @@
     <script nonce="{{ csp_nonce }}">
     (function(){
         var show = false;
-        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) show = true;
-        else if (window.navigator.standalone === true) show = true;
+        if (window.navigator.standalone === true) show = true;
         else if (window.matchMedia && (
             window.matchMedia('(display-mode: standalone)').matches ||
             window.matchMedia('(display-mode: fullscreen)').matches ||
@@ -861,195 +921,13 @@
     }
     </style>
 
-<script nonce="{{ csp_nonce }}">
-    // --- Capacitor Native App Support ---
-    // Hide splash screen when page is ready (for Capacitor app)
-    // Also handles deep linking from notifications
-    (function () {
-        // Check if running in Capacitor
-        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-            // Wait for Capacitor plugins to be ready
-            document.addEventListener('deviceready', function () {
-                // Hide splash screen with a nice fade
-                if (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
-                    window.Capacitor.Plugins.SplashScreen.hide();
-                }
-            }, false);
-
-            // Fallback: hide splash after window load if deviceready didn't fire
-            window.addEventListener('load', function () {
-                setTimeout(function () {
-                    if (window.Capacitor.Plugins && window.Capacitor.Plugins.SplashScreen) {
-                        window.Capacitor.Plugins.SplashScreen.hide();
-                    }
-                }, 500);
-            });
-
-            // Helper function to handle deep link URLs
-            function handleDeepLink(deepLinkUrl) {
-                if (!deepLinkUrl) return false;
-
-                console.log('Processing deep link:', deepLinkUrl);
-                try {
-                    const url = new URL(deepLinkUrl);
-                    console.log('Deep link parsed - protocol:', url.protocol, 'host:', url.host, 'search:', url.search);
-
-                    // Handle echowithin://open?path=/foo&bar=baz
-                    // Also handle case where host might be empty or different
-                    if (url.protocol === 'echowithin:') {
-                        // Get path from query params (our format: echowithin://open?path=/mobile_auth&token=xxx)
-                        const path = url.searchParams.get('path') || '/';
-                        console.log('Deep link path extracted:', path);
-
-                        // Create a new URL starting with the path
-                        const targetUrl = new URL(path, window.location.origin);
-                        // Append all original search params (excluding 'path')
-                        url.searchParams.forEach((value, key) => {
-                            if (key !== 'path') targetUrl.searchParams.set(key, value);
-                        });
-
-                        const finalUrl = targetUrl.pathname + targetUrl.search;
-                        console.log('Deep link redirecting to:', finalUrl);
-
-                        // Close the system browser (if open from OAuth flow)
-                        if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                            window.Capacitor.Plugins.Browser.close().catch(function () {
-                                // Ignore errors if browser wasn't open
-                            });
-                        }
-
-                        // Use replace to prevent back button from returning to this intermediate state
-                        window.location.replace(finalUrl);
-                        return true;
-                    } else if (url.protocol === 'https:' && (url.host === 'echowithin.xyz' || url.host === 'blog.echowithin.xyz') && url.pathname && url.pathname !== '/') {
-                        // Handle https deep links to our domain
-                        console.log('HTTPS deep link to:', url.pathname);
-
-                        // Close the system browser (if open from OAuth flow)
-                        if (window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                            window.Capacitor.Plugins.Browser.close().catch(function () {
-                                // Ignore errors if browser wasn't open
-                            });
-                        }
-
-                        window.location.replace(url.pathname + url.search);
-                        return true;
-                    }
-                } catch (e) {
-                    console.error('Error parsing deep link URL:', e);
-                    // Fallback: try to extract path manually if URL parsing fails
-                    try {
-                        const match = deepLinkUrl.match(/[?&]path=([^&]+)/);
-                        if (match) {
-                            const path = decodeURIComponent(match[1]);
-                            const tokenMatch = deepLinkUrl.match(/[?&]token=([^&]+)/);
-                            const token = tokenMatch ? tokenMatch[1] : '';
-                            const finalUrl = token ? path + '?token=' + token : path;
-                            console.log('Fallback deep link redirect to:', finalUrl);
-                            window.location.replace(finalUrl);
-                            return true;
-                        }
-                    } catch (fallbackErr) {
-                        console.error('Fallback parsing also failed:', fallbackErr);
-                    }
-                }
-                return false;
-            }
-
-            // Handle deep links (e.g., from Google OAuth redirect or notifications)
-            if (window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-                // Check for cold-start deep link (app launched via deep link)
-                // This is critical for OAuth redirects when app is not running
-                window.Capacitor.Plugins.App.getLaunchUrl().then(function (result) {
-                    if (result && result.url) {
-                        console.log('App launched with URL (cold start):', result.url);
-                        if (handleDeepLink(result.url)) {
-                            // Hide splash after redirect is initiated
-                            if (window.Capacitor.Plugins.SplashScreen) {
-                                window.Capacitor.Plugins.SplashScreen.hide();
-                            }
-                        }
-                    }
-                }).catch(function (err) {
-                    console.error('Error getting launch URL:', err);
-                });
-
-                // Listen for deep links when app is already running (warm start)
-                window.Capacitor.Plugins.App.addListener('appUrlOpen', function (event) {
-                    console.log('App opened with URL (warm start):', event.url);
-                    handleDeepLink(event.url);
-                    // Always ensure splash is hidden even if link fails
-                    if (window.Capacitor.Plugins.SplashScreen) {
-                        window.Capacitor.Plugins.SplashScreen.hide();
-                    }
-                });
-            }
-
-            // --- Push Notifications Listener (Always Register) ---
-            if (window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
-                // Handle notification clicks (warm start — app was in background)
-                window.Capacitor.Plugins.PushNotifications.addListener('pushNotificationActionPerformed', function (notification) {
-                    const data = notification.notification.data;
-                    console.log('Push notification action performed:', notification);
-                    if (data && data.url) {
-                        // Navigate directly using the full URL from the notification.
-                        // Avoids relative-path issues if the WebView origin is unexpected.
-                        if (data.url.startsWith('http')) {
-                            try {
-                                var urlObj = new URL(data.url);
-                                window.location.replace(urlObj.pathname + urlObj.search);
-                            } catch (e) {
-                                window.location.replace(data.url);
-                            }
-                        } else {
-                            window.location.replace(data.url);
-                        }
-                    }
-                });
-            }
-
-            // Register FCM token if logged in (only once per session to avoid slowness)
-            const isLoggedIn = document.body.dataset.userLoggedIn === 'true';
-            const fcmRegistered = sessionStorage.getItem('fcm_token_registered');
-
-            if (isLoggedIn && !fcmRegistered && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications) {
-                window.Capacitor.Plugins.PushNotifications.requestPermissions().then(function (result) {
-                    if (result.receive === 'granted') {
-                        window.Capacitor.Plugins.PushNotifications.register();
-                    }
-                });
-
-                window.Capacitor.Plugins.PushNotifications.addListener('registration', function (token) {
-                    console.log('Push registration successful, token:', token.value);
-                    // Send token to backend
-                    echoFetch('/api/fcm/register', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                        },
-                        body: JSON.stringify({ token: token.value, platform: 'android' })
-                    }).then(response => {
-                        if (response.ok) {
-                            sessionStorage.setItem('fcm_token_registered', 'true');
-                        }
-                    });
-                });
-            }
-        }
-    })();
-
     // PWA Install Prompt handling
     let deferredPrompt;
 
     // Check if app is already installed (running in standalone mode or native app)
     function isAppInstalled() {
-        // Check if running in Capacitor native app
-        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-            return true;
-        }
-        // Redundant check for EchoWithin custom User-Agent or specific mobile indicators
-        if (navigator.userAgent.includes('Capacitor') || navigator.userAgent.includes('EchoWithinApp')) {
+        // Check for EchoWithin native Android app custom User-Agent
+        if (navigator.userAgent.includes('EchoWithinApp')) {
             return true;
         }
         // Check display-mode media query (works for most browsers)
@@ -1095,25 +973,8 @@
 
     // Run immediately to hide button as early as possible
     if (isAppInstalled()) {
-        console.log('App is running in standalone mode (installed)');
         hideInstallButton();
-        // Also set a flag to prevent any future showing
         window.__pwaInstalled = true;
-
-    } else if (window.Capacitor) {
-        // Capacitor exists but isNativePlatform may not be ready yet
-        // Light retry — only for install-button hiding, not reload button
-        let _retries = 0;
-        const _retryTimer = setInterval(function () {
-            _retries++;
-            if (isAppInstalled()) {
-                clearInterval(_retryTimer);
-                hideInstallButton();
-                window.__pwaInstalled = true;
-            } else if (_retries >= 6) {
-                clearInterval(_retryTimer);
-            }
-        }, 500);
     }
 
     // Detect iOS for install-prompt handling
@@ -2275,7 +2136,7 @@
     // Native App Promotion Dialog for frequent visitors (Android APK only)
     function initNativeAppPromo() {
         const isAndroid = /Android/i.test(navigator.userAgent);
-        const isNative = navigator.userAgent.includes('EchoWithinApp') || navigator.userAgent.includes('Capacitor');
+        const isNative = navigator.userAgent.includes('EchoWithinApp');
         const dismissed = localStorage.getItem('ew_native_prompt_dismissed');
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 

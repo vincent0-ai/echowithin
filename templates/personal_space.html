@@ -1356,13 +1356,13 @@
             position: fixed;
             top: 0;
             left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
             width: 100vw;
-            height: 100vh;
-            /* Dynamic viewport fallback: on iOS 100vh is the large viewport (URL bar
-               collapsed). Using 100dvh keeps the fullscreen editor within the visible
-               area so toolbar/save buttons don't get pushed off-screen when the URL
-               bar expands or keyboard overlays. */
             width: 100dvw;
+            height: 100%;
+            height: 100vh;
             height: 100dvh;
             z-index: 10000;
             margin: 0;
@@ -8321,8 +8321,7 @@
 
         // --- Form Intercept ---
         // Always intercept form submission and use fetch + offline fallback.
-        // navigator.onLine is unreliable in Capacitor WebViews, so we try
-        // the network first and save to IndexedDB if it fails.
+        // Try the network first and save to IndexedDB if it fails.
         const form = document.getElementById('create-note-form');
         if (form) {
             form.addEventListener('submit', function (e) {

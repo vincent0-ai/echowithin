@@ -318,7 +318,7 @@
 
                     <!-- Message Input -->
                     <div class="chat-input-area"
-                        style="padding: 1rem 1.5rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f5ebe7; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden; flex-shrink: 0;">
+                        style="padding: 0.75rem 1.25rem; padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #f5ebe7; background: #fff; width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; overflow: hidden; flex-shrink: 0;">
 
                         <!-- Voice Recording UI -->
                         <div id="voice-recording-ui" class="voice-recording-ui" style="display:none;">
@@ -337,7 +337,7 @@
                             </div>
                         </div>
 
-                        <form id="chat-form" style="display: flex; gap: 0.8rem; align-items: center; width: 100%; min-width: 0; box-sizing: border-box; flex-wrap: nowrap;">
+                        <form id="chat-form" class="chat-input-form" style="display: flex; gap: 0.6rem; align-items: center; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; flex-wrap: nowrap;">
                             <input type="hidden" id="recipient-id" value="{{ active_chat._id if active_chat else '' }}">
                             <input type="hidden" id="reply-parent-id" value="">
                             <input type="hidden" id="pending-image-url" value="">
@@ -348,34 +348,34 @@
                             <!-- Image Upload Button -->
                             <button type="button" class="action-btn"
                                 onclick="document.getElementById('dm-image-upload').click()"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; flex: 0 0 auto; touch-action: manipulation;">
+                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; flex: 0 0 36px; touch-action: manipulation; display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-paperclip"></i>
                             </button>
                             <input type="file" id="dm-image-upload" accept="image/*" style="display: none;"
                                 onchange="handleImageSelection(event)">
 
-                            <div style="flex: 1; min-width: 0; position: relative;">
+                            <div class="message-input-wrapper" style="flex: 1 1 0; min-width: 0; max-width: 100%; position: relative;">
                                 <textarea id="message-input" placeholder="Type a message..." autocomplete="off" rows="1"
-                                    style="width: 100%; padding: 0.6rem 1rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none; resize: none; overflow-y: hidden; max-height: 120px; line-height: 1.4; font-family: inherit; box-sizing: border-box; min-width: 0; touch-action: manipulation;"></textarea>
+                                    style="width: 100%; padding: 0.55rem 0.9rem; border-radius: 20px; border: 1px solid #e8dcd5; background: #fdfaf9; font-size: 0.9rem; outline: none; resize: none; overflow-y: hidden; max-height: 120px; line-height: 1.4; font-family: inherit; box-sizing: border-box; min-width: 0; max-width: 100%; touch-action: manipulation;"></textarea>
                             </div>
 
                             <!-- Voice Message Button -->
                             <button type="button" class="action-btn voice-msg-btn" id="voice-msg-btn"
                                 onmousedown="startVoiceRecording(event)" ontouchstart="startVoiceRecording(event)"
                                 title="Hold to record voice message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 auto; touch-action: manipulation;">
+                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; user-select: none; -webkit-user-select: none; flex: 0 0 36px; touch-action: manipulation;">
                                 <i class="fas fa-microphone"></i>
                             </button>
 
                             <!-- Schedule Button -->
                             <button type="button" class="action-btn" id="schedule-btn" onclick="openScheduleModal()"
                                 title="Schedule message"
-                                style="width: 38px; height: 38px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 auto; touch-action: manipulation;">
+                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 36px; touch-action: manipulation;">
                                 <i class="far fa-clock"></i>
                             </button>
 
                             <button type="submit" class="btn" id="send-btn"
-                                style="background: #3e2217; color: white; width: 45px; height: 45px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 auto; touch-action: manipulation;">
+                                style="background: #3e2217; color: white; width: 42px; height: 42px; min-width: 42px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 42px; touch-action: manipulation;">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </form>
@@ -398,7 +398,7 @@
         user-select: text;
     }
     body.mobile-chat-open {
-        /* Prevent layout shifts when Android keyboard opens/closes */
+        /* Prevent layout shifts when Android/iOS keyboard opens/closes */
         overscroll-behavior: none;
     }
     body.mobile-chat-open .chat-bottom-wrapper {
@@ -410,7 +410,13 @@
     }
     body.mobile-chat-open .chat-input-area {
         flex-shrink: 0;
-        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        padding: 0.4rem 0.45rem !important;
+        padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px)) !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
     }
 
     /* Contact Items */
@@ -495,6 +501,19 @@
         box-shadow: 0 1px 3px rgba(62, 34, 23, 0.15);
     }
 
+    .message-sent a,
+    .message-sent .message-link {
+        color: #ffffff !important;
+        text-decoration: underline !important;
+        font-weight: 600;
+        text-underline-offset: 3px;
+        word-break: break-all;
+    }
+    .message-sent a:hover,
+    .message-sent .message-link:hover {
+        opacity: 0.88;
+    }
+
     .message-received {
         background: var(--surface-bg);
         color: var(--text-dark-color);
@@ -502,6 +521,28 @@
         border-bottom-left-radius: 4px;
         border: none;
         box-shadow: none;
+    }
+
+    .message-received a,
+    .message-received .message-link {
+        color: #2563eb !important;
+        text-decoration: underline !important;
+        font-weight: 600;
+        text-underline-offset: 3px;
+        word-break: break-all;
+    }
+    .message-received a:hover,
+    .message-received .message-link:hover {
+        color: #1d4ed8 !important;
+    }
+
+    [data-theme="dark"] .message-received a,
+    [data-theme="dark"] .message-received .message-link {
+        color: #60a5fa !important;
+    }
+    [data-theme="dark"] .message-received a:hover,
+    [data-theme="dark"] .message-received .message-link:hover {
+        color: #93c5fd !important;
     }
 
     @media (hover: hover) and (pointer: fine) {
@@ -988,6 +1029,14 @@
         border-radius: 10px;
     }
 
+    .contact-item {
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(62, 34, 23, 0.08);
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
     @media (max-width: 768px) {
         .messages-container {
             padding: 0 !important;
@@ -1024,6 +1073,7 @@
             color: var(--primary-color);
             padding: 5px;
             cursor: pointer;
+            touch-action: manipulation;
         }
 
         .desktop-only {
@@ -1147,54 +1197,91 @@
             font-size: 0.95rem !important;
         }
 
-        .header-action-btn {
-            padding: 4px;
-            font-size: 0.9rem;
-        }
-
         .chat-input-area {
-            padding: 0.5rem 0.6rem !important;
-            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
+            padding: 0.4rem 0.45rem !important;
+            padding-bottom: calc(0.4rem + env(safe-area-inset-bottom, 0px)) !important;
             width: 100% !important;
+            max-width: 100% !important;
             box-sizing: border-box !important;
             min-width: 0 !important;
-            background: #fff !important;
-            flex-shrink: 0 !important;
-            z-index: 10 !important;
+            overflow: hidden !important;
         }
 
-        .chat-input-area form {
-            gap: 0.35rem !important;
+        .chat-input-area form,
+        .chat-input-form,
+        #chat-form {
+            gap: 4px !important;
             width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             box-sizing: border-box !important;
             display: flex !important;
             align-items: center !important;
+            flex-wrap: nowrap !important;
+            overflow: hidden !important;
         }
 
-        .chat-input-area .action-btn {
+        .chat-input-area .action-btn,
+        .chat-input-area .voice-msg-btn,
+        .chat-input-area #schedule-btn {
             width: 32px !important;
             height: 32px !important;
-            font-size: 0.85rem !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            font-size: 0.82rem !important;
+            flex: 0 0 32px !important;
             flex-shrink: 0 !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            padding: 0 !important;
+            border-radius: 50% !important;
+            box-sizing: border-box !important;
+        }
+
+        .chat-input-area .message-input-wrapper,
+        .chat-input-area form > div {
+            flex: 1 1 0px !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            width: auto !important;
+            box-sizing: border-box !important;
+            position: relative !important;
         }
 
         .chat-input-area #message-input {
-            padding: 0.5rem 0.8rem !important;
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            padding: 0.45rem 0.65rem !important;
+            font-size: 16px !important;
+            line-height: 1.3 !important;
+            border-radius: 18px !important;
+            box-sizing: border-box !important;
         }
 
         #send-btn {
-            width: 38px !important;
-            height: 38px !important;
-            min-width: 38px !important;
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
+            max-width: 36px !important;
             font-size: 0.85rem !important;
+            flex: 0 0 36px !important;
             flex-shrink: 0 !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
+            padding: 0 !important;
+            border-radius: 50% !important;
+            box-sizing: border-box !important;
+        }
+
+        #reply-preview-banner,
+        #image-upload-banner,
+        #mic-permission-indicator {
+            padding: 0.4rem 0.75rem !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
         }
 
         /* Mobile specific message actions fixes */
@@ -1265,7 +1352,13 @@
         position: fixed;
         top: 0;
         left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        width: 100vw;
         width: 100dvw;
+        height: 100%;
+        height: 100vh;
         height: 100dvh;
         background: rgba(0, 0, 0, 0.5);
         z-index: 10001;
@@ -1274,6 +1367,9 @@
         justify-content: center;
         opacity: 0;
         transition: opacity 0.25s;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+        padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
     }
 
     .schedule-overlay.show {
@@ -1286,12 +1382,14 @@
         border-radius: 16px;
         padding: 0;
         width: min(90%, 340px);
+        max-width: calc(100vw - 32px);
         max-width: calc(100dvw - 32px);
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
         transform: translateY(20px);
         transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         overflow: hidden;
         box-sizing: border-box;
+        margin: auto;
     }
 
     .schedule-overlay.show .schedule-modal {
@@ -1734,7 +1832,13 @@
         position: fixed;
         top: 0;
         left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        width: 100vw;
         width: 100dvw;
+        height: 100%;
+        height: 100vh;
         height: 100dvh;
         background: rgba(0, 0, 0, 0.5);
         z-index: 2000;
@@ -1742,16 +1846,21 @@
         align-items: center;
         justify-content: center;
         backdrop-filter: blur(4px);
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+        padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
     }
 
     .mobile-action-menu {
         background: #fff;
         border-radius: 16px;
-        width: 80%;
-        max-width: 300px;
+        width: 85%;
+        max-width: 320px;
         overflow: hidden;
         box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
         animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        box-sizing: border-box;
+        margin: auto;
     }
 
     @keyframes popIn {
@@ -1885,7 +1994,12 @@
     };
 
     document.addEventListener('DOMContentLoaded', function () {
-        const socket = window.socket;
+        const getSocket = () => window.socket || null;
+        const emitSocket = (event, data) => {
+            if (window.socket && typeof window.socket.emit === 'function') {
+                window.socket.emit(event, data);
+            }
+        };
         const chatHistory = document.getElementById('chat-history');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -1990,7 +2104,7 @@
                 const displayUrl = escapeHtml(truncateUrl(url));
                 text = text.replace(
                     `__URL_PLACEHOLDER_${i}__`,
-                    `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">${displayUrl}</a>`
+                    `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="message-link">${displayUrl}</a>`
                 );
             });
             // Bold: *text*
@@ -2166,226 +2280,240 @@
         }
 
         // Rejoin server-side rooms after reconnects so realtime delivery stays reliable.
-        // IMPORTANT: Use sync (append-only) instead of full reload to avoid clearing
-        // the chat when a friend comes online and triggers a socket reconnect.
         function onSocketConnect() {
-            socket.emit('join_inbox');
+            emitSocket('join_inbox');
             if (activeRecipientId) {
-                socket.emit('viewing_chat', { partner_id: activeRecipientId });
+                emitSocket('viewing_chat', { partner_id: activeRecipientId });
                 syncActiveChatHistory();
                 startChatSync();
             }
         }
 
-        socket.on('connect', onSocketConnect);
-        if (socket.connected) {
-            onSocketConnect();
+        let _socketListenersAttached = false;
+        function initSocketListeners() {
+            const s = window.socket;
+            if (!s || _socketListenersAttached) return;
+            _socketListenersAttached = true;
+
+            s.on('connect', onSocketConnect);
+            if (s.connected) {
+                onSocketConnect();
+            }
+
+            // --- Socket Listeners ---
+            s.on('new_dm', (data) => {
+                console.log("Sync: Received new_dm", data);
+                if (data.sender_id === activeRecipientId) {
+                    hideTypingIndicator();
+                    appendMessage(data, 'received', false, data.id, data.is_read);
+                    scrollToBottom();
+                } else if (data.sender_id === currentUserId && data.recipient_id === activeRecipientId) {
+                    appendMessage(data, 'sent', false, data.id, data.is_read);
+                    scrollToBottom();
+                } else {
+                    updateSidebar(data);
+                    if (data.sender_id !== currentUserId) {
+                        showToast(`New message from ${data.sender_username}`);
+                    }
+                }
+            });
+
+            // DM error (e.g. permission denied)
+            s.on('dm_error', (data) => {
+                showToast(data.error || 'Failed to send message', 'error');
+                // Mark all pending messages as failed
+                Object.keys(pendingMessages).forEach(function(tempId) {
+                    markMessageFailed(tempId);
+                    clearTimeout(pendingMessages[tempId].timer);
+                });
+            });
+
+            // Real-time incoming message request
+            s.on('dm_request', (data) => {
+                const section = document.getElementById('requests-section');
+                if (section) section.style.display = '';
+                const badge = document.getElementById('request-badge');
+                if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
+                // Refresh requests list if open
+                const list = document.getElementById('requests-list');
+                if (list && list.style.display !== 'none') loadRequestsList();
+                showToast(`${data.from_username} wants to message you`);
+            });
+
+            // Request accepted notification
+            s.on('dm_request_accepted', (data) => {
+                const acceptedText = `${data.by_username} accepted your message request`;
+                upsertContactItem(data.by_user_id, data.by_username, acceptedText, data.accepted_at);
+
+                if (data.by_user_id === activeRecipientId) {
+                    appendSystemMessage(acceptedText, data.accepted_at);
+                    scrollToBottom();
+                }
+
+                showToast(`${acceptedText}!`);
+            });
+
+            s.on('message_reacted', (data) => {
+                if (data.id) {
+                    const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+                    if (bubble) updateReactions(bubble, data.reactions);
+                }
+            });
+
+            s.on('message_pinned', (data) => {
+                if (data.id) {
+                    updatePinVisual(data.id, data.is_pinned);
+                }
+            });
+
+            s.on('messages_read', (data) => {
+                if (data.sender_id === currentUserId) {
+                    document.querySelectorAll('.message-sent .read-status i').forEach(i => {
+                        i.className = 'fas fa-check-double';
+                        i.style.color = '#5dade2';
+                    });
+                }
+            });
+            s.on('message_edited', (data) => {
+                console.log("Sync: Received message_edited", data);
+                const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+                if (bubble) {
+                    bubble.querySelector('.message-content').textContent = data.content;
+                    if (!bubble.querySelector('.edited-flag')) {
+                        bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; opacity: 0.6; margin-right: 4px;">edited</span>');
+                    }
+                }
+            });
+
+            s.on('message_deleted', (data) => {
+                console.log("Sync: Received message_deleted", data);
+                const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
+                if (bubble) {
+                    bubble.style.opacity = '0';
+                    bubble.style.transform = 'scale(0.95)';
+                    setTimeout(() => bubble.remove(), 200);
+                }
+            });
+
+            s.on('chat_deleted', (data) => {
+                if (data.by_id === activeRecipientId) {
+                    chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">This conversation was deleted.</div>';
+                    location.reload();
+                }
+            });
+
+            s.on('message_confirmed', (data) => {
+                console.log("Sync: Message confirmed ID", data.id);
+                // Clear from pending queue
+                if (data.temp_id && pendingMessages[data.temp_id]) {
+                    clearTimeout(pendingMessages[data.temp_id].timer);
+                    delete pendingMessages[data.temp_id];
+                }
+                const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
+                if (bubble) {
+                    bubble.setAttribute('data-id', data.id);
+                    bubble.removeAttribute('data-temp');
+                    bubble.removeAttribute('data-failed');
+                    bubble.classList.remove('message-failed');
+                    var indicator = bubble.querySelector('.retry-indicator');
+                    if (indicator) indicator.remove();
+                    bubble.style.opacity = '';
+                    renderedMessageIds.add(data.id);
+                    const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
+                    addMessageActions(bubble, data.id, inferredType);
+                }
+            });
+
+            s.on('user_typing', function (data) {
+                if (data.sender_id === activeRecipientId) {
+                    const indicator = document.getElementById('typing-indicator');
+                    if (indicator) {
+                        indicator.style.display = 'block';
+                        indicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> ${data.username || ''} typing`;
+                    }
+                    // Show in-chat bubble too
+                    const chatBubble = document.getElementById('chat-typing-bubble');
+                    if (chatBubble) {
+                        chatBubble.classList.add('visible');
+                        chatBubble.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> typing`;
+                    }
+                    // Show bottom typing indicator (positioned right above input keyboard view)
+                    const bottomIndicator = document.getElementById('bottom-typing-indicator');
+                    const bottomText = document.getElementById('bottom-typing-text');
+                    if (bottomIndicator) {
+                        if (bottomText) bottomText.textContent = `${data.username || 'User'} is typing...`;
+                        bottomIndicator.classList.add('visible');
+                    }
+                    scrollToBottom();
+
+                    const status = document.getElementById('chat-status');
+                    if (status) status.style.display = 'none';
+
+                    // If stop_typing is dropped by the network, auto-clear stale typing state.
+                    if (remoteTypingClearTimer) clearTimeout(remoteTypingClearTimer);
+                    remoteTypingClearTimer = setTimeout(() => {
+                        hideTypingIndicator();
+                    }, 4500);
+                }
+            });
+
+            s.on('user_stop_typing', function (data) {
+                if (data.sender_id === activeRecipientId) {
+                    hideTypingIndicator();
+                }
+            });
+
+            // --- Recording Audio Indicator ---
+            s.on('recording_audio', function (data) {
+                if (data.sender_id === activeRecipientId) {
+                    const indicator = document.getElementById('typing-indicator');
+                    if (indicator) {
+                        indicator.style.display = 'block';
+                        indicator.innerHTML = '🎙 Recording audio...';
+                    }
+                    const chatBubble = document.getElementById('chat-typing-bubble');
+                    if (chatBubble) {
+                        chatBubble.classList.add('visible');
+                        chatBubble.innerHTML = '🎙 Recording audio...';
+                    }
+                    const bottomIndicator = document.getElementById('bottom-typing-indicator');
+                    const bottomText = document.getElementById('bottom-typing-text');
+                    if (bottomIndicator) {
+                        if (bottomText) bottomText.textContent = `🎙 ${data.username || 'User'} is recording audio...`;
+                        bottomIndicator.classList.add('visible');
+                    }
+                    scrollToBottom();
+
+                    const status = document.getElementById('chat-status');
+                    if (status) status.style.display = 'none';
+
+                    if (remoteTypingClearTimer) clearTimeout(remoteTypingClearTimer);
+                    remoteTypingClearTimer = setTimeout(() => {
+                        hideTypingIndicator();
+                    }, 30000); // 30s timeout for recording
+                }
+            });
+
+            s.on('stop_recording', function (data) {
+                if (data.sender_id === activeRecipientId) {
+                    hideTypingIndicator();
+                }
+            });
         }
+
+        if (window.socket) {
+            initSocketListeners();
+        }
+        if (window.getEchoSocket) {
+            window.getEchoSocket(function() {
+                initSocketListeners();
+            });
+        }
+        window.addEventListener('echosocketready', initSocketListeners);
 
         if (activeRecipientId) {
             startChatSync();
         }
-
-        // --- Socket Listeners ---
-        socket.on('new_dm', (data) => {
-            console.log("Sync: Received new_dm", data);
-            if (data.sender_id === activeRecipientId) {
-                hideTypingIndicator();
-                appendMessage(data, 'received', false, data.id, data.is_read);
-                scrollToBottom();
-            } else if (data.sender_id === currentUserId && data.recipient_id === activeRecipientId) {
-                appendMessage(data, 'sent', false, data.id, data.is_read);
-                scrollToBottom();
-            } else {
-                updateSidebar(data);
-                if (data.sender_id !== currentUserId) {
-                    showToast(`New message from ${data.sender_username}`);
-                }
-            }
-        });
-
-
-        // DM error (e.g. permission denied)
-        socket.on('dm_error', (data) => {
-            showToast(data.error || 'Failed to send message', 'error');
-            // Mark all pending messages as failed
-            Object.keys(pendingMessages).forEach(function(tempId) {
-                markMessageFailed(tempId);
-                clearTimeout(pendingMessages[tempId].timer);
-            });
-        });
-
-        // Real-time incoming message request
-        socket.on('dm_request', (data) => {
-            const section = document.getElementById('requests-section');
-            if (section) section.style.display = '';
-            const badge = document.getElementById('request-badge');
-            if (badge) badge.textContent = parseInt(badge.textContent || '0') + 1;
-            // Refresh requests list if open
-            const list = document.getElementById('requests-list');
-            if (list && list.style.display !== 'none') loadRequestsList();
-            showToast(`${data.from_username} wants to message you`);
-        });
-
-        // Request accepted notification
-        socket.on('dm_request_accepted', (data) => {
-            const acceptedText = `${data.by_username} accepted your message request`;
-            upsertContactItem(data.by_user_id, data.by_username, acceptedText, data.accepted_at);
-
-            if (data.by_user_id === activeRecipientId) {
-                appendSystemMessage(acceptedText, data.accepted_at);
-                scrollToBottom();
-            }
-
-            showToast(`${acceptedText}!`);
-        });
-
-        socket.on('message_reacted', (data) => {
-            if (data.id) {
-                const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
-                if (bubble) updateReactions(bubble, data.reactions);
-            }
-        });
-
-        socket.on('message_pinned', (data) => {
-            if (data.id) {
-                updatePinVisual(data.id, data.is_pinned);
-            }
-        });
-
-        socket.on('messages_read', (data) => {
-            if (data.sender_id === currentUserId) {
-                document.querySelectorAll('.message-sent .read-status i').forEach(i => {
-                    i.className = 'fas fa-check-double';
-                    i.style.color = '#5dade2';
-                });
-            }
-        });
-        socket.on('message_edited', (data) => {
-            console.log("Sync: Received message_edited", data);
-            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
-            if (bubble) {
-                bubble.querySelector('.message-content').textContent = data.content;
-                if (!bubble.querySelector('.edited-flag')) {
-                    bubble.querySelector('.message-meta').insertAdjacentHTML('afterbegin', '<span class="edited-flag" style="font-style: italic; opacity: 0.6; margin-right: 4px;">edited</span>');
-                }
-            }
-        });
-
-        socket.on('message_deleted', (data) => {
-            console.log("Sync: Received message_deleted", data);
-            const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
-            if (bubble) {
-                bubble.style.opacity = '0';
-                bubble.style.transform = 'scale(0.95)';
-                setTimeout(() => bubble.remove(), 200);
-            }
-        });
-
-        socket.on('chat_deleted', (data) => {
-            if (data.by_id === activeRecipientId) {
-                chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 3rem;">This conversation was deleted.</div>';
-                location.reload();
-            }
-        });
-
-        socket.on('message_confirmed', (data) => {
-            console.log("Sync: Message confirmed ID", data.id);
-            // Clear from pending queue
-            if (data.temp_id && pendingMessages[data.temp_id]) {
-                clearTimeout(pendingMessages[data.temp_id].timer);
-                delete pendingMessages[data.temp_id];
-            }
-            const bubble = document.querySelector(`.message-bubble[data-temp="${data.temp_id}"]`);
-            if (bubble) {
-                bubble.setAttribute('data-id', data.id);
-                bubble.removeAttribute('data-temp');
-                bubble.removeAttribute('data-failed');
-                bubble.classList.remove('message-failed');
-                var indicator = bubble.querySelector('.retry-indicator');
-                if (indicator) indicator.remove();
-                bubble.style.opacity = '';
-                renderedMessageIds.add(data.id);
-                const inferredType = bubble.classList.contains('message-sent') ? 'sent' : 'received';
-                addMessageActions(bubble, data.id, inferredType);
-            }
-        });
-
-        socket.on('user_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                const indicator = document.getElementById('typing-indicator');
-                if (indicator) {
-                    indicator.style.display = 'block';
-                    indicator.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> ${data.username || ''} typing`;
-                }
-                // Show in-chat bubble too
-                const chatBubble = document.getElementById('chat-typing-bubble');
-                if (chatBubble) {
-                    chatBubble.classList.add('visible');
-                    chatBubble.innerHTML = `<span class="typing-dot">.</span><span class="typing-dot">.</span><span class="typing-dot">.</span> typing`;
-                }
-                // Show bottom typing indicator (positioned right above input keyboard view)
-                const bottomIndicator = document.getElementById('bottom-typing-indicator');
-                const bottomText = document.getElementById('bottom-typing-text');
-                if (bottomIndicator) {
-                    if (bottomText) bottomText.textContent = `${data.username || 'User'} is typing...`;
-                    bottomIndicator.classList.add('visible');
-                }
-                scrollToBottom();
-
-                const status = document.getElementById('chat-status');
-                if (status) status.style.display = 'none';
-
-                // If stop_typing is dropped by the network, auto-clear stale typing state.
-                if (remoteTypingClearTimer) clearTimeout(remoteTypingClearTimer);
-                remoteTypingClearTimer = setTimeout(() => {
-                    hideTypingIndicator();
-                }, 4500);
-            }
-        });
-
-        socket.on('user_stop_typing', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                hideTypingIndicator();
-            }
-        });
-
-        // --- Recording Audio Indicator ---
-        socket.on('recording_audio', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                const indicator = document.getElementById('typing-indicator');
-                if (indicator) {
-                    indicator.style.display = 'block';
-                    indicator.innerHTML = '🎙 Recording audio...';
-                }
-                const chatBubble = document.getElementById('chat-typing-bubble');
-                if (chatBubble) {
-                    chatBubble.classList.add('visible');
-                    chatBubble.innerHTML = '🎙 Recording audio...';
-                }
-                const bottomIndicator = document.getElementById('bottom-typing-indicator');
-                const bottomText = document.getElementById('bottom-typing-text');
-                if (bottomIndicator) {
-                    if (bottomText) bottomText.textContent = `🎙 ${data.username || 'User'} is recording audio...`;
-                    bottomIndicator.classList.add('visible');
-                }
-                scrollToBottom();
-
-                const status = document.getElementById('chat-status');
-                if (status) status.style.display = 'none';
-
-                if (remoteTypingClearTimer) clearTimeout(remoteTypingClearTimer);
-                remoteTypingClearTimer = setTimeout(() => {
-                    hideTypingIndicator();
-                }, 30000); // 30s timeout for recording
-            }
-        });
-
-        socket.on('stop_recording', function (data) {
-            if (data.sender_id === activeRecipientId) {
-                hideTypingIndicator();
-            }
-        });
 
         // --- Message Actions ---
         // --- Send queue (pending messages with retry support) ---
@@ -2434,7 +2562,7 @@
             entry.timer = setTimeout(function() {
                 markMessageFailed(tempId);
             }, SEND_TIMEOUT);
-            socket.emit('send_dm', entry.payload);
+            emitSocket('send_dm', entry.payload);
         };
 
         if (chatForm) {
@@ -2449,7 +2577,7 @@
 
                 if (!content && !pendingUrl) return;
                 if (!activeRecipientId) return;
-                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                emitSocket('stop_typing', { recipient_id: activeRecipientId });
                 if (typingTimeout) clearTimeout(typingTimeout);
 
                 const tempId = Date.now().toString();
@@ -2483,7 +2611,7 @@
 
                 // Add to send queue before emitting
                 addPendingMessage(tempId, payload);
-                socket.emit('send_dm', payload);
+                emitSocket('send_dm', payload);
 
                 // Show optimistically
                 appendMessage(msgData, 'sent', false, null, false, tempId);
@@ -2542,10 +2670,10 @@
                     }
                 }
                 if (!activeRecipientId) return;
-                socket.emit('typing', { recipient_id: activeRecipientId });
+                emitSocket('typing', { recipient_id: activeRecipientId });
                 clearTimeout(typingTimeout);
                 typingTimeout = setTimeout(() => {
-                    socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                    emitSocket('stop_typing', { recipient_id: activeRecipientId });
                 }, 2000);
             });
             // Enter inserts a newline (default textarea behavior).
@@ -2553,25 +2681,37 @@
         }
 
         window.loadChat = function (userId, username, element) {
+            if (!userId) return;
             if (activeRecipientId && activeRecipientId !== userId) {
-                socket.emit('leave_chat', { partner_id: activeRecipientId });
-                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                emitSocket('leave_chat', { partner_id: activeRecipientId });
+                emitSocket('stop_typing', { recipient_id: activeRecipientId });
             }
-            document.querySelector('.messages-wrapper').classList.add('chat-view-active');
+            const wrapper = document.querySelector('.messages-wrapper');
+            if (wrapper) wrapper.classList.add('chat-view-active');
             if (window.innerWidth <= 768) { document.body.classList.add('mobile-chat-open'); }
             document.querySelectorAll('.contact-item').forEach(i => i.classList.remove('active'));
-            if (element) element.classList.add('active');
+            if (element) {
+                element.classList.add('active');
+            } else {
+                const matching = document.querySelector(`.contact-item[data-user-id="${userId}"]`);
+                if (matching) matching.classList.add('active');
+            }
 
             activeRecipientId = userId;
             activeRecipientName = username;
-            document.getElementById('recipient-id').value = userId;
-            document.getElementById('selection-splash').style.display = 'none';
-            document.getElementById('chat-interface').style.display = 'flex';
-            document.getElementById('chat-header-actions').style.display = 'flex';
+            const recipientInput = document.getElementById('recipient-id');
+            if (recipientInput) recipientInput.value = userId;
+            const splash = document.getElementById('selection-splash');
+            if (splash) splash.style.display = 'none';
+            const chatInterface = document.getElementById('chat-interface');
+            if (chatInterface) chatInterface.style.display = 'flex';
+            const headerActions = document.getElementById('chat-header-actions');
+            if (headerActions) headerActions.style.display = 'flex';
             var whisperBtn = document.getElementById('whisper-invite-btn');
             if (whisperBtn) whisperBtn.style.display = '';
             const displayUsername = (username && username.startsWith('Maya_DemoPartner')) ? 'Maya (Demo Partner)' : username;
-            document.getElementById('active-chat-username').textContent = displayUsername;
+            const activeUsernameEl = document.getElementById('active-chat-username');
+            if (activeUsernameEl) activeUsernameEl.textContent = displayUsername;
 
             // Update profile link in header
             const headerLink = document.getElementById('chat-header-link');
@@ -2587,14 +2727,16 @@
             const status = document.getElementById('chat-status');
             if (status) status.style.display = 'block';
 
-            chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
+            if (chatHistory) {
+                chatHistory.innerHTML = '<div style="text-align: center; color: #999; padding: 2rem;">Loading chat...</div>';
+            }
 
             loadChatHistory(userId);
             loadScheduledMessages(userId);
 
             if (element && element.querySelector('.unread-badge')) element.querySelector('.unread-badge').remove();
 
-            socket.emit('viewing_chat', { partner_id: userId });
+            emitSocket('viewing_chat', { partner_id: userId });
             startChatSync();
         };
 
@@ -3376,8 +3518,8 @@
         window.backToList = () => {
             // Leave chat tracking when going back to list
             if (activeRecipientId) {
-                socket.emit('leave_chat', { partner_id: activeRecipientId });
-                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                emitSocket('leave_chat', { partner_id: activeRecipientId });
+                emitSocket('stop_typing', { recipient_id: activeRecipientId });
             }
             stopChatSync();
             document.querySelector('.messages-wrapper').classList.remove('chat-view-active');
@@ -3499,7 +3641,7 @@
 
                 // Notify recipient we are recording
                 if (activeRecipientId) {
-                    socket.emit('recording_audio', { recipient_id: activeRecipientId });
+                    emitSocket('recording_audio', { recipient_id: activeRecipientId });
                 }
 
                 recordingTimer = setInterval(() => {
@@ -3529,7 +3671,7 @@
             document.getElementById('chat-form').style.display = 'flex';
             // Notify recipient we stopped recording
             if (activeRecipientId) {
-                socket.emit('stop_recording', { recipient_id: activeRecipientId });
+                emitSocket('stop_recording', { recipient_id: activeRecipientId });
             }
         };
 
@@ -3548,7 +3690,7 @@
 
             // Notify recipient we stopped recording
             if (activeRecipientId) {
-                socket.emit('stop_recording', { recipient_id: activeRecipientId });
+                emitSocket('stop_recording', { recipient_id: activeRecipientId });
             }
 
             mediaRecorder.onstop = () => {
@@ -3578,7 +3720,7 @@
                             temp_id: tempId,
                             timestamp: new Date().toISOString()
                         };
-                        socket.emit('send_dm', {
+                        emitSocket('send_dm', {
                             recipient_id: activeRecipientId,
                             image_url: d.url,
                             image_public_id: d.public_id || '',
@@ -3688,8 +3830,8 @@
         // Clean up on page leave
         window.addEventListener('beforeunload', () => {
             if (activeRecipientId) {
-                socket.emit('leave_chat', { partner_id: activeRecipientId });
-                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                emitSocket('leave_chat', { partner_id: activeRecipientId });
+                emitSocket('stop_typing', { recipient_id: activeRecipientId });
             }
             stopChatSync();
         });
@@ -3697,11 +3839,11 @@
         document.addEventListener('visibilitychange', () => {
             if (!activeRecipientId) return;
             if (document.visibilityState === 'hidden') {
-                socket.emit('leave_chat', { partner_id: activeRecipientId });
-                socket.emit('stop_typing', { recipient_id: activeRecipientId });
+                emitSocket('leave_chat', { partner_id: activeRecipientId });
+                emitSocket('stop_typing', { recipient_id: activeRecipientId });
                 stopChatSync();
             } else {
-                socket.emit('viewing_chat', { partner_id: activeRecipientId });
+                emitSocket('viewing_chat', { partner_id: activeRecipientId });
                 loadChatHistory(activeRecipientId);
                 startChatSync();
             }
@@ -4408,14 +4550,37 @@
 
     /* --- Whisper Mode Styles --- */
     .whisper-modal-overlay {
-        display: none; position: fixed; top: 0; left: 0; width: 100dvw; height: 100dvh;
-        background: rgba(0,0,0,0.6); z-index: 1300; align-items: center; justify-content: center;
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        width: 100vw;
+        width: 100dvw;
+        height: 100%;
+        height: 100vh;
+        height: 100dvh;
+        background: rgba(0,0,0,0.6);
+        z-index: 1300;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        -webkit-overflow-scrolling: touch;
+        padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
     }
     .whisper-modal-overlay.active { display: flex; }
     .whisper-modal {
-        background: #fff; border-radius: 8px; padding: 1.5rem;
-        max-width: 400px; width: min(90%, 400px); max-width: calc(100dvw - 32px); text-align: center;
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.5rem;
+        width: min(90%, 400px);
+        max-width: calc(100vw - 32px);
+        max-width: calc(100dvw - 32px);
+        text-align: center;
         box-sizing: border-box;
+        margin: auto;
     }
     .whisper-modal h3 { color: #2a1810; margin: 0 0 0.5rem; font-size: 1.1rem; }
     .whisper-modal p { color: #666; font-size: 0.85rem; margin: 0.3rem 0; }
@@ -4613,7 +4778,11 @@
 
 <script nonce="{{ csp_nonce }}">
 (function() {
-    const socket = window.socket;
+    const emitWhisperSocket = (event, data) => {
+        if (window.socket && typeof window.socket.emit === 'function') {
+            window.socket.emit(event, data);
+        }
+    };
     // Whisper state
     window.whisperState = {
         sessionId: null,
@@ -4631,16 +4800,6 @@
     };
 
     const currentUserId = '{{ current_user.id }}';
-
-    // Show whisper button when a chat is selected
-    const origLoadChat = window.loadChat;
-    window.loadChat = function(userId, username, element) {
-        if (typeof origLoadChat === 'function') {
-            origLoadChat(userId, username, element);
-        }
-        const btn = document.getElementById('whisper-invite-btn');
-        if (btn) btn.style.display = '';
-    };
 
     // --- Invite Flow ---
     window.openWhisperInvite = function() {
@@ -4842,8 +5001,8 @@
     }
 
     function reactToWhisperMessage(msgId, emoji) {
-        if (!window.socket || !whisperState.sessionId) return;
-        socket.emit('whisper_react', {
+        if (!whisperState.sessionId) return;
+        emitWhisperSocket('whisper_react', {
             session_id: whisperState.sessionId,
             message_id: msgId,
             emoji: emoji
@@ -4871,22 +5030,20 @@
         const localMsg = { sender_id: currentUserId, content: content || '[Photo]', timestamp: new Date().toISOString(), is_system: false, message_type: msgType };
         if (pendingImgUrl) localMsg.image_url = pendingImgUrl;
         appendWhisperMessage(localMsg);
-        if (window.socket) {
-            const payload = {
-                session_id: whisperState.sessionId,
-                content: content,
-                temp_id: tempId,
-                message_type: msgType
-            };
-            if (pendingImgUrl) payload.image_url = pendingImgUrl;
-            socket.emit('whisper_message', payload);
-        }
+        const payload = {
+            session_id: whisperState.sessionId,
+            content: content,
+            temp_id: tempId,
+            message_type: msgType
+        };
+        if (pendingImgUrl) payload.image_url = pendingImgUrl;
+        emitWhisperSocket('whisper_message', payload);
         // Clear pending image
         window._whisperPendingImageUrl = '';
         cancelWhisperImage();
         // Typing stop
-        if (window.socket && whisperState.partnerId) {
-            socket.emit('whisper_stop_typing', { partner_id: whisperState.partnerId });
+        if (whisperState.partnerId) {
+            emitWhisperSocket('whisper_stop_typing', { partner_id: whisperState.partnerId });
         }
     };
 
@@ -5018,9 +5175,7 @@
             if (!whisperState.active || !whisperState.sessionId) return;
             if (!document.getElementById('whisper-overlay').classList.contains('active')) return;
             if (document.visibilityState === 'hidden') {
-                if (window.socket) {
-                    socket.emit('whisper_screenshot_alert', { session_id: whisperState.sessionId });
-                }
+                emitWhisperSocket('whisper_screenshot_alert', { session_id: whisperState.sessionId });
             }
         };
         document.addEventListener('visibilitychange', screenshotHandler);
@@ -5044,52 +5199,55 @@
                 sendWhisperMessage();
                 return;
             }
-            if (window.socket && whisperState.partnerId) {
-                socket.emit('whisper_typing', { partner_id: whisperState.partnerId });
+            if (whisperState.partnerId) {
+                emitWhisperSocket('whisper_typing', { partner_id: whisperState.partnerId });
                 clearTimeout(whisperTypingTimeout);
                 whisperTypingTimeout = setTimeout(function() {
-                    socket.emit('whisper_stop_typing', { partner_id: whisperState.partnerId });
+                    emitWhisperSocket('whisper_stop_typing', { partner_id: whisperState.partnerId });
                 }, 2000);
             }
         });
     }
 
     // --- SocketIO Event Listeners ---
+    let _whisperSocketInitialized = false;
     function initWhisperSocket() {
-        if (!window.socket) { setTimeout(initWhisperSocket, 500); return; }
+        const s = window.socket;
+        if (!s || _whisperSocketInitialized) return;
+        _whisperSocketInitialized = true;
 
-        socket.on('whisper_invite_received', function(data) {
+        s.on('whisper_invite_received', function(data) {
             whisperState.pendingInviteSessionId = data.session_id;
             document.getElementById('whisper-incoming-text').textContent =
                 data.from_username + ' wants to start a ' + data.duration_minutes + '-minute whisper session.';
             document.getElementById('whisper-incoming-modal').classList.add('active');
         });
 
-        socket.on('whisper_accept', function(data) {
+        s.on('whisper_accept', function(data) {
             startWhisperSession(data);
         });
 
-        socket.on('whisper_decline', function(data) {
+        s.on('whisper_decline', function(data) {
             if (window.showCustomToast) showCustomToast(data.by_username + ' declined the whisper invite.', 'info');
         });
 
-        socket.on('whisper_new_message', function(data) {
+        s.on('whisper_new_message', function(data) {
             appendWhisperMessage(data);
             // Emit read receipt for incoming messages
             if (data.sender_id !== currentUserId && whisperState.sessionId) {
-                socket.emit('whisper_read', { session_id: whisperState.sessionId });
+                emitWhisperSocket('whisper_read', { session_id: whisperState.sessionId });
             }
         });
 
-        socket.on('whisper_message_confirmed', function(data) {
+        s.on('whisper_message_confirmed', function(data) {
             // Message confirmed by server — already shown optimistically
         });
 
-        socket.on('whisper_expired', function(data) {
+        s.on('whisper_expired', function(data) {
             whisperSessionEnded(data.reason || 'timeout');
         });
 
-        socket.on('whisper_extended', function(data) {
+        s.on('whisper_extended', function(data) {
             whisperState.expiresAt = new Date(data.new_expires_at);
             whisperState.warningShown = false;
             document.getElementById('whisper-warning-banner').classList.remove('active');
@@ -5099,21 +5257,21 @@
             appendWhisperMessage({ is_system: true, content: 'Session extended by ' + data.extra_minutes + ' minutes.' });
         });
 
-        socket.on('whisper_extend_request', function(data) {
+        s.on('whisper_extend_request', function(data) {
             whisperState.pendingExtendData = data;
             document.getElementById('whisper-extend-text').textContent =
                 data.requested_by_username + ' wants to extend the session by ' + data.extra_minutes + ' minutes.';
             document.getElementById('whisper-extend-modal').classList.add('active');
         });
 
-        socket.on('whisper_screenshot_detected', function(data) {
+        s.on('whisper_screenshot_detected', function(data) {
             appendWhisperMessage({
                 is_system: true,
                 content: data.username + ' may have captured the screen'
             });
         });
 
-        socket.on('whisper_read_receipt', function(data) {
+        s.on('whisper_read_receipt', function(data) {
             // Mark all sent whisper messages as read with a tick
             var container = document.getElementById('whisper-messages');
             if (!container) return;
@@ -5129,7 +5287,7 @@
             });
         });
 
-        socket.on('whisper_reaction', function(data) {
+        s.on('whisper_reaction', function(data) {
             var container = document.getElementById('whisper-messages');
             if (!container) return;
             var el = container.querySelector('[data-msg-id="' + data.message_id + '"]');
@@ -5139,15 +5297,15 @@
             }
         });
 
-        socket.on('whisper_user_typing', function(data) {
+        s.on('whisper_user_typing', function(data) {
             document.getElementById('whisper-typing').textContent = data.username + ' is typing...';
         });
 
-        socket.on('whisper_user_stop_typing', function() {
+        s.on('whisper_user_stop_typing', function() {
             document.getElementById('whisper-typing').textContent = '';
         });
 
-        socket.on('whisper_error', function(data) {
+        s.on('whisper_error', function(data) {
             if (window.showCustomAlert) showCustomAlert(data.error, 'danger');
         });
     }
@@ -5174,7 +5332,13 @@
         }
     });
 
-    initWhisperSocket();
+    if (window.socket) {
+        initWhisperSocket();
+    }
+    if (window.getEchoSocket) {
+        window.getEchoSocket(initWhisperSocket);
+    }
+    window.addEventListener('echosocketready', initWhisperSocket);
 
     // Close modals on overlay click
     ['whisper-invite-modal', 'whisper-incoming-modal', 'whisper-extend-modal'].forEach(id => {

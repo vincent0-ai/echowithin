@@ -157,7 +157,6 @@
         const forms = document.querySelectorAll('.auth-form');
 
         // Detect if running in mobile app context via user agent
-        // (Capacitor JS bridge is not available on the live site, only on the local bridge page)
         const isMobileApp = navigator.userAgent.includes('EchoWithinApp');
         if (isMobileApp) {
             console.log('Mobile app detected via user agent, adding platform=mobile to Google login links');

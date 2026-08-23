@@ -578,7 +578,7 @@
             submitBtn.textContent = 'Posting...';
 
             try {
-                const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
+                const resp = await (window.echoFetch || fetch)('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -741,7 +741,7 @@
                 replyBtn.textContent = 'Posting...';
 
                 try {
-                    const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
+                    const resp = await (window.echoFetch || fetch)('{{ url_for('blog.api_post_comments', slug=post.slug) }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -863,7 +863,7 @@
             loadMoreBtn.disabled = true;
             const nextPage = currentPage + 1;
             try {
-                const resp = await fetch('{{ url_for('blog.api_post_comments', slug=post.slug) }}?page=' + nextPage + '&per_page=' + perPage);
+                const resp = await (window.echoFetch || fetch)('{{ url_for('blog.api_post_comments', slug=post.slug) }}?page=' + nextPage + '&per_page=' + perPage);
                 if (!resp.ok) throw new Error('Failed to load');
                 const data = await resp.json();
                 if (data.comments && data.comments.length) {

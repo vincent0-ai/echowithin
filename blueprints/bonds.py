@@ -5148,6 +5148,7 @@ def api_bond_offline_sync(bond_id):
         now = datetime.datetime.now(datetime.timezone.utc)
         today = now.date()
         earliest_allowed = today - datetime.timedelta(days=MAX_BACKDATE_DAYS)
+        latest_allowed = today + datetime.timedelta(days=1)  # Timezone offset buffer (+1 to +14)
 
         results = []
         streak_dates = set()
@@ -5174,7 +5175,7 @@ def api_bond_offline_sync(bond_id):
                 results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'invalid date'})
                 continue
 
-            if action_date > today:
+            if action_date > latest_allowed:
                 results.append({'type': action_type, 'date': date_str, 'status': 'error', 'reason': 'future date'})
                 continue
             if action_date < earliest_allowed:

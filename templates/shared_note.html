@@ -3265,7 +3265,7 @@
                 status.textContent = 'Saving...';
 
                 try {
-                    const response = await fetch(`/share/note/{{ share_id }}/edit`, {
+                    const response = await (window.echoFetch || fetch)(`/share/note/{{ share_id }}/edit`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -3343,7 +3343,7 @@
 
                             window.onSaveMergeConflict = async (mergedText) => {
                                 try {
-                                    const mergeResp = await fetch(`/share/note/{{ share_id }}/edit`, {
+                                    const mergeResp = await (window.echoFetch || fetch)(`/share/note/{{ share_id }}/edit`, {
                                         method: 'POST',
                                         headers: {
                                             'Content-Type': 'application/json',
@@ -3748,7 +3748,7 @@
         if (!confirm('Delete this attachment?')) return;
 
         try {
-            const resp = await fetch(`/share/note/{{ share_id }}/attachment/${attachmentId}`, {
+            const resp = await (window.echoFetch || fetch)(`/share/note/{{ share_id }}/attachment/${attachmentId}`, {
                 method: 'DELETE',
                 headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
             });
@@ -4075,7 +4075,7 @@
         async function loadComments() {
             if (!commentsList) return;
             try {
-                const resp = await fetch(`/share/note/${SHARE_ID}/comments`);
+                const resp = await (window.echoFetch || fetch)(`/share/note/${SHARE_ID}/comments`);
                 const comments = await resp.json();
 
                 let totalCount = comments.length;
@@ -4115,7 +4115,7 @@
                 const originalText = postBtn.innerHTML;
                 postBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
                 try {
-                    const resp = await fetch(`/share/note/${SHARE_ID}/comments`, {
+                    const resp = await (window.echoFetch || fetch)(`/share/note/${SHARE_ID}/comments`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -4172,7 +4172,7 @@
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
             try {
-                const resp = await fetch(`/share/note/${SHARE_ID}/comments/${commentId}/replies`, {
+                const resp = await (window.echoFetch || fetch)(`/share/note/${SHARE_ID}/comments/${commentId}/replies`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -4202,7 +4202,7 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
 
             try {
-                const resp = await fetch(`/share/note/${SHARE_ID}/comments/${commentId}`, {
+                const resp = await (window.echoFetch || fetch)(`/share/note/${SHARE_ID}/comments/${commentId}`, {
                     method: 'DELETE',
                     headers: {
                         'X-CSRFToken': CSRF_TOKEN
@@ -4624,7 +4624,7 @@
         versionList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading versions...</div>';
 
         try {
-            const response = await fetch(`/personal_post/versions/${noteId}`);
+            const response = await (window.echoFetch || fetch)(`/personal_post/versions/${noteId}`);
             const versions = await response.json();
 
             if (!response.ok) {
@@ -4739,7 +4739,7 @@
         const payload = { action: action, edit_summary: action === 'accept' ? 'Accepted contributor proposal' : 'Rejected contributor proposal' };
         if (mergedContent && mergedContent.trim()) payload.merged_content = mergedContent;
 
-        const response = await fetch(`/personal_post/proposal/${proposalId}/decision`, {
+        const response = await (window.echoFetch || fetch)(`/personal_post/proposal/${proposalId}/decision`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -4826,7 +4826,7 @@
 
     window.performRestoreVersion = async function (versionId) {
         const csrfToken = '{{ csrf_token() }}';
-        const response = await fetch(`/personal_post/version/restore/${SHARED_NOTE_ID}/${versionId}`, {
+        const response = await (window.echoFetch || fetch)(`/personal_post/version/restore/${SHARED_NOTE_ID}/${versionId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -4851,7 +4851,7 @@
         if (!ownerLinksList) return;
         ownerLinksList.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading links...</div>';
         try {
-            const response = await fetch(`/personal_post/shares/${SHARED_NOTE_ID}`);
+            const response = await (window.echoFetch || fetch)(`/personal_post/shares/${SHARED_NOTE_ID}`);
             const shares = await response.json();
             if (!response.ok) {
                 ownerLinksList.innerHTML = `<p style="color:red; text-align:center;">${shares.error || 'Failed to load share links.'}</p>`;
@@ -4884,7 +4884,7 @@
 
         btn.disabled = true;
         try {
-            const response = await fetch(`/personal_post/revoke_share/${shareId}`, {
+            const response = await (window.echoFetch || fetch)(`/personal_post/revoke_share/${shareId}`, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': '{{ csrf_token() }}' }
             });
@@ -5010,7 +5010,7 @@
             const communityNoteId = '{{ community_note_id if community_note_id is defined else "" }}';
             const saveUrl = isCommunityNote ? `/api/community/note/${communityNoteId}/save` : `/shared_note/save/${shareId}`;
 
-            const resp = await fetch(saveUrl, {
+            const resp = await (window.echoFetch || fetch)(saveUrl, {
                 method: 'POST',
                 headers: { 'X-CSRFToken': CSRF_TOKEN }
             });

@@ -1,7 +1,7 @@
 {
-  "versionCode": 38,
-  "versionName": "1.10.4",
+  "versionCode": 39,
+  "versionName": "1.10.5",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.4 \u26a1 Fixes:\n\u2022 Shared Links tab now always refreshes when you open it, so newly created or revoked links appear right away\n\u2022 Share cards are shown even when the note isn't cached on this device",
-  "sha256": "701BDA2E281CFC4682E394E0B3105915752831966B7AC0C9EA73205C33ACE496"
+  "changelog": "v1.10.5 \u26a1 Fixes:\n\u2022 Instant server sync when creating, editing, or deleting notes\n\u2022 Enhanced background sync resilience on intermittent connections\n\u2022 Removed deprecated Capacitor native bridges",
+  "sha256": "B2AA7628CFCCA262814B577DCCEFFED2A378122B7F5069F060C0C45814B7C4C3"
 }

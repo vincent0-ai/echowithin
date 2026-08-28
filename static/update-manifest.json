@@ -1,7 +1,7 @@
 {
-  "versionCode": 39,
-  "versionName": "1.10.5",
+  "versionCode": 40,
+  "versionName": "1.10.6",
   "apkUrl": "https://echowithin.xyz/static/downloads/app-debug.apk",
-  "changelog": "v1.10.5 \u26a1 Fixes:\n\u2022 Instant server sync when creating, editing, or deleting notes\n\u2022 Enhanced background sync resilience on intermittent connections\n\u2022 Removed deprecated Capacitor native bridges",
-  "sha256": "B2AA7628CFCCA262814B577DCCEFFED2A378122B7F5069F060C0C45814B7C4C3"
+  "changelog": "v1.10.6 \u26a1 Sync Fix:\n\u2022 Fixed manual sync showing success but not pushing changes to server\n\u2022 Notes created/edited offline now always sync when connection is restored\n\u2022 Sync errors now surface actual failure messages instead of false success",
+  "sha256": "0BB10DF658FEB70256753EC9C7B0179A77BF579EE37A31BEEE7D59328E9C954D"
 }

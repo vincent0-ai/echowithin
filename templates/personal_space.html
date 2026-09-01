@@ -1946,11 +1946,14 @@
 
         .share-link-url input {
             flex: 1;
+            min-width: 0;
             padding: 0.3rem;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 0.85rem;
             background: #fff;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .share-link-meta {
@@ -2868,9 +2871,9 @@
                     Settings</a>
             </div>
         </div>
-        {% elif not is_unlocked %}
-        <!-- PIN is set but tab is locked -->
-        <div class="locked-gate">
+        {% elif has_app_lock %}
+        <!-- PIN is set but tab is locked — show gate, hide notes -->
+        <div id="pin-gate-container" class="locked-gate" style="{{ 'display:none;' if is_unlocked else '' }}">
             <i class="fas fa-lock gate-icon"></i>
             <h3>Locked Notes</h3>
             <p>Enter your PIN to view {{ locked_notes_count }} locked note{{ 's' if locked_notes_count != 1 else '' }}.
@@ -2882,7 +2885,9 @@
                     style="font-size: 0.85rem; color: #888; text-decoration: underline;">Forgot PIN?</a>
             </div>
         </div>
-        {% elif locked_notes %}
+        <!-- Locked notes content — always rendered, hidden until unlocked -->
+        <div id="locked-notes-content" style="{{ '' if is_unlocked else 'display:none;' }}">
+        {% if locked_notes %}
         <!-- Unlocked: show locked notes with auto-relock timer -->
         <div
             style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; background: #fdfaf9; padding: 0.75rem 1rem; border-radius: 10px; border: 1px solid #f5ebe7;">
@@ -3158,6 +3163,7 @@
             <p>Lock notes from the Notes tab using the <i class="fas fa-lock" style="font-size: 0.9em;"></i> button.</p>
         </div>
         {% endif %}
+        </div><!-- /locked-notes-content -->
     </div>
 </div>
 
@@ -4315,9 +4321,40 @@
         });
 
         setTimeout(() => {
-            // Force the hash to 'locked' before reloading so we come back to this tab
-            window.location.hash = 'locked';
-            window.location.reload();
+            if (navigator.onLine) {
+                // Online: reload to set server session for persistence
+                window.location.hash = 'locked';
+                window.location.reload();
+            } else {
+                // Offline: swap DOM visibility instead of reloading
+                // (reload would lose session state and re-show the PIN gate)
+                const gate = document.getElementById('pin-gate-container');
+                const content = document.getElementById('locked-notes-content');
+                if (gate) gate.style.display = 'none';
+                if (content) content.style.display = '';
+                // Close the PIN modal
+                if (typeof closePinModal === 'function') closePinModal();
+                // Start a client-side auto-relock timer (5 minutes)
+                const UNLOCK_DURATION = 300;
+                const timerEl = document.getElementById('relock-timer');
+                let remaining = UNLOCK_DURATION;
+                function formatTime(secs) {
+                    const m = Math.floor(secs / 60);
+                    const s = secs % 60;
+                    return m + ':' + (s < 10 ? '0' : '') + s;
+                }
+                if (timerEl) timerEl.textContent = '(' + formatTime(remaining) + ')';
+                const interval = setInterval(() => {
+                    remaining--;
+                    if (timerEl) timerEl.textContent = '(' + formatTime(Math.max(0, remaining)) + ')';
+                    if (remaining <= 0) {
+                        clearInterval(interval);
+                        // Auto-relock: hide notes, show gate
+                        if (content) content.style.display = 'none';
+                        if (gate) gate.style.display = '';
+                    }
+                }, 1000);
+            }
         }, 500);
     }
 

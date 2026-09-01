@@ -113,17 +113,26 @@
                 {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Surprise
                 {% elif surprise_theme == 'anniversary' %}<i class="fas fa-ring"></i> Anniversary Surprise
                 {% elif surprise_theme == 'celebration' %}<i class="fas fa-party-popper"></i> Celebration
+                {% elif surprise_theme == 'graduation' %}<i class="fas fa-graduation-cap"></i> Graduation
+                {% elif surprise_theme == 'thankyou' %}<i class="fas fa-hands-praying"></i> Thank You
+                {% elif surprise_theme == 'apology' %}<i class="fas fa-dove"></i> Apology
                 {% else %}<i class="fas fa-heart"></i> Personal Surprise{% endif %}
             </div>
             <div class="envelope-icon">
                 {% if surprise_theme == 'birthday' %}<i class="fas fa-gift"></i>
                 {% elif surprise_theme == 'celebration' %}<i class="fas fa-glass-cheers"></i>
+                {% elif surprise_theme == 'graduation' %}<i class="fas fa-graduation-cap"></i>
+                {% elif surprise_theme == 'thankyou' %}<i class="fas fa-handshake"></i>
+                {% elif surprise_theme == 'apology' %}<i class="fas fa-dove"></i>
                 {% else %}<i class="fas fa-envelope-open-text"></i>{% endif %}
             </div>
             <h2>
                 {% if surprise_theme == 'birthday' %}Happy Birthday!
                 {% elif surprise_theme == 'anniversary' %}Happy Anniversary!
                 {% elif surprise_theme == 'celebration' %}Congratulations!
+                {% elif surprise_theme == 'graduation' %}Congratulations, Graduate!
+                {% elif surprise_theme == 'thankyou' %}Thank You
+                {% elif surprise_theme == 'apology' %}I'm Sorry
                 {% else %}A special message for you{% endif %}
             </h2>
             <p>Click to open your surprise</p>
@@ -144,12 +153,24 @@
             </div>
             {% endif %}
 
+            {% if valentine_document %}
+            <div style="text-align: center; margin-top: 1rem;">
+                <a href="{{ valentine_document }}" target="_blank" rel="noopener noreferrer"
+                    class="btn comment-btn" style="text-decoration: none;">
+                    <i class="fas fa-file-alt"></i> {{ valentine_document_filename or 'View Document' }}
+                </a>
+            </div>
+            {% endif %}
+
             <div class="note-card-shared">
                 <div class="shared-note-header">
                     <div class="owner-info">
                         {% if surprise_theme == 'birthday' %}<i class="fas fa-birthday-cake"></i> Birthday Note
                         {% elif surprise_theme == 'anniversary' %}<i class="fas fa-ring"></i> Anniversary Note
                         {% elif surprise_theme == 'celebration' %}<i class="fas fa-party-popper"></i> Celebration Note
+                        {% elif surprise_theme == 'graduation' %}<i class="fas fa-graduation-cap"></i> Graduation Note
+                        {% elif surprise_theme == 'thankyou' %}<i class="fas fa-hands-praying"></i> Thank You Note
+                        {% elif surprise_theme == 'apology' %}<i class="fas fa-dove"></i> Apology Note
                         {% else %}<i class="fas fa-heart"></i> Personal Surprise Note{% endif %}
                     </div>
 
@@ -423,30 +444,18 @@
                     <button type="button" class="media-toolbar-btn" id="upload-image-btn" title="Add image">
                         <i class="fas fa-image"></i> Image
                     </button>
-                    <button type="button" class="media-toolbar-btn" id="record-audio-btn"
-                        title="Hold to record voice note" onmousedown="window.startSharedVoiceRecording(event)"
-                        ontouchstart="window.startSharedVoiceRecording(event)"
-                        style="user-select: none; -webkit-user-select: none;">
-                        <i class="fas fa-microphone"></i> Record
+                    <button type="button" class="media-toolbar-btn" id="upload-document-btn" title="Upload document">
+                        <i class="fas fa-file-alt"></i> Document
                     </button>
                     <button type="button" class="media-toolbar-btn" id="upload-audio-btn" title="Upload audio file">
                         <i class="fas fa-file-audio"></i> Upload
                     </button>
-                    <div id="shared-voice-recording-ui" class="voice-recording-ui"
-                        style="display:none; align-items:center; gap:8px; margin-left: auto; background: #fff8f8; padding: 4px 12px; border-radius: 20px; border: 1px solid #ffcccc; font-size: 0.85rem;">
-                        <span class="voice-pulse"
-                            style="width: 8px; height: 8px; background: red; border-radius: 50%; display: inline-block; animation: pulse 1.5s infinite;"></span>
-                        <span id="shared-voice-timer" style="font-family: monospace; font-weight: 600;">0:00</span>
-                        <button type="button" class="shared-voice-cancel-btn"
-                            style="background:none;border:none;color:#666;cursor:pointer;margin-left:4px;"
-                            title="Cancel">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
                     <input type="file" id="image-file-input" accept="image/*"
                         style="display:none;">
                     <input type="file" id="audio-file-input"
                         accept="audio/*" style="display:none;">
+                    <input type="file" id="document-file-input"
+                        accept=".pdf,.doc,.docx,.txt,.rtf" style="display:none;">
                     <div id="upload-progress" class="upload-progress" style="display:none;">
                         <div class="upload-progress-bar" id="upload-progress-bar"></div>
                         <span id="upload-progress-text" class="upload-progress-text">Uploading...</span>
@@ -531,6 +540,17 @@
                             </audio>
                         </div>
                     </div>
+                    {% elif att.file_type == 'document' %}
+                    <div class="attachment-document-wrap" style="display:flex;align-items:center;gap:10px;padding:0.75rem;background:#faf7f5;border-radius:8px;border:1px solid #f0e8e4;">
+                        <i class="fas fa-file-alt" style="font-size:1.5rem;color:#5a3328;"></i>
+                        <div style="flex:1;min-width:0;">
+                            <a href="{{ att.url }}" target="_blank" rel="noopener noreferrer"
+                                style="color:#3e2217;font-weight:600;text-decoration:none;word-break:break-all;font-size:0.9rem;">{{ att.filename }}</a>
+                        </div>
+                        <a href="{{ att.url }}" download="{{ att.filename }}" style="color:#5a3328;font-size:0.85rem;text-decoration:none;">
+                            <i class="fas fa-download"></i>
+                        </a>
+                    </div>
                     {% endif %}
                     <div class="attachment-meta">
                         <span class="attachment-uploader">{{ att.uploader_name }}</span>
@@ -545,8 +565,8 @@
                 {% endfor %}
             </div>
             {% if not note_attachments %}
-            <p class="attachments-empty" id="attachments-empty">No attachments yet. Use the editor toolbar to add images
-                or voice notes.</p>
+            <p class="attachments-empty" id="attachments-empty">No attachments yet. Use the editor toolbar to add images,
+                voice notes, or documents.</p>
             {% endif %}
         </div>
         {% endif %}
@@ -609,6 +629,15 @@
                         {% elif surprise_theme == 'celebration' %}
                         <h3 class="cta-heading">Got something to celebrate?</h3>
                         <p class="cta-text">A celebration note with confetti, photos, and music.</p>
+                        {% elif surprise_theme == 'graduation' %}
+                        <h3 class="cta-heading">Celebrate a graduation milestone</h3>
+                        <p class="cta-text">A graduation note with caps, confetti, and a heartfelt reveal.</p>
+                        {% elif surprise_theme == 'thankyou' %}
+                        <h3 class="cta-heading">Say thank you in a special way</h3>
+                        <p class="cta-text">A gratitude note with a warm, personal touch.</p>
+                        {% elif surprise_theme == 'apology' %}
+                        <h3 class="cta-heading">Say you're sorry, from the heart</h3>
+                        <p class="cta-text">A heartfelt apology note with a gentle, personal touch.</p>
                         {% elif surprise_theme != 'none' %}
                         <h3 class="cta-heading">Express your love beautifully</h3>
                         <p class="cta-text">A surprise note with photos, music, and an interactive reveal.</p>
@@ -3679,6 +3708,18 @@
                                 </audio>
                             </div>
                         </div>`;
+        } else if (att.file_type === 'document') {
+            innerHtml = `
+                        <div class="attachment-document-wrap" style="display:flex;align-items:center;gap:10px;padding:0.75rem;background:#faf7f5;border-radius:8px;border:1px solid #f0e8e4;">
+                            <i class="fas fa-file-alt" style="font-size:1.5rem;color:#5a3328;"></i>
+                            <div style="flex:1;min-width:0;">
+                                <a href="${att.url}" target="_blank" rel="noopener noreferrer"
+                                    style="color:#3e2217;font-weight:600;text-decoration:none;word-break:break-all;font-size:0.9rem;">${att.filename}</a>
+                            </div>
+                            <a href="${att.url}" download="${att.filename}" style="color:#5a3328;font-size:0.85rem;text-decoration:none;">
+                                <i class="fas fa-download"></i>
+                            </a>
+                        </div>`;
         }
 
         // Add meta row with delete button
@@ -3784,8 +3825,10 @@
     if (CAN_UPLOAD_MEDIA) {
         const imgBtn = document.getElementById('upload-image-btn');
         const audioBtn = document.getElementById('upload-audio-btn');
+        const docBtn = document.getElementById('upload-document-btn');
         const imgInput = document.getElementById('image-file-input');
         const audioInput = document.getElementById('audio-file-input');
+        const docInput = document.getElementById('document-file-input');
 
         if (imgBtn && imgInput) {
             imgBtn.addEventListener('click', () => imgInput.click());
@@ -3797,6 +3840,13 @@
         if (audioBtn && audioInput) {
             audioBtn.addEventListener('click', () => audioInput.click());
             audioInput.addEventListener('change', function () {
+                if (this.files.length) uploadNoteAttachment(this.files[0]);
+                this.value = '';
+            });
+        }
+        if (docBtn && docInput) {
+            docBtn.addEventListener('click', () => docInput.click());
+            docInput.addEventListener('change', function () {
                 if (this.files.length) uploadNoteAttachment(this.files[0]);
                 this.value = '';
             });
@@ -3845,6 +3895,7 @@
     const IS_AUTHENTICATED = {{ 'true' if current_user.is_authenticated else 'false' }};
     const CURRENT_USER_NAME = "{{ current_user.username if current_user.is_authenticated else '' }}";
     const IS_ADMIN = {{ 'true' if current_user.is_authenticated and current_user.is_admin else 'false' }};
+    const IS_NOTE_OWNER = {{ 'true' if is_owner else 'false' }};
     const CSRF_TOKEN = '{{ csrf_token() }}';
 
     if (SHARE_ID !== 'local') {
@@ -4023,7 +4074,7 @@
             const repliesHTML = (comment.replies || []).map(r => createCommentHTML(r, depth + 1)).join('');
             const isReply = depth > 0;
             const containerClass = isReply ? 'reply-card' : 'comment-card';
-            const canDelete = IS_AUTHENTICATED && (comment.author_name === CURRENT_USER_NAME || IS_ADMIN);
+            const canDelete = IS_AUTHENTICATED && (comment.author_name === CURRENT_USER_NAME || IS_NOTE_OWNER);
             
             const isDeleted = comment.deleted || false;
             let safeAuthor, bodyText;
@@ -4305,6 +4356,15 @@
         } else if (theme === 'celebration' || theme === 'anniversary') {
             content = '<i class="fas fa-star"></i>';
             color = ['#ffd700', '#fff', '#ffd700', '#f8f8f8'][Math.floor(Math.random() * 4)];
+        } else if (theme === 'graduation') {
+            content = '<i class="fas fa-graduation-cap"></i>';
+            color = ['#1a237e', '#ffd700', '#0d47a1', '#ffab00'][Math.floor(Math.random() * 4)];
+        } else if (theme === 'thankyou') {
+            content = '<i class="fas fa-heart"></i>';
+            color = ['#e8a598', '#f4c2a1', '#d4a574', '#c9917a'][Math.floor(Math.random() * 4)];
+        } else if (theme === 'apology') {
+            content = '<i class="fas fa-dove"></i>';
+            color = ['#b0bec5', '#cfd8dc', '#90a4ae', '#e0e0e0'][Math.floor(Math.random() * 4)];
         } else {
             content = '<i class="fas fa-circle"></i>';
             color = '#fff';

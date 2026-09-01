@@ -779,8 +779,11 @@ def api_create_note_share(post_id):
     surprise_theme = 'none'
     valentine_photo = None
     valentine_audio = None
+    valentine_document = None
     valentine_photo_public_id = ''
     valentine_audio_public_id = ''
+    valentine_document_public_id = ''
+    valentine_document_filename = ''
     use_typewriter = False
     auto_approve = False
 
@@ -810,59 +813,81 @@ def api_create_note_share(post_id):
         auto_approve = request.form.get('auto_approve') == 'true'
         
         # Handle file uploads
-        if surprise_theme != 'none':
-            photo_file = request.files.get('valentine_photo')
-            audio_file = request.files.get('valentine_audio')
+        photo_file = request.files.get('valentine_photo')
+        audio_file = request.files.get('valentine_audio')
+        document_file = request.files.get('valentine_document')
+        
+        # --- Premium check for media uploads ---
+        has_media = False
+        if photo_file and photo_file.filename:
+            has_media = True
+        if audio_file and audio_file.filename:
+            has_media = True
+        if document_file and document_file.filename:
+            has_media = True
             
-            # --- Premium check for media uploads ---
-            has_media = False
-            if photo_file and photo_file.filename:
-                has_media = True
-            if audio_file and audio_file.filename:
-                has_media = True
-                
-            if has_media and not m.is_premium(user_doc):
-                return jsonify({
-                    'error': 'Uploading custom photos and music to surprise notes is a Premium feature. Upgrade to unlock!',
-                    'upgrade': True
-                }), 403
+        if has_media and not m.is_premium(user_doc):
+            return jsonify({
+                'error': 'Uploading attachments is a Premium feature. Upgrade to unlock!',
+                'upgrade': True
+            }), 403
 
-            if photo_file and photo_file.filename:
-                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
-                if ext in m.ALLOWED_IMAGE_EXTENSIONS:
-                    try:
-                        # SECURITY: encrypt bytes at rest (authenticated raw),
-                        # same as collaborative note attachments.
-                        photo_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(
-                            m.encrypt_media_bytes(photo_file.read()),
-                            folder="echowithin_valentine",
-                            resource_type="raw",
-                            type="authenticated"
-                        )
-                        photo_public_id = upload_result.get('public_id', '')
-                        valentine_photo = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
-                        valentine_photo_public_id = photo_public_id
-                    except Exception as e:
-                        m.app.logger.error(f"Valentine photo upload failed: {e}")
+        if photo_file and photo_file.filename:
+            ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+            if ext in m.ALLOWED_IMAGE_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt bytes at rest (authenticated raw),
+                    # same as collaborative note attachments.
+                    photo_file.seek(0)
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(photo_file.read()),
+                        folder="echowithin_valentine",
+                        resource_type="raw",
+                        type="authenticated"
+                    )
+                    photo_public_id = upload_result.get('public_id', '')
+                    valentine_photo = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
+                    valentine_photo_public_id = photo_public_id
+                except Exception as e:
+                    m.app.logger.error(f"Valentine photo upload failed: {e}")
 
-            if audio_file and audio_file.filename:
-                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
-                if ext in m.ALLOWED_AUDIO_EXTENSIONS:
-                    try:
-                        # SECURITY: encrypt audio bytes at rest (authenticated raw).
-                        audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(
-                            m.encrypt_media_bytes(audio_file.read()),
-                            resource_type="raw",
-                            type="authenticated",
-                            folder="echowithin_valentine"
-                        )
-                        audio_public_id = upload_result.get('public_id', '')
-                        valentine_audio = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
-                        valentine_audio_public_id = audio_public_id
-                    except Exception as e:
-                        m.app.logger.error(f"Valentine audio upload failed: {e}")
+        if audio_file and audio_file.filename:
+            ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+            if ext in m.ALLOWED_AUDIO_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt audio bytes at rest (authenticated raw).
+                    audio_file.seek(0)
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(audio_file.read()),
+                        resource_type="raw",
+                        type="authenticated",
+                        folder="echowithin_valentine"
+                    )
+                    audio_public_id = upload_result.get('public_id', '')
+                    valentine_audio = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
+                    valentine_audio_public_id = audio_public_id
+                except Exception as e:
+                    m.app.logger.error(f"Valentine audio upload failed: {e}")
+
+        if document_file and document_file.filename:
+            ext = document_file.filename.rsplit('.', 1)[1].lower() if '.' in document_file.filename else ''
+            if ext in m.ALLOWED_DOCUMENT_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt document bytes at rest (authenticated raw).
+                    document_file.seek(0)
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(document_file.read()),
+                        resource_type="raw",
+                        type="authenticated",
+                        folder="echowithin_valentine"
+                    )
+                    doc_public_id = upload_result.get('public_id', '')
+                    doc_mime = (document_file.mimetype or 'application/octet-stream')[:200]
+                    valentine_document = m.build_media_serve_url(doc_public_id, doc_mime) or upload_result.get('secure_url', '')
+                    valentine_document_public_id = doc_public_id
+                    valentine_document_filename = document_file.filename[:255]
+                except Exception as e:
+                    m.app.logger.error(f"Valentine document upload failed: {e}")
 
     if permissions not in ['view', 'edit']:
         permissions = 'view'
@@ -907,12 +932,17 @@ def api_create_note_share(post_id):
         'surprise_theme': surprise_theme,
         'valentine_photo': m.encrypt_note(valentine_photo, user_id=current_user.id) if valentine_photo else None,
         'valentine_audio': m.encrypt_note(valentine_audio, user_id=current_user.id) if valentine_audio else None,
+        'valentine_document': m.encrypt_note(valentine_document, user_id=current_user.id) if valentine_document else None,
         'valentine_photo_hash': hashlib.sha256(valentine_photo.encode()).hexdigest() if valentine_photo else None,
         'valentine_audio_hash': hashlib.sha256(valentine_audio.encode()).hexdigest() if valentine_audio else None,
+        'valentine_document_hash': hashlib.sha256(valentine_document.encode()).hexdigest() if valentine_document else None,
         'valentine_photo_public_id': valentine_photo_public_id if valentine_photo_public_id else '',
         'valentine_audio_public_id': valentine_audio_public_id if valentine_audio_public_id else '',
+        'valentine_document_public_id': valentine_document_public_id if valentine_document_public_id else '',
         'valentine_photo_mime': (photo_file.mimetype if photo_file and photo_file.mimetype else 'image/jpeg')[:200] if valentine_photo_public_id else '',
         'valentine_audio_mime': (audio_file.mimetype if audio_file and audio_file.mimetype else 'audio/mpeg')[:200] if valentine_audio_public_id else '',
+        'valentine_document_mime': (document_file.mimetype if document_file and document_file.mimetype else 'application/octet-stream')[:200] if valentine_document_public_id else '',
+        'valentine_document_filename': valentine_document_filename,
         'use_typewriter': use_typewriter,
         'auto_approve': auto_approve,
         'access_code_hash': access_code_hash,

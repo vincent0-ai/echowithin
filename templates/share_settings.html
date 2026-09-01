@@ -38,6 +38,7 @@
 
     .link-box input {
         flex: 1;
+        min-width: 0;
         padding: 0.4rem 0.6rem;
         border: 1px solid rgba(255,255,255,0.3);
         border-radius: 6px;
@@ -45,9 +46,13 @@
         background: rgba(255,255,255,0.15);
         color: white;
         box-sizing: border-box;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .link-box button {
+        flex-shrink: 0;
+        white-space: nowrap;
         background: rgba(255,255,255,0.2);
         color: white;
         border: 1px solid rgba(255,255,255,0.3);
@@ -251,36 +256,13 @@
                     <option value="birthday" {{ 'selected' if share.surprise_theme == 'birthday' }}>Birthday Surprise</option>
                     <option value="anniversary" {{ 'selected' if share.surprise_theme == 'anniversary' }}>Anniversary Surprise</option>
                     <option value="celebration" {{ 'selected' if share.surprise_theme == 'celebration' }}>Celebration Surprise</option>
+                    <option value="graduation" {{ 'selected' if share.surprise_theme == 'graduation' }}>Graduation Surprise</option>
+                    <option value="thankyou" {{ 'selected' if share.surprise_theme == 'thankyou' }}>Thank You</option>
+                    <option value="apology" {{ 'selected' if share.surprise_theme == 'apology' }}>Apology</option>
                 </select>
             </div>
 
             <div id="surprise-options" style="display: {{ 'block' if share.surprise_theme and share.surprise_theme != 'none' else 'none' }};">
-                <div class="form-group">
-                    <label>
-                        Personal Photo (Optional)
-                        {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
-                    </label>
-                    <input type="file" name="valentine_photo" accept="image/*" class="form-input"
-                        {% if not user_is_premium %}disabled{% endif %}
-                        style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
-                    {% if valentine_photo %}
-                    <div class="media-preview">Current photo attached</div>
-                    {% endif %}
-                </div>
-
-                <div class="form-group">
-                    <label>
-                        Background Music (Optional)
-                        {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
-                    </label>
-                    <input type="file" name="valentine_audio" accept="audio/*" class="form-input"
-                        {% if not user_is_premium %}disabled{% endif %}
-                        style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
-                    {% if valentine_audio %}
-                    <div class="media-preview">Current audio attached</div>
-                    {% endif %}
-                </div>
-
                 <div class="form-group">
                     <label class="form-checkbox">
                         <input type="checkbox" name="use_typewriter" value="true"
@@ -289,6 +271,49 @@
                     </label>
                     <div class="help-text">Text reveals letter by letter for a personal touch</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Attachments -->
+        <div class="settings-card">
+            <h3>Attachments</h3>
+            <div class="form-group">
+                <label>
+                    Personal Photo (Optional)
+                    {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                </label>
+                <input type="file" name="valentine_photo" accept="image/*" class="form-input"
+                    {% if not user_is_premium %}disabled{% endif %}
+                    style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
+                {% if valentine_photo %}
+                <div class="media-preview">Current photo attached</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Background Music (Optional)
+                    {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                </label>
+                <input type="file" name="valentine_audio" accept="audio/*" class="form-input"
+                    {% if not user_is_premium %}disabled{% endif %}
+                    style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
+                {% if valentine_audio %}
+                <div class="media-preview">Current audio attached</div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Document (Optional)
+                    {% if not user_is_premium %}<span class="premium-tag">Premium</span>{% endif %}
+                </label>
+                <input type="file" name="valentine_document" accept=".pdf,.doc,.docx,.txt,.rtf" class="form-input"
+                    {% if not user_is_premium %}disabled{% endif %}
+                    style="{% if not user_is_premium %}opacity:0.5;cursor:not-allowed;{% endif %}">
+                {% if valentine_document %}
+                <div class="media-preview">Current document attached</div>
+                {% endif %}
             </div>
         </div>
 

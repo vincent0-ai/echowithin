@@ -377,7 +377,8 @@ def cleanup_share_media(share):
     """
     media_hash_fields = {
         'valentine_photo': 'valentine_photo_hash',
-        'valentine_audio': 'valentine_audio_hash'
+        'valentine_audio': 'valentine_audio_hash',
+        'valentine_document': 'valentine_document_hash'
     }
     for field, hash_field in media_hash_fields.items():
         media_hash = share.get(hash_field)
@@ -465,7 +466,8 @@ def cleanup_post_media(post):
     """
     media_hash_fields = {
         'valentine_photo': 'valentine_photo_hash',
-        'valentine_audio': 'valentine_audio_hash'
+        'valentine_audio': 'valentine_audio_hash',
+        'valentine_document': 'valentine_document_hash'
     }
     for field, hash_field in media_hash_fields.items():
         media_hash = post.get(hash_field)

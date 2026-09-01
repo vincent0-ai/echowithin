@@ -39,7 +39,8 @@ GOOGLE_CLIENT_SECRET = get_env_variable('GOOGLE_CLIENT_SECRET')
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv'}
-ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac'}
+ALLOWED_AUDIO_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'aac', 'webm'}
+ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt', 'rtf'}
 MAX_VIDEO_SIZE = 50 * 1024 * 1024  # 50 MB limit for uploaded videos
 MAX_IMAGE_SIZE = 5 * 1024 * 1024   # 5 MB limit per uploaded image
 

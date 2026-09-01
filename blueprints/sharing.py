@@ -171,8 +171,10 @@ def api_create_share(post_id):
         'surprise_theme': surprise_theme,
         'valentine_photo': None,
         'valentine_audio': None,
+        'valentine_document': None,
         'valentine_photo_hash': None,
         'valentine_audio_hash': None,
+        'valentine_document_hash': None,
         'use_typewriter': use_typewriter,
         'auto_approve': auto_approve,
         'unlock_date': None
@@ -399,6 +401,8 @@ def view_shared_note(share_id):
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=_resolve_surprise_media_url(share, 'valentine_photo', 'image/jpeg'),
                            valentine_audio=_resolve_surprise_media_url(share, 'valentine_audio', 'audio/mpeg'),
+                           valentine_document=_resolve_surprise_media_url(share, 'valentine_document', share.get('valentine_document_mime', 'application/octet-stream')),
+                           valentine_document_filename=share.get('valentine_document_filename', ''),
                            use_typewriter=use_typewriter,
                            owner_max_chars=owner_max_chars,
                            note_attachments=note_attachments_list,
@@ -436,7 +440,7 @@ def _resolve_surprise_media_url(share, field_prefix, default_mime):
 @login_required
 @limits(calls=10, period=60)
 def api_upload_note_attachment(share_id):
-    """Upload an image or voice note to a shared collaborative note (premium only)."""
+    """Upload an image, voice note, or document to a shared collaborative note (premium only)."""
     import main as m
     share = m.note_shares_conf.find_one({'share_id': share_id})
     if not share or share.get('permissions') != 'edit':
@@ -486,8 +490,11 @@ def api_upload_note_attachment(share_id):
     elif ext in m.ALLOWED_AUDIO_EXTENSIONS:
         file_type = 'audio'
         max_size = 10 * 1024 * 1024  # 10 MB for audio
+    elif ext in m.ALLOWED_DOCUMENT_EXTENSIONS:
+        file_type = 'document'
+        max_size = 10 * 1024 * 1024  # 10 MB for documents
     else:
-        return jsonify({'error': f'Unsupported file type. Allowed: {", ".join(m.ALLOWED_IMAGE_EXTENSIONS | m.ALLOWED_AUDIO_EXTENSIONS)}'}), 400
+        return jsonify({'error': f'Unsupported file type. Allowed: {", ".join(m.ALLOWED_IMAGE_EXTENSIONS | m.ALLOWED_AUDIO_EXTENSIONS | m.ALLOWED_DOCUMENT_EXTENSIONS)}'}), 400
 
     # Check file size
     try:
@@ -692,12 +699,17 @@ def api_save_shared_note(share_id):
         'surprise_theme': share.get('surprise_theme', 'none'),
         'valentine_photo': m.encrypt_note(m.decrypt_note(share.get('valentine_photo'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_photo') else None,
         'valentine_audio': m.encrypt_note(m.decrypt_note(share.get('valentine_audio'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_audio') else None,
+        'valentine_document': m.encrypt_note(m.decrypt_note(share.get('valentine_document'), user_id=str(share.get('owner_id', ''))), user_id=current_user.id) if share.get('valentine_document') else None,
         'valentine_photo_hash': share.get('valentine_photo_hash'),
         'valentine_audio_hash': share.get('valentine_audio_hash'),
+        'valentine_document_hash': share.get('valentine_document_hash'),
         'valentine_photo_public_id': share.get('valentine_photo_public_id', ''),
         'valentine_audio_public_id': share.get('valentine_audio_public_id', ''),
+        'valentine_document_public_id': share.get('valentine_document_public_id', ''),
         'valentine_photo_mime': share.get('valentine_photo_mime', 'image/jpeg'),
         'valentine_audio_mime': share.get('valentine_audio_mime', 'audio/mpeg'),
+        'valentine_document_mime': share.get('valentine_document_mime', ''),
+        'valentine_document_filename': share.get('valentine_document_filename', ''),
         'use_typewriter': share.get('use_typewriter', False),
         'permissions': share.get('permissions', 'view')
     })
@@ -738,6 +750,8 @@ def view_saved_note(note_id):
                            is_valentine=(surprise_theme != 'none'),
                            valentine_photo=_resolve_surprise_media_url(note, 'valentine_photo', 'image/jpeg'),
                            valentine_audio=_resolve_surprise_media_url(note, 'valentine_audio', 'audio/mpeg'),
+                           valentine_document=_resolve_surprise_media_url(note, 'valentine_document', note.get('valentine_document_mime', 'application/octet-stream')),
+                           valentine_document_filename=note.get('valentine_document_filename', ''),
                            use_typewriter=note.get('use_typewriter', False),
                            note_attachments=[],
                            can_upload_media=False)
@@ -1062,6 +1076,7 @@ def share_settings_page(share_id):
     # Decrypt media URLs for display
     valentine_photo = _resolve_surprise_media_url(share, 'valentine_photo', 'image/jpeg')
     valentine_audio = _resolve_surprise_media_url(share, 'valentine_audio', 'audio/mpeg')
+    valentine_document = _resolve_surprise_media_url(share, 'valentine_document', share.get('valentine_document_mime', 'application/octet-stream'))
 
     share_url = url_for('sharing.view_shared_note', share_id=share_id, _external=True)
 
@@ -1082,6 +1097,7 @@ def share_settings_page(share_id):
                            share_url=share_url,
                            valentine_photo=valentine_photo,
                            valentine_audio=valentine_audio,
+                           valentine_document=valentine_document,
                            unlock_date_str=unlock_date_str,
                            user_is_premium=user_is_premium)
 
@@ -1154,68 +1170,94 @@ def api_update_share_settings(share_id):
         update_fields['unlock_date'] = None
 
     # Handle media uploads (premium gated)
-    if surprise_theme != 'none':
-        photo_file = request.files.get('valentine_photo')
-        audio_file = request.files.get('valentine_audio')
+    photo_file = request.files.get('valentine_photo')
+    audio_file = request.files.get('valentine_audio')
+    document_file = request.files.get('valentine_document')
 
-        has_media = bool((photo_file and photo_file.filename) or (audio_file and audio_file.filename))
-        if has_media and not m.is_premium(user_doc):
-            flash('Uploading photos and music is a Premium feature.', 'warning')
-        else:
-            if photo_file and photo_file.filename:
-                ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
-                if ext in m.ALLOWED_IMAGE_EXTENSIONS:
-                    try:
-                        # SECURITY: encrypt bytes at rest before uploading to
-                        # Cloudinary (authenticated raw type, same as note
-                        # attachments), not a public plaintext image.
-                        photo_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(
-                            m.encrypt_media_bytes(photo_file.read()),
-                            folder="echowithin_valentine",
-                            resource_type="raw",
-                            type="authenticated"
-                        )
-                        photo_public_id = upload_result.get('public_id', '')
-                        photo_url = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
-                        update_fields['valentine_photo'] = m.encrypt_note(photo_url, user_id=current_user.id)
-                        update_fields['valentine_photo_hash'] = hashlib.sha256(photo_url.encode()).hexdigest()
-                        update_fields['valentine_photo_public_id'] = photo_public_id
-                        update_fields['valentine_photo_mime'] = (photo_file.mimetype or 'image/jpeg')[:200]
-                        update_fields['valentine_photo_encrypted'] = True
-                    except Exception as e:
-                        current_app.logger.error(f"Share settings photo upload failed: {e}")
+    has_media = bool((photo_file and photo_file.filename) or (audio_file and audio_file.filename) or (document_file and document_file.filename))
+    if has_media and not m.is_premium(user_doc):
+        flash('Uploading attachments is a Premium feature.', 'warning')
+    else:
+        if photo_file and photo_file.filename:
+            ext = photo_file.filename.rsplit('.', 1)[1].lower() if '.' in photo_file.filename else ''
+            if ext in m.ALLOWED_IMAGE_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt bytes at rest before uploading to
+                    # Cloudinary (authenticated raw type, same as note
+                    # attachments), not a public plaintext image.
+                    photo_file.seek(0)
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(photo_file.read()),
+                        folder="echowithin_valentine",
+                        resource_type="raw",
+                        type="authenticated"
+                    )
+                    photo_public_id = upload_result.get('public_id', '')
+                    photo_url = m.build_media_serve_url(photo_public_id, 'image/jpeg') or upload_result.get('secure_url', '')
+                    update_fields['valentine_photo'] = m.encrypt_note(photo_url, user_id=current_user.id)
+                    update_fields['valentine_photo_hash'] = hashlib.sha256(photo_url.encode()).hexdigest()
+                    update_fields['valentine_photo_public_id'] = photo_public_id
+                    update_fields['valentine_photo_mime'] = (photo_file.mimetype or 'image/jpeg')[:200]
+                    update_fields['valentine_photo_encrypted'] = True
+                except Exception as e:
+                    current_app.logger.error(f"Share settings photo upload failed: {e}")
 
-            if audio_file and audio_file.filename:
-                ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
-                if ext in m.ALLOWED_AUDIO_EXTENSIONS:
-                    try:
-                        # SECURITY: encrypt audio bytes at rest before upload.
-                        audio_file.seek(0)
-                        upload_result = m.cloudinary.uploader.upload(
-                            m.encrypt_media_bytes(audio_file.read()),
-                            resource_type="raw",
-                            type="authenticated",
-                            folder="echowithin_valentine"
-                        )
-                        audio_public_id = upload_result.get('public_id', '')
-                        audio_url = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
-                        update_fields['valentine_audio'] = m.encrypt_note(audio_url, user_id=current_user.id)
-                        update_fields['valentine_audio_hash'] = hashlib.sha256(audio_url.encode()).hexdigest()
-                        update_fields['valentine_audio_public_id'] = audio_public_id
-                        update_fields['valentine_audio_mime'] = (audio_file.mimetype or 'audio/mpeg')[:200]
-                        update_fields['valentine_audio_encrypted'] = True
-                    except Exception as e:
-                        current_app.logger.error(f"Share settings audio upload failed: {e}")
+        if audio_file and audio_file.filename:
+            ext = audio_file.filename.rsplit('.', 1)[1].lower() if '.' in audio_file.filename else ''
+            if ext in m.ALLOWED_AUDIO_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt audio bytes at rest before upload.
+                    audio_file.seek(0)
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(audio_file.read()),
+                        resource_type="raw",
+                        type="authenticated",
+                        folder="echowithin_valentine"
+                    )
+                    audio_public_id = upload_result.get('public_id', '')
+                    audio_url = m.build_media_serve_url(audio_public_id, 'audio/mpeg') or upload_result.get('secure_url', '')
+                    update_fields['valentine_audio'] = m.encrypt_note(audio_url, user_id=current_user.id)
+                    update_fields['valentine_audio_hash'] = hashlib.sha256(audio_url.encode()).hexdigest()
+                    update_fields['valentine_audio_public_id'] = audio_public_id
+                    update_fields['valentine_audio_mime'] = (audio_file.mimetype or 'audio/mpeg')[:200]
+                    update_fields['valentine_audio_encrypted'] = True
+                except Exception as e:
+                    current_app.logger.error(f"Share settings audio upload failed: {e}")
+
+        if document_file and document_file.filename:
+            ext = document_file.filename.rsplit('.', 1)[1].lower() if '.' in document_file.filename else ''
+            if ext in m.ALLOWED_DOCUMENT_EXTENSIONS:
+                try:
+                    # SECURITY: encrypt document bytes at rest before upload.
+                    document_file.seek(0)
+                    doc_mime = (document_file.mimetype or 'application/octet-stream')[:200]
+                    upload_result = m.cloudinary.uploader.upload(
+                        m.encrypt_media_bytes(document_file.read()),
+                        resource_type="raw",
+                        type="authenticated",
+                        folder="echowithin_valentine"
+                    )
+                    doc_public_id = upload_result.get('public_id', '')
+                    doc_url = m.build_media_serve_url(doc_public_id, doc_mime) or upload_result.get('secure_url', '')
+                    update_fields['valentine_document'] = m.encrypt_note(doc_url, user_id=current_user.id)
+                    update_fields['valentine_document_hash'] = hashlib.sha256(doc_url.encode()).hexdigest()
+                    update_fields['valentine_document_public_id'] = doc_public_id
+                    update_fields['valentine_document_mime'] = doc_mime
+                    update_fields['valentine_document_encrypted'] = True
+                    update_fields['valentine_document_filename'] = document_file.filename[:255]
+                except Exception as e:
+                    current_app.logger.error(f"Share settings document upload failed: {e}")
 
     # Clear media if switching back to standard
     if surprise_theme == 'none':
-        if share.get('valentine_photo') or share.get('valentine_audio'):
+        if share.get('valentine_photo') or share.get('valentine_audio') or share.get('valentine_document'):
             m.cleanup_share_media(share)
         update_fields['valentine_photo'] = None
         update_fields['valentine_audio'] = None
+        update_fields['valentine_document'] = None
         update_fields['valentine_photo_hash'] = None
         update_fields['valentine_audio_hash'] = None
+        update_fields['valentine_document_hash'] = None
         update_fields['use_typewriter'] = False
 
     m.note_shares_conf.update_one({'_id': share['_id']}, {'$set': update_fields})

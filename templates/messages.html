@@ -2086,6 +2086,10 @@
 
         function formatMessageText(text) {
             if (!text) return '';
+            // Strip any pre-existing HTML tags from old messages that were
+            // stored with HTML (e.g. <a href="...">). This prevents
+            // double-escaping that makes raw HTML visible as text.
+            text = text.replace(/<[^>]*>/g, '');
             // Extract URLs BEFORE escaping so HTML entities don't corrupt URLs
             const urlRegex = /(https?:\/\/[^\s]+)/g;
             const urls = [];
@@ -3884,9 +3888,29 @@
                     } else {
                         wrapper.style.height = vp.height + 'px';
                     }
-                    if (bottomWrapper && !_isIOS) {
-                        bottomWrapper.style.position = 'relative';
-                        bottomWrapper.style.bottom = '0';
+                    // Reposition bottom wrapper for both iOS and Android
+                    if (bottomWrapper) {
+                        if (_isIOS) {
+                            // On iOS, use fixed positioning anchored to the visual viewport
+                            // bottom so the input bar stays above the keyboard (iPhone XR fix)
+                            var keyboardHeight = window.innerHeight - vp.height;
+                            if (keyboardHeight > 50) {
+                                bottomWrapper.style.position = 'fixed';
+                                bottomWrapper.style.bottom = keyboardHeight + 'px';
+                                bottomWrapper.style.left = '0';
+                                bottomWrapper.style.right = '0';
+                                bottomWrapper.style.zIndex = '100';
+                            } else {
+                                bottomWrapper.style.position = '';
+                                bottomWrapper.style.bottom = '';
+                                bottomWrapper.style.left = '';
+                                bottomWrapper.style.right = '';
+                                bottomWrapper.style.zIndex = '';
+                            }
+                        } else {
+                            bottomWrapper.style.position = 'relative';
+                            bottomWrapper.style.bottom = '0';
+                        }
                     }
                     // Scroll to bottom when keyboard is open and input is focused
                     if (document.activeElement && document.activeElement.id === 'message-input') {
@@ -3900,9 +3924,16 @@
                     document.body.style.height = '';
                     document.documentElement.style.height = '';
                     window.scrollTo(0, 0);
-                    // On iOS, also reset the wrapper height to prevent stale sizing
-                    if (_isIOS && wrapper) {
-                        wrapper.style.height = '';
+                    // On iOS, also reset the wrapper height and bottom bar positioning
+                    if (_isIOS) {
+                        if (wrapper) wrapper.style.height = '';
+                        if (bottomWrapper) {
+                            bottomWrapper.style.position = '';
+                            bottomWrapper.style.bottom = '';
+                            bottomWrapper.style.left = '';
+                            bottomWrapper.style.right = '';
+                            bottomWrapper.style.zIndex = '';
+                        }
                     }
                 }
                 _lastVpHeight = vp.height;

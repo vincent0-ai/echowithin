@@ -1792,6 +1792,18 @@
 
     <!-- Active Bonds -->
     {% if bonds %}
+    <script nonce="{{ csp_nonce }}">
+        // Early definition of switchBond so tab clicks never encounter ReferenceError
+        function switchBond(bondId, btn) {
+            var allCards = document.querySelectorAll('.bonds-section > .bond-card');
+            allCards.forEach(function(c) { c.style.display = 'none'; });
+            var target = document.getElementById('bond-' + bondId);
+            if (target) target.style.display = 'block';
+            document.querySelectorAll('.bond-tab').forEach(function(t) { t.classList.remove('active'); });
+            if (btn) btn.classList.add('active');
+        }
+        window.switchBond = switchBond;
+    </script>
     <div class="bonds-section">
         <div class="bonds-section-title">Your Bonds</div>
         {% if bonds|length > 1 %}

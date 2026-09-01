@@ -124,6 +124,12 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Encrypted authenticated media streams: let browser handle natively via network
+  // (prevents service worker buffering/cache corruption on binary media streams)
+  if (url.pathname.startsWith('/media/')) {
+    return;
+  }
+
   // API requests: Network-first with cache fallback for notes and bonds data
   // This enables full offline browsing of notes and bonds even when the network is unavailable
   if (url.origin === location.origin && (url.pathname.startsWith('/api/notes') || url.pathname.startsWith('/api/v1/notes') || url.pathname.startsWith('/api/bonds'))) {

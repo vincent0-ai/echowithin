@@ -248,8 +248,6 @@
         padding: env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);
         box-sizing: border-box;
         -webkit-overflow-scrolling: touch;
-        /* Force composited layer sync on iOS: backdrop-filter + fixed positioning
-           can desync the render layer from the hit-test layer. */
         -webkit-transform: translateZ(0);
         transform: translateZ(0);
         -webkit-backface-visibility: hidden;
@@ -297,6 +295,253 @@
         justify-content: space-between;
         background: var(--card-bg);
         overflow-y: auto;
+    }
+
+    /* On This Day / Flashback Card */
+    .on-this-day-banner {
+        background: var(--surface-bg);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--primary-color);
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        margin-bottom: 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+        box-shadow: 0 2px 8px var(--shadow-color);
+    }
+    .on-this-day-banner .otd-photos {
+        display: flex;
+        gap: 0.4rem;
+        overflow-x: auto;
+        padding: 2px 0;
+    }
+    .on-this-day-banner .otd-thumb {
+        width: 48px;
+        height: 48px;
+        border-radius: 6px;
+        object-fit: cover;
+        cursor: pointer;
+        border: 1px solid var(--border-color);
+        transition: transform 0.15s ease;
+        flex-shrink: 0;
+    }
+    .on-this-day-banner .otd-thumb:hover {
+        transform: scale(1.08);
+        border-color: var(--primary-color);
+    }
+
+    /* View Switcher Controls */
+    .album-view-btn {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-dark-color);
+        font-size: 0.75rem;
+        padding: 0.25rem 0.55rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: all 0.15s ease;
+    }
+    .album-view-btn:hover {
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+    .album-view-btn.active {
+        background: var(--primary-color);
+        color: #ffffff;
+        border-color: var(--primary-color);
+    }
+
+    /* Polaroid Scrapbook Mode */
+    .album-polaroid-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+        gap: 1.2rem;
+        padding: 0.5rem 0;
+    }
+    .album-polaroid-card {
+        background: #ffffff;
+        padding: 0.6rem 0.6rem 1rem 0.6rem;
+        border-radius: 4px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        position: relative;
+        text-align: center;
+        color: #2b1810;
+    }
+    .album-polaroid-card:nth-child(even) {
+        transform: rotate(1.2deg);
+    }
+    .album-polaroid-card:nth-child(odd) {
+        transform: rotate(-1.2deg);
+    }
+    .album-polaroid-card:nth-child(3n) {
+        transform: rotate(0.8deg);
+    }
+    .album-polaroid-card:hover {
+        transform: scale(1.04) rotate(0deg) !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+        z-index: 5;
+    }
+    .album-polaroid-card img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 2px;
+        display: block;
+        background: #eee;
+    }
+    .album-polaroid-card .polaroid-caption {
+        font-family: 'Segoe Print', 'Comic Sans MS', 'Caveat', cursive, sans-serif;
+        font-size: 0.85rem;
+        margin-top: 0.6rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #3e2723;
+    }
+    .album-polaroid-card .polaroid-date {
+        font-size: 0.68rem;
+        color: #795548;
+        margin-top: 2px;
+    }
+
+    /* Timeline / Story Mode */
+    .album-timeline-container {
+        position: relative;
+        padding-left: 1.2rem;
+        border-left: 2px solid var(--border-color);
+        margin-left: 0.5rem;
+    }
+    .album-timeline-group {
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+    .album-timeline-group::before {
+        content: '';
+        position: absolute;
+        left: -1.6rem;
+        top: 4px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        border: 2px solid var(--card-bg);
+    }
+    .album-timeline-header {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--primary-dark-color);
+        margin-bottom: 0.6rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .album-timeline-header span {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    /* Slideshow Fullscreen Overlay */
+    .slideshow-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        background: #000000;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+    }
+    .slideshow-img-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+    .slideshow-img {
+        max-width: 95vw;
+        max-height: 80vh;
+        object-fit: contain;
+        transition: opacity 0.6s ease-in-out;
+        opacity: 1;
+    }
+    .slideshow-img.fading {
+        opacity: 0;
+    }
+    .slideshow-bar {
+        width: 100%;
+        background: rgba(18, 18, 18, 0.85);
+        backdrop-filter: blur(10px);
+        padding: 0.8rem 1.2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #ffffff;
+        box-sizing: border-box;
+    }
+    .slideshow-ctrl-btn {
+        background: rgba(255, 255, 255, 0.15);
+        border: none;
+        color: #ffffff;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+    .slideshow-ctrl-btn:hover {
+        background: var(--primary-color);
+    }
+
+    /* Reaction Bar in Lightbox */
+    .photo-reaction-bar {
+        display: flex;
+        gap: 0.35rem;
+        margin-top: 0.6rem;
+        flex-wrap: wrap;
+    }
+    .photo-reaction-btn {
+        background: var(--surface-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        transition: all 0.15s ease;
+        color: var(--text-dark-color);
+    }
+    .photo-reaction-btn:hover {
+        border-color: var(--primary-color);
+        transform: scale(1.05);
+    }
+    .photo-reaction-btn.active {
+        background: rgba(var(--primary-color-rgb, 142, 68, 173), 0.15);
+        border-color: var(--primary-color);
+        font-weight: 600;
     }
     .lightbox-nav-btn {
         position: absolute;
@@ -1724,32 +1969,59 @@
                         <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Shared Album</strong>
                         <span id="album-count-{{ bond.id }}" style="font-size: 0.75rem; color: var(--text-muted); background: var(--surface-bg); border: 1px solid var(--border-color); padding: 0.1rem 0.4rem; border-radius: 12px;">0 photos</span>
                     </div>
-                    <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.7rem; border-radius: 6px; touch-action: manipulation;" onclick="openAlbumUploadModal('{{ bond.id }}')">+ Add Photos</button>
+                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <button type="button" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; touch-action: manipulation;" onclick="startAlbumSlideshow('{{ bond.id }}')">
+                            <i class="fas fa-play"></i> Slideshow
+                        </button>
+                        <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.7rem; border-radius: 6px; touch-action: manipulation;" onclick="openAlbumUploadModal('{{ bond.id }}')">+ Add Photos</button>
+                    </div>
                 </div>
 
-                <!-- Album Toolbar: Category Chips & Sort Selector -->
-                <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.4rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
-                    <!-- Category Filter Chips -->
-                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;" id="album-cat-chips-{{ bond.id }}">
-                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)" style="touch-action: manipulation;">All</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)" style="touch-action: manipulation;">Memories</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)" style="touch-action: manipulation;">Milestones</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)" style="touch-action: manipulation;">Fun</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)" style="touch-action: manipulation;">Travel</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)" style="touch-action: manipulation;">Special</button>
-                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)" style="touch-action: manipulation;">Other</button>
+                <!-- "On This Day" / Flashback Banner (populated dynamically if memories exist) -->
+                <div id="album-on-this-day-{{ bond.id }}" style="display: none;"></div>
+
+                <!-- Album Toolbar: View Switcher, Category Chips & Sort Selector -->
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.5rem 0.6rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px;">
+                    <!-- Top Row: View Mode Switcher + Sort Selector -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="display: flex; gap: 0.3rem; align-items: center;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">View:</span>
+                            <button type="button" class="album-view-btn active" id="view-grid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'grid')" title="Compact Grid">
+                                <i class="fas fa-th-large"></i> Grid
+                            </button>
+                            <button type="button" class="album-view-btn" id="view-timeline-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'timeline')" title="Story / Timeline">
+                                <i class="fas fa-stream"></i> Timeline
+                            </button>
+                            <button type="button" class="album-view-btn" id="view-polaroid-btn-{{ bond.id }}" onclick="setAlbumViewMode('{{ bond.id }}', 'polaroid')" title="Polaroid Scrapbook">
+                                <i class="fas fa-images"></i> Polaroid
+                            </button>
+                        </div>
+
+                        <!-- Sort Arrangement Selector -->
+                        <div style="display: flex; align-items: center; gap: 0.4rem;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Sort:</label>
+                            <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
+                                <option value="date_desc">Date Taken (Newest)</option>
+                                <option value="date_asc">Date Taken (Oldest)</option>
+                                <option value="uploaded_desc">Latest Uploaded</option>
+                                <option value="uploaded_asc">Oldest Uploaded</option>
+                                <option value="pinned">Pinned First</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <!-- Sort Arrangement Selector -->
-                    <div style="display: flex; align-items: center; gap: 0.4rem;">
-                        <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Sort:</label>
-                        <select id="album-sort-{{ bond.id }}" onchange="changeAlbumSort('{{ bond.id }}', this.value)" style="font-size: 0.75rem; padding: 0.2rem 0.4rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; touch-action: manipulation;">
-                            <option value="date_desc">Date Taken (Newest)</option>
-                            <option value="date_asc">Date Taken (Oldest)</option>
-                            <option value="uploaded_desc">Latest Uploaded</option>
-                            <option value="uploaded_asc">Oldest Uploaded</option>
-                            <option value="pinned">Pinned First</option>
-                        </select>
+                    <!-- Bottom Row: Category Filter Chips -->
+                    <div style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;" id="album-cat-chips-{{ bond.id }}">
+                        <button type="button" class="album-chip active" onclick="setAlbumCategory('{{ bond.id }}', 'all', this)" style="touch-action: manipulation;">All</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'memory', this)" style="touch-action: manipulation;">📸 Memories</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'milestone', this)" style="touch-action: manipulation;">🏆 Milestones</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'fun', this)" style="touch-action: manipulation;">😄 Fun</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'travel', this)" style="touch-action: manipulation;">✈️ Travel</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'special', this)" style="touch-action: manipulation;">✨ Special</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'food', this)" style="touch-action: manipulation;">🍴 Food</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'pets', this)" style="touch-action: manipulation;">🐾 Pets</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'jokes', this)" style="touch-action: manipulation;">💬 Inside Jokes</button>
+                        <button type="button" class="album-chip" onclick="setAlbumCategory('{{ bond.id }}', 'other', this)" style="touch-action: manipulation;">Other</button>
                     </div>
                 </div>
 
@@ -2085,11 +2357,14 @@
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
                     <select id="album-upload-cat" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
-                        <option value="memory">Memory</option>
-                        <option value="milestone">Milestone</option>
-                        <option value="fun">Fun</option>
-                        <option value="travel">Travel</option>
-                        <option value="special">Special</option>
+                        <option value="memory">📸 Memory</option>
+                        <option value="milestone">🏆 Milestone</option>
+                        <option value="fun">😄 Fun</option>
+                        <option value="travel">✈️ Travel</option>
+                        <option value="special">✨ Special</option>
+                        <option value="food">🍴 Food</option>
+                        <option value="pets">🐾 Pets</option>
+                        <option value="jokes">💬 Inside Jokes</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
@@ -2135,10 +2410,23 @@
 
                 <!-- Title & Description -->
                 <h3 id="lightbox-title" style="margin: 0 0 0.4rem 0; font-size: 1.1rem; color: var(--text-dark-color); word-break: break-word;">Untitled Memory</h3>
-                <p id="lightbox-desc" style="margin: 0 0 1rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; word-break: break-word; white-space: pre-line;"></p>
+                <p id="lightbox-desc" style="margin: 0 0 0.6rem 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; word-break: break-word; white-space: pre-line;"></p>
+
+                <!-- Emoji Reactions Bar -->
+                <div style="margin-top: 0.4rem; margin-bottom: 0.6rem;">
+                    <div style="font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.2rem;">Reactions</div>
+                    <div class="photo-reaction-bar" id="lightbox-reaction-bar">
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('❤️')">❤️ <span id="react-count-❤️"></span></button>
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('🥰')">🥰 <span id="react-count-🥰"></span></button>
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('😂')">😂 <span id="react-count-😂"></span></button>
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('🔥')">🔥 <span id="react-count-🔥"></span></button>
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('🥺')">🥺 <span id="react-count-🥺"></span></button>
+                        <button type="button" class="photo-reaction-btn" onclick="reactToCurrentPhoto('✨')">✨ <span id="react-count-✨"></span></button>
+                    </div>
+                </div>
 
                 <!-- Metadata List -->
-                <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 0.8rem; margin-top: 0.8rem;">
+                <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 0.8rem; margin-top: 0.4rem;">
                     <div style="margin-bottom: 0.3rem;"><strong style="color: var(--text-dark-color);">Date Taken:</strong> <span id="lightbox-date-taken">-</span></div>
                     <div style="margin-bottom: 0.3rem;"><strong style="color: var(--text-dark-color);">Uploaded By:</strong> <span id="lightbox-uploaded-by">-</span></div>
                     <div><strong style="color: var(--text-dark-color);">Uploaded On:</strong> <span id="lightbox-uploaded-at">-</span></div>
@@ -2157,6 +2445,41 @@
                     <i class="fas fa-trash"></i> Delete
                 </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Memory Lane Slideshow Modal -->
+<div id="bond-album-slideshow-modal" class="slideshow-backdrop" style="display:none;">
+    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); box-sizing: border-box;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <i class="fas fa-film" style="color: var(--primary-color);"></i>
+            <span style="font-weight: 600; font-size: 0.95rem; color: #fff;">Memory Lane Slideshow</span>
+            <span id="slideshow-counter" style="font-size: 0.8rem; color: #aaa; margin-left: 0.4rem;"></span>
+        </div>
+        <button type="button" onclick="stopAlbumSlideshow()" style="background: none; border: none; color: #fff; font-size: 1.6rem; cursor: pointer; line-height: 1;">&times;</button>
+    </div>
+
+    <div class="slideshow-img-container">
+        <img id="slideshow-current-img" class="slideshow-img" src="" alt="Slideshow Memory">
+    </div>
+
+    <div class="slideshow-bar">
+        <div style="flex: 1; min-width: 0; padding-right: 1rem;">
+            <div id="slideshow-title" style="font-size: 1.05rem; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+            <div id="slideshow-meta" style="font-size: 0.78rem; color: #bbb; margin-top: 2px;"></div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <button type="button" class="slideshow-ctrl-btn" onclick="prevSlideshowSlide()" title="Previous Memory">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button type="button" class="slideshow-ctrl-btn" id="slideshow-play-pause-btn" onclick="toggleSlideshowPlayback()" title="Pause / Play">
+                <i class="fas fa-pause"></i>
+            </button>
+            <button type="button" class="slideshow-ctrl-btn" onclick="nextSlideshowSlide()" title="Next Memory">
+                <i class="fas fa-chevron-right"></i>
+            </button>
         </div>
     </div>
 </div>
@@ -2187,11 +2510,14 @@
                 <div>
                     <label style="display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-dark-color); margin-bottom: 0.25rem;">Category</label>
                     <select id="edit-photo-cat" style="width: 100%; font-size: 0.85rem; padding: 0.45rem 0.6rem; border-radius: 6px; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-dark-color); cursor: pointer; box-sizing: border-box;">
-                        <option value="memory">Memory</option>
-                        <option value="milestone">Milestone</option>
-                        <option value="fun">Fun</option>
-                        <option value="travel">Travel</option>
-                        <option value="special">Special</option>
+                        <option value="memory">📸 Memory</option>
+                        <option value="milestone">🏆 Milestone</option>
+                        <option value="fun">😄 Fun</option>
+                        <option value="travel">✈️ Travel</option>
+                        <option value="special">✨ Special</option>
+                        <option value="food">🍴 Food</option>
+                        <option value="pets">🐾 Pets</option>
+                        <option value="jokes">💬 Inside Jokes</option>
                         <option value="other">Other</option>
                     </select>
                 </div>
@@ -3792,29 +4118,196 @@
     // ===================================================================
     // Shared Album & Photo Lightbox Functions
     // ===================================================================
-    var bondAlbumState = {}; // Stores { category: 'all', sort: 'date_desc', photos: [] } per bondId
+    var bondAlbumState = {}; // Stores { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] } per bondId
     var currentLightboxState = { bondId: null, index: -1 };
+    var slideshowState = { bondId: null, index: 0, timer: null, isPlaying: false };
 
-    function renderAlbumGridHtml(bondId, photos) {
+    var categoryIcons = {
+        'memory': '📸',
+        'milestone': '🏆',
+        'fun': '😄',
+        'travel': '✈️',
+        'special': '✨',
+        'food': '🍴',
+        'pets': '🐾',
+        'jokes': '💬',
+        'other': '📁'
+    };
+
+    function setAlbumViewMode(bondId, mode) {
+        if (!bondAlbumState[bondId]) bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] };
+        bondAlbumState[bondId].viewMode = mode;
+
+        ['grid', 'timeline', 'polaroid'].forEach(function(m) {
+            var btn = document.getElementById('view-' + m + '-btn-' + bondId);
+            if (btn) {
+                if (m === mode) btn.classList.add('active');
+                else btn.classList.remove('active');
+            }
+        });
+
+        var container = document.getElementById('album-grid-' + bondId);
+        if (container && bondAlbumState[bondId].photos) {
+            container.innerHTML = renderAlbumContentHtml(bondId, bondAlbumState[bondId].photos, mode);
+        }
+    }
+
+    function checkOnThisDayMemories(bondId, photos) {
+        var banner = document.getElementById('album-on-this-day-' + bondId);
+        if (!banner) return;
+        if (!photos || photos.length === 0) {
+            banner.style.display = 'none';
+            return;
+        }
+
+        var today = new Date();
+        var todayMonth = today.getMonth();
+        var todayDate = today.getDate();
+        var todayYear = today.getFullYear();
+
+        var matches = photos.filter(function(p) {
+            if (!p.date_taken) return false;
+            var dt = window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken);
+            if (!dt || isNaN(dt)) return false;
+            // Match same month & day but different year or same year previous month
+            return dt.getMonth() === todayMonth && dt.getDate() === todayDate && dt.getFullYear() < todayYear;
+        });
+
+        if (matches.length === 0) {
+            banner.style.display = 'none';
+            return;
+        }
+
+        var yearsAgo = todayYear - (new Date(matches[0].date_taken).getFullYear());
+        var yearText = yearsAgo === 1 ? '1 year ago today' : yearsAgo + ' years ago today';
+
+        var html = '<div class="on-this-day-banner">'
+            + '<div style="flex:1; min-width:0;">'
+            + '<div style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; font-weight:700; color:var(--primary-dark-color);">'
+            + '<i class="fas fa-history" style="color:var(--primary-color);"></i> On This Day <span style="font-size:0.75rem; font-weight:500; color:var(--text-muted);">(' + yearText + ')</span>'
+            + '</div>'
+            + '<div style="font-size:0.72rem; color:var(--text-secondary); margin-top:2px;">You captured ' + matches.length + ' memory on this date!</div>'
+            + '</div>'
+            + '<div class="otd-photos">';
+
+        matches.forEach(function(m) {
+            var fullIdx = photos.findIndex(function(x) { return x.id === m.id; });
+            html += '<img src="' + m.url + '" class="otd-thumb" alt="' + escHtml(m.title || 'Memory') + '" title="' + escHtml(m.title || 'Memory') + '" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + (fullIdx >= 0 ? fullIdx : 0) + ')">';
+        });
+
+        html += '</div></div>';
+        banner.innerHTML = html;
+        banner.style.display = 'block';
+    }
+
+    function renderAlbumContentHtml(bondId, photos, mode) {
         if (!photos || photos.length === 0) {
             return '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
         }
+
+        if (mode === 'polaroid') {
+            return renderPolaroidViewHtml(bondId, photos);
+        } else if (mode === 'timeline') {
+            return renderTimelineViewHtml(bondId, photos);
+        }
+        return renderAlbumGridHtml(bondId, photos);
+    }
+
+    function renderAlbumGridHtml(bondId, photos) {
         var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:0.6rem;">';
         photos.forEach(function(p, idx) {
             var title = p.title ? escHtml(p.title) : 'Untitled';
             var dateObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
             var dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+            var catIcon = categoryIcons[p.category] || '📁';
             var catLabel = p.category ? (p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Memory';
+
+            var reactBadges = '';
+            if (p.reactions) {
+                Object.keys(p.reactions).forEach(function(em) {
+                    if (p.reactions[em] > 0) reactBadges += '<span style="font-size:0.7rem;margin-right:2px;">' + em + '</span>';
+                });
+            }
 
             html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
             if (p.is_pinned) {
                 html += '<div class="album-pin-badge" title="Pinned Memory"><i class="fas fa-thumbtack"></i></div>';
             }
-            html += '<div class="album-cat-badge">' + escHtml(catLabel) + '</div>';
+            html += '<div class="album-cat-badge">' + catIcon + ' ' + escHtml(catLabel) + '</div>';
             html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy">';
             html += '<div style="padding:0.4rem 0.5rem;">';
-            html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+            html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+            html += '<div style="font-size:0.75rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + title + '</div>';
+            if (reactBadges) html += '<div style="margin-left:4px;flex-shrink:0;">' + reactBadges + '</div>';
+            html += '</div>';
             html += '<div style="font-size:0.65rem;color:var(--text-muted);margin-top:2px;">' + (dateStr ? dateStr : 'No date') + ' · ' + escHtml(p.uploaded_by_name) + '</div>';
+            html += '</div></div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function renderPolaroidViewHtml(bondId, photos) {
+        var html = '<div class="album-polaroid-grid">';
+        photos.forEach(function(p, idx) {
+            var title = p.title ? escHtml(p.title) : 'Cherished Memory';
+            var dateObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+            var dateStr = dateObj && !isNaN(dateObj) ? dateObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+            var reactBadges = '';
+            if (p.reactions) {
+                Object.keys(p.reactions).forEach(function(em) {
+                    if (p.reactions[em] > 0) reactBadges += '<span style="font-size:0.75rem;">' + em + '</span>';
+                });
+            }
+
+            html += '<div class="album-polaroid-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
+            if (p.is_pinned) {
+                html += '<div style="position:absolute;top:2px;right:6px;color:#c62828;font-size:1.1rem;"><i class="fas fa-thumbtack"></i></div>';
+            }
+            html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy">';
+            html += '<div class="polaroid-caption">' + title + '</div>';
+            html += '<div class="polaroid-date">' + (dateStr ? dateStr : 'A special moment') + (reactBadges ? ' · ' + reactBadges : '') + '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function renderTimelineViewHtml(bondId, photos) {
+        // Group photos by Month Year
+        var groups = {};
+        photos.forEach(function(p, idx) {
+            var dt = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : (p.uploaded_at ? new Date(p.uploaded_at) : new Date());
+            var groupKey = dt && !isNaN(dt) ? dt.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : 'Unknown Date';
+            if (!groups[groupKey]) groups[groupKey] = [];
+            groups[groupKey].push({ photo: p, index: idx });
+        });
+
+        var html = '<div class="album-timeline-container">';
+        Object.keys(groups).forEach(function(grpName) {
+            var items = groups[grpName];
+            html += '<div class="album-timeline-group">'
+                + '<div class="album-timeline-header">' + grpName + ' <span>(' + items.length + ' memory' + (items.length > 1 ? 's' : '') + ')</span></div>'
+                + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0.5rem;">';
+
+            items.forEach(function(item) {
+                var p = item.photo;
+                var idx = item.index;
+                var title = p.title ? escHtml(p.title) : 'Untitled';
+                var dtObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+                var dayStr = dtObj && !isNaN(dtObj) ? dtObj.toLocaleDateString(undefined, { day: 'numeric', weekday: 'short' }) : '';
+                var catIcon = categoryIcons[p.category] || '📸';
+
+                html += '<div class="album-photo-card" onclick="openBondPhotoLightbox(\'' + bondId + '\',' + idx + ')">';
+                if (p.is_pinned) html += '<div class="album-pin-badge"><i class="fas fa-thumbtack"></i></div>';
+                html += '<img src="' + p.url + '" alt="' + title + '" loading="lazy" style="height:105px;">';
+                html += '<div style="padding:0.35rem 0.45rem;">';
+                html += '<div style="font-size:0.72rem;font-weight:600;color:var(--text-dark-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+                html += '<div style="font-size:0.62rem;color:var(--text-muted);">' + catIcon + ' ' + (dayStr || 'Photo') + '</div>';
+                html += '</div></div>';
+            });
+
             html += '</div></div>';
         });
         html += '</div>';
@@ -3826,13 +4319,14 @@
         if (!container) return;
 
         if (!bondAlbumState[bondId]) {
-            bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', photos: [] };
+            bondAlbumState[bondId] = { category: 'all', sort: 'date_desc', viewMode: 'grid', photos: [] };
         }
         if (catOverride !== undefined) bondAlbumState[bondId].category = catOverride;
         if (sortOverride !== undefined) bondAlbumState[bondId].sort = sortOverride;
 
         var cat = bondAlbumState[bondId].category;
         var sort = bondAlbumState[bondId].sort;
+        var viewMode = bondAlbumState[bondId].viewMode || 'grid';
         var cacheKey = bondId + ':album:' + cat + ':' + sort;
 
         container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
@@ -3850,6 +4344,7 @@
                     var countEl = document.getElementById('album-count-' + bondId);
                     if (countEl) countEl.textContent = '0 photos';
                     el.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:1.2rem;background:var(--surface-bg);border-radius:8px;border:1px dashed var(--border-color);">No photos found in this category. Click "+ Add Photos" to capture your first memory!</div>';
+                    checkOnThisDayMemories(bondId, []);
                     return;
                 }
 
@@ -3857,7 +4352,8 @@
                 var countEl = document.getElementById('album-count-' + bondId);
                 if (countEl) countEl.textContent = d.photos.length + ' photo' + (d.photos.length > 1 ? 's' : '');
 
-                el.innerHTML = renderAlbumGridHtml(bondId, d.photos);
+                checkOnThisDayMemories(bondId, d.photos);
+                el.innerHTML = renderAlbumContentHtml(bondId, d.photos, viewMode);
             })
             .catch(function() {
                 var el = document.getElementById('album-grid-' + bondId);
@@ -3867,7 +4363,8 @@
                         bondAlbumState[bondId].photos = cached.photos;
                         var countEl = document.getElementById('album-count-' + bondId);
                         if (countEl) countEl.textContent = cached.photos.length + ' photo' + (cached.photos.length > 1 ? 's' : '');
-                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached photos</div>' + renderAlbumGridHtml(bondId, cached.photos);
+                        checkOnThisDayMemories(bondId, cached.photos);
+                        el.innerHTML = '<div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem; text-align:right;"><i class="fas fa-database"></i> Showing cached photos</div>' + renderAlbumContentHtml(bondId, cached.photos, viewMode);
                     } else {
                         var countEl = document.getElementById('album-count-' + bondId);
                         if (countEl) countEl.textContent = 'Offline';
@@ -4012,7 +4509,10 @@
         document.getElementById('lightbox-img').src = p.url;
         document.getElementById('lightbox-title').textContent = p.title || 'Untitled Memory';
         document.getElementById('lightbox-desc').textContent = p.description || 'No description provided.';
-        document.getElementById('lightbox-cat-badge').textContent = (p.category || 'memory').toUpperCase();
+        
+        var catIcon = categoryIcons[p.category] || '📸';
+        var catName = (p.category || 'memory').toUpperCase();
+        document.getElementById('lightbox-cat-badge').textContent = catIcon + ' ' + catName;
 
         var dtObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
         var dtStr = dtObj && !isNaN(dtObj) ? dtObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'Unknown';
@@ -4034,10 +4534,52 @@
             pinLabel.textContent = 'Pin';
         }
 
+        // Render Reactions
+        ['❤️', '🥰', '😂', '🔥', '🥺', '✨'].forEach(function(em) {
+            var countEl = document.getElementById('react-count-' + em);
+            if (countEl) {
+                var cnt = (p.reactions && p.reactions[em]) ? p.reactions[em] : '';
+                countEl.textContent = cnt > 0 ? cnt : '';
+            }
+        });
+        var reactBtns = document.querySelectorAll('.photo-reaction-btn');
+        reactBtns.forEach(function(b) {
+            var text = b.textContent.trim().split(' ')[0];
+            if (p.user_reaction === text) b.classList.add('active');
+            else b.classList.remove('active');
+        });
+
         var editBtn = document.getElementById('lightbox-edit-btn');
         var deleteBtn = document.getElementById('lightbox-delete-btn');
         if (editBtn) editBtn.style.display = 'inline-flex';
         if (deleteBtn) deleteBtn.style.display = p.uploaded_by_me ? 'inline-flex' : 'none';
+    }
+
+    function reactToCurrentPhoto(emoji) {
+        var bondId = currentLightboxState.bondId;
+        var index = currentLightboxState.index;
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || !photos[index]) return;
+
+        var p = photos[index];
+        echoFetch('/api/bonds/album/photo/' + p.id + '/react', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ emoji: emoji })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                p.reactions = d.reactions;
+                p.user_reaction = d.user_reaction;
+                renderLightboxContent();
+                // re-render grid in background to update reaction badges
+                var viewMode = (bondAlbumState[bondId] && bondAlbumState[bondId].viewMode) || 'grid';
+                var gridEl = document.getElementById('album-grid-' + bondId);
+                if (gridEl) gridEl.innerHTML = renderAlbumContentHtml(bondId, photos, viewMode);
+            }
+        });
     }
 
     function navigateLightbox(dir) {
@@ -4203,10 +4745,110 @@
         });
     }
 
+    // Slideshow Functions
+    function startAlbumSlideshow(bondId) {
+        var photos = bondAlbumState[bondId] ? bondAlbumState[bondId].photos : [];
+        if (!photos || photos.length === 0) {
+            if (window.showCustomAlert) showCustomAlert('No photos in album to play slideshow.', 'info');
+            return;
+        }
+
+        slideshowState.bondId = bondId;
+        slideshowState.index = 0;
+        slideshowState.isPlaying = true;
+
+        var modal = document.getElementById('bond-album-slideshow-modal');
+        if (modal) modal.style.display = 'flex';
+
+        renderSlideshowSlide();
+        scheduleNextSlide();
+    }
+
+    function renderSlideshowSlide() {
+        var photos = bondAlbumState[slideshowState.bondId] ? bondAlbumState[slideshowState.bondId].photos : [];
+        if (!photos || photos.length === 0) return;
+
+        var p = photos[slideshowState.index];
+        var imgEl = document.getElementById('slideshow-current-img');
+        if (imgEl) {
+            imgEl.classList.add('fading');
+            setTimeout(function() {
+                imgEl.src = p.url;
+                imgEl.classList.remove('fading');
+            }, 250);
+        }
+
+        var titleEl = document.getElementById('slideshow-title');
+        if (titleEl) titleEl.textContent = p.title || 'Cherished Memory';
+
+        var dtObj = p.date_taken ? (window.parseServerTime ? window.parseServerTime(p.date_taken) : new Date(p.date_taken)) : null;
+        var dtStr = dtObj && !isNaN(dtObj) ? dtObj.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+        var metaEl = document.getElementById('slideshow-meta');
+        if (metaEl) metaEl.textContent = (dtStr ? dtStr + ' · ' : '') + escHtml(p.uploaded_by_name) + ' (' + (p.category || 'memory') + ')';
+
+        var counterEl = document.getElementById('slideshow-counter');
+        if (counterEl) counterEl.textContent = (slideshowState.index + 1) + ' / ' + photos.length;
+    }
+
+    function scheduleNextSlide() {
+        if (slideshowState.timer) clearTimeout(slideshowState.timer);
+        if (!slideshowState.isPlaying) return;
+
+        slideshowState.timer = setTimeout(function() {
+            nextSlideshowSlide();
+        }, 4000);
+    }
+
+    function nextSlideshowSlide() {
+        var photos = bondAlbumState[slideshowState.bondId] ? bondAlbumState[slideshowState.bondId].photos : [];
+        if (!photos || photos.length === 0) return;
+
+        slideshowState.index = (slideshowState.index + 1) % photos.length;
+        renderSlideshowSlide();
+        scheduleNextSlide();
+    }
+
+    function prevSlideshowSlide() {
+        var photos = bondAlbumState[slideshowState.bondId] ? bondAlbumState[slideshowState.bondId].photos : [];
+        if (!photos || photos.length === 0) return;
+
+        slideshowState.index = (slideshowState.index - 1 + photos.length) % photos.length;
+        renderSlideshowSlide();
+        scheduleNextSlide();
+    }
+
+    function toggleSlideshowPlayback() {
+        slideshowState.isPlaying = !slideshowState.isPlaying;
+        var btn = document.getElementById('slideshow-play-pause-btn');
+        if (btn) {
+            btn.innerHTML = slideshowState.isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+        }
+        if (slideshowState.isPlaying) {
+            scheduleNextSlide();
+        } else if (slideshowState.timer) {
+            clearTimeout(slideshowState.timer);
+        }
+    }
+
+    function stopAlbumSlideshow() {
+        if (slideshowState.timer) clearTimeout(slideshowState.timer);
+        slideshowState.isPlaying = false;
+        slideshowState.bondId = null;
+        var modal = document.getElementById('bond-album-slideshow-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
     // Expose functions globally for inline HTML event attributes
     window.loadAlbum = loadAlbum;
     window.setAlbumCategory = setAlbumCategory;
     window.changeAlbumSort = changeAlbumSort;
+    window.setAlbumViewMode = setAlbumViewMode;
+    window.startAlbumSlideshow = startAlbumSlideshow;
+    window.stopAlbumSlideshow = stopAlbumSlideshow;
+    window.nextSlideshowSlide = nextSlideshowSlide;
+    window.prevSlideshowSlide = prevSlideshowSlide;
+    window.toggleSlideshowPlayback = toggleSlideshowPlayback;
+    window.reactToCurrentPhoto = reactToCurrentPhoto;
     window.openAlbumUploadModal = openAlbumUploadModal;
     window.closeAlbumUploadModal = closeAlbumUploadModal;
     window.handleAlbumFileSelect = handleAlbumFileSelect;

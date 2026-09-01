@@ -4138,6 +4138,16 @@ def api_bond_album_list(bond_id):
                 if uploader_doc:
                     uploader_name = _clean_username(uploader_doc.get('username', 'Partner'))
 
+            reactions_raw = p.get('reactions', {})
+            reactions = {}
+            user_reaction = None
+            for r_emoji, uids in reactions_raw.items():
+                if isinstance(uids, list):
+                    uid_strs = [str(u) for u in uids]
+                    reactions[r_emoji] = len(uid_strs)
+                    if user_id_str in uid_strs:
+                        user_reaction = r_emoji
+
             photo = {
                 'id': str(p['_id']),
                 'title': m.decrypt_bond_data(p.get('title', ''), bond_id) if p.get('encrypted') else p.get('title', ''),
@@ -4150,6 +4160,8 @@ def api_bond_album_list(bond_id):
                 'uploaded_by_me': uploaded_by_id == user_id_str,
                 'uploaded_at': _format_datetime(p.get('uploaded_at')),
                 'is_pinned': bool(p.get('is_pinned', False)),
+                'reactions': reactions,
+                'user_reaction': user_reaction,
             }
             if decrypted_url:
                 result.append(photo)
@@ -4184,7 +4196,7 @@ def api_bond_album_upload(bond_id):
         title = (request.form.get('title', '') or '')[:100].strip()
         description = (request.form.get('description', '') or '')[:500].strip()
         category = (request.form.get('category', 'other') or 'other').strip().lower()
-        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'other'):
+        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'food', 'pets', 'jokes', 'other'):
             category = 'other'
 
         date_taken_str = request.form.get('date_taken', '').strip()
@@ -4370,6 +4382,81 @@ def api_bond_album_pin(photo_id):
         return jsonify({'error': 'Failed to update pin state'}), 500
 
 
+@bp.route('/api/bonds/album/photo/<photo_id>/react', methods=['POST'])
+@login_required
+def api_bond_album_react(photo_id):
+    """Toggle an emoji reaction on a bond album photo."""
+    import main as m
+    try:
+        photo = m.bond_album_photos_conf.find_one({'_id': ObjectId(photo_id)})
+        if not photo:
+            return jsonify({'error': 'Photo not found'}), 404
+
+        bond_id = str(photo['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        emoji = (data.get('emoji', '') or '').strip()
+        allowed_emojis = {'❤️', '🥰', '😂', '🔥', '🥺', '✨'}
+        if emoji not in allowed_emojis:
+            return jsonify({'error': 'Invalid emoji reaction'}), 400
+
+        reactions = photo.get('reactions', {})
+        current_uids = reactions.get(emoji, [])
+        user_uid_obj = ObjectId(user_id_str)
+
+        # Toggle reaction
+        has_reacted = user_uid_obj in current_uids or user_id_str in current_uids
+        if has_reacted:
+            # Remove
+            m.bond_album_photos_conf.update_one(
+                {'_id': ObjectId(photo_id)},
+                {'$pull': {f'reactions.{emoji}': user_uid_obj}}
+            )
+            # Also clean if strings were saved
+            m.bond_album_photos_conf.update_one(
+                {'_id': ObjectId(photo_id)},
+                {'$pull': {f'reactions.{emoji}': user_id_str}}
+            )
+            user_reaction = None
+        else:
+            # Add
+            m.bond_album_photos_conf.update_one(
+                {'_id': ObjectId(photo_id)},
+                {'$addToSet': {f'reactions.{emoji}': user_uid_obj}}
+            )
+            user_reaction = emoji
+
+        # Fetch updated counts
+        updated_photo = m.bond_album_photos_conf.find_one({'_id': ObjectId(photo_id)})
+        updated_reactions_raw = updated_photo.get('reactions', {}) if updated_photo else {}
+        reaction_counts = {}
+        for r_emoji, uids in updated_reactions_raw.items():
+            if isinstance(uids, list) and len(uids) > 0:
+                reaction_counts[r_emoji] = len(uids)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_album_updated', {
+            'bond_id': bond_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({
+            'success': True,
+            'reactions': reaction_counts,
+            'user_reaction': user_reaction
+        })
+    except Exception as e:
+        current_app.logger.error(f"Album react error: {e}")
+        return jsonify({'error': 'Failed to react'}), 500
+
+
 @bp.route('/api/bonds/album/photo/<photo_id>', methods=['PUT'])
 @login_required
 def api_bond_album_update(photo_id):
@@ -4393,7 +4480,7 @@ def api_bond_album_update(photo_id):
         title = (data.get('title', '') or '')[:100].strip()
         description = (data.get('description', '') or '')[:500].strip()
         category = (data.get('category', 'other') or 'other').strip().lower()
-        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'other'):
+        if category not in ('memory', 'milestone', 'fun', 'travel', 'special', 'food', 'pets', 'jokes', 'other'):
             category = 'other'
 
         update_fields = {

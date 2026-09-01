@@ -127,12 +127,44 @@ def process_image_for_nsfw(post_id, image_url, public_id):
             return
 
         if is_nsfw:
-            _get_app().logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Tagging image and updating post.")
+            _get_app().logger.warning(f"NSFW content detected in {public_id} for post {post_id}. Flagging post and suppressing visibility.")
             try:
                 cloudinary.uploader.add_tag('nsfw', [public_id])
             except Exception as cl_e:
                 _get_app().logger.error(f"Cloudinary tagging failed: {cl_e}")
-            database.posts_conf.update_one({'_id': ObjectId(post_id)}, {'$set': {'image_status': 'removed_nsfw'}})
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            database.posts_conf.update_one(
+                {'_id': ObjectId(post_id)},
+                {
+                    '$set': {
+                        'image_status': 'removed_nsfw',
+                        'ai_safety_flagged': True,
+                        'moderation_status': 'ai_flagged',
+                        'is_suppressed': True,
+                        'is_approved': False,
+                        'flagged_reason': 'AI detected sensitive/NSFW image content',
+                        'flagged_at': now_utc
+                    }
+                }
+            )
+            try:
+                if database.blog_feed_cache:
+                    database.blog_feed_cache.clear()
+            except Exception:
+                pass
+            try:
+                import typesense_client as _t
+                if _t.ts_posts:
+                    _t._ts_delete_document('posts', str(post_id))
+            except Exception:
+                pass
+            try:
+                post = database.posts_conf.find_one({'_id': ObjectId(post_id)}, {'title': 1, 'author': 1})
+                if post:
+                    ntfy_msg = f"AI flagged sensitive content in '{post.get('title')}' by {post.get('author')}. Visibility suppressed pending admin review."
+                    send_ntfy_notification(ntfy_msg, "AI Content Flagged", "see_no_evil")
+            except Exception as ntfy_err:
+                _get_app().logger.debug(f"Failed to send ntfy notification for AI flag: {ntfy_err}")
         else:
             _get_app().logger.info(f"Image {public_id} for post {post_id} is safe. Updating post status.")
             database.posts_conf.update_one(

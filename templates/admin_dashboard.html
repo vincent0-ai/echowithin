@@ -409,11 +409,25 @@ html += '</div>';
       const cCls = c.status === 'healthy' ? (c.pending_reports > 0 ? 'stale' : 'healthy') : 'error';
       html += `<div class="health-card ${cCls}">`;
       html += `<h4><span class="health-dot"></span> Communities</h4>`;
-      if (c.status === 'healthy') {
+      if (c.status === 'healthy' || c.status === 'stale') {
         html += `<p>Total: <strong>${c.total}</strong></p>`;
         html += `<p>Pending Reports: <strong style="${c.pending_reports > 0 ? 'color:#ef4444' : ''}">${c.pending_reports}</strong></p>`;
       } else {
         html += `<p>${c.detail || 'Error'}</p>`;
+      }
+      html += '</div>';
+
+      // Post Moderation
+      const pm = h.post_moderation || {};
+      const pmCls = pm.status === 'healthy' ? 'healthy' : (pm.status === 'stale' ? 'stale' : (pm.status === 'error' ? 'error' : 'unknown'));
+      html += `<div class="health-card ${pmCls}">`;
+      html += `<h4><span class="health-dot"></span> Post Moderation</h4>`;
+      if (pm.status === 'healthy' || pm.status === 'stale') {
+        html += `<p>Pending Reports: <strong style="${pm.pending_reports > 0 ? 'color:#ef4444' : ''}">${pm.pending_reports}</strong></p>`;
+        html += `<p>AI Flagged: <strong style="${pm.ai_flagged > 0 ? 'color:#e65100' : ''}">${pm.ai_flagged}</strong></p>`;
+        html += `<p>Total Reports: <strong>${pm.total_reports || 0}</strong></p>`;
+      } else {
+        html += `<p>${pm.detail || 'Error'}</p>`;
       }
       html += '</div>';
 

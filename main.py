@@ -110,7 +110,7 @@ from utils import (linkify_filter, _linkify_target_blank, markdown_filter,
     index_post_to_typesense, reindex_all_posts_to_typesense,
     reindex_all_notes_to_typesense,
     comment_count_cache, get_batch_comment_counts, prepare_posts,
-    calculate_hot_score, _serialize_comment, _get_user_badge_count,
+    get_public_posts_filter, calculate_hot_score, _serialize_comment, _get_user_badge_count,
     _invalidate_badge_cache, _has_active_auto_approve,
     can_dm, fetch_link_preview, _deliver_scheduled_message,
     _nlp_suggest_tags, get_zen_quote, is_blocked_by)
@@ -690,6 +690,7 @@ communities_conf = db['communities']
 community_notes_conf = db['community_notes']
 community_reactions_conf = db['community_reactions']
 community_reports_conf = db['community_reports']
+post_reports_conf = db['post_reports']
 community_challenges_conf = db['community_challenges']
 community_polls_conf = db['community_polls']
 community_poll_votes_conf = db['community_poll_votes']
@@ -887,6 +888,9 @@ community_reactions_conf.create_index([('note_id', 1), ('user_id', 1)], unique=T
 community_reactions_conf.create_index([('note_id', 1)])
 community_reports_conf.create_index([('community_id', 1), ('status', 1)])
 community_reports_conf.create_index('reporter_id')
+post_reports_conf.create_index([('post_id', 1), ('status', 1)])
+post_reports_conf.create_index('reporter_id')
+post_reports_conf.create_index('created_at')
 community_challenges_conf.create_index([('community_id', 1), ('status', 1)])
 community_polls_conf.create_index([('community_id', 1), ('status', 1), ('created_at', -1)])
 community_poll_votes_conf.create_index([('poll_id', 1), ('user_id', 1)], unique=True)
@@ -929,6 +933,7 @@ database.communities_conf = communities_conf
 database.community_notes_conf = community_notes_conf
 database.community_reactions_conf = community_reactions_conf
 database.community_reports_conf = community_reports_conf
+database.post_reports_conf = post_reports_conf
 database.community_challenges_conf = community_challenges_conf
 database.community_polls_conf = community_polls_conf
 database.community_poll_votes_conf = community_poll_votes_conf

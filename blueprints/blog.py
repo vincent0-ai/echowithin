@@ -13,11 +13,12 @@ def get_latest_posts_feed():
     if cached_feed:
         return cached_feed
 
-    total_posts_count = m.posts_conf.count_documents({})
-    pinned_posts = list(m.posts_conf.find({'is_pinned': True}).sort('pinned_at', -1))
+    public_filter = m.get_public_posts_filter()
+    total_posts_count = m.posts_conf.count_documents(public_filter)
+    pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
     if total_posts_count <= 10:
-        other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1))
+        other_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1))
         random.shuffle(other_posts)
         all_posts_list = pinned_posts + other_posts
         with current_app.app_context():
@@ -25,9 +26,9 @@ def get_latest_posts_feed():
     else:
         now = datetime.datetime.now(datetime.timezone.utc)
         one_month_ago = now - datetime.timedelta(days=30)
-        recent_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}}).sort('timestamp', -1).limit(2))
+        recent_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids}, **public_filter}).sort('timestamp', -1).limit(2))
         recent_ids = [p['_id'] for p in recent_posts]
-        month_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids + recent_ids}, 'timestamp': {'$gte': one_month_ago}}).sort('timestamp', -1).limit(20))
+        month_posts = list(m.posts_conf.find({'_id': {'$nin': pinned_ids + recent_ids}, 'timestamp': {'$gte': one_month_ago}, **public_filter}).sort('timestamp', -1).limit(20))
         if len(month_posts) > 4:
             month_weights = []
             for mp in month_posts:
@@ -46,8 +47,9 @@ def get_latest_posts_feed():
         month_ids = [p['_id'] for p in month_selection]
         excluded_ids = pinned_ids + recent_ids + month_ids
         posts_needed = 10 - len(recent_posts) - len(month_selection)
+        match_query = {'_id': {'$nin': excluded_ids}, **public_filter}
         older_posts = list(m.posts_conf.aggregate([
-            {'$match': {'_id': {'$nin': excluded_ids}}},
+            {'$match': match_query},
             {'$addFields': {'_eng_weight': {'$add': [{'$ifNull': ['$likes_count', 0]}, {'$multiply': [{'$ifNull': ['$share_count', 0]}, 2]}, 1]}}},
             {'$sample': {'size': max(posts_needed * 3, 3)}}
         ]))
@@ -72,7 +74,7 @@ def blog():
     import main as m
     query = request.args.get('query', None)
     if query:
-        search_filter = {"$text": {"$search": query}}
+        search_filter = m.get_public_posts_filter({"$text": {"$search": query}})
         page = request.args.get('page', 1, type=int)
         posts_per_page = 10
         total_posts = m.posts_conf.count_documents(search_filter)
@@ -99,10 +101,11 @@ def all_posts():
     page = request.args.get('page', 1, type=int)
     posts_per_page = 10
 
-    # Build the filter query
-    filter_query = {}
+    # Build the filter query ensuring suppressed posts are excluded
+    extra_filter = {}
     if selected_tag:
-        filter_query['tags'] = selected_tag
+        extra_filter['tags'] = selected_tag
+    filter_query = m.get_public_posts_filter(extra_filter)
 
     total_posts = m.posts_conf.count_documents(filter_query)
     total_pages = math.ceil(total_posts / posts_per_page)
@@ -317,8 +320,8 @@ def all_posts():
 def get_all_posts_json():
     import main as m
     try:
-        # Fetch all posts with necessary fields
-        all_posts = list(m.posts_conf.find({}, {
+        # Fetch all public posts with necessary fields
+        all_posts = list(m.posts_conf.find(m.get_public_posts_filter(), {
             '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 
             'author_id': 1, 'timestamp': 1, 'image_url': 1, 'image_urls': 1, 
             'image_public_ids': 1, 'image_status': 1, 'video_url': 1, 
@@ -362,6 +365,8 @@ def get_top_posts_json():
     try:
         # Use aggregation pipeline for efficient server-side processing
         pipeline = [
+            # Stage 0: Filter out suppressed/moderated posts
+            {'$match': m.get_public_posts_filter()},
             # Stage 1: Project only needed fields
             {'$project': {
                 '_id': 1, 'title': 1, 'slug': 1, 'content': 1, 'author': 1, 'author_id': 1,
@@ -485,7 +490,7 @@ def get_hot_posts_json():
         # Fetch recent posts to calculate scores on (e.g., last 7 days)
         seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
         recent_posts = list(m.posts_conf.find(
-            {'created_at': {'$gte': seven_days_ago}},
+            m.get_public_posts_filter({'created_at': {'$gte': seven_days_ago}}),
             {'_id': 1, 'title':1, 'slug':1, 'content':1, 'author':1, 'author_id':1, 'timestamp':1, 'created_at': 1, 'view_count': 1, 'image_url':1, 'image_urls':1, 'likes_count': 1, 'share_count': 1, 'reactions': 1}
         ))
 
@@ -977,9 +982,11 @@ def get_related_posts_json():
         return jsonify({'error': 'Post not found'}), 404
     tags = post.get('tags', [])
     if tags:
-        related = list(m.posts_conf.find({'tags': {'$in': tags}, '_id': {'$ne': post['_id']}}).sort('timestamp', -1).limit(4))
+        related_filter = m.get_public_posts_filter({'tags': {'$in': tags}, '_id': {'$ne': post['_id']}})
+        related = list(m.posts_conf.find(related_filter).sort('timestamp', -1).limit(4))
     else:
-        related = list(m.posts_conf.find({'_id': {'$ne': post['_id']}}).sort('timestamp', -1).limit(4))
+        related_filter = m.get_public_posts_filter({'_id': {'$ne': post['_id']}})
+        related = list(m.posts_conf.find(related_filter).sort('timestamp', -1).limit(4))
     with current_app.app_context():
         related = m.prepare_posts(related)
     return jsonify(related)
@@ -996,6 +1003,102 @@ def get_post_status(post_id):
     if not post:
         return jsonify({'error': 'Post not found'}), 404
     return jsonify({'status': post.get('status', 'unknown')})
+
+
+@bp.route('/api/posts/<post_id>/report', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_report_post(post_id):
+    """Submit a user report against a blog post for violations."""
+    import main as m
+    post_obj_id = m.safe_object_id(post_id)
+    if not post_obj_id:
+        return jsonify({'error': 'Invalid post ID'}), 400
+
+    post = m.posts_conf.find_one({'_id': post_obj_id})
+    if not post:
+        return jsonify({'error': 'Post not found'}), 404
+
+    # Cannot report own post
+    if str(post.get('author_id')) == str(current_user.id):
+        return jsonify({'error': 'You cannot report your own post'}), 400
+
+    # Check for existing pending report from this user
+    existing = m.post_reports_conf.find_one({
+        'post_id': post_obj_id,
+        'reporter_id': ObjectId(current_user.id),
+        'status': 'pending'
+    })
+    if existing:
+        return jsonify({'error': 'You already have a pending report for this post'}), 409
+
+    data = request.get_json(silent=True) or request.form or {}
+    reason = data.get('reason', '').strip()
+    details = data.get('details', '').strip()
+
+    valid_reasons = ['spam', 'harassment', 'hate_speech', 'inappropriate', 'misinformation', 'other']
+    if not reason or reason not in valid_reasons:
+        return jsonify({'error': f'Valid reason is required. Options: {", ".join(valid_reasons)}'}), 400
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    report = {
+        'post_id': post_obj_id,
+        'post_slug': post.get('slug'),
+        'post_title': post.get('title'),
+        'post_author': post.get('author'),
+        'reporter_id': ObjectId(current_user.id),
+        'reporter_username': current_user.username,
+        'reason': reason,
+        'details': details[:500] if details else '',
+        'status': 'pending',
+        'created_at': now_utc,
+    }
+    m.post_reports_conf.insert_one(report)
+
+    # Flag the post and immediately suppress visibility in the algorithm
+    m.posts_conf.update_one(
+        {'_id': post_obj_id},
+        {
+            '$inc': {'report_count': 1},
+            '$set': {
+                'is_reported': True,
+                'moderation_status': 'flagged',
+                'is_suppressed': True,
+                'last_reported_at': now_utc,
+            },
+            '$addToSet': {'reported_by': ObjectId(current_user.id)}
+        }
+    )
+
+    # Remove from Typesense if indexed
+    try:
+        if m._t.ts_posts:
+            m._t._ts_delete_document('posts', str(post_obj_id))
+    except Exception:
+        pass
+
+    # Invalidate feed cache
+    try:
+        if m.blog_feed_cache:
+            m.blog_feed_cache.clear()
+    except Exception:
+        pass
+
+    # Notify admin via ntfy
+    try:
+        ntfy_msg = f"Post '{post.get('title')}' reported by {current_user.username} for: {reason}"
+        m.send_ntfy_notification.queue(ntfy_msg, "Post Reported", "warning")
+    except Exception:
+        try:
+            m.executor.submit(m.send_ntfy_notification, f"Post '{post.get('title')}' reported by {current_user.username} for: {reason}", "Post Reported", "warning")
+        except Exception:
+            pass
+
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('Accept') == 'application/json':
+        return jsonify({'success': True, 'message': 'Report submitted. Post visibility has been suppressed pending admin review.'})
+
+    flash('Report submitted. Post visibility has been suppressed pending admin review.', 'success')
+    return redirect(url_for('blog.blog'))
 
 
 @bp.route("/post", methods=['POST', 'GET'])
@@ -1213,6 +1316,23 @@ def view_post(slug):
         flash("Post not found.", "danger")
         return redirect(url_for('blog.blog'))
 
+    # Check suppression / moderation status
+    is_suppressed = (
+        post.get('is_suppressed', False)
+        or post.get('moderation_status') in ['flagged', 'ai_flagged', 'banned', 'deleted']
+        or (post.get('image_status') == 'removed_nsfw' and not post.get('is_approved'))
+    )
+    under_moderation = False
+    if is_suppressed:
+        # Check permissions: only author or admin can view
+        can_view = current_user.is_authenticated and (
+            getattr(current_user, 'is_admin', False) or str(post.get('author_id')) == str(current_user.id)
+        )
+        if not can_view:
+            flash("This post is currently under moderation review.", "warning")
+            return redirect(url_for('blog.blog'))
+        under_moderation = True
+
     # If current user is the author, update author_last_viewed
     if current_user.is_authenticated:
         try:
@@ -1418,7 +1538,7 @@ def view_post(slug):
     except Exception:
         jsonld_str = ''
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved, under_moderation=under_moderation)
 
 
 @bp.route('/api/posts/<post_id>/view', methods=['POST'])

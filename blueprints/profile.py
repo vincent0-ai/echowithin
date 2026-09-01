@@ -41,24 +41,25 @@ def profile(username):
                 candidate['bio'] = m.decrypt_note(candidate['bio'], user_id=str(candidate['_id']))
     page = request.args.get('page', 1, type=int)
     posts_per_page = 5
-    stats_cache_key = f"profile_stats:{user_id}"
+    is_owner_or_admin = current_user.is_authenticated and (str(current_user.id) == str(user_id) or getattr(current_user, 'is_admin', False))
+    stats_cache_key = f"profile_stats:{user_id}:{'own' if is_owner_or_admin else 'public'}"
     cached_stats = m.profile_stats_cache.get(stats_cache_key)
     if cached_stats:
         total_posts = cached_stats['total_posts']
         total_comments = cached_stats['total_comments']
     else:
-        filter_query = {'author_id': user_id}
+        filter_query = {'author_id': user_id} if is_owner_or_admin else m.get_public_posts_filter({'author_id': user_id})
         total_posts = m.posts_conf.count_documents(filter_query)
         total_comments = m.comments_conf.count_documents({'author_id': user_id, 'is_deleted': False})
         m.profile_stats_cache[stats_cache_key] = {'total_posts': total_posts, 'total_comments': total_comments}
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
-    posts_cache_key = f"profile_posts:{user_id}:page{page}"
+    posts_cache_key = f"profile_posts:{user_id}:page{page}:{'own' if is_owner_or_admin else 'public'}"
     cached_posts = m.profile_posts_cache.get(posts_cache_key)
     if cached_posts:
         user_posts = cached_posts
     else:
-        filter_query = {'author_id': user_id}
+        filter_query = {'author_id': user_id} if is_owner_or_admin else m.get_public_posts_filter({'author_id': user_id})
         user_posts_cursor = m.posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
         with current_app.app_context():
             user_posts = m.prepare_posts(list(user_posts_cursor))
@@ -100,12 +101,14 @@ def user_posts_page(username):
         flash("User not found.", "danger")
         return redirect(url_for('pages.home'))
     user_id = user['_id']
+    is_owner_or_admin = current_user.is_authenticated and (str(current_user.id) == str(user_id) or getattr(current_user, 'is_admin', False))
     page = request.args.get('page', 1, type=int)
     posts_per_page = 10
-    total_posts = m.posts_conf.count_documents({'author_id': user_id})
+    filter_query = {'author_id': user_id} if is_owner_or_admin else m.get_public_posts_filter({'author_id': user_id})
+    total_posts = m.posts_conf.count_documents(filter_query)
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
-    user_posts_cursor = m.posts_conf.find({'author_id': user_id}).sort('timestamp', -1).skip(skip).limit(posts_per_page)
+    user_posts_cursor = m.posts_conf.find(filter_query).sort('timestamp', -1).skip(skip).limit(posts_per_page)
     with current_app.app_context():
         user_posts = m.prepare_posts(list(user_posts_cursor))
     page_title = f"All posts by {user['username']} - EchoWithin"

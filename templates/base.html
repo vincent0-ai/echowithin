@@ -856,6 +856,46 @@
                 </div>
             </div>
         </div>
+
+        <!-- Post Report Modal -->
+        {% if current_user.is_authenticated %}
+        <div id="post-report-modal" class="custom-modal-overlay" style="display:none; align-items:center; justify-content:center;">
+            <div class="custom-modal" style="width: min(90%, 460px); text-align: left; background: #fff; padding: 1.25rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+                <div class="custom-modal-content" style="padding: 0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; border-bottom:1px solid #eee; padding-bottom:0.5rem;">
+                        <h3 style="margin:0; font-size:1.1rem; color:var(--text-dark-color); display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-flag" style="color:#c62828;"></i> Report Post
+                        </h3>
+                        <span id="post-report-modal-close" style="font-size:1.4rem; color:#888; cursor:pointer; line-height:1;">&times;</span>
+                    </div>
+                    <p id="post-report-modal-target" style="font-size:0.85rem; color:#666; margin-bottom:0.75rem; font-weight:600;"></p>
+                    <form id="post-report-form">
+                        <input type="hidden" id="post-report-post-id" value="">
+                        <div style="margin-bottom:0.75rem;">
+                            <label style="display:block; font-size:0.82rem; font-weight:600; margin-bottom:0.3rem; color:#444;">Reason for report <span style="color:#c62828;">*</span></label>
+                            <select id="post-report-reason" required style="width:100%; padding:0.45rem; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; box-sizing:border-box;">
+                                <option value="" disabled selected>Select a reason...</option>
+                                <option value="spam">Spam / Commercial advertising</option>
+                                <option value="harassment">Harassment / Bullying / Hate speech</option>
+                                <option value="hate_speech">Hate speech / Violence</option>
+                                <option value="inappropriate">Inappropriate / Explicit / Sensitive media</option>
+                                <option value="misinformation">Misinformation / Harmful claims</option>
+                                <option value="other">Other policy violation</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block; font-size:0.82rem; font-weight:600; margin-bottom:0.3rem; color:#444;">Additional details (optional)</label>
+                            <textarea id="post-report-details" rows="3" maxlength="500" placeholder="Provide any extra context to help moderation..." style="width:100%; padding:0.45rem; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; box-sizing:border-box; resize:vertical;"></textarea>
+                        </div>
+                        <div class="custom-modal-actions" style="justify-content:flex-end; gap:0.5rem; display:flex;">
+                            <button type="button" id="post-report-cancel-btn" class="btn edit-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem;">Cancel</button>
+                            <button type="submit" id="post-report-submit-btn" class="btn delete-btn" style="padding:0.4rem 0.9rem; font-size:0.85rem; background:#c62828; color:white; border:none; border-radius:5px; cursor:pointer;">Submit Report</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         <!-- Toast container for custom alerts -->
         <div id="custom-toast-container"
             style="position: fixed; top: 20px; right: 20px; z-index:200000; display:flex; flex-direction:column; gap:10px;">
@@ -1795,6 +1835,88 @@
         confirmOverlay.addEventListener('click', (e) => {
             if (e.target === confirmOverlay) confirmCancel.click();
         });
+
+        // --- Global Post Reporting Handler ---
+        window.openPostReportModal = function(postId, postTitle) {
+            const modal = document.getElementById('post-report-modal');
+            if (!modal) {
+                window.location.href = "{{ url_for('auth.login') }}";
+                return;
+            }
+            document.getElementById('post-report-post-id').value = postId;
+            document.getElementById('post-report-modal-target').textContent = 'Reporting: ' + (postTitle || 'Post');
+            document.getElementById('post-report-reason').value = '';
+            document.getElementById('post-report-details').value = '';
+            modal.style.display = 'flex';
+        };
+
+        const postReportModal = document.getElementById('post-report-modal');
+        if (postReportModal) {
+            const closeBtn = document.getElementById('post-report-modal-close');
+            const cancelBtn = document.getElementById('post-report-cancel-btn');
+            const reportForm = document.getElementById('post-report-form');
+
+            const hideReportModal = () => { postReportModal.style.display = 'none'; };
+            if (closeBtn) closeBtn.addEventListener('click', hideReportModal);
+            if (cancelBtn) cancelBtn.addEventListener('click', hideReportModal);
+            postReportModal.addEventListener('click', (e) => {
+                if (e.target === postReportModal) hideReportModal();
+            });
+
+            if (reportForm) {
+                reportForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const postId = document.getElementById('post-report-post-id').value;
+                    const reason = document.getElementById('post-report-reason').value;
+                    const details = document.getElementById('post-report-details').value;
+                    const submitBtn = document.getElementById('post-report-submit-btn');
+
+                    if (!reason) {
+                        alert('Please select a reason for the report.');
+                        return;
+                    }
+
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Submitting...';
+
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    try {
+                        const res = await fetch(`/api/posts/${postId}/report`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken,
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({ reason: reason, details: details })
+                        });
+                        const data = await res.json();
+                        hideReportModal();
+                        if (res.ok && data.success) {
+                            if (window.showToast) {
+                                window.showToast('Report submitted. Post visibility has been suppressed pending review.', 'success', 4500);
+                            } else {
+                                alert('Report submitted. Post visibility has been suppressed pending review.');
+                            }
+                            if (window.location.pathname.includes('/post/')) {
+                                setTimeout(() => window.location.reload(), 1500);
+                            }
+                        } else {
+                            const err = data.error || 'Failed to submit report.';
+                            if (window.showToast) window.showToast(err, 'error');
+                            else alert(err);
+                        }
+                    } catch (err) {
+                        hideReportModal();
+                        if (window.showToast) window.showToast('Network error while reporting.', 'error');
+                        else alert('Network error while reporting.');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Submit Report';
+                    }
+                });
+            }
+        }
 
         // --- Event delegation for custom confirms on any form ---
         document.body.addEventListener('submit', function (e) {

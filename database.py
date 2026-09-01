@@ -27,6 +27,7 @@ communities_conf = None
 community_notes_conf = None
 community_reactions_conf = None
 community_reports_conf = None
+post_reports_conf = None
 community_challenges_conf = None
 dm_permissions_conf = None
 scheduled_messages_conf = None

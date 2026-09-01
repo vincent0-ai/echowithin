@@ -156,7 +156,7 @@ def search():
             current_app.logger.error(f'Typesense search error: {e}')
     else:
         if query:
-            cursor = m.posts_conf.find({'$text': {'$search': query}}, {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).limit(per_page)
+            cursor = m.posts_conf.find(m.get_public_posts_filter({'$text': {'$search': query}}), {'score': {'$meta': 'textScore'}}).sort([('score', {'$meta': 'textScore'})]).limit(per_page)
             for p in cursor:
                 results.append({'id': str(p.get('_id')), 'title': p.get('title'), 'slug': p.get('slug'), 'author': p.get('author'), 'created_at': p.get('timestamp'), 'excerpt': p.get('content', '')[:300]})
             total = len(results)

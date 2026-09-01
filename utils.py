@@ -673,6 +673,30 @@ def get_batch_comment_counts(post_urls: tuple) -> dict:
     return counts_map
 
 
+def get_public_posts_filter(extra_query=None):
+    """
+    Returns a MongoDB query filter dict that excludes posts that are
+    suppressed due to user reports or unapproved AI safety flags.
+    """
+    base_filter = {
+        'status': 'published',
+        'is_suppressed': {'$ne': True},
+        'moderation_status': {'$nin': ['flagged', 'ai_flagged', 'banned', 'deleted']},
+        'image_status': {'$ne': 'removed_nsfw'},
+    }
+    if extra_query:
+        merged = dict(base_filter)
+        for k, v in extra_query.items():
+            if k in merged and k != '_id':
+                if '$and' not in merged:
+                    merged['$and'] = [{k: merged.pop(k)}]
+                merged['$and'].append({k: v})
+            else:
+                merged[k] = v
+        return merged
+    return base_filter
+
+
 def prepare_posts(posts):
     """
     Add `url` and `comment_count` fields to each post.

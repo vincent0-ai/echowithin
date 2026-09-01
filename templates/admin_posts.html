@@ -1,88 +1,295 @@
 {% extends "base.html" %}
 
-{% block title %} <title>Admin</title> {% endblock %}
+{% block title %} <title>Admin - Post Management</title> {% endblock %}
 
 {% block content %}
-<div class="blog-container">
-  <header class="blog-header">
-    <h1>Admin Post Management</h1>
-    <a href="{{ url_for('blog.blog') }}" class="btn-back" style="margin-top: 1rem;">&larr; Back to Blog</a>
-  </header>
+<div class="admin-page-container" style="max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.75rem;">
+    <div>
+      <h1 style="margin: 0; font-size: 1.4rem; color: #3e2217;">Admin Post Management</h1>
+      <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: #888;">
+        {{ total }} post{{ 's' if total != 1 }} &bull;
+        <span style="color: {{ '#c62828' if total_pending_reports > 0 else '#888' }}; font-weight: {{ '700' if total_pending_reports > 0 else '400' }};">
+          {{ total_pending_reports }} pending report{{ 's' if total_pending_reports != 1 }}
+        </span>
+        {% if total_ai_flagged > 0 %}
+        &bull; <span style="color: #e65100; font-weight: 700;">{{ total_ai_flagged }} AI flagged</span>
+        {% endif %}
+      </p>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+      <a href="{{ url_for('admin.admin_dashboard') }}" style="background: #3e2217; color: white; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; text-decoration: none;">&larr; Dashboard</a>
+      <a href="{{ url_for('blog.blog') }}" style="background: #f5f5f5; color: #333; padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; text-decoration: none; border: 1px solid #ddd;">Blog</a>
+    </div>
+  </div>
+
+  <!-- Filter Tabs -->
+  <div style="display: flex; gap: 0.4rem; margin-bottom: 1.25rem; flex-wrap: wrap;">
+    <a href="{{ url_for('admin.admin_posts', filter='all', query=query) }}" style="padding: 0.35rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; {{ 'background: #3e2217; color: white;' if filter_type == 'all' else 'background: #f5f5f5; color: #666;' }}">
+      All Posts
+    </a>
+    <a href="{{ url_for('admin.admin_posts', filter='reported', query=query) }}" style="padding: 0.35rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; {{ 'background: #c62828; color: white;' if filter_type == 'reported' else 'background: #ffebee; color: #c62828;' }}">
+      Reported {% if total_reported_posts > 0 %}<span style="background: {{ 'white' if filter_type == 'reported' else '#c62828' }}; color: {{ '#c62828' if filter_type == 'reported' else 'white' }}; padding: 0.05rem 0.35rem; border-radius: 8px; font-size: 0.7rem; margin-left: 3px;">{{ total_reported_posts }}</span>{% endif %}
+    </a>
+    <a href="{{ url_for('admin.admin_posts', filter='ai_flagged', query=query) }}" style="padding: 0.35rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; {{ 'background: #e65100; color: white;' if filter_type == 'ai_flagged' else 'background: #fff3e0; color: #e65100;' }}">
+      AI Flagged {% if total_ai_flagged > 0 %}<span style="background: {{ 'white' if filter_type == 'ai_flagged' else '#e65100' }}; color: {{ '#e65100' if filter_type == 'ai_flagged' else 'white' }}; padding: 0.05rem 0.35rem; border-radius: 8px; font-size: 0.7rem; margin-left: 3px;">{{ total_ai_flagged }}</span>{% endif %}
+    </a>
+    <a href="{{ url_for('admin.admin_posts', filter='pinned', query=query) }}" style="padding: 0.35rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; {{ 'background: #333; color: white;' if filter_type == 'pinned' else 'background: #f5f5f5; color: #666;' }}">
+      Pinned
+    </a>
+  </div>
 
   <!-- Search Form -->
   <form action="{{ url_for('admin.admin_posts') }}" method="GET" class="search-form"
-    style="margin-top: 1.5rem; margin-bottom: 2rem; display: flex; justify-content: center; gap: 0.5rem;">
-    <input type="text" name="query" class="form-input" placeholder="Search by title or content..."
-      value="{{ query or '' }}" style="width: 70%;">
-    <button type="submit" class="form-button" style="width: auto; padding: 0 1rem;">Search</button>
+    style="margin-bottom: 1.5rem; display: flex; gap: 0.5rem;">
+    <input type="hidden" name="filter" value="{{ filter_type }}">
+    <input type="text" name="query" class="form-input" placeholder="Search posts by title, author, or content..."
+      value="{{ query or '' }}" style="flex: 1; padding: 0.5rem 0.75rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem;">
+    <button type="submit" class="btn" style="background: #3e2217; color: white; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; border: none; font-weight: 600; cursor: pointer;">Search</button>
+    {% if query %}
+    <a href="{{ url_for('admin.admin_posts', filter=filter_type) }}" class="btn" style="background: #f5f5f5; color: #666; padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem; border: 1px solid #ddd; text-decoration: none; display: flex; align-items: center;">Clear</a>
+    {% endif %}
   </form>
 
   <div class="posts-section">
-    <h2>{{ 'Search Results' if query else 'All Posts' }}</h2>
-    <div class="posts-list">
+    <div class="posts-list" style="display: flex; flex-direction: column; gap: 1rem;">
       {% for post in posts %}
-      <div class="post-item">
-        <h3><a href="{{ url_for('blog.view_post', slug=post.slug) }}">{{ post.title }}</a></h3>
-        {% if post.content|length > 150 %}
-        <p>{{ (post.content[:150] ~ '...') | linkify | safe }}</p>
-        {% else %}
-        <p>{{ post.content | linkify | safe }}</p>
-        {% endif %}
-        <div class="post-meta">
-          {% if post.edited_at %}
-          Edited on {{ post.edited_at|localtime }} by <strong><a
-              href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong><br>
-          {% else %}
-          Posted by <strong><a href="{{ url_for('profile.profile', username=post.author) }}">{{ post.author }}</a></strong>
-          {% endif %}
+      <div class="post-item" style="border: 1px solid {{ '#ffcdd2' if (post.is_reported or post.pending_reports > 0) else ('#ffe0b2' if post.ai_safety_flagged else '#eee') }}; border-radius: 8px; padding: 1rem; background: {{ '#fffafa' if (post.is_reported or post.pending_reports > 0) else ('#fffdfa' if post.ai_safety_flagged else '#fff') }};">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap;">
+          <h3 style="margin: 0 0 0.4rem 0; font-size: 1.05rem;">
+            <a href="{{ url_for('blog.view_post', slug=post.slug) }}" target="_blank" style="color: #3e2217; text-decoration: none; font-weight: 600;">
+              {{ post.title }} <i class="fas fa-external-link-alt" style="font-size: 0.75rem; color: #aaa;"></i>
+            </a>
+          </h3>
+
+          <!-- Status Badges -->
+          <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+            {% if post.is_pinned %}
+            <span style="background: #fff8e1; color: #f57f17; border: 1px solid #ffe082; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">PINNED</span>
+            {% endif %}
+
+            {% if post.is_reported or post.pending_reports > 0 or post.moderation_status == 'flagged' %}
+            <span style="background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">
+              <i class="fas fa-flag"></i> FLAGGED ({{ post.pending_reports or 0 }} pending)
+            </span>
+            {% endif %}
+
+            {% if post.ai_safety_flagged or post.moderation_status == 'ai_flagged' or post.image_status == 'removed_nsfw' %}
+            <span style="background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">
+              <i class="fas fa-robot"></i> AI FLAGGED
+            </span>
+            {% endif %}
+
+            {% if post.is_suppressed %}
+            <span style="background: #f5f5f5; color: #666; border: 1px solid #ddd; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">
+              SUPPRESSED
+            </span>
+            {% elif post.moderation_status == 'cleared' or post.is_approved %}
+            <span style="background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.72rem; font-weight: 600;">
+              APPROVED
+            </span>
+            {% endif %}
+          </div>
         </div>
-        <div class="post-actions">
+
+        {% if post.content %}
+        <p style="font-size: 0.88rem; color: #555; margin: 0.5rem 0; line-height: 1.45;">
+          {{ (post.content[:160] ~ '...') if post.content|length > 160 else post.content }}
+        </p>
+        {% endif %}
+
+        {% if post.flagged_reason %}
+        <div style="font-size: 0.78rem; color: #c62828; background: #fff5f5; padding: 0.35rem 0.6rem; border-radius: 4px; margin: 0.4rem 0;">
+          <strong>Flag reason:</strong> {{ post.flagged_reason }}
+        </div>
+        {% endif %}
+
+        <div class="post-meta" style="font-size: 0.8rem; color: #888; margin-top: 0.5rem;">
+          {% if post.edited_at %}
+          Edited <span class="relative-time" data-timestamp="{{ (post.edited_at.isoformat() + 'Z').replace('+00:00Z', 'Z') if post.edited_at else '' }}">{{ post.edited_at|localtime }}</span>
+          {% else %}
+          Posted <span class="relative-time" data-timestamp="{{ (post.timestamp.isoformat() + 'Z').replace('+00:00Z', 'Z') if post.timestamp else '' }}">{{ post.timestamp|localtime }}</span>
+          {% endif %}
+          by <strong><a href="{{ url_for('profile.profile', username=post.author) }}" style="color: #3e2217; text-decoration: none;">{{ post.author }}</a></strong>
+          &bull; {{ post.view_count or 0 }} views &bull; {{ post.likes_count or 0 }} likes &bull; {{ post.comment_count or 0 }} comments
+        </div>
+
+        <div class="post-actions" style="margin-top: 0.85rem; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center;">
+          {% if post.total_reports > 0 %}
+          <button onclick="viewPostReports('{{ post._id }}', '{{ post.title | e }}')" class="btn" style="background: #fff; border: 1px solid #ffcdd2; color: #c62828; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+            <i class="fas fa-eye"></i> Reports ({{ post.total_reports }})
+          </button>
+          {% endif %}
+
+          {% if post.is_suppressed or post.is_reported or post.ai_safety_flagged or post.moderation_status in ['flagged', 'ai_flagged'] or post.image_status == 'removed_nsfw' %}
+          <form action="{{ url_for('admin.admin_approve_post', post_id=post._id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Approve this post and restore its visibility to the public feed?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn" style="background: #2e7d32; color: white; border: none; padding: 0.25rem 0.65rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+              <i class="fas fa-check"></i> Approve & Clear
+            </button>
+          </form>
+          {% endif %}
+
           {% if post.is_pinned %}
           <form action="{{ url_for('admin.admin_unpin_post', post_id=post._id) }}" method="POST" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn comment-btn" style="background-color: #ffd700; color: #000; border: none;">
-              Unpin</button>
+            <button type="submit" class="btn" style="background: #ffd700; color: #000; border: none; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;">
+              Unpin
+            </button>
           </form>
           {% else %}
           <form action="{{ url_for('admin.admin_pin_post', post_id=post._id) }}" method="POST" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn comment-btn" style="border: none;">
-              Pin</button>
+            <button type="submit" class="btn" style="background: #f5f5f5; color: #333; border: 1px solid #ddd; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;">
+              Pin
+            </button>
           </form>
           {% endif %}
 
           <form action="{{ url_for('admin.admin_delete_post', post_id=post._id) }}" method="POST"
-            data-confirm="Are you sure you want to permanently delete this post?" style="display: inline;">
+            onsubmit="return confirm('Are you sure you want to PERMANENTLY delete this post and all associated media/comments? This cannot be undone!');" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="delete-btn">Delete Post</button>
+            <button type="submit" class="btn delete-btn" style="background: #c62828; color: white; border: none; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; cursor: pointer;">
+              <i class="fas fa-trash"></i> Delete Post
+            </button>
           </form>
         </div>
       </div>
       {% else %}
-      <p>No posts found.</p>
+      <div style="text-align: center; padding: 3rem 1rem; color: #aaa;">
+        <i class="fas fa-newspaper" style="font-size: 2.5rem; margin-bottom: 0.75rem; display: block;"></i>
+        <h3 style="color: #888; margin: 0 0 0.25rem 0;">No posts found</h3>
+        <p>{% if filter_type == 'reported' %}No posts with pending reports.{% elif filter_type == 'ai_flagged' %}No AI-flagged posts.{% elif filter_type == 'pinned' %}No pinned posts.{% else %}No posts match your search.{% endif %}</p>
+      </div>
       {% endfor %}
     </div>
 
     {# Pagination Links #}
     {% if total_pages > 1 %}
-    <nav aria-label="Page navigation" class="pagination-nav">
-      <ul class="pagination">
-        {# Link to the Previous Page #}
+    <nav aria-label="Page navigation" class="pagination-nav" style="margin-top: 1.5rem;">
+      <ul class="pagination" style="display: flex; justify-content: center; gap: 0.5rem; list-style: none; padding: 0;">
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-          <a class="page-link" href="{{ url_for('admin.admin_posts', page=page-1, query=query) }}">Previous</a>
+          <a class="page-link" href="{{ url_for('admin.admin_posts', page=page-1, filter=filter_type, query=query) }}" style="padding: 0.4rem 0.8rem; border-radius: 6px; background: #f5f5f5; color: #333; text-decoration: none; font-size: 0.82rem; font-weight: 600;">Previous</a>
         </li>
-
-        {# Link to the Next Page #}
+        <li style="display: flex; align-items: center; font-size: 0.85rem; color: #888;">
+          Page {{ page }} of {{ total_pages }}
+        </li>
         <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-          <a class="page-link" href="{{ url_for('admin.admin_posts', page=page+1, query=query) }}">Next</a>
-        </li>
-
-        <li class="page-item" style="margin-left: auto;">
-          <a class="page-link" href="{{ url_for('blog.blog') }}">Home</a>
+          <a class="page-link" href="{{ url_for('admin.admin_posts', page=page+1, filter=filter_type, query=query) }}" style="padding: 0.4rem 0.8rem; border-radius: 6px; background: #f5f5f5; color: #333; text-decoration: none; font-size: 0.82rem; font-weight: 600;">Next</a>
         </li>
       </ul>
     </nav>
     {% endif %}
   </div>
 </div>
+
+<!-- Post Reports Modal -->
+<div id="postReportsModal" style="display:none;position:fixed;z-index:1000;left:0;top:0;right:0;bottom:0;width:100%;width:100vw;width:100dvw;height:100%;height:100vh;height:100dvh;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;backdrop-filter:blur(3px);box-sizing:border-box;padding:env(safe-area-inset-top, 16px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 16px) env(safe-area-inset-left, 16px);" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;padding:1.5rem;border-radius:12px;width:min(90%,600px);max-width:calc(100vw - 32px);max-width:calc(100dvw - 32px);box-shadow:0 10px 30px rgba(0,0,0,0.2);position:relative;max-height:90vh;max-height:90dvh;overflow-y:auto;box-sizing:border-box;margin:auto;">
+    <span onclick="document.getElementById('postReportsModal').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;font-size:1.3rem;color:#aaa;cursor:pointer;">&times;</span>
+    <h2 id="post-reports-modal-title" style="margin:0 0 1rem 0;color:#3e2217;font-size:1.1rem;">Post Reports</h2>
+    <div id="post-reports-list" style="min-height: 60px;">
+      <p style="color: #999; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  async function viewPostReports(postId, postTitle) {
+    const modal = document.getElementById('postReportsModal');
+    const title = document.getElementById('post-reports-modal-title');
+    const list = document.getElementById('post-reports-list');
+
+    title.textContent = 'Reports: ' + postTitle;
+    list.innerHTML = '<p style="color: #999; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Loading reports...</p>';
+    modal.style.display = 'flex';
+
+    try {
+      const res = await fetch(`/api/admin/posts/${postId}/reports`);
+      const data = await res.json();
+
+      if (!data.reports || data.reports.length === 0) {
+        list.innerHTML = '<p style="color: #aaa; text-align: center; padding: 1rem;">No reports for this post.</p>';
+        return;
+      }
+
+      const reasonLabels = {
+        'spam': 'Spam / Commercial',
+        'harassment': 'Harassment / Bullying',
+        'hate_speech': 'Hate Speech',
+        'inappropriate': 'Inappropriate / Explicit Content',
+        'misinformation': 'Misinformation',
+        'other': 'Other'
+      };
+
+      let html = '';
+      data.reports.forEach(r => {
+        const statusColor = r.status === 'pending' ? '#ff9800' : (r.status === 'dismissed' ? '#999' : '#2e7d32');
+        const statusBg = r.status === 'pending' ? '#fff3e0' : (r.status === 'dismissed' ? '#f5f5f5' : '#e8f5e9');
+        const date = r.created_at ? (window.parseServerTime ? window.parseServerTime(r.created_at) : new Date(r.created_at)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+        html += `<div style="border: 1px solid #eee; border-radius: 8px; padding: 0.85rem; margin-bottom: 0.6rem; background: #fafafa;">`;
+        html += `<div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">`;
+        html += `<div>`;
+        html += `<div style="font-weight: 600; font-size: 0.85rem; color: #333;"><i class="fas fa-user" style="color:#aaa; margin-right:4px;"></i> ${r.reporter_username}</div>`;
+        html += `<div style="font-size: 0.78rem; color: #aaa; margin-top: 2px;">${date}</div>`;
+        html += `</div>`;
+        html += `<div style="display: flex; align-items: center; gap: 0.4rem;">`;
+        html += `<span style="background: ${statusBg}; color: ${statusColor}; padding: 0.1rem 0.45rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">${r.status}</span>`;
+        html += `</div>`;
+        html += `</div>`;
+        html += `<div style="margin-top: 0.5rem;">`;
+        html += `<span style="background: #eee; padding: 0.15rem 0.45rem; border-radius: 3px; font-size: 0.75rem; color: #333; font-weight: 600;">${reasonLabels[r.reason] || r.reason}</span>`;
+        if (r.details) {
+          html += `<p style="font-size: 0.82rem; color: #555; margin: 0.4rem 0 0 0; line-height: 1.4;">${r.details}</p>`;
+        }
+        html += `</div>`;
+        if (r.status === 'pending') {
+          html += `<div style="margin-top: 0.5rem; text-align: right;">`;
+          html += `<button onclick="dismissPostReport('${r.id}', this)" style="background: none; border: 1px solid #ddd; padding: 0.25rem 0.6rem; border-radius: 4px; font-size: 0.75rem; cursor: pointer; color: #666;">Dismiss Report</button>`;
+          html += `</div>`;
+        }
+        html += `</div>`;
+      });
+
+      list.innerHTML = html;
+    } catch (err) {
+      list.innerHTML = '<p style="color: #c62828; text-align: center;">Failed to load reports.</p>';
+    }
+  }
+
+  async function dismissPostReport(reportId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Dismissing...';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    try {
+      const res = await fetch(`/api/admin/post_reports/${reportId}/dismiss`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      if (data.success) {
+        btn.textContent = 'Dismissed ✓';
+        btn.style.color = '#2e7d32';
+        btn.style.borderColor = '#2e7d32';
+        const card = btn.closest('div[style*="border: 1px"]');
+        if (card) {
+          const badge = card.querySelector('span[style*="text-transform: uppercase"]');
+          if (badge) {
+            badge.textContent = 'DISMISSED';
+            badge.style.background = '#f5f5f5';
+            badge.style.color = '#999';
+          }
+        }
+      } else {
+        btn.textContent = 'Error';
+        btn.style.color = '#c62828';
+      }
+    } catch (err) {
+      btn.textContent = 'Error';
+      btn.style.color = '#c62828';
+    }
+  }
+</script>
 {% endblock %}

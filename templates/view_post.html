@@ -161,6 +161,25 @@
 <div class="content-wrapper">
     <div class="post-item auto-view-post" data-post-id="{{ post._id|string }}"
         style="position: relative; border-left: none; box-shadow: none; padding: 20px; background-color: white;">
+        {% if under_moderation %}
+        <div style="background: #fff3e0; border: 1px solid #ffe0b2; color: #e65100; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: 0.88rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+            <div>
+                <i class="fas fa-exclamation-triangle" style="margin-right: 6px;"></i>
+                <strong>Under Moderation:</strong> This post is currently flagged or under review. Its visibility is suppressed in public feeds.
+                {% if post.flagged_reason %}
+                <span style="display: block; font-size: 0.8rem; margin-top: 2px; color: #c62828;">Reason: {{ post.flagged_reason }}</span>
+                {% endif %}
+            </div>
+            {% if current_user.is_authenticated and current_user.is_admin %}
+            <form action="{{ url_for('admin.admin_approve_post', post_id=post._id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Approve this post and restore its visibility to the public feed?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn" style="background: #2e7d32; color: white; border: none; padding: 0.3rem 0.75rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-check"></i> Approve Post
+                </button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
         <div class="post-header" style="align-items: flex-start; gap: 0.6rem; flex-wrap: wrap;">
             <h1 class="post-title single-post-title"
                 style="margin:0; flex: 1 1 auto; min-width: 0; font-size: 1.4rem; word-wrap: break-word; overflow-wrap: break-word;">
@@ -219,6 +238,11 @@
                         <i class="{% if is_saved %}fas{% else %}far{% endif %} fa-bookmark"></i>
                     </button>
                 </form>
+                {% if current_user.id != post.author_id|string %}
+                <button type="button" onclick="openPostReportModal('{{ post._id|string }}', '{{ post.title | e }}')" title="Report Post" style="background: none; border: none; cursor: pointer; color: #6c757d; font-size: 1.1rem; padding: 0; display: inline-flex; align-items: center;">
+                    <i class="far fa-flag"></i>
+                </button>
+                {% endif %}
                 {% endif %}
             </div>
         </div>

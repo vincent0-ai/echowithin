@@ -252,6 +252,17 @@ def admin_system_health():
         health['communities'] = {'status': 'healthy', 'total': m.communities_conf.count_documents({}), 'pending_reports': m.community_reports_conf.count_documents({'status': 'pending'})}
     except Exception as e:
         health['communities'] = {'status': 'error', 'detail': str(e)}
+    try:
+        pending_post_reps = m.post_reports_conf.count_documents({'status': 'pending'})
+        ai_flagged_count = m.posts_conf.count_documents({'$or': [{'ai_safety_flagged': True}, {'moderation_status': 'ai_flagged'}, {'image_status': 'removed_nsfw'}]})
+        health['post_moderation'] = {
+            'status': 'stale' if (pending_post_reps > 0 or ai_flagged_count > 0) else 'healthy',
+            'pending_reports': pending_post_reps,
+            'ai_flagged': ai_flagged_count,
+            'total_reports': m.post_reports_conf.count_documents({})
+        }
+    except Exception as e:
+        health['post_moderation'] = {'status': 'error', 'detail': str(e)}
     return jsonify(health)
 
 
@@ -294,12 +305,195 @@ def admin_reindex_notes_typesense():
 @admin_required
 def admin_posts():
     import main as m
+    import re
     page = request.args.get('page', 1, type=int)
     per_page = 20
     skip = (page - 1) * per_page
-    total = m.posts_conf.count_documents({})
-    posts = list(m.posts_conf.find({}).sort('timestamp', -1).skip(skip).limit(per_page))
-    return render_template('admin_posts.html', posts=posts, page=page, total_pages=(total + per_page - 1) // per_page, total=total)
+    filter_type = request.args.get('filter', 'all')  # all, reported, ai_flagged, pinned
+    query_param = request.args.get('query', '').strip()
+
+    # Base query based on tab filter
+    query = {}
+    if filter_type == 'reported':
+        reported_ids = m.post_reports_conf.distinct('post_id', {'status': 'pending'})
+        query['$or'] = [
+            {'_id': {'$in': reported_ids}},
+            {'is_reported': True},
+            {'moderation_status': 'flagged'}
+        ]
+    elif filter_type == 'ai_flagged':
+        query['$or'] = [
+            {'ai_safety_flagged': True},
+            {'moderation_status': 'ai_flagged'},
+            {'image_status': 'removed_nsfw'}
+        ]
+    elif filter_type == 'pinned':
+        query['is_pinned'] = True
+
+    if query_param:
+        search_or = [
+            {'title': {'$regex': re.escape(query_param), '$options': 'i'}},
+            {'author': {'$regex': re.escape(query_param), '$options': 'i'}},
+            {'content': {'$regex': re.escape(query_param), '$options': 'i'}}
+        ]
+        if '$or' in query:
+            query = {'$and': [{'$or': query.pop('$or')}, {'$or': search_or}]}
+        else:
+            query['$or'] = search_or
+
+    total = m.posts_conf.count_documents(query)
+    posts = list(m.posts_conf.find(query).sort('timestamp', -1).skip(skip).limit(per_page))
+
+    # Enrich posts with report stats
+    for p in posts:
+        p['pending_reports'] = m.post_reports_conf.count_documents({'post_id': p['_id'], 'status': 'pending'})
+        p['total_reports'] = m.post_reports_conf.count_documents({'post_id': p['_id']})
+
+    # Counts for tab badges
+    pending_reported_ids = m.post_reports_conf.distinct('post_id', {'status': 'pending'})
+    total_reported_posts = m.posts_conf.count_documents({
+        '$or': [
+            {'_id': {'$in': pending_reported_ids}},
+            {'is_reported': True},
+            {'moderation_status': 'flagged'}
+        ]
+    })
+    total_ai_flagged = m.posts_conf.count_documents({
+        '$or': [
+            {'ai_safety_flagged': True},
+            {'moderation_status': 'ai_flagged'},
+            {'image_status': 'removed_nsfw'}
+        ]
+    })
+    total_pending_reports = m.post_reports_conf.count_documents({'status': 'pending'})
+
+    return render_template(
+        'admin_posts.html',
+        posts=posts,
+        page=page,
+        total_pages=max((total + per_page - 1) // per_page, 1),
+        total=total,
+        filter_type=filter_type,
+        query=query_param,
+        total_reported_posts=total_reported_posts,
+        total_ai_flagged=total_ai_flagged,
+        total_pending_reports=total_pending_reports
+    )
+
+
+@bp.route('/admin/posts/<post_id>/approve', methods=['POST'])
+@login_required
+@admin_required
+def admin_approve_post(post_id):
+    """Approve/clear a reported or AI-flagged post, restoring full feed visibility."""
+    import main as m
+    post_obj_id = m.safe_object_id(post_id)
+    if not post_obj_id:
+        flash('Invalid post ID.', 'danger')
+        return redirect(url_for('admin.admin_posts'))
+
+    post = m.posts_conf.find_one({'_id': post_obj_id})
+    if not post:
+        flash('Post not found.', 'danger')
+        return redirect(url_for('admin.admin_posts'))
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    update_doc = {
+        'moderation_status': 'cleared',
+        'is_suppressed': False,
+        'is_approved': True,
+        'is_reported': False,
+        'reviewed_by': ObjectId(current_user.id),
+        'reviewed_at': now_utc,
+    }
+    if post.get('image_status') in ['removed_nsfw', 'pending_review']:
+        update_doc['image_status'] = 'safe'
+
+    unset_doc = {'ai_safety_flagged': '', 'flagged_reason': ''}
+    m.posts_conf.update_one({'_id': post_obj_id}, {'$set': update_doc, '$unset': unset_doc})
+
+    # Mark all pending reports for this post as cleared
+    m.post_reports_conf.update_many(
+        {'post_id': post_obj_id, 'status': 'pending'},
+        {
+            '$set': {
+                'status': 'cleared',
+                'reviewed_by': ObjectId(current_user.id),
+                'reviewed_at': now_utc,
+            }
+        }
+    )
+
+    # Invalidate feed cache
+    try:
+        if m.blog_feed_cache:
+            m.blog_feed_cache.clear()
+    except Exception:
+        pass
+
+    # Reindex to Typesense
+    try:
+        if m._t.ts_posts:
+            m.index_post_to_typesense(str(post_obj_id))
+    except Exception:
+        pass
+
+    flash(f"Post '{post.get('title')}' approved and restored to feeds.", 'success')
+    return redirect(request.referrer or url_for('admin.admin_posts'))
+
+
+@bp.route('/api/admin/posts/<post_id>/reports', methods=['GET'])
+@login_required
+@admin_required
+def api_admin_post_reports(post_id):
+    """View all reports for a specific blog post."""
+    import main as m
+    post_obj_id = m.safe_object_id(post_id)
+    if not post_obj_id:
+        return jsonify({'error': 'Invalid post ID'}), 400
+
+    reports = list(m.post_reports_conf.find({'post_id': post_obj_id}).sort('created_at', -1))
+    result = []
+    for r in reports:
+        dt = r.get('created_at')
+        if dt and dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        iso_str = (dt.isoformat() + 'Z').replace('+00:00Z', 'Z') if dt else ''
+        result.append({
+            'id': str(r['_id']),
+            'reporter_username': r.get('reporter_username', 'Unknown'),
+            'reason': r.get('reason', 'other'),
+            'details': r.get('details', ''),
+            'status': r.get('status', 'pending'),
+            'created_at': iso_str,
+        })
+    return jsonify({'success': True, 'reports': result})
+
+
+@bp.route('/api/admin/post_reports/<report_id>/dismiss', methods=['POST'])
+@login_required
+@admin_required
+def api_admin_dismiss_post_report(report_id):
+    """Dismiss a specific blog post report."""
+    import main as m
+    report_obj_id = m.safe_object_id(report_id)
+    if not report_obj_id:
+        return jsonify({'error': 'Invalid report ID'}), 400
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    result = m.post_reports_conf.update_one(
+        {'_id': report_obj_id},
+        {
+            '$set': {
+                'status': 'dismissed',
+                'dismissed_by': ObjectId(current_user.id),
+                'dismissed_at': now_utc,
+            }
+        }
+    )
+    if result.matched_count == 0:
+        return jsonify({'error': 'Report not found'}), 404
+    return jsonify({'success': True, 'message': 'Report dismissed'})
 
 
 @bp.route('/admin/delete_post/<post_id>', methods=['POST'])
@@ -329,12 +523,23 @@ def admin_delete_post(post_id):
         for c in m.comments_conf.find({'post_slug': post.get('slug')}):
             backup_before_delete('comments', c, current_user.id)
         m.comments_conf.delete_many({'post_slug': post.get('slug')})
+        m.post_reports_conf.delete_many({'post_id': post['_id']})
         backup_before_delete('posts', post, current_user.id)
         m.posts_conf.delete_one({'_id': post['_id']})
+        try:
+            if m._t.ts_posts:
+                m._t._ts_delete_document('posts', str(post['_id']))
+        except Exception:
+            pass
+        try:
+            if m.blog_feed_cache:
+                m.blog_feed_cache.clear()
+        except Exception:
+            pass
         flash('Post deleted.', 'success')
     else:
         flash('Post not found.', 'danger')
-    return redirect(url_for('admin.admin_posts'))
+    return redirect(request.referrer or url_for('admin.admin_posts'))
 
 
 @bp.route('/admin/posts/pin/<post_id>', methods=['POST'])

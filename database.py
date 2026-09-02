@@ -76,6 +76,10 @@ payment_grants_conf = None
 forms_conf = None
 form_responses_conf = None
 
+# --- Game Lobbies (Kahoot-style poll/trivia) ---
+game_sessions_conf = None
+game_votes_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 
@@ -102,6 +106,11 @@ _dm_fernet_v3_cache = TTLCache(maxsize=512, ttl=3600)
 _community_fernet_v2_cache = TTLCache(maxsize=128, ttl=3600)
 _bond_fernet_cache = TTLCache(maxsize=512, ttl=3600)
 _form_fernet_cache = TTLCache(maxsize=512, ttl=3600)
+
+# Game lobby presence (mirrors active_note_viewers) — lobby_id -> {user_id: {name, avatar, id, ready}}
+active_game_players = {}
+# Per-lobby vote debounce (lobby_id -> timestamp) not needed — counts in DB
+
 
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 active_chat_views = {}

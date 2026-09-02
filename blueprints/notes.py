@@ -547,6 +547,11 @@ def personal_space():
         user_forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
     except Exception:
         user_forms = []
+    # Games for personal_space tab (2+ players, anytime)
+    try:
+        user_games = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(20))
+    except Exception:
+        user_games = []
     render_kwargs = {
         'saved_posts': saved_posts,
         'personal_posts': personal_posts,
@@ -585,7 +590,9 @@ def personal_space():
         ],
         'pending_proposals_map': pending_proposals_map,
         'user_forms': user_forms,
-        'total_forms': len(user_forms)
+        'total_forms': len(user_forms),
+        'user_games': user_games,
+        'total_games': len(user_games)
     }
     if target_note_id:
         render_kwargs['target_note_id'] = target_note_id

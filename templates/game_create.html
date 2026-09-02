@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:720px; margin:2rem auto; padding:0 1rem;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h2 style="margin:0; color:#3e2217;"><i class="fas fa-gamepad"></i> Create Game</h2>
+    <a href="{{ url_for('game.games_list') }}" style="font-size:0.85rem; color:#3e2217; text-decoration:underline;">My lobbies</a>
+  </div>
+  <p style="font-size:0.85rem; color:#666; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.6rem 0.8rem;"><i class="fas fa-users"></i> <strong>Poll</strong> = community reflection, no right answer &bull; <strong>Trivia</strong> = cozy single-choice, accuracy only (no speed). Live via <code>share_id</code> room <code>main.py:1527</code>, 30 players max.</p>
+  <form method="POST" style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1.2rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Title *</label>
+    <input type="text" name="title" maxlength="100" required style="width:100%; padding:0.55rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.8rem;" placeholder="e.g., Team check-in">
+    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Question *</label>
+    <input type="text" name="question" maxlength="200" required style="width:100%; padding:0.55rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.8rem;" placeholder="e.g., One word for your week?">
+    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Game type</label>
+    <select name="game_type" id="game_type" onchange="document.getElementById('correct_wrap').style.display=this.value==='trivia'?'block':'none'" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.8rem;">
+      <option value="poll">Poll / reflection (no correct answer)</option>
+      <option value="trivia">Cozy trivia (accuracy only)</option>
+    </select>
+    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Options (2-5)</label>
+    <div id="opts">
+      <input type="text" name="options" placeholder="Option 1" required style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.4rem;">
+      <input type="text" name="options" placeholder="Option 2" required style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.4rem;">
+    </div>
+    <button type="button" onclick="if(document.querySelectorAll('[name=options]').length<5){const i=document.createElement('input'); i.name='options'; i.placeholder='Option '+(document.querySelectorAll('[name=options]').length+1); i.style='width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.4rem;'; document.getElementById('opts').appendChild(i);}" style="font-size:0.8rem; background:#f5ebe7; border:1px solid #e8dcd5; border-radius:6px; padding:0.3rem 0.6rem; margin-bottom:0.8rem;">+ Add option</button>
+    <div id="correct_wrap" style="display:none; margin-bottom:0.8rem;">
+      <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Correct option (trivia only, optional)</label>
+      <input type="text" name="correct_option" placeholder="Must match an option exactly" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px;">
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
+      <div>
+        <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Expiry</label>
+        <select name="expires_in" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px;">
+          <option value="">Never</option>
+          <option value="1h">1 hour</option>
+          <option value="1d">1 day</option>
+          <option value="7d">7 days</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:end;"><button type="submit" style="width:100%; background:#3e2217; color:#fff; border-radius:8px; padding:0.65rem; font-weight:600; border:none; cursor:pointer;">Create & get link</button></div>
+    </div>
+  </form>
+</div>
+{% endblock %}

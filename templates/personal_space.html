@@ -2144,6 +2144,10 @@
             Forms
             <span class="badge">{{ total_forms }}</span>
         </button>
+        <button data-tab="games" role="tab" aria-selected="false" id="games-tab-btn">
+            Games
+            <span class="badge">{{ total_games }}</span>
+        </button>
     </div>
 
     <!-- Saved Posts Tab -->
@@ -3217,6 +3221,38 @@
             <h3>No forms yet</h3>
             <p>Create a Google-Forms-style questionnaire, share a public link, and view encrypted responses.</p>
             <a href="{{ url_for('forms.forms_create') }}" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.6rem 1.2rem; text-decoration:none; margin-top:0.5rem; display:inline-block;">Create your first form</a>
+        </div>
+        {% endif %}
+    </div>
+    <div id="tab-games" class="tab-panel" role="tabpanel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; color:#3e2217;"><i class="fas fa-gamepad"></i> Games — 2+ players, anytime</h3>
+            <a href="{{ url_for('game.games_create') }}" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.5rem 1rem; text-decoration:none; font-size:0.85rem;"><i class="fas fa-plus"></i> New lobby</a>
+        </div>
+        <p style="font-size:0.85rem; color:#666; margin:0 0 1rem 0; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.6rem 0.8rem;"><i class="fas fa-users"></i> <strong>On-demand party games</strong> — poll & cozy trivia. Share a link, 2–30 players join instantly, no scheduling. Live via <code>share_id</code> room <code>main.py:1527</code>, offline queue via IndexedDB. <a href="{{ url_for('game.games_list') }}" style="color:#3e2217; text-decoration:underline;">All lobbies</a></p>
+        {% if user_games %}
+        <div style="display:grid; gap:0.7rem;">
+            {% for lobby in user_games %}
+            <div style="border:1px solid #f5ebe7; border-radius:10px; padding:0.9rem; background:#fff;">
+                <div style="font-weight:600; color:#3e2217; font-size:0.95rem;">{{ lobby.title }} <span style="font-weight:400; font-size:0.7rem; background:#f5ebe7; padding:2px 6px; border-radius:6px;">{{ lobby.game_type }}</span> {% if lobby.deactivated %}<span style="background:#fee; color:#c0392b; padding:2px 6px; border-radius:6px; font-size:0.7rem;">deactivated</span>{% endif %}{% if lobby.revealed %}<span style="background:#eafaf1; color:#1e8449; padding:2px 6px; border-radius:6px; font-size:0.7rem;">revealed</span>{% endif %}</div>
+                <div style="font-size:0.85rem; color:#555; margin:0.2rem 0;">{{ lobby.question.label }}</div>
+                <div style="font-size:0.75rem; color:#999;">{{ lobby.question.options|join(' • ') }} &bull; {{ lobby.created_at|localtime('%b %d %H:%M') }}</div>
+                <div style="margin-top:0.5rem; display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                    {% set _gurl = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
+                    <input type="text" value="{{ _gurl }}" readonly onclick="this.select()" style="flex:1; min-width:160px; font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #eee; border-radius:6px; background:#fafafa;">
+                    <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" style="font-size:0.75rem; padding:0.3rem 0.6rem; border-radius:6px; background:#f5ebe7; border:1px solid #e8dcd5; cursor:pointer;">Copy</button>
+                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" style="font-size:0.78rem; padding:0.3rem 0.7rem; border-radius:6px; background:#3e2217; color:#fff; text-decoration:none;">Open</a>
+                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" style="font-size:0.78rem; padding:0.3rem 0.7rem; border-radius:6px; background:#fff; border:1px solid #ddd; text-decoration:none;">Results</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-gamepad" style="opacity:0.4;"></i>
+            <h3>No games yet</h3>
+            <p>Host a poll or cozy trivia — share a link, 2–30 friends join at any time.</p>
+            <a href="{{ url_for('game.games_create') }}" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.6rem 1.2rem; text-decoration:none; margin-top:0.5rem; display:inline-block;">Create game</a>
         </div>
         {% endif %}
     </div>
@@ -6677,7 +6713,7 @@
         // Helper to get tab from Hash
         function getTabFromHash() {
             const hash = window.location.hash.replace('#', '');
-            if (['saved', 'notes', 'activity', 'locked', 'forms'].includes(hash)) return hash;
+            if (['saved', 'notes', 'activity', 'locked', 'forms', 'games'].includes(hash)) return hash;
             return null;
         }
 

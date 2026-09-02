@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:680px; margin:2rem auto; padding:0 1rem;">
+  {% if expired %}
+    <div style="background:#fee; border:1px solid #fcc; border-radius:12px; padding:1.5rem; text-align:center;">
+      <h3 style="color:#c0392b;">{{ msg or 'Lobby unavailable' }}</h3>
+      <a href="/" style="color:#3e2217; text-decoration:underline;">Home</a>
+    </div>
+  {% else %}
+    <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1.2rem; margin-bottom:1rem;">
+      <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:start;">
+        <div>
+          <h2 style="margin:0 0 0.3rem 0; color:#3e2217; font-size:1.3rem;">{{ lobby.title }}</h2>
+          <div style="font-size:0.8rem; color:#999;">{{ lobby.game_type }} &bull; Host {{ lobby.host_username }} &bull; <span id="presence-count">—</span> present &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
+        </div>
+        {% if is_host %}
+          <form method="POST" action="{{ url_for('game.reveal_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" style="background:#3e2217; color:#fff; border:none; border-radius:8px; padding:0.5rem 0.8rem; font-size:0.8rem; cursor:pointer;" {% if lobby.revealed %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>{% if lobby.revealed %}Revealed{% else %}Reveal results{% endif %}</button>
+          </form>
+        {% endif %}
+      </div>
+      <div style="margin-top:0.8rem; font-size:0.95rem; color:#333; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.8rem;">
+        <div style="font-weight:600; color:#3e2217; margin-bottom:0.5rem;">{{ lobby.question.label }}</div>
+        {% if not has_voted and not is_host %}
+          <form method="POST" action="{{ url_for('game.vote_lobby', lobby_id=lobby.lobby_id) }}" id="vote-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="position:absolute; left:-9999px; width:1px; overflow:hidden;"><input type="text" name="website" autocomplete="off" tabindex="-1"></div>
+            {% for opt in lobby.question.options %}
+              <label style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.4rem; cursor:pointer;">
+                <input type="radio" name="option" value="{{ opt }}" required> <span>{{ opt }}</span>
+              </label>
+            {% endfor %}
+            <button type="submit" style="width:100%; margin-top:0.6rem; background:#3e2217; color:#fff; border:none; border-radius:8px; padding:0.7rem; font-weight:600; cursor:pointer;">Submit vote</button>
+          </form>
+          <p style="font-size:0.75rem; color:#999; margin:0.5rem 0 0 0;"><i class="fas fa-lock"></i> Anonymous by default (IP hashed). Encrypted at rest not E2E.</p>
+        {% elif has_voted %}
+          <div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:8px; padding:0.6rem 0.8rem; font-size:0.9rem; color:#1e8449;"><i class="fas fa-check"></i> You voted <strong>{{ my_vote }}</strong> — waiting for host reveal.</div>
+          {% if lobby.revealed %}
+            <div style="margin-top:0.6rem; font-size:0.9rem;">
+              {% if lobby.game_type=='trivia' and lobby.question.correct_option %}<div style="margin-bottom:0.4rem;">Correct: <strong style="color:#1e8449;">{{ lobby.question.correct_option }}</strong> {% if my_vote == lobby.question.correct_option %}✅{% else %}❌{% endif %}</div>{% endif %}
+              <div style="font-weight:600; margin-bottom:0.3rem;">Live counts:</div>
+              {% for opt in lobby.question.options %}
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding:0.2rem 0;"><span>{{ opt }}</span><strong id="count-{{ loop.index0 }}">{{ lobby.counts[opt] if lobby.counts else 0 }}</strong></div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% elif is_host %}
+          <div style="font-size:0.85rem; color:#666;">Host view — 
+            {% if lobby.revealed %} revealed. {% else %} waiting for votes. Press Reveal to show results. {% endif %}
+            <div style="margin-top:0.5rem;">
+              {% for opt in lobby.question.options %}
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem;"><span>{{ opt }}</span><strong class="host-count" data-opt="{{ opt }}">{{ lobby.counts[opt] if lobby.counts else 0 }}</strong></div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+      <div style="margin-top:0.8rem; font-size:0.78rem; color:#999;">
+        Share: <input type="text" value="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly onclick="this.select()" style="width:60%; font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #eee; border-radius:6px; background:#fafafa;">
+        <button onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" style="font-size:0.75rem; padding:0.25rem 0.5rem; border-radius:6px; background:#3e2217; color:#fff; border:none; cursor:pointer;">Copy</button>
+        {% if is_host %}<a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" style="margin-left:0.5rem; font-size:0.78rem; color:#3e2217; text-decoration:underline;">Results & export</a>{% endif %}
+      </div>
+      <div id="presence-list" style="margin-top:0.8rem; font-size:0.8rem; color:#666;"></div>
+    </div>
+    <div style="font-size:0.75rem; color:#999; text-align:center;">LAN: if server unreachable, host's <code>/g/{{ lobby.lobby_id }}</code> is cached via service-worker <code>API_CACHE</code> + IndexedDB queue (like Bonds <code>offline-sync 5292</code>). Players on same WiFi use QR LAN IP; votes queue and <code>Background Sync</code> flush when online.</div>
+  {% endif %}
+</div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  const lobbyId = "{{ lobby.lobby_id if not expired else '' }}";
+  if(!lobbyId || typeof io==='undefined') return;
+  const socket = io({transports:['websocket','polling']});
+  socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
+  socket.on('game_presence_update', (data)=>{
+    const el=document.getElementById('presence-list');
+    if(el && data.players) el.textContent = data.players.length + ' present: ' + data.players.map(p=>p.name).join(', ');
+    const pc=document.getElementById('presence-count');
+    if(pc && data.players) pc.textContent = data.players.length;
+  });
+  socket.on('game_vote', (data)=>{
+    if(data.lobby_id!==lobbyId) return;
+    const vc=document.getElementById('vote-count');
+    if(vc) vc.textContent = data.total;
+    Object.entries(data.counts||{}).forEach(([opt,c])=>{
+      document.querySelectorAll('[data-opt="'+opt+'"], [id^="count-"]').forEach(el=>{
+        if(el.dataset.opt===opt) el.textContent=c;
+      });
+    });
+  });
+  socket.on('game_reveal', (data)=>{
+    if(data.lobby_id!==lobbyId) return;
+    location.reload();
+  });
+  // offline queue: if submit fails, store in IndexedDB like personal_space 8049
+  const form=document.getElementById('vote-form');
+  if(form){
+    form.addEventListener('submit', async (e)=>{
+      if(!navigator.onLine){
+        e.preventDefault();
+        try{
+          const fd=new FormData(form);
+          const opt=fd.get('option');
+          const dbName='echowithin-game-pending';
+          const openReq=indexedDB.open(dbName,1);
+          openReq.onupgradeneeded=e=>e.target.result.createObjectStore('votes',{autoIncrement:true});
+          openReq.onsuccess=e=>{
+            const db=e.target.result;
+            const tx=db.transaction('votes','readwrite');
+            tx.objectStore('votes').add({lobbyId, option:opt, ts:Date.now()});
+            if('serviceWorker' in navigator && 'SyncManager' in window){
+              navigator.serviceWorker.ready.then(r=>r.sync.register('sync-pending-game-votes'));
+            }
+            alert('Offline — vote queued, will sync when online.');
+          };
+        }catch(err){ alert('Offline — try again when online.'); }
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

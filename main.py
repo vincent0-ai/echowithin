@@ -130,6 +130,7 @@ from blueprints.admin import bp as admin_bp
 from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
 from blueprints.forms import bp as forms_bp
+from blueprints.game import bp as game_bp
 from api import api_bp
 
 from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
@@ -199,6 +200,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
 app.register_blueprint(forms_bp)
+app.register_blueprint(game_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
 
 
@@ -343,6 +345,10 @@ def cleanup_stale_global_state():
             except Exception:
                 pass
             note_locks.pop(share_id, None)
+
+    for lobby_id in list(active_game_players.keys()):
+        if not active_game_players[lobby_id]:
+            active_game_players.pop(lobby_id, None)
 # Restrict CORS to the canonical domain (prevents Cross-Site WebSocket Hijacking)
 _ALLOWED_ORIGINS = os.environ.get('SOCKETIO_ALLOWED_ORIGINS', 'https://echowithin.xyz,https://blog.echowithin.xyz,https://staging.echowithin.xyz').split(',')
 socketio = SocketIO(cors_allowed_origins=_ALLOWED_ORIGINS, async_mode='gevent')
@@ -625,6 +631,10 @@ app_updates_conf = db['app_updates']
 forms_conf = db['forms']
 form_responses_conf = db['form_responses']
 
+# --- Game Lobbies (2+ players, anytime — poll/trivia on-demand) ---
+game_sessions_conf = db['game_sessions']
+game_votes_conf = db['game_votes']
+
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
 user_sessions_conf.create_index('user_id')
@@ -824,6 +834,15 @@ active_note_viewers = {}
 # Prevents concurrent editing conflicts during Bible study sessions
 note_locks = {}
 
+# In-memory game lobby presence (lobby_id -> {user_id: {name, avatar, id}})
+# Mirrors active_note_viewers pattern — 30 max via game logic, no persistence
+active_game_players = {}
+try:
+    import database as _db_game
+    _db_game.active_game_players = active_game_players
+except Exception:
+    pass
+
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
@@ -914,6 +933,12 @@ forms_conf.create_index([('owner_id', 1), ('created_at', -1)])
 form_responses_conf.create_index([('form_id', 1), ('submitted_at', -1)])
 form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 
+# --- Game Lobbies (2+ players, anytime) ---
+game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
+game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
+game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)], unique=True)
+game_votes_conf.create_index([('lobby_id', 1), ('submitted_at', -1)])
+
 # --- Performance: Additional compound indexes for common query patterns ---
 comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
 comments_conf.create_index([('parent_id', 1), ('author_id', 1)])
@@ -978,6 +1003,8 @@ database.bond_pulses_conf = bond_pulses_conf
 database.hidden_chats_conf = hidden_chats_conf
 database.forms_conf = forms_conf
 database.form_responses_conf = form_responses_conf
+database.game_sessions_conf = game_sessions_conf
+database.game_votes_conf = game_votes_conf
 
 
 def purge_guest_user_data(guest_id_str):
@@ -1670,6 +1697,65 @@ def handle_discussion_new_comment(data):
     emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
 
 
+# --- Game Lobbies (2+ players, anytime — poll/trivia on-demand) ---
+def _game_access(lobby_id):
+    if not lobby_id:
+        return None
+    lobby = game_sessions_conf.find_one({'lobby_id': lobby_id})
+    if not lobby:
+        return None
+    if lobby.get('deactivated'):
+        return None
+    if lobby.get('expires_at'):
+        exp = lobby['expires_at']
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=datetime.timezone.utc)
+        if datetime.datetime.now(datetime.timezone.utc) > exp:
+            return None
+    return lobby
+
+@socketio.on('join_game')
+@authenticated_only
+def handle_join_game(data):
+    lobby_id = (data or {}).get('lobby_id')
+    lobby = _game_access(lobby_id)
+    if not lobby:
+        emit('game_error', {'message': 'Lobby not found or expired.'}, room=request.sid)
+        return
+    # 2+ players guard: max 30
+    players = active_game_players.get(lobby_id, {})
+    if len(players) >= 30 and str(current_user.id) not in players:
+        emit('game_error', {'message': 'Lobby full (30 max).'}, room=request.sid)
+        return
+    join_room(lobby_id)
+    # track presence like active_note_viewers
+    user_id = str(current_user.id)
+    players[user_id] = {'name': current_user.username, 'avatar': getattr(current_user, 'profile_image_url', None), 'id': user_id}
+    active_game_players[lobby_id] = players
+    emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
+
+@socketio.on('leave_game')
+@authenticated_only
+def handle_leave_game(data):
+    lobby_id = (data or {}).get('lobby_id')
+    if not lobby_id:
+        return
+    user_id = str(current_user.id)
+    leaving = request.sid
+    # leave room
+    try:
+        leave_room(lobby_id)
+    except: pass
+    players = active_game_players.get(lobby_id, {})
+    if user_id in players:
+        players.pop(user_id, None)
+        if players:
+            active_game_players[lobby_id] = players
+            emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
+        else:
+            active_game_players.pop(lobby_id, None)
+
+
 # --- Direct Messaging (DM) Functionality ---
 
 @socketio.on('join_inbox')
@@ -1727,6 +1813,16 @@ def handle_dm_disconnect():
             if share_id in note_locks and note_locks[share_id]['user_id'] == user_id:
                 note_locks.pop(share_id)
                 emit('lock_released', {'share_id': share_id}, room=share_id)
+
+    # Cleanup game lobby presence (2+ players, anytime)
+    for lobby_id, players in list(active_game_players.items()):
+        if user_id in players:
+            players.pop(user_id, None)
+            if players:
+                active_game_players[lobby_id] = players
+                emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
+            else:
+                active_game_players.pop(lobby_id, None)
 
 
 @socketio.on('send_dm')

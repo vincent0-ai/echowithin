@@ -2140,6 +2140,10 @@
             Locked
             <span class="badge">{{ locked_notes_count }}</span>
         </button>
+        <button data-tab="forms" role="tab" aria-selected="false" id="forms-tab-btn">
+            Forms
+            <span class="badge">{{ total_forms }}</span>
+        </button>
     </div>
 
     <!-- Saved Posts Tab -->
@@ -3164,6 +3168,56 @@
         </div>
         {% endif %}
         </div><!-- /locked-notes-content -->
+        {% endif %}
+    </div>
+    <div id="tab-forms" class="tab-panel" role="tabpanel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; color:#3e2217;"><i class="fas fa-poll"></i> Forms — public share-link data collection</h3>
+            <a href="{{ url_for('forms.forms_create') }}" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.5rem 1rem; text-decoration:none; font-size:0.85rem;"><i class="fas fa-plus"></i> New Form</a>
+        </div>
+        <p style="font-size:0.85rem; color:#666; margin:0 0 1rem 0; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.6rem 0.8rem;"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> with a server-held key (like community notes) and only you can view them. They are <strong>not end-to-end encrypted</strong> — anonymous submitters have no account/key. <a href="/about" style="color:#3e2217; text-decoration:underline;">Privacy</a></p>
+        {% if user_forms %}
+        <div style="display:grid; gap:0.8rem;">
+            {% for form in user_forms %}
+            <div style="border:1px solid #f5ebe7; border-radius:10px; padding:1rem; background:#fff;">
+                <div style="display:flex; justify-content:space-between; gap:1rem; align-items:start;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; color:#3e2217; font-size:1rem; word-break:break-word;">{{ form.title }}</div>
+                        {% if form.description %}<div style="font-size:0.85rem; color:#666; margin:0.25rem 0;">{{ form.description }}</div>{% endif %}
+                        <div style="font-size:0.75rem; color:#999; margin-top:0.35rem;">
+                            <i class="far fa-clock"></i> {{ form.created_at|localtime('%b %d, %Y') }} &bull;
+                            {{ form.questions|length }} question(s) &bull;
+                            <strong style="color:#3e2217;">{{ form.response_count or 0 }} responses</strong>
+                            {% if form.expires_at %}&bull; expires {{ form.expires_at|localtime('%b %d') }}{% endif %}
+                            {% if form.deactivated %}<span style="background:#fee; color:#c0392b; padding:1px 6px; border-radius:8px; margin-left:4px;">deactivated</span>{% endif %}
+                        </div>
+                        <div style="margin-top:0.5rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+                            {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
+                            <input type="text" value="{{ _furl }}" readonly onclick="this.select()" style="flex:1; min-width:180px; font-size:0.75rem; padding:0.35rem 0.5rem; border:1px solid #eee; border-radius:6px; background:#fafafa;">
+                            <button type="button" class="btn" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" style="font-size:0.75rem; padding:0.35rem 0.6rem; border-radius:6px; background:#f5ebe7; border:1px solid #e8dcd5; cursor:pointer;">Copy link</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.35rem; flex-shrink:0;">
+                        <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="btn" style="font-size:0.78rem; padding:0.35rem 0.7rem; border-radius:6px; background:#3e2217; color:#fff; text-decoration:none; text-align:center;"><i class="fas fa-table"></i> Responses</a>
+                        <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="btn" style="font-size:0.75rem; padding:0.3rem 0.6rem; border-radius:6px; background:#fff; border:1px solid #ddd; text-decoration:none; text-align:center;">CSV</a>
+                        {% if not form.deactivated %}
+                        <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline;" onsubmit="return confirm('Deactivate this form? Link will stop accepting responses.')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" style="width:100%; font-size:0.73rem; padding:0.3rem 0.6rem; border-radius:6px; background:#fee; border:1px solid #fcc; color:#c0392b; cursor:pointer;">Deactivate</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-poll" style="opacity:0.4;"></i>
+            <h3>No forms yet</h3>
+            <p>Create a Google-Forms-style questionnaire, share a public link, and view encrypted responses.</p>
+            <a href="{{ url_for('forms.forms_create') }}" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.6rem 1.2rem; text-decoration:none; margin-top:0.5rem; display:inline-block;">Create your first form</a>
+        </div>
         {% endif %}
     </div>
 </div>
@@ -6623,7 +6677,7 @@
         // Helper to get tab from Hash
         function getTabFromHash() {
             const hash = window.location.hash.replace('#', '');
-            if (['saved', 'notes', 'activity', 'locked'].includes(hash)) return hash;
+            if (['saved', 'notes', 'activity', 'locked', 'forms'].includes(hash)) return hash;
             return null;
         }
 

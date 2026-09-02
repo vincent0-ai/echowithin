@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:640px; margin:2rem auto; padding:0 1rem;">
+  {% if expired %}
+    <div style="background:#fee; border:1px solid #fcc; border-radius:12px; padding:1.5rem; text-align:center;">
+      <i class="fas fa-clock" style="font-size:2rem; color:#c0392b;"></i>
+      <h3 style="color:#c0392b; margin:0.5rem 0;">{{ msg or 'Form unavailable' }}</h3>
+      <p style="color:#666; font-size:0.9rem;">This form link is no longer accepting responses.</p>
+      <a href="/" style="color:#3e2217; text-decoration:underline; font-size:0.9rem;">Go home</a>
+    </div>
+  {% elif submitted %}
+    <div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:12px; padding:1.5rem; text-align:center;">
+      <i class="fas fa-check-circle" style="font-size:2.5rem; color:#27ae60;"></i>
+      <h3 style="color:#1e8449; margin:0.5rem 0;">Response recorded</h3>
+      <p style="color:#555; font-size:0.9rem;">Thank you — your data is stored encrypted at rest. The form owner can view it privately.</p>
+    </div>
+  {% else %}
+    <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1.2rem; margin-bottom:1rem;">
+      <h2 style="margin:0 0 0.3rem 0; color:#3e2217; font-size:1.4rem;">{{ form.title }}</h2>
+      {% if form.description %}<p style="margin:0; color:#666; font-size:0.9rem;">{{ form.description }}</p>{% endif %}
+      <p style="margin:0.6rem 0 0 0; font-size:0.75rem; color:#999;"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> (server-held key) — only the owner can view them. Not E2E. Anonymous by default.</p>
+    </div>
+    <form method="POST" action="{{ url_for('forms.submit_form', share_id=share_id) }}" style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1.2rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;"><label>Website <input type="text" name="website" autocomplete="off" tabindex="-1"></label></div>
+      {% for q in form.questions %}
+        <div style="margin-bottom:1rem;">
+          <label style="display:block; font-weight:600; color:#3e2217; margin-bottom:0.35rem; font-size:0.9rem;">{{ q.label }} {% if q.required %}<span style="color:#c0392b;">*</span>{% endif %} <span style="font-weight:400; color:#999; font-size:0.75rem;">({{ q.type }})</span></label>
+          {% if q.type == 'short_text' %}
+            <input type="text" name="q_{{ q.id }}" {% if q.required %}required{% endif %} maxlength="2000" style="width:100%; padding:0.6rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px;">
+          {% elif q.type == 'paragraph' %}
+            <textarea name="q_{{ q.id }}" {% if q.required %}required{% endif %} maxlength="2000" rows="3" style="width:100%; padding:0.6rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px;"></textarea>
+          {% elif q.type == 'single_choice' %}
+            {% for opt in q.options %}
+              <label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0; font-size:0.9rem;"><input type="radio" name="q_{{ q.id }}" value="{{ opt }}" {% if q.required and loop.first %}required{% endif %}> {{ opt }}</label>
+            {% endfor %}
+          {% elif q.type == 'multiple_choice' %}
+            {% for opt in q.options %}
+              <label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0; font-size:0.9rem;"><input type="checkbox" name="q_{{ q.id }}" value="{{ opt }}"> {{ opt }}</label>
+            {% endfor %}
+          {% elif q.type == 'rating' %}
+            <div style="display:flex; gap:0.4rem;">
+              {% for i in range(1,6) %}
+                <label style="flex:1; text-align:center; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; cursor:pointer; font-size:0.85rem;"><input type="radio" name="q_{{ q.id }}" value="{{ i }}" {% if q.required and i==1 %}required{% endif %}> {{ i }}</label>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" style="width:100%; background:#3e2217; color:#fff; border:none; border-radius:8px; padding:0.8rem; font-weight:600; font-size:0.95rem; cursor:pointer;">Submit</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

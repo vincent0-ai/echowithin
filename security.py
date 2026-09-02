@@ -297,6 +297,45 @@ def decrypt_bond_data(encrypted_content: str, bond_id: str) -> str:
         return '[Content unavailable — decryption error]'
 
 
+def _get_form_fernet(form_id: str) -> Fernet:
+    """Per-form Fernet — encrypted at rest with server-held key (not E2E). Reuses per-bond pattern."""
+    cached = database._form_fernet_cache.get(str(form_id))
+    if cached:
+        return cached
+    secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
+    salt = f'echowithin_forms_v1_{form_id}'.encode()
+    key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    database._form_fernet_cache[str(form_id)] = f
+    return f
+
+
+def encrypt_form_response(plaintext: str, form_id: str) -> str:
+    """Encrypt a single form answer value at rest (per-form key)."""
+    if not plaintext:
+        return plaintext
+    try:
+        f = _get_form_fernet(str(form_id))
+        return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        _get_app().logger.error(f"Error encrypting form response {form_id}: {e}")
+        raise
+
+
+def decrypt_form_response(ciphertext: str, form_id: str) -> str:
+    """Decrypt a form answer value. Falls back to plaintext if not Fernet."""
+    if not ciphertext:
+        return ciphertext
+    try:
+        f = _get_form_fernet(str(form_id))
+        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+    except Exception:
+        if not ciphertext.startswith('gAAAAA'):
+            return ciphertext
+        _get_app().logger.warning(f"Form response decryption failed for form {form_id}")
+        return '[Unavailable]'
+
+
 def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 900) -> str:
     """Generates a short-lived signed Cloudinary URL for private/authenticated assets.
 

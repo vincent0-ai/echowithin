@@ -542,6 +542,11 @@ def personal_space():
                 pending_proposals_map[nid] = []
             pending_proposals_map[nid].append(p)
 
+    # Forms for personal_space tab
+    try:
+        user_forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
+    except Exception:
+        user_forms = []
     render_kwargs = {
         'saved_posts': saved_posts,
         'personal_posts': personal_posts,
@@ -578,7 +583,9 @@ def personal_space():
             for a in activity_notifications
             if a.get('event_type') == 'snapshot' and a.get('is_auto_approved')
         ],
-        'pending_proposals_map': pending_proposals_map
+        'pending_proposals_map': pending_proposals_map,
+        'user_forms': user_forms,
+        'total_forms': len(user_forms)
     }
     if target_note_id:
         render_kwargs['target_note_id'] = target_note_id

@@ -129,6 +129,7 @@ from blueprints.communities import bp as communities_bp
 from blueprints.admin import bp as admin_bp
 from blueprints.whisper import bp as whisper_bp
 from blueprints.bonds import bp as bonds_bp
+from blueprints.forms import bp as forms_bp
 from api import api_bp
 
 from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
@@ -197,6 +198,7 @@ app.register_blueprint(communities_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(whisper_bp)
 app.register_blueprint(bonds_bp)
+app.register_blueprint(forms_bp)
 app.register_blueprint(api_bp, url_prefix='/api/v1')
 
 
@@ -262,6 +264,7 @@ csrf.exempt(app.view_functions['payments.paystack_webhook'])
 csrf.exempt(app.view_functions['notes.api_mark_activity_read'])
 csrf.exempt(app.view_functions['chat.api_process_scheduled_messages'])
 csrf.exempt(app.view_functions['pages.unsubscribe'])
+csrf.exempt(app.view_functions['forms.submit_form'])
 
 
 @app.route('/api/csrf-token')
@@ -618,6 +621,10 @@ weekly_winners_conf = db['weekly_winners']
 app_tokens_conf = db['app_tokens']  # Persistent auth tokens for native app session revival
 app_updates_conf = db['app_updates']
 
+# --- Forms (public share-link data collection) ---
+forms_conf = db['forms']
+form_responses_conf = db['form_responses']
+
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
 user_sessions_conf.create_index('user_id')
@@ -901,6 +908,12 @@ community_checkins_conf.create_index([('community_id', 1), ('created_at', -1)])
 community_premium_vouchers_conf.create_index('code', unique=True)
 community_premium_vouchers_conf.create_index([('community_id', 1), ('active', 1)])
 
+# --- Forms ---
+forms_conf.create_index('share_id', unique=True, sparse=True)
+forms_conf.create_index([('owner_id', 1), ('created_at', -1)])
+form_responses_conf.create_index([('form_id', 1), ('submitted_at', -1)])
+form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
+
 # --- Performance: Additional compound indexes for common query patterns ---
 comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
 comments_conf.create_index([('parent_id', 1), ('author_id', 1)])
@@ -963,6 +976,8 @@ database.bond_bucketlist_conf = bond_bucketlist_conf
 database.bond_recommendations_conf = bond_recommendations_conf
 database.bond_pulses_conf = bond_pulses_conf
 database.hidden_chats_conf = hidden_chats_conf
+database.forms_conf = forms_conf
+database.form_responses_conf = form_responses_conf
 
 
 def purge_guest_user_data(guest_id_str):

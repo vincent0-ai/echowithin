@@ -72,6 +72,10 @@ deleted_items_conf = None
 # --- Paystack payment grants (idempotency + audit for premium activation) ---
 payment_grants_conf = None
 
+# --- Forms (public share-link data collection) ---
+forms_conf = None
+form_responses_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 
@@ -97,6 +101,7 @@ _user_fernet_v3_cache = TTLCache(maxsize=512, ttl=3600)
 _dm_fernet_v3_cache = TTLCache(maxsize=512, ttl=3600)
 _community_fernet_v2_cache = TTLCache(maxsize=128, ttl=3600)
 _bond_fernet_cache = TTLCache(maxsize=512, ttl=3600)
+_form_fernet_cache = TTLCache(maxsize=512, ttl=3600)
 
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 active_chat_views = {}

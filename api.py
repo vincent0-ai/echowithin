@@ -1923,5 +1923,44 @@ def api_sync_note(note_id):
         return jsonify({'error': 'Internal error'}), 500
 
 
+@api_bp.route('/notes/export', methods=['GET'])
+@login_required
+@limits(calls=5, period=60)
+def api_export_notes():
+    """Export all personal notes — decrypted on demand for offline backup.
+
+    Query params:
+        format=json        (default) JSON array
+        ciphertext=true    include raw ciphertext alongside plaintext
+    """
+    import main as m
+    user_id = ObjectId(current_user.id)
+    wants_cipher = request.args.get('ciphertext', '').lower() in ('1', 'true', 'yes')
+    notes = list(m.personal_posts_conf.find({'user_id': user_id}).sort('created_at', -1))
+    exported = []
+    for n in notes:
+        raw = n.get('content', '')
+        plain = raw
+        if n.get('encrypted'):
+            try:
+                plain = m._decrypt_note_record(n) or raw
+            except Exception:
+                plain = raw
+        item = {
+            'id': str(n['_id']),
+            'title': n.get('title') or n.get('summary') or '',
+            'content': plain,
+            'tags': n.get('tags') or [],
+            'reference': n.get('reference') or '',
+            'created_at': (n.get('created_at').isoformat() + 'Z').replace('+00:00Z', 'Z') if n.get('created_at') else None,
+            'updated_at': (n.get('updated_at').isoformat() + 'Z').replace('+00:00Z', 'Z') if n.get('updated_at') else None,
+            'is_locked': bool(n.get('is_locked')),
+        }
+        if wants_cipher:
+            item['ciphertext'] = raw
+        exported.append(item)
+    return jsonify({'success': True, 'count': len(exported), 'notes': exported})
+
+
 
 

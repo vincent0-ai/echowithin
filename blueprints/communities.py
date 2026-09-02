@@ -1014,6 +1014,44 @@ def api_save_community_note(note_id):
     return jsonify({'success': True, 'message': 'Note saved to your personal notes!'})
 
 
+@bp.route('/api/community/<community_id>/notes/search')
+@login_required
+def api_search_community_notes(community_id):
+    """Search decrypted community notes — member only, capped to 100 recent (I4)."""
+    import main as m
+    try:
+        comm_obj_id = ObjectId(community_id)
+    except Exception:
+        return jsonify({'error': 'Invalid community ID'}), 400
+    community = m.communities_conf.find_one({'_id': comm_obj_id}, {'members': 1})
+    if not community:
+        return jsonify({'error': 'Community not found'}), 404
+    user_id_obj = ObjectId(current_user.id)
+    is_member = user_id_obj in (community.get('members') or [])
+    if not is_member and not getattr(current_user, 'is_admin', False):
+        return jsonify({'error': 'Membership required'}), 403
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({'results': [], 'total': 0, 'query': ''})
+    if len(q) > 200:
+        return jsonify({'error': 'Query too long'}), 400
+    q_lower = q.lower()
+    notes_raw = list(m.community_notes_conf.find({'community_id': comm_obj_id}).sort('created_at', -1).limit(100))
+    results = []
+    import re as re_mod
+    for n in notes_raw:
+        try:
+            content = m.decrypt_community_note(n.get('content', ''), str(comm_obj_id))
+        except Exception:
+            continue
+        if q_lower in content.lower():
+            snippet_start = max(0, content.lower().find(q_lower) - 80)
+            snippet = content[snippet_start:snippet_start+160]
+            hl = re_mod.sub(f'({re_mod.escape(q)})', r'<mark>\1</mark>', snippet, flags=re_mod.IGNORECASE)
+            results.append({'id': str(n['_id']), 'snippet': hl, 'score': n.get('score', 0), 'created_at': n.get('created_at').isoformat().replace('+00:00','Z')+'Z' if n.get('created_at') else None})
+    return jsonify({'results': results, 'total': len(results), 'query': q})
+
+
 @bp.route('/api/community/<community_id>/challenge/create', methods=['POST'])
 @login_required
 @limits(calls=5, period=3600)

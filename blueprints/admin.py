@@ -442,6 +442,43 @@ def admin_approve_post(post_id):
     return redirect(request.referrer or url_for('admin.admin_posts'))
 
 
+@bp.route('/admin/posts/<post_id>/suppress', methods=['POST'])
+@login_required
+@admin_required
+def admin_suppress_post(post_id):
+    """Confirm suppression — move quarantined post to banned/removed."""
+    import main as m
+    post_obj_id = m.safe_object_id(post_id)
+    if not post_obj_id:
+        flash('Invalid post ID.', 'danger')
+        return redirect(url_for('admin.admin_posts'))
+    post = m.posts_conf.find_one({'_id': post_obj_id})
+    if not post:
+        flash('Post not found.', 'danger')
+        return redirect(url_for('admin.admin_posts'))
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    m.posts_conf.update_one({'_id': post_obj_id}, {'$set': {
+        'moderation_status': 'banned',
+        'is_suppressed': True,
+        'is_approved': False,
+        'reviewed_by': ObjectId(current_user.id),
+        'reviewed_at': now_utc,
+    }})
+    m.post_reports_conf.update_many({'post_id': post_obj_id, 'status': 'pending'}, {'$set': {'status': 'upheld', 'reviewed_by': ObjectId(current_user.id), 'reviewed_at': now_utc}})
+    try:
+        if m._t.ts_posts:
+            m._t._ts_delete_document('posts', str(post_obj_id))
+    except Exception:
+        pass
+    try:
+        if m.blog_feed_cache:
+            m.blog_feed_cache.clear()
+    except Exception:
+        pass
+    flash(f"Post '{post.get('title')}' has been suppressed.", 'success')
+    return redirect(request.referrer or url_for('admin.admin_posts'))
+
+
 @bp.route('/api/admin/posts/<post_id>/reports', methods=['GET'])
 @login_required
 @admin_required

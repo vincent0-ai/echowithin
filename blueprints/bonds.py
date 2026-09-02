@@ -907,8 +907,8 @@ def _get_community_bank_question(bond_type, bond_id):
     if exclude_conditions:
         query = {'$and': [query] + exclude_conditions}
 
-    # Use aggregation $sample for random selection
-    pipeline = [{'$match': query}, {'$sample': {'size': 1}}]
+    # Prefer highly-voted community questions: top 20 by votes, then random (N2 curation).
+    pipeline = [{'$match': query}, {'$sort': {'votes': -1}}, {'$limit': 20}, {'$sample': {'size': 1}}]
     results = list(m.community_questions_conf.aggregate(pipeline))
 
     if results:
@@ -942,6 +942,8 @@ def _store_in_community_bank(question_text, bond_type, source='ai'):
                     'bond_type': bond_type,
                     'question_hash': question_hash,
                     'source': source,
+                    'votes': 0,
+                    'voters': [],
                     'used_count': 0,
                     'created_at': datetime.datetime.now(datetime.timezone.utc)
                 }
@@ -3006,6 +3008,87 @@ def api_bond_qotd_skip(bond_id):
         current_app.logger.error(f"Bond QotD skip error: {e}")
         return jsonify({'error': 'Failed to skip question'}), 500
 
+@bp.route('/api/community_questions', methods=['GET'])
+@login_required
+def api_list_community_questions():
+    """List community-curated QotD questions — curated by votes (N2)."""
+    import main as m
+    bond_type = request.args.get('bond_type')
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except Exception:
+        page = 1
+    per_page = min(50, max(10, int(request.args.get('per_page', 20) or 20)))
+    query = {}
+    if bond_type and bond_type in BOND_TYPES:
+        query['bond_type'] = bond_type
+    total = m.community_questions_conf.count_documents(query)
+    items = list(m.community_questions_conf.find(query).sort([('votes', -1), ('created_at', -1)]).skip((page-1)*per_page).limit(per_page))
+    # Add voted flag
+    uid = str(current_user.id)
+    for doc in items:
+        doc['_id'] = str(doc['_id'])
+        doc['voted'] = uid in (doc.get('voters') or [])
+        doc.pop('question_hash', None)
+    return jsonify({'questions': items, 'total': total, 'page': page, 'per_page': per_page})
+
+
+@bp.route('/api/community_questions/propose', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def api_propose_community_question():
+    """Propose a new community QotD — curated into bond rotation via votes."""
+    import main as m
+    data = request.get_json(silent=True) or {}
+    text = (data.get('question_text') or data.get('question') or '').strip()
+    bond_type = (data.get('bond_type') or 'custom').strip()
+    if not text or len(text) < 10 or len(text) > 300:
+        return jsonify({'error': 'Question required (10-300 chars)'}), 400
+    if bond_type not in BOND_TYPES:
+        bond_type = 'custom'
+    qhash = hashlib.sha256(text.strip().lower().encode()).hexdigest()
+    existing = m.community_questions_conf.find_one({'question_hash': qhash})
+    if existing:
+        return jsonify({'error': 'This question already exists in the community bank'}), 409
+    doc = {
+        'question_text': text,
+        'question_hash': qhash,
+        'bond_type': bond_type,
+        'source': 'community',
+        'votes': 1,
+        'voters': [str(current_user.id)],
+        'proposed_by': ObjectId(current_user.id),
+        'used_count': 0,
+        'created_at': datetime.datetime.now(datetime.timezone.utc),
+    }
+    res = m.community_questions_conf.insert_one(doc)
+    doc['_id'] = str(res.inserted_id)
+    doc.pop('question_hash', None)
+    return jsonify({'success': True, 'question': doc}), 201
+
+
+@bp.route('/api/community_questions/<qid>/vote', methods=['POST'])
+@login_required
+@limits(calls=30, period=60)
+def api_vote_community_question(qid):
+    """Upvote / toggle vote for a community question."""
+    import main as m
+    qid_obj = m.safe_object_id(qid)
+    if not qid_obj:
+        return jsonify({'error': 'Invalid ID'}), 400
+    uid = str(current_user.id)
+    doc = m.community_questions_conf.find_one({'_id': qid_obj})
+    if not doc:
+        return jsonify({'error': 'Not found'}), 404
+    voters = doc.get('voters') or []
+    if uid in voters:
+        m.community_questions_conf.update_one({'_id': qid_obj}, {'$pull': {'voters': uid}, '$inc': {'votes': -1}})
+        return jsonify({'success': True, 'voted': False, 'votes': max(0, doc.get('votes', 1) - 1)})
+    else:
+        m.community_questions_conf.update_one({'_id': qid_obj}, {'$addToSet': {'voters': uid}, '$inc': {'votes': 1}})
+        return jsonify({'success': True, 'voted': True, 'votes': doc.get('votes', 0) + 1})
+
+
 @bp.route('/api/bonds/<bond_id>/qotd/ai_consent', methods=['POST'])
 @login_required
 @limits(calls=20, period=60)
@@ -4252,12 +4335,16 @@ def api_bond_album_upload(bond_id):
             # Attempt Cloudinary upload first (server-side encrypted at rest)
             try:
                 photo_mime = (file.mimetype or 'image/jpeg')[:200]
+                _raw = file.read()
+                _cipher = m.encrypt_media_bytes(_raw)
+                del _raw
                 upload_result = m.cloudinary.uploader.upload(
-                    m.encrypt_media_bytes(file.read()),
+                    _cipher,
                     folder='echowithin_bond_album',
                     resource_type='raw',
                     type='authenticated'
                 )
+                del _cipher
                 photo_public_id = upload_result.get('public_id', '')
                 photo_url = m.build_media_serve_url(photo_public_id, photo_mime) or upload_result.get('secure_url', '')
                 media_encrypted = bool(photo_public_id)
@@ -4271,7 +4358,9 @@ def api_bond_album_upload(bond_id):
                     os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
                     unique_filename = f"bond_album_{uuid.uuid4().hex[:12]}.{ext}"
                     file.seek(0)
-                    ciphertext = m.encrypt_media_bytes(file.read())
+                    _fb_raw = file.read()
+                    ciphertext = m.encrypt_media_bytes(_fb_raw)
+                    del _fb_raw
                     save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
                     with open(save_path, 'wb') as f:
                         f.write(ciphertext)
@@ -4895,12 +4984,16 @@ def api_bond_recommendations_create(bond_id):
                     media_encrypted = False
                     try:
                         image_mime = (image_file.mimetype or 'image/jpeg')[:200]
+                        _ir = image_file.read()
+                        _ic = m.encrypt_media_bytes(_ir)
+                        del _ir
                         upload_result = m.cloudinary.uploader.upload(
-                            m.encrypt_media_bytes(image_file.read()),
+                            _ic,
                             folder='echowithin_bond_recs',
                             resource_type='raw',
                             type='authenticated'
                         )
+                        del _ic
                         image_public_id = upload_result.get('public_id', '')
                         image_url = m.build_media_serve_url(image_public_id, image_mime) or upload_result.get('secure_url', '')
                         media_encrypted = bool(image_public_id)
@@ -4914,7 +5007,9 @@ def api_bond_recommendations_create(bond_id):
                             os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
                             unique_filename = f"bond_rec_{uuid.uuid4().hex[:12]}.{ext}"
                             image_file.seek(0)
-                            ciphertext = m.encrypt_media_bytes(image_file.read())
+                            _rr = image_file.read()
+                            ciphertext = m.encrypt_media_bytes(_rr)
+                            del _rr
                             save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
                             with open(save_path, 'wb') as f:
                                 f.write(ciphertext)

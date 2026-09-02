@@ -1565,7 +1565,7 @@ def view_post(slug):
     except Exception:
         jsonld_str = ''
 
-    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved, under_moderation=under_moderation)
+    return render_template('view_post.html', post=post, comments=comments, comment_count=comment_count, comment_page=comment_page, per_page=per_page, has_more=has_more, active_page='blog', title=page_title, description=page_description, reply_counts=reply_counts, meta_image=meta_image, meta_url=meta_url, meta_jsonld=jsonld_str, related_posts=related_posts, is_saved=is_saved, under_moderation=under_moderation, enable_mathjax=True)
 
 
 @bp.route('/api/posts/<post_id>/view', methods=['POST'])

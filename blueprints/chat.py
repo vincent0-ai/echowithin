@@ -64,6 +64,9 @@ def messages_page():
             contacts.append(build_contact_entry(user_info, last_msg, c['timestamp'], c['unread_count']))
             contact_user_ids.add(str(user_info['_id']))
     accepted_permissions = list(m.dm_permissions_conf.find({'status': 'accepted', '$or': [{'requester_id': current_user_oid}, {'target_id': current_user_oid}]}).sort('updated_at', -1))
+    # Batch-fetch permission graft users in one query (I1)
+    _perm_other_ids = []
+    _perm_map = {}
     for perm in accepted_permissions:
         requester_id_str = str(perm.get('requester_id'))
         target_id_str = str(perm.get('target_id'))
@@ -72,12 +75,21 @@ def messages_page():
         if other_user_id_str in contact_user_ids:
             continue
         try:
-            other_user_oid = ObjectId(other_user_id_str)
+            oid = ObjectId(other_user_id_str)
         except Exception:
             continue
-        user_info = m.users_conf.find_one({'_id': other_user_oid}, {'username': 1, 'profile_image_url': 1, 'last_active': 1})
+        if oid not in _perm_other_ids:
+            _perm_other_ids.append(oid)
+            _perm_map[other_user_id_str] = perm
+    _perm_users_map = {}
+    if _perm_other_ids:
+        for u in m.users_conf.find({'_id': {'$in': _perm_other_ids}}, {'username': 1, 'profile_image_url': 1, 'last_active': 1}):
+            _perm_users_map[str(u['_id'])] = u
+    for other_user_id_str, perm in _perm_map.items():
+        user_info = _perm_users_map.get(other_user_id_str)
         if not user_info:
             continue
+        is_requester = str(perm.get('requester_id')) == str(current_user.id)
         system_preview = f"{user_info['username']} accepted your message request" if is_requester else f"You accepted {user_info['username']}'s message request"
         event_time = perm.get('updated_at') or perm.get('created_at') or datetime.datetime.now(datetime.timezone.utc)
         contacts.append(build_contact_entry(user_info, system_preview, event_time, 0))

@@ -18,6 +18,14 @@ def _find_note_page(m, user_id, note_id, per_page=10):
     except Exception:
         return 1
 
+    # Perf cap: avoid O(N) id-array build for very large libraries (I2).
+    try:
+        total = m.personal_posts_conf.count_documents({'user_id': ObjectId(user_id), 'is_locked': {'$ne': True}})
+        if total > 500:
+            return 1
+    except Exception:
+        pass
+
     # Use the same aggregation pipeline as the main query to get consistent sorting
     pipeline = [
         {'$match': {'user_id': ObjectId(user_id), 'is_locked': {'$ne': True}}},
@@ -787,12 +795,13 @@ def search_personal_notes():
         return jsonify({'results': [], 'total': 0, 'query': ''})
 
     if not _t.ts_notes:
-        # Fallback: simple MongoDB text search on decrypted notes
+        # Fallback: simple MongoDB text search on decrypted notes — capped to 200 most recent
+        # to avoid O(N) decrypt storm on large libraries (I4). Typesense is the primary path.
         try:
             notes_raw = list(m.personal_posts_conf.find({
                 'user_id': ObjectId(current_user.id),
                 'is_locked': {'$ne': True}
-            }).sort('created_at', -1))
+            }).sort('created_at', -1).limit(200))
             q_lower = query.lower()
             results = []
             for note in notes_raw:

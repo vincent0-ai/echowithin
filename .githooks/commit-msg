@@ -1,0 +1,24 @@
+#!/bin/sh
+# Enforce AGENTS.md commit discipline: detailed message + model + no 'Fix issues' filler.
+MSG_FILE="$1"
+MSG=$(cat "$MSG_FILE")
+
+# Block vague 'Fix issues' spam
+if echo "$MSG" | grep -qE "^(Fix issues|Fix issue|Fixed issues)\s*$"; then
+  echo "commit-msg hook: vague message 'Fix issues' is blocked. Describe files + problem (see AGENTS.md:1)." >&2
+  exit 1
+fi
+
+# Require at least 20 chars and a conventional prefix or file reference
+if [ ${#MSG} -lt 20 ]; then
+  echo "commit-msg hook: message too short (<20 chars). Provide detailed description." >&2
+  exit 1
+fi
+
+# Require Model line or model attribution
+if ! echo "$MSG" | grep -qiE "Model:|Gemini|Muse|Spark|Opus"; then
+  echo "commit-msg hook: missing Model attribution (e.g. 'Model: muse-spark...')." >&2
+  exit 1
+fi
+
+exit 0

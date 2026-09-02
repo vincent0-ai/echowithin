@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover, interactive-widget=resizes-content">
     <link rel="shortcut icon" href="{{ url_for('static', filename='logo.png') }}" type="image/x-icon">
     <!-- Preconnect to font/CDN origins for faster resource loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -506,8 +506,10 @@
     {# Block for Content Security Policy or other meta tags #}
     {% block head_meta %}{% endblock %}
 
-    {# MathJax for rendering LaTeX/math expressions #}
+    {# MathJax — loaded only on pages that set enable_mathjax=True (post/note views) to save ~200k on other routes #}
+    {% if enable_mathjax|default(false) %}
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    {% endif %}
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
@@ -779,7 +781,10 @@
         <div class="navbar">
             <div class="nav-left">
                 <a href="{{ url_for('pages.dashboard') }}" class="nav-brand">
-                    <img src="{{ url_for('static', filename='logo.png') }}" alt="EchoWithin Logo" class="nav-logo">
+                    <picture>
+                        <source srcset="{{ url_for('static', filename='logo.webp') }}" type="image/webp">
+                        <img src="{{ url_for('static', filename='logo.png') }}" alt="EchoWithin Logo" class="nav-logo" width="40" height="40" loading="eager" decoding="async">
+                    </picture>
                     EchoWithin
                 </a>
                 <div class="nav-socials" aria-hidden="false">

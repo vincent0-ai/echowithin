@@ -1,21 +1,22 @@
 {% extends "base.html" %}
+{% block title %}<title>Create Form — EchoWithin</title>{% endblock %}
 {% block content %}
-<div style="max-width:780px; margin:2rem auto; padding:0 1rem;">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-    <h2 style="margin:0; color:#3e2217;"><i class="fas fa-poll"></i> Create Form</h2>
-    <a href="{{ url_for('notes.personal_space') }}#forms" style="font-size:0.85rem; color:#3e2217; text-decoration:underline;">Back to Forms</a>
+<div class="content-wrapper" style="max-width: 780px;">
+  <div class="ew-header-row">
+    <h2>Create Form</h2>
+    <a href="{{ url_for('notes.personal_space') }}#forms" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">Back to Forms</a>
   </div>
-  <p style="font-size:0.85rem; color:#666; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.6rem 0.8rem;"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> with a server-held key (like community notes). Not E2E — anonymous submitters have no key. Only you can view/export.</p>
-  <form method="POST" id="form-builder" style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1.2rem;">
+  <div class="ew-info-banner"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> with a server-held key (like community notes). Not E2E — anonymous submitters have no key. Only you can view/export.</div>
+  <form method="POST" id="form-builder" class="ew-card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Title *</label>
-    <input type="text" name="title" maxlength="100" required style="width:100%; padding:0.55rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.8rem;">
-    <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Description</label>
-    <textarea name="description" maxlength="500" rows="2" style="width:100%; padding:0.55rem 0.7rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.8rem;" placeholder="Optional — shown to submitters"></textarea>
+    <label class="ew-form-label">Title *</label>
+    <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;">
+    <label class="ew-form-label">Description</label>
+    <textarea name="description" maxlength="500" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Optional — shown to submitters"></textarea>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Expiry</label>
-        <select name="expires_in" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px;">
+        <label class="ew-form-label">Expiry</label>
+        <select name="expires_in" class="form-input">
           <option value="">Never</option>
           <option value="1h">1 hour</option>
           <option value="1d">1 day</option>
@@ -23,20 +24,20 @@
         </select>
       </div>
       <div>
-        <label style="display:block; font-weight:600; margin-bottom:0.25rem;">Max responses</label>
-        <input type="number" name="max_responses" min="1" max="10000" placeholder="Unlimited" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px;">
+        <label class="ew-form-label">Max responses</label>
+        <input type="number" name="max_responses" min="1" max="10000" placeholder="Unlimited" class="form-input">
       </div>
     </div>
     <input type="hidden" name="questions_json" id="questions_json">
     <div id="questions-container"></div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0;">
-      <button type="button" onclick="addQuestion('short_text')" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.4rem 0.7rem; font-size:0.8rem;"><i class="fas fa-font"></i> Short text</button>
-      <button type="button" onclick="addQuestion('paragraph')" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.4rem 0.7rem; font-size:0.8rem;"><i class="fas fa-align-left"></i> Paragraph</button>
-      <button type="button" onclick="addQuestion('single_choice')" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.4rem 0.7rem; font-size:0.8rem;"><i class="fas fa-dot-circle"></i> Single choice</button>
-      <button type="button" onclick="addQuestion('multiple_choice')" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.4rem 0.7rem; font-size:0.8rem;"><i class="fas fa-check-square"></i> Multiple</button>
-      <button type="button" onclick="addQuestion('rating')" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.4rem 0.7rem; font-size:0.8rem;"><i class="fas fa-star"></i> Rating 1-5</button>
+      <button type="button" onclick="addQuestion('short_text')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-font"></i> Short text</button>
+      <button type="button" onclick="addQuestion('paragraph')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-align-left"></i> Paragraph</button>
+      <button type="button" onclick="addQuestion('single_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-dot-circle"></i> Single choice</button>
+      <button type="button" onclick="addQuestion('multiple_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-check-square"></i> Multiple</button>
+      <button type="button" onclick="addQuestion('rating')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-star"></i> Rating 1-5</button>
     </div>
-    <button type="submit" class="btn" style="background:#3e2217; color:#fff; border-radius:8px; padding:0.7rem 1.2rem; width:100%; font-weight:600;">Create & get share link</button>
+    <button type="submit" class="ew-btn" style="width:100%; padding:0.7rem;">Create &amp; get share link</button>
   </form>
 </div>
 <script nonce="{{ csp_nonce }}">
@@ -49,14 +50,14 @@ function addQuestion(type){
 function render(){
   const c = document.getElementById('questions-container');
   c.innerHTML = questions.map((q, idx)=> `
-    <div style="border:1px solid #f5ebe7; border-radius:10px; padding:0.8rem; margin-bottom:0.7rem; background:#fdfaf9;">
+    <div class="ew-card" style="background:var(--surface-bg);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
-        <span style="font-size:0.75rem; background:#3e2217; color:#fff; padding:2px 6px; border-radius:6px;">${q.type}</span>
-        <button type="button" onclick="questions.splice(${idx},1); render()" style="background:#fee; border:1px solid #fcc; color:#c0392b; border-radius:6px; padding:2px 8px; font-size:0.75rem;">Remove</button>
+        <span class="ew-badge">${q.type}</span>
+        <button type="button" onclick="questions.splice(${idx},1); render()" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Remove</button>
       </div>
-      <input type="text" placeholder="Question label *" value="${q.label.replace(/"/g,'&quot;')}" oninput="questions[${idx}].label=this.value" style="width:100%; padding:0.5rem; border:1px solid #e8dcd5; border-radius:8px; margin-bottom:0.4rem;">
-      <label style="font-size:0.78rem;"><input type="checkbox" ${q.required?'checked':''} onchange="questions[${idx}].required=this.checked"> Required</label>
-      ${q.type.includes('choice') ? `<div style="margin-top:0.5rem;"><div style="font-size:0.78rem; font-weight:600; margin-bottom:0.3rem;">Options (2-10)</div>${q.options.map((o,oi)=> `<div style="display:flex; gap:0.4rem; margin-bottom:0.3rem;"><input type="text" value="${o.replace(/"/g,'&quot;')}" oninput="questions[${idx}].options[${oi}]=this.value" style="flex:1; padding:0.4rem; border:1px solid #e8dcd5; border-radius:6px;"><button type="button" onclick="questions[${idx}].options.splice(${oi},1); render()" style="background:#fee; border:1px solid #fcc; border-radius:6px; padding:2px 6px;">x</button></div>`).join('')}<button type="button" onclick="if(questions[${idx}].options.length<10){questions[${idx}].options.push('Option '+(questions[${idx}].options.length+1)); render()}" style="font-size:0.75rem; margin-top:0.3rem; background:#f5ebe7; border:1px solid #e8dcd5; border-radius:6px; padding:2px 8px;">+ Add option</button></div>` : ''}
+      <input type="text" placeholder="Question label *" value="${q.label.replace(/"/g,'&quot;')}" oninput="questions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.4rem;">
+      <label style="font-size:0.78rem; color:var(--text-secondary);"><input type="checkbox" ${q.required?'checked':''} onchange="questions[${idx}].required=this.checked"> Required</label>
+      ${q.type.includes('choice') ? `<div style="margin-top:0.5rem;"><div style="font-size:0.78rem; font-weight:600; margin-bottom:0.3rem; color:var(--text-dark-color);">Options (2-10)</div>${q.options.map((o,oi)=> `<div style="display:flex; gap:0.4rem; margin-bottom:0.3rem;"><input type="text" value="${o.replace(/"/g,'&quot;')}" oninput="questions[${idx}].options[${oi}]=this.value" class="form-input" style="flex:1;"><button type="button" onclick="questions[${idx}].options.splice(${oi},1); render()" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">x</button></div>`).join('')}<button type="button" onclick="if(questions[${idx}].options.length<10){questions[${idx}].options.push('Option '+(questions[${idx}].options.length+1)); render()}" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.3rem; cursor:pointer;">+ Add option</button></div>` : ''}
     </div>
   `).join('');
 }

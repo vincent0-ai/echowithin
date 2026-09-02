@@ -1,30 +1,34 @@
 {% extends "base.html" %}
+{% block title %}<title>{{ form.title }} — Responses — EchoWithin</title>{% endblock %}
+{% block extra_head_css %}
+{% if stats %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endif %}
+{% endblock %}
 {% block content %}
-<div style="max-width:1000px; margin:1.5rem auto; padding:0 1rem;">
-  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
-    <h2 style="margin:0; color:#3e2217;"><i class="fas fa-poll"></i> {{ form.title }} — Responses</h2>
-    <div style="display:flex; gap:0.5rem;">
-      <a href="{{ url_for('forms.forms_list') }}" style="font-size:0.85rem; color:#3e2217; text-decoration:underline;">All forms</a>
-      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.35rem 0.7rem; font-size:0.8rem; text-decoration:none;">Export CSV</a>
-      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="btn" style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.35rem 0.7rem; font-size:0.8rem; text-decoration:none;">Export JSON</a>
+<div class="content-wrapper">
+  <div class="ew-header-row">
+    <h2>{{ form.title }} — Responses</h2>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+      <a href="{{ url_for('forms.forms_list') }}" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">All forms</a>
+      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
+      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
     </div>
   </div>
-  <div style="font-size:0.8rem; color:#666; background:#fdfaf9; border:1px solid #f5ebe7; border-radius:8px; padding:0.5rem 0.8rem; margin-bottom:1rem;">
-    Share link: <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" style="width:60%; font-size:0.75rem; padding:0.3rem 0.5rem; border:1px solid #eee; border-radius:6px; background:#fff;">
-    <button onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" style="font-size:0.75rem; padding:0.25rem 0.5rem; border-radius:6px; background:#3e2217; color:#fff; border:none; cursor:pointer;">Copy</button>
+  <div class="ew-info-banner">
+    Share link: <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input" style="width:60%; display:inline-block;">
+    <button onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" class="ew-copy-btn">Copy</button>
     &bull; {{ total }} response(s) &bull; {{ form.questions|length }} question(s)
   </div>
 
   {% if stats %}
-  <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1rem; margin-bottom:1rem;">
-    <h4 style="margin:0 0 0.6rem 0; color:#3e2217; font-size:0.95rem;"><i class="fas fa-chart-bar"></i> Summary</h4>
+  <div class="ew-card">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color); font-size:0.95rem;"><i class="fas fa-chart-bar"></i> Summary</h4>
     {% for qid, s in stats.items() %}
       <div style="margin-bottom:0.8rem;">
-        <div style="font-weight:600; font-size:0.85rem; color:#3e2217;">{{ s.label }}</div>
+        <div style="font-weight:600; font-size:0.85rem; color:var(--primary-color);">{{ s.label }}</div>
         {% if s.type == 'single_choice' %}
           <div style="display:flex; gap:0.3rem; margin-top:0.3rem; flex-wrap:wrap;">
             {% for opt, cnt in s.counts.items() %}
-              <span style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:6px; padding:2px 6px; font-size:0.78rem;">{{ opt }}: <strong>{{ cnt }}</strong></span>
+              <span class="ew-count-chip">{{ opt }}: <strong>{{ cnt }}</strong></span>
             {% endfor %}
           </div>
           <canvas id="chart-{{ qid }}" height="60"></canvas>
@@ -32,42 +36,47 @@
             (function(){
               const ctx = document.getElementById('chart-{{ qid }}');
               if(!ctx || typeof Chart==='undefined') return;
-              new Chart(ctx, {type:'bar', data:{labels: {{ s.counts.keys()|list|tojson }}, datasets:[{label:'Responses', data: {{ s.counts.values()|list|tojson }}, backgroundColor:'#3e2217'}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+              const rootStyles = getComputedStyle(document.documentElement);
+              const barColor = rootStyles.getPropertyValue('--primary-color').trim() || '#3e2217';
+              const textColor = rootStyles.getPropertyValue('--text-dark-color').trim() || '#333';
+              new Chart(ctx, {type:'bar', data:{labels: {{ s.counts.keys()|list|tojson }}, datasets:[{label:'Responses', data: {{ s.counts.values()|list|tojson }}, backgroundColor:barColor}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:textColor}}, x:{ticks:{color:textColor}}}}});
             })();
           </script>
         {% elif s.type == 'rating' %}
-          <div style="font-size:0.8rem; color:#666;">Avg: <strong>{{ s.avg if s.avg is not none else '—' }}</strong> ({{ s.count }} ratings) &bull; {{ s.distribution }}</div>
+          <div style="font-size:0.8rem; color:var(--text-secondary);">Avg: <strong>{{ s.avg if s.avg is not none else '—' }}</strong> ({{ s.count }} ratings) &bull; {{ s.distribution }}</div>
           <canvas id="chart-{{ qid }}" height="60"></canvas>
           <script nonce="{{ csp_nonce }}">
             (function(){
               const ctx=document.getElementById('chart-{{ qid }}');
               if(!ctx || typeof Chart==='undefined') return;
-              new Chart(ctx,{type:'bar',data:{labels:['1','2','3','4','5'],datasets:[{label:'Ratings', data: {{ [s.distribution['1'], s.distribution['2'], s.distribution['3'], s.distribution['4'], s.distribution['5']] | tojson }}, backgroundColor:'#3e2217'}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+              const rootStyles = getComputedStyle(document.documentElement);
+              const barColor = rootStyles.getPropertyValue('--primary-color').trim() || '#3e2217';
+              const textColor = rootStyles.getPropertyValue('--text-dark-color').trim() || '#333';
+              new Chart(ctx,{type:'bar',data:{labels:['1','2','3','4','5'],datasets:[{label:'Ratings', data: {{ [s.distribution['1'], s.distribution['2'], s.distribution['3'], s.distribution['4'], s.distribution['5']] | tojson }}, backgroundColor:barColor}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:textColor}}, x:{ticks:{color:textColor}}}}});
             })();
           </script>
         {% endif %}
       </div>
     {% endfor %}
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {% endif %}
 
   {% if responses %}
-  <div style="overflow-x:auto; background:#fff; border:1px solid #f5ebe7; border-radius:12px;">
-    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-      <thead><tr style="background:#fdfaf9;">
-        <th style="text-align:left; padding:0.6rem 0.7rem; border-bottom:1px solid #f5ebe7;">#</th>
-        <th style="text-align:left; padding:0.6rem 0.7rem; border-bottom:1px solid #f5ebe7;">Submitted</th>
-        {% for q in form.questions %}<th style="text-align:left; padding:0.6rem 0.7rem; border-bottom:1px solid #f5ebe7; min-width:120px;">{{ q.label }}</th>{% endfor %}
+  <div class="ew-table-wrap">
+    <table class="ew-table">
+      <thead><tr>
+        <th>#</th>
+        <th>Submitted</th>
+        {% for q in form.questions %}<th style="min-width:120px;">{{ q.label }}</th>{% endfor %}
       </tr></thead>
       <tbody>
         {% for r in responses %}
-        <tr style="border-bottom:1px solid #faf8f7;">
-          <td style="padding:0.55rem 0.7rem; color:#999;">{{ (page-1)*per_page + loop.index }}</td>
-          <td style="padding:0.55rem 0.7rem; color:#666; white-space:nowrap; font-size:0.78rem;">{{ r.submitted_at_iso or '' }}</td>
+        <tr>
+          <td class="muted">{{ (page-1)*per_page + loop.index }}</td>
+          <td class="secondary" style="white-space:nowrap;">{{ r.submitted_at_iso or '' }}</td>
           {% for q in form.questions %}
             {% set ans = (r.answers|selectattr('question_id','equalto',q.id)|first) %}
-            <td style="padding:0.55rem 0.7rem; word-break:break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
+            <td style="word-break:break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -75,17 +84,17 @@
     </table>
   </div>
   {% if total_pages > 1 %}
-  <nav style="margin-top:1rem; display:flex; gap:0.3rem; justify-content:center;">
-    {% if page>1 %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page-1) }}" style="padding:0.4rem 0.7rem; border:1px solid #e8dcd5; border-radius:6px; text-decoration:none; font-size:0.8rem;">Prev</a>{% endif %}
-    <span style="padding:0.4rem 0.7rem; font-size:0.8rem;">Page {{ page }} of {{ total_pages }}</span>
-    {% if page < total_pages %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page+1) }}" style="padding:0.4rem 0.7rem; border:1px solid #e8dcd5; border-radius:6px; text-decoration:none; font-size:0.8rem;">Next</a>{% endif %}
+  <nav class="ew-pagination">
+    {% if page>1 %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page-1) }}">Prev</a>{% endif %}
+    <span>Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page+1) }}">Next</a>{% endif %}
   </nav>
   {% endif %}
   {% else %}
-    <div style="text-align:center; padding:2rem; background:#fff; border:1px solid #f5ebe7; border-radius:12px; color:#999;">
-      <i class="fas fa-inbox" style="font-size:2rem; opacity:0.4; margin-bottom:0.5rem;"></i>
-      <p>No responses yet — share your link to collect data.</p>
-      <p style="font-size:0.8rem;">Link: <code style="background:#f5ebe7; padding:2px 6px; border-radius:6px;">{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}</code></p>
+    <div class="ew-card" style="text-align:center; padding:2rem;">
+      <i class="fas fa-inbox" style="font-size:2rem; opacity:0.4; margin-bottom:0.5rem; display:block; color:var(--text-muted);"></i>
+      <p style="color:var(--text-muted);">No responses yet — share your link to collect data.</p>
+      <p style="font-size:0.8rem; color:var(--text-muted);">Link: <code style="background:var(--surface-bg); padding:2px 6px; border-radius:6px;">{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}</code></p>
     </div>
   {% endif %}
 </div>

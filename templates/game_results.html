@@ -1,51 +1,57 @@
 {% extends "base.html" %}
+{% block title %}<title>{{ lobby.title }} — Results — EchoWithin</title>{% endblock %}
+{% block extra_head_css %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 {% block content %}
-<div style="max-width:900px; margin:1.5rem auto; padding:0 1rem;">
-  <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem;">
-    <h2 style="margin:0; color:#3e2217;"><i class="fas fa-poll"></i> {{ lobby.title }} — Results</h2>
+<div class="content-wrapper">
+  <div class="ew-header-row">
+    <h2>{{ lobby.title }} — Results</h2>
     <div style="display:flex; gap:0.5rem;">
-      <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" style="font-size:0.8rem; background:#f5ebe7; border:1px solid #e8dcd5; border-radius:8px; padding:0.35rem 0.7rem; text-decoration:none;">Lobby</a>
-      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" style="font-size:0.8rem; background:#3e2217; color:#fff; border-radius:8px; padding:0.35rem 0.7rem; text-decoration:none;">CSV</a>
-      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" style="font-size:0.8rem; background:#fff; border:1px solid #ddd; border-radius:8px; padding:0.35rem 0.7rem; text-decoration:none;">JSON</a>
+      <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Lobby</a>
+      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">CSV</a>
+      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">JSON</a>
     </div>
   </div>
-  <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1rem; margin-bottom:1rem;">
-    <div style="font-weight:600; color:#3e2217;">{{ lobby.question.label }}</div>
-    <div style="font-size:0.8rem; color:#999;">{{ lobby.game_type }} &bull; {{ total }} votes &bull; host {{ lobby.host_username }}</div>
-    {% if lobby.game_type=='trivia' and lobby.question.correct_option %}<div style="margin-top:0.4rem; font-size:0.85rem; background:#eafaf1; border:1px solid #a9dfbf; border-radius:6px; padding:0.4rem 0.6rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
+  <div class="ew-card">
+    <div style="font-weight:600; color:var(--primary-color);">{{ lobby.question.label }}</div>
+    <div style="font-size:0.8rem; color:var(--text-muted);">{{ lobby.game_type }} &bull; {{ total }} votes &bull; host {{ lobby.host_username }}</div>
+    {% if lobby.game_type=='trivia' and lobby.question.correct_option %}<div class="ew-success-banner" style="margin-top:0.4rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
   </div>
-  <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; padding:1rem; margin-bottom:1rem;">
-    <h4 style="margin:0 0 0.6rem 0; color:#3e2217;"><i class="fas fa-chart-bar"></i> Counts</h4>
+  <div class="ew-card">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-chart-bar"></i> Counts</h4>
     <canvas id="resultsChart" height="80"></canvas>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script nonce="{{ csp_nonce }}">
       (function(){
         const ctx=document.getElementById('resultsChart');
         if(!ctx || typeof Chart==='undefined') return;
         const labels = {{ per_option|map(attribute='_id')|list|tojson }};
         const data = {{ per_option|map(attribute='count')|list|tojson }};
-        new Chart(ctx, {type:'bar', data:{labels, datasets:[{label:'Votes', data, backgroundColor:'#3e2217'}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}}}});
+        const rootStyles = getComputedStyle(document.documentElement);
+        const barColor = rootStyles.getPropertyValue('--primary-color').trim() || '#3e2217';
+        const textColor = rootStyles.getPropertyValue('--text-dark-color').trim() || '#333';
+        new Chart(ctx, {type:'bar', data:{labels, datasets:[{label:'Votes', data, backgroundColor:barColor}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:textColor}}, x:{ticks:{color:textColor}}}}});
       })();
     </script>
     <div style="margin-top:0.6rem; display:flex; gap:0.4rem; flex-wrap:wrap;">
       {% for row in per_option %}
-        <span style="background:#f5ebe7; border:1px solid #e8dcd5; border-radius:6px; padding:3px 8px; font-size:0.8rem;">{{ row._id }}: <strong>{{ row.count }}</strong></span>
+        <span class="ew-count-chip">{{ row._id }}: <strong>{{ row.count }}</strong></span>
       {% endfor %}
     </div>
   </div>
   {% if votes %}
-  <div style="background:#fff; border:1px solid #f5ebe7; border-radius:12px; overflow:hidden;">
-    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-      <thead><tr style="background:#fdfaf9;"><th style="text-align:left; padding:0.5rem 0.7rem; border-bottom:1px solid #f5ebe7;">#</th><th style="text-align:left; padding:0.5rem 0.7rem; border-bottom:1px solid #f5ebe7;">Player</th><th style="text-align:left; padding:0.5rem 0.7rem; border-bottom:1px solid #f5ebe7;">Option</th><th style="text-align:left; padding:0.5rem 0.7rem; border-bottom:1px solid #f5ebe7;">Time</th></tr></thead>
+  <div class="ew-table-wrap">
+    <table class="ew-table">
+      <thead><tr><th>#</th><th>Player</th><th>Option</th><th>Time</th></tr></thead>
       <tbody>
         {% for v in votes %}
-          <tr style="border-bottom:1px solid #faf8f7;"><td style="padding:0.45rem 0.7rem; color:#999;">{{ loop.index }}</td><td style="padding:0.45rem 0.7rem;">{{ v.username }}</td><td style="padding:0.45rem 0.7rem;"><strong>{{ v.option }}</strong> {% if lobby.game_type=='trivia' and v.option==lobby.question.correct_option %}✅{% elif lobby.game_type=='trivia' %}❌{% endif %}</td><td style="padding:0.45rem 0.7rem; color:#666; font-size:0.78rem;">{{ v.submitted_at|localtime('%b %d %H:%M') if v.submitted_at else '' }}</td></tr>
+          <tr><td class="muted">{{ loop.index }}</td><td>{{ v.username }}</td><td><strong>{{ v.option }}</strong> {% if lobby.game_type=='trivia' and v.option==lobby.question.correct_option %}✅{% elif lobby.game_type=='trivia' %}❌{% endif %}</td><td class="secondary">{{ v.submitted_at|localtime('%b %d %H:%M') if v.submitted_at else '' }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-    <p style="text-align:center; color:#999; padding:1rem;">No votes yet.</p>
+    <p style="text-align:center; color:var(--text-muted); padding:1rem;">No votes yet.</p>
   {% endif %}
 </div>
 {% endblock %}

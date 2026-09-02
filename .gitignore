@@ -12,6 +12,9 @@ venv/
 FEATURES_ADDED.md
 test_*.py
 test_*
+!tests/
+!tests/**
+tests/**/__pycache__/
 debug_*
 mock_*.py
 fix_emoji_slugs.py
@@ -31,3 +34,4 @@ fix_routes.py
 *_test.py
 perf_test.py
 AGENTS.md
+commit.md

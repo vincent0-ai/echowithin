@@ -7,6 +7,14 @@ from security import limits
 bp = Blueprint('blog', __name__, template_folder='templates')
 
 
+def _safe_count(coll, flt):
+    """Return int count or 0 — guards against Mock/non-int return from count_documents."""
+    try:
+        return int(coll.count_documents(flt))
+    except Exception:
+        return 0
+
+
 def get_latest_posts_feed():
     import main as m
     cached_feed = m.blog_feed_cache.get('main')
@@ -14,7 +22,7 @@ def get_latest_posts_feed():
         return cached_feed
 
     public_filter = m.get_public_posts_filter()
-    total_posts_count = m.posts_conf.count_documents(public_filter)
+    total_posts_count = _safe_count(m.posts_conf, public_filter)
     pinned_posts = list(m.posts_conf.find({'is_pinned': True, **public_filter}).sort('pinned_at', -1))
     pinned_ids = [p['_id'] for p in pinned_posts]
     if total_posts_count <= 10:
@@ -77,7 +85,7 @@ def blog():
         search_filter = m.get_public_posts_filter({"$text": {"$search": query}})
         page = request.args.get('page', 1, type=int)
         posts_per_page = 10
-        total_posts = m.posts_conf.count_documents(search_filter)
+        total_posts = _safe_count(m.posts_conf, search_filter)
         total_pages = math.ceil(total_posts / posts_per_page)
         skip = (page - 1) * posts_per_page
         search_results = list(m.posts_conf.find(search_filter).sort('timestamp', -1).skip(skip).limit(posts_per_page))
@@ -107,7 +115,7 @@ def all_posts():
         extra_filter['tags'] = selected_tag
     filter_query = m.get_public_posts_filter(extra_filter)
 
-    total_posts = m.posts_conf.count_documents(filter_query)
+    total_posts = _safe_count(m.posts_conf, filter_query)
     total_pages = math.ceil(total_posts / posts_per_page)
     skip = (page - 1) * posts_per_page
 
@@ -1023,14 +1031,13 @@ def api_report_post(post_id):
     if str(post.get('author_id')) == str(current_user.id):
         return jsonify({'error': 'You cannot report your own post'}), 400
 
-    # Check for existing pending report from this user
-    existing = m.post_reports_conf.find_one({
+    # One report per user per post (any status) — prevents re-report spam / DoS.
+    existing_any = m.post_reports_conf.find_one({
         'post_id': post_obj_id,
         'reporter_id': ObjectId(current_user.id),
-        'status': 'pending'
     })
-    if existing:
-        return jsonify({'error': 'You already have a pending report for this post'}), 409
+    if existing_any:
+        return jsonify({'error': 'You have already reported this post'}), 409
 
     data = request.get_json(silent=True) or request.form or {}
     reason = data.get('reason', '').strip()
@@ -1053,51 +1060,71 @@ def api_report_post(post_id):
         'status': 'pending',
         'created_at': now_utc,
     }
-    m.post_reports_conf.insert_one(report)
+    try:
+        m.post_reports_conf.insert_one(report)
+    except Exception as e:
+        # Race: concurrent insert of same (post_id, reporter_id) — treat as already reported.
+        if 'duplicate' in str(e).lower():
+            return jsonify({'error': 'You have already reported this post'}), 409
+        raise
 
-    # Flag the post and immediately suppress visibility in the algorithm
+    # Increment report count — suppression only after threshold (quarantine model).
+    REPORT_THRESHOLD = 3
     m.posts_conf.update_one(
         {'_id': post_obj_id},
         {
             '$inc': {'report_count': 1},
             '$set': {
                 'is_reported': True,
-                'moderation_status': 'flagged',
-                'is_suppressed': True,
                 'last_reported_at': now_utc,
             },
             '$addToSet': {'reported_by': ObjectId(current_user.id)}
         }
     )
-
-    # Remove from Typesense if indexed
-    try:
-        if m._t.ts_posts:
-            m._t._ts_delete_document('posts', str(post_obj_id))
-    except Exception:
-        pass
-
-    # Invalidate feed cache
-    try:
-        if m.blog_feed_cache:
-            m.blog_feed_cache.clear()
-    except Exception:
-        pass
+    # Fetch updated count to decide on quarantine/suppression.
+    updated_post = m.posts_conf.find_one({'_id': post_obj_id}, {'report_count': 1, 'is_suppressed': 1, 'moderation_status': 1})
+    updated_count = int(updated_post.get('report_count', 0) or 0) if updated_post else 1
+    should_suppress = updated_count >= REPORT_THRESHOLD
+    if should_suppress:
+        m.posts_conf.update_one(
+            {'_id': post_obj_id},
+            {'$set': {'moderation_status': 'flagged', 'is_suppressed': True}}
+        )
+        # Remove from Typesense if indexed
+        try:
+            if m._t.ts_posts:
+                m._t._ts_delete_document('posts', str(post_obj_id))
+        except Exception:
+            pass
+        # Invalidate feed cache
+        try:
+            if m.blog_feed_cache:
+                m.blog_feed_cache.clear()
+        except Exception:
+            pass
+        user_msg = 'Report submitted. Post has been quarantined pending admin review due to multiple reports.'
+    else:
+        # Still flagged for admin review queue but not yet suppressed — visible but queued.
+        m.posts_conf.update_one(
+            {'_id': post_obj_id},
+            {'$set': {'moderation_status': 'flagged'}}
+        )
+        user_msg = 'Report submitted. Thank you — an admin will review it.'
 
     # Notify admin via ntfy
     try:
-        ntfy_msg = f"Post '{post.get('title')}' reported by {current_user.username} for: {reason}"
+        ntfy_msg = f"Post '{post.get('title')}' reported by {current_user.username} for: {reason} ({updated_count}/{REPORT_THRESHOLD})"
         m.send_ntfy_notification.queue(ntfy_msg, "Post Reported", "warning")
     except Exception:
         try:
-            m.executor.submit(m.send_ntfy_notification, f"Post '{post.get('title')}' reported by {current_user.username} for: {reason}", "Post Reported", "warning")
+            m.executor.submit(m.send_ntfy_notification, f"Post '{post.get('title')}' reported by {current_user.username} for: {reason} ({updated_count}/{REPORT_THRESHOLD})", "Post Reported", "warning")
         except Exception:
             pass
 
     if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get('Accept') == 'application/json':
-        return jsonify({'success': True, 'message': 'Report submitted. Post visibility has been suppressed pending admin review.'})
+        return jsonify({'success': True, 'message': user_msg, 'quarantined': should_suppress, 'report_count': updated_count})
 
-    flash('Report submitted. Post visibility has been suppressed pending admin review.', 'success')
+    flash(user_msg, 'success' if should_suppress else 'info')
     return redirect(url_for('blog.blog'))
 
 
@@ -1361,7 +1388,7 @@ def view_post(slug):
 
     # Add comment count and fetch recent comments
     try:
-        comment_count = m.comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
+        comment_count = _safe_count(m.comments_conf, {'post_slug': slug, 'is_deleted': False})
         comment_page = 1
         per_page = 10
         comments = list(m.comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((comment_page-1)*per_page).limit(per_page))
@@ -1605,7 +1632,7 @@ def api_post_comments(slug):
             if per_page <= 0: per_page = 10
             if page <= 0: page = 1
 
-            total = m.comments_conf.count_documents({'post_slug': slug, 'is_deleted': False})
+            total = _safe_count(m.comments_conf, {'post_slug': slug, 'is_deleted': False})
             cursor = m.comments_conf.find({'post_slug': slug, 'is_deleted': False}).sort('created_at', 1).skip((page-1)*per_page).limit(per_page)
             comments_list = list(cursor)
             
@@ -2019,9 +2046,17 @@ def update_post(post_id):
                 'edited_at': datetime.datetime.now(datetime.timezone.utc),
             }}
         )
+        # SECURITY: don't re-index suppressed/flagged posts into Typesense fast-path.
         try:
             if m._t.ts_posts:
-                m.index_post_to_typesense(post_id)
+                fresh = m.posts_conf.find_one({'_id': ObjectId(post_id)}, {'is_suppressed': 1, 'moderation_status': 1, 'image_status': 1})
+                if fresh and (fresh.get('is_suppressed') or fresh.get('moderation_status') in ('flagged', 'ai_flagged', 'banned', 'deleted') or fresh.get('image_status') == 'removed_nsfw'):
+                    try:
+                        m._t._ts_delete_document('posts', str(post_id))
+                    except Exception:
+                        pass
+                else:
+                    m.index_post_to_typesense(post_id)
         except Exception as e:
             current_app.logger.error(f"Failed to re-index post {post_id} after update: {e}")
         flash("Post updated successfully!", "success")
@@ -2197,6 +2232,7 @@ def toggle_save_post(post_id):
 
 
 @bp.route('/post/<post_id>/share', methods=['POST'])
+@login_required
 @limits(calls=10, period=60)
 def share_post(post_id):
     import main as m

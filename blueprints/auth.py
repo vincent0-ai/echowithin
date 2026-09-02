@@ -179,7 +179,7 @@ def register():
         gen_code = str(secrets.randbelow(10**6)).zfill(6)
         hashed = hashlib.sha256(gen_code.encode()).hexdigest()
         code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-        m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+        m.auth_conf.update_one({'email': email}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
         m.send_code(email, gen_code)
 
         flash("Confirmation code sent to your email. Please verify to activate your account.", "info")
@@ -188,6 +188,7 @@ def register():
 
 
 @bp.route("/confirm/<email>", methods=['GET', 'POST'])
+@limits(calls=20, period=60)
 def confirm(email):
     import main as m
     next_url = request.args.get('next')
@@ -201,34 +202,40 @@ def confirm(email):
             if not hashed_obj:
                 error = 'No confirmation code found for this email.'
             else:
-                code_exp = hashed_obj.get('code_expiry')
-                if code_exp and code_exp.tzinfo is None:
-                    code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
-                if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
-                    error = 'This confirmation code has expired.'
-                elif hmac.compare_digest(hashed_obj['hashed_code'], hashlib.sha256(code.encode()).hexdigest()):
-                    m.users_conf.update_one(
-                        {"email": email},
-                        {"$set": {
-                            "is_confirmed": True,
-                            "is_guest": False,
-                            "guest_expires_at": None
-                        }}
-                    )
-                    m.auth_conf.delete_one({"email": email})
-                    user_data = m.users_conf.find_one({"email": email})
-                    if user_data:
-                        user_obj = m.User(user_data)
-                        login_user(user_obj, remember=True)
-                        session.pop('is_guest_tour', None)
-                        warm_user_fernet(str(user_data['_id']))
-                        _record_login_session(str(user_data['_id']), 'password')
-                    flash("Email confirmed! Your account is active and ready.", "success")
-                    if next_url and m.is_safe_url(next_url):
-                        return redirect(next_url)
-                    return redirect(url_for('notes.personal_space'))
+                MAX_CONFIRM_ATTEMPTS = 10
+                attempts = int(hashed_obj.get('attempt_count', 0) or 0)
+                if attempts >= MAX_CONFIRM_ATTEMPTS:
+                    error = 'Too many failed attempts. Please request a new code.'
                 else:
-                    error = 'Invalid verification code.'
+                    code_exp = hashed_obj.get('code_expiry')
+                    if code_exp and code_exp.tzinfo is None:
+                        code_exp = code_exp.replace(tzinfo=datetime.timezone.utc)
+                    if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
+                        error = 'This confirmation code has expired.'
+                    elif hmac.compare_digest(hashed_obj['hashed_code'], hashlib.sha256(code.encode()).hexdigest()):
+                        m.users_conf.update_one(
+                            {"email": email},
+                            {"$set": {
+                                "is_confirmed": True,
+                                "is_guest": False,
+                                "guest_expires_at": None
+                            }}
+                        )
+                        m.auth_conf.delete_one({"email": email})
+                        user_data = m.users_conf.find_one({"email": email})
+                        if user_data:
+                            user_obj = m.User(user_data)
+                            login_user(user_obj, remember=True)
+                            session.pop('is_guest_tour', None)
+                            warm_user_fernet(str(user_data['_id']))
+                            _record_login_session(str(user_data['_id']), 'password')
+                        flash("Email confirmed! Your account is active and ready.", "success")
+                        if next_url and m.is_safe_url(next_url):
+                            return redirect(next_url)
+                        return redirect(url_for('notes.personal_space'))
+                    else:
+                        m.auth_conf.update_one({'email': email}, {'$inc': {'attempt_count': 1}})
+                        error = 'Invalid verification code.'
     return render_template("confirm.html", email=email, error=error)
 
 
@@ -253,7 +260,7 @@ def login():
                 gen_code = str(secrets.randbelow(10**6)).zfill(6)
                 hashed = hashlib.sha256(gen_code.encode()).hexdigest()
                 code_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=24)
-                m.auth_conf.update_one({'email': user_data['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry}}, upsert=True)
+                m.auth_conf.update_one({'email': user_data['email']}, {'$set': {'hashed_code': hashed, 'code_expiry': code_expiry, 'attempt_count': 0}}, upsert=True)
                 m.send_code(user_data['email'], gen_code)
                 flash("Email not confirmed. A new confirmation code has been sent.", "warning")
                 return redirect(url_for('auth.confirm', email=user_data['email']))

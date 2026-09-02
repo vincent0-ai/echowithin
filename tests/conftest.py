@@ -90,3 +90,52 @@ def https_client(app):
         return original_open(*args, **kwargs)
     tc.open = https_open
     return tc
+
+
+@pytest.fixture
+def mock_user():
+    import datetime
+    from bson.objectid import ObjectId
+    return {
+        '_id': ObjectId('507f1f77bcf86cd799439011'),
+        'username': 'testuser',
+        'email': 'testuser@example.com',
+        'is_admin': False,
+        'is_confirmed': True,
+        'join_date': datetime.datetime.now(datetime.timezone.utc),
+        'account_tier': 'free'
+    }
+
+
+@pytest.fixture
+def mock_admin_user():
+    import datetime
+    from bson.objectid import ObjectId
+    return {
+        '_id': ObjectId('507f1f77bcf86cd799439099'),
+        'username': 'adminuser',
+        'email': 'admin@example.com',
+        'is_admin': True,
+        'is_confirmed': True,
+        'join_date': datetime.datetime.now(datetime.timezone.utc),
+        'account_tier': 'premium'
+    }
+
+
+@pytest.fixture
+def auth_client(app, mock_user):
+    from main import User
+    user_obj = User(mock_user)
+    with app.test_client() as c:
+        with patch('flask_login.utils._get_user', return_value=user_obj):
+            yield c
+
+
+@pytest.fixture
+def admin_client(app, mock_admin_user):
+    from main import User
+    admin_obj = User(mock_admin_user)
+    with app.test_client() as c:
+        with patch('flask_login.utils._get_user', return_value=admin_obj):
+            yield c
+

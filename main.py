@@ -334,7 +334,7 @@ def cleanup_stale_global_state():
 
     for share_id, lock_data in list(note_locks.items()):
         lock_age = now_ts - lock_data.get('timestamp', now_ts)
-        if lock_age > 600:
+        if lock_age > 180:
             try:
                 socketio.emit('lock_released', {'share_id': share_id}, room=share_id)
             except Exception:
@@ -891,6 +891,8 @@ community_reports_conf.create_index('reporter_id')
 post_reports_conf.create_index([('post_id', 1), ('status', 1)])
 post_reports_conf.create_index('reporter_id')
 post_reports_conf.create_index('created_at')
+# One report per user per post — prevents spam + race duplicates (AUDIT F1/F2).
+post_reports_conf.create_index([('post_id', 1), ('reporter_id', 1)], unique=True)
 community_challenges_conf.create_index([('community_id', 1), ('status', 1)])
 community_polls_conf.create_index([('community_id', 1), ('status', 1), ('created_at', -1)])
 community_poll_votes_conf.create_index([('poll_id', 1), ('user_id', 1)], unique=True)
@@ -1589,8 +1591,8 @@ def handle_acquire_lock(data):
     now = time.time()
     existing_lock = note_locks.get(share_id)
     
-    # If lock exists and hasn't expired (10 mins)
-    if existing_lock and (now - existing_lock['timestamp'] < 600) and existing_lock['user_id'] != user_id:
+    # If lock exists and hasn't expired (3 mins)
+    if existing_lock and (now - existing_lock['timestamp'] < 180) and existing_lock['user_id'] != user_id:
         emit('lock_denied', {
             'message': f"Note is currently being edited by {existing_lock['user_name']}",
             'user_name': existing_lock['user_name']
@@ -1643,8 +1645,14 @@ def handle_note_update(data):
 def handle_discussion_new_comment(data):
     share_id = data.get('share_id')
     comment_data = data.get('comment')
-    if share_id and comment_data:
-        emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
+    if not share_id or not comment_data:
+        return
+    # SECURITY: verify caller can access this share before broadcasting.
+    share = _note_share_access(share_id)
+    if not share:
+        emit('discussion_error', {'message': 'Share not found or access denied.'}, room=request.sid)
+        return
+    emit('discussion_updated', {'comment': comment_data}, room=share_id, include_self=False)
 
 
 # --- Direct Messaging (DM) Functionality ---

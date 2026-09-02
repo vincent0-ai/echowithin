@@ -677,12 +677,19 @@ def get_public_posts_filter(extra_query=None):
     """
     Returns a MongoDB query filter dict that excludes posts that are
     suppressed due to user reports or unapproved AI safety flags.
+
+    Note: `image_status == removed_nsfw` is hidden unless `is_approved == True`
+    (admin has explicitly approved after review) — prevents drift between
+    `view_post` (which allows approved+removed_nsfw) and feed queries.
     """
     base_filter = {
         'status': 'published',
         'is_suppressed': {'$ne': True},
         'moderation_status': {'$nin': ['flagged', 'ai_flagged', 'banned', 'deleted']},
-        'image_status': {'$ne': 'removed_nsfw'},
+        '$or': [
+            {'image_status': {'$ne': 'removed_nsfw'}},
+            {'is_approved': True},
+        ],
     }
     if extra_query:
         merged = dict(base_filter)
@@ -1099,7 +1106,14 @@ def is_safe_fetch_url(url):
         hostname = parsed.hostname
         if not hostname:
             return False
-        if hostname.lower() in ('localhost', '169.254.169.254'):
+        # Explicit port allowlist — only 80/443 or default.
+        if parsed.port is not None and parsed.port not in (80, 443):
+            return False
+        hl = hostname.lower()
+        # Block well-known SSRF targets (including IPv6-mapped forms).
+        if hl in ('localhost', '169.254.169.254', '0.0.0.0', '::', '::1'):
+            return False
+        if '169.254.169.254' in hl or 'metadata.google.internal' in hl:
             return False
 
         # Resolve hostname to IP to prevent private network SSRF
@@ -1107,9 +1121,21 @@ def is_safe_fetch_url(url):
             ip_list = socket.getaddrinfo(hostname, None)
             for item in ip_list:
                 ip_str = item[4][0]
-                ip_obj = ipaddress.ip_address(ip_str)
+                # Strip IPv6 zone index (e.g. fe80::1%lo0) before parsing.
+                if '%' in ip_str:
+                    ip_str = ip_str.split('%', 1)[0]
+                try:
+                    ip_obj = ipaddress.ip_address(ip_str)
+                except ValueError:
+                    continue
                 if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_reserved or ip_obj.is_multicast:
                     return False
+                # Extra guard for IPv4-mapped IPv6 (e.g. ::ffff:169.254.169.254)
+                # — ipaddress treats it as IPv6; check embedded IPv4.
+                if ip_obj.version == 6 and ip_obj.ipv4_mapped is not None:
+                    v4 = ip_obj.ipv4_mapped
+                    if v4.is_private or v4.is_loopback or v4.is_link_local or v4.is_reserved or v4.is_multicast:
+                        return False
         except socket.gaierror:
             return False
         return True

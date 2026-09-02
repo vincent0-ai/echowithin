@@ -631,9 +631,10 @@ app_updates_conf = db['app_updates']
 forms_conf = db['forms']
 form_responses_conf = db['form_responses']
 
-# --- Game Lobbies (2+ players, anytime — poll/trivia on-demand) ---
+# --- Game Lobbies (2+ players, anytime — poll/trivia/wyr/ttal/story/caption) ---
 game_sessions_conf = db['game_sessions']
 game_votes_conf = db['game_votes']
+game_submissions_conf = db['game_submissions']  # TTAL statements, captions
 
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
@@ -936,8 +937,10 @@ form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 # --- Game Lobbies (2+ players, anytime) ---
 game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
 game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
-game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)], unique=True)
+game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)], unique=True, sparse=True)
 game_votes_conf.create_index([('lobby_id', 1), ('submitted_at', -1)])
+game_submissions_conf.create_index([('lobby_id', 1), ('user_id', 1), ('type', 1)], unique=True)
+game_submissions_conf.create_index([('lobby_id', 1), ('type', 1)])
 
 # --- Performance: Additional compound indexes for common query patterns ---
 comments_conf.create_index([('post_slug', 1), ('is_deleted', 1), ('created_at', -1)])
@@ -1005,6 +1008,7 @@ database.forms_conf = forms_conf
 database.form_responses_conf = form_responses_conf
 database.game_sessions_conf = game_sessions_conf
 database.game_votes_conf = game_votes_conf
+database.game_submissions_conf = game_submissions_conf
 
 
 def purge_guest_user_data(guest_id_str):

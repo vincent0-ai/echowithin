@@ -6,28 +6,59 @@
     <h2>Create Game</h2>
     <a href="{{ url_for('game.games_list') }}" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">My lobbies</a>
   </div>
-  <div class="ew-info-banner"><strong>Poll</strong> = community reflection, no right answer &bull; <strong>Trivia</strong> = cozy single-choice, accuracy only. Share a link and up to 30 players can join instantly.</div>
-  <form method="POST" class="ew-card">
+  <div class="ew-info-banner">Share a link and up to 30 players can join instantly. Choose a game type below.</div>
+  <form method="POST" class="ew-card" id="create-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
     <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Team check-in">
-    <label class="ew-form-label">Question *</label>
-    <input type="text" name="question" maxlength="200" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., One word for your week?">
+
     <label class="ew-form-label">Game type</label>
-    <select name="game_type" id="game_type" onchange="document.getElementById('correct_wrap').style.display=this.value==='trivia'?'block':'none'" class="form-input" style="margin-bottom:0.8rem;">
-      <option value="poll">Poll / reflection (no correct answer)</option>
-      <option value="trivia">Cozy trivia (accuracy only)</option>
+    <select name="game_type" id="game_type" class="form-input" style="margin-bottom:0.8rem;" onchange="toggleFields()">
+      <option value="poll">Poll — community reflection, no right answer</option>
+      <option value="trivia">Trivia — single-choice, accuracy only</option>
+      <option value="wyr">Would You Rather — binary A vs B choice</option>
+      <option value="ttal">Two Truths and a Lie — players submit in-lobby</option>
+      <option value="story">Story Chain — collaborative storytelling</option>
+      <option value="caption">Caption This — players caption a prompt</option>
     </select>
-    <label class="ew-form-label">Options (2-5)</label>
-    <div id="opts">
-      <input type="text" name="options" placeholder="Option 1" required class="form-input" style="margin-bottom:0.4rem;">
-      <input type="text" name="options" placeholder="Option 2" required class="form-input" style="margin-bottom:0.4rem;">
+
+    <!-- Poll / Trivia / WYR fields -->
+    <div id="fields-question">
+      <label class="ew-form-label">Question *</label>
+      <input type="text" name="question" maxlength="200" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., One word for your week?">
     </div>
-    <button type="button" onclick="if(document.querySelectorAll('[name=options]').length<5){const i=document.createElement('input'); i.name='options'; i.placeholder='Option '+(document.querySelectorAll('[name=options]').length+1); i.className='form-input'; i.style.marginBottom='0.4rem'; document.getElementById('opts').appendChild(i);}" class="ew-btn--outline ew-btn--sm" style="margin-bottom:0.8rem; display:inline-block; cursor:pointer;">+ Add option</button>
-    <div id="correct_wrap" style="display:none; margin-bottom:0.8rem;">
-      <label class="ew-form-label">Correct option (trivia only, optional)</label>
+    <div id="fields-options">
+      <label class="ew-form-label">Options (<span id="opts-range">2-5</span>)</label>
+      <div id="opts">
+        <input type="text" name="options" placeholder="Option 1" class="form-input" style="margin-bottom:0.4rem;">
+        <input type="text" name="options" placeholder="Option 2" class="form-input" style="margin-bottom:0.4rem;">
+      </div>
+      <button type="button" id="add-opt-btn" onclick="addOption()" class="ew-btn--outline ew-btn--sm" style="margin-bottom:0.8rem; display:inline-block; cursor:pointer;">+ Add option</button>
+    </div>
+    <div id="fields-correct" style="display:none; margin-bottom:0.8rem;">
+      <label class="ew-form-label">Correct option (trivia only)</label>
       <input type="text" name="correct_option" placeholder="Must match an option exactly" class="form-input">
     </div>
+
+    <!-- Story Chain fields -->
+    <div id="fields-story" style="display:none;">
+      <label class="ew-form-label">Starter sentence *</label>
+      <textarea name="starter_sentence" maxlength="280" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Once upon a time in a quiet village..."></textarea>
+      <div class="ew-info-banner" style="font-size:0.8rem;">You write the first sentence. Players take turns adding one sentence each to build a collaborative story.</div>
+    </div>
+
+    <!-- Caption This fields -->
+    <div id="fields-caption" style="display:none;">
+      <label class="ew-form-label">Prompt / Scenario *</label>
+      <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., You walk into the office and find your boss wearing a superhero cape..."></textarea>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Players will each submit a caption for this scenario. Then everyone votes for their favourite.</div>
+    </div>
+
+    <!-- TTAL info -->
+    <div id="fields-ttal" style="display:none;">
+      <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed — players will submit their 3 statements (2 truths + 1 lie) after joining the lobby. You control when guessing begins.</div>
+    </div>
+
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
       <div>
         <label class="ew-form-label">Expiry</label>
@@ -42,4 +73,46 @@
     </div>
   </form>
 </div>
+<script nonce="{{ csp_nonce }}">
+function toggleFields(){
+  const gt = document.getElementById('game_type').value;
+  const show = (id, v) => { const el = document.getElementById(id); if(el) el.style.display = v ? '' : 'none'; };
+  // Poll/Trivia/WYR share question + options
+  const hasQO = ['poll','trivia','wyr'].includes(gt);
+  show('fields-question', hasQO);
+  show('fields-options', hasQO);
+  show('fields-correct', gt === 'trivia');
+  show('fields-story', gt === 'story');
+  show('fields-caption', gt === 'caption');
+  show('fields-ttal', gt === 'ttal');
+  // WYR: exactly 2 options, hide add button
+  const optRange = document.getElementById('opts-range');
+  const addBtn = document.getElementById('add-opt-btn');
+  if(gt === 'wyr'){
+    if(optRange) optRange.textContent = 'exactly 2';
+    if(addBtn) addBtn.style.display = 'none';
+    // Trim to 2
+    const inputs = document.querySelectorAll('#opts [name=options]');
+    for(let i=2; i<inputs.length; i++) inputs[i].remove();
+  } else {
+    if(optRange) optRange.textContent = '2-5';
+    if(addBtn) addBtn.style.display = '';
+  }
+  // Set required attributes
+  document.querySelectorAll('[name=question]').forEach(el => el.required = hasQO);
+  document.querySelectorAll('[name=starter_sentence]').forEach(el => el.required = gt === 'story');
+  document.querySelectorAll('[name=prompt]').forEach(el => el.required = gt === 'caption');
+}
+function addOption(){
+  const gt = document.getElementById('game_type').value;
+  const max = gt === 'wyr' ? 2 : 5;
+  const count = document.querySelectorAll('#opts [name=options]').length;
+  if(count >= max) return;
+  const i = document.createElement('input');
+  i.name = 'options'; i.placeholder = 'Option ' + (count+1);
+  i.className = 'form-input'; i.style.marginBottom = '0.4rem';
+  document.getElementById('opts').appendChild(i);
+}
+toggleFields();
+</script>
 {% endblock %}

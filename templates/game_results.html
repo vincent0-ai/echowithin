@@ -5,19 +5,23 @@
 {% endblock %}
 {% block content %}
 <div class="content-wrapper">
+  {% set gt = lobby.game_type %}
   <div class="ew-header-row">
     <h2>{{ lobby.title }} — Results</h2>
-    <div style="display:flex; gap:0.5rem;">
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
       <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Lobby</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">CSV</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">JSON</a>
     </div>
   </div>
   <div class="ew-card">
-    <div style="font-weight:600; color:var(--primary-color);">{{ lobby.question.label }}</div>
-    <div style="font-size:0.8rem; color:var(--text-muted);">{{ lobby.game_type }} &bull; {{ total }} votes &bull; host {{ lobby.host_username }}</div>
-    {% if lobby.game_type=='trivia' and lobby.question.correct_option %}<div class="ew-success-banner" style="margin-top:0.4rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
+    <div style="font-weight:600; color:var(--primary-color);">{{ lobby.prompt or lobby.question.label }}</div>
+    <div style="font-size:0.8rem; color:var(--text-muted);"><span class="ew-badge">{{ gt }}</span> &bull; {{ total }} votes &bull; host {{ lobby.host_username }}</div>
+    {% if gt=='trivia' and lobby.question.correct_option %}<div class="ew-success-banner" style="margin-top:0.4rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
   </div>
+
+  {# ─── Poll / Trivia / WYR Chart ─── #}
+  {% if gt in ('poll', 'trivia', 'wyr') and per_option %}
   <div class="ew-card">
     <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-chart-bar"></i> Counts</h4>
     <canvas id="resultsChart" height="80"></canvas>
@@ -39,18 +43,69 @@
       {% endfor %}
     </div>
   </div>
-  {% if votes %}
+  {% endif %}
+
+  {# ─── TTAL Results ─── #}
+  {% if gt == 'ttal' and submissions %}
+  <div class="ew-card">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-user-secret"></i> Truths &amp; Lies</h4>
+    {% for sub in submissions %}
+      <div style="margin-bottom:0.8rem; padding-bottom:0.8rem; {% if not loop.last %}border-bottom:1px solid var(--border-color);{% endif %}">
+        <div style="font-weight:600; color:var(--text-dark-color);">{{ sub.username }}</div>
+        {% for stmt in sub.content.statements %}
+          <div style="font-size:0.85rem; padding:0.2rem 0; color:var(--text-dark-color);">
+            #{{ loop.index }}: {{ stmt }}
+            {% if loop.index0 == sub.content.lie_index %}<span class="ew-badge ew-badge--danger">LIE</span>{% else %}<span class="ew-badge ew-badge--success">Truth</span>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ─── Story Chain Results ─── #}
+  {% if gt == 'story' and sentences %}
+  <div class="ew-card">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-book-open"></i> Complete Story</h4>
+    <div style="line-height:1.8; color:var(--text-dark-color);">
+      {% for s in sentences %}
+        <span><strong style="color:var(--text-muted); font-size:0.7rem;">{{ s.username }}:</strong> {{ s.text }} </span>
+      {% endfor %}
+    </div>
+    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.6rem;">{{ sentences|length }} sentences by {{ sentences|map(attribute='username')|unique|list|length }} writer(s)</div>
+  </div>
+  {% endif %}
+
+  {# ─── Caption This Results ─── #}
+  {% if gt == 'caption' and captions %}
+  <div class="ew-card">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-comment-dots"></i> Captions</h4>
+    {% for cap in captions %}
+      {% set vote_count = lobby.counts.get(cap._id|string, 0) %}
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; {% if not loop.last %}border-bottom:1px solid var(--separator-color);{% endif %}">
+        <div>
+          <div style="font-weight:600; color:var(--text-dark-color);">"{{ cap.content.caption }}"</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">— {{ cap.username }}</div>
+        </div>
+        <span class="ew-count-chip"><strong>{{ vote_count }}</strong> votes</span>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ─── Vote log table (all types that use game_votes) ─── #}
+  {% if votes and gt in ('poll', 'trivia', 'wyr', 'caption') %}
   <div class="ew-table-wrap">
     <table class="ew-table">
       <thead><tr><th>#</th><th>Player</th><th>Option</th><th>Time</th></tr></thead>
       <tbody>
         {% for v in votes %}
-          <tr><td class="muted">{{ loop.index }}</td><td>{{ v.username }}</td><td><strong>{{ v.option }}</strong> {% if lobby.game_type=='trivia' and v.option==lobby.question.correct_option %}✅{% elif lobby.game_type=='trivia' %}❌{% endif %}</td><td class="secondary">{{ v.submitted_at|localtime('%b %d %H:%M') if v.submitted_at else '' }}</td></tr>
+          <tr><td class="muted">{{ loop.index }}</td><td>{{ v.username }}</td><td><strong>{{ v.option }}</strong> {% if gt=='trivia' and v.option==lobby.question.correct_option %}✅{% elif gt=='trivia' %}❌{% endif %}</td><td class="secondary">{{ v.submitted_at|localtime('%b %d %H:%M') if v.submitted_at else '' }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
-  {% else %}
+  {% elif not votes and gt in ('poll', 'trivia', 'wyr') %}
     <p style="text-align:center; color:var(--text-muted); padding:1rem;">No votes yet.</p>
   {% endif %}
 </div>

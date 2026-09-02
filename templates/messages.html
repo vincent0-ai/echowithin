@@ -1992,6 +1992,9 @@
     window.loadChat = window.loadChat || function () {
         window.__pendingLoadChatArgs = arguments;
     };
+    window.setChatTheme = window.setChatTheme || function () {
+        window.__pendingThemeArgs = arguments;
+    };
 
     document.addEventListener('DOMContentLoaded', function () {
         const getSocket = () => window.socket || null;
@@ -2684,6 +2687,16 @@
             // Sending is done exclusively via the Send button.
         }
 
+        // Early theme helper so loadChat can call it before the later full definition.
+        if (!window.setChatTheme) {
+            window.setChatTheme = function (theme, save) {
+                if (chatHistory) chatHistory.setAttribute('data-theme', theme);
+                if (save) {
+                    try { localStorage.setItem('chat_theme_' + currentUserId, theme); } catch(e) {}
+                }
+            };
+        }
+
         window.loadChat = function (userId, username, element) {
             if (!userId) return;
             if (activeRecipientId && activeRecipientId !== userId) {
@@ -2723,7 +2736,7 @@
 
             // Load theme
             const savedTheme = localStorage.getItem(`chat_theme_${currentUserId}`);
-            setChatTheme(savedTheme || 'default', false);
+            window.setChatTheme(savedTheme || 'default', false);
 
             // Clean up header state
             const indicator = document.getElementById('typing-indicator');
@@ -3819,11 +3832,16 @@
         };
 
         window.setChatTheme = function (theme, save = true) {
-            chatHistory.setAttribute('data-theme', theme);
+            if (chatHistory) chatHistory.setAttribute('data-theme', theme);
             if (save) {
-                localStorage.setItem(`chat_theme_${currentUserId}`, theme);
-                showToast(`Theme updated to ${theme}`);
-                closeThemePicker();
+                try { localStorage.setItem(`chat_theme_${currentUserId}`, theme); } catch(e) {}
+                if (typeof showToast === 'function') showToast(`Theme updated to ${theme}`);
+                if (typeof closeThemePicker === 'function' && save) try { closeThemePicker(); } catch(e) {}
+            }
+            // Replay any theme call that happened before this definition.
+            if (window.__pendingThemeArgs) {
+                const pa = window.__pendingThemeArgs; window.__pendingThemeArgs = null;
+                if (pa[0] !== theme) window.setChatTheme.apply(window, pa);
             }
             // Update selection UI
             document.querySelectorAll('.theme-option').forEach(opt => {

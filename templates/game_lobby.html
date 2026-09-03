@@ -268,6 +268,16 @@
         <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
         {% if is_host %}
           <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
+          {% if not lobby.deactivated %}
+          <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+          </form>
+          {% endif %}
+          <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete Lobby</button>
+          </form>
         {% endif %}
       </div>
       <div id="presence-list" style="margin-top:0.6rem; font-size:0.8rem; color:var(--text-secondary);"></div>

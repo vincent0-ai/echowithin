@@ -40,9 +40,21 @@
               <button type="button" onclick="navigator.clipboard.writeText('{{ _url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
             </div>
           </div>
-          <div style="display:flex; gap:0.5rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem;">
+          <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem; flex-wrap:wrap;">
             <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Open Lobby</a>
             <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Results</a>
+            {% if current_user.is_authenticated and (current_user.id|string == lobby.host_id|string or current_user.is_admin) %}
+              {% if not lobby.deactivated %}
+              <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+              </form>
+              {% endif %}
+              <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
+              </form>
+            {% endif %}
           </div>
         </div>
       {% endfor %}

@@ -437,9 +437,36 @@ def deactivate_lobby(lobby_id):
     import main as m
     lobby = _game_access(lobby_id)
     if not lobby: flash('Not found','danger'); return redirect(url_for('game.games_list'))
-    if not _is_host(lobby): flash('Not host','danger'); return redirect(url_for('game.games_list'))
+    if not _is_host(lobby) and not getattr(current_user, 'is_admin', False):
+        flash('Not authorized','danger')
+        return redirect(url_for('game.games_list'))
     m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$set':{'deactivated':True}})
     flash('Lobby deactivated.','success')
+    referrer = request.referrer or ''
+    if 'personal_space' in referrer:
+        return redirect(url_for('pages.personal_space') + '#games')
+    return redirect(url_for('game.games_list'))
+
+
+@bp.route('/g/<lobby_id>/delete', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def delete_lobby(lobby_id):
+    import main as m
+    lobby = _game_access(lobby_id)
+    if not lobby:
+        flash('Lobby not found', 'danger')
+        return redirect(url_for('game.games_list'))
+    if not _is_host(lobby) and not getattr(current_user, 'is_admin', False):
+        flash('Not authorized', 'danger')
+        return redirect(url_for('game.games_list'))
+    m.game_votes_conf.delete_many({'lobby_id': lobby_id})
+    m.game_submissions_conf.delete_many({'lobby_id': lobby_id})
+    m.game_sessions_conf.delete_one({'lobby_id': lobby_id})
+    flash('Game lobby deleted.', 'success')
+    referrer = request.referrer or ''
+    if 'personal_space' in referrer:
+        return redirect(url_for('pages.personal_space') + '#games')
     return redirect(url_for('game.games_list'))
 
 # ─── TTAL: Two Truths and a Lie ───

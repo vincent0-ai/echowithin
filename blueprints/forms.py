@@ -511,8 +511,32 @@ def form_deactivate(share_id):
         flash('Not authorized','danger')
         return redirect(url_for('forms.forms_list'))
     m.forms_conf.update_one({'_id': form['_id']}, {'$set':{'deactivated':True}})
-    flash('Form deactivated — link no longer accepts responses.','success')
+    flash('Form deactivated. The link will no longer accept responses.','success')
+    referrer = request.referrer or ''
+    if 'personal_space' in referrer:
+        return redirect(url_for('pages.personal_space') + '#forms')
     return redirect(url_for('forms.form_responses_view', share_id=share_id))
+
+
+@bp.route('/forms/<share_id>/delete', methods=['POST'])
+@login_required
+@limits(calls=10, period=60)
+def form_delete(share_id):
+    import main as m
+    form = m.forms_conf.find_one({'share_id': share_id})
+    if not form:
+        flash('Form not found', 'danger')
+        return redirect(url_for('forms.forms_list'))
+    if str(form['owner_id']) != str(current_user.id) and not getattr(current_user, 'is_admin', False):
+        flash('Not authorized', 'danger')
+        return redirect(url_for('forms.forms_list'))
+    m.form_responses_conf.delete_many({'form_id': form['_id']})
+    m.forms_conf.delete_one({'_id': form['_id']})
+    flash('Form and all associated responses deleted.', 'success')
+    referrer = request.referrer or ''
+    if 'personal_space' in referrer:
+        return redirect(url_for('pages.personal_space') + '#forms')
+    return redirect(url_for('forms.forms_list'))
 
 
 @bp.route('/api/forms/<share_id>/stats')

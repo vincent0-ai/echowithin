@@ -67,3 +67,37 @@ class TestFormSubmitterIdentity:
         now = datetime.datetime(2026, 9, 3, 14, 30, 0, tzinfo=datetime.timezone.utc)
         formatted = now.strftime('%b %d, %Y, %I:%M %p')
         assert formatted == "Sep 03, 2026, 02:30 PM"
+
+
+class TestFormAndGameDeletion:
+    """Test deletion behavior and cascading cleanups for forms and games."""
+
+    def test_form_deletion_cascades_responses(self):
+        form_id = ObjectId()
+        mock_forms_conf = MagicMock()
+        mock_responses_conf = MagicMock()
+
+        with patch('main.forms_conf', mock_forms_conf), \
+             patch('main.form_responses_conf', mock_responses_conf):
+            mock_responses_conf.delete_many({'form_id': form_id})
+            mock_forms_conf.delete_one({'_id': form_id})
+
+            mock_responses_conf.delete_many.assert_called_once_with({'form_id': form_id})
+            mock_forms_conf.delete_one.assert_called_once_with({'_id': form_id})
+
+    def test_game_deletion_cascades_votes_and_submissions(self):
+        lobby_id = "test_lobby_123"
+        mock_sessions_conf = MagicMock()
+        mock_votes_conf = MagicMock()
+        mock_subs_conf = MagicMock()
+
+        with patch('main.game_sessions_conf', mock_sessions_conf), \
+             patch('main.game_votes_conf', mock_votes_conf), \
+             patch('main.game_submissions_conf', mock_subs_conf):
+            mock_votes_conf.delete_many({'lobby_id': lobby_id})
+            mock_subs_conf.delete_many({'lobby_id': lobby_id})
+            mock_sessions_conf.delete_one({'lobby_id': lobby_id})
+
+            mock_votes_conf.delete_many.assert_called_once_with({'lobby_id': lobby_id})
+            mock_subs_conf.delete_many.assert_called_once_with({'lobby_id': lobby_id})
+            mock_sessions_conf.delete_one.assert_called_once_with({'lobby_id': lobby_id})

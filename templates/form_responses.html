@@ -14,6 +14,16 @@
       <a href="{{ url_for('notes.personal_space') }}#forms" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Forms</a>
       <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
       <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
+      {% if not form.deactivated %}
+      <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this form? The link will stop accepting responses.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+      </form>
+      {% endif %}
+      <form method="POST" action="{{ url_for('forms.form_delete', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this form and all its responses? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete Form</button>
+      </form>
     </div>
   </div>
 

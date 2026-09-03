@@ -11,10 +11,22 @@
       <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-dark-color);">{{ lobby.title }}</h2>
       <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">Results</div>
     </div>
-    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
       <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Lobby</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Export CSV</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
+      {% if is_host or (current_user.is_authenticated and current_user.is_admin) %}
+        {% if not lobby.deactivated %}
+        <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+        </form>
+        {% endif %}
+        <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete Lobby</button>
+        </form>
+      {% endif %}
     </div>
   </div>
   <div class="ew-card">

@@ -37,9 +37,13 @@
             <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
           </div>
         </div>
-        <div style="display:flex; gap:0.5rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem;">
+        <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem; flex-wrap:wrap;">
           <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Responses</a>
           <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">View Form</a>
+          <form method="POST" action="{{ url_for('forms.form_delete', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this form and all its responses? This cannot be undone.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
+          </form>
         </div>
       </div>
     {% endfor %}

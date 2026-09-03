@@ -41,7 +41,7 @@
     <div class="ew-share-row" style="margin-top: 0.75rem; align-items: center;">
       <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark-color); white-space: nowrap;">Share link:</span>
       <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
-      <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+      <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
     </div>
   </div>
 

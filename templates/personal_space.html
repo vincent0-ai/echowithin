@@ -1713,40 +1713,85 @@
             background: var(--surface-bg, #faf7f5);
             margin-top: 0.75rem;
             box-sizing: border-box;
+            width: 100%;
+            max-width: 100%;
         }
 
         .ew-share-input {
-            flex: 1;
-            min-width: 120px;
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+            width: 100%;
             font-size: 0.8rem;
-            padding: 0.45rem 0.75rem;
+            padding: 0.45rem 0.65rem;
             border: none;
             background: transparent;
             color: var(--text-dark-color, #333);
             outline: none;
             font-family: inherit;
             box-sizing: border-box;
+            text-overflow: ellipsis;
         }
 
         .ew-copy-btn {
-            border: none;
-            border-left: 1px solid var(--border-color, #e5dcd6);
-            background: var(--card-bg, #ffffff);
-            color: var(--primary-color, #3e2217);
+            border: none !important;
+            border-left: 1px solid var(--border-color, #e5dcd6) !important;
+            background: var(--card-bg, #ffffff) !important;
+            color: var(--primary-color, #3e2217) !important;
             font-weight: 600;
             font-size: 0.78rem;
-            padding: 0.45rem 0.95rem;
+            padding: 0.45rem 0.85rem;
             cursor: pointer;
             transition: background 0.15s, color 0.15s;
             white-space: nowrap;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0 !important;
+            border-radius: 0 !important;
         }
 
         .ew-copy-btn:hover {
             background: var(--surface-bg, #f5efe9);
             color: var(--primary-dark-color, #2a160e);
+        }
+
+        /* Card action buttons row: flex on desktop, clean 2x2 grid on mobile */
+        .ew-card-actions {
+            display: flex;
+            gap: 0.45rem;
+            align-items: center;
+            border-top: 1px solid var(--border-color, #e5dcd6);
+            padding-top: 0.75rem;
+            margin-top: 0.35rem;
+            flex-wrap: wrap;
+        }
+
+        .ew-card-actions a.ew-btn,
+        .ew-card-actions button.ew-btn,
+        .ew-card-actions form button {
+            white-space: nowrap;
+        }
+
+        @media (max-width: 600px) {
+            .ew-card-actions {
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.45rem;
+            }
+            .ew-card-actions > a,
+            .ew-card-actions > form {
+                display: block !important;
+                width: 100% !important;
+                margin: 0 !important;
+            }
+            .ew-card-actions a.ew-btn,
+            .ew-card-actions button.ew-btn,
+            .ew-card-actions form button {
+                width: 100% !important;
+                text-align: center !important;
+                justify-content: center !important;
+                box-sizing: border-box !important;
+            }
         }
 
         .ew-card-grid {
@@ -3408,12 +3453,12 @@
                         <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
                         {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
                         <input type="text" value="{{ _furl }}" readonly onclick="this.select()" class="ew-share-input">
-                        <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+                        <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
                     </div>
                 </div>
-                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem; flex-wrap:wrap;">
-                    <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Responses</a>
-                    <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Export CSV</a>
+                <div class="ew-card-actions">
+                    <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Responses</a>
+                    <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
                     {% if not form.deactivated %}
                     <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this form? The link will stop accepting responses.')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -3473,12 +3518,12 @@
                         <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
                         {% set _gurl = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
                         <input type="text" value="{{ _gurl }}" readonly onclick="this.select()" class="ew-share-input">
-                        <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+                        <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
                     </div>
                 </div>
-                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem; flex-wrap:wrap;">
-                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Open Lobby</a>
-                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Results</a>
+                <div class="ew-card-actions">
+                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Open Lobby</a>
+                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
                     {% if not lobby.deactivated %}
                     <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

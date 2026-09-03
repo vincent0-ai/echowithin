@@ -6,7 +6,14 @@
     <div class="ew-error-banner" style="text-align: center; padding: 2rem 1.5rem; border-radius: 12px;">
       <h3 style="margin: 0 0 0.5rem 0;">{{ msg or 'Form unavailable' }}</h3>
       <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">This form link is no longer accepting responses.</p>
-      <a href="/" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Return Home</a>
+      <div style="display:flex; gap:0.6rem; justify-content:center; flex-wrap:wrap;">
+        {% if form and can_view_responses %}
+          <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">View Responses</a>
+          <a href="{{ url_for('forms.forms_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">All Forms</a>
+        {% else %}
+          <a href="/" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Return Home</a>
+        {% endif %}
+      </div>
     </div>
   {% elif submitted %}
     <div class="ew-success-banner" style="text-align: center; padding: 2rem 1.5rem; border-radius: 12px;">

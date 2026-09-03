@@ -3,9 +3,21 @@
 {% block content %}
 <div class="content-wrapper" style="max-width: 680px;">
   {% if expired %}
-    <div class="ew-error-banner">
-      <h3>{{ msg or 'Lobby unavailable' }}</h3>
-      <a href="/" style="color:var(--primary-color); text-decoration:underline;">Home</a>
+    <div class="ew-card" style="text-align:center; padding:2rem 1.5rem; margin-top:1.5rem;">
+      <h3 style="margin:0 0 0.5rem 0; color:var(--text-dark-color); font-size:1.3rem;">{{ msg or 'Lobby unavailable' }}</h3>
+      {% if lobby and can_view_results %}
+        <p style="color:var(--text-secondary); margin:0.4rem 0 1.2rem 0; font-size:0.92rem;">The game is over, but you can view the recorded results.</p>
+        <div style="display:flex; gap:0.6rem; justify-content:center; flex-wrap:wrap;">
+          <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">View Results</a>
+          <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">All Games</a>
+        </div>
+      {% else %}
+        <p style="color:var(--text-secondary); margin:0.4rem 0 1.2rem 0; font-size:0.92rem;">This game session is no longer active.</p>
+        <div style="display:flex; gap:0.6rem; justify-content:center; flex-wrap:wrap;">
+          <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Browse Games</a>
+          <a href="/" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Home</a>
+        </div>
+      {% endif %}
     </div>
   {% else %}
     {% set gt = lobby.game_type %}

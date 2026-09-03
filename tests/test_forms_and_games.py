@@ -101,3 +101,26 @@ class TestFormAndGameDeletion:
             mock_votes_conf.delete_many.assert_called_once_with({'lobby_id': lobby_id})
             mock_subs_conf.delete_many.assert_called_once_with({'lobby_id': lobby_id})
             mock_sessions_conf.delete_one.assert_called_once_with({'lobby_id': lobby_id})
+
+
+class TestExpiredGameLobbies:
+    """Test that expired or deactivated game lobbies preserve results access."""
+
+    def test_is_lobby_active_flags(self):
+        from blueprints.game import _is_lobby_active
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        past = now - datetime.timedelta(hours=2)
+        future = now + datetime.timedelta(hours=2)
+
+        # Active lobby
+        assert _is_lobby_active({'expires_at': future, 'deactivated': False}) is True
+
+        # Expired lobby
+        assert _is_lobby_active({'expires_at': past, 'deactivated': False}) is False
+
+        # Deactivated lobby
+        assert _is_lobby_active({'expires_at': future, 'deactivated': True}) is False
+
+        # None lobby
+        assert _is_lobby_active(None) is False

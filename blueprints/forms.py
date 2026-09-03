@@ -195,16 +195,17 @@ def view_form(share_id):
     form = m.forms_conf.find_one({'share_id': share_id})
     if not form:
         return render_template('form_submit.html', expired=True, msg='Form not found'), 404
+    is_owner = current_user.is_authenticated and (str(form['owner_id']) == str(current_user.id) or getattr(current_user, 'is_admin', False))
     if form.get('deactivated'):
-        return render_template('form_submit.html', expired=True, msg='This form has been deactivated by the owner'), 410
+        return render_template('form_submit.html', form=form, expired=True, msg='This form has been deactivated by the owner', can_view_responses=is_owner), 410
     if form.get('expires_at'):
         exp = form['expires_at']
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=datetime.timezone.utc)
         if datetime.datetime.now(datetime.timezone.utc) > exp:
-            return render_template('form_submit.html', expired=True, msg='This form has expired'), 410
+            return render_template('form_submit.html', form=form, expired=True, msg='This form has expired', can_view_responses=is_owner), 410
     if form.get('max_responses') and form.get('response_count', 0) >= form['max_responses']:
-        return render_template('form_submit.html', expired=True, msg='This form has reached its response limit'), 410
+        return render_template('form_submit.html', form=form, expired=True, msg='This form has reached its response limit', can_view_responses=is_owner), 410
     # success param shows thank-you state
     submitted = request.args.get('submitted') == '1'
     return render_template('form_submit.html', form=form, submitted=submitted, share_id=share_id)

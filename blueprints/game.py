@@ -15,18 +15,26 @@ MAX_SENTENCE_LEN = 280
 MAX_CAPTION_LEN = 200
 ALLOWED_GAME_TYPES = ('poll', 'trivia', 'wyr', 'ttal', 'story', 'caption')
 
-def _game_access(lobby_id):
+def _get_lobby(lobby_id):
     import main as m
-    lobby = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    return m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+
+def _is_lobby_active(lobby):
     if not lobby:
-        return None
+        return False
+    if lobby.get('deactivated'):
+        return False
     if lobby.get('expires_at'):
         exp = lobby['expires_at']
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=datetime.timezone.utc)
         if datetime.datetime.now(datetime.timezone.utc) > exp:
-            return None
-    if lobby.get('deactivated'):
+            return False
+    return True
+
+def _game_access(lobby_id):
+    lobby = _get_lobby(lobby_id)
+    if not lobby or not _is_lobby_active(lobby):
         return None
     return lobby
 
@@ -234,10 +242,15 @@ def api_create_poll():
 @limits(calls=30, period=60)
 def view_lobby(lobby_id):
     import main as m
-    lobby = _game_access(lobby_id)
+    lobby = _get_lobby(lobby_id)
     if not lobby:
-        return render_template('game_lobby.html', expired=True, msg='Lobby not found or expired'),404
+        return render_template('game_lobby.html', expired=True, msg='Game lobby not found'), 404
     is_host = _is_host(lobby)
+    if not _is_lobby_active(lobby):
+        is_deactivated = bool(lobby.get('deactivated'))
+        msg = 'This lobby has been deactivated by the host.' if is_deactivated else 'This game lobby has expired.'
+        can_view_results = lobby.get('revealed') or is_host
+        return render_template('game_lobby.html', lobby=lobby, expired=True, msg=msg, can_view_results=can_view_results, is_host=is_host), 200
     gt = lobby.get('game_type', 'poll')
     total = m.game_votes_conf.count_documents({'lobby_id': lobby_id})
     has_voted = False
@@ -346,9 +359,9 @@ def vote_lobby(lobby_id):
 @limits(calls=10, period=60)
 def reveal_lobby(lobby_id):
     import main as m
-    lobby = _game_access(lobby_id)
+    lobby = _get_lobby(lobby_id)
     if not lobby: return jsonify({'error':'Not found'}),404
-    if not _is_host(lobby): return jsonify({'error':'Not host'}),403
+    if not _is_host(lobby) and not getattr(current_user, 'is_admin', False): return jsonify({'error':'Not host'}),403
     m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$set':{'revealed':True,'status':'revealed','phase':'revealed','revealed_at':datetime.datetime.now(datetime.timezone.utc)}})
     try:
         lobby_fresh = m.game_sessions_conf.find_one({'lobby_id':lobby_id})
@@ -377,8 +390,8 @@ def reveal_lobby(lobby_id):
 @login_required
 def lobby_results(lobby_id):
     import main as m
-    lobby = _game_access(lobby_id)
-    if not lobby: flash('Not found','danger'); return redirect(url_for('game.games_list'))
+    lobby = _get_lobby(lobby_id)
+    if not lobby: flash('Game lobby not found.','danger'); return redirect(url_for('game.games_list'))
     if str(lobby['host_id']) != str(current_user.id) and not getattr(current_user,'is_admin',False):
         # players can also see after reveal
         if not lobby.get('revealed'):
@@ -409,7 +422,7 @@ def lobby_results(lobby_id):
 @login_required
 def lobby_export(lobby_id):
     import main as m, csv, io
-    lobby = _game_access(lobby_id)
+    lobby = _get_lobby(lobby_id)
     if not lobby: return jsonify({'error':'Not found'}),404
     if str(lobby['host_id']) != str(current_user.id) and not getattr(current_user,'is_admin',False):
         return jsonify({'error':'Not host'}),403
@@ -435,7 +448,7 @@ def lobby_export(lobby_id):
 @limits(calls=10, period=60)
 def deactivate_lobby(lobby_id):
     import main as m
-    lobby = _game_access(lobby_id)
+    lobby = _get_lobby(lobby_id)
     if not lobby: flash('Not found','danger'); return redirect(url_for('game.games_list'))
     if not _is_host(lobby) and not getattr(current_user, 'is_admin', False):
         flash('Not authorized','danger')
@@ -453,7 +466,7 @@ def deactivate_lobby(lobby_id):
 @limits(calls=10, period=60)
 def delete_lobby(lobby_id):
     import main as m
-    lobby = _game_access(lobby_id)
+    lobby = _get_lobby(lobby_id)
     if not lobby:
         flash('Lobby not found', 'danger')
         return redirect(url_for('game.games_list'))

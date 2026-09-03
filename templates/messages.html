@@ -2000,7 +2000,11 @@
         const getSocket = () => window.socket || null;
         const emitSocket = (event, data) => {
             if (window.socket && typeof window.socket.emit === 'function') {
-                window.socket.emit(event, data);
+                if (typeof data !== 'undefined') {
+                    window.socket.emit(event, data);
+                } else {
+                    window.socket.emit(event);
+                }
             }
         };
         const chatHistory = document.getElementById('chat-history');

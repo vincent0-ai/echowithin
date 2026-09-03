@@ -1563,7 +1563,9 @@ def _note_share_access(share_id):
 # --- WebSocket Real-time collaboration ---
 @socketio.on('join_note')
 @authenticated_only
-def handle_join_note(data):
+def handle_join_note(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     user_name = getattr(current_user, 'username', 'Anonymous')
     user_id = str(current_user.id)
@@ -1601,7 +1603,9 @@ def handle_join_note(data):
 
 @socketio.on('leave_note')
 @authenticated_only
-def handle_leave_note(data):
+def handle_leave_note(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     user_id = str(current_user.id)
     
@@ -1623,7 +1627,9 @@ def handle_leave_note(data):
 
 @socketio.on('acquire_lock')
 @authenticated_only
-def handle_acquire_lock(data):
+def handle_acquire_lock(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     user_name = getattr(current_user, 'username', 'Anonymous')
     user_id = str(current_user.id)
@@ -1663,7 +1669,9 @@ def handle_acquire_lock(data):
 
 @socketio.on('release_lock')
 @authenticated_only
-def handle_release_lock(data):
+def handle_release_lock(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     user_id = str(current_user.id)
     
@@ -1676,7 +1684,9 @@ def handle_release_lock(data):
 
 @socketio.on('note_update')
 @authenticated_only
-def handle_note_update(data):
+def handle_note_update(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     content = data.get('content')
     user_id = str(current_user.id)
@@ -1694,7 +1704,9 @@ def handle_note_update(data):
 
 @socketio.on('discussion_new_comment')
 @authenticated_only
-def handle_discussion_new_comment(data):
+def handle_discussion_new_comment(data=None, *args, **kwargs):
+    if not data or not isinstance(data, dict):
+        return
     share_id = data.get('share_id')
     comment_data = data.get('comment')
     if not share_id or not comment_data:
@@ -1726,8 +1738,8 @@ def _game_access(lobby_id):
 
 @socketio.on('join_game')
 @authenticated_only
-def handle_join_game(data):
-    lobby_id = (data or {}).get('lobby_id')
+def handle_join_game(data=None, *args, **kwargs):
+    lobby_id = (data or {}).get('lobby_id') if isinstance(data, dict) else None
     lobby = _game_access(lobby_id)
     if not lobby:
         emit('game_error', {'message': 'Lobby not found or expired.'}, room=request.sid)
@@ -1746,8 +1758,8 @@ def handle_join_game(data):
 
 @socketio.on('leave_game')
 @authenticated_only
-def handle_leave_game(data):
-    lobby_id = (data or {}).get('lobby_id')
+def handle_leave_game(data=None, *args, **kwargs):
+    lobby_id = (data or {}).get('lobby_id') if isinstance(data, dict) else None
     if not lobby_id:
         return
     user_id = str(current_user.id)
@@ -1770,7 +1782,7 @@ def handle_leave_game(data):
 
 @socketio.on('join_inbox')
 @authenticated_only
-def handle_join_inbox():
+def handle_join_inbox(data=None, *args, **kwargs):
     """Each user joins their own private room for real-time DM delivery."""
     user_room = f"user_{current_user.id}"
     join_room(user_room)
@@ -1786,8 +1798,10 @@ def handle_join_inbox():
 
 @socketio.on('viewing_chat')
 @authenticated_only
-def handle_viewing_chat(data):
+def handle_viewing_chat(data=None, *args, **kwargs):
     """Track that the user is actively viewing a specific chat for notification suppression."""
+    if not data or not isinstance(data, dict):
+        return
     partner_id = data.get('partner_id')
     if partner_id:
         user_id = str(current_user.id)
@@ -1797,8 +1811,10 @@ def handle_viewing_chat(data):
 
 @socketio.on('leave_chat')
 @authenticated_only
-def handle_leave_chat(data):
+def handle_leave_chat(data=None, *args, **kwargs):
     """User left a specific chat view."""
+    if not data or not isinstance(data, dict):
+        return
     partner_id = data.get('partner_id')
     if partner_id:
         user_id = str(current_user.id)
@@ -1806,7 +1822,7 @@ def handle_leave_chat(data):
             active_chat_views[user_id].discard(partner_id)
 
 @socketio.on('disconnect')
-def handle_dm_disconnect():
+def handle_dm_disconnect(*args, **kwargs):
     """Clean up active chat and note presence on disconnect."""
     user_id = str(current_user.id) if current_user.is_authenticated else request.sid
     
@@ -1837,11 +1853,13 @@ def handle_dm_disconnect():
 
 @socketio.on('send_dm')
 @authenticated_only
-def handle_send_dm(data):
+def handle_send_dm(data=None, *args, **kwargs):
     """
     Handles sending a direct message via Socket.IO.
     Data expected: { 'recipient_id': '...', 'content': '...', 'reply_to_id': '...', 'image_url': '...', 'message_type': 'text|image' }
     """
+    if not data or not isinstance(data, dict):
+        return
     recipient_id_str = data.get('recipient_id')
     content = data.get('content', '')
     reply_to_id = data.get('reply_to_id')
@@ -2058,8 +2076,10 @@ def handle_send_dm(data):
 
 @socketio.on('typing')
 @authenticated_only
-def handle_typing(data):
+def handle_typing(data=None, *args, **kwargs):
     """Broadcasts that the current user is typing to the recipient."""
+    if not data or not isinstance(data, dict):
+        return
     recipient_id = data.get('recipient_id')
     if recipient_id:
         recipient_id_str = str(recipient_id)
@@ -2071,8 +2091,10 @@ def handle_typing(data):
 
 @socketio.on('stop_typing')
 @authenticated_only
-def handle_stop_typing(data):
+def handle_stop_typing(data=None, *args, **kwargs):
     """Broadcasts that the user has stopped typing."""
+    if not data or not isinstance(data, dict):
+        return
     recipient_id = data.get('recipient_id')
     if recipient_id:
         recipient_id_str = str(recipient_id)
@@ -2083,8 +2105,10 @@ def handle_stop_typing(data):
 
 @socketio.on('recording_audio')
 @authenticated_only
-def handle_recording_audio(data):
+def handle_recording_audio(data=None, *args, **kwargs):
     """Broadcasts that the current user is recording a voice note."""
+    if not data or not isinstance(data, dict):
+        return
     recipient_id = data.get('recipient_id')
     if recipient_id:
         recipient_room = f"user_{str(recipient_id)}"
@@ -2095,8 +2119,10 @@ def handle_recording_audio(data):
 
 @socketio.on('stop_recording')
 @authenticated_only
-def handle_stop_recording(data):
+def handle_stop_recording(data=None, *args, **kwargs):
     """Broadcasts that the user stopped recording."""
+    if not data or not isinstance(data, dict):
+        return
     recipient_id = data.get('recipient_id')
     if recipient_id:
         recipient_room = f"user_{str(recipient_id)}"
@@ -2109,12 +2135,14 @@ def handle_stop_recording(data):
 
 @socketio.on('whisper_message')
 @authenticated_only
-def handle_whisper_message(data):
+def handle_whisper_message(data=None, *args, **kwargs):
     """Handle sending a message within an active whisper session.
     
     Supports text and image messages. Image URLs are encrypted at rest
     just like text content, and auto-delete with the session TTL.
     """
+    if not data or not isinstance(data, dict):
+        return
     session_id = data.get('session_id')
     content = data.get('content', '').strip()
     message_type = data.get('message_type', 'text')  # 'text' or 'image'
@@ -2218,8 +2246,10 @@ def handle_whisper_message(data):
 
 @socketio.on('whisper_typing')
 @authenticated_only
-def handle_whisper_typing(data):
+def handle_whisper_typing(data=None, *args, **kwargs):
     """Broadcast whisper typing indicator."""
+    if not data or not isinstance(data, dict):
+        return
     partner_id = data.get('partner_id')
     if partner_id:
         emit('whisper_user_typing', {
@@ -2230,8 +2260,10 @@ def handle_whisper_typing(data):
 
 @socketio.on('whisper_stop_typing')
 @authenticated_only
-def handle_whisper_stop_typing(data):
+def handle_whisper_stop_typing(data=None, *args, **kwargs):
     """Broadcast whisper stop typing."""
+    if not data or not isinstance(data, dict):
+        return
     partner_id = data.get('partner_id')
     if partner_id:
         emit('whisper_user_stop_typing', {
@@ -2241,8 +2273,10 @@ def handle_whisper_stop_typing(data):
 
 @socketio.on('whisper_read')
 @authenticated_only
-def handle_whisper_read(data):
+def handle_whisper_read(data=None, *args, **kwargs):
     """Mark whisper messages as read and notify the sender."""
+    if not data or not isinstance(data, dict):
+        return
     session_id = data.get('session_id')
     if not session_id:
         return
@@ -2278,8 +2312,10 @@ def handle_whisper_read(data):
 
 @socketio.on('whisper_screenshot_alert')
 @authenticated_only
-def handle_whisper_screenshot(data):
+def handle_whisper_screenshot(data=None, *args, **kwargs):
     """Alert both parties of potential screenshot activity."""
+    if not data or not isinstance(data, dict):
+        return
     session_id = data.get('session_id')
     if not session_id:
         return
@@ -2329,8 +2365,10 @@ def handle_whisper_screenshot(data):
 
 @socketio.on('whisper_react')
 @authenticated_only
-def handle_whisper_react(data):
+def handle_whisper_react(data=None, *args, **kwargs):
     """Handle emoji reaction on a whisper message."""
+    if not data or not isinstance(data, dict):
+        return
     session_id = data.get('session_id')
     message_id = data.get('message_id')
     emoji = data.get('emoji', '')

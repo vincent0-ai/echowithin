@@ -82,3 +82,66 @@ class TestChatEndpointsAuth:
         assert res.status_code in [302, 401]
 
 
+class TestSocketHandlersPayloadResilience:
+    """Tests that socket handlers accept missing, None, or extra arguments without throwing TypeError or AttributeError."""
+
+    def test_handle_join_inbox_with_none_and_args(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        user_obj = User(mock_user)
+
+        with app.test_request_context():
+            login_user(user_obj)
+            join_inbox_handler = None
+            for call in m.socketio.on.mock_calls:
+                if len(call.args) > 0 and callable(call.args[0]) and getattr(call.args[0], '__name__', '') == 'handle_join_inbox':
+                    join_inbox_handler = call.args[0]
+                    break
+            assert join_inbox_handler is not None
+
+            with patch('main.join_room') as mock_join:
+                # 0 arguments
+                join_inbox_handler()
+                mock_join.assert_called_with(f"user_{mock_user['_id']}")
+
+                # 1 argument: None (the exact bug encountered when client sends ['join_inbox', None])
+                join_inbox_handler(None)
+                assert mock_join.call_count == 2
+
+                # Extra arbitrary arguments
+                join_inbox_handler(None, "extra", foo="bar")
+                assert mock_join.call_count == 3
+
+    def test_handle_viewing_and_leave_chat_with_none(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        user_obj = User(mock_user)
+
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                fn = call.args[0]
+                handlers[getattr(fn, '__name__', '')] = fn
+
+        with app.test_request_context():
+            login_user(user_obj)
+            target_handlers = [
+                'handle_viewing_chat', 'handle_leave_chat', 'handle_typing',
+                'handle_stop_typing', 'handle_recording_audio', 'handle_stop_recording',
+                'handle_join_note', 'handle_leave_note', 'handle_acquire_lock',
+                'handle_release_lock', 'handle_note_update', 'handle_discussion_new_comment',
+                'handle_send_dm', 'handle_whisper_message', 'handle_whisper_typing',
+                'handle_whisper_stop_typing', 'handle_whisper_read',
+                'handle_whisper_screenshot', 'handle_whisper_react'
+            ]
+            for name in target_handlers:
+                assert name in handlers, f"Expected {name} to be registered with socketio.on"
+                # Must safely tolerate None, empty dict, or extra args without throwing exceptions
+                handlers[name](None)
+                handlers[name]({})
+                handlers[name](None, "extra", param=123)
+
+
+

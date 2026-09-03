@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, math, hashlib, hmac, secrets, requests
-from security import limits
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 from config import get_env_variable
 
 def csrf_exempt(view):
@@ -1598,14 +1598,35 @@ def app_lock_verify():
     if not pin:
         return jsonify({'error': 'PIN is required'}), 400
 
+    # Graduated PIN protection (account+IP) — immediate 429 only on lockout
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('pin', str(current_user.id), bf_ip)
+    if tier == 'lockout':
+        resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': retry})
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp, 429
+
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)}, {'app_lock_pin_hash': 1})
     if not user or not user.get('app_lock_pin_hash'):
         return jsonify({'error': 'No app lock PIN is set'}), 400
 
     if m.check_password_hash(user['app_lock_pin_hash'], pin):
+        brute_force_clear('pin', str(current_user.id), bf_ip)
         session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
         return jsonify({'success': True})
     else:
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('pin', str(current_user.id), bf_ip)
+        if new_tier == 'lockout':
+            resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp, 429
+        if new_tier == 'friction':
+            resp = jsonify({'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp, 429
         return jsonify({'error': 'Incorrect PIN'}), 403
 
 
@@ -1725,6 +1746,14 @@ def app_lock_forgot():
 def app_lock_reset_verify():
     """Verify the emailed code and set a new APP Lock PIN."""
     import main as m
+    # Graduated per-account+IP for pin_reset (PLAN P2-3, immediate 429 only on lockout)
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('pin_reset', str(current_user.id), bf_ip)
+    if tier == 'lockout':
+        resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': retry})
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp, 429
     data = request.get_json() or {}
     code = data.get('code', '').strip()
     new_pin = data.get('new_pin', '').strip()
@@ -1768,7 +1797,20 @@ def app_lock_reset_verify():
     hashed_input = hashlib.sha256(code.encode()).hexdigest()
     if not hmac.compare_digest(hashed_input, auth_record.get('pin_reset_code', '')):
         m.auth_conf.update_one({'email': email}, {'$inc': {'pin_reset_attempts': 1}})
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('pin_reset', str(current_user.id), bf_ip)
+        if new_tier == 'lockout':
+            resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp, 429
+        if new_tier == 'friction':
+            resp = jsonify({'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp, 429
         return jsonify({'error': 'Incorrect verification code'}), 403
+    # success — clear
+    brute_force_clear('pin_reset', str(current_user.id), bf_ip)
 
     # Code is valid — update the PIN
     new_pin_hash = m.generate_password_hash(new_pin)

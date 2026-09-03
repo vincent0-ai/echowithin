@@ -2374,7 +2374,17 @@ def page_not_found(e):
 def handle_ratelimit_exception(e):
     """Custom handler for rate limit exceeded exceptions."""
     period_remaining = math.ceil(e.period_remaining)
-    app.logger.warning(f"Rate limit exceeded for IP {request.remote_addr}. Blocked for {period_remaining} seconds.")
+    # Monitoring hook: distinct event from normal failed logins (PLAN §5)
+    try:
+        # Use X-Forwarded-For aware IP for correct attribution behind ProxyFix
+        fwd = request.headers.get('X-Forwarded-For', '')
+        ip = fwd.split(',')[0].strip() if fwd and ',' in fwd else (fwd.strip() if fwd else request.remote_addr)
+        app.logger.warning(
+            f"rate_limit_exceeded endpoint={request.endpoint} ip={ip} remaining={period_remaining}",
+            extra={'event': 'rate_limit_exceeded', 'endpoint': str(request.endpoint), 'ip': str(ip), 'period_remaining': period_remaining}
+        )
+    except Exception:
+        app.logger.warning(f"Rate limit exceeded for IP {request.remote_addr}. Blocked for {period_remaining} seconds.")
     return render_template('429.html', period_remaining=period_remaining), 429
 
 @app.errorhandler(OSError)

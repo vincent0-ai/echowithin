@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os
-from security import limits
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip
 
 bp = Blueprint('sharing', __name__, template_folder='templates')
 
@@ -214,14 +214,35 @@ def view_shared_note(share_id):
     if share.get('deactivated'):
         return render_template('shared_note.html', expired=True), 410
 
-    # Check access code
+    # Check access code — graduated per-share+IP (PLAN P1-2, immediate 429)
     requires_code = bool(share.get('access_code_hash'))
     if requires_code:
+        bf_ip = _bf_get_client_ip()
         if request.method == 'POST':
+            # pre-check lockout before hashing (friction handled after recording)
+            tier, cnt, retry, ttl = brute_force_check('share', share_id, bf_ip)
+            if tier == 'lockout':
+                resp = make_response(render_template('shared_note.html', share_id=share_id, requires_code=True, error=f'Too many attempts. Try again in {retry} seconds.'), 429)
+                resp.headers['Retry-After'] = str(retry)
+                resp.headers['X-BruteForce-Tier'] = 'lockout'
+                return resp
             code = request.form.get('access_code')
             if not code or not m.check_password_hash(share['access_code_hash'], code):
+                new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('share', share_id, bf_ip)
+                if new_tier == 'lockout':
+                    resp = make_response(render_template('shared_note.html', share_id=share_id, requires_code=True, error=f'Too many attempts. Try again in {new_retry} seconds.'), 429)
+                    resp.headers['Retry-After'] = str(new_retry)
+                    resp.headers['X-BruteForce-Tier'] = 'lockout'
+                    return resp
+                if new_tier == 'friction':
+                    resp = make_response(render_template('shared_note.html', share_id=share_id, requires_code=True, error=f'Too many attempts. Try again in {new_retry} seconds.'), 429)
+                    resp.headers['Retry-After'] = str(new_retry)
+                    resp.headers['X-BruteForce-Tier'] = 'friction'
+                    return resp
                 flash('Invalid access code.', 'danger')
                 return render_template('shared_note.html', share_id=share_id, requires_code=True)
+            # success — clear counter
+            brute_force_clear('share', share_id, bf_ip)
             # Store in session that this share is unlocked
             session[f'unlocked_{share_id}'] = True
             return redirect(url_for('sharing.view_shared_note', share_id=share_id))

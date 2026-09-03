@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os, hmac
-from security import limits, warm_user_fernet, generate_user_envelope_keys, hash_app_token, create_app_token
+from security import limits, warm_user_fernet, generate_user_envelope_keys, hash_app_token, create_app_token, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 from config import TIME
 
 def csrf_exempt(view):
@@ -121,7 +121,7 @@ def _user_is_guest(user):
 
 
 @bp.route('/register', methods=['GET', 'POST'])
-@limits(calls=15, period=TIME)
+@limits(calls=15, period=60)
 def register():
     import main as m
     if current_user.is_authenticated and not _user_is_guest(current_user):
@@ -195,6 +195,15 @@ def confirm(email):
     error = None
     if request.method == "POST":
         code = request.form.get("code", "").strip()
+        # Graduated brute-force for OTP (account+IP) — immediate 429 only on lockout (friction after recording)
+        bf_ip = _bf_get_client_ip()
+        tier, cnt, retry, ttl = brute_force_check('confirm', email.lower(), bf_ip)
+        if tier == 'lockout':
+            error = f'Too many attempts. Try again in {retry} seconds.'
+            resp = make_response(render_template("confirm.html", email=email, error=error), 429)
+            resp.headers['Retry-After'] = str(retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp
         if not code:
             error = "Verification code is required."
         else:
@@ -213,6 +222,8 @@ def confirm(email):
                     if code_exp and code_exp < datetime.datetime.now(datetime.timezone.utc):
                         error = 'This confirmation code has expired.'
                     elif hmac.compare_digest(hashed_obj['hashed_code'], hashlib.sha256(code.encode()).hexdigest()):
+                        # success — clear graduated counter
+                        brute_force_clear('confirm', email.lower(), bf_ip)
                         m.users_conf.update_one(
                             {"email": email},
                             {"$set": {
@@ -235,12 +246,26 @@ def confirm(email):
                         return redirect(url_for('notes.personal_space'))
                     else:
                         m.auth_conf.update_one({'email': email}, {'$inc': {'attempt_count': 1}})
+                        # record graduated failure
+                        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('confirm', email.lower(), bf_ip)
+                        if new_tier == 'lockout':
+                            error = f'Too many attempts. Try again in {new_retry} seconds.'
+                            resp = make_response(render_template("confirm.html", email=email, error=error), 429)
+                            resp.headers['Retry-After'] = str(new_retry)
+                            resp.headers['X-BruteForce-Tier'] = 'lockout'
+                            return resp
+                        if new_tier == 'friction':
+                            error = f'Too many attempts. Try again in {new_retry} seconds.'
+                            resp = make_response(render_template("confirm.html", email=email, error=error), 429)
+                            resp.headers['Retry-After'] = str(new_retry)
+                            resp.headers['X-BruteForce-Tier'] = 'friction'
+                            return resp
                         error = 'Invalid verification code.'
     return render_template("confirm.html", email=email, error=error)
 
 
 @bp.route("/login", methods=['GET', 'POST'])
-@limits(calls=15, period=TIME)
+@limits(calls=20, period=60)
 def login():
     import main as m
     if current_user.is_authenticated and not _user_is_guest(current_user):
@@ -254,6 +279,17 @@ def login():
         if not username or not password:
             flash("Username and password required.", "danger")
             return redirect(url_for('auth.login'))
+        # Brute-force: check account+IP lockout before verifying password (PLAN §2 — no sleep, immediate 429)
+        bf_account = username.lower() if username else "__unknown__"
+        bf_ip = _bf_get_client_ip()
+        tier, cnt, retry, ttl = brute_force_check('login', bf_account, bf_ip)
+        if tier == 'lockout':
+            # distinct event already logged on record; log check too
+            current_app.logger.warning(f"brute_force_lockout kind=login account_hash={_bf_hash_for_log(bf_account)} ip={bf_ip} count={cnt} ttl={ttl}", extra={'event': 'brute_force_lockout', 'kind': 'login', 'account_hash': _bf_hash_for_log(bf_account), 'ip': bf_ip, 'count': cnt, 'retry_after': retry})
+            resp = make_response(render_template('429.html', period_remaining=retry), 429)
+            resp.headers['Retry-After'] = str(retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp
         user_data = m.users_conf.find_one({"$or": [{"email": username}, {"username": username}]})
         if user_data:
             if not user_data.get('is_confirmed'):
@@ -267,7 +303,9 @@ def login():
             if user_data.get('is_banned'):
                 flash("Your account has been suspended.", "danger")
                 return redirect(url_for('auth.login'))
-            if m.check_password_hash(user_data['password'], password):
+            if user_data['password'] and m.check_password_hash(user_data['password'], password):
+                # success — clear graduated counter
+                brute_force_clear('login', bf_account, bf_ip)
                 user_obj = m.User(user_data)
                 login_user(user_obj, remember=remember)
                 warm_user_fernet(str(user_data['_id']))  # Pre-derive Fernet key for notes
@@ -278,12 +316,46 @@ def login():
                 if next_url and m.is_safe_url(next_url):
                     return redirect(next_url)
                 return redirect(url_for('pages.home'))
+            # wrong password — record failure with graduated tier
+            new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('login', bf_account, bf_ip)
+            # also emit login_failed distinct from lockout
+            try:
+                current_app.logger.info(f"login_failed account_hash={_bf_hash_for_log(bf_account)} ip={bf_ip} count={new_cnt} tier={new_tier}", extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(bf_account), 'ip': bf_ip, 'count': new_cnt, 'tier': new_tier})
+            except Exception:
+                pass
+            if new_tier == 'lockout':
+                resp = make_response(render_template('429.html', period_remaining=new_retry), 429)
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'lockout'
+                return resp
+            if new_tier == 'friction':
+                resp = make_response(render_template('429.html', period_remaining=new_retry), 429)
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'friction'
+                return resp
+        else:
+            # user not found — same graduated handling to keep enumeration-safe timing
+            new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('login', bf_account, bf_ip)
+            try:
+                current_app.logger.info(f"login_failed account_hash={_bf_hash_for_log(bf_account)} ip={bf_ip} count={new_cnt} tier={new_tier}", extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(bf_account), 'ip': bf_ip, 'count': new_cnt, 'tier': new_tier})
+            except Exception:
+                pass
+            if new_tier == 'lockout':
+                resp = make_response(render_template('429.html', period_remaining=new_retry), 429)
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'lockout'
+                return resp
+            if new_tier == 'friction':
+                resp = make_response(render_template('429.html', period_remaining=new_retry), 429)
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'friction'
+                return resp
         flash("Invalid username/email or password", "danger")
     return render_template('auth.html', active_page='login', form='login')
 
 
 @bp.route('/google_login')
-@limits(calls=10, period=TIME)
+@limits(calls=10, period=60)
 def google_login():
     import main as m
     scope = ['openid', 'email', 'profile']
@@ -503,7 +575,7 @@ def logout():
 
 
 @bp.route('/forgot_password', methods=['GET', 'POST'])
-@limits(calls=10, period=TIME)
+@limits(calls=10, period=60)
 def forgot_password():
     import main as m
     if request.method == 'POST':
@@ -528,6 +600,7 @@ def forgot_password():
 
 
 @bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+@limits(calls=10, period=60)
 def reset_password(token):
     import main as m
     hashed_token = hashlib.sha256(token.encode()).hexdigest()
@@ -550,7 +623,7 @@ def reset_password(token):
         if username and password and confirm_password:
             existing_user = m.users_conf.find_one({'username': username})
             if existing_user and existing_user['email'] != auth_record['email']:
-                flash("That username is already taken. Please choose a different one.", "danger")
+                flash("Unable to complete. That username may already be in use or invalid.", "danger")
                 return render_template('reset_password.html', token=token, active_page='reset_password')
             if password == confirm_password:
                 hashed_password = m.generate_password_hash(password)

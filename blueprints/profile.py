@@ -2,8 +2,9 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from flask_login import login_required, current_user, login_user
 from bson.objectid import ObjectId
 import datetime, math, json, os, hashlib, secrets
-from security import limits
+from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 from config import TIME
+import hmac
 bp = Blueprint('profile', __name__, template_folder='templates')
 
 # PUBLIC_PROFILE_PROJECTION: explicit allowlist of fields exposed on the
@@ -213,7 +214,7 @@ def profile_settings(username):
 
 @bp.route('/profile/<username>/export_data', methods=['POST'])
 @login_required
-@limits(calls=3, period=TIME)
+@limits(calls=3, period=60)
 def export_data(username):
     import main as m
     if username != current_user.username:
@@ -255,7 +256,7 @@ def export_data(username):
 
 @bp.route('/profile/<username>/request_delete_code', methods=['POST'])
 @login_required
-@limits(calls=5, period=TIME)
+@limits(calls=5, period=60)
 def request_delete_code(username):
     import main as m
     if username != current_user.username:
@@ -300,7 +301,7 @@ def request_delete_code(username):
 
 @bp.route('/profile/<username>/delete_account', methods=['POST'])
 @login_required
-@limits(calls=5, period=TIME)
+@limits(calls=5, period=60)
 def delete_account(username):
     import main as m
     if username != current_user.username:
@@ -326,6 +327,16 @@ def delete_account(username):
         flash('Verification code is required to delete your account.', 'danger')
         return redirect(url_for('profile.profile_settings', username=username))
 
+    # Graduated per-account+IP for delete code (PLAN P2-4, immediate 429 only on lockout)
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('delete', str(user['_id']), bf_ip)
+    if tier == 'lockout':
+        flash(f'Too many attempts. Try again in {retry} seconds.', 'warning')
+        resp = make_response(redirect(url_for('profile.profile_settings', username=username)), 429)
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp
+
     auth_doc = m.auth_conf.find_one({'email': user['email'], 'type': 'delete_account'})
     if not auth_doc:
         flash('No deletion request found. Please request a verification code first.', 'danger')
@@ -339,9 +350,26 @@ def delete_account(username):
         flash('Verification code has expired. Please request a new code.', 'danger')
         return redirect(url_for('profile.profile_settings', username=username))
 
-    if auth_doc.get('hashed_code') != hashlib.sha256(code.encode()).hexdigest():
+    # constant-time compare (fix enumeration-safe)
+    provided_hash = hashlib.sha256(code.encode()).hexdigest()
+    if not hmac.compare_digest(auth_doc.get('hashed_code', ''), provided_hash):
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('delete', str(user['_id']), bf_ip)
+        if new_tier == 'lockout':
+            flash(f'Too many attempts. Try again in {new_retry} seconds.', 'warning')
+            resp = make_response(redirect(url_for('profile.profile_settings', username=username)), 429)
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp
+        if new_tier == 'friction':
+            flash(f'Too many attempts. Try again in {new_retry} seconds.', 'warning')
+            resp = make_response(redirect(url_for('profile.profile_settings', username=username)), 429)
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp
         flash('Invalid verification code. Please check your email and try again.', 'danger')
         return redirect(url_for('profile.profile_settings', username=username))
+    # success — clear
+    brute_force_clear('delete', str(user['_id']), bf_ip)
 
     m.auth_conf.delete_one({'_id': auth_doc['_id']})
 

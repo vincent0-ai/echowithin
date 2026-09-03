@@ -6,8 +6,7 @@ from flask import Blueprint, request, jsonify, session, url_for, make_response
 from flask_login import login_required, current_user, login_user, logout_user
 from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
-from security import limits, generate_user_envelope_keys
-from config import TIME
+from security import limits, generate_user_envelope_keys, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 
 # Create the API blueprint
 api_bp = Blueprint('api_v1', __name__)
@@ -21,7 +20,7 @@ def safe_obj_id(val):
 # --- AUTHENTICATION ENDPOINTS ---
 
 @api_bp.route('/register', methods=['POST'])
-@limits(calls=15, period=TIME)
+@limits(calls=15, period=60)
 def api_register():
     import main as m
     data = request.get_json(silent=True) or {}
@@ -86,6 +85,15 @@ def api_confirm(email):
     data = request.get_json(silent=True) or {}
     confirm_code = data.get("code", "").strip()
 
+    # Graduated account+IP check — immediate 429 (PLAN §2)
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('confirm', email, bf_ip)
+    if tier == 'lockout':
+        resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': retry})
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp, 429
+
     user = m.users_conf.find_one({"email": email})
     if not user:
         return jsonify({'error': 'Invalid confirmation request.'}), 404
@@ -115,21 +123,43 @@ def api_confirm(email):
     # SECURITY: constant-time comparison of the SHA-256 digests.
     provided_hash = hashlib.sha256(confirm_code.encode()).hexdigest()
     if hmac.compare_digest(hashed_obj['hashed_code'], provided_hash):
+        brute_force_clear('confirm', email, bf_ip)
         m.users_conf.update_one({'email': email}, {'$set': {'is_confirmed': True}})
         m.auth_conf.delete_one({'email': email})
         return jsonify({'success': True, 'message': 'Email confirmed successfully.'})
     else:
         m.auth_conf.update_one({'email': email}, {'$set': {'attempt_count': attempts + 1}})
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('confirm', email, bf_ip)
+        if new_tier == 'lockout':
+            resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp, 429
+        if new_tier == 'friction':
+            resp = jsonify({'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp, 429
         return jsonify({'error': 'The confirmation code is incorrect.'}), 400
 
 @api_bp.route('/login', methods=['POST'])
-@limits(calls=15, period=TIME)
+@limits(calls=20, period=60)
 def api_login():
     import main as m
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "").strip()
     remember = bool(data.get("remember", True))
+
+    # Brute-force graduated check (account+IP) — immediate 429 only on lockout; friction after recording (PLAN §2)
+    bf_account = (username.lower() if username else "__unknown__")
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('login', bf_account, bf_ip)
+    if tier == 'lockout':
+        resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': retry})
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp, 429
 
     user = m.users_conf.find_one({
         "$or": [
@@ -160,6 +190,8 @@ def api_login():
             if user.get('is_banned'):
                 return jsonify({'error': 'Your account has been suspended.'}), 403
 
+            # success — clear graduated counter
+            brute_force_clear('login', bf_account, bf_ip)
             user_obj = m.User(user)
             login_user(user_obj, remember=remember)
 
@@ -183,9 +215,39 @@ def api_login():
             return resp
         else:
             print("[DEBUG LOGIN] Password hash mismatch", flush=True)
+            new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('login', bf_account, bf_ip)
+            try:
+                m.app.logger.info(f"login_failed account_hash={_bf_hash_for_log(bf_account)} ip={bf_ip} count={new_cnt} tier={new_tier}", extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(bf_account), 'ip': bf_ip, 'count': new_cnt, 'tier': new_tier})
+            except Exception:
+                pass
+            if new_tier == 'lockout':
+                resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'lockout'
+                return resp, 429
+            if new_tier == 'friction':
+                resp = jsonify({'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+                resp.headers['Retry-After'] = str(new_retry)
+                resp.headers['X-BruteForce-Tier'] = 'friction'
+                return resp, 429
             return jsonify({'error': 'Wrong details provided.'}), 401
     else:
         print("[DEBUG LOGIN] User not found", flush=True)
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('login', bf_account, bf_ip)
+        try:
+            m.app.logger.info(f"login_failed account_hash={_bf_hash_for_log(bf_account)} ip={bf_ip} count={new_cnt} tier={new_tier}", extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(bf_account), 'ip': bf_ip, 'count': new_cnt, 'tier': new_tier})
+        except Exception:
+            pass
+        if new_tier == 'lockout':
+            resp = jsonify({'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp, 429
+        if new_tier == 'friction':
+            resp = jsonify({'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp, 429
         return jsonify({'error': 'Wrong details provided.'}), 401
 
 @api_bp.route('/logout', methods=['POST', 'GET'])
@@ -517,14 +579,35 @@ def api_app_lock_verify():
     data = request.get_json(silent=True) or {}
     pin = data.get('pin', '').strip()
 
+    # Graduated PIN protection (account+IP) — immediate 429 only on lockout
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('pin', str(current_user.id), bf_ip)
+    if tier == 'lockout':
+        resp = jsonify({'success': False, 'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': retry})
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp, 429
+
     user = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
     if not user or not user.get('app_lock_pin_hash'):
         return jsonify({'error': 'No PIN setup found.'}), 404
 
     if check_password_hash(user['app_lock_pin_hash'], pin):
+        brute_force_clear('pin', str(current_user.id), bf_ip)
         session['app_lock_unlocked_at'] = datetime.datetime.now(datetime.timezone.utc)
         return jsonify({'success': True})
     else:
+        new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('pin', str(current_user.id), bf_ip)
+        if new_tier == 'lockout':
+            resp = jsonify({'success': False, 'error': 'Too many attempts. Try again in a few minutes.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'lockout'
+            return resp, 429
+        if new_tier == 'friction':
+            resp = jsonify({'success': False, 'error': 'Too many attempts. Try again shortly.', 'retry_after': new_retry})
+            resp.headers['Retry-After'] = str(new_retry)
+            resp.headers['X-BruteForce-Tier'] = 'friction'
+            return resp, 429
         # SECURITY NOTE: Return 200 with success:false (NOT 401).
         # 401 would trip the Android client's global 401 interceptor and
         # silently sign the user out of the app every time they fat-finger

@@ -158,7 +158,7 @@ def limits(calls, period):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            ip = request.remote_addr or 'unknown'
+            ip = _bf_get_client_ip()
             key = "rl:%s.%s:%s" % (func.__module__, func.__name__, ip)
             window = int(_time.time() // period)
             try:
@@ -194,6 +194,252 @@ def limits(calls, period):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+# ---------------------------------------------------------------------------
+# Brute-force graduated protection — account+IP scoped, Redis-backed
+# ---------------------------------------------------------------------------
+# Implements the plan from IMPLEMENTATION_PLAN.md §2/§5.
+# 1-3: no friction, 4-5: friction (immediate 429 + Retry-After, no sleep),
+# 6+: soft lockout (minutes). Never IP-alone, never account-alone.
+# Recovery via email (forgot_password) uses a different key space.
+# ---------------------------------------------------------------------------
+
+_BF_MEMORY = {}
+_BF_MEMORY_LOCK = threading.Lock()
+
+_BF_CONFIG = {
+    'login':      {'window': 900, 'lockout': 600, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'confirm':    {'window': 900, 'lockout': 900, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'pin':        {'window': 600, 'lockout': 900, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'pin_reset':  {'window': 600, 'lockout': 900, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'share':      {'window': 900, 'lockout': 600, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'delete':     {'window': 900, 'lockout': 900, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+    'contact':    {'window': 900, 'lockout': 600, 'friction_at': 4, 'lockout_at': 6, 'retry_4': 2, 'retry_5': 4},
+}
+
+
+def _bf_get_client_ip():
+    """Client IP respecting ProxyFix / X-Forwarded-For (same logic as auth._record_login_session)."""
+    try:
+        fwd = request.headers.get('X-Forwarded-For', '')
+        if fwd and ',' in fwd:
+            return fwd.split(',')[0].strip()
+        if fwd:
+            return fwd.strip()
+    except Exception:
+        pass
+    return request.remote_addr or 'unknown'
+
+
+def _bf_normalize_account(value):
+    if not value:
+        return '__unknown__'
+    v = str(value).strip().lower()
+    # keep safe chars for Redis key, replace pipe/newline
+    v = v.replace('|', '_').replace('\n', '_').replace('\r', '_')[:120]
+    return v or '__unknown__'
+
+
+def _bf_hash_for_log(value):
+    try:
+        return hashlib.sha256(str(value).encode('utf-8')).hexdigest()[:12]
+    except Exception:
+        return 'unknown'
+
+
+def _bf_key(kind, account, ip):
+    acct = _bf_normalize_account(account)
+    # share_id is high-entropy; hash it for log privacy but keep raw for key uniqueness (truncate)
+    # Do not hash the key itself — keep it deterministic for INCR.
+    safe_acct = re.sub(r'[^a-zA-Z0-9._\-@]', '_', acct)[:80]
+    safe_ip = re.sub(r'[^0-9a-fA-F.:]', '_', str(ip))[:45]
+    return f"bf:{kind}:{safe_acct}|{safe_ip}"
+
+
+def _bf_redis_available():
+    return database.redis_cache is not None
+
+
+def _bf_get_count_and_ttl(kind, account, ip):
+    """Return (count, ttl_seconds) for the current window. 0/0 if none."""
+    cfg = _BF_CONFIG.get(kind, _BF_CONFIG['login'])
+    key = _bf_key(kind, account, ip)
+    try:
+        if _bf_redis_available():
+            cnt = database.redis_cache.get(key)
+            if cnt is None:
+                return 0, 0
+            # redis-py returns bytes/str depending on decode_responses
+            count = int(cnt) if isinstance(cnt, (int, float)) else int(str(cnt).strip())
+            ttl = database.redis_cache.ttl(key)
+            if ttl is None or ttl < 0:
+                ttl = cfg['window']
+            return count, int(ttl)
+    except Exception:
+        pass
+    # in-memory fallback
+    with _BF_MEMORY_LOCK:
+        entry = _BF_MEMORY.get(key)
+        if not entry:
+            return 0, 0
+        count, expire_at = entry
+        now = _time.time()
+        if now >= expire_at:
+            _BF_MEMORY.pop(key, None)
+            return 0, 0
+        return count, int(expire_at - now)
+    return 0, 0
+
+
+def _bf_incr(kind, account, ip):
+    """INCR the account+IP counter and return (new_count, ttl_remaining)."""
+    cfg = _BF_CONFIG.get(kind, _BF_CONFIG['login'])
+    key = _bf_key(kind, account, ip)
+    window = cfg['window']
+    lockout = cfg['lockout']
+    try:
+        if _bf_redis_available():
+            # Use pipeline: INCR + TTL handling
+            # We need to know if this is first incr to set window TTL
+            pipe = database.redis_cache.pipeline()
+            pipe.incr(key)
+            pipe.ttl(key)
+            new_count, ttl = pipe.execute()
+            new_count = int(new_count)
+            # ttl after incr: -1 means no expire was set
+            if ttl == -1 or ttl is None or ttl < 0:
+                # first hit — set window expiry
+                database.redis_cache.expire(key, window)
+                ttl = window
+            # On lockout threshold, extend TTL to lockout duration
+            if new_count >= cfg['lockout_at']:
+                # extend to lockout if not already longer
+                # we set expire to lockout from now (soft lockout minutes, not hours)
+                database.redis_cache.expire(key, lockout)
+                ttl = lockout
+                # also emit lockout log once (caller will log too, but ensure)
+            return new_count, int(ttl) if ttl and ttl > 0 else lockout
+    except Exception as e:
+        try:
+            _get_app().logger.warning(f"brute_force_redis_unavailable kind={kind} error={e}", extra={'event': 'brute_force_redis_unavailable', 'kind': kind})
+        except Exception:
+            pass
+    # in-memory fallback
+    with _BF_MEMORY_LOCK:
+        now = _time.time()
+        entry = _BF_MEMORY.get(key)
+        if not entry or now >= entry[1]:
+            new_count = 1
+            expire_at = now + window
+        else:
+            new_count = entry[0] + 1
+            expire_at = entry[1]
+            if new_count >= cfg['lockout_at']:
+                expire_at = now + lockout
+        _BF_MEMORY[key] = (new_count, expire_at)
+        ttl = int(expire_at - now)
+        return new_count, ttl if ttl > 0 else lockout
+    return 1, window
+
+
+def _bf_clear(kind, account, ip):
+    """Clear the counter on success (so 2 fails + success resets)."""
+    key = _bf_key(kind, account, ip)
+    try:
+        if _bf_redis_available():
+            database.redis_cache.delete(key)
+            return
+    except Exception:
+        pass
+    with _BF_MEMORY_LOCK:
+        _BF_MEMORY.pop(key, None)
+
+
+def _bf_tier_for_count(kind, count):
+    cfg = _BF_CONFIG.get(kind, _BF_CONFIG['login'])
+    if count >= cfg['lockout_at']:
+        return 'lockout'
+    if count >= cfg['friction_at']:
+        return 'friction'
+    return 'ok'
+
+
+def _bf_retry_after(kind, count):
+    cfg = _BF_CONFIG.get(kind, _BF_CONFIG['login'])
+    if count == 4:
+        return cfg['retry_4']
+    if count == 5:
+        return cfg['retry_5']
+    if count >= cfg['lockout_at']:
+        return cfg['lockout']
+    return 0
+
+
+def brute_force_check(kind, account, ip=None):
+    """
+    Check current tier without incrementing.
+    Returns (tier, count, retry_after, ttl).
+    tier in ('ok','friction','lockout')
+    """
+    ip = ip or _bf_get_client_ip()
+    count, ttl = _bf_get_count_and_ttl(kind, account, ip)
+    tier = _bf_tier_for_count(kind, count)
+    retry = _bf_retry_after(kind, count) if tier != 'ok' else 0
+    # For lockout, retry is ttl remaining (more accurate)
+    if tier == 'lockout' and ttl > 0:
+        retry = ttl
+    return tier, count, retry, ttl
+
+
+def brute_force_record_failure(kind, account, ip=None):
+    """
+    Record a failure and return (new_count, tier, retry_after, ttl).
+    Caller should map tier to response.
+    """
+    ip = ip or _bf_get_client_ip()
+    new_count, ttl = _bf_incr(kind, account, ip)
+    tier = _bf_tier_for_count(kind, new_count)
+    retry = _bf_retry_after(kind, new_count) if tier != 'ok' else 0
+    if tier == 'lockout' and ttl > 0:
+        retry = ttl
+    # monitoring hook — distinct from normal failed logins
+    try:
+        acct_hash = _bf_hash_for_log(account) if kind != 'share' else hashlib.sha256(str(account).encode()).hexdigest()[:10]
+        if tier == 'friction':
+            _get_app().logger.warning(
+                f"brute_force_friction kind={kind} account_hash={acct_hash} ip={ip} count={new_count} retry_after={retry}",
+                extra={'event': 'brute_force_friction', 'kind': kind, 'account_hash': acct_hash, 'ip': ip, 'count': new_count, 'retry_after': retry}
+            )
+        elif tier == 'lockout':
+            _get_app().logger.warning(
+                f"brute_force_lockout kind={kind} account_hash={acct_hash} ip={ip} count={new_count} ttl={ttl}",
+                extra={'event': 'brute_force_lockout', 'kind': kind, 'account_hash': acct_hash, 'ip': ip, 'count': new_count, 'retry_after': ttl}
+            )
+    except Exception:
+        pass
+    return new_count, tier, retry, ttl
+
+
+def brute_force_clear(kind, account, ip=None):
+    """Public clear helper to call on success."""
+    ip = ip or _bf_get_client_ip()
+    _bf_clear(kind, account, ip)
+
+
+def _bf_is_locked(kind, account, ip=None):
+    tier, count, retry, ttl = brute_force_check(kind, account, ip)
+    return tier == 'lockout', retry, count
+
+
+def _bf_log_login_failed(account, ip, count, tier):
+    try:
+        _get_app().logger.info(
+            f"login_failed account_hash={_bf_hash_for_log(account)} ip={ip} count={count} tier={tier}",
+            extra={'event': 'login_failed', 'kind': 'login', 'account_hash': _bf_hash_for_log(account), 'ip': ip, 'count': count, 'tier': tier}
+        )
+    except Exception:
+        pass
 
 
 # --- Encryption utilities for personal notes ---

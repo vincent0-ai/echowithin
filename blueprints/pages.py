@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 import datetime, os, json, hashlib, math, re
 from urllib.parse import urlparse, urljoin
 from bson.objectid import ObjectId
-from security import limits, admin_required
+from security import limits, admin_required, brute_force_check, brute_force_record_failure, _bf_get_client_ip
 from config import get_env_variable
 
 def csrf_exempt(view):
@@ -287,8 +287,32 @@ def create_post():
 
 
 @bp.route('/contact', methods=['POST'])
+@limits(calls=10, period=60)
 def contact_developer():
     import main as m
+    # Graduated per-IP for contact spam (PLAN P2, immediate 429)
+    bf_ip = _bf_get_client_ip()
+    tier, cnt, retry, ttl = brute_force_check('contact', bf_ip, bf_ip)
+    if tier == 'lockout':
+        flash(f'Too many messages. Try again in {retry} seconds.', 'warning')
+        resp = make_response(redirect(url_for('pages.about')), 429)
+        resp.headers['Retry-After'] = str(retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp
+    # count this submission and enforce friction immediately (so 4th/5th do not send email)
+    new_cnt, new_tier, new_retry, new_ttl = brute_force_record_failure('contact', bf_ip, bf_ip)
+    if new_tier == 'lockout':
+        flash(f'Too many messages. Try again in {new_retry} seconds.', 'warning')
+        resp = make_response(redirect(url_for('pages.about')), 429)
+        resp.headers['Retry-After'] = str(new_retry)
+        resp.headers['X-BruteForce-Tier'] = 'lockout'
+        return resp
+    if new_tier == 'friction':
+        flash(f'Too many messages. Try again in {new_retry} seconds.', 'warning')
+        resp = make_response(redirect(url_for('pages.about')), 429)
+        resp.headers['Retry-After'] = str(new_retry)
+        resp.headers['X-BruteForce-Tier'] = 'friction'
+        return resp
     if request.method == 'POST':
         name = request.form.get('name')
         sender_email = request.form.get('email')

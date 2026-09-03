@@ -2021,6 +2021,7 @@
         let remoteTypingClearTimer = null;
         let chatSyncIntervalId = null;
         const renderedMessageIds = new Set();
+        const deletedMessageIds = new Set();  // Track deleted msgs to prevent ghost re-render
         let mediaRecorder = null;
         let audioChunks = [];
         let recordingTimer = null;
@@ -2394,6 +2395,8 @@
 
             s.on('message_deleted', (data) => {
                 console.log("Sync: Received message_deleted", data);
+                deletedMessageIds.add(data.id);
+                renderedMessageIds.delete(data.id);
                 const bubble = document.querySelector(`.message-bubble[data-id="${data.id}"]`);
                 if (bubble) {
                     bubble.style.opacity = '0';
@@ -2766,6 +2769,8 @@
         function loadChatHistory(userId) {
             lastMessageDate = null;
             renderedMessageIds.clear();
+            deletedMessageIds.clear();
+            oldestRenderedTimestamp = null;
             loadingOlder = false;
             hasMoreMessages = true;
             oldestMessageId = null;
@@ -2783,6 +2788,9 @@
                     hasMoreMessages = messages.length >= 50;
                 }
                 let lastSender = null;
+                if (messages.length > 0 && messages[0].timestamp) {
+                    oldestRenderedTimestamp = messages[0].timestamp;
+                }
                 messages.forEach(m => {
                     appendMessage(m, m.sender_id === currentUserId ? 'sent' : 'received', m.sender_id === lastSender, m.id, m.is_read);
                     lastSender = m.sender_id;
@@ -2801,6 +2809,7 @@
             });
         }
 
+        let oldestRenderedTimestamp = null;  // Track oldest visible message timestamp
         function syncActiveChatHistory() {
             if (!activeRecipientId) return;
             echoFetch(`/api/messages/history/${activeRecipientId}`).then(r => r.json()).then(data => {
@@ -2809,7 +2818,13 @@
                 let lastSender = null;
 
                 messages.forEach(m => {
-                    if (!m.id || renderedMessageIds.has(m.id)) {
+                    if (!m.id || renderedMessageIds.has(m.id) || deletedMessageIds.has(m.id)) {
+                        lastSender = m.sender_id;
+                        return;
+                    }
+                    // Skip messages older than the oldest currently visible one —
+                    // these only appear because a delete shifted the 50-msg window.
+                    if (oldestRenderedTimestamp && m.timestamp && m.timestamp < oldestRenderedTimestamp) {
                         lastSender = m.sender_id;
                         return;
                     }
@@ -3058,6 +3073,9 @@
                 // Get the first visible bubble's data-id to use as insert-after anchor
                 var firstExisting = chatHistory.querySelector('.message-bubble[data-id]');
                 oldestMessageId = msgs[0].id;
+                if (msgs[0].timestamp) {
+                    oldestRenderedTimestamp = msgs[0].timestamp;
+                }
                 // Prepend the older messages directly before the existing content
                 // (messageInsertAnchor makes appendMessage insert before this node).
                 var lastSender = null;
@@ -3391,6 +3409,8 @@
                     headers: { 'X-CSRFToken': csrfToken }
                 }).then(r => r.json()).then(d => {
                     if (d.success) {
+                        deletedMessageIds.add(msgId);
+                        renderedMessageIds.delete(msgId);
                         const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
                         if (bubble) {
                             bubble.style.opacity = '0';

@@ -167,6 +167,10 @@ def personal_space():
 
     # Fetch personal posts (notes) - Paginated! Exclude locked notes from the main list.
     total_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': {'$ne': True}})
+    try:
+        total_notes_count = int(total_notes_count)
+    except (TypeError, ValueError):
+        total_notes_count = 0
     skip_notes = (notes_page - 1) * per_page
 
     # OPTIMIZATION: Use projection to only fetch needed fields.
@@ -309,6 +313,10 @@ def personal_space():
             # Auto-expire: clear stale unlock
             session.pop('app_lock_unlocked_at', None)
     locked_notes_count = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id), 'is_locked': True})
+    try:
+        locked_notes_count = int(locked_notes_count)
+    except (TypeError, ValueError):
+        locked_notes_count = 0
     total_locked_pages = math.ceil(locked_notes_count / per_page) if per_page else 0
     skip_locked = (locked_page - 1) * per_page
     locked_notes = []

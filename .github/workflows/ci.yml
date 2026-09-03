@@ -9,6 +9,22 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      SECRET: test-secret-key-for-ci
+      MONGODB_CONNECTION: mongodb://localhost:27017
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      MAIL_SERVER: smtp.example.com
+      MAIL_PORT: 587
+      MAIL_USERNAME: test@example.com
+      MAIL_PASSWORD: test-password
+      CLOUDINARY_CLOUD_NAME: test-cloud
+      CLOUDINARY_API_KEY: test-key
+      CLOUDINARY_API_SECRET: test-secret
+      JIGSAW_API_KEY: test-jigsaw-key
+      GOOGLE_CLIENT_ID: test-google-id.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: test-google-secret
+      BYPASS_RATE_LIMIT: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,34 +37,7 @@ jobs:
           pip install pytest flake8
       - name: Flake8 (errors only)
         run: flake8 --select=E9,F63,F82 --exclude=.venv .
-      - name: Pytest
-        env:
-          SECRET: test-secret-key-for-ci
-          MONGODB_CONNECTION: mongodb://localhost:27017
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          MAIL_SERVER: smtp.example.com
-          MAIL_PORT: 587
-          MAIL_USERNAME: test@example.com
-          MAIL_PASSWORD: test-password
-          CLOUDINARY_CLOUD_NAME: test-cloud
-          CLOUDINARY_API_KEY: test-key
-          CLOUDINARY_API_SECRET: test-secret
-          JIGSAW_API_KEY: test-jigsaw-key
-          GOOGLE_CLIENT_ID: test-google-id.apps.googleusercontent.com
-          GOOGLE_CLIENT_SECRET: test-google-secret
-          BYPASS_RATE_LIMIT: true
-        run: pytest -q
-
-  perf-gate:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Perf gate (warn if slow-request budget exceeded)
-        run: |
-          echo "Perf gate: check PERF_REPORT thresholds (p95 >800ms warns)"
-          if grep -q "p95=.*ms" PERF_REPORT.md; then cat PERF_REPORT.md; fi
+      - name: Pytest Unit & Integration Tests
+        run: pytest -q --ignore=tests/test_performance.py
+      - name: Performance Latency Benchmark
+        run: pytest tests/test_performance.py -s -v

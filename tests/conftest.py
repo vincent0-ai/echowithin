@@ -44,7 +44,6 @@ def _session_mocks():
     _patches.append(patch('cloudinary.uploader.destroy', autospec=True))
     _patches.append(patch('cloudinary.uploader.add_tag', autospec=True))
     _patches.append(patch('cloudinary.config', autospec=True))
-    _patches.append(patch('meilisearch.Client', autospec=True))
     _patches.append(patch('pywebpush.webpush', autospec=True))
     _patches.append(patch('requests.get', autospec=True))
     _patches.append(patch('requests.post', autospec=True))

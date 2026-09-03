@@ -285,6 +285,10 @@ def api_get_notes():
     notes_cursor = m.personal_posts_conf.find({'user_id': ObjectId(current_user.id)}).sort('created_at', -1).skip(offset).limit(per_page)
     notes_list = list(notes_cursor)
     total = m.personal_posts_conf.count_documents({'user_id': ObjectId(current_user.id)})
+    try:
+        total = int(total)
+    except (TypeError, ValueError):
+        total = 0
 
     formatted_notes = []
     for note in notes_list:

@@ -201,6 +201,10 @@ def api_message_history(other_user_id):
 def api_unread_dm_count():
     import main as m
     count = m.direct_messages_conf.count_documents({'recipient_id': ObjectId(current_user.id), 'is_read': False})
+    try:
+        count = int(count)
+    except (TypeError, ValueError):
+        count = 0
     return jsonify({'count': count})
 
 
@@ -246,6 +250,10 @@ def get_badge_counts():
             'recipient_id': ObjectId(user_id_str),
             'is_read': False
         })
+        try:
+            msg_count = int(msg_count)
+        except (TypeError, ValueError):
+            msg_count = 0
     except Exception as e:
         current_app.logger.error(f"Error computing badge counts: {e}")
 

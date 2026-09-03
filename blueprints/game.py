@@ -315,21 +315,13 @@ def vote_lobby(lobby_id):
             if data: return jsonify({'error':'Invalid option'}),400
             flash('Invalid option','danger')
             return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    # one vote per user per lobby (unique)
-    try:
-        m.game_votes_conf.insert_one({'lobby_id':lobby_id,'user_id':ObjectId(current_user.id),'username':current_user.username,'option':option,'submitted_at':datetime.datetime.now(datetime.timezone.utc),'ip_hash': hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''})
-    except Exception as e:
-        if 'duplicate' in str(e).lower():
-            if data: return jsonify({'error':'Already voted'}),409
-            flash('You already voted','warning')
-            return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-        # also check existing
-        existing = m.game_votes_conf.find_one({'lobby_id':lobby_id,'user_id':ObjectId(current_user.id)})
-        if existing:
-            if data: return jsonify({'error':'Already voted'}),409
-            flash('Already voted','warning')
-            return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-        raise
+    # one vote per user per lobby (check before insert — no unique index)
+    existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
+    if existing:
+        if data: return jsonify({'error': 'Already voted'}), 409
+        flash('You already voted', 'warning')
+        return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
+    m.game_votes_conf.insert_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'username': current_user.username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''})
     # increment count
     m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{option}':1}})
     # live broadcast

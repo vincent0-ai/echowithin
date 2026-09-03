@@ -937,7 +937,13 @@ form_responses_conf.create_index([('share_id', 1), ('submitted_at', -1)])
 # --- Game Lobbies (2+ players, anytime) ---
 game_sessions_conf.create_index('lobby_id', unique=True, sparse=True)
 game_sessions_conf.create_index([('host_id', 1), ('created_at', -1)])
-game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)], unique=True, sparse=True)
+# NOTE: Not unique — TTAL guesses create multiple docs per user per lobby.
+# Application-level duplicate checks handle poll/trivia/wyr one-vote-per-user.
+try:
+    game_votes_conf.drop_index('lobby_id_1_user_id_1')
+except Exception:
+    pass
+game_votes_conf.create_index([('lobby_id', 1), ('user_id', 1)])
 game_votes_conf.create_index([('lobby_id', 1), ('submitted_at', -1)])
 game_submissions_conf.create_index([('lobby_id', 1), ('user_id', 1), ('type', 1)], unique=True)
 game_submissions_conf.create_index([('lobby_id', 1), ('type', 1)])

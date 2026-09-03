@@ -3,23 +3,26 @@
 {% block content %}
 <div class="content-wrapper" style="max-width: 720px;">
   <div class="ew-header-row">
-    <h2>Create Game</h2>
-    <a href="{{ url_for('game.games_list') }}" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">My lobbies</a>
+    <div>
+      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Create Game</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Set up an interactive game lobby and get a shareable link.</div>
+    </div>
+    <a href="{{ url_for('notes.personal_space') }}#games" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
   </div>
-  <div class="ew-info-banner">Share a link and up to 30 players can join instantly. Choose a game type below.</div>
+  <div class="ew-info-banner">Share your game link with friends to play together in real time.</div>
   <form method="POST" class="ew-card" id="create-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
-    <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Team check-in">
+    <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., Friday Game Night">
 
     <label class="ew-form-label">Game type</label>
     <select name="game_type" id="game_type" class="form-input" style="margin-bottom:0.8rem;" onchange="toggleFields()">
-      <option value="poll">Poll — community reflection, no right answer</option>
-      <option value="trivia">Trivia — single-choice, accuracy only</option>
-      <option value="wyr">Would You Rather — binary A vs B choice</option>
-      <option value="ttal">Two Truths and a Lie — players submit in-lobby</option>
-      <option value="story">Story Chain — collaborative storytelling</option>
-      <option value="caption">Caption This — players caption a prompt</option>
+      <option value="poll">Poll: Community reflection</option>
+      <option value="trivia">Trivia: Accuracy quiz</option>
+      <option value="wyr">Would You Rather: A vs B choice</option>
+      <option value="ttal">Two Truths and a Lie</option>
+      <option value="story">Story Chain: Collaborative storytelling</option>
+      <option value="caption">Caption This: Best caption contest</option>
     </select>
 
     <!-- Poll / Trivia / WYR fields -->
@@ -44,19 +47,19 @@
     <div id="fields-story" style="display:none;">
       <label class="ew-form-label">Starter sentence *</label>
       <textarea name="starter_sentence" maxlength="280" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Once upon a time in a quiet village..."></textarea>
-      <div class="ew-info-banner" style="font-size:0.8rem;">You write the first sentence. Players take turns adding one sentence each to build a collaborative story.</div>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Write the first sentence. Players take turns adding sentences to build the story together.</div>
     </div>
 
     <!-- Caption This fields -->
     <div id="fields-caption" style="display:none;">
       <label class="ew-form-label">Prompt / Scenario *</label>
-      <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., You walk into the office and find your boss wearing a superhero cape..."></textarea>
-      <div class="ew-info-banner" style="font-size:0.8rem;">Players will each submit a caption for this scenario. Then everyone votes for their favourite.</div>
+      <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., You walk into the office and find a surprise celebration..."></textarea>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Players each submit a caption for this scenario, then vote for their favorite.</div>
     </div>
 
     <!-- TTAL info -->
     <div id="fields-ttal" style="display:none;">
-      <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed — players will submit their 3 statements (2 truths + 1 lie) after joining the lobby. You control when guessing begins.</div>
+      <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed. Players will submit their statements after joining the lobby.</div>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
@@ -69,7 +72,7 @@
           <option value="7d">7 days</option>
         </select>
       </div>
-      <div style="display:flex; align-items:end;"><button type="submit" class="ew-btn" style="width:100%; padding:0.65rem;">Create &amp; get link</button></div>
+      <div style="display:flex; align-items:end;"><button type="submit" class="ew-btn" style="width:100%; padding:0.65rem;">Create Game</button></div>
     </div>
   </form>
 </div>

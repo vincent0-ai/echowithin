@@ -4132,11 +4132,14 @@ body {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 12px;
+    box-shadow: 0 2px 8px var(--shadow-color);
+    margin-bottom: 1rem;
 }
 
 .ew-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.85rem;
     color: var(--text-dark-color);
 }
@@ -4147,16 +4150,27 @@ body {
 
 .ew-table th {
     text-align: left;
-    padding: 0.6rem 0.7rem;
-    border-bottom: 1px solid var(--border-color);
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border-color);
     font-weight: 600;
     color: var(--text-dark-color);
+    font-size: 0.82rem;
+    white-space: nowrap;
 }
 
 .ew-table td {
-    padding: 0.5rem 0.7rem;
-    border-bottom: 1px solid var(--separator-color);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
     color: var(--text-dark-color);
+    vertical-align: middle;
+}
+
+.ew-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ew-table tbody tr:hover td {
+    background: var(--surface-bg);
 }
 
 .ew-table td.muted {
@@ -4165,7 +4179,7 @@ body {
 
 .ew-table td.secondary {
     color: var(--text-secondary);
-    font-size: 0.78rem;
+    font-size: 0.8rem;
 }
 
 /* Success banner (voted, submitted) */

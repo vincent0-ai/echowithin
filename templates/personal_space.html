@@ -3176,83 +3176,106 @@
     </div>
     <div id="tab-forms" class="tab-panel" role="tabpanel">
         <div class="ew-header-row">
-            <h3>Forms — public share-link data collection</h3>
-            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn" style="text-decoration:none;"><i class="fas fa-plus"></i> New Form</a>
+            <div>
+                <h3>Forms</h3>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.15rem;">Create forms, share public links, and view responses.</div>
+            </div>
+            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">New Form</a>
         </div>
-        <div class="ew-info-banner"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> with a server-held key (like community notes) and only you can view them. They are <strong>not end-to-end encrypted</strong> — anonymous submitters have no account/key. <a href="/about" style="color:var(--primary-color); text-decoration:underline;">Privacy</a></div>
+        <div class="ew-info-banner">Responses are encrypted and visible only to you.</div>
         {% if user_forms %}
         <div class="ew-card-grid">
             {% for form in user_forms %}
-            <div class="ew-card" style="margin-bottom:0;">
-                <div style="display:flex; justify-content:space-between; gap:1rem; align-items:start;">
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-weight:600; color:var(--text-dark-color); font-size:1rem; word-break:break-word;">{{ form.title }}</div>
-                        {% if form.description %}<div style="font-size:0.85rem; color:var(--text-secondary); margin:0.25rem 0;">{{ form.description }}</div>{% endif %}
-                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.35rem;">
-                            <i class="far fa-clock"></i> {{ form.created_at|localtime('%b %d, %Y') }} &bull;
-                            {{ form.questions|length }} question(s) &bull;
-                            <strong style="color:var(--primary-color);">{{ form.response_count or 0 }} responses</strong>
-                            {% if form.expires_at %}&bull; expires {{ form.expires_at|localtime('%b %d') }}{% endif %}
-                            {% if form.deactivated %}<span class="ew-badge ew-badge--danger" style="margin-left:4px;">deactivated</span>{% endif %}
-                        </div>
-                        <div class="ew-share-row">
-                            {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
-                            <input type="text" value="{{ _furl }}" readonly onclick="this.select()" class="ew-share-input" style="min-width:180px;">
-                            <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
-                        </div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:0.35rem; flex-shrink:0;">
-                        <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; text-align:center;"><i class="fas fa-table"></i> Responses</a>
-                        <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">CSV</a>
-                        {% if not form.deactivated %}
-                        <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline;" onsubmit="return confirm('Deactivate this form? Link will stop accepting responses.')">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="ew-btn--danger ew-btn--sm" style="width:100%; cursor:pointer;">Deactivate</button>
-                        </form>
+            <div class="ew-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                        <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem; word-break:break-word;">{{ form.title }}</div>
+                        {% if form.deactivated %}
+                            <span class="ew-badge ew-badge--danger">Deactivated</span>
+                        {% else %}
+                            <span class="ew-badge ew-badge--success">{{ form.response_count or 0 }} response{% if form.response_count != 1 %}s{% endif %}</span>
                         {% endif %}
                     </div>
+                    {% if form.description %}<div style="font-size:0.85rem; color:var(--text-secondary); margin:0.35rem 0;">{{ form.description }}</div>{% endif %}
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">
+                        {{ form.created_at|localtime('%b %d, %Y') }} &bull;
+                        {{ form.questions|length }} question{% if form.questions|length != 1 %}s{% endif %}
+                        {% if form.expires_at %}&bull; Expires {{ form.expires_at|localtime('%b %d') }}{% endif %}
+                    </div>
+                    <div class="ew-share-row" style="margin-top:0.6rem;">
+                        {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
+                        <input type="text" value="{{ _furl }}" readonly onclick="this.select()" class="ew-share-input">
+                        <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--separator-color); padding-top:0.6rem; margin-top:0.2rem; flex-wrap:wrap;">
+                    <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Responses</a>
+                    <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">CSV</a>
+                    {% if not form.deactivated %}
+                    <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this form? The link will stop accepting responses.')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-poll" style="opacity:0.4;"></i>
             <h3>No forms yet</h3>
-            <p>Create a Google-Forms-style questionnaire, share a public link, and view encrypted responses.</p>
-            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create your first form</a>
+            <p>Create a questionnaire, share your link, and view responses in real time.</p>
+            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create Form</a>
         </div>
         {% endif %}
     </div>
     <div id="tab-games" class="tab-panel" role="tabpanel">
         <div class="ew-header-row">
-            <h3>Games — 2+ players, anytime</h3>
-            <a href="{{ url_for('game.games_create') }}" class="ew-btn" style="text-decoration:none;"><i class="fas fa-plus"></i> New lobby</a>
+            <div>
+                <h3>Games</h3>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.15rem;">Interactive party games, polls, and trivia.</div>
+            </div>
+            <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">New Lobby</a>
         </div>
-        <div class="ew-info-banner"><i class="fas fa-users"></i> <strong>On-demand party games</strong> — poll &amp; cozy trivia. Share a link, 2–30 players join instantly, no scheduling. Votes queue offline and sync automatically. <a href="{{ url_for('game.games_list') }}" style="color:var(--primary-color); text-decoration:underline;">All lobbies</a></div>
+        <div class="ew-info-banner" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <span>Play polls, trivia, and games with friends. Share a link to invite players.</span>
+            <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Browse All Games</a>
+        </div>
         {% if user_games %}
         <div class="ew-card-grid">
             {% for lobby in user_games %}
-            <div class="ew-card" style="margin-bottom:0;">
-                <div style="font-weight:600; color:var(--text-dark-color); font-size:0.95rem;">{{ lobby.title }} <span class="ew-badge">{{ lobby.game_type }}</span> {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">deactivated</span>{% endif %}{% if lobby.revealed %}<span class="ew-badge ew-badge--success">revealed</span>{% endif %}</div>
-                <div style="font-size:0.85rem; color:var(--text-secondary); margin:0.2rem 0;">{{ lobby.question.label }}</div>
-                <div style="font-size:0.75rem; color:var(--text-muted);">{{ lobby.question.options|join(' • ') }} &bull; {{ lobby.created_at|localtime('%b %d %H:%M') }}</div>
-                <div class="ew-share-row">
-                    {% set _gurl = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
-                    <input type="text" value="{{ _gurl }}" readonly onclick="this.select()" class="ew-share-input">
-                    <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" class="ew-copy-btn">Copy</button>
-                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Open</a>
-                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
+            <div class="ew-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+                <div>
+                    <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem;">
+                        {{ lobby.title }}
+                        <span class="ew-badge">{{ lobby.game_type }}</span>
+                        {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">Deactivated</span>{% endif %}
+                        {% if lobby.revealed %}<span class="ew-badge ew-badge--success">Revealed</span>{% endif %}
+                    </div>
+                    {% if lobby.question and lobby.question.label %}
+                        <div style="font-size:0.85rem; color:var(--text-secondary); margin:0.35rem 0;">{{ lobby.question.label }}</div>
+                    {% endif %}
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">
+                        {{ lobby.created_at|localtime('%b %d, %Y') }}
+                    </div>
+                    <div class="ew-share-row" style="margin-top:0.6rem;">
+                        {% set _gurl = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
+                        <input type="text" value="{{ _gurl }}" readonly onclick="this.select()" class="ew-share-input">
+                        <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--separator-color); padding-top:0.6rem; margin-top:0.2rem;">
+                    <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Open Lobby</a>
+                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Results</a>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="empty-state">
-            <i class="fas fa-gamepad" style="opacity:0.4;"></i>
             <h3>No games yet</h3>
-            <p>Host a poll or cozy trivia — share a link, 2–30 friends join at any time.</p>
-            <a href="{{ url_for('game.games_create') }}" class="ew-btn" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create game</a>
+            <p>Host a poll or trivia game. Share your link to start playing with friends.</p>
+            <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create Game</a>
         </div>
         {% endif %}
     </div>

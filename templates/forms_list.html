@@ -1,26 +1,33 @@
 {% extends "base.html" %}
 {% block title %}<title>My Forms — EchoWithin</title>{% endblock %}
 {% block content %}
-<div class="content-wrapper">
+<div class="content-wrapper" style="max-width: 900px; margin: 0 auto;">
   <div class="ew-header-row">
-    <h2>My Forms</h2>
-    <a href="{{ url_for('forms.forms_create') }}" class="ew-btn" style="text-decoration:none;">+ New Form</a>
+    <div>
+      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">My Forms</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Manage your forms and view responses.</div>
+    </div>
+    <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">New Form</a>
   </div>
   {% if forms %}
     <div class="ew-card-grid">
     {% for form in forms %}
       <div class="ew-card" style="margin-bottom:0;">
-        <div style="font-weight:600; color:var(--text-dark-color);">{{ form.title }}</div>
-        <div style="font-size:0.8rem; color:var(--text-secondary);">{{ form.response_count or 0 }} responses &bull; {{ form.questions|length }} questions</div>
-        <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
-          <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">View</a>
+        <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem;">{{ form.title }}</div>
+        <div style="font-size:0.8rem; color:var(--text-secondary); margin-top: 0.25rem;">{{ form.response_count or 0 }} responses &bull; {{ form.questions|length }} questions</div>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem;">
+          <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">View Form</a>
           <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Responses</a>
         </div>
       </div>
     {% endfor %}
     </div>
   {% else %}
-    <p style="color:var(--text-muted); text-align:center; padding:2rem;">No forms yet. <a href="{{ url_for('forms.forms_create') }}" style="color:var(--primary-color); text-decoration:underline;">Create one</a></p>
+    <div class="ew-card" style="text-align:center; padding:2.5rem 1.5rem;">
+      <h4 style="margin:0 0 0.35rem 0; color:var(--text-dark-color);">No forms yet</h4>
+      <p style="color:var(--text-secondary); font-size:0.88rem; margin:0 0 1rem 0;">Create your first form to start collecting responses.</p>
+      <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Create Form</a>
+    </div>
   {% endif %}
 </div>
 {% endblock %}

@@ -10,10 +10,10 @@
   {% else %}
     {% set gt = lobby.game_type %}
     <div class="ew-card">
-      <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:start;">
+      <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:center;">
         <div>
           <h2 style="margin:0 0 0.3rem 0; color:var(--text-dark-color); font-size:1.3rem;">{{ lobby.title }}</h2>
-          <div style="font-size:0.8rem; color:var(--text-muted);"><span class="ew-badge">{{ gt }}</span> &bull; Host {{ lobby.host_username }} &bull; <span id="presence-count">—</span> present &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
+          <div style="font-size:0.8rem; color:var(--text-secondary);"><span class="ew-badge">{{ gt }}</span> &bull; Host: {{ lobby.host_username }} &bull; <span id="presence-count">—</span> present &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
         </div>
         {% if is_host %}
           <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
@@ -21,21 +21,21 @@
             {% if gt != 'story' %}
             <form method="POST" action="{{ url_for('game.reveal_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="ew-btn ew-btn--sm" {% if lobby.revealed %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>{% if lobby.revealed %}Revealed{% else %}Reveal results{% endif %}</button>
+              <button type="submit" class="ew-btn ew-btn--sm" {% if lobby.revealed %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>{% if lobby.revealed %}Revealed{% else %}Reveal Results{% endif %}</button>
             </form>
             {% endif %}
             {# TTAL: start guessing #}
             {% if gt == 'ttal' and lobby.phase == 'submit' %}
             <form method="POST" action="{{ url_for('game.ttal_start_guessing', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="ew-btn ew-btn--sm">Start guessing</button>
+              <button type="submit" class="ew-btn ew-btn--sm">Start Guessing</button>
             </form>
             {% endif %}
             {# Caption: lock submissions #}
             {% if gt == 'caption' and lobby.phase == 'submit' %}
             <form method="POST" action="{{ url_for('game.caption_lock', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="ew-btn ew-btn--sm">Start voting</button>
+              <button type="submit" class="ew-btn ew-btn--sm">Start Voting</button>
             </form>
             {% endif %}
           </div>
@@ -54,13 +54,13 @@
             {% for opt in lobby.question.options %}
               <label class="ew-option-row"><input type="radio" name="option" value="{{ opt }}" required> <span>{{ opt }}</span></label>
             {% endfor %}
-            <button type="submit" class="ew-btn" style="width:100%; margin-top:0.6rem;">Submit vote</button>
+            <button type="submit" class="ew-btn" style="width:100%; margin-top:0.6rem;">Submit Vote</button>
           </form>
         {% elif has_voted %}
-          <div class="ew-success-banner"><i class="fas fa-check"></i> You voted <strong>{{ my_vote }}</strong></div>
+          <div class="ew-success-banner">You voted: <strong>{{ my_vote }}</strong></div>
           {% if lobby.revealed %}
             <div style="margin-top:0.6rem;">
-              {% if gt=='trivia' and lobby.question.correct_option %}<div style="margin-bottom:0.4rem;">Correct: <strong style="color:var(--success-color);">{{ lobby.question.correct_option }}</strong> {% if my_vote == lobby.question.correct_option %}✅{% else %}❌{% endif %}</div>{% endif %}
+              {% if gt=='trivia' and lobby.question.correct_option %}<div style="margin-bottom:0.4rem;">Correct: <strong style="color:var(--success-color);">{{ lobby.question.correct_option }}</strong> {% if my_vote == lobby.question.correct_option %}<span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct</span>{% else %}<span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>{% endif %}</div>{% endif %}
               {% for opt in lobby.question.options %}
                 <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding:0.2rem 0;"><span>{{ opt }}</span><strong>{{ lobby.counts[opt] if lobby.counts else 0 }}</strong></div>
               {% endfor %}
@@ -99,20 +99,20 @@
       </div>
       <div class="ew-card" style="text-align:center;">
         <div style="font-weight:600; color:var(--primary-color);">{{ lobby.question.label }}</div>
-        {% if has_voted %}<div class="ew-success-banner" style="margin-top:0.5rem;"><i class="fas fa-check"></i> You chose <strong>{{ my_vote }}</strong></div>{% endif %}
+        {% if has_voted %}<div class="ew-success-banner" style="margin-top:0.5rem;">You chose: <strong>{{ my_vote }}</strong></div>{% endif %}
       </div>
 
     {# ─── TWO TRUTHS AND A LIE ─── #}
     {% elif gt == 'ttal' %}
       <div class="ew-info-banner">
-        {% if lobby.phase == 'submit' %}<i class="fas fa-pen"></i> <strong>Submission phase</strong> — enter 2 truths and 1 lie about yourself.
-        {% elif lobby.phase == 'guess' %}<i class="fas fa-question-circle"></i> <strong>Guessing phase</strong> — guess which statement is the lie for each player.
-        {% else %}<i class="fas fa-trophy"></i> <strong>Revealed!</strong> — see who guessed correctly.
+        {% if lobby.phase == 'submit' %}<strong>Submission Phase:</strong> Enter 2 truths and 1 lie about yourself.
+        {% elif lobby.phase == 'guess' %}<strong>Guessing Phase:</strong> Guess which statement is the lie for each player.
+        {% else %}<strong>Results:</strong> See who guessed correctly.
         {% endif %}
       </div>
       {% if lobby.phase == 'submit' %}
         {% if my_submission %}
-          <div class="ew-success-banner" style="margin-bottom:1rem;"><i class="fas fa-check"></i> You submitted your statements. Waiting for other players...</div>
+          <div class="ew-success-banner" style="margin-bottom:1rem;">You submitted your statements. Waiting for other players...</div>
         {% else %}
           <form method="POST" action="{{ url_for('game.ttal_submit', lobby_id=lobby.lobby_id) }}" class="ew-card">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -179,13 +179,13 @@
     {# ─── STORY CHAIN ─── #}
     {% elif gt == 'story' %}
       <div class="ew-card" id="story-container">
-        <h3 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-book-open"></i> The Story So Far</h3>
-        <div id="story-text" style="line-height:1.8; color:var(--text-dark-color);">
+        <h3 style="margin:0 0 0.6rem 0; color:var(--text-dark-color); font-size:1.15rem; font-weight:700;">The Story So Far</h3>
+        <div id="story-text" style="line-height:1.8; color:var(--text-dark-color); background:var(--surface-bg); padding:1rem; border-radius:8px; border:1px solid var(--border-color); margin-bottom:0.6rem;">
           {% for s in sentences %}
-            <span style="{% if loop.last %}font-weight:600;{% endif %}"><span style="color:var(--text-muted); font-size:0.7rem;" title="{{ s.username }}">{{ s.username }}:</span> {{ s.text }} </span>
+            <span style="{% if loop.last %}font-weight:600;{% endif %}"><span style="color:var(--text-secondary); font-size:0.75rem;" title="{{ s.username }}">{{ s.username }}:</span> {{ s.text }} </span>
           {% endfor %}
         </div>
-        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.6rem;">{{ sentences|length }} sentence(s) so far</div>
+        <div style="font-size:0.75rem; color:var(--text-muted);">{{ sentences|length }} sentence{% if sentences|length != 1 %}s{% endif %} recorded</div>
       </div>
       {% if lobby.status == 'active' %}
         {% set uid = current_user.id|string if current_user.is_authenticated else '' %}
@@ -194,19 +194,19 @@
           {% if is_my_turn or (uid and uid not in turn_order) %}
             <form method="POST" action="{{ url_for('game.story_add', lobby_id=lobby.lobby_id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <label class="ew-form-label">Your sentence (max 280 chars)</label>
-              <textarea name="sentence" maxlength="280" rows="2" required class="form-input" style="margin-bottom:0.5rem;" placeholder="Continue the story..."></textarea>
-              <button type="submit" class="ew-btn" style="width:100%;">Add to story</button>
+              <label class="ew-form-label">Your sentence (max 280 characters)</label>
+              <textarea name="sentence" maxlength="280" rows="2" required class="form-input" style="margin-bottom:0.6rem;" placeholder="Continue the story..."></textarea>
+              <button type="submit" class="ew-btn" style="width:100%;">Add to Story</button>
             </form>
           {% else %}
             <div style="text-align:center; padding:1rem; color:var(--text-secondary);">
-              <i class="fas fa-hourglass-half"></i> Waiting for <strong>{{ turn_order[current_turn % turn_order|length] if turn_order else '?' }}</strong>'s turn...
+              Waiting for <strong>{{ turn_order[current_turn % turn_order|length] if turn_order else '?' }}</strong>'s turn...
               <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.3rem;">Turn {{ current_turn + 1 }} &bull; {{ turn_order|length }} writer(s) in rotation</div>
             </div>
           {% endif %}
         </div>
       {% else %}
-        <div class="ew-success-banner" style="text-align:center;"><i class="fas fa-check"></i> Story complete!</div>
+        <div class="ew-success-banner" style="text-align:center;">Story complete!</div>
       {% endif %}
 
     {# ─── CAPTION THIS ─── #}
@@ -217,20 +217,20 @@
       </div>
       {% if lobby.phase == 'submit' %}
         {% if my_caption %}
-          <div class="ew-success-banner" style="margin-bottom:1rem;"><i class="fas fa-check"></i> Caption submitted: "{{ my_caption.content.caption }}"</div>
+          <div class="ew-success-banner" style="margin-bottom:1rem;">Caption submitted: "{{ my_caption.content.caption }}"</div>
           <div style="font-size:0.85rem; color:var(--text-secondary);"><strong>{{ captions|length }}</strong> caption(s) submitted. Waiting for host to start voting...</div>
         {% else %}
           <form method="POST" action="{{ url_for('game.caption_submit', lobby_id=lobby.lobby_id) }}" class="ew-card">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label class="ew-form-label">Your caption (max 200 chars)</label>
-            <input type="text" name="caption" maxlength="200" required class="form-input" style="margin-bottom:0.5rem;" placeholder="Write something creative...">
-            <button type="submit" class="ew-btn" style="width:100%;">Submit caption</button>
+            <label class="ew-form-label">Your caption (max 200 characters)</label>
+            <input type="text" name="caption" maxlength="200" required class="form-input" style="margin-bottom:0.6rem;" placeholder="Write something creative...">
+            <button type="submit" class="ew-btn" style="width:100%;">Submit Caption</button>
           </form>
         {% endif %}
       {% elif lobby.phase == 'voting' %}
-        <div class="ew-info-banner"><i class="fas fa-vote-yea"></i> <strong>Voting phase</strong> — pick your favourite caption!</div>
+        <div class="ew-info-banner"><strong>Voting Phase:</strong> Pick your favorite caption.</div>
         {% if has_voted %}
-          <div class="ew-success-banner"><i class="fas fa-check"></i> You voted! Waiting for reveal...</div>
+          <div class="ew-success-banner">You voted! Waiting for results...</div>
         {% else %}
           {% for cap in captions %}
             <form method="POST" action="{{ url_for('game.vote_lobby', lobby_id=lobby.lobby_id) }}" style="margin-bottom:0.4rem;">
@@ -244,14 +244,14 @@
         {% endif %}
       {% else %}
         {# Revealed #}
-        <div class="ew-info-banner"><i class="fas fa-trophy"></i> <strong>Results!</strong></div>
+        <div class="ew-info-banner"><strong>Results</strong></div>
         {% for cap in captions|sort(attribute='content.caption') %}
           {% set vote_count = lobby.counts.get(cap._id|string, 0) %}
           <div class="ew-card" style="margin-bottom:0.5rem;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-weight:600; color:var(--text-dark-color);">"{{ cap.content.caption }}"</div>
-                <div style="font-size:0.75rem; color:var(--text-muted);">— {{ cap.username }}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">Submitted by {{ cap.username }}</div>
               </div>
               <div style="text-align:center;"><span style="font-size:1.3rem; font-weight:700; color:var(--primary-color);">{{ vote_count }}</span><div style="font-size:0.7rem; color:var(--text-muted);">votes</div></div>
             </div>
@@ -261,12 +261,17 @@
     {% endif %}
 
     {# ─── Share row + Presence (all types) ─── #}
-    <div class="ew-share-row" style="margin-top:0.8rem; font-size:0.78rem; color:var(--text-muted);">
-      Share: <input type="text" value="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
-      <button onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" class="ew-copy-btn">Copy</button>
-      {% if is_host %}<a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" style="margin-left:0.5rem; font-size:0.78rem; color:var(--primary-color); text-decoration:underline;">Results &amp; export</a>{% endif %}
+    <div class="ew-card" style="margin-top:1.2rem; padding:1rem 1.2rem;">
+      <div class="ew-share-row" style="align-items:center;">
+        <span style="font-size:0.82rem; font-weight:600; color:var(--text-dark-color); white-space:nowrap;">Share link:</span>
+        <input type="text" value="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
+        <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+        {% if is_host %}
+          <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
+        {% endif %}
+      </div>
+      <div id="presence-list" style="margin-top:0.6rem; font-size:0.8rem; color:var(--text-secondary);"></div>
     </div>
-    <div id="presence-list" style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-secondary);"></div>
   {% endif %}
 </div>
 <script nonce="{{ csp_nonce }}">

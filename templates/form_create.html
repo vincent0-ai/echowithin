@@ -3,16 +3,19 @@
 {% block content %}
 <div class="content-wrapper" style="max-width: 780px;">
   <div class="ew-header-row">
-    <h2>Create Form</h2>
-    <a href="{{ url_for('notes.personal_space') }}#forms" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">Back to Forms</a>
+    <div>
+      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Create Form</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Build a questionnaire and generate a shareable link.</div>
+    </div>
+    <a href="{{ url_for('notes.personal_space') }}#forms" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Forms</a>
   </div>
-  <div class="ew-info-banner"><i class="fas fa-lock"></i> Responses are <strong>encrypted at rest</strong> with a server-held key (like community notes). Not E2E — anonymous submitters have no key. Only you can view/export.</div>
+  <div class="ew-info-banner">Responses are encrypted and only accessible by you.</div>
   <form method="POST" id="form-builder" class="ew-card">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
     <input type="text" name="title" maxlength="100" required class="form-input" style="margin-bottom:0.8rem;">
     <label class="ew-form-label">Description</label>
-    <textarea name="description" maxlength="500" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Optional — shown to submitters"></textarea>
+    <textarea name="description" maxlength="500" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Optional description shown to submitters"></textarea>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
       <div>
         <label class="ew-form-label">Expiry</label>
@@ -31,13 +34,13 @@
     <input type="hidden" name="questions_json" id="questions_json">
     <div id="questions-container"></div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin:1rem 0;">
-      <button type="button" onclick="addQuestion('short_text')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-font"></i> Short text</button>
-      <button type="button" onclick="addQuestion('paragraph')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-align-left"></i> Paragraph</button>
-      <button type="button" onclick="addQuestion('single_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-dot-circle"></i> Single choice</button>
-      <button type="button" onclick="addQuestion('multiple_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-check-square"></i> Multiple</button>
-      <button type="button" onclick="addQuestion('rating')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;"><i class="fas fa-star"></i> Rating 1-5</button>
+      <button type="button" onclick="addQuestion('short_text')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Short text</button>
+      <button type="button" onclick="addQuestion('paragraph')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Paragraph</button>
+      <button type="button" onclick="addQuestion('single_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Single choice</button>
+      <button type="button" onclick="addQuestion('multiple_choice')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Multiple choice</button>
+      <button type="button" onclick="addQuestion('rating')" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Rating (1-5)</button>
     </div>
-    <button type="submit" class="ew-btn" style="width:100%; padding:0.7rem;">Create &amp; get share link</button>
+    <button type="submit" class="ew-btn" style="width:100%; padding:0.7rem;">Create and get link</button>
   </form>
 </div>
 <script nonce="{{ csp_nonce }}">

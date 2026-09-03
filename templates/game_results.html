@@ -1,29 +1,32 @@
 {% extends "base.html" %}
-{% block title %}<title>{{ lobby.title }} — Results — EchoWithin</title>{% endblock %}
+{% block title %}<title>{{ lobby.title }} Results — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 {% block content %}
-<div class="content-wrapper">
+<div class="content-wrapper" style="max-width: 900px; margin: 0 auto;">
   {% set gt = lobby.game_type %}
-  <div class="ew-header-row">
-    <h2>{{ lobby.title }} — Results</h2>
+  <div class="ew-header-row" style="margin-bottom: 1.2rem;">
+    <div>
+      <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-dark-color);">{{ lobby.title }}</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">Results</div>
+    </div>
     <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Lobby</a>
-      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">CSV</a>
-      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">JSON</a>
+      <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Lobby</a>
+      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Export CSV</a>
+      <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
     </div>
   </div>
   <div class="ew-card">
     <div style="font-weight:600; color:var(--primary-color);">{{ lobby.prompt or lobby.question.label }}</div>
-    <div style="font-size:0.8rem; color:var(--text-muted);"><span class="ew-badge">{{ gt }}</span> &bull; {{ total }} votes &bull; host {{ lobby.host_username }}</div>
+    <div style="font-size:0.8rem; color:var(--text-muted); margin-top: 0.3rem;"><span class="ew-badge">{{ gt }}</span> &bull; {{ total }} votes &bull; Host: {{ lobby.host_username }}</div>
     {% if gt=='trivia' and lobby.question.correct_option %}<div class="ew-success-banner" style="margin-top:0.4rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
   </div>
 
   {# ─── Poll / Trivia / WYR Chart ─── #}
   {% if gt in ('poll', 'trivia', 'wyr') and per_option %}
   <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-chart-bar"></i> Counts</h4>
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Vote Counts</h4>
     <canvas id="resultsChart" height="80"></canvas>
     <script nonce="{{ csp_nonce }}">
       (function(){
@@ -48,7 +51,7 @@
   {# ─── TTAL Results ─── #}
   {% if gt == 'ttal' and submissions %}
   <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-user-secret"></i> Truths &amp; Lies</h4>
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Truths and Lies</h4>
     {% for sub in submissions %}
       <div style="margin-bottom:0.8rem; padding-bottom:0.8rem; {% if not loop.last %}border-bottom:1px solid var(--border-color);{% endif %}">
         <div style="font-weight:600; color:var(--text-dark-color);">{{ sub.username }}</div>
@@ -66,26 +69,26 @@
   {# ─── Story Chain Results ─── #}
   {% if gt == 'story' and sentences %}
   <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-book-open"></i> Complete Story</h4>
-    <div style="line-height:1.8; color:var(--text-dark-color);">
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Complete Story</h4>
+    <div style="line-height:1.8; color:var(--text-dark-color); background:var(--surface-bg); padding:1rem; border-radius:8px; border:1px solid var(--border-color); margin-bottom:0.6rem;">
       {% for s in sentences %}
-        <span><strong style="color:var(--text-muted); font-size:0.7rem;">{{ s.username }}:</strong> {{ s.text }} </span>
+        <span><strong style="color:var(--text-secondary); font-size:0.75rem;">{{ s.username }}:</strong> {{ s.text }} </span>
       {% endfor %}
     </div>
-    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.6rem;">{{ sentences|length }} sentences by {{ sentences|map(attribute='username')|unique|list|length }} writer(s)</div>
+    <div style="font-size:0.75rem; color:var(--text-muted);">{{ sentences|length }} sentence(s) by {{ sentences|map(attribute='username')|unique|list|length }} writer(s)</div>
   </div>
   {% endif %}
 
   {# ─── Caption This Results ─── #}
   {% if gt == 'caption' and captions %}
   <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);"><i class="fas fa-comment-dots"></i> Captions</h4>
+    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Captions</h4>
     {% for cap in captions %}
       {% set vote_count = lobby.counts.get(cap._id|string, 0) %}
       <div style="display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; {% if not loop.last %}border-bottom:1px solid var(--separator-color);{% endif %}">
         <div>
           <div style="font-weight:600; color:var(--text-dark-color);">"{{ cap.content.caption }}"</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">— {{ cap.username }}</div>
+          <div style="font-size:0.75rem; color:var(--text-muted);">Submitted by {{ cap.username }}</div>
         </div>
         <span class="ew-count-chip"><strong>{{ vote_count }}</strong> votes</span>
       </div>
@@ -97,16 +100,30 @@
   {% if votes and gt in ('poll', 'trivia', 'wyr', 'caption') %}
   <div class="ew-table-wrap">
     <table class="ew-table">
-      <thead><tr><th>#</th><th>Player</th><th>Option</th><th>Time</th></tr></thead>
+      <thead><tr><th style="width:40px; text-align:center;">#</th><th>Player</th><th>Option</th><th>Time</th></tr></thead>
       <tbody>
         {% for v in votes %}
-          <tr><td class="muted">{{ loop.index }}</td><td>{{ v.username }}</td><td><strong>{{ v.option }}</strong> {% if gt=='trivia' and v.option==lobby.question.correct_option %}✅{% elif gt=='trivia' %}❌{% endif %}</td><td class="secondary">{{ v.submitted_at|localtime('%b %d %H:%M') if v.submitted_at else '' }}</td></tr>
+          <tr>
+            <td class="muted" style="text-align:center;">{{ loop.index }}</td>
+            <td><strong>{{ v.username }}</strong></td>
+            <td>
+              <span>{{ v.option }}</span>
+              {% if gt=='trivia' and v.option==lobby.question.correct_option %}
+                <span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct</span>
+              {% elif gt=='trivia' %}
+                <span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>
+              {% endif %}
+            </td>
+            <td class="secondary">{{ v.submitted_at|localtime('%b %d, %Y, %I:%M %p') if v.submitted_at else '' }}</td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% elif not votes and gt in ('poll', 'trivia', 'wyr') %}
-    <p style="text-align:center; color:var(--text-muted); padding:1rem;">No votes yet.</p>
+    <div class="ew-card" style="text-align:center; padding:2rem;">
+      <p style="color:var(--text-secondary); margin:0;">No votes recorded yet.</p>
+    </div>
   {% endif %}
 </div>
 {% endblock %}

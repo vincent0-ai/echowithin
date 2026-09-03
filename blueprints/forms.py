@@ -351,13 +351,24 @@ def submit_form(share_id):
         # encrypt at rest
         enc_val = encrypt_form_response(raw_val, str(form['_id'])) if raw_val else ''
         answers.append({'question_id': qid, 'type': qtype, 'value': enc_val, 'label': q['label']})
-    # store
+    # store submitter identity if logged in
     ip_hash = hashlib.sha256((ip or '').encode()).hexdigest()[:16] if ip else ''
+    is_auth = current_user.is_authenticated
+    submitter_id = current_user.id if is_auth else None
+    submitter_username = getattr(current_user, 'username', None) if is_auth else None
+    submitter_name = (getattr(current_user, 'display_name', '') or getattr(current_user, 'full_name', '') or getattr(current_user, 'username', '')) if is_auth else None
+    submitter_avatar = getattr(current_user, 'profile_image_url', None) if is_auth else None
+
     doc = {
         'form_id': form['_id'],
         'share_id': share_id,
         'answers': answers,
         'submitted_at': datetime.datetime.now(datetime.timezone.utc),
+        'submitter_id': submitter_id,
+        'submitter_username': submitter_username,
+        'submitter_name': submitter_name,
+        'submitter_avatar': submitter_avatar,
+        'is_authenticated': is_auth,
         'submitter_ip_hash': ip_hash,
         'user_agent': (request.headers.get('User-Agent') or '')[:300],
     }
@@ -370,7 +381,7 @@ def submit_form(share_id):
         pass
     if data:
         return jsonify({'success': True, 'message': 'Response recorded'})
-    flash('Response recorded — thank you! Your data is stored encrypted at rest.', 'success')
+    flash('Response recorded. Thank you!', 'success')
     return redirect(url_for('forms.view_form', share_id=share_id, submitted='1'))
 
 
@@ -402,6 +413,9 @@ def form_responses_view(share_id):
             ts = r['submitted_at']
             if ts.tzinfo is None: ts = ts.replace(tzinfo=datetime.timezone.utc)
             r['submitted_at_iso'] = ts.isoformat().replace('+00:00','Z')
+            r['submitted_at_formatted'] = ts.strftime('%b %d, %Y, %I:%M %p')
+        else:
+            r['submitted_at_formatted'] = '—'
     # stats for charts: per single_choice counts and rating avg
     stats = {}
     if responses:
@@ -446,14 +460,21 @@ def form_responses_export(share_id):
     if fmt == 'json':
         out=[]
         for r in responses:
-            row={'submitted_at': r['submitted_at'].isoformat().replace('+00:00','Z')+'Z' if r.get('submitted_at') else None}
+            ts = r.get('submitted_at')
+            if ts and ts.tzinfo is None:
+                ts = ts.replace(tzinfo=datetime.timezone.utc)
+            row = {
+                'submitted_at': ts.isoformat().replace('+00:00','Z') if ts else None,
+                'respondent': r.get('submitter_username') or 'Anonymous',
+                'is_authenticated': bool(r.get('is_authenticated'))
+            }
             for a in r.get('answers', []):
                 row[a.get('label') or a['question_id']] = decrypt_form_response(a.get('value',''), str(form['_id']))
             out.append(row)
         return jsonify({'form':{'title':form['title'],'share_id':share_id},'count':len(out),'responses':out})
     # csv
     q_labels = [q['label'] for q in form.get('questions',[])]
-    headers = ['submitted_at'] + q_labels
+    headers = ['submitted_at', 'respondent'] + q_labels
     output = io.StringIO()
     w = csv.writer(output)
     w.writerow(headers)
@@ -461,7 +482,12 @@ def form_responses_export(share_id):
         ans_map={}
         for a in r.get('answers',[]):
             ans_map[a['question_id']] = decrypt_form_response(a.get('value',''), str(form['_id']))
-        row=[r['submitted_at'].isoformat().replace('+00:00','Z')+'Z' if r.get('submitted_at') else '']
+        ts = r.get('submitted_at')
+        if ts and ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        sub_str = ts.strftime('%Y-%m-%d %H:%M:%S UTC') if ts else ''
+        resp_str = r.get('submitter_username') or 'Anonymous'
+        row=[sub_str, resp_str]
         for q in form.get('questions',[]):
             row.append(ans_map.get(q['id'],''))
         w.writerow(row)

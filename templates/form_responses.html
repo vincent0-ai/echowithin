@@ -1,34 +1,50 @@
 {% extends "base.html" %}
-{% block title %}<title>{{ form.title }} — Responses — EchoWithin</title>{% endblock %}
+{% block title %}<title>{{ form.title }} Responses — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
 {% if stats %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endif %}
 {% endblock %}
 {% block content %}
-<div class="content-wrapper">
-  <div class="ew-header-row">
-    <h2>{{ form.title }} — Responses</h2>
-    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-      <a href="{{ url_for('forms.forms_list') }}" style="font-size:0.85rem; color:var(--primary-color); text-decoration:underline;">All forms</a>
-      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
-      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
+<div class="content-wrapper" style="max-width: 960px; margin: 0 auto;">
+  <div class="ew-header-row" style="margin-bottom: 1.2rem;">
+    <div>
+      <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-dark-color);">{{ form.title }}</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">Responses</div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+      <a href="{{ url_for('notes.personal_space') }}#forms" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Forms</a>
+      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export CSV</a>
+      <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='json') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
     </div>
   </div>
-  <div class="ew-info-banner">
-    Share link: <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input" style="width:60%; display:inline-block;">
-    <button onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500)" class="ew-copy-btn">Copy</button>
-    &bull; {{ total }} response(s) &bull; {{ form.questions|length }} question(s)
+
+  <div class="ew-card" style="margin-bottom: 1.2rem; padding: 1rem 1.2rem;">
+    <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
+      <span class="ew-badge" style="font-weight: 600; font-size: 0.8rem; padding: 4px 8px;">{{ total }} response{% if total != 1 %}s{% endif %}</span>
+      <span class="ew-badge" style="font-size: 0.8rem; padding: 4px 8px;">{{ form.questions|length }} question{% if form.questions|length != 1 %}s{% endif %}</span>
+      {% if form.expires_at %}
+        <span class="ew-badge" style="font-size: 0.8rem; padding: 4px 8px;">Expires {{ form.expires_at|localtime('%b %d, %Y') }}</span>
+      {% endif %}
+      {% if form.deactivated %}
+        <span class="ew-badge ew-badge--danger" style="font-size: 0.8rem; padding: 4px 8px;">Deactivated</span>
+      {% endif %}
+    </div>
+    <div class="ew-share-row" style="margin-top: 0.75rem; align-items: center;">
+      <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark-color); white-space: nowrap;">Share link:</span>
+      <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
+      <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+    </div>
   </div>
 
   {% if stats %}
-  <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color); font-size:0.95rem;"><i class="fas fa-chart-bar"></i> Summary</h4>
+  <div class="ew-card" style="margin-bottom: 1.2rem;">
+    <h4 style="margin: 0 0 0.8rem 0; color: var(--text-dark-color); font-size: 0.95rem;">Summary</h4>
     {% for qid, s in stats.items() %}
-      <div style="margin-bottom:0.8rem;">
-        <div style="font-weight:600; font-size:0.85rem; color:var(--primary-color);">{{ s.label }}</div>
+      <div style="margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--separator-color);">
+        <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color);">{{ s.label }}</div>
         {% if s.type == 'single_choice' %}
-          <div style="display:flex; gap:0.3rem; margin-top:0.3rem; flex-wrap:wrap;">
+          <div style="display: flex; gap: 0.4rem; margin: 0.4rem 0 0.8rem 0; flex-wrap: wrap;">
             {% for opt, cnt in s.counts.items() %}
-              <span class="ew-count-chip">{{ opt }}: <strong>{{ cnt }}</strong></span>
+              <span class="ew-badge" style="background: var(--surface-bg); font-weight: 500;">{{ opt }}: <strong style="color: var(--primary-color);">{{ cnt }}</strong></span>
             {% endfor %}
           </div>
           <canvas id="chart-{{ qid }}" height="60"></canvas>
@@ -43,7 +59,7 @@
             })();
           </script>
         {% elif s.type == 'rating' %}
-          <div style="font-size:0.8rem; color:var(--text-secondary);">Avg: <strong>{{ s.avg if s.avg is not none else '—' }}</strong> ({{ s.count }} ratings) &bull; {{ s.distribution }}</div>
+          <div style="font-size: 0.82rem; color: var(--text-secondary); margin: 0.35rem 0;">Average: <strong style="color: var(--primary-color);">{{ s.avg if s.avg is not none else '—' }}</strong> ({{ s.count }} ratings)</div>
           <canvas id="chart-{{ qid }}" height="60"></canvas>
           <script nonce="{{ csp_nonce }}">
             (function(){
@@ -64,19 +80,29 @@
   {% if responses %}
   <div class="ew-table-wrap">
     <table class="ew-table">
-      <thead><tr>
-        <th>#</th>
-        <th>Submitted</th>
-        {% for q in form.questions %}<th style="min-width:120px;">{{ q.label }}</th>{% endfor %}
-      </tr></thead>
+      <thead>
+        <tr>
+          <th style="width: 40px; text-align: center;">#</th>
+          <th style="min-width: 140px;">Submitted</th>
+          <th style="min-width: 130px;">Respondent</th>
+          {% for q in form.questions %}<th style="min-width: 140px;">{{ q.label }}</th>{% endfor %}
+        </tr>
+      </thead>
       <tbody>
         {% for r in responses %}
         <tr>
-          <td class="muted">{{ (page-1)*per_page + loop.index }}</td>
-          <td class="secondary" style="white-space:nowrap;">{{ r.submitted_at_iso or '' }}</td>
+          <td class="muted" style="text-align: center;">{{ (page-1)*per_page + loop.index }}</td>
+          <td class="secondary" style="white-space: nowrap;">{{ r.submitted_at_formatted or r.submitted_at_iso }}</td>
+          <td style="white-space: nowrap;">
+            {% if r.submitter_username %}
+              <span style="font-weight: 600; font-size: 0.82rem; color: var(--primary-color);">@{{ r.submitter_username }}</span>
+            {% else %}
+              <span class="ew-badge" style="font-size: 0.72rem;">Anonymous</span>
+            {% endif %}
+          </td>
           {% for q in form.questions %}
             {% set ans = (r.answers|selectattr('question_id','equalto',q.id)|first) %}
-            <td style="word-break:break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
+            <td style="word-break: break-word;">{{ ans.value_plain if ans and ans.value_plain else '—' }}</td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -84,17 +110,16 @@
     </table>
   </div>
   {% if total_pages > 1 %}
-  <nav class="ew-pagination">
-    {% if page>1 %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page-1) }}">Prev</a>{% endif %}
-    <span>Page {{ page }} of {{ total_pages }}</span>
-    {% if page < total_pages %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page+1) }}">Next</a>{% endif %}
+  <nav class="ew-pagination" style="display: flex; justify-content: center; align-items: center; gap: 1rem; margin-top: 1.2rem;">
+    {% if page>1 %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page-1) }}" class="ew-btn ew-btn--outline ew-btn--sm">Previous</a>{% endif %}
+    <span style="font-size: 0.85rem; color: var(--text-secondary);">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}<a href="{{ url_for('forms.form_responses_view', share_id=form.share_id, page=page+1) }}" class="ew-btn ew-btn--outline ew-btn--sm">Next</a>{% endif %}
   </nav>
   {% endif %}
   {% else %}
-    <div class="ew-card" style="text-align:center; padding:2rem;">
-      <i class="fas fa-inbox" style="font-size:2rem; opacity:0.4; margin-bottom:0.5rem; display:block; color:var(--text-muted);"></i>
-      <p style="color:var(--text-muted);">No responses yet — share your link to collect data.</p>
-      <p style="font-size:0.8rem; color:var(--text-muted);">Link: <code style="background:var(--surface-bg); padding:2px 6px; border-radius:6px;">{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}</code></p>
+    <div class="ew-card" style="text-align: center; padding: 2.5rem 1.5rem;">
+      <h4 style="margin: 0 0 0.35rem 0; color: var(--text-dark-color);">No responses yet</h4>
+      <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Share your form link to begin collecting responses.</p>
     </div>
   {% endif %}
 </div>

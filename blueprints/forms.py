@@ -114,6 +114,8 @@ def forms_create():
                     max_responses = None
             except Exception:
                 max_responses = None
+        allow_anon_raw = (request.form.get('allow_anonymous') or '1').strip()
+        allow_anonymous = allow_anon_raw != '0'
         share_id = secrets.token_urlsafe(16)
         doc = {
             'owner_id': ObjectId(current_user.id),
@@ -128,6 +130,7 @@ def forms_create():
             'deactivated': False,
             'response_count': 0,
             'max_responses': max_responses,
+            'allow_anonymous': allow_anonymous,
         }
         m.forms_conf.insert_one(doc)
         flash(f'Form created — share link copied.', 'success')
@@ -180,6 +183,7 @@ def api_create_form():
         'deactivated': False,
         'response_count': 0,
         'max_responses': max_responses,
+        'allow_anonymous': bool(data.get('allow_anonymous', True) if not isinstance(data.get('allow_anonymous'), str) else data.get('allow_anonymous', '1') not in ('0', 'false', 'no')),
     }
     m.forms_conf.insert_one(doc)
     share_url = url_for('forms.view_form', share_id=share_id, _external=True)
@@ -206,6 +210,8 @@ def view_form(share_id):
             return render_template('form_submit.html', form=form, expired=True, msg='This form has expired', can_view_responses=is_owner), 410
     if form.get('max_responses') and form.get('response_count', 0) >= form['max_responses']:
         return render_template('form_submit.html', form=form, expired=True, msg='This form has reached its response limit', can_view_responses=is_owner), 410
+    if not form.get('allow_anonymous', True) and not current_user.is_authenticated:
+        return render_template('form_submit.html', form=form, login_required=True, msg='Account required. The creator of this form requires respondents to log in.', share_id=share_id), 200
     # success param shows thank-you state
     submitted = request.args.get('submitted') == '1'
     return render_template('form_submit.html', form=form, submitted=submitted, share_id=share_id)
@@ -231,6 +237,8 @@ def submit_form(share_id):
             return jsonify({'error': 'Form expired'}), 410
     if form.get('max_responses') and form.get('response_count', 0) >= form['max_responses']:
         return jsonify({'error': 'Response limit reached'}), 410
+    if not form.get('allow_anonymous', True) and not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required. This form does not allow anonymous submissions.'}), 401
     # Per-IP per-form 5/600 like proposal
     ip = (request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr or '')
     rate_key = f'form_submit_rate_{share_id}:{ip}'

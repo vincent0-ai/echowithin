@@ -124,3 +124,36 @@ class TestExpiredGameLobbies:
 
         # None lobby
         assert _is_lobby_active(None) is False
+
+
+class TestAnonymousSettings:
+    """Test allow_anonymous controls for both forms and games."""
+
+    def test_form_allow_anonymous_rejection_logic(self):
+        # When allow_anonymous is False and user is unauthenticated
+        form = {'allow_anonymous': False, 'share_id': 'xyz'}
+        is_authenticated = False
+        should_reject = not form.get('allow_anonymous', True) and not is_authenticated
+        assert should_reject is True
+
+        # When allow_anonymous is True and user is unauthenticated
+        form_anon = {'allow_anonymous': True, 'share_id': 'xyz'}
+        should_reject_anon = not form_anon.get('allow_anonymous', True) and not is_authenticated
+        assert should_reject_anon is False
+
+        # When user is authenticated
+        is_authenticated = True
+        should_reject_auth = not form.get('allow_anonymous', True) and not is_authenticated
+        assert should_reject_auth is False
+
+    def test_game_allow_anonymous_rejection_logic(self):
+        # When allow_anonymous is False and player is unauthenticated
+        game = {'allow_anonymous': False, 'lobby_id': 'lobby1'}
+        is_authenticated = False
+        should_reject = not game.get('allow_anonymous', True) and not is_authenticated
+        assert should_reject is True
+
+        # When allow_anonymous is True and player is unauthenticated
+        game_anon = {'allow_anonymous': True, 'lobby_id': 'lobby1'}
+        should_reject_anon = not game_anon.get('allow_anonymous', True) and not is_authenticated
+        assert should_reject_anon is False

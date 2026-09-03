@@ -75,6 +75,8 @@ def games_create():
         if expires_in == '1h': expires_at = now + datetime.timedelta(hours=1)
         elif expires_in == '1d': expires_at = now + datetime.timedelta(days=1)
         elif expires_in == '7d': expires_at = now + datetime.timedelta(days=7)
+        allow_anon_raw = (request.form.get('allow_anonymous') or '1').strip()
+        allow_anonymous = allow_anon_raw != '0'
         lobby_id = secrets.token_urlsafe(16)
 
         # --- Build doc per game type ---
@@ -199,6 +201,7 @@ def games_create():
                 'revealed': False,
             }
 
+        doc['allow_anonymous'] = allow_anonymous
         m.game_sessions_conf.insert_one(doc)
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
@@ -233,7 +236,10 @@ def api_create_poll():
     elif expires_in=='1d': expires_at=now+datetime.timedelta(days=1)
     elif expires_in=='7d': expires_at=now+datetime.timedelta(days=7)
     lobby_id = secrets.token_urlsafe(16)
-    doc={'lobby_id':lobby_id,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False}
+    allow_anonymous = data.get('allow_anonymous', True)
+    if isinstance(allow_anonymous, str):
+        allow_anonymous = allow_anonymous.lower() not in ('0', 'false', 'no')
+    doc={'lobby_id':lobby_id,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous)}
     m.game_sessions_conf.insert_one(doc)
     share_url = url_for('game.view_lobby', lobby_id=lobby_id, _external=True)
     return jsonify({'success':True,'lobby_id':lobby_id,'share_url':share_url}),201
@@ -251,12 +257,21 @@ def view_lobby(lobby_id):
         msg = 'This lobby has been deactivated by the host.' if is_deactivated else 'This game lobby has expired.'
         can_view_results = lobby.get('revealed') or is_host
         return render_template('game_lobby.html', lobby=lobby, expired=True, msg=msg, can_view_results=can_view_results, is_host=is_host), 200
+
+    if not lobby.get('allow_anonymous', True) and not current_user.is_authenticated:
+        return render_template('game_lobby.html', lobby=lobby, login_required=True, msg='Account required. The host requires players to log in.', is_host=False), 200
+
     gt = lobby.get('game_type', 'poll')
     total = m.game_votes_conf.count_documents({'lobby_id': lobby_id})
+    ip = (request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr or '')
+    ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
     has_voted = False
     my_vote = None
     if current_user.is_authenticated:
         v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id)})
+        if v: has_voted=True; my_vote=v.get('option')
+    elif ip_hash:
+        v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash})
         if v: has_voted=True; my_vote=v.get('option')
 
     # Type-specific context
@@ -286,7 +301,6 @@ def view_lobby(lobby_id):
     return render_template('game_lobby.html', lobby=lobby, is_host=is_host, has_voted=has_voted, my_vote=my_vote, total_votes=total, **extra)
 
 @bp.route('/g/<lobby_id>/vote', methods=['POST'])
-@login_required
 @limits(calls=10, period=60)
 def vote_lobby(lobby_id):
     import main as m
@@ -294,6 +308,13 @@ def vote_lobby(lobby_id):
         return jsonify({'error':'Bot detected'}),400
     lobby = _game_access(lobby_id)
     if not lobby: return jsonify({'error':'Lobby not found'}),404
+
+    data = request.get_json(silent=True)
+    if not lobby.get('allow_anonymous', True) and not current_user.is_authenticated:
+        if data: return jsonify({'error': 'Authentication required. This game requires you to log in.'}), 401
+        flash('Log in to vote in this game.', 'warning')
+        return redirect(url_for('auth.login', next=url_for('game.view_lobby', lobby_id=lobby_id)))
+
     gt = lobby.get('game_type', 'poll')
     # Caption voting requires 'voting' phase
     if gt == 'caption' and lobby.get('phase') != 'voting':
@@ -309,7 +330,6 @@ def vote_lobby(lobby_id):
             if cnt==1: m.redis_cache.expire(rate_key,600)
             if cnt>5: return jsonify({'error':'Too many votes — try later'}),429
         except: pass
-    data = request.get_json(silent=True)
     option = (data.get('option') if data else request.form.get('option') or '').strip() if (data or request.form) else ''
     if not option: 
         if data: return jsonify({'error':'Option required'}),400
@@ -328,13 +348,23 @@ def vote_lobby(lobby_id):
             if data: return jsonify({'error':'Invalid option'}),400
             flash('Invalid option','danger')
             return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    # one vote per user per lobby (check before insert — no unique index)
-    existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
+
+    ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
+    # one vote per user (or per IP if anonymous) per lobby
+    if current_user.is_authenticated:
+        existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
+        voter_user_id = ObjectId(current_user.id)
+        voter_username = current_user.username
+    else:
+        existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'vote_type': {'$exists': False}}) if ip_hash else None
+        voter_user_id = None
+        voter_username = 'Anonymous'
+
     if existing:
         if data: return jsonify({'error': 'Already voted'}), 409
         flash('You already voted', 'warning')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    m.game_votes_conf.insert_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'username': current_user.username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''})
+    m.game_votes_conf.insert_one({'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash})
     # increment count
     m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{option}':1}})
     # live broadcast
@@ -343,11 +373,12 @@ def vote_lobby(lobby_id):
         counts = lobby2.get('counts',{}) if lobby2 else {}
         m.socketio.emit('game_vote', {'lobby_id':lobby_id,'counts':counts,'total': sum(counts.values())}, room=lobby_id)
         # presence update
-        players = database.active_game_players.get(lobby_id, {})
-        if str(current_user.id) not in players:
-            players[str(current_user.id)] = {'name':current_user.username,'avatar':getattr(current_user,'profile_image_url',None),'id':str(current_user.id)}
-            database.active_game_players[lobby_id]=players
-            m.socketio.emit('game_presence_update', {'players': list(players.values())}, room=lobby_id)
+        if current_user.is_authenticated:
+            players = database.active_game_players.get(lobby_id, {})
+            if str(current_user.id) not in players:
+                players[str(current_user.id)] = {'name':current_user.username,'avatar':getattr(current_user,'profile_image_url',None),'id':str(current_user.id)}
+                database.active_game_players[lobby_id]=players
+                m.socketio.emit('game_presence_update', {'players': list(players.values())}, room=lobby_id)
     except: pass
     if data:
         return jsonify({'success':True,'message':'Vote recorded'})

@@ -15,6 +15,15 @@
         {% endif %}
       </div>
     </div>
+  {% elif login_required %}
+    <div class="ew-card" style="text-align: center; padding: 2.2rem 1.5rem; border-radius: 12px; margin-top: 1.5rem;">
+      <h3 style="margin: 0 0 0.5rem 0; color: var(--text-dark-color); font-size: 1.35rem;">Account Required</h3>
+      <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 1.4rem;">The creator of this form (<strong>{{ form.title }}</strong>) requires respondents to log in before submitting.</p>
+      <div style="display: flex; gap: 0.6rem; justify-content: center; flex-wrap: wrap;">
+        <a href="{{ url_for('auth.login', next=request.path) }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">Log In to Respond</a>
+        <a href="{{ url_for('auth.register', next=request.path) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">Sign Up</a>
+      </div>
+    </div>
   {% elif submitted %}
     <div class="ew-success-banner" style="text-align: center; padding: 2rem 1.5rem; border-radius: 12px;">
       <h3 style="color: inherit; margin: 0 0 0.5rem 0;">Response recorded</h3>

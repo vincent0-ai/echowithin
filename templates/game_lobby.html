@@ -19,6 +19,15 @@
         </div>
       {% endif %}
     </div>
+  {% elif login_required %}
+    <div class="ew-card" style="text-align:center; padding:2.2rem 1.5rem; margin-top:1.5rem;">
+      <h3 style="margin:0 0 0.5rem 0; color:var(--text-dark-color); font-size:1.35rem;">Account Required</h3>
+      <p style="color:var(--text-secondary); margin:0.4rem 0 1.4rem 0; font-size:0.92rem;">The host of <strong>{{ lobby.title }}</strong> requires players to have an EchoWithin account to play.</p>
+      <div style="display:flex; gap:0.6rem; justify-content:center; flex-wrap:wrap;">
+        <a href="{{ url_for('auth.login', next=request.path) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Log In to Play</a>
+        <a href="{{ url_for('auth.register', next=request.path) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Sign Up</a>
+      </div>
+    </div>
   {% else %}
     {% set gt = lobby.game_type %}
     <div class="ew-card">

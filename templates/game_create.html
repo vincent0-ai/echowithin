@@ -62,7 +62,7 @@
       <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed. Players will submit their statements after joining the lobby.</div>
     </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:0.8rem;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1rem;">
       <div>
         <label class="ew-form-label">Expiry</label>
         <select name="expires_in" class="form-input">
@@ -72,8 +72,15 @@
           <option value="7d">7 days</option>
         </select>
       </div>
-      <div style="display:flex; align-items:end;"><button type="submit" class="ew-btn" style="width:100%; padding:0.65rem;">Create Game</button></div>
+      <div>
+        <label class="ew-form-label">Player Participation</label>
+        <select name="allow_anonymous" class="form-input">
+          <option value="1" selected>Allow anonymous players</option>
+          <option value="0">Require EchoWithin account</option>
+        </select>
+      </div>
     </div>
+    <button type="submit" class="ew-btn" style="width:100%; padding:0.75rem;">Create Game</button>
   </form>
 </div>
 <script nonce="{{ csp_nonce }}">

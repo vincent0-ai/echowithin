@@ -1547,19 +1547,218 @@
         /* Empty state */
         .empty-state {
             text-align: center;
-            padding: 3rem 1rem;
-            color: #888;
+            padding: 3rem 1.5rem;
+            background: var(--card-bg, #ffffff);
+            border: 1px dashed var(--border-color, #e5dcd6);
+            border-radius: 14px;
+            margin: 1rem 0;
+            color: var(--text-secondary, #666);
         }
 
         .empty-state i {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
+            font-size: 2.5rem;
+            margin-bottom: 0.8rem;
+            opacity: 0.4;
         }
 
         .empty-state h3 {
-            color: #666;
-            margin-bottom: 0.5rem;
+            color: var(--text-dark-color, #333);
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .empty-state p {
+            font-size: 0.88rem;
+            color: var(--text-secondary, #777);
+            margin: 0 0 1rem 0;
+        }
+
+        /* Forms & Games tab components */
+        .ew-card {
+            background: var(--card-bg, #ffffff);
+            border: 1px solid var(--border-color, #f0e6e1);
+            border-radius: 14px;
+            padding: 1.25rem 1.4rem;
+            box-shadow: 0 2px 8px var(--shadow-color, rgba(0,0,0,0.06));
+            margin-bottom: 1rem;
+            box-sizing: border-box;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .ew-card:hover {
+            box-shadow: 0 4px 14px var(--shadow-color, rgba(0,0,0,0.1));
+        }
+
+        .ew-info-banner {
+            font-size: 0.88rem;
+            color: var(--text-dark-color, #333);
+            background: var(--surface-bg, #faf6f3);
+            border: 1px solid var(--border-color, #e5dcd6);
+            border-radius: 10px;
+            padding: 0.85rem 1.15rem;
+            margin-bottom: 1.25rem;
+            line-height: 1.5;
+            box-sizing: border-box;
+        }
+
+        .ew-header-row {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .ew-header-row h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-dark-color, #333);
+        }
+
+        .ew-badge {
+            display: inline-block;
+            font-weight: 600;
+            font-size: 0.72rem;
+            background: var(--surface-bg, #f5efe9);
+            border: 1px solid var(--border-color, #e5dcd6);
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            color: var(--text-secondary, #666);
+            vertical-align: middle;
+            letter-spacing: 0.3px;
+            text-transform: capitalize;
+        }
+
+        .ew-badge--danger {
+            background: #fff0f0;
+            color: #c0392b;
+            border-color: #ffcdd2;
+        }
+
+        .ew-badge--success {
+            background: #eafaf1;
+            color: #1e8449;
+            border-color: #a9dfbf;
+        }
+
+        .ew-btn {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            background: var(--primary-color, #3e2217) !important;
+            color: #ffffff !important;
+            border: 1px solid var(--primary-color, #3e2217) !important;
+            border-radius: 8px !important;
+            padding: 0.5rem 1.1rem !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            cursor: pointer;
+            line-height: 1.4;
+            box-shadow: 0 2px 6px rgba(62,34,23,0.15);
+            transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+            box-sizing: border-box;
+        }
+
+        .ew-btn:hover {
+            background: var(--primary-dark-color, #2a160e) !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(62,34,23,0.22);
+            text-decoration: none !important;
+        }
+
+        .ew-btn--outline {
+            background: var(--card-bg, #ffffff) !important;
+            color: var(--text-dark-color, #333) !important;
+            border: 1px solid var(--border-color, #dcd2cc) !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .ew-btn--outline:hover {
+            border-color: var(--primary-color, #3e2217) !important;
+            color: var(--primary-color, #3e2217) !important;
+            background: var(--surface-bg, #fdfbf9) !important;
+            transform: translateY(-1px);
+        }
+
+        .ew-btn--sm {
+            font-size: 0.8rem !important;
+            padding: 0.38rem 0.85rem !important;
+            border-radius: 7px !important;
+        }
+
+        .ew-btn--danger {
+            background: #fff0f0 !important;
+            border: 1px solid #ffcdd2 !important;
+            color: #c0392b !important;
+            box-shadow: none;
+        }
+
+        .ew-btn--danger:hover {
+            background: #c0392b !important;
+            color: #ffffff !important;
+        }
+
+        .ew-share-row {
+            display: flex;
+            align-items: stretch;
+            border: 1px solid var(--border-color, #e5dcd6);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--surface-bg, #faf7f5);
+            margin-top: 0.75rem;
+            box-sizing: border-box;
+        }
+
+        .ew-share-input {
+            flex: 1;
+            min-width: 120px;
+            font-size: 0.8rem;
+            padding: 0.45rem 0.75rem;
+            border: none;
+            background: transparent;
+            color: var(--text-dark-color, #333);
+            outline: none;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .ew-copy-btn {
+            border: none;
+            border-left: 1px solid var(--border-color, #e5dcd6);
+            background: var(--card-bg, #ffffff);
+            color: var(--primary-color, #3e2217);
+            font-weight: 600;
+            font-size: 0.78rem;
+            padding: 0.45rem 0.95rem;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ew-copy-btn:hover {
+            background: var(--surface-bg, #f5efe9);
+            color: var(--primary-dark-color, #2a160e);
+        }
+
+        .ew-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1rem;
+        }
+
+        @media (max-width: 640px) {
+            .ew-card-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         /* Search/filter */
@@ -3186,31 +3385,35 @@
         {% if user_forms %}
         <div class="ew-card-grid">
             {% for form in user_forms %}
-            <div class="ew-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+            <div class="ew-card" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
                 <div>
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
-                        <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem; word-break:break-word;">{{ form.title }}</div>
-                        {% if form.deactivated %}
-                            <span class="ew-badge ew-badge--danger">Deactivated</span>
-                        {% else %}
-                            <span class="ew-badge ew-badge--success">{{ form.response_count or 0 }} response{% if form.response_count != 1 %}s{% endif %}</span>
-                        {% endif %}
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                        <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; line-height:1.3; word-break:break-word;">{{ form.title }}</div>
+                        <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0;">
+                            {% if form.deactivated %}
+                                <span class="ew-badge ew-badge--danger">Deactivated</span>
+                            {% else %}
+                                <span class="ew-badge ew-badge--success">{{ form.response_count or 0 }} response{% if form.response_count != 1 %}s{% endif %}</span>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% if form.description %}<div style="font-size:0.85rem; color:var(--text-secondary); margin:0.35rem 0;">{{ form.description }}</div>{% endif %}
-                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">
-                        {{ form.created_at|localtime('%b %d, %Y') }} &bull;
-                        {{ form.questions|length }} question{% if form.questions|length != 1 %}s{% endif %}
-                        {% if form.expires_at %}&bull; Expires {{ form.expires_at|localtime('%b %d') }}{% endif %}
+                    {% if form.description %}<div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ form.description }}</div>{% endif %}
+                    <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <span>{{ form.created_at|localtime('%b %d, %Y, %I:%M %p') }}</span>
+                        <span>&bull;</span>
+                        <span>{{ form.questions|length }} question{% if form.questions|length != 1 %}s{% endif %}</span>
+                        {% if form.expires_at %}<span>&bull;</span><span>Expires {{ form.expires_at|localtime('%b %d') }}</span>{% endif %}
                     </div>
-                    <div class="ew-share-row" style="margin-top:0.6rem;">
+                    <div class="ew-share-row" style="margin-top:0.75rem;">
+                        <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
                         {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
                         <input type="text" value="{{ _furl }}" readonly onclick="this.select()" class="ew-share-input">
                         <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
                     </div>
                 </div>
-                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--separator-color); padding-top:0.6rem; margin-top:0.2rem; flex-wrap:wrap;">
+                <div style="display:flex; gap:0.5rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem; flex-wrap:wrap;">
                     <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Responses</a>
-                    <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">CSV</a>
+                    <a href="{{ url_for('forms.form_responses_export', share_id=form.share_id, format='csv') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Export CSV</a>
                     {% if not form.deactivated %}
                     <form method="POST" action="{{ url_for('forms.form_deactivate', share_id=form.share_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this form? The link will stop accepting responses.')">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -3225,7 +3428,7 @@
         <div class="empty-state">
             <h3>No forms yet</h3>
             <p>Create a questionnaire, share your link, and view responses in real time.</p>
-            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create Form</a>
+            <a href="{{ url_for('forms.forms_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Create Form</a>
         </div>
         {% endif %}
     </div>
@@ -3244,29 +3447,34 @@
         {% if user_games %}
         <div class="ew-card-grid">
             {% for lobby in user_games %}
-            <div class="ew-card" style="margin-bottom:0; display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+            <div class="ew-card" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
                 <div>
-                    <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem;">
-                        {{ lobby.title }}
-                        <span class="ew-badge">{{ lobby.game_type }}</span>
-                        {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">Deactivated</span>{% endif %}
-                        {% if lobby.revealed %}<span class="ew-badge ew-badge--success">Revealed</span>{% endif %}
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                        <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; line-height:1.3; word-break:break-word;">{{ lobby.title }}</div>
+                        <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0;">
+                            <span class="ew-badge">{{ lobby.game_type }}</span>
+                            {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">Deactivated</span>{% endif %}
+                            {% if lobby.revealed %}<span class="ew-badge ew-badge--success">Revealed</span>{% endif %}
+                        </div>
                     </div>
                     {% if lobby.question and lobby.question.label %}
-                        <div style="font-size:0.85rem; color:var(--text-secondary); margin:0.35rem 0;">{{ lobby.question.label }}</div>
+                        <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.question.label }}</div>
+                    {% elif lobby.prompt %}
+                        <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.prompt }}</div>
                     {% endif %}
-                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">
-                        {{ lobby.created_at|localtime('%b %d, %Y') }}
+                    <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                        <span>{{ lobby.created_at|localtime('%b %d, %Y, %I:%M %p') }}</span>
                     </div>
-                    <div class="ew-share-row" style="margin-top:0.6rem;">
+                    <div class="ew-share-row" style="margin-top:0.75rem;">
+                        <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
                         {% set _gurl = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
                         <input type="text" value="{{ _gurl }}" readonly onclick="this.select()" class="ew-share-input">
                         <button type="button" onclick="navigator.clipboard.writeText('{{ _gurl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
                     </div>
                 </div>
-                <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--separator-color); padding-top:0.6rem; margin-top:0.2rem;">
+                <div style="display:flex; gap:0.5rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem;">
                     <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Open Lobby</a>
-                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Results</a>
+                    <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">Results</a>
                 </div>
             </div>
             {% endfor %}
@@ -3275,7 +3483,7 @@
         <div class="empty-state">
             <h3>No games yet</h3>
             <p>Host a poll or trivia game. Share your link to start playing with friends.</p>
-            <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none; margin-top:0.5rem; display:inline-block;">Create Game</a>
+            <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Create Game</a>
         </div>
         {% endif %}
     </div>

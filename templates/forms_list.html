@@ -12,12 +12,34 @@
   {% if forms %}
     <div class="ew-card-grid">
     {% for form in forms %}
-      <div class="ew-card" style="margin-bottom:0;">
-        <div style="font-weight:600; color:var(--text-dark-color); font-size:1.05rem;">{{ form.title }}</div>
-        <div style="font-size:0.8rem; color:var(--text-secondary); margin-top: 0.25rem;">{{ form.response_count or 0 }} responses &bull; {{ form.questions|length }} questions</div>
-        <div style="margin-top:0.75rem; display:flex; gap:0.5rem;">
-          <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">View Form</a>
-          <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Responses</a>
+      <div class="ew-card" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+            <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; line-height:1.3; word-break:break-word;">{{ form.title }}</div>
+            <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0;">
+              {% if form.deactivated %}
+                <span class="ew-badge ew-badge--danger">Deactivated</span>
+              {% else %}
+                <span class="ew-badge ew-badge--success">{{ form.response_count or 0 }} response{% if form.response_count != 1 %}s{% endif %}</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if form.description %}<div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ form.description }}</div>{% endif %}
+          <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+            <span>{{ form.created_at|localtime('%b %d, %Y, %I:%M %p') }}</span>
+            <span>&bull;</span>
+            <span>{{ form.questions|length }} question{% if form.questions|length != 1 %}s{% endif %}</span>
+          </div>
+          <div class="ew-share-row" style="margin-top:0.75rem;">
+            <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
+            {% set _furl = url_for('forms.view_form', share_id=form.share_id, _external=True) %}
+            <input type="text" value="{{ _furl }}" readonly onclick="this.select()" class="ew-share-input">
+            <button type="button" onclick="navigator.clipboard.writeText('{{ _furl }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy link', 1500)" class="ew-copy-btn">Copy link</button>
+          </div>
+        </div>
+        <div style="display:flex; gap:0.5rem; align-items:center; border-top:1px solid var(--border-color); padding-top:0.75rem; margin-top:0.35rem;">
+          <a href="{{ url_for('forms.form_responses_view', share_id=form.share_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none; flex:1; text-align:center;">Responses</a>
+          <a href="{{ url_for('forms.view_form', share_id=form.share_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none; text-align:center;">View Form</a>
         </div>
       </div>
     {% endfor %}

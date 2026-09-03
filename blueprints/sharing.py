@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app, abort
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session, current_app, abort, make_response
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime, hashlib, secrets, os

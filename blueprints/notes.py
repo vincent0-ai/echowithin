@@ -4,6 +4,11 @@ from bson.objectid import ObjectId
 import datetime, math, hashlib, hmac, secrets, requests
 from security import limits, brute_force_check, brute_force_record_failure, brute_force_clear, _bf_get_client_ip, _bf_hash_for_log
 from config import get_env_variable
+try:
+    from jigsawstack import JigsawStack
+except ImportError:
+    JigsawStack = None
+
 
 def csrf_exempt(view):
     """Mark view as exempt from CSRF protection."""

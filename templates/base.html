@@ -1116,8 +1116,13 @@
             navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
                 .then(function (reg) {
                     console.log('Service worker registered with scope:', reg.scope);
-                    // Initialize push notifications after service worker is ready
-                    initPushNotifications(reg);
+                    // Initialize push notifications asynchronously during idle time
+                    // to ensure zero impact on initial page load, paint, and interactivity.
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(function () { initPushNotifications(reg); }, { timeout: 4000 });
+                    } else {
+                        setTimeout(function () { initPushNotifications(reg); }, 1500);
+                    }
 
                     // Detect SW updates and notify the user
                     reg.addEventListener('updatefound', function () {
@@ -1174,31 +1179,64 @@
         // Check current subscription status
         const subscription = await registration.pushManager.getSubscription();
         if (subscription) {
-            // Debounce: skip the server sync if we recently confirmed
-            // the subscription. This avoids hammering /api/push/subscribe
-            // on every single page load (which also triggers iOS empty-body
-            // errors when the PWA is suspended mid-fetch).
-            const lastSync = parseInt(localStorage.getItem('pushSubSyncedAt') || '0', 10);
-            const syncIntervalMs = isIOSStandalone
-                ? 1 * 60 * 60 * 1000    // 1 hour for iOS PWA
-                : 6 * 60 * 60 * 1000;   // 6 hours elsewhere
+            const now = Date.now();
+            const nowStr = now.toString();
 
-            if ((Date.now() - lastSync) < syncIntervalMs) {
-                // Recent sync — subscription is current, nothing to do
+            // 1. Proactive Endpoint Health Verification:
+            // Check if this specific subscription endpoint is still valid in MongoDB.
+            // Debounce: cache verification in sessionStorage (30 mins) so internal link
+            // navigation and fast page clicks incur ZERO network requests.
+            const lastVerified = parseInt(sessionStorage.getItem('pushEndpointVerifiedAt') || '0', 10);
+            if ((now - lastVerified) > (30 * 60 * 1000)) {
+                try {
+                    const statusRes = await fetch('/api/push/status?endpoint=' + encodeURIComponent(subscription.endpoint), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (statusRes.ok) {
+                        const statusData = await statusRes.json();
+                        // If endpoint is missing from server (deleted after FCM 403/410) or marked revoked:
+                        if (statusData.endpoint_valid === false || statusData.force_new === true) {
+                            console.warn('Push subscription invalid or pruned on server. Auto-healing with fresh token...');
+                            try {
+                                await subscription.unsubscribe();
+                            } catch (unsubErr) {}
+                            localStorage.removeItem('pushSubRefreshedAt');
+                            localStorage.removeItem('pushSubSyncedAt');
+                            sessionStorage.removeItem('pushEndpointVerifiedAt');
+                            await subscribeToPush(registration, { forceRenew: true });
+                            return;
+                        } else {
+                            sessionStorage.setItem('pushEndpointVerifiedAt', nowStr);
+                        }
+                    }
+                } catch (statusErr) {
+                    // Non-blocking: if network check fails, proceed with standard sync logic
+                }
+            }
+
+            // 2. Proactive Periodic Token Renewal:
+            // Recover from silent APNs/FCM token expiry (3 days for both iOS and Android PWAs).
+            const lastRefresh = parseInt(localStorage.getItem('pushSubRefreshedAt') || '0', 10);
+            const refreshWindowMs = 3 * 24 * 60 * 60 * 1000;
+            const shouldForceRenew = !lastRefresh || (now - lastRefresh) > refreshWindowMs;
+
+            if (shouldForceRenew) {
+                await subscribeToPush(registration, {
+                    existingSubscription: subscription,
+                    forceRenew: true
+                });
                 return;
             }
 
-            // Check if we need a full re-subscribe (new endpoint) to
-            // recover from silently-invalidated iOS subscriptions.
-            const lastRefresh = localStorage.getItem('pushSubRefreshedAt');
-            const refreshWindowMs = isIOSStandalone
-                ? 3 * 24 * 60 * 60 * 1000   // 3 days for iOS PWA
-                : 7 * 24 * 60 * 60 * 1000;  // 7 days elsewhere
-            const shouldForceRenew = !lastRefresh || (Date.now() - parseInt(lastRefresh, 10)) > refreshWindowMs;
-            await subscribeToPush(registration, {
-                existingSubscription: subscription,
-                forceRenew: shouldForceRenew
-            });
+            // 3. Regular Debounced Sync (every 3 hours):
+            const lastSync = parseInt(localStorage.getItem('pushSubSyncedAt') || '0', 10);
+            const syncIntervalMs = 3 * 60 * 60 * 1000;
+            if ((now - lastSync) > syncIntervalMs) {
+                await subscribeToPush(registration, {
+                    existingSubscription: subscription,
+                    forceRenew: false
+                });
+            }
             return;
         }
 
@@ -1246,6 +1284,24 @@
         console.warn('Error initializing push notifications:', err);
     }
     }
+
+    // Auto-heal on PWA resume from background if idle for over 1 hour
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') {
+            const lastVerified = parseInt(sessionStorage.getItem('pushEndpointVerifiedAt') || '0', 10);
+            if ((Date.now() - lastVerified) > (60 * 60 * 1000)) {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.ready.then(function (reg) {
+                        if ('requestIdleCallback' in window) {
+                            requestIdleCallback(function () { initPushNotifications(reg); }, { timeout: 4000 });
+                        } else {
+                            setTimeout(function () { initPushNotifications(reg); }, 1500);
+                        }
+                    }).catch(function () {});
+                }
+            }
+        }
+    });
 
     // Show a one-time subtle prompt for iOS Safari users to install the app
     // so they can receive push notifications (push only works in standalone mode)
@@ -1385,7 +1441,7 @@
             const csrfMeta = document.querySelector('meta[name="csrf-token"]');
             const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
             // Send subscription to server
-            const subResponse = await echoFetch('/api/push/subscribe', {
+            let subResponse = await echoFetch('/api/push/subscribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1395,11 +1451,38 @@
                 keepalive: true  // Ensures iOS completes the request even if the PWA is suspended
             });
 
-            if (subResponse.ok) {
+            // Handle revoked endpoint response (HTTP 410 or force_new)
+            if (subResponse && subResponse.status === 410) {
+                const errData = await subResponse.json().catch(function () { return {}; });
+                if (errData && errData.force_new) {
+                    console.warn('Push endpoint was revoked by push service. Unsubscribing and negotiating fresh endpoint...');
+                    try {
+                        await subscription.unsubscribe();
+                    } catch (e) {}
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                    if (subscription) {
+                        subResponse = await echoFetch('/api/push/subscribe', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken
+                            },
+                            body: JSON.stringify(subscription.toJSON()),
+                            keepalive: true
+                        });
+                    }
+                }
+            }
+
+            if (subResponse && subResponse.ok) {
                 console.log('Successfully subscribed to push notifications');
                 const nowStr = Date.now().toString();
                 localStorage.setItem('pushSubRefreshedAt', nowStr);
                 localStorage.setItem('pushSubSyncedAt', nowStr);
+                sessionStorage.setItem('pushEndpointVerifiedAt', nowStr);
             } else {
                 console.warn('Failed to save subscription on server');
             }

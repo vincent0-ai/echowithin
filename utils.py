@@ -88,7 +88,21 @@ def _is_ios_web_push_subscription(subscription_doc: dict) -> bool:
 
 def _remove_stale_push_subscription(subscription_doc: dict, platform: str, user_label: str, reason: str):
     try:
+        endpoint = (subscription_doc or {}).get('endpoint')
         database.push_subscriptions_conf.delete_one({'_id': subscription_doc['_id']})
+        if endpoint and getattr(database, 'revoked_push_endpoints_conf', None) is not None:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            database.revoked_push_endpoints_conf.update_one(
+                {'endpoint': endpoint},
+                {'$set': {
+                    'endpoint': endpoint,
+                    'user_id': subscription_doc.get('user_id'),
+                    'platform': platform,
+                    'reason': reason,
+                    'revoked_at': now
+                }},
+                upsert=True
+            )
         _get_app().logger.info(f"Removed stale {platform} push subscription for {user_label} ({reason})")
     except Exception as exc:
         _get_app().logger.error(f"Failed to remove stale {platform} push subscription for {user_label}: {exc}")

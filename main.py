@@ -618,6 +618,7 @@ note_shares_conf = db['note_shares']
 note_versions_conf = db['note_versions']
 note_discussions_conf = db['note_discussions']
 push_subscriptions_conf = db['push_subscriptions']
+revoked_push_endpoints_conf = db['revoked_push_endpoints']
 fcm_tokens_conf = db['fcm_tokens']  # FCM tokens for native app push notifications
 direct_messages_conf = db['direct_messages']
 newsletter_conf = db['newsletter_subs']
@@ -852,6 +853,8 @@ except Exception:
 
 # Create index for push subscriptions to ensure unique endpoints per user
 push_subscriptions_conf.create_index([('user_id', 1), ('endpoint', 1)], unique=True)
+revoked_push_endpoints_conf.create_index('endpoint', unique=True)
+revoked_push_endpoints_conf.create_index('revoked_at', expireAfterSeconds=14 * 86400)
 newsletter_conf.create_index('email', unique=True)
 users_conf.create_index('username')
 user_post_views_conf.create_index([('user_id', 1), ('post_id', 1)], unique=True)
@@ -974,6 +977,7 @@ database.note_shares_conf = note_shares_conf
 database.note_versions_conf = note_versions_conf
 database.note_discussions_conf = note_discussions_conf
 database.push_subscriptions_conf = push_subscriptions_conf
+database.revoked_push_endpoints_conf = revoked_push_endpoints_conf
 database.fcm_tokens_conf = fcm_tokens_conf
 database.direct_messages_conf = direct_messages_conf
 database.newsletter_conf = newsletter_conf

@@ -86,6 +86,20 @@ def subscribe_push():
     try:
         user_id = ObjectId(current_user.id)
         new_endpoint = data['endpoint']
+
+        # If this endpoint was previously marked as revoked by push service (FCM 403/410),
+        # refuse to reuse the dead endpoint and instruct client to mint a brand-new token.
+        if getattr(m, 'revoked_push_endpoints_conf', None) is not None:
+            revoked = m.revoked_push_endpoints_conf.find_one({'endpoint': new_endpoint})
+            if revoked:
+                current_app.logger.warning(
+                    f"Blocked subscribe attempt for revoked endpoint (user: {current_user.username}, reason: {revoked.get('reason')})"
+                )
+                return jsonify({
+                    'error': 'Subscription endpoint has been revoked by push service',
+                    'force_new': True
+                }), 410
+
         delete_result = m.push_subscriptions_conf.delete_many({
             'user_id': user_id,
             'endpoint': {'$ne': new_endpoint}
@@ -152,8 +166,29 @@ def unsubscribe_push():
 def push_subscription_status():
     import main as m
     try:
-        count = m.push_subscriptions_conf.count_documents({'user_id': ObjectId(current_user.id)})
-        return jsonify({'subscribed': count > 0, 'subscription_count': count})
+        user_id = ObjectId(current_user.id)
+        endpoint = request.args.get('endpoint', '').strip()
+        count = m.push_subscriptions_conf.count_documents({'user_id': user_id})
+
+        endpoint_valid = None
+        force_new = False
+        if endpoint:
+            # Check if this specific endpoint exists and is active for the user
+            sub = m.push_subscriptions_conf.find_one({'user_id': user_id, 'endpoint': endpoint})
+            endpoint_valid = sub is not None
+            if not endpoint_valid:
+                # Check if it was explicitly revoked
+                if getattr(m, 'revoked_push_endpoints_conf', None) is not None:
+                    revoked = m.revoked_push_endpoints_conf.find_one({'endpoint': endpoint})
+                    if revoked:
+                        force_new = True
+
+        return jsonify({
+            'subscribed': count > 0,
+            'subscription_count': count,
+            'endpoint_valid': endpoint_valid,
+            'force_new': force_new
+        })
     except Exception as e:
         current_app.logger.error(f"Failed to check push subscription status: {e}")
         return jsonify({'error': 'Failed to check status'}), 500

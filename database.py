@@ -14,6 +14,7 @@ note_shares_conf = None
 note_versions_conf = None
 note_discussions_conf = None
 push_subscriptions_conf = None
+revoked_push_endpoints_conf = None
 fcm_tokens_conf = None
 direct_messages_conf = None
 newsletter_conf = None

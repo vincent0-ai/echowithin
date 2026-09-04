@@ -66,7 +66,7 @@
       <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed. Players submit their statements after joining.</div>
     </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1rem;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.8rem; margin-bottom:1rem;">
       <div>
         <label class="ew-form-label">Expiry</label>
         <select name="expires_in" class="form-input">
@@ -83,7 +83,18 @@
           <option value="0">Require EchoWithin account</option>
         </select>
       </div>
+      <div>
+        <label class="ew-form-label">Question timer</label>
+        <select name="timer_seconds" class="form-input">
+          <option value="0" selected>None (no time limit)</option>
+          <option value="15">15 seconds</option>
+          <option value="30">30 seconds</option>
+          <option value="45">45 seconds</option>
+          <option value="60">60 seconds</option>
+        </select>
+      </div>
     </div>
+
     <button type="submit" class="ew-btn" style="width:100%; padding:0.75rem;">Create Game</button>
   </form>
 </div>
@@ -93,6 +104,15 @@ let mqQuestions = [];
 function addMQ(){
   const gt = document.getElementById('game_type').value;
   mqQuestions.push({label:'', options:['',''], correct_option:''});
+  renderMQ();
+}
+
+function moveMQ(idx, dir){
+  const target = idx + dir;
+  if(target < 0 || target >= mqQuestions.length) return;
+  const temp = mqQuestions[idx];
+  mqQuestions[idx] = mqQuestions[target];
+  mqQuestions[target] = temp;
   renderMQ();
 }
 
@@ -109,7 +129,11 @@ function renderMQ(){
         <div style="display:flex; align-items:center; gap:0.4rem;">
           <span class="ew-q-number">${idx+1}</span>
         </div>
-        <button type="button" onclick="mqQuestions.splice(${idx},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+        <div style="display:flex; align-items:center; gap:0.35rem;">
+          ${idx > 0 ? `<button type="button" onclick="moveMQ(${idx}, -1)" class="ew-nudge-btn" title="Move Up">&uarr;</button>` : ''}
+          ${idx < mqQuestions.length - 1 ? `<button type="button" onclick="moveMQ(${idx}, 1)" class="ew-nudge-btn" title="Move Down">&darr;</button>` : ''}
+          <button type="button" onclick="mqQuestions.splice(${idx},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+        </div>
       </div>
       <input type="text" placeholder="Question *" value="${(q.label||'').replace(/"/g,'&quot;')}" oninput="mqQuestions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
       <div style="margin-top:0.4rem;">

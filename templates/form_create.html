@@ -82,6 +82,15 @@ function changeQuestionType(idx, newType){
   render();
 }
 
+function moveQuestion(idx, dir){
+  const target = idx + dir;
+  if(target < 0 || target >= questions.length) return;
+  const temp = questions[idx];
+  questions[idx] = questions[target];
+  questions[target] = temp;
+  render();
+}
+
 function render(){
   const c = document.getElementById('questions-container');
   if(questions.length === 0){
@@ -101,7 +110,11 @@ function render(){
             <option value="rating" ${q.type==='rating'?'selected':''}>Rating (1 - 5 stars)</option>
           </select>
         </div>
-        <button type="button" onclick="questions.splice(${idx},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+        <div style="display:flex; align-items:center; gap:0.35rem;">
+          ${idx > 0 ? `<button type="button" onclick="moveQuestion(${idx}, -1)" class="ew-nudge-btn" title="Move Up">&uarr;</button>` : ''}
+          ${idx < questions.length - 1 ? `<button type="button" onclick="moveQuestion(${idx}, 1)" class="ew-nudge-btn" title="Move Down">&darr;</button>` : ''}
+          <button type="button" onclick="questions.splice(${idx},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+        </div>
       </div>
 
       <input type="text" placeholder="Question label *" value="${(q.label || '').replace(/"/g,'&quot;')}" oninput="questions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">

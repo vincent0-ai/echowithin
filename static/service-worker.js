@@ -17,7 +17,8 @@ const STATIC_ASSETS = [
   '/static/manifest.json',
   // MathJax for math/LaTeX rendering
   'https://polyfill.io/v3/polyfill.min.js?features=es6',
-  'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js'
+  'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+  'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js'
 ];
 
 // Pages to cache for offline access

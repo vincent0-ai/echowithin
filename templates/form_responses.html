@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ form.title }} Responses — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 {% if stats %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endif %}
 {% endblock %}
 {% block content %}
@@ -42,8 +43,17 @@
       <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-dark-color); white-space: nowrap;">Link</span>
       <input type="text" value="{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
       <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
+      <button type="button" onclick="toggleQRCode()" class="ew-copy-btn">QR Code</button>
+    </div>
+    <div id="qr-box" class="ew-qr-box">
+      <div style="font-size:0.85rem; font-weight:600; color:var(--text-dark-color); margin-bottom:0.6rem;">Scan to fill out this form</div>
+      <div class="ew-qr-canvas-wrap">
+        <canvas id="qr-canvas"></canvas>
+      </div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Point your phone camera to open the form</div>
     </div>
   </div>
+
 
   {% if stats %}
   <div class="ew-card" style="margin-bottom: 1.2rem;">
@@ -133,4 +143,22 @@
     </div>
   {% endif %}
 </div>
+<script nonce="{{ csp_nonce }}">
+window.toggleQRCode = function(){
+  const box = document.getElementById('qr-box');
+  if(!box) return;
+  const isHidden = box.style.display === 'none' || !box.style.display;
+  box.style.display = isHidden ? 'block' : 'none';
+  if(isHidden && typeof QRCode !== 'undefined'){
+    const canvas = document.getElementById('qr-canvas');
+    if(canvas && !canvas.dataset.rendered){
+      const url = "{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}";
+      QRCode.toCanvas(canvas, url, { width: 180, margin: 1 }, function(err){
+        if(!err) canvas.dataset.rendered = "true";
+      });
+    }
+  }
+};
+</script>
 {% endblock %}
+

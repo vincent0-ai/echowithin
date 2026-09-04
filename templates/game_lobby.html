@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ lobby.title if not expired else 'Lobby' }} — EchoWithin</title>{% endblock %}
+{% block extra_head_css %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+{% endblock %}
 {% block content %}
 <div class="content-wrapper" style="max-width: 680px;">
   {% if expired %}
@@ -61,9 +64,22 @@
       </div>
     </div>
 
+    {% if lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
+    <div class="ew-timer-container" id="timer-box">
+      <div class="ew-timer-pill">
+        <span>Time remaining:</span>
+        <span id="timer-display">{{ lobby.timer_seconds }}s</span>
+      </div>
+      <div class="ew-timer-track">
+        <div class="ew-timer-bar" id="timer-bar"></div>
+      </div>
+    </div>
+    {% endif %}
+
     {# ─── POLL / TRIVIA (multi-question) ─── #}
     {% if gt in ('poll', 'trivia') %}
       {% set questions = lobby.get('questions', [lobby.question]) %}
+
       {% for q in questions %}
         {% set qi = loop.index0 %}
         <div class="ew-card">
@@ -316,6 +332,14 @@
         <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
         <input type="text" value="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
         <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
+        <button type="button" onclick="toggleQRCode()" class="ew-copy-btn">QR Code</button>
+      </div>
+      <div id="qr-box" class="ew-qr-box">
+        <div style="font-size:0.85rem; font-weight:600; color:var(--text-dark-color); margin-bottom:0.6rem;">Scan to join this game</div>
+        <div class="ew-qr-canvas-wrap">
+          <canvas id="qr-canvas"></canvas>
+        </div>
+        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Point your phone camera to open this lobby</div>
       </div>
       {% if is_host %}
         <div class="ew-host-actions">
@@ -340,6 +364,60 @@
 (function(){
   const lobbyId = "{{ lobby.lobby_id if not expired else '' }}";
   if(!lobbyId || typeof io==='undefined') return;
+
+  window.toggleQRCode = function(){
+    const box = document.getElementById('qr-box');
+    if(!box) return;
+    const isHidden = box.style.display === 'none' || !box.style.display;
+    box.style.display = isHidden ? 'block' : 'none';
+    if(isHidden && typeof QRCode !== 'undefined'){
+      const canvas = document.getElementById('qr-canvas');
+      if(canvas && !canvas.dataset.rendered){
+        QRCode.toCanvas(canvas, window.location.href, { width: 180, margin: 1 }, function(err){
+          if(!err) canvas.dataset.rendered = "true";
+        });
+      }
+    }
+  };
+
+  {% if lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
+  (function(){
+    const totalSeconds = {{ lobby.timer_seconds }};
+    let remaining = totalSeconds;
+    const display = document.getElementById('timer-display');
+    const bar = document.getElementById('timer-bar');
+    if(!display || !bar) return;
+
+    const interval = setInterval(()=>{
+      remaining--;
+      if(remaining >= 0){
+        display.textContent = remaining + 's';
+        bar.style.width = ((remaining / totalSeconds) * 100) + '%';
+      }
+      if(remaining <= 5){
+        display.style.color = 'var(--danger-color, #c0392b)';
+        bar.style.background = 'var(--danger-color, #c0392b)';
+      }
+      if(remaining <= 0){
+        clearInterval(interval);
+        display.textContent = "Time's up!";
+        let submittedAny = false;
+        document.querySelectorAll('.vote-form').forEach(form => {
+          const checked = form.querySelector('input[type="radio"]:checked');
+          if(checked && !submittedAny){
+            form.submit();
+            submittedAny = true;
+          } else {
+            form.querySelectorAll('input, button').forEach(el => el.disabled = true);
+            const btn = form.querySelector('button[type="submit"]');
+            if(btn) { btn.textContent = "Time's Up"; btn.style.opacity = '0.5'; }
+          }
+        });
+      }
+    }, 1000);
+  })();
+  {% endif %}
+
   const socket = io({transports:['websocket','polling']});
   socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
   socket.on('game_presence_update', (data)=>{
@@ -387,4 +465,5 @@
   });
 })();
 </script>
+
 {% endblock %}

@@ -4509,4 +4509,92 @@ body {
     font-weight: 700;
     flex-shrink: 0;
 }
+
+/* Question reorder nudge buttons */
+.ew-nudge-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: 5px;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.ew-nudge-btn:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: var(--surface-bg);
+}
+
+.ew-nudge-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Question countdown timer */
+.ew-timer-container {
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    margin-bottom: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+.ew-timer-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.ew-timer-track {
+    flex: 1;
+    max-width: 180px;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ew-timer-bar {
+    height: 100%;
+    width: 100%;
+    background: var(--primary-color);
+    border-radius: 3px;
+    transition: width 1s linear;
+}
+
+/* QR Code Display Container - Always white backdrop for camera readability */
+.ew-qr-box {
+    display: none;
+    text-align: center;
+    margin-top: 0.85rem;
+    padding: 1.1rem;
+    background: var(--surface-bg);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.ew-qr-canvas-wrap {
+    display: inline-block;
+    background: #ffffff;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
 

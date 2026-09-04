@@ -83,6 +83,11 @@ def games_create():
         elif expires_in == '7d': expires_at = now + datetime.timedelta(days=7)
         allow_anon_raw = (request.form.get('allow_anonymous') or '1').strip()
         allow_anonymous = allow_anon_raw != '0'
+        timer_seconds_raw = (request.form.get('timer_seconds') or '0').strip()
+        try:
+            timer_seconds = max(0, min(300, int(timer_seconds_raw)))
+        except (ValueError, TypeError):
+            timer_seconds = 0
         lobby_id = secrets.token_urlsafe(16)
 
         # --- Build doc per game type ---
@@ -251,6 +256,7 @@ def games_create():
             }
 
         doc['allow_anonymous'] = allow_anonymous
+        doc['timer_seconds'] = timer_seconds
         m.game_sessions_conf.insert_one(doc)
         flash('Game lobby created — share the link.', 'success')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
@@ -288,10 +294,15 @@ def api_create_poll():
     allow_anonymous = data.get('allow_anonymous', True)
     if isinstance(allow_anonymous, str):
         allow_anonymous = allow_anonymous.lower() not in ('0', 'false', 'no')
-    doc={'lobby_id':lobby_id,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous)}
+    try:
+        timer_seconds = max(0, min(300, int(data.get('timer_seconds', 0) or 0)))
+    except (ValueError, TypeError):
+        timer_seconds = 0
+    doc={'lobby_id':lobby_id,'host_id':ObjectId(current_user.id),'host_username':current_user.username,'title':title,'game_type':game_type,'question':{'label':question,'options':opts,'correct_option':correct},'counts':{o:0 for o in opts},'status':'active','max_players':MAX_PLAYERS,'expires_at':expires_at,'created_at':now,'revealed':False,'allow_anonymous':bool(allow_anonymous),'timer_seconds':timer_seconds}
     m.game_sessions_conf.insert_one(doc)
     share_url = url_for('game.view_lobby', lobby_id=lobby_id, _external=True)
     return jsonify({'success':True,'lobby_id':lobby_id,'share_url':share_url}),201
+
 
 @bp.route('/g/<lobby_id>', methods=['GET'])
 @limits(calls=30, period=60)

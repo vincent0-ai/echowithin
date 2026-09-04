@@ -41,8 +41,12 @@
         {% endif %}
       </div>
     </div>
-    <form method="POST" action="{{ url_for('forms.submit_form', share_id=share_id) }}" class="ew-card">
+    <form method="POST" action="{{ url_for('forms.submit_form', share_id=share_id) }}" class="ew-card" id="form-response">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div id="draft-notice" style="display:none; font-size:0.78rem; color:var(--text-secondary); background:var(--surface-bg); padding:0.4rem 0.75rem; border-radius:6px; margin-bottom:0.9rem; border:1px solid var(--border-color); justify-content:space-between; align-items:center;">
+        <span>Restored your unsaved draft</span>
+        <a href="javascript:void(0)" onclick="clearDraft()" style="color:var(--danger-color, #c0392b); text-decoration:none; font-weight:600;">Clear</a>
+      </div>
       <div style="position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;"><label>Website <input type="text" name="website" autocomplete="off" tabindex="-1"></label></div>
       {% for q in form.questions %}
         <div style="margin-bottom:1rem;">
@@ -72,4 +76,91 @@
     </form>
   {% endif %}
 </div>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  const shareId = "{{ share_id or (form.share_id if form else '') }}";
+  if(!shareId) return;
+  const storageKey = 'ew_form_draft_' + shareId;
+
+  {% if submitted %}
+  try { localStorage.removeItem(storageKey); } catch(e){}
+  return;
+  {% endif %}
+
+  const form = document.getElementById('form-response');
+  if(!form) return;
+
+  // Restore draft
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if(saved){
+      const data = JSON.parse(saved);
+      let restoredCount = 0;
+      for(const [name, val] of Object.entries(data)){
+        const els = form.querySelectorAll(`[name="${name}"]`);
+        if(!els.length) continue;
+        if(els[0].type === 'checkbox'){
+          const vals = Array.isArray(val) ? val : [val];
+          els.forEach(el => {
+            if(vals.includes(el.value)) { el.checked = true; restoredCount++; }
+          });
+        } else if(els[0].type === 'radio'){
+          els.forEach(el => {
+            if(el.value === val) { el.checked = true; restoredCount++; }
+          });
+        } else {
+          els[0].value = val;
+          if(val) restoredCount++;
+        }
+      }
+      if(restoredCount > 0){
+        const notice = document.getElementById('draft-notice');
+        if(notice) notice.style.display = 'flex';
+      }
+    }
+  } catch(e){}
+
+  // Auto-save on input or change
+  let saveTimer = null;
+  form.addEventListener('input', scheduleSave);
+  form.addEventListener('change', scheduleSave);
+
+  function scheduleSave(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 300);
+  }
+
+  function saveDraft(){
+    const data = {};
+    const fd = new FormData(form);
+    for(const [key, val] of fd.entries()){
+      if(key === 'csrf_token' || key === 'website') continue;
+      if(data[key] !== undefined){
+        if(Array.isArray(data[key])) data[key].push(val);
+        else data[key] = [data[key], val];
+      } else {
+        data[key] = val;
+      }
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(data));
+    } catch(e){}
+  }
+
+  // Clear on successful submit
+  form.addEventListener('submit', function(){
+    try { localStorage.removeItem(storageKey); } catch(e){}
+  });
+
+  window.clearDraft = function(){
+    try {
+      localStorage.removeItem(storageKey);
+      form.reset();
+      const notice = document.getElementById('draft-notice');
+      if(notice) notice.style.display = 'none';
+    } catch(e){}
+  };
+})();
+</script>
 {% endblock %}
+

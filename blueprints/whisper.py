@@ -629,38 +629,7 @@ def api_whisper_history(session_id):
             {'session_id': ObjectId(session_id)}
         ).sort('timestamp', 1).limit(500))
 
-        now = datetime.datetime.now(datetime.timezone.utc)
 
-        # Lazy view-once destroy sweep (W.6): messages past their single 60s
-        # post-open window lose their bytes now; the TTL index is the backstop.
-        # Bytes are $unset server-side — never merely hidden client-side.
-        destroyed_ids = []
-        for msg in messages:
-            if (msg.get('view_once') and msg.get('view_once_opened_at')
-                    and 'image_url' in msg and not msg.get('view_once_destroyed')):
-                opened_at = msg['view_once_opened_at']
-                if opened_at.tzinfo is None:
-                    opened_at = opened_at.replace(tzinfo=datetime.timezone.utc)
-                grace = getattr(m, 'WHISPER_VIEW_ONCE_GRACE_SECONDS', 60)
-                if (now - opened_at).total_seconds() >= grace:
-                    m.whisper_messages_conf.update_one(
-                        {'_id': msg['_id']},
-                        {'$unset': {'image_url': '', 'image_public_id': ''},
-                         '$set': {'view_once_destroyed': True}}
-                    )
-                    msg.pop('image_url', None)
-                    msg.pop('image_public_id', None)
-                    msg['view_once_destroyed'] = True
-                    destroyed_ids.append(str(msg['_id']))
-        if destroyed_ids:
-            initiator_str = str(session_doc['initiator_id'])
-            recipient_str = str(session_doc['recipient_id'])
-            for uid in (initiator_str, recipient_str):
-                for mid in destroyed_ids:
-                    m.socketio.emit('whisper_view_once_destroyed', {
-                        'session_id': session_id,
-                        'message_id': mid
-                    }, room=f"user_{uid}")
 
         # DM parity (F4): fetching history marks the partner's messages read
         # and notifies them, exactly like DM history does with `messages_read`.
@@ -700,28 +669,17 @@ def api_whisper_history(session_id):
             }
             if msg.get('reactions'):
                 entry['reactions'] = msg['reactions']
-            if msg.get('view_once'):
-                # Server enforcement (W.6): withhold bytes until opened.
-                destroyed = bool(msg.get('view_once_destroyed')) or 'image_url' not in msg
-                opened_by_me = user_id_str in (msg.get('viewed_by') or [])
-                entry['view_once'] = True
-                entry['viewed'] = bool(msg.get('viewed_by'))
-                entry['destroyed'] = destroyed
-                if not destroyed and (is_sender or opened_by_me):
-                    serve = m._whisper_image_serve_url(msg, str(msg['sender_id']), partner_id)
-                    if serve:
-                        entry['image_url'] = serve
-                        entry['locked'] = False
-                    else:
-                        entry['locked'] = True
-                else:
-                    entry['locked'] = True
-            elif msg_type == 'image' and 'image_url' in msg:
+            if msg_type == 'image' and 'image_url' in msg:
                 # DM parity (F5): re-serve fresh signed URLs on every fetch so
                 # authenticated Cloudinary URLs never go stale after reload.
                 serve = m._whisper_image_serve_url(msg, str(msg['sender_id']), partner_id)
                 if serve:
                     entry['image_url'] = serve
+            # Reply-to threading context
+            if msg.get('reply_to'):
+                entry['reply_to'] = str(msg['reply_to'])
+                entry['reply_preview'] = msg.get('reply_preview', '')
+                entry['reply_sender_id'] = str(msg.get('reply_sender_id', ''))
             formatted.append(entry)
 
         return jsonify({'messages': formatted})

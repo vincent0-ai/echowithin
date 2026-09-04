@@ -1,8 +1,8 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory, abort, current_app
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, send_from_directory, abort, current_app, Response
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 from bson.son import SON
-import datetime, math, json, random, os, re
+import datetime, math, json, random, os, re, hashlib
 from security import limits
 bp = Blueprint('blog', __name__, template_folder='templates')
 
@@ -1324,7 +1324,15 @@ def encrypted_uploaded_file(filename):
                 mime = 'image/gif'
             elif ext == '.webp':
                 mime = 'image/webp'
-            return send_file(io.BytesIO(plain), mimetype=mime, max_age=0)
+
+            etag = f'"{hashlib.md5(filename.encode("utf-8")).hexdigest()}"'
+            if request.headers.get('If-None-Match') == etag:
+                return Response(status=304)
+
+            resp = send_file(io.BytesIO(plain), mimetype=mime, max_age=86400)
+            resp.headers['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
+            resp.headers['ETag'] = etag
+            return resp
         except Exception:
             # Not ciphertext -> legacy plaintext file, serve directly.
             return send_from_directory(m.UPLOAD_FOLDER, filename)

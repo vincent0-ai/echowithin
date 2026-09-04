@@ -582,25 +582,27 @@ def decrypt_form_response(ciphertext: str, form_id: str) -> str:
         return '[Unavailable]'
 
 
-def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 900) -> str:
-    """Generates a short-lived signed Cloudinary URL for private/authenticated assets.
+def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 14400) -> str:
+    """Generates a deterministic signed Cloudinary URL for private/authenticated assets.
 
-    URLs expire after ``expires_in`` seconds (default 15 minutes). Because stored
-    URLs can expire, callers MUST store the ``public_id`` alongside and re-sign at
-    read/serve time via :func:`re_sign_cloudinary_url`.
+    Bucketed to a 4-hour window so the URL remains stable and browser-cacheable across
+    multiple page loads instead of regenerating a cache-busting timestamp every second.
     """
     if not public_id:
         return ''
     try:
         import time
         import cloudinary.utils
+        window = max(3600, int(expires_in))
+        now_ts = int(time.time())
+        expires_at = ((now_ts // window) + 2) * window
         signed_url, _ = cloudinary.utils.cloudinary_url(
             public_id,
             resource_type=resource_type or 'image',
             type=delivery_type or 'authenticated',
             sign_url=True,
             secure=True,
-            expires_at=int(time.time()) + max(60, int(expires_in))
+            expires_at=expires_at
         )
         return signed_url
     except Exception as e:
@@ -608,7 +610,7 @@ def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image',
         return ''
 
 
-def re_sign_cloudinary_url(public_id, resource_type='image', delivery_type='authenticated', expires_in=900, fallback_url=''):
+def re_sign_cloudinary_url(public_id, resource_type='image', delivery_type='authenticated', expires_in=14400, fallback_url=''):
     """Returns a fresh signed URL for a private Cloudinary asset.
 
     Falls back to ``fallback_url`` (e.g. a stored legacy URL) if no ``public_id``
@@ -681,16 +683,18 @@ def _media_signature(public_id, expires_at):
     return hmac.new(secret, msg, hashlib.sha256).hexdigest()[:32]
 
 
-def build_media_serve_url(public_id, mime_type='application/octet-stream', expires_in=900):
-    """Builds a short-lived capability URL for the encrypted-media proxy.
+def build_media_serve_url(public_id, mime_type='application/octet-stream', expires_in=14400):
+    """Builds a deterministic capability URL for the encrypted-media proxy.
 
-    Must be called inside an active request/app context (uses ``url_for``).
-    Returns '' on failure.
+    Bucketed to a 4-hour window so the URL remains stable and browser-cacheable across
+    multiple page loads and navigations instead of regenerating every second.
     """
     if not public_id:
         return ''
     try:
-        expires_at = int(_time.time()) + max(60, int(expires_in))
+        window = max(3600, int(expires_in))
+        now_ts = int(_time.time())
+        expires_at = ((now_ts // window) + 2) * window
         sig = _media_signature(public_id, expires_at)
         return url_for('serve_encrypted_media', public_id=public_id, mime=quote(str(mime_type or 'application/octet-stream')), expires=expires_at, sig=sig, _external=True)
     except Exception as e:

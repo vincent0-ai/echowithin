@@ -236,6 +236,11 @@ def serve_encrypted_media(public_id):
     sig = request.args.get('sig', '')
     if not media_serve_token_valid(public_id, expires, sig):
         return abort(403)
+
+    etag = f'"{hashlib.md5(public_id.encode("utf-8")).hexdigest()}"'
+    if request.headers.get('If-None-Match') == etag:
+        return Response(status=304)
+
     try:
         signed_raw = generate_signed_cloudinary_url(public_id, resource_type='raw', delivery_type='authenticated')
         if not signed_raw:
@@ -250,7 +255,8 @@ def serve_encrypted_media(public_id):
         app.logger.error(f"Media serve error for {public_id}: {e}")
         return abort(404)
     resp = Response(plain, mimetype=mime)
-    resp.headers['Cache-Control'] = 'private, max-age=300'
+    resp.headers['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
+    resp.headers['ETag'] = etag
     resp.headers['X-Content-Type-Options'] = 'nosniff'
     resp.headers['Content-Disposition'] = 'inline'
     return resp

@@ -5187,6 +5187,25 @@ def api_bond_album_upload(bond_id):
             try:
                 photo_mime = (file.mimetype or 'image/jpeg')[:200]
                 _raw = file.read()
+                try:
+                    from PIL import Image, ImageOps
+                    import io
+                    with Image.open(io.BytesIO(_raw)) as img:
+                        img = ImageOps.exif_transpose(img)
+                        max_dim = (1600, 1600)
+                        img.thumbnail(max_dim, Image.Resampling.LANCZOS)
+                        out_io = io.BytesIO()
+                        if img.mode in ('RGBA', 'LA'):
+                            img.save(out_io, format='WEBP', quality=82, method=6)
+                            photo_mime = 'image/webp'
+                        else:
+                            img = img.convert('RGB')
+                            img.save(out_io, format='JPEG', quality=82, optimize=True)
+                            photo_mime = 'image/jpeg'
+                        _raw = out_io.getvalue()
+                except Exception as resize_err:
+                    current_app.logger.debug(f"Album photo optimization skipped: {resize_err}")
+
                 _cipher = m.encrypt_media_bytes(_raw)
                 del _raw
                 upload_result = m.cloudinary.uploader.upload(
@@ -5195,7 +5214,6 @@ def api_bond_album_upload(bond_id):
                     resource_type='raw',
                     type='authenticated'
                 )
-                del _cipher
                 photo_public_id = upload_result.get('public_id', '')
                 photo_url = m.build_media_serve_url(photo_public_id, photo_mime) or upload_result.get('secure_url', '')
                 media_encrypted = bool(photo_public_id)
@@ -5208,17 +5226,14 @@ def api_bond_album_upload(bond_id):
                 try:
                     os.makedirs(m.UPLOAD_FOLDER, exist_ok=True)
                     unique_filename = f"bond_album_{uuid.uuid4().hex[:12]}.{ext}"
-                    file.seek(0)
-                    _fb_raw = file.read()
-                    ciphertext = m.encrypt_media_bytes(_fb_raw)
-                    del _fb_raw
                     save_path = os.path.join(m.UPLOAD_FOLDER, unique_filename)
                     with open(save_path, 'wb') as f:
-                        f.write(ciphertext)
+                        f.write(_cipher)
                     photo_url = url_for('blog.encrypted_uploaded_file', filename=unique_filename, _external=True)
                 except Exception as save_err:
                     current_app.logger.error(f"Local file fallback upload failed: {save_err}")
                     continue
+            del _cipher
 
             if not photo_url:
                 continue

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, current_app, url_for, session
+from flask import Blueprint, request, jsonify, render_template, current_app, url_for, session, Response
 from flask_login import login_required, current_user
 from bson.objectid import ObjectId
 import datetime
@@ -40,7 +40,7 @@ def _format_datetime(val):
     return str(val)
 
 # Section names for unread badge tracking
-BOND_SECTIONS = ['mood', 'qotd', 'journal', 'goals', 'habits', 'insights', 'album', 'bucketlist', 'recommendations', 'pulses', 'countdowns']
+BOND_SECTIONS = ['mood', 'qotd', 'journal', 'goals', 'habits', 'insights', 'album', 'bucketlist', 'recommendations', 'pulses', 'countdowns', 'calendar']
 
 
 def _new_tracking_dict():
@@ -3749,6 +3749,24 @@ def api_bond_insights_get(bond_id):
                     next_milestone_days = ms_days - days_since
                     break
 
+        # Calendar events (past 30 days completed / next 30 days upcoming)
+        thirty_days_ahead = today + datetime.timedelta(days=30)
+        thirty_days_ahead_str = thirty_days_ahead.isoformat()
+        today_str = today.isoformat()
+
+        all_events = list(m.bond_events_conf.find({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        }))
+        events_past_30d = 0
+        events_upcoming_30d = 0
+        for ev in all_events:
+            s_date = ev.get('start_date', '')
+            if thirty_days_ago_str <= s_date <= today_str:
+                events_past_30d += 1
+            if today_str <= s_date <= thirty_days_ahead_str:
+                events_upcoming_30d += 1
+
         return jsonify({
             'partner_username': partner_username,
             'mood_comparison': mood_comparison,
@@ -3765,6 +3783,8 @@ def api_bond_insights_get(bond_id):
                 'goals_completed': goals_completed,
                 'qotd_answered': qotd_answered,
                 'journal_count': journal_count,
+                'events_completed_30d': events_past_30d,
+                'upcoming_events_count': events_upcoming_30d,
                 'my_top_mood': my_top_mood,
                 'partner_top_mood': partner_top_mood
             }
@@ -4160,6 +4180,837 @@ def api_bond_countdown_delete(countdown_id):
     except Exception as e:
         current_app.logger.error(f"Bond countdown delete error: {e}")
         return jsonify({'error': 'Failed to archive countdown'}), 500
+
+
+# ===================================================================
+# Bond Shared Calendar (Aggregated & Custom Events)
+# ===================================================================
+
+import calendar as py_calendar
+
+
+def _expand_event_dates(start_date, recurrence, range_start, range_end, max_end=None):
+    """Generate date objects for an event based on its recurrence within [range_start, range_end]."""
+    if not start_date:
+        return []
+
+    dates = []
+    if recurrence == 'weekly':
+        curr = start_date
+        if curr < range_start:
+            days_diff = (range_start - curr).days
+            weeks = days_diff // 7
+            curr = curr + datetime.timedelta(days=weeks * 7)
+            if curr < range_start:
+                curr += datetime.timedelta(days=7)
+
+        while curr <= range_end:
+            if curr >= start_date and (not max_end or curr <= max_end):
+                dates.append(curr)
+            curr += datetime.timedelta(days=7)
+
+    elif recurrence == 'monthly':
+        start_year = range_start.year
+        end_year = range_end.year
+        for yr in range(start_year, end_year + 1):
+            for mo in range(1, 13):
+                last_day = py_calendar.monthrange(yr, mo)[1]
+                target_day = min(start_date.day, last_day)
+                curr = datetime.date(yr, mo, target_day)
+                if curr >= start_date and range_start <= curr <= range_end and (not max_end or curr <= max_end):
+                    dates.append(curr)
+
+    elif recurrence == 'yearly':
+        for yr in range(range_start.year, range_end.year + 1):
+            last_day = py_calendar.monthrange(yr, start_date.month)[1]
+            target_day = min(start_date.day, last_day)
+            curr = datetime.date(yr, start_date.month, target_day)
+            if curr >= start_date and range_start <= curr <= range_end and (not max_end or curr <= max_end):
+                dates.append(curr)
+
+    else:
+        # One-off / none
+        if range_start <= start_date <= range_end:
+            dates.append(start_date)
+
+    return dates
+
+
+def _get_live_countdown_label(event_date, today):
+    """Compute standard live countdown label (Today!, Tomorrow!, X days left, X days ago)."""
+    diff_days = (event_date - today).days
+    if diff_days < 0:
+        abs_days = abs(diff_days)
+        label = f"{abs_days} day{'s' if abs_days != 1 else ''} ago"
+        color = "muted"
+    elif diff_days == 0:
+        label = "Today!"
+        color = "success"
+    elif diff_days == 1:
+        label = "Tomorrow!"
+        color = "success"
+    else:
+        label = f"{diff_days} days left"
+        color = "primary"
+    return label, color, diff_days
+
+
+def _get_aggregated_bond_calendar(bond_doc, start_date_str, end_date_str, current_user_id):
+    """Aggregate date-bearing data from across the bond:
+    1. Custom calendar events (with recurring expansion)
+    2. Countdowns
+    3. Mutual goal deadlines
+    4. Bond anniversaries and milestones
+    """
+    import main as m
+    import security
+
+    bond_id = str(bond_doc['_id'])
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    today = now_utc.date()
+
+    try:
+        range_start = datetime.date.fromisoformat(start_date_str) if start_date_str else (today.replace(day=1) - datetime.timedelta(days=7))
+    except Exception:
+        range_start = today.replace(day=1) - datetime.timedelta(days=7)
+
+    try:
+        if end_date_str:
+            range_end = datetime.date.fromisoformat(end_date_str)
+        else:
+            # Approx 45 days forward
+            range_end = (today.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) + datetime.timedelta(days=14)
+    except Exception:
+        range_end = (today.replace(day=1) + datetime.timedelta(days=32)).replace(day=1) + datetime.timedelta(days=14)
+
+    events_list = []
+    user_id_str = str(current_user_id)
+    partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+
+    # 1. Custom Calendar Events
+    custom_events = list(m.bond_events_conf.find({
+        'bond_id': ObjectId(bond_id),
+        'archived': {'$ne': True}
+    }))
+
+    for ev in custom_events:
+        ev_id = str(ev['_id'])
+        s_date_raw = ev.get('start_date', '')
+        try:
+            ev_start_date = datetime.date.fromisoformat(s_date_raw) if isinstance(s_date_raw, str) else s_date_raw.date()
+        except Exception:
+            continue
+
+        e_date_raw = ev.get('end_date')
+        ev_end_date = None
+        if e_date_raw:
+            try:
+                ev_end_date = datetime.date.fromisoformat(e_date_raw) if isinstance(e_date_raw, str) else e_date_raw.date()
+            except Exception:
+                pass
+
+        recurrence = ev.get('recurrence', 'none')
+        is_owner = str(ev.get('created_by', '')) == user_id_str
+
+        # Dual-reveal surprise logic
+        is_surprise = bool(ev.get('surprise'))
+        reveal_date_raw = ev.get('reveal_date')
+        is_revealed = True
+        if is_surprise and not is_owner and reveal_date_raw:
+            try:
+                r_date = datetime.date.fromisoformat(reveal_date_raw)
+                if today < r_date:
+                    is_revealed = False
+            except Exception:
+                pass
+
+        if not is_revealed:
+            title = "Surprise Event 🎁"
+            note = f"Secret until {reveal_date_raw}!"
+            location = ""
+        else:
+            title = m.decrypt_bond_data(ev.get('title', ''), bond_id) if ev.get('encrypted') else ev.get('title', '')
+            note = m.decrypt_bond_data(ev.get('note', ''), bond_id) if ev.get('encrypted') and ev.get('note') else (ev.get('note') or '')
+            location = m.decrypt_bond_data(ev.get('location', ''), bond_id) if ev.get('encrypted') and ev.get('location') else (ev.get('location') or '')
+
+        rsvps = ev.get('rsvps', {})
+        my_rsvp = rsvps.get(user_id_str, 'none')
+        partner_rsvp = rsvps.get(partner_id, 'none')
+
+        expanded_dates = _expand_event_dates(ev_start_date, recurrence, range_start, range_end, max_end=ev_end_date)
+        for occ_date in expanded_dates:
+            label, color, diff_days = _get_live_countdown_label(occ_date, today)
+            events_list.append({
+                'id': ev_id,
+                'source': 'custom',
+                'type': 'event',
+                'title': title,
+                'date': occ_date.isoformat(),
+                'time': ev.get('time', ''),
+                'recurrence': recurrence,
+                'note': note,
+                'location': location,
+                'goal_id': str(ev.get('goal_id')) if ev.get('goal_id') else None,
+                'is_owner': is_owner,
+                'is_surprise': is_surprise,
+                'is_revealed': is_revealed,
+                'my_rsvp': my_rsvp,
+                'partner_rsvp': partner_rsvp,
+                'badge_color': 'primary',
+                'badge_label': label,
+                'badge_status': color,
+                'diff_days': diff_days,
+                'created_by': str(ev.get('created_by', '')),
+                'created_at': _format_datetime(ev.get('created_at'))
+            })
+
+    # 2. Countdowns
+    countdown_docs = list(m.bond_countdowns_conf.find({
+        'bond_id': ObjectId(bond_id),
+        'archived': {'$ne': True}
+    }))
+    for c in countdown_docs:
+        c_date_raw = c.get('event_date') or c.get('target_date')
+        try:
+            if isinstance(c_date_raw, datetime.datetime):
+                c_date = c_date_raw.date()
+            elif isinstance(c_date_raw, datetime.date):
+                c_date = c_date_raw
+            elif isinstance(c_date_raw, str):
+                c_date = datetime.date.fromisoformat(c_date_raw[:10])
+            else:
+                continue
+        except Exception:
+            continue
+
+        if range_start <= c_date <= range_end:
+            title = m.decrypt_bond_data(c.get('title', ''), bond_id) if c.get('encrypted') else c.get('title', '')
+            label, color, diff_days = _get_live_countdown_label(c_date, today)
+            events_list.append({
+                'id': str(c['_id']),
+                'source': 'countdown',
+                'type': 'countdown',
+                'title': f"⏳ {title}",
+                'date': c_date.isoformat(),
+                'time': '',
+                'recurrence': 'none',
+                'note': 'Shared Countdown',
+                'location': '',
+                'goal_id': None,
+                'is_owner': str(c.get('created_by', '')) == user_id_str,
+                'is_surprise': False,
+                'is_revealed': True,
+                'badge_color': 'amber',
+                'badge_label': label,
+                'badge_status': color,
+                'diff_days': diff_days,
+                'created_by': str(c.get('created_by', '')),
+                'created_at': _format_datetime(c.get('created_at'))
+            })
+
+    # 3. Mutual Goals with Deadlines
+    goal_docs = list(m.bond_goals_conf.find({
+        'bond_id': ObjectId(bond_id),
+        'status': {'$in': ['active', 'proposed']},
+        'deadline': {'$ne': None}
+    }))
+    for g in goal_docs:
+        dl_raw = g.get('deadline')
+        try:
+            if isinstance(dl_raw, datetime.datetime):
+                g_date = dl_raw.date()
+            elif isinstance(dl_raw, datetime.date):
+                g_date = dl_raw
+            elif isinstance(dl_raw, str):
+                g_date = security.parse_iso_utc(dl_raw).date()
+            else:
+                continue
+        except Exception:
+            continue
+
+        if range_start <= g_date <= range_end:
+            title = m.decrypt_bond_data(g.get('title', ''), bond_id) if g.get('encrypted') else g.get('title', '')
+            label, color, diff_days = _get_live_countdown_label(g_date, today)
+            events_list.append({
+                'id': str(g['_id']),
+                'source': 'goal',
+                'type': 'goal',
+                'title': f"🎯 Goal: {title}",
+                'date': g_date.isoformat(),
+                'time': '',
+                'recurrence': 'none',
+                'note': f"Category: {g.get('category', 'Custom')} | Status: {g.get('status')}",
+                'location': '',
+                'goal_id': str(g['_id']),
+                'is_owner': str(g.get('proposed_by', '')) == user_id_str,
+                'is_surprise': False,
+                'is_revealed': True,
+                'badge_color': 'teal',
+                'badge_label': label,
+                'badge_status': color,
+                'diff_days': diff_days,
+                'created_by': str(g.get('proposed_by', '')),
+                'created_at': _format_datetime(g.get('created_at'))
+            })
+
+    # 4. Bond Anniversary & Milestones
+    accepted_at = bond_doc.get('accepted_at') or bond_doc.get('created_at')
+    if accepted_at:
+        try:
+            acc_date = accepted_at.date() if isinstance(accepted_at, datetime.datetime) else datetime.date.fromisoformat(str(accepted_at)[:10])
+            for yr in range(range_start.year, range_end.year + 1):
+                try:
+                    last_day = py_calendar.monthrange(yr, acc_date.month)[1]
+                    target_day = min(acc_date.day, last_day)
+                    anniv_date = datetime.date(yr, acc_date.month, target_day)
+                    if anniv_date > acc_date and range_start <= anniv_date <= range_end:
+                        years_together = yr - acc_date.year
+                        label, color, diff_days = _get_live_countdown_label(anniv_date, today)
+                        events_list.append({
+                            'id': f'bond_anniversary_{yr}',
+                            'source': 'anniversary',
+                            'type': 'anniversary',
+                            'title': f"❤️ Bond Anniversary ({years_together} Year{'s' if years_together != 1 else ''})",
+                            'date': anniv_date.isoformat(),
+                            'time': '',
+                            'recurrence': 'yearly',
+                            'note': f"Celebrating {years_together} year{'s' if years_together != 1 else ''} together!",
+                            'location': '',
+                            'goal_id': None,
+                            'is_owner': False,
+                            'is_surprise': False,
+                            'is_revealed': True,
+                            'badge_color': 'rose',
+                            'badge_label': label,
+                            'badge_status': color,
+                            'diff_days': diff_days,
+                            'created_by': '',
+                            'created_at': None
+                        })
+                except Exception:
+                    pass
+
+            for m_days in (50, 100, 200, 300, 500, 750, 1000):
+                ms_date = acc_date + datetime.timedelta(days=m_days)
+                if range_start <= ms_date <= range_end and ms_date >= today - datetime.timedelta(days=14):
+                    label, color, diff_days = _get_live_countdown_label(ms_date, today)
+                    events_list.append({
+                        'id': f'bond_milestone_{m_days}',
+                        'source': 'milestone',
+                        'type': 'milestone',
+                        'title': f"✨ {m_days} Days Together Milestone!",
+                        'date': ms_date.isoformat(),
+                        'time': '',
+                        'recurrence': 'none',
+                        'note': f"Commemorating {m_days} days of shared bond journey.",
+                        'location': '',
+                        'goal_id': None,
+                        'is_owner': False,
+                        'is_surprise': False,
+                        'is_revealed': True,
+                        'badge_color': 'rose',
+                        'badge_label': label,
+                        'badge_status': color,
+                        'diff_days': diff_days,
+                        'created_by': '',
+                        'created_at': None
+                    })
+        except Exception as e:
+            current_app.logger.warning(f"Error calculating bond anniversary/milestone: {e}")
+
+    # Sort events chronologically
+    events_list.sort(key=lambda x: (x['date'], x.get('time') or '99:99', x['title']))
+
+    upcoming = [e for e in events_list if e.get('diff_days', -1) >= 0]
+    nearest_upcoming = min(upcoming, key=lambda x: x['diff_days']) if upcoming else None
+
+    return {
+        'events': events_list,
+        'nearest_upcoming': nearest_upcoming,
+        'total_events': len(events_list),
+        'range_start': range_start.isoformat(),
+        'range_end': range_end.isoformat()
+    }
+
+
+@bp.route('/api/bonds/<bond_id>/calendar', methods=['GET'])
+@login_required
+def api_bond_calendar_get(bond_id):
+    """Retrieve aggregated calendar events and milestones for a bond."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        start_date = request.args.get('start', '').strip()
+        end_date = request.args.get('end', '').strip()
+
+        calendar_data = _get_aggregated_bond_calendar(bond_doc, start_date, end_date, current_user.id)
+        return jsonify({
+            'success': True,
+            **calendar_data
+        })
+    except Exception as e:
+        current_app.logger.error(f"Calendar get error: {e}")
+        return jsonify({'error': 'Failed to load calendar'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/calendar/events', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_bond_calendar_create_event(bond_id):
+    """Create a new encrypted calendar event."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        # Check tier limit
+        user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+        tier = m.get_user_tier(user_doc)
+        max_events = m.TIER_LIMITS.get(tier, m.TIER_LIMITS['free']).get('max_events_per_bond', 20)
+        active_count = m.bond_events_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        })
+        if active_count >= max_events:
+            return jsonify({'error': f'Event limit reached ({max_events} events per bond). Upgrade for more.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title') or '').strip()
+        start_date_str = (data.get('start_date') or '').strip()
+
+        if not title or len(title) > 200:
+            return jsonify({'error': 'Event title is required (max 200 chars).'}), 400
+        if not start_date_str:
+            return jsonify({'error': 'Start date is required.'}), 400
+
+        try:
+            datetime.date.fromisoformat(start_date_str)
+        except ValueError:
+            return jsonify({'error': 'Invalid start date format (YYYY-MM-DD).'}), 400
+
+        end_date_str = (data.get('end_date') or '').strip() or None
+        if end_date_str:
+            try:
+                datetime.date.fromisoformat(end_date_str)
+            except ValueError:
+                end_date_str = None
+
+        time_str = (data.get('time') or '').strip()[:5]
+        recurrence = (data.get('recurrence') or 'none').strip().lower()
+        if recurrence not in ('none', 'weekly', 'monthly', 'yearly'):
+            recurrence = 'none'
+
+        note = (data.get('note') or '').strip()[:1000]
+        location = (data.get('location') or '').strip()[:200]
+        goal_id = data.get('goal_id')
+        goal_oid = None
+        if goal_id:
+            try:
+                goal_oid = ObjectId(goal_id)
+            except Exception:
+                goal_oid = None
+
+        surprise = bool(data.get('surprise'))
+        reveal_date = (data.get('reveal_date') or '').strip() or None
+        if surprise and not reveal_date:
+            reveal_date = start_date_str
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+        encrypted_note = m.encrypt_bond_data(note, bond_id) if note else ''
+        encrypted_location = m.encrypt_bond_data(location, bond_id) if location else ''
+
+        event_doc = {
+            'bond_id': ObjectId(bond_id),
+            'title': encrypted_title,
+            'start_date': start_date_str,
+            'end_date': end_date_str,
+            'time': time_str,
+            'recurrence': recurrence,
+            'note': encrypted_note,
+            'location': encrypted_location,
+            'goal_id': goal_oid,
+            'surprise': surprise,
+            'reveal_date': reveal_date,
+            'created_by': ObjectId(user_id_str),
+            'created_at': now_utc,
+            'updated_at': now_utc,
+            'archived': False,
+            'encrypted': True,
+            'rsvps': {user_id_str: 'accepted'}
+        }
+        res = m.bond_events_conf.insert_one(event_doc)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_calendar_updated', {
+            'bond_id': bond_id,
+            'action': 'create',
+            'event_id': str(res.inserted_id),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        m.send_push_notification_to_user(
+            partner_id,
+            f"{current_user.username} added a calendar event",
+            f'"{title}" on {start_date_str}',
+            url=url_for('bonds.bonds_page', _external=True),
+            tag=f'bond-event-{res.inserted_id}'
+        )
+
+        _on_bond_action(bond_doc, 'calendar', current_user.id)
+
+        return jsonify({
+            'success': True,
+            'event_id': str(res.inserted_id),
+            'title': title
+        })
+    except Exception as e:
+        current_app.logger.error(f"Create calendar event error: {e}")
+        return jsonify({'error': 'Failed to create event'}), 500
+
+
+@bp.route('/api/bonds/calendar/events/<event_id>', methods=['PUT'])
+@login_required
+def api_bond_calendar_edit_event(event_id):
+    """Edit an existing calendar event."""
+    import main as m
+    try:
+        ev = m.bond_events_conf.find_one({'_id': ObjectId(event_id), 'archived': {'$ne': True}})
+        if not ev:
+            return jsonify({'error': 'Event not found'}), 404
+
+        bond_id = str(ev['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title') or '').strip()
+        start_date_str = (data.get('start_date') or '').strip()
+
+        if not title or len(title) > 200:
+            return jsonify({'error': 'Event title is required (max 200 chars).'}), 400
+        if not start_date_str:
+            return jsonify({'error': 'Start date is required.'}), 400
+
+        try:
+            datetime.date.fromisoformat(start_date_str)
+        except ValueError:
+            return jsonify({'error': 'Invalid start date format (YYYY-MM-DD).'}), 400
+
+        end_date_str = (data.get('end_date') or '').strip() or None
+        if end_date_str:
+            try:
+                datetime.date.fromisoformat(end_date_str)
+            except ValueError:
+                end_date_str = None
+
+        time_str = (data.get('time') or '').strip()[:5]
+        recurrence = (data.get('recurrence') or 'none').strip().lower()
+        if recurrence not in ('none', 'weekly', 'monthly', 'yearly'):
+            recurrence = 'none'
+
+        note = (data.get('note') or '').strip()[:1000]
+        location = (data.get('location') or '').strip()[:200]
+        goal_id = data.get('goal_id')
+        goal_oid = None
+        if goal_id:
+            try:
+                goal_oid = ObjectId(goal_id)
+            except Exception:
+                goal_oid = None
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+        encrypted_note = m.encrypt_bond_data(note, bond_id) if note else ''
+        encrypted_location = m.encrypt_bond_data(location, bond_id) if location else ''
+
+        update_fields = {
+            'title': encrypted_title,
+            'start_date': start_date_str,
+            'end_date': end_date_str,
+            'time': time_str,
+            'recurrence': recurrence,
+            'note': encrypted_note,
+            'location': encrypted_location,
+            'goal_id': goal_oid,
+            'updated_at': now_utc,
+        }
+
+        m.bond_events_conf.update_one({'_id': ObjectId(event_id)}, {'$set': update_fields})
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_calendar_updated', {
+            'bond_id': bond_id,
+            'action': 'update',
+            'event_id': event_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        _on_bond_action(bond_doc, 'calendar', current_user.id)
+
+        return jsonify({'success': True, 'event_id': event_id})
+    except Exception as e:
+        current_app.logger.error(f"Edit calendar event error: {e}")
+        return jsonify({'error': 'Failed to edit event'}), 500
+
+
+@bp.route('/api/bonds/calendar/events/<event_id>', methods=['DELETE'])
+@login_required
+def api_bond_calendar_delete_event(event_id):
+    """Archive / delete a calendar event."""
+    import main as m
+    try:
+        ev = m.bond_events_conf.find_one({'_id': ObjectId(event_id)})
+        if not ev:
+            return jsonify({'error': 'Event not found'}), 404
+
+        bond_id = str(ev['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        m.bond_events_conf.update_one(
+            {'_id': ObjectId(event_id)},
+            {'$set': {'archived': True, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_calendar_updated', {
+            'bond_id': bond_id,
+            'action': 'delete',
+            'event_id': event_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        _on_bond_action(bond_doc, 'calendar', current_user.id)
+
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f"Delete calendar event error: {e}")
+        return jsonify({'error': 'Failed to delete event'}), 500
+
+
+@bp.route('/api/bonds/calendar/events/<event_id>/rsvp', methods=['POST'])
+@login_required
+def api_bond_calendar_event_rsvp(event_id):
+    """RSVP to a calendar event (accepted, tentative, declined)."""
+    import main as m
+    try:
+        ev = m.bond_events_conf.find_one({'_id': ObjectId(event_id), 'archived': {'$ne': True}})
+        if not ev:
+            return jsonify({'error': 'Event not found'}), 404
+
+        bond_id = str(ev['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        data = request.get_json(silent=True) or {}
+        rsvp_status = (data.get('status') or '').strip().lower()
+        if rsvp_status not in ('accepted', 'tentative', 'declined'):
+            return jsonify({'error': 'Invalid RSVP status'}), 400
+
+        m.bond_events_conf.update_one(
+            {'_id': ObjectId(event_id)},
+            {'$set': {f'rsvps.{user_id_str}': rsvp_status, 'updated_at': datetime.datetime.now(datetime.timezone.utc)}}
+        )
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_calendar_updated', {
+            'bond_id': bond_id,
+            'action': 'rsvp',
+            'event_id': event_id,
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        return jsonify({'success': True, 'status': rsvp_status})
+    except Exception as e:
+        current_app.logger.error(f"Event RSVP error: {e}")
+        return jsonify({'error': 'Failed to update RSVP'}), 500
+
+
+@bp.route('/api/bonds/countdowns/<countdown_id>/promote-to-event', methods=['POST'])
+@login_required
+def api_bond_countdown_promote_to_event(countdown_id):
+    """Promote an existing countdown into a full shared calendar event."""
+    import main as m
+    try:
+        countdown = m.bond_countdowns_conf.find_one({'_id': ObjectId(countdown_id)})
+        if not countdown:
+            return jsonify({'error': 'Countdown not found'}), 404
+
+        bond_id = str(countdown['bond_id'])
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': 'active'})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
+        tier = m.get_user_tier(user_doc)
+        max_events = m.TIER_LIMITS.get(tier, m.TIER_LIMITS['free']).get('max_events_per_bond', 20)
+        active_count = m.bond_events_conf.count_documents({
+            'bond_id': ObjectId(bond_id),
+            'archived': {'$ne': True}
+        })
+        if active_count >= max_events:
+            return jsonify({'error': f'Calendar event limit reached ({max_events} events).'}), 400
+
+        data = request.get_json(silent=True) or {}
+        time_str = (data.get('time') or '').strip()[:5]
+        note = (data.get('note') or '').strip()[:1000]
+
+        ev_date = countdown.get('event_date')
+        if isinstance(ev_date, datetime.datetime):
+            start_date_str = ev_date.date().isoformat()
+        else:
+            start_date_str = str(ev_date)[:10]
+
+        title = m.decrypt_bond_data(countdown.get('title', ''), bond_id) if countdown.get('encrypted') else countdown.get('title', '')
+        if not note:
+            note = "Promoted from shared countdown"
+
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        encrypted_title = m.encrypt_bond_data(title, bond_id)
+        encrypted_note = m.encrypt_bond_data(note, bond_id) if note else ''
+
+        event_doc = {
+            'bond_id': ObjectId(bond_id),
+            'title': encrypted_title,
+            'start_date': start_date_str,
+            'end_date': None,
+            'time': time_str,
+            'recurrence': 'none',
+            'note': encrypted_note,
+            'location': '',
+            'goal_id': None,
+            'surprise': False,
+            'reveal_date': None,
+            'created_by': ObjectId(user_id_str),
+            'created_at': now_utc,
+            'updated_at': now_utc,
+            'archived': False,
+            'encrypted': True,
+            'rsvps': {user_id_str: 'accepted'}
+        }
+        res = m.bond_events_conf.insert_one(event_doc)
+
+        partner_id = _get_partner_id_from_bond(bond_doc, user_id_str)
+        m.socketio.emit('bond_calendar_updated', {
+            'bond_id': bond_id,
+            'action': 'create',
+            'event_id': str(res.inserted_id),
+            'by_username': current_user.username
+        }, room=f"user_{partner_id}")
+
+        _on_bond_action(bond_doc, 'calendar', current_user.id)
+
+        return jsonify({'success': True, 'event_id': str(res.inserted_id), 'title': title})
+    except Exception as e:
+        current_app.logger.error(f"Promote countdown error: {e}")
+        return jsonify({'error': 'Failed to promote countdown'}), 500
+
+
+@bp.route('/api/bonds/<bond_id>/calendar/export.ics', methods=['GET'])
+@login_required
+def api_bond_calendar_export_ics(bond_id):
+    """Export bond events, countdowns, and anniversaries to an RFC 5545 iCalendar (.ics) file."""
+    import main as m
+    try:
+        bond_doc = m.bonds_conf.find_one({'_id': ObjectId(bond_id), 'status': {'$in': ['active', 'broken']}})
+        if not bond_doc:
+            return jsonify({'error': 'Bond not found'}), 404
+        user_id_str = str(current_user.id)
+        if not _is_bond_participant(bond_doc, user_id_str):
+            return jsonify({'error': 'Not authorized'}), 403
+
+        # Aggregate 1 year back to 2 years forward
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        start_date = (now_utc.date() - datetime.timedelta(days=365)).isoformat()
+        end_date = (now_utc.date() + datetime.timedelta(days=730)).isoformat()
+        cal_data = _get_aggregated_bond_calendar(bond_doc, start_date, end_date, current_user.id)
+        events = cal_data.get('events', [])
+
+        def _escape_ics(text):
+            if not text:
+                return ''
+            return text.replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
+
+        dtstamp = now_utc.strftime('%Y%m%dT%H%M%SZ')
+        lines = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//EchoWithin//Bond Shared Calendar//EN",
+            "CALSCALE:GREGORIAN",
+            "METHOD:PUBLISH",
+            "X-WR-CALNAME:EchoWithin Bond Calendar",
+            "X-WR-TIMEZONE:UTC",
+        ]
+
+        for ev in events:
+            ev_date_str = ev.get('date', '').replace('-', '')
+            ev_time = (ev.get('time') or '').replace(':', '')
+            if len(ev_time) == 4:
+                dtstart = f"{ev_date_str}T{ev_time}00Z"
+                dtstart_line = f"DTSTART:{dtstart}"
+            else:
+                dtstart_line = f"DTSTART;VALUE=DATE:{ev_date_str}"
+
+            uid = f"{ev.get('id', 'event')}-{ev.get('date')}@echowithin.xyz"
+            summary = _escape_ics(ev.get('title', 'Event'))
+            desc = _escape_ics(ev.get('note', ''))
+            loc = _escape_ics(ev.get('location', ''))
+
+            lines.append("BEGIN:VEVENT")
+            lines.append(f"UID:{uid}")
+            lines.append(f"DTSTAMP:{dtstamp}")
+            lines.append(dtstart_line)
+            lines.append(f"SUMMARY:{summary}")
+            if desc:
+                lines.append(f"DESCRIPTION:{desc}")
+            if loc:
+                lines.append(f"LOCATION:{loc}")
+            lines.append("END:VEVENT")
+
+        lines.append("END:VCALENDAR")
+        ics_content = "\r\n".join(lines) + "\r\n"
+
+        return Response(
+            ics_content,
+            mimetype='text/calendar',
+            headers={
+                'Content-Disposition': f'attachment; filename="bond-calendar-{bond_id[:8]}.ics"',
+                'Cache-Control': 'no-cache'
+            }
+        )
+    except Exception as e:
+        current_app.logger.error(f"Export ICS error: {e}")
+        return jsonify({'error': 'Failed to export calendar'}), 500
 
 
 # ===================================================================

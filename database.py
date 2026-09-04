@@ -47,6 +47,7 @@ bond_moods_conf = None
 bond_qotd_conf = None
 bond_habits_conf = None
 bond_countdowns_conf = None
+bond_events_conf = None
 
 # --- Bond Shared Album (Photo Memories) ---
 bond_album_photos_conf = None

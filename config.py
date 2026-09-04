@@ -98,6 +98,7 @@ TIER_LIMITS = {
         'max_bonds': 3,
         'max_goals_per_bond': 5,
         'max_nudges_per_day': 3,
+        'max_events_per_bond': 20,
     },
     'premium': {
         'max_notes': 99999,               # effectively unlimited
@@ -118,6 +119,7 @@ TIER_LIMITS = {
         'max_bonds': 3,
         'max_goals_per_bond': 20,
         'max_nudges_per_day': 10,
+        'max_events_per_bond': 100,
     }
 }
 

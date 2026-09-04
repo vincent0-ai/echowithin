@@ -1870,6 +1870,10 @@
                     Insights{% if bond.unread_sections.get('insights') %}<span class="section-badge" id="badge-insights-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-insights-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
                 <button class="btn btn-bond-primary btn-bond-section"
+                    onclick="toggleSection('calendar-{{ bond.id }}', this); loadCalendar('{{ bond.id }}')">
+                    Calendar{% if bond.unread_sections.get('calendar') %}<span class="section-badge" id="badge-calendar-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-calendar-{{ bond.id }}" style="display:none;"></span>{% endif %}
+                </button>
+                <button class="btn btn-bond-primary btn-bond-section"
                     onclick="toggleSection('countdowns-{{ bond.id }}', this); loadCountdowns('{{ bond.id }}')">
                     Countdowns{% if bond.unread_sections.get('countdowns') %}<span class="section-badge" id="badge-countdowns-{{ bond.id }}"></span>{% else %}<span class="section-badge" id="badge-countdowns-{{ bond.id }}" style="display:none;"></span>{% endif %}
                 </button>
@@ -1952,6 +1956,98 @@
                 </div>
                 <div id="habits-list-{{ bond.id }}">
                     <div style="color: #999; font-size: 0.85rem; text-align: center; padding: 0.5rem;">Loading habits...</div>
+                </div>
+            </div>
+
+            <!-- Shared Calendar Section -->
+            <div class="bond-expand-section" id="calendar-{{ bond.id }}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <strong style="font-size: 0.95rem; color: var(--primary-dark-color);">Shared Calendar</strong>
+                    </div>
+                    <div style="display: flex; gap: 0.4rem; align-items: center;">
+                        <a href="/api/bonds/{{ bond.id }}/calendar/export.ics" class="btn btn-bond-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px; text-decoration:none;" title="Export calendar (.ics)">
+                            <i class="fas fa-file-export"></i> Export .ics
+                        </a>
+                        <button class="btn btn-bond-primary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 6px;" onclick="showAddEventForm('{{ bond.id }}')">+ Add Event</button>
+                    </div>
+                </div>
+
+                <!-- Live Nearest Event Banner -->
+                <div id="calendar-nearest-banner-{{ bond.id }}" style="display:none; margin-bottom:0.8rem; padding:0.6rem 0.8rem; background:var(--surface-bg); border-radius:8px; border-left:4px solid var(--primary-color);">
+                </div>
+
+                <!-- Add/Edit Event Form -->
+                <div id="add-event-form-{{ bond.id }}" style="display:none; margin-bottom:0.8rem; padding:0.8rem; background:var(--surface-bg); border-radius:8px; border:1px solid var(--border-color);">
+                    <div style="font-weight:600; font-size:0.85rem; color:var(--primary-dark-color); margin-bottom:0.5rem;" id="event-form-title-{{ bond.id }}">New Calendar Event</div>
+                    <input type="hidden" id="event-edit-id-{{ bond.id }}" value="">
+                    <input type="text" id="event-title-input-{{ bond.id }}" placeholder="Event title (e.g. Date Night, Movie, Dinner)..." maxlength="200" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; margin-bottom:0.4rem; background:var(--card-bg); color:var(--text-dark-color);">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-bottom:0.4rem;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Date</label>
+                            <input type="date" id="event-date-input-{{ bond.id }}" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Time (optional)</label>
+                            <input type="time" id="event-time-input-{{ bond.id }}" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem; margin-bottom:0.4rem;">
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Repeats</label>
+                            <select id="event-recurrence-input-{{ bond.id }}" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                                <option value="none">Does not repeat</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Location (optional)</label>
+                            <input type="text" id="event-location-input-{{ bond.id }}" placeholder="e.g. Italian Bistro" maxlength="200" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                        </div>
+                    </div>
+                    <textarea id="event-note-input-{{ bond.id }}" placeholder="Optional notes or plan details..." maxlength="1000" rows="2" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; margin-bottom:0.4rem; background:var(--card-bg); color:var(--text-dark-color); resize:vertical;"></textarea>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.4rem; flex-wrap:wrap; gap:0.4rem;">
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:flex; align-items:center; gap:0.3rem; cursor:pointer;">
+                            <input type="checkbox" id="event-surprise-input-{{ bond.id }}"> Secret surprise event 🎁
+                        </label>
+                        <div style="display:flex; gap:0.4rem;">
+                            <button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="hideAddEventForm('{{ bond.id }}')">Cancel</button>
+                            <button class="btn btn-bond-primary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="saveCalendarEvent('{{ bond.id }}')">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar Month Navigation & Grid -->
+                <div style="background:var(--card-bg); border:1px solid var(--border-color); border-radius:8px; padding:0.8rem; margin-bottom:0.8rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+                        <button class="btn btn-bond-secondary" style="font-size:0.8rem; padding:0.2rem 0.5rem;" onclick="changeCalendarMonth('{{ bond.id }}', -1)">&lt; Prev</button>
+                        <div style="font-weight:700; font-size:0.95rem; color:var(--primary-dark-color);" id="calendar-month-label-{{ bond.id }}">Month Year</div>
+                        <div style="display:flex; gap:0.3rem;">
+                            <button class="btn btn-bond-secondary" style="font-size:0.75rem; padding:0.2rem 0.5rem;" onclick="resetCalendarToToday('{{ bond.id }}')">Today</button>
+                            <button class="btn btn-bond-secondary" style="font-size:0.8rem; padding:0.2rem 0.5rem;" onclick="changeCalendarMonth('{{ bond.id }}', 1)">Next &gt;</button>
+                        </div>
+                    </div>
+
+                    <!-- Weekday Header -->
+                    <div style="display:grid; grid-template-columns: repeat(7, 1fr); text-align:center; font-size:0.75rem; font-weight:600; color:var(--text-muted); padding-bottom:0.4rem; border-bottom:1px solid var(--border-color); margin-bottom:0.4rem;">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+
+                    <!-- Days Grid -->
+                    <div id="calendar-grid-{{ bond.id }}" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:2px;">
+                        <div style="grid-column: 1 / -1; text-align:center; color:var(--text-muted); font-size:0.85rem; padding:1rem;">Loading calendar...</div>
+                    </div>
+                </div>
+
+                <!-- Selected Date Events List -->
+                <div id="calendar-day-detail-{{ bond.id }}" style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:8px; padding:0.8rem;">
+                    <div style="font-weight:600; font-size:0.85rem; color:var(--primary-dark-color); margin-bottom:0.5rem;" id="calendar-selected-date-label-{{ bond.id }}">Events</div>
+                    <div id="calendar-selected-day-list-{{ bond.id }}">
+                        <div style="font-size:0.8rem; color:var(--text-muted); text-align:center; padding:0.5rem;">Select a date to view events</div>
+                    </div>
                 </div>
             </div>
 
@@ -5746,6 +5842,12 @@
             if (window.showCustomToast) showCustomToast(data.by_username + ' updated daily habits!', 'success');
             loadHabits(data.bond_id);
         });
+        // --- Shared Calendar JS ---
+        socket.on('bond_calendar_updated', function(data) {
+            if (window.showCustomToast) showCustomToast((data.by_username || 'Partner') + ' updated the calendar! 📅', 'success');
+            loadCalendar(data.bond_id);
+        });
+
         // --- Shared Countdowns JS ---
         socket.on('bond_countdown_updated', function(data) {
             if (window.showCustomToast) showCustomToast(data.by_username + ' updated countdowns!', 'success');
@@ -5900,6 +6002,414 @@
                 loadCountdowns(bondId);
                 if (window.showCustomToast) showCustomToast('Countdown removed.', 'success');
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
+        });
+    }
+
+    // --- Shared Calendar Functions ---
+    var bondCalendarState = {};
+
+    function initBondCalendarState(bondId) {
+        if (!bondCalendarState[bondId]) {
+            var now = new Date();
+            var todayStr = now.toISOString().slice(0, 10);
+            bondCalendarState[bondId] = {
+                year: now.getFullYear(),
+                month: now.getMonth(),
+                selectedDate: todayStr,
+                events: [],
+                nearestUpcoming: null
+            };
+        }
+        return bondCalendarState[bondId];
+    }
+
+    function loadCalendar(bondId, targetYear, targetMonth) {
+        var state = initBondCalendarState(bondId);
+        if (targetYear !== undefined && targetMonth !== undefined) {
+            state.year = targetYear;
+            state.month = targetMonth;
+        }
+
+        var firstDay = new Date(state.year, state.month, 1);
+        var qStart = new Date(firstDay.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+        var lastDay = new Date(state.year, state.month + 1, 0);
+        var qEnd = new Date(lastDay.getTime() + 14 * 86400000).toISOString().slice(0, 10);
+
+        echoFetch('/api/bonds/' + bondId + '/calendar?start=' + qStart + '&end=' + qEnd)
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d && d.success) {
+                    state.events = d.events || [];
+                    state.nearestUpcoming = d.nearest_upcoming || null;
+                    setBondCache(bondId + ':calendar', d);
+                    updateNearestBanner(bondId, state.nearestUpcoming);
+                    renderCalendarGrid(bondId);
+                    renderCalendarDayEvents(bondId, state.selectedDate);
+                }
+            })
+            .catch(function() {
+                getBondCache(bondId + ':calendar').then(function(cached) {
+                    if (cached && cached.events) {
+                        state.events = cached.events || [];
+                        state.nearestUpcoming = cached.nearest_upcoming || null;
+                        updateNearestBanner(bondId, state.nearestUpcoming);
+                        renderCalendarGrid(bondId);
+                        renderCalendarDayEvents(bondId, state.selectedDate);
+                    }
+                });
+            });
+    }
+
+    function updateNearestBanner(bondId, nearest) {
+        var banner = document.getElementById('calendar-nearest-banner-' + bondId);
+        if (!banner) return;
+        if (!nearest) {
+            banner.style.display = 'none';
+            return;
+        }
+        var icon = nearest.source === 'countdown' ? '⏳' : (nearest.source === 'goal' ? '🎯' : (nearest.source === 'anniversary' ? '❤️' : '📅'));
+        var colorStyle = nearest.badge_status === 'success' ? 'var(--success-color)' : 'var(--primary-color)';
+        banner.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">' +
+            '<div style="font-size:0.85rem; color:var(--text-dark-color);">' +
+            '<strong>Nearest Upcoming:</strong> ' + icon + ' ' + escHtml(nearest.title) + ' (' + nearest.date + (nearest.time ? ' at ' + nearest.time : '') + ')' +
+            '</div>' +
+            '<span style="font-weight:700; font-size:0.85rem; color:' + colorStyle + ';">' + nearest.badge_label + '</span>' +
+            '</div>';
+        banner.style.display = 'block';
+    }
+
+    function changeCalendarMonth(bondId, delta) {
+        var state = initBondCalendarState(bondId);
+        var newMonth = state.month + delta;
+        var newYear = state.year;
+        if (newMonth < 0) {
+            newMonth = 11;
+            newYear -= 1;
+        } else if (newMonth > 11) {
+            newMonth = 0;
+            newYear += 1;
+        }
+        state.month = newMonth;
+        state.year = newYear;
+        loadCalendar(bondId, newYear, newMonth);
+    }
+
+    function resetCalendarToToday(bondId) {
+        var now = new Date();
+        var state = initBondCalendarState(bondId);
+        state.year = now.getFullYear();
+        state.month = now.getMonth();
+        state.selectedDate = now.toISOString().slice(0, 10);
+        loadCalendar(bondId, state.year, state.month);
+    }
+
+    function renderCalendarGrid(bondId) {
+        var state = initBondCalendarState(bondId);
+        var monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        var labelEl = document.getElementById('calendar-month-label-' + bondId);
+        if (labelEl) labelEl.textContent = monthNames[state.month] + ' ' + state.year;
+
+        var gridEl = document.getElementById('calendar-grid-' + bondId);
+        if (!gridEl) return;
+
+        var firstDayIdx = new Date(state.year, state.month, 1).getDay();
+        var totalDays = new Date(state.year, state.month + 1, 0).getDate();
+        var prevMonthTotalDays = new Date(state.year, state.month, 0).getDate();
+
+        var todayStr = new Date().toISOString().slice(0, 10);
+        var html = '';
+
+        for (var p = firstDayIdx - 1; p >= 0; p--) {
+            var dayNum = prevMonthTotalDays - p;
+            var prevMo = state.month === 0 ? 11 : state.month - 1;
+            var prevYr = state.month === 0 ? state.year - 1 : state.year;
+            var prevDateStr = prevYr + '-' + String(prevMo + 1).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+            html += renderDayCell(bondId, prevDateStr, dayNum, true, todayStr);
+        }
+
+        for (var d = 1; d <= totalDays; d++) {
+            var dateStr = state.year + '-' + String(state.month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+            html += renderDayCell(bondId, dateStr, d, false, todayStr);
+        }
+
+        var totalCells = firstDayIdx + totalDays;
+        var nextDays = (totalCells % 7 === 0) ? 0 : (7 - (totalCells % 7));
+        for (var n = 1; n <= nextDays; n++) {
+            var nextMo = state.month === 11 ? 0 : state.month + 1;
+            var nextYr = state.month === 11 ? state.year + 1 : state.year;
+            var nextDateStr = nextYr + '-' + String(nextMo + 1).padStart(2, '0') + '-' + String(n).padStart(2, '0');
+            html += renderDayCell(bondId, nextDateStr, n, true, todayStr);
+        }
+
+        gridEl.innerHTML = html;
+    }
+
+    function renderDayCell(bondId, dateStr, dayNum, isOtherMonth, todayStr) {
+        var state = bondCalendarState[bondId];
+        var isSelected = state && state.selectedDate === dateStr;
+        var isToday = dateStr === todayStr;
+
+        var dayEvents = (state && state.events ? state.events : []).filter(function(e) {
+            return e.date === dateStr;
+        });
+
+        var cellBg = isSelected ? 'var(--surface-bg)' : 'var(--card-bg)';
+        var cellBorder = isSelected ? '2px solid var(--primary-color)' : (isToday ? '1px solid var(--primary-color)' : '1px solid var(--border-color)');
+        var numColor = isOtherMonth ? 'var(--text-muted)' : (isToday ? 'var(--primary-color)' : 'var(--text-dark-color)');
+        var fontWeight = (isToday || isSelected) ? '700' : '400';
+
+        var dotsHtml = '';
+        if (dayEvents.length > 0) {
+            dotsHtml = '<div style="display:flex; justify-content:center; gap:3px; margin-top:2px; flex-wrap:wrap;">';
+            dayEvents.slice(0, 4).forEach(function(ev) {
+                var dotColor = 'var(--primary-color)';
+                if (ev.source === 'countdown') dotColor = '#f59e0b';
+                else if (ev.source === 'goal') dotColor = '#10b981';
+                else if (ev.source === 'anniversary' || ev.source === 'milestone') dotColor = '#f43f5e';
+                dotsHtml += '<span style="width:6px; height:6px; border-radius:50%; background:' + dotColor + ';" title="' + escHtml(ev.title) + '"></span>';
+            });
+            if (dayEvents.length > 4) {
+                dotsHtml += '<span style="font-size:0.6rem; color:var(--text-muted); line-height:6px;">+</span>';
+            }
+            dotsHtml += '</div>';
+        }
+
+        return '<div onclick="selectCalendarDate(\'' + bondId + '\', \'' + dateStr + '\')" style="min-height:52px; padding:3px; border-radius:6px; background:' + cellBg + '; border:' + cellBorder + '; cursor:pointer; text-align:center; transition:background 0.15s; position:relative;">' +
+            '<div style="font-size:0.75rem; font-weight:' + fontWeight + '; color:' + numColor + ';">' + dayNum + '</div>' +
+            dotsHtml +
+            '</div>';
+    }
+
+    function selectCalendarDate(bondId, dateStr) {
+        var state = initBondCalendarState(bondId);
+        state.selectedDate = dateStr;
+        renderCalendarGrid(bondId);
+        renderCalendarDayEvents(bondId, dateStr);
+    }
+
+    function renderCalendarDayEvents(bondId, dateStr) {
+        var state = initBondCalendarState(bondId);
+        var labelEl = document.getElementById('calendar-selected-date-label-' + bondId);
+        if (labelEl) {
+            var dObj = new Date(dateStr + 'T00:00:00');
+            labelEl.textContent = 'Events on ' + dObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        var listEl = document.getElementById('calendar-selected-day-list-' + bondId);
+        if (!listEl) return;
+
+        var dayEvents = (state && state.events ? state.events : []).filter(function(e) {
+            return e.date === dateStr;
+        });
+
+        if (dayEvents.length === 0) {
+            listEl.innerHTML = '<div style="font-size:0.85rem; color:var(--text-muted); text-align:center; padding:0.8rem; background:var(--card-bg); border-radius:6px; border:1px dashed var(--border-color);">' +
+                'No events on this day. <a href="javascript:void(0)" onclick="showAddEventForm(\'' + bondId + '\', null, \'' + dateStr + '\')" style="color:var(--primary-color); font-weight:600;">+ Plan something</a>' +
+                '</div>';
+            return;
+        }
+
+        var html = '<div style="display:flex; flex-direction:column; gap:0.5rem;">';
+        dayEvents.forEach(function(ev) {
+            var icon = '📅';
+            var sourceBadge = '<span style="font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:10px; background:rgba(99,102,241,0.1); color:var(--primary-color);">Event</span>';
+            if (ev.source === 'countdown') {
+                icon = '⏳';
+                sourceBadge = '<span style="font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:10px; background:rgba(245,158,11,0.1); color:#f59e0b;">Countdown</span>';
+            } else if (ev.source === 'goal') {
+                icon = '🎯';
+                sourceBadge = '<span style="font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:10px; background:rgba(16,185,129,0.1); color:#10b981;">Goal Deadline</span>';
+            } else if (ev.source === 'anniversary' || ev.source === 'milestone') {
+                icon = '❤️';
+                sourceBadge = '<span style="font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:10px; background:rgba(244,63,94,0.1); color:#f43f5e;">Anniversary</span>';
+            }
+
+            var timeHtml = ev.time ? '<span style="font-size:0.75rem; color:var(--text-muted);"><i class="far fa-clock"></i> ' + ev.time + '</span>' : '';
+            var locHtml = ev.location ? '<span style="font-size:0.75rem; color:var(--text-muted);"><i class="fas fa-map-marker-alt"></i> ' + escHtml(ev.location) + '</span>' : '';
+            var recurrenceHtml = (ev.recurrence && ev.recurrence !== 'none') ? '<span style="font-size:0.7rem; color:var(--text-muted);"><i class="fas fa-redo"></i> ' + ev.recurrence + '</span>' : '';
+
+            var actionsHtml = '';
+            if (ev.source === 'custom') {
+                actionsHtml = '<div style="display:flex; gap:0.3rem; align-items:center;">' +
+                    '<button onclick="showAddEventForm(\'' + bondId + '\', ' + JSON.stringify(ev).replace(/"/g, '&quot;') + ')" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.8rem; padding:0.2rem;" title="Edit event"><i class="fas fa-edit"></i></button>' +
+                    '<button onclick="deleteCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\')" style="background:none; border:none; color:#c62828; cursor:pointer; font-size:0.8rem; padding:0.2rem;" title="Delete event">&times;</button>' +
+                    '</div>';
+            } else if (ev.source === 'countdown') {
+                actionsHtml = '<button class="btn btn-bond-secondary" style="font-size:0.7rem; padding:0.15rem 0.4rem;" onclick="promoteCountdownToEvent(\'' + ev.id + '\', \'' + bondId + '\')"><i class="fas fa-calendar-plus"></i> Promote to Event</button>';
+            }
+
+            var rsvpBlock = '';
+            if (ev.source === 'custom') {
+                var myR = ev.my_rsvp || 'none';
+                rsvpBlock = '<div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.4rem; font-size:0.75rem;">' +
+                    '<span style="color:var(--text-muted);">RSVP:</span>' +
+                    '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'accepted\')" style="background:' + (myR === 'accepted' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'accepted' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Going</button>' +
+                    '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'tentative\')" style="background:' + (myR === 'tentative' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'tentative' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Maybe</button>' +
+                    '<button onclick="rsvpCalendarEvent(\'' + ev.id + '\', \'' + bondId + '\', \'declined\')" style="background:' + (myR === 'declined' ? 'var(--primary-color)' : 'none') + '; color:' + (myR === 'declined' ? '#fff' : 'var(--text-muted)') + '; border:1px solid var(--border-color); border-radius:4px; padding:0.1rem 0.4rem; cursor:pointer;">Can\'t</button>' +
+                    '</div>';
+            }
+
+            html += '<div style="padding:0.6rem; background:var(--card-bg); border:1px solid var(--border-color); border-radius:6px;">' +
+                '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.4rem;">' +
+                '<div style="flex:1;">' +
+                '<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">' +
+                '<span style="font-size:1rem;">' + icon + '</span>' +
+                '<strong style="font-size:0.88rem; color:var(--text-dark-color);">' + escHtml(ev.title) + '</strong>' +
+                sourceBadge +
+                (ev.badge_label ? '<span style="font-size:0.75rem; font-weight:600; color:' + (ev.badge_status === 'success' ? 'var(--success-color)' : 'var(--primary-color)') + ';">' + ev.badge_label + '</span>' : '') +
+                '</div>' +
+                '<div style="display:flex; gap:0.6rem; align-items:center; margin-top:0.2rem; flex-wrap:wrap;">' +
+                timeHtml + locHtml + recurrenceHtml +
+                '</div>' +
+                (ev.note ? '<div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.3rem;">' + escHtml(ev.note) + '</div>' : '') +
+                rsvpBlock +
+                '</div>' +
+                actionsHtml +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        listEl.innerHTML = html;
+    }
+
+    function showAddEventForm(bondId, editEv, initialDate) {
+        var form = document.getElementById('add-event-form-' + bondId);
+        if (!form) return;
+        var editIdInput = document.getElementById('event-edit-id-' + bondId);
+        var titleInput = document.getElementById('event-title-input-' + bondId);
+        var dateInput = document.getElementById('event-date-input-' + bondId);
+        var timeInput = document.getElementById('event-time-input-' + bondId);
+        var recInput = document.getElementById('event-recurrence-input-' + bondId);
+        var locInput = document.getElementById('event-location-input-' + bondId);
+        var noteInput = document.getElementById('event-note-input-' + bondId);
+        var surpriseInput = document.getElementById('event-surprise-input-' + bondId);
+        var headerEl = document.getElementById('event-form-title-' + bondId);
+
+        if (editEv) {
+            if (headerEl) headerEl.textContent = 'Edit Calendar Event';
+            if (editIdInput) editIdInput.value = editEv.id;
+            if (titleInput) titleInput.value = editEv.title;
+            if (dateInput) dateInput.value = editEv.date;
+            if (timeInput) timeInput.value = editEv.time || '';
+            if (recInput) recInput.value = editEv.recurrence || 'none';
+            if (locInput) locInput.value = editEv.location || '';
+            if (noteInput) noteInput.value = editEv.note || '';
+            if (surpriseInput) surpriseInput.checked = !!editEv.is_surprise;
+        } else {
+            if (headerEl) headerEl.textContent = 'New Calendar Event';
+            if (editIdInput) editIdInput.value = '';
+            if (titleInput) titleInput.value = '';
+            var defDate = initialDate || (bondCalendarState[bondId] ? bondCalendarState[bondId].selectedDate : new Date().toISOString().slice(0, 10));
+            if (dateInput) dateInput.value = defDate;
+            if (timeInput) timeInput.value = '';
+            if (recInput) recInput.value = 'none';
+            if (locInput) locInput.value = '';
+            if (noteInput) noteInput.value = '';
+            if (surpriseInput) surpriseInput.checked = false;
+        }
+        form.style.display = 'block';
+    }
+
+    function hideAddEventForm(bondId) {
+        var form = document.getElementById('add-event-form-' + bondId);
+        if (form) form.style.display = 'none';
+    }
+
+    function saveCalendarEvent(bondId) {
+        var editId = (document.getElementById('event-edit-id-' + bondId) || {}).value;
+        var title = (document.getElementById('event-title-input-' + bondId) || {}).value || '';
+        var date = (document.getElementById('event-date-input-' + bondId) || {}).value || '';
+        var time = (document.getElementById('event-time-input-' + bondId) || {}).value || '';
+        var recurrence = (document.getElementById('event-recurrence-input-' + bondId) || {}).value || 'none';
+        var location = (document.getElementById('event-location-input-' + bondId) || {}).value || '';
+        var note = (document.getElementById('event-note-input-' + bondId) || {}).value || '';
+        var surprise = (document.getElementById('event-surprise-input-' + bondId) || {}).checked;
+
+        if (!title.trim()) {
+            if (window.showCustomAlert) showCustomAlert('Please enter an event title.', 'danger');
+            return;
+        }
+        if (!date) {
+            if (window.showCustomAlert) showCustomAlert('Please select an event date.', 'danger');
+            return;
+        }
+
+        var payload = {
+            title: title.trim(),
+            start_date: date,
+            time: time,
+            recurrence: recurrence,
+            location: location.trim(),
+            note: note.trim(),
+            surprise: surprise
+        };
+
+        var url = editId ? ('/api/bonds/calendar/events/' + editId) : ('/api/bonds/' + bondId + '/calendar/events');
+        var method = editId ? 'PUT' : 'POST';
+
+        echoFetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(payload)
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                hideAddEventForm(bondId);
+                loadCalendar(bondId);
+                if (window.showCustomToast) showCustomToast(editId ? 'Event updated!' : 'Event created! 📅', 'success');
+            } else if (window.showCustomAlert) {
+                showCustomAlert(d.error || 'Failed to save event', 'danger');
+            }
+        });
+    }
+
+    function deleteCalendarEvent(eventId, bondId) {
+        if (window.showCustomConfirm) {
+            showCustomConfirm('Delete this calendar event?', function(ok) {
+                if (ok) doDeleteCalendarEvent(eventId, bondId);
+            });
+        } else {
+            if (confirm('Delete this calendar event?')) doDeleteCalendarEvent(eventId, bondId);
+        }
+    }
+
+    function doDeleteCalendarEvent(eventId, bondId) {
+        echoFetch('/api/bonds/calendar/events/' + eventId, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                loadCalendar(bondId);
+                if (window.showCustomToast) showCustomToast('Event deleted.', 'success');
+            } else if (window.showCustomAlert) {
+                showCustomAlert(d.error || 'Failed to delete event', 'danger');
+            }
+        });
+    }
+
+    function rsvpCalendarEvent(eventId, bondId, status) {
+        echoFetch('/api/bonds/calendar/events/' + eventId + '/rsvp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ status: status })
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                loadCalendar(bondId);
+                if (window.showCustomToast) showCustomToast('RSVP updated to ' + status, 'success');
+            }
+        });
+    }
+
+    function promoteCountdownToEvent(countdownId, bondId) {
+        echoFetch('/api/bonds/countdowns/' + countdownId + '/promote-to-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.success) {
+                loadCalendar(bondId);
+                if (window.showCustomToast) showCustomToast('Countdown promoted to calendar event! 📅', 'success');
+            } else if (window.showCustomAlert) {
+                showCustomAlert(d.error || 'Failed to promote countdown', 'danger');
+            }
         });
     }
 

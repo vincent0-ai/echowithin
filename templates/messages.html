@@ -17,7 +17,7 @@
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.78rem; background: var(--card-bg, #fafafa); padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border-color, #eee);">
             <div><strong>Send a Message:</strong> Type anything to Maya and see her auto-reply.</div>
-            <div><strong>Whisper Mode:</strong> Self-destructing chats with screenshot alerts.</div>
+            <div><strong>Whisper Mode:</strong> Self-destructing chats with session watermarks & capture alerts.</div>
             <div><strong>Real-Time:</strong> Messages deliver instantly with read receipts.</div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-top: 0.6rem;">
@@ -2011,6 +2011,7 @@
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
         const currentUserId = "{{ current_user.id }}";
+        const currentUserName = "{{ current_user.username }}";
         let activeRecipientId = "{{ active_chat._id if active_chat else '' }}";
         let activeRecipientName = "{{ active_chat.username if active_chat else '' }}";
         if (activeRecipientId && window.innerWidth <= 768) {
@@ -3998,7 +3999,12 @@
                         }
                     }
                     if (document.activeElement && document.activeElement.id === 'whisper-input') {
-                        if (window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                        // Only auto-scroll when user is already near the bottom
+                        // to avoid yanking position during keyboard/address-bar toggling.
+                        if (wMessages) {
+                            var _wDist = wMessages.scrollHeight - wMessages.scrollTop - wMessages.clientHeight;
+                            if (_wDist < 200 && window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                        }
                     }
                 }
                 // Detect keyboard closing (viewport returning to full height) — reset any dead space
@@ -4047,7 +4053,13 @@
                                 var wo = document.getElementById('whisper-overlay');
                                 if (wo && wo.classList.contains('active')) {
                                     wo.style.height = window.visualViewport.height + 'px';
-                                    if (window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                                    // Only auto-scroll if near bottom; preserve position
+                                    // when the user is reading older messages (iPhone XR fix).
+                                    var wm = document.getElementById('whisper-messages');
+                                    if (wm) {
+                                        var _dist = wm.scrollHeight - wm.scrollTop - wm.clientHeight;
+                                        if (_dist < 200 && window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                                    }
                                 }
                             }
                         }, 300);
@@ -4763,25 +4775,34 @@
     .whisper-overlay-header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 0.8rem 1rem; background: #2a1810; color: #fff;
+        position: relative; z-index: 2;
     }
     .whisper-overlay-header .whisper-partner { font-weight: 600; font-size: 1rem; }
     .whisper-timer-bar {
         height: 4px; background: #3e2217; transition: width 1s linear;
+        position: relative; z-index: 2;
     }
     .whisper-timer-text { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
     .whisper-end-btn {
         background: none; border: 1px solid rgba(255,255,255,0.4); color: #fff;
         padding: 0.3rem 0.8rem; border-radius: 20px; cursor: pointer; font-size: 0.8rem;
     }
+    .whisper-watermark {
+        position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none; user-select: none; -webkit-user-select: none;
+        background-repeat: repeat; z-index: 0;
+    }
     .whisper-messages {
         flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem;
         display: flex; flex-direction: column; gap: 6px;
+        position: relative; z-index: 1;
     }
     .whisper-msg {
         max-width: 75%; padding: 0.5rem 0.8rem; border-radius: 12px;
         font-size: 0.9rem; line-height: 1.4;
         user-select: none; -webkit-user-select: none;
+        position: relative; z-index: 2;
     }
     .whisper-msg-sent { background: #3e2217; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
     .whisper-msg-received { background: #333; color: #e0e0e0; align-self: flex-start; border-bottom-left-radius: 4px; }
@@ -4799,10 +4820,15 @@
         white-space: nowrap; color: rgba(255,255,255,0.45); font-size: 0.75rem;
     }
     .whisper-msg-time { font-size: 0.65rem; opacity: 0.6; margin-top: 2px; }
+    /* Read-status ticks (DM parity): single grey ✓ → blue ✓✓ */
+    .whisper-read-status { margin-left: 4px; font-size: 0.6rem; }
+    .whisper-read-status i.fa-check { color: rgba(255,255,255,0.6); }
+    .whisper-read-status i.fa-check-double { color: #5dade2; animation: tickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
     .whisper-input-area {
         display: flex; gap: 0.5rem; padding: 0.8rem 1rem;
         padding-bottom: calc(0.8rem + env(safe-area-inset-bottom, 0px));
         background: #222; border-top: 1px solid #333; flex-shrink: 0;
+        position: relative; z-index: 2;
     }
     .whisper-input-area textarea {
         flex: 1; background: #333; border: none; color: #fff; border-radius: 20px;
@@ -4876,7 +4902,7 @@
         <div class="whisper-duration-options" id="whisper-duration-options"></div>
         <div class="whisper-consent-text">
             Both parties must consent. Messages and photos are permanently deleted when time runs out and are never backed up.
-            Screen capture attempts will alert both participants.
+            Sessions are protected with dynamic session watermarks and desktop capture alerts.
         </div>
         <div class="whisper-modal-actions">
             <button class="btn btn-whisper-cancel" onclick="closeWhisperInvite()">Cancel</button>
@@ -4891,7 +4917,7 @@
         <h3>Whisper Invite</h3>
         <p id="whisper-incoming-text"></p>
         <div class="whisper-consent-text">
-            This is a timed, private conversation. Messages are permanently deleted when it ends.
+            This is a timed, private conversation protected by session watermarks. Messages are permanently deleted when it ends.
         </div>
         <div class="whisper-modal-actions">
             <button class="btn btn-whisper-cancel" onclick="respondWhisperInvite('decline')">Decline</button>
@@ -4902,6 +4928,7 @@
 
 <!-- Active Whisper Session Overlay -->
 <div class="whisper-overlay" id="whisper-overlay">
+    <div class="whisper-watermark" id="whisper-watermark" aria-hidden="true"></div>
     <div class="whisper-overlay-header">
         <span class="whisper-partner" id="whisper-partner-name">Whisper</span>
         <span class="whisper-timer-text" id="whisper-timer-text">--:--</span>
@@ -5084,6 +5111,7 @@
         });
 
         startWhisperTimer();
+        renderWhisperWatermark(data.partner_username);
         setupScreenshotDetection();
     };
 
@@ -5125,7 +5153,7 @@
         if (msg.id && whisperRenderedIds.has(msg.id)) return;
         // Smart autoscroll (F1): only jump to bottom when already near it.
         // Otherwise preserve the reader's position and offer the FAB (DM parity).
-        var _nearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 120;
+        var _nearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 200;
         const div = document.createElement('div');
         if (msg.is_system) {
             div.className = 'whisper-msg whisper-msg-system';
@@ -5188,6 +5216,14 @@
                 edFlag.textContent = 'edited';
                 time.appendChild(edFlag);
             }
+            // Read-status ticks for sent messages (DM parity).
+            if (isSent) {
+                var tickSpan = document.createElement('span');
+                tickSpan.className = 'whisper-read-status';
+                var iconClass = msg.is_read ? 'fa-check-double' : 'fa-check';
+                tickSpan.innerHTML = '<i class="fas ' + iconClass + '"></i>';
+                time.appendChild(tickSpan);
+            }
             div.appendChild(time);
             if (msg.pending) {
                 var sendState = document.createElement('span');
@@ -5214,7 +5250,7 @@
         }
         container.appendChild(div);
         if (_nearBottom || msg.sender_id === currentUserId) {
-            scrollWhisperToBottom();
+            scrollWhisperToBottom(true);
         } else {
             var fab = document.getElementById('whisper-scroll-fab');
             if (fab) fab.style.display = 'block';
@@ -5269,7 +5305,7 @@
             var fab = document.getElementById('whisper-scroll-fab');
             if (!fab) return;
             var diff = list.scrollHeight - list.scrollTop - list.clientHeight;
-            fab.style.display = diff > 300 ? 'block' : 'none';
+            fab.style.display = diff > 200 ? 'block' : 'none';
         });
     })();
 
@@ -5629,6 +5665,8 @@
             clearTimeout(_whisperViewOnceTimers[m]);
             delete _whisperViewOnceTimers[m];
         });
+        var wmEl = document.getElementById('whisper-watermark');
+        if (wmEl) wmEl.style.backgroundImage = '';
         document.getElementById('whisper-end-screen').classList.add('active');
         teardownScreenshotDetection();
     };
@@ -5673,26 +5711,73 @@
         whisperState.pendingExtendData = null;
     };
 
-    // --- Screenshot Detection ---
+    // --- Dynamic Session Watermark ---
+    function renderWhisperWatermark(partnerUsername) {
+        const watermarkEl = document.getElementById('whisper-watermark');
+        if (!watermarkEl) return;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 160;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const currentUser = (typeof currentUserName !== 'undefined' && currentUserName) ? currentUserName : 'You';
+            const partner = partnerUsername || (whisperState && whisperState.partnerUsername) || 'Partner';
+            const dateStr = new Date().toISOString().slice(0, 10);
+            const textLine1 = 'EchoWithin Whisper';
+            const textLine2 = partner + ' • ' + currentUser;
+            const textLine3 = dateStr;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.rotate(-25 * Math.PI / 180);
+            ctx.textAlign = 'center';
+            ctx.font = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.045)';
+            ctx.fillText(textLine1, 0, -10);
+            ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+            ctx.fillText(textLine2, 0, 8);
+            ctx.font = '400 10px monospace';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
+            ctx.fillText(textLine3, 0, 24);
+            ctx.restore();
+
+            const dataUrl = canvas.toDataURL('image/png');
+            watermarkEl.style.backgroundImage = 'url(' + dataUrl + ')';
+            watermarkEl.style.backgroundRepeat = 'repeat';
+        } catch (e) {
+            console.error('Error rendering whisper watermark:', e);
+        }
+    }
+
+    // --- Hardened Screenshot Detection (Desktop PrintScreen) ---
     let screenshotHandler = null;
-    let screenshotReady = false;
+    let lastScreenshotAlertTime = 0;
     function setupScreenshotDetection() {
-        screenshotReady = false;
+        lastScreenshotAlertTime = 0;
         screenshotHandler = function(e) {
-            if (!screenshotReady) return;
             if (!whisperState.active || !whisperState.sessionId) return;
-            if (!document.getElementById('whisper-overlay').classList.contains('active')) return;
-            if (document.visibilityState === 'hidden') {
-                emitWhisperSocket('whisper_screenshot_alert', { session_id: whisperState.sessionId });
+            const overlay = document.getElementById('whisper-overlay');
+            if (!overlay || !overlay.classList.contains('active')) return;
+            if (e.key === 'PrintScreen') {
+                const now = Date.now();
+                if (now - lastScreenshotAlertTime < 10000) return;
+                lastScreenshotAlertTime = now;
+                emitWhisperSocket('whisper_screenshot_alert', {
+                    session_id: whisperState.sessionId,
+                    trigger: 'printscreen'
+                });
             }
         };
-        document.addEventListener('visibilitychange', screenshotHandler);
-        setTimeout(function() { screenshotReady = true; }, 3000);
+        window.addEventListener('keyup', screenshotHandler);
     }
 
     function teardownScreenshotDetection() {
         if (screenshotHandler) {
-            document.removeEventListener('visibilitychange', screenshotHandler);
+            window.removeEventListener('keyup', screenshotHandler);
             screenshotHandler = null;
         }
     }
@@ -5805,23 +5890,36 @@
         s.on('whisper_screenshot_detected', function(data) {
             appendWhisperMessage({
                 is_system: true,
-                content: data.username + ' may have captured the screen'
+                content: data.content || (data.username + ' captured the screen (desktop PrintScreen)')
             });
         });
 
         s.on('whisper_read_receipt', function(data) {
-            // Mark all sent whisper messages as read with a tick
+            // Upgrade sent message ticks from single → blue double (DM parity).
             var container = document.getElementById('whisper-messages');
             if (!container) return;
             var sentMsgs = container.querySelectorAll('.whisper-msg-sent');
             sentMsgs.forEach(function(el) {
-                if (!el.querySelector('.whisper-read-tick')) {
-                    var tick = document.createElement('span');
-                    tick.className = 'whisper-read-tick';
-                    tick.textContent = 'Read';
-                    tick.style.cssText = 'font-size:0.65rem;color:rgba(255,255,255,0.5);display:block;text-align:right;margin-top:0.1rem;';
-                    el.appendChild(tick);
+                var statusSpan = el.querySelector('.whisper-read-status');
+                if (statusSpan) {
+                    // Upgrade existing tick to double-tick
+                    var icon = statusSpan.querySelector('i');
+                    if (icon) {
+                        icon.className = 'fas fa-check-double';
+                    }
+                } else {
+                    // Fallback: no tick yet (e.g. optimistic bubble before confirm)
+                    var time = el.querySelector('.whisper-msg-time');
+                    if (time && !time.querySelector('.whisper-read-status')) {
+                        var ts = document.createElement('span');
+                        ts.className = 'whisper-read-status';
+                        ts.innerHTML = '<i class="fas fa-check-double"></i>';
+                        time.appendChild(ts);
+                    }
                 }
+                // Remove legacy "Read" text spans if any remain
+                var oldTick = el.querySelector('.whisper-read-tick');
+                if (oldTick) oldTick.remove();
             });
         });
 

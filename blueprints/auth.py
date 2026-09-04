@@ -1088,12 +1088,10 @@ def _validate_session_token():
             )
         except Exception:
             pass
+        # Refresh validity cache after successful heartbeat so the next
+        # request within 60 s skips the MongoDB round-trip entirely.
         if m.redis_cache:
             try:
-                m.redis_cache.setex(cache_key, 60, '0')
+                m.redis_cache.setex(cache_key, 60, '1')
             except Exception:
                 pass
-        logout_user()
-        session.clear()
-        flash('Your session was ended from another device.', 'info')
-        return redirect(url_for('auth.login'))

@@ -1,4 +1,4 @@
-﻿"""
+"""
 EchoWithin CI Performance Benchmark Test
 =========================================
 Tests internal application response latency against key routes using the test client.
@@ -27,6 +27,9 @@ AUTH_ROUTES = [
     ("API: Badge Counts", "/api/notifications/badge-counts"),
     ("API: Activity Feed", "/api/activity/feed"),
     ("API: My Notes", "/api/v1/notes"),
+    ("Whisper: Durations", "/api/whisper/durations"),
+    ("Whisper: Active", "/api/whisper/active"),
+    ("Whisper: Pending", "/api/whisper/pending"),
 ]
 
 

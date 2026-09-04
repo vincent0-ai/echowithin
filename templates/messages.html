@@ -3961,6 +3961,46 @@
                 } else if (wrapper) {
                     wrapper.style.height = '';
                 }
+                // Whisper overlay shares the same keyboard-safe layout (F2): it is
+                // a separate fixed surface that DM commit cb10c23 never covered.
+                var wOverlay = document.getElementById('whisper-overlay');
+                if (wOverlay && wOverlay.classList.contains('active')) {
+                    var wInputBar = document.getElementById('whisper-input-area');
+                    if (_isIOS && vp.offsetTop > 0) {
+                        wOverlay.style.height = (vp.height + vp.offsetTop) + 'px';
+                        window.scrollTo(0, 0);
+                    } else {
+                        wOverlay.style.height = vp.height + 'px';
+                    }
+                    var wMessages = document.getElementById('whisper-messages');
+                    if (wInputBar) {
+                        if (_isIOS) {
+                            var wKbHeight = window.innerHeight - vp.height;
+                            if (wKbHeight > 50) {
+                                wInputBar.style.position = 'fixed';
+                                wInputBar.style.bottom = wKbHeight + 'px';
+                                wInputBar.style.left = '0';
+                                wInputBar.style.right = '0';
+                                wInputBar.style.zIndex = '100';
+                                if (wMessages) wMessages.style.paddingBottom = (wInputBar.offsetHeight + 10) + 'px';
+                            } else {
+                                wInputBar.style.position = '';
+                                wInputBar.style.bottom = '';
+                                wInputBar.style.left = '';
+                                wInputBar.style.right = '';
+                                wInputBar.style.zIndex = '';
+                                if (wMessages) wMessages.style.paddingBottom = '';
+                            }
+                        } else {
+                            wInputBar.style.position = 'relative';
+                            wInputBar.style.bottom = '0';
+                            if (wMessages) wMessages.style.paddingBottom = '';
+                        }
+                    }
+                    if (document.activeElement && document.activeElement.id === 'whisper-input') {
+                        if (window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                    }
+                }
                 // Detect keyboard closing (viewport returning to full height) — reset any dead space
                 if (vp.height >= _lastVpHeight + 100 || vp.height >= window.screen.height * 0.85) {
                     document.body.style.height = '';
@@ -3976,12 +4016,53 @@
                             bottomWrapper.style.right = '';
                             bottomWrapper.style.zIndex = '';
                         }
+                        // Same reset for the Whisper overlay/input bar (F2).
+                        var wOverlayReset = document.getElementById('whisper-overlay');
+                        if (wOverlayReset) wOverlayReset.style.height = '';
+                        var wInputReset = document.getElementById('whisper-input-area');
+                        if (wInputReset) {
+                            wInputReset.style.position = '';
+                            wInputReset.style.bottom = '';
+                            wInputReset.style.left = '';
+                            wInputReset.style.right = '';
+                            wInputReset.style.zIndex = '';
+                        }
+                        var wMessagesReset = document.getElementById('whisper-messages');
+                        if (wMessagesReset) wMessagesReset.style.paddingBottom = '';
                     }
                 }
                 _lastVpHeight = vp.height;
             }
             window.visualViewport.addEventListener('resize', handleViewportResize);
             window.visualViewport.addEventListener('scroll', handleViewportResize);
+
+            // iOS-specific: handle focus/blur to ensure Whisper input stays visible (F2).
+            // Mirrors the #message-input handlers above for the Whisper surface.
+            if (_isIOS) {
+                var whisperKbInput = document.getElementById('whisper-input');
+                if (whisperKbInput) {
+                    whisperKbInput.addEventListener('focus', function() {
+                        setTimeout(function() {
+                            if (window.visualViewport) {
+                                var wo = document.getElementById('whisper-overlay');
+                                if (wo && wo.classList.contains('active')) {
+                                    wo.style.height = window.visualViewport.height + 'px';
+                                    if (window.scrollWhisperToBottom) window.scrollWhisperToBottom();
+                                }
+                            }
+                        }, 300);
+                    });
+                    whisperKbInput.addEventListener('blur', function() {
+                        setTimeout(function() {
+                            var wo = document.getElementById('whisper-overlay');
+                            if (wo && wo.classList.contains('active')) {
+                                wo.style.height = window.visualViewport ? window.visualViewport.height + 'px' : '';
+                            }
+                            window.scrollTo(0, 0);
+                        }, 100);
+                    });
+                }
+            }
 
             // iOS-specific: handle focus/blur to ensure input stays visible
             if (_isIOS) {
@@ -4675,8 +4756,8 @@
 
     /* Active Whisper Session Overlay */
     .whisper-overlay {
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: #1a1a1a; z-index: 1400; flex-direction: column;
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; height: 100dvh;
+        background: #1a1a1a; z-index: 1400; flex-direction: column; overflow: hidden;
     }
     .whisper-overlay.active { display: flex; }
     .whisper-overlay-header {
@@ -4693,7 +4774,8 @@
         padding: 0.3rem 0.8rem; border-radius: 20px; cursor: pointer; font-size: 0.8rem;
     }
     .whisper-messages {
-        flex: 1; overflow-y: auto; padding: 1rem;
+        flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem;
         display: flex; flex-direction: column; gap: 6px;
     }
     .whisper-msg {
@@ -4719,7 +4801,8 @@
     .whisper-msg-time { font-size: 0.65rem; opacity: 0.6; margin-top: 2px; }
     .whisper-input-area {
         display: flex; gap: 0.5rem; padding: 0.8rem 1rem;
-        background: #222; border-top: 1px solid #333;
+        padding-bottom: calc(0.8rem + env(safe-area-inset-bottom, 0px));
+        background: #222; border-top: 1px solid #333; flex-shrink: 0;
     }
     .whisper-input-area textarea {
         flex: 1; background: #333; border: none; color: #fff; border-radius: 20px;
@@ -4767,6 +4850,21 @@
         padding: 0.3rem 0.8rem; border-radius: 20px; border: none; cursor: pointer;
         font-size: 0.8rem; margin: 0.4rem 0.2rem 0;
     }
+    /* Whisper send-state / edit / view-once (DM parity, F3/F6/F7) */
+    .whisper-msg.whisper-pending { opacity: 0.55; }
+    .whisper-msg.whisper-failed { opacity: 0.8; }
+    .whisper-retry { font-size: 0.65rem; color: #ff9d9d; display: block; text-align: right; margin-top: 0.15rem; cursor: pointer; }
+    .whisper-sending { font-size: 0.65rem; opacity: 0.6; display: block; text-align: right; margin-top: 0.1rem; }
+    .whisper-edited-flag { font-size: 0.65rem; opacity: 0.6; font-style: italic; margin-left: 0.3rem; }
+    .whisper-edit-btn { background: none; border: none; color: rgba(255,255,255,0.55); font-size: 0.68rem; cursor: pointer; padding: 0; margin-top: 0.15rem; display: block; margin-left: auto; }
+    .whisper-edit-row { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
+    .whisper-edit-row textarea { flex: 1; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.85rem; font-family: inherit; resize: none; }
+    .whisper-edit-row button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
+    .whisper-viewonce-locked { display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.08); border: 1px dashed rgba(255,255,255,0.35); border-radius: 8px; padding: 0.6rem 0.8rem; cursor: pointer; font-size: 0.85rem; }
+    .whisper-viewonce-destroyed { font-size: 0.8rem; font-style: italic; opacity: 0.5; }
+    .whisper-viewonce-toggle { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 1.1rem; cursor: pointer; padding: 0 0.2rem; }
+    .whisper-viewonce-toggle.armed { color: #ffca28; }
+    .whisper-scroll-fab { display: none; position: absolute; bottom: 96px; right: 16px; z-index: 5; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 0.35rem 0.8rem; font-size: 0.75rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
 </style>
 
 <!-- Whisper Invite Modal -->
@@ -4821,9 +4919,11 @@
         <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
         <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
     </div>
-    <div class="whisper-input-area">
+    <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)">New messages &darr;</button>
+    <div class="whisper-input-area" id="whisper-input-area">
         <input type="file" id="whisper-image-input" accept="image/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
         <button onclick="document.getElementById('whisper-image-input').click()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo"><i class="fas fa-camera"></i></button>
+        <button id="whisper-viewonce-toggle" class="whisper-viewonce-toggle" onclick="toggleWhisperViewOnce()" title="Send photo as view-once (opens a single time, then destroyed)"><i class="fas fa-eye"></i></button>
         <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
         <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
     </div>
@@ -4871,6 +4971,13 @@
         pendingExtendData: null,
         active: false
     };
+    // DM-parity send queue + render dedup (F1/F3). Same pattern as DM's
+    // `pendingMessages`/`renderedMessageIds`, kept separate because whisper
+    // payloads reconcile against `whisper_message_confirmed` instead.
+    var whisperPending = {};
+    var whisperRenderedIds = new Set();
+    var WHISPER_SEND_TIMEOUT = 8000;
+    window._whisperViewOnceArmed = false;
 
     const currentUserId = '{{ current_user.id }}';
 
@@ -4953,8 +5060,19 @@
 
         document.getElementById('whisper-partner-name').textContent = data.partner_username;
         document.getElementById('whisper-messages').innerHTML = '';
+        // Fresh session: drop all render/send state so reconnects can't duplicate (F1/F3).
+        whisperRenderedIds.clear();
+        Object.keys(whisperPending).forEach(function(t) { clearTimeout(whisperPending[t].timer); });
+        whisperPending = {};
+        window._whisperViewOnceArmed = false;
+        var _voT = document.getElementById('whisper-viewonce-toggle');
+        if (_voT) _voT.classList.remove('armed');
+        var _fab = document.getElementById('whisper-scroll-fab');
+        if (_fab) _fab.style.display = 'none';
         document.getElementById('whisper-warning-banner').classList.remove('active');
         document.getElementById('whisper-overlay').classList.add('active');
+        // Lock background scroll so pans drive the message list, not the page (F1).
+        document.body.style.overflow = 'hidden';
         document.getElementById('whisper-input').focus();
 
         // Load history for reconnection
@@ -5003,6 +5121,11 @@
     window.appendWhisperMessage = function(msg) {
         const container = document.getElementById('whisper-messages');
         if (!container) return;
+        // Dedup (F1): history reloads + socket echoes must never double-render.
+        if (msg.id && whisperRenderedIds.has(msg.id)) return;
+        // Smart autoscroll (F1): only jump to bottom when already near it.
+        // Otherwise preserve the reader's position and offer the FAB (DM parity).
+        var _nearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 120;
         const div = document.createElement('div');
         if (msg.is_system) {
             div.className = 'whisper-msg whisper-msg-system';
@@ -5010,14 +5133,26 @@
         } else {
             const isSent = msg.sender_id === currentUserId;
             div.className = 'whisper-msg ' + (isSent ? 'whisper-msg-sent' : 'whisper-msg-received');
-            if (msg.id) div.setAttribute('data-msg-id', msg.id);
+            if (msg.id) { div.setAttribute('data-msg-id', msg.id); whisperRenderedIds.add(msg.id); }
+            if (msg.temp_id) div.setAttribute('data-temp', msg.temp_id);
+            if (msg.pending) div.classList.add('whisper-pending');
             var contentDiv = document.createElement('div');
-            if (msg.message_type === 'image' && msg.image_url) {
+            contentDiv.className = 'whisper-content';
+            if (msg.view_once && (msg.locked || !msg.image_url)) {
+                // Locked or destroyed view-once (F7): never render bytes we don't hold.
+                renderWhisperViewOncePlaceholder(contentDiv, msg);
+            } else if (msg.message_type === 'image' && msg.image_url) {
                 const img = document.createElement('img');
                 img.src = msg.image_url;
                 img.style.cssText = 'max-width:220px;max-height:200px;border-radius:6px;cursor:pointer;display:block;';
                 img.onclick = function() { if (window.openLightbox) openLightbox(msg.image_url); };
                 contentDiv.appendChild(img);
+                if (msg.view_once && !isSent) {
+                    var voNote = document.createElement('div');
+                    voNote.style.cssText = 'font-size:0.68rem;margin-top:0.25rem;opacity:0.7;';
+                    voNote.textContent = 'View-once photo — destroys itself shortly';
+                    contentDiv.appendChild(voNote);
+                }
                 if (msg.content && msg.content !== '[Photo]') {
                     const caption = document.createElement('div');
                     caption.style.cssText = 'font-size:0.82rem;margin-top:0.3rem;';
@@ -5028,10 +5163,11 @@
                 contentDiv.textContent = msg.content;
             }
             div.appendChild(contentDiv);
-            // Reaction badge area
+            // Reaction badge area (renders persisted history reactions too — F5)
             var reactBadge = document.createElement('div');
             reactBadge.className = 'whisper-reaction-badge';
             reactBadge.style.cssText = 'font-size:0.85rem;margin-top:0.15rem;';
+            if (msg.reactions) reactBadge.textContent = whisperReactionsText(msg.reactions);
             div.appendChild(reactBadge);
             // Add reaction tap for received messages
             if (!isSent && msg.id) {
@@ -5039,16 +5175,103 @@
                 var tapTimer = null;
                 div.ontouchstart = function() { tapTimer = setTimeout(function() { showWhisperReactionPicker(msg.id, div); }, 500); };
                 div.ontouchend = function() { clearTimeout(tapTimer); };
+                div.ontouchmove = function() { clearTimeout(tapTimer); };
+                div.ontouchcancel = function() { clearTimeout(tapTimer); };
             }
             const time = document.createElement('div');
             time.className = 'whisper-msg-time';
             const d = window.parseServerTime ? window.parseServerTime(msg.timestamp) : new Date(msg.timestamp);
             time.textContent = d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            if (msg.edited) {
+                var edFlag = document.createElement('span');
+                edFlag.className = 'whisper-edited-flag';
+                edFlag.textContent = 'edited';
+                time.appendChild(edFlag);
+            }
             div.appendChild(time);
+            if (msg.pending) {
+                var sendState = document.createElement('span');
+                sendState.className = 'whisper-sending';
+                sendState.textContent = 'Sending…';
+                div.appendChild(sendState);
+            }
+            if (msg.failed && msg.temp_id) {
+                var retry = document.createElement('span');
+                retry.className = 'whisper-retry';
+                retry.textContent = 'Failed — tap to retry';
+                retry.onclick = function() { retryWhisperSend(msg.temp_id); };
+                div.appendChild(retry);
+            }
+            // Own text messages get an edit affordance (F6). Edits overwrite
+            // in place, keep no history, and never extend the TTL (W.5).
+            if (isSent && msg.id && msg.message_type !== 'image' && !msg.pending) {
+                var editBtn = document.createElement('button');
+                editBtn.className = 'whisper-edit-btn';
+                editBtn.textContent = 'Edit';
+                editBtn.onclick = function() { startWhisperEdit(msg.id); };
+                div.appendChild(editBtn);
+            }
         }
         container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
+        if (_nearBottom || msg.sender_id === currentUserId) {
+            scrollWhisperToBottom();
+        } else {
+            var fab = document.getElementById('whisper-scroll-fab');
+            if (fab) fab.style.display = 'block';
+        }
     };
+
+    // Scroll helper shared with the DM keyboard/viewport handler (F1/F2).
+    window.scrollWhisperToBottom = function(force) {
+        var container = document.getElementById('whisper-messages');
+        if (!container) return;
+        requestAnimationFrame(function() {
+            container.scrollTop = container.scrollHeight;
+            var fab = document.getElementById('whisper-scroll-fab');
+            if (fab) fab.style.display = 'none';
+        });
+        setTimeout(function() {
+            // Second pass after images load (mirrors DM scrollToBottom).
+            if (force) container.scrollTop = container.scrollHeight;
+        }, 350);
+    };
+
+    function whisperReactionsText(reactions) {
+        // Server stores {userId: emoji} (single emoji per user, ephemeral).
+        var seen = {};
+        Object.keys(reactions || {}).forEach(function(k) { seen[reactions[k]] = true; });
+        return Object.keys(seen).join(' ');
+    }
+
+    function renderWhisperViewOncePlaceholder(el, msg) {
+        el.innerHTML = '';
+        if (msg.destroyed) {
+            var gone = document.createElement('div');
+            gone.className = 'whisper-viewonce-destroyed';
+            gone.textContent = 'Photo destroyed';
+            el.appendChild(gone);
+            return;
+        }
+        var lock = document.createElement('div');
+        lock.className = 'whisper-viewonce-locked';
+        lock.textContent = 'View-once photo — tap to open (one time only)';
+        if (msg.id && msg.sender_id !== currentUserId) {
+            lock.onclick = function() { openWhisperViewOnce(msg.id); };
+        }
+        el.appendChild(lock);
+    }
+
+    // FAB visibility follows the list position (DM parity, F1).
+    (function initWhisperScrollFab() {
+        var list = document.getElementById('whisper-messages');
+        if (!list) return;
+        list.addEventListener('scroll', function() {
+            var fab = document.getElementById('whisper-scroll-fab');
+            if (!fab) return;
+            var diff = list.scrollHeight - list.scrollTop - list.clientHeight;
+            fab.style.display = diff > 300 ? 'block' : 'none';
+        });
+    })();
 
     var _whisperReactPicker = null;
     function showWhisperReactionPicker(msgId, el) {
@@ -5091,6 +5314,58 @@
         }
     }
 
+    window.toggleWhisperViewOnce = function() {
+        // View-once applies to photos only (F7). Armed state is per-send.
+        window._whisperViewOnceArmed = !window._whisperViewOnceArmed;
+        var btn = document.getElementById('whisper-viewonce-toggle');
+        if (btn) btn.classList.toggle('armed', window._whisperViewOnceArmed);
+        if (window._whisperViewOnceArmed && window.showCustomToast) {
+            showCustomToast('View-once armed: your next photo opens a single time, then is destroyed.', 'info');
+        }
+    };
+
+    function markWhisperFailed(tempId) {
+        var entry = whisperPending[tempId];
+        if (!entry) return;
+        var container = document.getElementById('whisper-messages');
+        if (!container) return;
+        var bubble = container.querySelector('[data-temp="' + tempId + '"]');
+        if (bubble) {
+            bubble.classList.remove('whisper-pending');
+            bubble.classList.add('whisper-failed');
+            var sending = bubble.querySelector('.whisper-sending');
+            if (sending) sending.remove();
+            if (!bubble.querySelector('.whisper-retry')) {
+                var retry = document.createElement('span');
+                retry.className = 'whisper-retry';
+                retry.textContent = 'Failed — tap to retry';
+                retry.onclick = function() { retryWhisperSend(tempId); };
+                bubble.appendChild(retry);
+            }
+        }
+    }
+
+    window.retryWhisperSend = function(tempId) {
+        var entry = whisperPending[tempId];
+        if (!entry) return;
+        entry.retries = (entry.retries || 0) + 1;
+        if (entry.retries > 3) {
+            if (window.showCustomToast) showCustomToast('Whisper failed after 3 retries.', 'error');
+            return;
+        }
+        var container = document.getElementById('whisper-messages');
+        var bubble = container && container.querySelector('[data-temp="' + tempId + '"]');
+        if (bubble) {
+            bubble.classList.remove('whisper-failed');
+            bubble.classList.add('whisper-pending');
+            var retry = bubble.querySelector('.whisper-retry');
+            if (retry) retry.remove();
+        }
+        clearTimeout(entry.timer);
+        entry.timer = setTimeout(function() { markWhisperFailed(tempId); }, WHISPER_SEND_TIMEOUT);
+        emitWhisperSocket('whisper_message', entry.payload);
+    };
+
     window.sendWhisperMessage = function() {
         const input = document.getElementById('whisper-input');
         const content = input.value.trim();
@@ -5098,9 +5373,14 @@
         if (!content && !pendingImgUrl) return;
         if (!whisperState.sessionId) return;
         input.value = '';
+        input.style.height = 'auto';
         const tempId = 'wt-' + Date.now();
         const msgType = pendingImgUrl ? 'image' : 'text';
-        const localMsg = { sender_id: currentUserId, content: content || '[Photo]', timestamp: new Date().toISOString(), is_system: false, message_type: msgType };
+        const viewOnce = pendingImgUrl && window._whisperViewOnceArmed;
+        const meta = window._whisperPendingImageMeta || {};
+        const localMsg = { sender_id: currentUserId, content: content || '[Photo]', timestamp: new Date().toISOString(), is_system: false, message_type: msgType, temp_id: tempId, pending: true };
+        // The sender holds the bytes (they uploaded them), so the own-echo
+        // always renders the image; only the partner gets the locked seal (W.6).
         if (pendingImgUrl) localMsg.image_url = pendingImgUrl;
         appendWhisperMessage(localMsg);
         const payload = {
@@ -5109,10 +5389,25 @@
             temp_id: tempId,
             message_type: msgType
         };
-        if (pendingImgUrl) payload.image_url = pendingImgUrl;
+        if (pendingImgUrl) {
+            payload.image_url = pendingImgUrl;
+            if (meta.public_id) payload.image_public_id = meta.public_id;
+            if (meta.mime) payload.mime_type = meta.mime;
+        }
+        if (viewOnce) payload.view_once = true;
+        // DM-parity send queue (F3): timeout separates in-flight from failed.
+        whisperPending[tempId] = {
+            payload: payload,
+            retries: 0,
+            timer: setTimeout(function() { markWhisperFailed(tempId); }, WHISPER_SEND_TIMEOUT)
+        };
         emitWhisperSocket('whisper_message', payload);
-        // Clear pending image
+        // Clear pending image + disarm view-once after each send
         window._whisperPendingImageUrl = '';
+        window._whisperPendingImageMeta = null;
+        window._whisperViewOnceArmed = false;
+        var _voT = document.getElementById('whisper-viewonce-toggle');
+        if (_voT) _voT.classList.remove('armed');
         cancelWhisperImage();
         // Typing stop
         if (whisperState.partnerId) {
@@ -5148,6 +5443,12 @@
             uploading.style.display = 'none';
             if (d.success && d.url) {
                 window._whisperPendingImageUrl = d.url;
+                // Keep public_id/mime so the server can re-serve fresh signed
+                // URLs on history fetch (DM parity, F5).
+                window._whisperPendingImageMeta = {
+                    public_id: d.public_id || '',
+                    mime: d.mime_type || ''
+                };
             } else {
                 cancelWhisperImage();
                 alert(d.error || 'Upload failed');
@@ -5162,9 +5463,119 @@
 
     window.cancelWhisperImage = function() {
         window._whisperPendingImageUrl = '';
+        window._whisperPendingImageMeta = null;
         document.getElementById('whisper-image-preview').style.display = 'none';
         document.getElementById('whisper-image-preview-img').src = '';
     };
+
+    // --- Whisper message editing (F6; semantics in DISCOVERY W.5) ---
+    window.startWhisperEdit = function(msgId) {
+        var container = document.getElementById('whisper-messages');
+        if (!container) return;
+        var bubble = container.querySelector('[data-msg-id="' + msgId + '"]');
+        if (!bubble || bubble.querySelector('.whisper-edit-row')) return;
+        var contentEl = bubble.querySelector('.whisper-content');
+        if (!contentEl) return;
+        var original = contentEl.textContent;
+        var row = document.createElement('div');
+        row.className = 'whisper-edit-row';
+        var area = document.createElement('textarea');
+        area.rows = 2;
+        area.maxLength = 5000;
+        area.value = original;
+        var saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.onclick = function() {
+            var next = area.value.trim();
+            if (!next || next === original) { row.remove(); return; }
+            saveBtn.disabled = true;
+            emitWhisperSocket('whisper_edit', {
+                session_id: whisperState.sessionId,
+                message_id: msgId,
+                content: next
+            });
+            // Optimistic: update immediately; server echo confirms (F6).
+            contentEl.textContent = next;
+            var timeEl = bubble.querySelector('.whisper-msg-time');
+            if (timeEl && !timeEl.querySelector('.whisper-edited-flag')) {
+                var flag = document.createElement('span');
+                flag.className = 'whisper-edited-flag';
+                flag.textContent = 'edited';
+                timeEl.appendChild(flag);
+            }
+            row.remove();
+        };
+        var cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.onclick = function() { row.remove(); };
+        row.appendChild(area);
+        row.appendChild(saveBtn);
+        row.appendChild(cancelBtn);
+        bubble.appendChild(row);
+        area.focus();
+    };
+
+    // --- View-once open (F7; state machine in DISCOVERY W.6) ---
+    window.openWhisperViewOnce = function(msgId) {
+        if (!whisperState.sessionId) return;
+        emitWhisperSocket('whisper_view_once_open', {
+            session_id: whisperState.sessionId,
+            message_id: msgId
+        });
+    };
+
+    var _whisperViewOnceTimers = {};
+
+    function setWhisperViewOnceRevealed(msgId, imageUrl) {
+        var container = document.getElementById('whisper-messages');
+        if (!container) return;
+        var bubble = container.querySelector('[data-msg-id="' + msgId + '"]');
+        if (!bubble) return;
+        var contentEl = bubble.querySelector('.whisper-content');
+        if (!contentEl) return;
+        contentEl.innerHTML = '';
+        var img = document.createElement('img');
+        img.src = imageUrl;
+        img.style.cssText = 'max-width:220px;max-height:200px;border-radius:6px;cursor:pointer;display:block;';
+        img.onclick = function() { if (window.openLightbox) openLightbox(imageUrl); };
+        contentEl.appendChild(img);
+        var note = document.createElement('div');
+        note.style.cssText = 'font-size:0.68rem;margin-top:0.25rem;opacity:0.7;';
+        note.textContent = 'View-once photo — destroys itself shortly';
+        contentEl.appendChild(note);
+        scrollWhisperToBottom();
+
+        // Client-side auto-burn timer (60s grace per DISCOVERY W.6)
+        if (_whisperViewOnceTimers[msgId]) clearTimeout(_whisperViewOnceTimers[msgId]);
+        _whisperViewOnceTimers[msgId] = setTimeout(function() {
+            setWhisperViewOnceDestroyed(msgId);
+            if (whisperState.sessionId) {
+                emitWhisperSocket('whisper_view_once_burn', {
+                    session_id: whisperState.sessionId,
+                    message_id: msgId
+                });
+            }
+            delete _whisperViewOnceTimers[msgId];
+        }, 60000);
+    }
+
+    function setWhisperViewOnceDestroyed(msgId) {
+        if (_whisperViewOnceTimers[msgId]) {
+            clearTimeout(_whisperViewOnceTimers[msgId]);
+            delete _whisperViewOnceTimers[msgId];
+        }
+        var container = document.getElementById('whisper-messages');
+        if (!container) return;
+        var bubble = container.querySelector('[data-msg-id="' + msgId + '"]');
+        if (!bubble) return;
+        var contentEl = bubble.querySelector('.whisper-content');
+        if (!contentEl) return;
+        contentEl.innerHTML = '';
+        var gone = document.createElement('div');
+        gone.className = 'whisper-viewonce-destroyed';
+        gone.textContent = 'Photo destroyed';
+        contentEl.appendChild(gone);
+    }
 
     window.endWhisperSession = function() {
         if (!whisperState.sessionId) return;
@@ -5194,6 +5605,30 @@
         whisperState.active = false;
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
         document.getElementById('whisper-overlay').classList.remove('active');
+        // Release keyboard/viewport overrides + background scroll lock (F1/F2).
+        var wo = document.getElementById('whisper-overlay');
+        if (wo) wo.style.height = '';
+        var wb = document.getElementById('whisper-input-area');
+        if (wb) {
+            wb.style.position = '';
+            wb.style.bottom = '';
+            wb.style.left = '';
+            wb.style.right = '';
+            wb.style.zIndex = '';
+        }
+        var wm = document.getElementById('whisper-messages');
+        if (wm) wm.style.paddingBottom = '';
+        document.body.style.overflow = '';
+        var fab = document.getElementById('whisper-scroll-fab');
+        if (fab) fab.style.display = 'none';
+        Object.keys(whisperPending).forEach(function(t) {
+            clearTimeout(whisperPending[t].timer);
+            markWhisperFailed(t);
+        });
+        Object.keys(_whisperViewOnceTimers).forEach(function(m) {
+            clearTimeout(_whisperViewOnceTimers[m]);
+            delete _whisperViewOnceTimers[m];
+        });
         document.getElementById('whisper-end-screen').classList.add('active');
         teardownScreenshotDetection();
     };
@@ -5280,6 +5715,10 @@
                 }, 2000);
             }
         });
+        whisperInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
     }
 
     // --- SocketIO Event Listeners ---
@@ -5313,7 +5752,33 @@
         });
 
         s.on('whisper_message_confirmed', function(data) {
-            // Message confirmed by server — already shown optimistically
+            // Reconcile the optimistic bubble with its server id (F3, DM parity).
+            var tempId = data.temp_id;
+            var entry = tempId && whisperPending[tempId];
+            if (entry) {
+                clearTimeout(entry.timer);
+                delete whisperPending[tempId];
+            }
+            var container = document.getElementById('whisper-messages');
+            var bubble = tempId && container && container.querySelector('[data-temp="' + tempId + '"]');
+            if (bubble) {
+                if (data.id) {
+                    bubble.setAttribute('data-msg-id', data.id);
+                    whisperRenderedIds.add(data.id);
+                }
+                bubble.removeAttribute('data-temp');
+                bubble.classList.remove('whisper-pending');
+                var sending = bubble.querySelector('.whisper-sending');
+                if (sending) sending.remove();
+                // Attach edit affordance to confirmed own text messages (F6).
+                if (data.message_type !== 'image' && data.id && !bubble.querySelector('.whisper-edit-btn')) {
+                    var editBtn = document.createElement('button');
+                    editBtn.className = 'whisper-edit-btn';
+                    editBtn.textContent = 'Edit';
+                    editBtn.onclick = function() { startWhisperEdit(data.id); };
+                    bubble.appendChild(editBtn);
+                }
+            }
         });
 
         s.on('whisper_expired', function(data) {
@@ -5370,16 +5835,61 @@
             }
         });
 
+        var whisperTypingClearTimer = null;
         s.on('whisper_user_typing', function(data) {
             document.getElementById('whisper-typing').textContent = data.username + ' is typing...';
+            // Stale-state guard (F4, DM parity): a dropped stop event must not
+            // leave "typing…" on screen forever.
+            if (whisperTypingClearTimer) clearTimeout(whisperTypingClearTimer);
+            whisperTypingClearTimer = setTimeout(function() {
+                document.getElementById('whisper-typing').textContent = '';
+            }, 4500);
         });
 
         s.on('whisper_user_stop_typing', function() {
+            if (whisperTypingClearTimer) clearTimeout(whisperTypingClearTimer);
             document.getElementById('whisper-typing').textContent = '';
         });
 
         s.on('whisper_error', function(data) {
+            // Fail-mark in-flight sends so expired/failed states are distinct (F8).
+            Object.keys(whisperPending).forEach(function(t) {
+                clearTimeout(whisperPending[t].timer);
+                markWhisperFailed(t);
+            });
             if (window.showCustomAlert) showCustomAlert(data.error, 'danger');
+        });
+
+        s.on('whisper_message_edited', function(data) {
+            var container = document.getElementById('whisper-messages');
+            if (!container) return;
+            var bubble = container.querySelector('[data-msg-id="' + data.message_id + '"]');
+            if (!bubble) return;
+            var contentEl = bubble.querySelector('.whisper-content');
+            if (contentEl) contentEl.textContent = data.content;
+            var timeEl = bubble.querySelector('.whisper-msg-time');
+            if (timeEl && !timeEl.querySelector('.whisper-edited-flag')) {
+                var flag = document.createElement('span');
+                flag.className = 'whisper-edited-flag';
+                flag.textContent = 'edited';
+                timeEl.appendChild(flag);
+            }
+        });
+
+        s.on('whisper_view_once_revealed', function(data) {
+            setWhisperViewOnceRevealed(data.message_id, data.image_url);
+        });
+
+        s.on('whisper_view_once_update', function(data) {
+            // Partner opened the seal: if we somehow rendered bytes (sender
+            // preview keeps them), leave them; otherwise nothing to change.
+            if (window.showCustomToast && data.opened_by !== currentUserId) {
+                showCustomToast('Your view-once photo was opened.', 'info');
+            }
+        });
+
+        s.on('whisper_view_once_destroyed', function(data) {
+            setWhisperViewOnceDestroyed(data.message_id);
         });
     }
 

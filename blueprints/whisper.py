@@ -23,7 +23,7 @@ def _utc_iso(dt):
         return None
     if dt.tzinfo is None:
         return dt.isoformat() + 'Z'
-    return dt.isoformat().replace('+00:00', 'Z')
+    return dt.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
 def _send_whisper_dm(sender_oid, recipient_oid, content):
@@ -507,14 +507,14 @@ def api_whisper_end(session_id):
             'session_id': session_id,
             'sender_id': user_id_str,
             'content': ended_msg,
-            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'timestamp': _utc_iso(now),
             'is_system': True
         }, room=f"user_{partner_id}")
         m.socketio.emit('whisper_new_message', {
             'session_id': session_id,
             'sender_id': user_id_str,
             'content': ended_msg,
-            'timestamp': now.isoformat().replace('+00:00', 'Z'),
+            'timestamp': _utc_iso(now),
             'is_system': True
         }, room=f"user_{user_id_str}")
 
@@ -596,11 +596,9 @@ def api_whisper_active():
         }
 
         if session_doc.get('started_at'):
-            st = session_doc['started_at']
-            result['started_at'] = (st.isoformat() + 'Z') if st.tzinfo is None else st.isoformat().replace('+00:00', 'Z')
+            result['started_at'] = _utc_iso(session_doc['started_at'])
         if session_doc.get('expires_at'):
-            et = session_doc['expires_at']
-            result['expires_at'] = (et.isoformat() + 'Z') if et.tzinfo is None else et.isoformat().replace('+00:00', 'Z')
+            result['expires_at'] = _utc_iso(session_doc['expires_at'])
 
         return jsonify(result)
 
@@ -631,33 +629,99 @@ def api_whisper_history(session_id):
             {'session_id': ObjectId(session_id)}
         ).sort('timestamp', 1).limit(500))
 
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # Lazy view-once destroy sweep (W.6): messages past their single 60s
+        # post-open window lose their bytes now; the TTL index is the backstop.
+        # Bytes are $unset server-side — never merely hidden client-side.
+        destroyed_ids = []
+        for msg in messages:
+            if (msg.get('view_once') and msg.get('view_once_opened_at')
+                    and 'image_url' in msg and not msg.get('view_once_destroyed')):
+                opened_at = msg['view_once_opened_at']
+                if opened_at.tzinfo is None:
+                    opened_at = opened_at.replace(tzinfo=datetime.timezone.utc)
+                grace = getattr(m, 'WHISPER_VIEW_ONCE_GRACE_SECONDS', 60)
+                if (now - opened_at).total_seconds() >= grace:
+                    m.whisper_messages_conf.update_one(
+                        {'_id': msg['_id']},
+                        {'$unset': {'image_url': '', 'image_public_id': ''},
+                         '$set': {'view_once_destroyed': True}}
+                    )
+                    msg.pop('image_url', None)
+                    msg.pop('image_public_id', None)
+                    msg['view_once_destroyed'] = True
+                    destroyed_ids.append(str(msg['_id']))
+        if destroyed_ids:
+            initiator_str = str(session_doc['initiator_id'])
+            recipient_str = str(session_doc['recipient_id'])
+            for uid in (initiator_str, recipient_str):
+                for mid in destroyed_ids:
+                    m.socketio.emit('whisper_view_once_destroyed', {
+                        'session_id': session_id,
+                        'message_id': mid
+                    }, room=f"user_{uid}")
+
+        # DM parity (F4): fetching history marks the partner's messages read
+        # and notifies them, exactly like DM history does with `messages_read`.
+        m.whisper_messages_conf.update_many(
+            {'session_id': ObjectId(session_id),
+             'sender_id': ObjectId(partner_id),
+             'is_read': {'$ne': True}},
+            {'$set': {'is_read': True}}
+        )
+        m.socketio.emit('whisper_read_receipt', {
+            'session_id': session_id,
+            'reader_id': user_id_str
+        }, room=f"user_{partner_id}")
+
         formatted = []
         for msg in messages:
             content = msg.get('content', '')
-            image_url = msg.get('image_url', '')
             msg_type = msg.get('message_type', 'text')
+            is_sender = str(msg['sender_id']) == user_id_str
             if not msg.get('is_system'):
                 if content and content.startswith('gAAAAA'):
                     try:
                         content = m.decrypt_dm(content, user_id_str, partner_id)
                     except Exception as err:
                         current_app.logger.warning(f"Whisper message decryption error: {err}")
-                if image_url and image_url.startswith('gAAAAA'):
-                    try:
-                        image_url = m.decrypt_dm(image_url, user_id_str, partner_id)
-                    except Exception as err:
-                        current_app.logger.warning(f"Whisper image URL decryption error: {err}")
-                        image_url = ''
             entry = {
                 'id': str(msg['_id']),
                 'sender_id': str(msg['sender_id']),
                 'content': content,
                 'timestamp': _utc_iso(msg.get('timestamp')),
                 'is_system': msg.get('is_system', False),
-                'message_type': msg_type
+                'message_type': msg_type,
+                # DM parity (F4/F5/F6): per-message read state, edit flag, and
+                # reactions (previously omitted, so reactions vanished on reload).
+                'is_read': msg.get('is_read', False) if is_sender else True,
+                'edited': bool(msg.get('edited', False)),
             }
-            if msg_type == 'image' and image_url:
-                entry['image_url'] = image_url
+            if msg.get('reactions'):
+                entry['reactions'] = msg['reactions']
+            if msg.get('view_once'):
+                # Server enforcement (W.6): withhold bytes until opened.
+                destroyed = bool(msg.get('view_once_destroyed')) or 'image_url' not in msg
+                opened_by_me = user_id_str in (msg.get('viewed_by') or [])
+                entry['view_once'] = True
+                entry['viewed'] = bool(msg.get('viewed_by'))
+                entry['destroyed'] = destroyed
+                if not destroyed and (is_sender or opened_by_me):
+                    serve = m._whisper_image_serve_url(msg, str(msg['sender_id']), partner_id)
+                    if serve:
+                        entry['image_url'] = serve
+                        entry['locked'] = False
+                    else:
+                        entry['locked'] = True
+                else:
+                    entry['locked'] = True
+            elif msg_type == 'image' and 'image_url' in msg:
+                # DM parity (F5): re-serve fresh signed URLs on every fetch so
+                # authenticated Cloudinary URLs never go stale after reload.
+                serve = m._whisper_image_serve_url(msg, str(msg['sender_id']), partner_id)
+                if serve:
+                    entry['image_url'] = serve
             formatted.append(entry)
 
         return jsonify({'messages': formatted})
@@ -679,3 +743,128 @@ def api_whisper_durations():
         return jsonify({'durations': durations, 'tier': tier})
     except Exception:
         return jsonify({'durations': FREE_DURATIONS, 'tier': 'free'})
+
+
+@bp.route('/api/whisper/edit/<message_id>', methods=['POST'])
+@login_required
+@limits(calls=30, period=60)
+def api_whisper_edit(message_id):
+    """Edit own whisper text message in place (REST fallback; F6, W.5)."""
+    import main as m
+    try:
+        data = request.get_json() or {}
+        new_content = (data.get('content') or '').strip()
+        if not new_content:
+            return jsonify({'error': 'Content cannot be empty'}), 400
+        if len(new_content) > getattr(m, 'WHISPER_MAX_CONTENT_LENGTH', 5000):
+            return jsonify({'error': 'Message exceeds maximum length'}), 400
+
+        try:
+            msg_oid = ObjectId(message_id)
+        except Exception:
+            return jsonify({'error': 'Invalid message ID'}), 400
+
+        msg = m.whisper_messages_conf.find_one({'_id': msg_oid})
+        if not msg:
+            return jsonify({'error': 'Message not found'}), 404
+
+        user_id_str = str(current_user.id)
+        if str(msg.get('sender_id')) != user_id_str:
+            return jsonify({'error': 'Cannot edit messages sent by another user'}), 403
+
+        if msg.get('message_type') == 'image' or msg.get('is_system'):
+            return jsonify({'error': 'Cannot edit image or system messages'}), 400
+
+        session_id = msg.get('session_id')
+        session_doc = m.whisper_sessions_conf.find_one({
+            '_id': session_id,
+            'status': 'active'
+        })
+        if not session_doc:
+            return jsonify({'error': 'Whisper session is no longer active'}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = session_doc.get('expires_at')
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+            if now >= expires_at:
+                return jsonify({'error': 'Whisper session has expired'}), 400
+
+        # Edit rate guard (min 5s between edits of same message)
+        last_edit = msg.get('edited_at')
+        if last_edit:
+            if last_edit.tzinfo is None:
+                last_edit = last_edit.replace(tzinfo=datetime.timezone.utc)
+            min_interval = getattr(m, 'WHISPER_EDIT_MIN_INTERVAL_SECONDS', 5)
+            if (now - last_edit).total_seconds() < min_interval:
+                return jsonify({'error': 'Editing too fast — wait a moment'}), 429
+
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+
+        encrypted = m.encrypt_dm(new_content, user_id_str, partner_id)
+        m.whisper_messages_conf.update_one(
+            {'_id': msg_oid},
+            {'$set': {'content': encrypted, 'edited': True, 'edited_at': now}}
+        )
+
+        payload = {
+            'session_id': str(session_id),
+            'message_id': str(msg_oid),
+            'content': new_content,
+            'edited': True
+        }
+        m.socketio.emit('whisper_message_edited', payload, room=f"user_{partner_id}")
+        m.socketio.emit('whisper_message_edited', payload, room=f"user_{user_id_str}")
+
+        return jsonify({'success': True, 'message_id': str(msg_oid), 'content': new_content})
+    except Exception as e:
+        current_app.logger.error(f"Whisper REST edit error: {e}")
+        return jsonify({'error': 'Failed to edit message'}), 500
+
+
+@bp.route('/api/whisper/view_once/burn/<message_id>', methods=['POST'])
+@login_required
+def api_whisper_view_once_burn(message_id):
+    """Immediately burn a view-once image when closed or dismissed (REST fallback; F7, W.6)."""
+    import main as m
+    try:
+        try:
+            msg_oid = ObjectId(message_id)
+        except Exception:
+            return jsonify({'error': 'Invalid message ID'}), 400
+
+        msg = m.whisper_messages_conf.find_one({'_id': msg_oid})
+        if not msg or not msg.get('view_once'):
+            return jsonify({'error': 'View-once image not found'}), 404
+
+        session_id = msg.get('session_id')
+        session_doc = m.whisper_sessions_conf.find_one({
+            '_id': session_id,
+            'status': 'active'
+        })
+        if not session_doc:
+            return jsonify({'error': 'Session not active'}), 400
+
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        m.whisper_messages_conf.update_one(
+            {'_id': msg_oid},
+            {'$unset': {'image_url': '', 'image_public_id': ''},
+             '$set': {'view_once_destroyed': True}}
+        )
+
+        burned_payload = {'session_id': str(session_id), 'message_id': str(msg_oid)}
+        m.socketio.emit('whisper_view_once_destroyed', burned_payload, room=f"user_{initiator_str}")
+        m.socketio.emit('whisper_view_once_destroyed', burned_payload, room=f"user_{recipient_str}")
+
+        return jsonify({'success': True, 'message_id': str(msg_oid)})
+    except Exception as e:
+        current_app.logger.error(f"Whisper REST view-once burn error: {e}")
+        return jsonify({'error': 'Failed to burn image'}), 500

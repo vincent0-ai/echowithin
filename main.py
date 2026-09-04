@@ -2154,6 +2154,10 @@ def handle_whisper_message(data=None, *args, **kwargs):
     content = data.get('content', '').strip()
     message_type = data.get('message_type', 'text')  # 'text' or 'image'
     image_url = data.get('image_url', '').strip()
+    image_public_id = (data.get('image_public_id') or '').strip()
+    mime_type = (data.get('mime_type') or '')[:200]
+    # View-once images (F7): single-open, server-enforced (see W.6). Images only.
+    view_once = bool(data.get('view_once')) and message_type == 'image'
 
     # Require content for text messages, image_url for image messages
     if not session_id:
@@ -2161,6 +2165,9 @@ def handle_whisper_message(data=None, *args, **kwargs):
     if message_type == 'image' and not image_url:
         return
     if message_type == 'text' and not content:
+        return
+    if len(content) > 5000:
+        emit('whisper_error', {'error': 'Message too long (max 5000 characters)'}, room=f"user_{current_user.id}")
         return
 
     try:
@@ -2219,6 +2226,11 @@ def handle_whisper_message(data=None, *args, **kwargs):
             encrypted_image_url = None
             encrypted_content = encrypt_dm(content, user_id_str, partner_id)
 
+        # DM parity (F4): initialize read state explicitly instead of relying
+        # on `$ne: True` matching a missing field.
+        partner_viewing = active_chat_views.get(partner_id, set())
+        is_actively_viewing = user_id_str in partner_viewing
+
         msg_doc = {
             'session_id': ObjectId(session_id),
             'sender_id': ObjectId(current_user.id),
@@ -2226,10 +2238,24 @@ def handle_whisper_message(data=None, *args, **kwargs):
             'timestamp': now,
             'expires_at': msg_expires,
             'is_system': False,
+            'is_read': is_actively_viewing,
             'message_type': message_type
         }
         if encrypted_image_url:
             msg_doc['image_url'] = encrypted_image_url
+        if image_public_id:
+            msg_doc['image_public_id'] = encrypt_dm(image_public_id, user_id_str, partner_id)
+        if is_media_proxy_url(image_url):
+            msg_doc['media_encrypted'] = True
+            msg_doc['mime_type'] = mime_type or 'image/jpeg'
+        elif mime_type:
+            msg_doc['mime_type'] = mime_type
+        if view_once:
+            # View-once state machine (W.6): locked -> revealed (60s) -> destroyed.
+            # The bytes are withheld from the partner until they open it.
+            msg_doc['view_once'] = True
+            msg_doc['viewed_by'] = []
+            msg_doc['view_once_opened_at'] = None
         whisper_messages_conf.insert_one(msg_doc)
 
         payload = {
@@ -2239,13 +2265,45 @@ def handle_whisper_message(data=None, *args, **kwargs):
             'content': content or '[Photo]',
             'timestamp': now.isoformat().replace('+00:00', 'Z'),
             'temp_id': data.get('temp_id'),
-            'message_type': message_type
+            'message_type': message_type,
+            'is_read': is_actively_viewing
         }
         if message_type == 'image':
-            payload['image_url'] = image_url
+            if view_once:
+                # Server enforcement: the partner gets a locked placeholder,
+                # never the bytes, until `whisper_view_once_open`.
+                payload['view_once'] = True
+                payload['locked'] = True
+            else:
+                payload['image_url'] = image_url
 
         emit('whisper_new_message', payload, room=f"user_{partner_id}")
-        emit('whisper_message_confirmed', payload, room=f"user_{user_id_str}")
+        # The sender already holds the bytes (they uploaded them), so the
+        # confirmation carries the full payload including the image URL.
+        confirm_payload = dict(payload)
+        if message_type == 'image' and view_once:
+            confirm_payload['image_url'] = image_url
+            confirm_payload['locked'] = False
+        emit('whisper_message_confirmed', confirm_payload, room=f"user_{user_id_str}")
+
+        if is_actively_viewing:
+            emit('whisper_read_receipt', {
+                'session_id': session_id,
+                'reader_id': partner_id
+            }, room=f"user_{user_id_str}")
+        else:
+            # DM parity (F4): redacted push only — never the ephemeral content
+            # (push bodies are minimized repo-wide; see DISCOVERY §3.9).
+            try:
+                send_push_notification_to_user(
+                    partner_id,
+                    f"New whisper from {current_user.username}",
+                    "A self-destructing message is waiting — open Whisper to view it",
+                    url=url_for('chat.messages_page', _external=True),
+                    tag=f'whisper-msg-{session_id}'
+                )
+            except Exception as push_err:
+                app.logger.warning(f"Whisper push failed: {push_err}")
 
     except Exception as e:
         app.logger.error(f"Whisper message error: {e}")
@@ -2399,14 +2457,278 @@ def handle_whisper_react(data=None, *args, **kwargs):
             {'_id': ObjectId(message_id), 'session_id': ObjectId(session_id)},
             {'$set': {f'reactions.{user_id_str}': emoji}}
         )
-        emit('whisper_reaction', {
+        # DM parity (F5): fan out to BOTH rooms so the reactor's own echo
+        # reconciles too (previously only the partner was notified).
+        reaction_payload = {
             'session_id': session_id,
             'message_id': message_id,
             'emoji': emoji,
             'reactor_id': user_id_str
-        }, room=f"user_{partner_id}")
+        }
+        emit('whisper_reaction', reaction_payload, room=f"user_{partner_id}")
+        emit('whisper_reaction', reaction_payload, room=f"user_{user_id_str}")
     except Exception as e:
         app.logger.error(f"Whisper react error: {e}")
+
+
+# View-once grace window: first open starts a single 60s destruction window
+# (W.6). Never refreshed, never extended by session extension.
+WHISPER_VIEW_ONCE_GRACE_SECONDS = 60
+# Minimum gap between edits of the same message (anti-spam / covert-channel).
+WHISPER_EDIT_MIN_INTERVAL_SECONDS = 5
+WHISPER_MAX_CONTENT_LENGTH = 5000
+
+
+def _whisper_image_serve_url(msg_doc, user_id_str, partner_id):
+    """Resolve a whisper image message to a fresh, viewable URL (DM parity, F5).
+
+    Mirrors the DM history logic in `blueprints/chat.py:api_message_history`:
+    media-proxy bytes are re-served via capability URL, legacy Cloudinary
+    `authenticated` assets are re-signed, otherwise the stored URL is used.
+    Returns '' when the bytes were destroyed (view-once) or undecryptable.
+    """
+    try:
+        raw_img = msg_doc.get('image_url', '')
+        plain_url = decrypt_dm(raw_img, user_id_str, partner_id) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+        raw_pub = msg_doc.get('image_public_id', '')
+        plain_pub = decrypt_dm(raw_pub, user_id_str, partner_id) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+        if msg_doc.get('media_encrypted') and plain_pub:
+            return build_media_serve_url(plain_pub, msg_doc.get('mime_type', 'application/octet-stream')) or plain_url
+        if plain_pub:
+            return re_sign_cloudinary_url(plain_pub, resource_type='image', delivery_type='authenticated', fallback_url=plain_url) or plain_url
+        return plain_url or ''
+    except Exception as e:
+        app.logger.warning(f"Whisper image serve-URL error: {e}")
+        return ''
+
+
+@socketio.on('whisper_edit')
+@authenticated_only
+def handle_whisper_edit(data=None, *args, **kwargs):
+    """Edit own whisper text message in place (F6, semantics in W.5).
+
+    Overwrites the ciphertext, sets `edited`, keeps NO history, and does NOT
+    touch `expires_at` — the self-destruct window is fixed at session scope so
+    rapid-fire edits cannot smuggle content past it.
+    """
+    if not data or not isinstance(data, dict):
+        return
+    session_id = data.get('session_id')
+    message_id = data.get('message_id')
+    new_content = (data.get('content') or '').strip()
+    if not session_id or not message_id or not new_content:
+        return
+    if len(new_content) > WHISPER_MAX_CONTENT_LENGTH:
+        emit('whisper_error', {'error': 'Message too long (max 5000 characters)'}, room=f"user_{current_user.id}")
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            emit('whisper_error', {'error': 'Session not active'}, room=f"user_{current_user.id}")
+            return
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+        try:
+            msg_oid = ObjectId(message_id)
+        except Exception:
+            return
+        msg = whisper_messages_conf.find_one({
+            '_id': msg_oid,
+            'session_id': ObjectId(session_id)
+        })
+        if not msg or msg.get('is_system'):
+            return
+        if str(msg.get('sender_id')) != user_id_str:
+            emit('whisper_error', {'error': 'You can only edit your own messages'}, room=f"user_{user_id_str}")
+            return
+        if msg.get('message_type') != 'text' or msg.get('view_once'):
+            emit('whisper_error', {'error': 'Only text messages can be edited'}, room=f"user_{user_id_str}")
+            return
+        now = datetime.datetime.now(datetime.timezone.utc)
+        last_edit = msg.get('edited_at')
+        if last_edit:
+            if last_edit.tzinfo is None:
+                last_edit = last_edit.replace(tzinfo=datetime.timezone.utc)
+            if (now - last_edit).total_seconds() < WHISPER_EDIT_MIN_INTERVAL_SECONDS:
+                emit('whisper_error', {'error': 'Editing too fast — wait a moment'}, room=f"user_{user_id_str}")
+                return
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+        encrypted = encrypt_dm(new_content, user_id_str, partner_id)
+        whisper_messages_conf.update_one(
+            {'_id': msg_oid},
+            {'$set': {'content': encrypted, 'edited': True, 'edited_at': now}}
+        )
+        payload = {
+            'session_id': session_id,
+            'message_id': str(msg_oid),
+            'content': new_content,
+            'edited': True
+        }
+        emit('whisper_message_edited', payload, room=f"user_{partner_id}")
+        emit('whisper_message_edited', payload, room=f"user_{user_id_str}")
+    except Exception as e:
+        app.logger.error(f"Whisper edit error: {e}")
+
+
+@socketio.on('whisper_view_once_open')
+@authenticated_only
+def handle_whisper_view_once_open(data=None, *args, **kwargs):
+    """Reveal a view-once image exactly once, server-enforced (F7, W.6).
+
+    The recipient's first open starts a single 60s destruction window; the
+    message `expires_at` only ever moves earlier so view-once can never
+    outlive the session. The sender may always preview their own image
+    without starting destruction.
+    """
+    if not data or not isinstance(data, dict):
+        return
+    session_id = data.get('session_id')
+    message_id = data.get('message_id')
+    if not session_id or not message_id:
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            emit('whisper_error', {'error': 'Session not active'}, room=f"user_{current_user.id}")
+            return
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+        try:
+            msg_oid = ObjectId(message_id)
+        except Exception:
+            return
+        msg = whisper_messages_conf.find_one({
+            '_id': msg_oid,
+            'session_id': ObjectId(session_id)
+        })
+        if not msg or msg.get('message_type') != 'image' or not msg.get('view_once'):
+            return
+        if 'image_url' not in msg or msg.get('view_once_destroyed'):
+            emit('whisper_view_once_destroyed', {
+                'session_id': session_id,
+                'message_id': str(msg_oid)
+            }, room=f"user_{user_id_str}")
+            return
+        partner_id = recipient_str if user_id_str == initiator_str else initiator_str
+        sender_str = str(msg.get('sender_id'))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if user_id_str != sender_str and user_id_str not in (msg.get('viewed_by') or []):
+            # First open by the recipient: start the single destruction window.
+            destroy_at = now + datetime.timedelta(seconds=WHISPER_VIEW_ONCE_GRACE_SECONDS)
+            current_expires = msg.get('expires_at')
+            if current_expires:
+                if current_expires.tzinfo is None:
+                    current_expires = current_expires.replace(tzinfo=datetime.timezone.utc)
+                new_expires = min(current_expires, destroy_at)
+            else:
+                new_expires = destroy_at
+            whisper_messages_conf.update_one(
+                {'_id': msg_oid},
+                {'$set': {
+                    'viewed_by': (msg.get('viewed_by') or []) + [user_id_str],
+                    'view_once_opened_at': now,
+                    'expires_at': new_expires
+                }}
+            )
+            # Notify both rooms that the seal is broken (no bytes included).
+            opened_payload = {
+                'session_id': session_id,
+                'message_id': str(msg_oid),
+                'opened': True,
+                'opened_by': user_id_str
+            }
+            emit('whisper_view_once_update', opened_payload, room=f"user_{partner_id}")
+            emit('whisper_view_once_update', opened_payload, room=f"user_{user_id_str}")
+
+            # Schedule auto-burn background task so bytes are destroyed server-side
+            # even if neither user fetches history.
+            def _auto_burn_task(sub_sid, sub_mid, sub_uid1, sub_uid2):
+                time.sleep(WHISPER_VIEW_ONCE_GRACE_SECONDS + 1)
+                with app.app_context():
+                    m_doc = whisper_messages_conf.find_one({'_id': ObjectId(sub_mid)})
+                    if m_doc and 'image_url' in m_doc and not m_doc.get('view_once_destroyed'):
+                        whisper_messages_conf.update_one(
+                            {'_id': ObjectId(sub_mid)},
+                            {'$unset': {'image_url': '', 'image_public_id': ''},
+                             '$set': {'view_once_destroyed': True}}
+                        )
+                        d_payload = {'session_id': sub_sid, 'message_id': sub_mid}
+                        socketio.emit('whisper_view_once_destroyed', d_payload, room=f"user_{sub_uid1}")
+                        socketio.emit('whisper_view_once_destroyed', d_payload, room=f"user_{sub_uid2}")
+
+            socketio.start_background_task(_auto_burn_task, session_id, str(msg_oid), initiator_str, recipient_str)
+        # Reveal the bytes to the opener only.
+        serve_url = _whisper_image_serve_url(msg, sender_str, partner_id)
+        if not serve_url:
+            emit('whisper_view_once_destroyed', {
+                'session_id': session_id,
+                'message_id': str(msg_oid)
+            }, room=f"user_{user_id_str}")
+            return
+        emit('whisper_view_once_revealed', {
+            'session_id': session_id,
+            'message_id': str(msg_oid),
+            'image_url': serve_url
+        }, room=f"user_{user_id_str}")
+    except Exception as e:
+        app.logger.error(f"Whisper view-once open error: {e}")
+
+
+@socketio.on('whisper_view_once_burn')
+@authenticated_only
+def handle_whisper_view_once_burn(data=None, *args, **kwargs):
+    """Immediately burn a view-once image when closed or dismissed by opener."""
+    if not data or not isinstance(data, dict):
+        return
+    session_id = data.get('session_id')
+    message_id = data.get('message_id')
+    if not session_id or not message_id:
+        return
+    try:
+        session_doc = whisper_sessions_conf.find_one({
+            '_id': ObjectId(session_id),
+            'status': 'active'
+        })
+        if not session_doc:
+            return
+        user_id_str = str(current_user.id)
+        initiator_str = str(session_doc['initiator_id'])
+        recipient_str = str(session_doc['recipient_id'])
+        if user_id_str not in (initiator_str, recipient_str):
+            return
+        try:
+            msg_oid = ObjectId(message_id)
+        except Exception:
+            return
+        msg = whisper_messages_conf.find_one({
+            '_id': msg_oid,
+            'session_id': ObjectId(session_id)
+        })
+        if not msg or not msg.get('view_once'):
+            return
+        # Destroy bytes immediately server-side
+        whisper_messages_conf.update_one(
+            {'_id': msg_oid},
+            {'$unset': {'image_url': '', 'image_public_id': ''},
+             '$set': {'view_once_destroyed': True}}
+        )
+        burned_payload = {'session_id': session_id, 'message_id': str(msg_oid)}
+        emit('whisper_view_once_destroyed', burned_payload, room=f"user_{initiator_str}")
+        emit('whisper_view_once_destroyed', burned_payload, room=f"user_{recipient_str}")
+    except Exception as e:
+        app.logger.error(f"Whisper view-once burn error: {e}")
 
 
 # Handles any possible errors

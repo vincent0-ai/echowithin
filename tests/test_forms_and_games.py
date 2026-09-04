@@ -157,3 +157,56 @@ class TestAnonymousSettings:
         game_anon = {'allow_anonymous': True, 'lobby_id': 'lobby1'}
         should_reject_anon = not game_anon.get('allow_anonymous', True) and not is_authenticated
         assert should_reject_anon is False
+
+
+class TestGameCreateAndLobbyUI:
+    """Tests for game create trivia syncing and lobby QR code rendering."""
+
+    def test_game_create_page_contains_realtime_correct_dropdown_logic(self, auth_client, app):
+        with auth_client.session_transaction() as sess:
+            sess['ew_session_token'] = 'test-token'
+        res = auth_client.get('/games/create')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'updateMQOption' in html
+        assert 'updateCorrectAnswerDropdown' in html
+        assert 'mq-correct-' in html
+
+    def test_game_lobby_page_contains_qrcode_assets_and_global_toggle(self, client, app):
+        import main as m
+        import datetime
+        from bson.objectid import ObjectId
+
+        lobby_doc = {
+            '_id': ObjectId(),
+            'lobby_id': 'test-lobby-qr',
+            'title': 'Trivia Night',
+            'game_type': 'trivia',
+            'host_id': ObjectId(),
+            'host_username': 'hostuser',
+            'status': 'active',
+            'deactivated': False,
+            'revealed': False,
+            'allow_anonymous': True,
+            'timer_seconds': 0,
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2),
+            'question': {'label': 'Capital of France?', 'options': ['Paris', 'London'], 'correct_option': 'Paris'},
+            'counts': {'Paris': 0, 'London': 0}
+        }
+
+        mock_sessions = MagicMock()
+        mock_sessions.find_one.return_value = lobby_doc
+        mock_votes = MagicMock()
+        mock_votes.count_documents.return_value = 0
+        mock_votes.find.return_value = []
+
+        with patch.object(m, 'game_sessions_conf', mock_sessions), \
+             patch.object(m, 'game_votes_conf', mock_votes):
+            res = client.get('/g/test-lobby-qr')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            assert 'qrcode.min.js' in html
+            assert 'window.toggleQRCode = function' in html
+            assert 'id="qr-canvas"' in html
+            assert 'id="qr-box"' in html

@@ -101,9 +101,23 @@
 <script nonce="{{ csp_nonce }}">
 let mqQuestions = [];
 
+function escapeHtml(str){
+  if(!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function addMQ(){
-  const gt = document.getElementById('game_type').value;
   mqQuestions.push({label:'', options:['',''], correct_option:''});
+  renderMQ();
+}
+
+function removeMQ(idx){
+  mqQuestions.splice(idx, 1);
   renderMQ();
 }
 
@@ -116,6 +130,59 @@ function moveMQ(idx, dir){
   renderMQ();
 }
 
+function addOption(qIdx){
+  if(!mqQuestions[qIdx] || mqQuestions[qIdx].options.length >= 5) return;
+  mqQuestions[qIdx].options.push('');
+  renderMQ();
+}
+
+function removeOption(qIdx, optIdx){
+  if(!mqQuestions[qIdx] || mqQuestions[qIdx].options.length <= 2) return;
+  const removed = mqQuestions[qIdx].options.splice(optIdx, 1)[0];
+  if(mqQuestions[qIdx].correct_option && mqQuestions[qIdx].correct_option === removed){
+    mqQuestions[qIdx].correct_option = '';
+  }
+  renderMQ();
+}
+
+function updateMQOption(qIdx, optIdx, val){
+  if(!mqQuestions[qIdx]) return;
+  const oldVal = mqQuestions[qIdx].options[optIdx];
+  mqQuestions[qIdx].options[optIdx] = val;
+  
+  // If the edited option was selected as the correct answer, keep correct_option synced
+  if(mqQuestions[qIdx].correct_option && mqQuestions[qIdx].correct_option === oldVal){
+    mqQuestions[qIdx].correct_option = val.trim();
+  }
+  
+  updateCorrectAnswerDropdown(qIdx);
+}
+
+function updateCorrectAnswerDropdown(qIdx){
+  const gt = document.getElementById('game_type').value;
+  if(gt !== 'trivia') return;
+  const selectEl = document.getElementById(`mq-correct-${qIdx}`);
+  if(!selectEl || !mqQuestions[qIdx]) return;
+  
+  const q = mqQuestions[qIdx];
+  const validOpts = q.options.map(o => (o || '').trim()).filter(o => o.length > 0);
+  
+  let currentVal = q.correct_option || selectEl.value;
+  if(!validOpts.includes(currentVal)){
+    currentVal = '';
+    q.correct_option = '';
+  }
+  
+  let html = '<option value="">Select correct answer</option>';
+  validOpts.forEach(o => {
+    const isSel = (o === currentVal) ? 'selected' : '';
+    html += `<option value="${escapeHtml(o)}" ${isSel}>${escapeHtml(o)}</option>`;
+  });
+  
+  selectEl.innerHTML = html;
+  selectEl.value = currentVal;
+}
+
 function renderMQ(){
   const c = document.getElementById('mq-container');
   const gt = document.getElementById('game_type').value;
@@ -123,7 +190,9 @@ function renderMQ(){
     c.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">No questions added yet. Click "Add Question" below.</div>';
     return;
   }
-  c.innerHTML = mqQuestions.map((q, idx) => `
+  c.innerHTML = mqQuestions.map((q, idx) => {
+    const validOpts = q.options.map(o => (o || '').trim()).filter(o => o.length > 0);
+    return `
     <div class="ew-card" style="background:var(--surface-bg); margin-bottom:0.8rem; border:1px solid var(--border-color); padding:1rem;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
         <div style="display:flex; align-items:center; gap:0.4rem;">
@@ -132,31 +201,31 @@ function renderMQ(){
         <div style="display:flex; align-items:center; gap:0.35rem;">
           ${idx > 0 ? `<button type="button" onclick="moveMQ(${idx}, -1)" class="ew-nudge-btn" title="Move Up">&uarr;</button>` : ''}
           ${idx < mqQuestions.length - 1 ? `<button type="button" onclick="moveMQ(${idx}, 1)" class="ew-nudge-btn" title="Move Down">&darr;</button>` : ''}
-          <button type="button" onclick="mqQuestions.splice(${idx},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+          <button type="button" onclick="removeMQ(${idx})" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
         </div>
       </div>
-      <input type="text" placeholder="Question *" value="${(q.label||'').replace(/"/g,'&quot;')}" oninput="mqQuestions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
+      <input type="text" placeholder="Question *" value="${escapeHtml(q.label)}" oninput="mqQuestions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
       <div style="margin-top:0.4rem;">
         <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.3rem; color:var(--text-secondary);">Options</div>
         ${q.options.map((o, oi) => `
           <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.3rem;">
-            <input type="text" value="${(o||'').replace(/"/g,'&quot;')}" oninput="mqQuestions[${idx}].options[${oi}]=this.value" class="form-input" style="flex:1; padding:0.35rem 0.6rem; font-size:0.85rem;" placeholder="Option ${oi+1}">
-            ${q.options.length > 2 ? `<button type="button" onclick="mqQuestions[${idx}].options.splice(${oi},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1rem; padding:0.2rem 0.4rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove option">&times;</button>` : ''}
+            <input type="text" value="${escapeHtml(o)}" oninput="updateMQOption(${idx}, ${oi}, this.value)" class="form-input" style="flex:1; padding:0.35rem 0.6rem; font-size:0.85rem;" placeholder="Option ${oi+1}">
+            ${q.options.length > 2 ? `<button type="button" onclick="removeOption(${idx}, ${oi})" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1rem; padding:0.2rem 0.4rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove option">&times;</button>` : ''}
           </div>
         `).join('')}
-        ${q.options.length < 5 ? `<button type="button" onclick="if(mqQuestions[${idx}].options.length<5){mqQuestions[${idx}].options.push(''); renderMQ()}" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.2rem; cursor:pointer;">Add option</button>` : ''}
+        ${q.options.length < 5 ? `<button type="button" onclick="addOption(${idx})" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.2rem; cursor:pointer;">Add option</button>` : ''}
       </div>
       ${gt === 'trivia' ? `
-        <div style="margin-top:0.6rem;">
+        <div style="margin-top:0.6rem;" id="mq-correct-wrapper-${idx}">
           <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">Correct answer</label>
-          <select onchange="mqQuestions[${idx}].correct_option=this.value" class="form-input" style="padding:0.3rem 0.5rem; font-size:0.82rem; margin-top:0.2rem;">
+          <select id="mq-correct-${idx}" onchange="mqQuestions[${idx}].correct_option=this.value" class="form-input" style="padding:0.3rem 0.5rem; font-size:0.82rem; margin-top:0.2rem;">
             <option value="">Select correct answer</option>
-            ${q.options.filter(o=>o.trim()).map(o => `<option value="${o.replace(/"/g,'&quot;')}" ${q.correct_option===o?'selected':''}>${o}</option>`).join('')}
+            ${validOpts.map(o => `<option value="${escapeHtml(o)}" ${q.correct_option===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}
           </select>
         </div>
       ` : ''}
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function toggleFields(){
@@ -173,18 +242,25 @@ function toggleFields(){
   document.querySelectorAll('[name=question]').forEach(el => el.required = gt === 'wyr');
   document.querySelectorAll('[name=starter_sentence]').forEach(el => el.required = gt === 'story');
   document.querySelectorAll('[name=prompt]').forEach(el => el.required = gt === 'caption');
+
+  if(isMultiQ){
+    renderMQ();
+  }
 }
 
 document.getElementById('create-form').addEventListener('submit', (e) => {
   const gt = document.getElementById('game_type').value;
   if(['poll','trivia'].includes(gt)){
     if(mqQuestions.length === 0){ e.preventDefault(); alert('Add at least one question'); return; }
-    for(const q of mqQuestions){
-      if(!q.label.trim()){ e.preventDefault(); alert('All questions need a label'); return; }
+    for(let i = 0; i < mqQuestions.length; i++){
+      const q = mqQuestions[i];
+      if(!q.label.trim()){ e.preventDefault(); alert(`Question ${i+1} needs a question title`); return; }
       const validOpts = q.options.filter(o => o.trim());
-      if(validOpts.length < 2){ e.preventDefault(); alert('Each question needs at least 2 options'); return; }
-      if(gt === 'trivia' && q.correct_option && !validOpts.includes(q.correct_option)){
-        e.preventDefault(); alert('Correct answer must match one of the options'); return;
+      if(validOpts.length < 2){ e.preventDefault(); alert(`Question ${i+1} needs at least 2 options`); return; }
+      if(gt === 'trivia'){
+        if(!q.correct_option || !validOpts.includes(q.correct_option)){
+          e.preventDefault(); alert(`Please select the correct answer for Question ${i+1}`); return;
+        }
       }
     }
     // Clean up empty options before serializing
@@ -195,7 +271,7 @@ document.getElementById('create-form').addEventListener('submit', (e) => {
   }
 });
 
-toggleFields();
 addMQ();
+toggleFields();
 </script>
 {% endblock %}

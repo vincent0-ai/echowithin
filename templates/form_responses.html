@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ form.title }} Responses — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='qrcode.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+if (typeof QRCode === 'undefined') {
+  var qrs = document.createElement('script');
+  qrs.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
+  document.head.appendChild(qrs);
+}
+</script>
 {% if stats %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endif %}
 {% endblock %}
 {% block content %}
@@ -149,13 +156,45 @@ window.toggleQRCode = function(){
   if(!box) return;
   const isHidden = box.style.display === 'none' || !box.style.display;
   box.style.display = isHidden ? 'block' : 'none';
-  if(isHidden && typeof QRCode !== 'undefined'){
+  if(isHidden){
     const canvas = document.getElementById('qr-canvas');
-    if(canvas && !canvas.dataset.rendered){
-      const url = "{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}";
-      QRCode.toCanvas(canvas, url, { width: 180, margin: 1 }, function(err){
-        if(!err) canvas.dataset.rendered = "true";
-      });
+    if(!canvas) return;
+    const url = "{{ url_for('forms.view_form', share_id=form.share_id, _external=True) }}";
+    if(!canvas.dataset.rendered){
+      let attempts = 0;
+      function renderCode(){
+        if(typeof QRCode !== 'undefined' && QRCode.toCanvas){
+          QRCode.toCanvas(canvas, url, { width: 180, margin: 1 }, function(err){
+            if(!err){
+              canvas.dataset.rendered = "true";
+            } else {
+              console.error('QR code error:', err);
+              renderFallback();
+            }
+          });
+        } else if(attempts < 15){
+          attempts++;
+          setTimeout(renderCode, 100);
+        } else {
+          renderFallback();
+        }
+      }
+      function renderFallback(){
+        const wrap = canvas.parentElement;
+        if(wrap && !wrap.dataset.fallback){
+          wrap.dataset.fallback = "true";
+          canvas.style.display = 'none';
+          const img = document.createElement('img');
+          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(url);
+          img.alt = 'QR Code';
+          img.width = 180;
+          img.height = 180;
+          img.style.display = 'block';
+          img.style.borderRadius = '4px';
+          wrap.appendChild(img);
+        }
+      }
+      renderCode();
     }
   }
 };

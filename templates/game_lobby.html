@@ -1,7 +1,14 @@
 {% extends "base.html" %}
 {% block title %}<title>{{ lobby.title if not expired else 'Lobby' }} — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="{{ url_for('static', filename='qrcode.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+if (typeof QRCode === 'undefined') {
+  var qrs = document.createElement('script');
+  qrs.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js';
+  document.head.appendChild(qrs);
+}
+</script>
 {% endblock %}
 {% block content %}
 <div class="content-wrapper" style="max-width: 680px;">
@@ -361,24 +368,59 @@
   {% endif %}
 </div>
 <script nonce="{{ csp_nonce }}">
+window.toggleQRCode = function(){
+  const box = document.getElementById('qr-box');
+  if(!box) return;
+  const isHidden = box.style.display === 'none' || !box.style.display;
+  box.style.display = isHidden ? 'block' : 'none';
+  if(isHidden){
+    const canvas = document.getElementById('qr-canvas');
+    if(!canvas) return;
+    const shareInput = document.querySelector('.ew-share-input');
+    const shareUrl = (shareInput && shareInput.value) ? shareInput.value : window.location.href;
+    
+    if(!canvas.dataset.rendered){
+      let attempts = 0;
+      function renderCode(){
+        if(typeof QRCode !== 'undefined' && QRCode.toCanvas){
+          QRCode.toCanvas(canvas, shareUrl, { width: 180, margin: 1 }, function(err){
+            if(!err){
+              canvas.dataset.rendered = "true";
+            } else {
+              console.error('QR code error:', err);
+              renderFallback();
+            }
+          });
+        } else if(attempts < 15){
+          attempts++;
+          setTimeout(renderCode, 100);
+        } else {
+          renderFallback();
+        }
+      }
+      function renderFallback(){
+        const wrap = canvas.parentElement;
+        if(wrap && !wrap.dataset.fallback){
+          wrap.dataset.fallback = "true";
+          canvas.style.display = 'none';
+          const img = document.createElement('img');
+          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(shareUrl);
+          img.alt = 'QR Code';
+          img.width = 180;
+          img.height = 180;
+          img.style.display = 'block';
+          img.style.borderRadius = '4px';
+          wrap.appendChild(img);
+        }
+      }
+      renderCode();
+    }
+  }
+};
+
 (function(){
   const lobbyId = "{{ lobby.lobby_id if not expired else '' }}";
   if(!lobbyId || typeof io==='undefined') return;
-
-  window.toggleQRCode = function(){
-    const box = document.getElementById('qr-box');
-    if(!box) return;
-    const isHidden = box.style.display === 'none' || !box.style.display;
-    box.style.display = isHidden ? 'block' : 'none';
-    if(isHidden && typeof QRCode !== 'undefined'){
-      const canvas = document.getElementById('qr-canvas');
-      if(canvas && !canvas.dataset.rendered){
-        QRCode.toCanvas(canvas, window.location.href, { width: 180, margin: 1 }, function(err){
-          if(!err) canvas.dataset.rendered = "true";
-        });
-      }
-    }
-  };
 
   {% if lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
   (function(){

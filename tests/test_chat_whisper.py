@@ -547,4 +547,128 @@ class TestWhisperRESTFallbackEndpoints:
                 assert mock_emit.call_count == 2
 
 
+class TestWhisperScreenshotAlert:
+    """Tests for whisper screenshot alerts and session debounce."""
+
+    def _handlers(self):
+        import main as m
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                handlers[getattr(call.args[0], '__name__', '')] = call.args[0]
+        return handlers
+
+    def test_screenshot_alert_printscreen_trigger(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        me = str(mock_user['_id'])
+        partner = str(ObjectId())
+        sid = ObjectId()
+        session_doc = {
+            '_id': sid,
+            'initiator_id': ObjectId(me),
+            'recipient_id': ObjectId(partner),
+            'status': 'active',
+            'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+        }
+        handlers = self._handlers()
+        assert 'handle_whisper_screenshot' in handlers
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                handlers['handle_whisper_screenshot']({
+                    'session_id': str(sid),
+                    'trigger': 'printscreen'
+                })
+                # Debounce update timestamp
+                assert sess.update_one.call_count == 1
+                update_set = sess.update_one.call_args[0][1]['$set']
+                assert 'last_screenshot_alert_at' in update_set
+                assert update_set['last_screenshot_alert_at'].tzinfo == datetime.timezone.utc
+
+                # System message insertion
+                assert msgs.insert_one.call_count == 1
+                inserted_msg = msgs.insert_one.call_args[0][0]
+                assert inserted_msg['session_id'] == sid
+                assert inserted_msg['is_system'] is True
+                assert 'desktop PrintScreen' in inserted_msg['content']
+                assert inserted_msg['timestamp'].tzinfo == datetime.timezone.utc
+
+                # Fanned out to both rooms with ISO Z timestamp
+                assert mock_emit.call_count == 2
+                rooms = {c.kwargs.get('room') for c in mock_emit.call_args_list}
+                assert rooms == {f'user_{me}', f'user_{partner}'}
+                event_name = mock_emit.call_args_list[0].args[0]
+                payload = mock_emit.call_args_list[0].args[1]
+                assert event_name == 'whisper_screenshot_detected'
+                assert payload['content'] == f"{mock_user['username']} captured the screen (desktop PrintScreen)"
+                assert payload['timestamp'].endswith('Z')
+
+    def test_screenshot_alert_debounced_within_10_seconds(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        me = str(mock_user['_id'])
+        partner = str(ObjectId())
+        sid = ObjectId()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        session_doc = {
+            '_id': sid,
+            'initiator_id': ObjectId(me),
+            'recipient_id': ObjectId(partner),
+            'status': 'active',
+            'last_screenshot_alert_at': now - datetime.timedelta(seconds=4),
+            'expires_at': now + datetime.timedelta(minutes=15)
+        }
+        handlers = self._handlers()
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                handlers['handle_whisper_screenshot']({
+                    'session_id': str(sid),
+                    'trigger': 'printscreen'
+                })
+                # Debounced: no updates, no message insert, no socket emits
+                sess.update_one.assert_not_called()
+                msgs.insert_one.assert_not_called()
+                mock_emit.assert_not_called()
+
+    def test_screenshot_alert_unauthorized_user_ignored(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        me = str(mock_user['_id'])
+        initiator = str(ObjectId())
+        recipient = str(ObjectId())
+        sid = ObjectId()
+        session_doc = {
+            '_id': sid,
+            'initiator_id': ObjectId(initiator),
+            'recipient_id': ObjectId(recipient),
+            'status': 'active'
+        }
+        handlers = self._handlers()
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                handlers['handle_whisper_screenshot']({
+                    'session_id': str(sid),
+                    'trigger': 'printscreen'
+                })
+                sess.update_one.assert_not_called()
+                msgs.insert_one.assert_not_called()
+                mock_emit.assert_not_called()
+
+
+
 

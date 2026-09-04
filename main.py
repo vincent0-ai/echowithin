@@ -2402,13 +2402,34 @@ def handle_whisper_screenshot(data=None, *args, **kwargs):
         partner_id = recipient_str if user_id_str == initiator_str else initiator_str
         now = datetime.datetime.now(datetime.timezone.utc)
 
+        # 10s debounce per session to prevent alert spam
+        last_alert = session_doc.get('last_screenshot_alert_at')
+        if last_alert:
+            if last_alert.tzinfo is None:
+                last_alert = last_alert.replace(tzinfo=datetime.timezone.utc)
+            if (now - last_alert).total_seconds() < 10:
+                return
+
+        whisper_sessions_conf.update_one(
+            {'_id': session_doc['_id']},
+            {'$set': {'last_screenshot_alert_at': now}}
+        )
+
+        trigger = data.get('trigger', 'unknown')
+        if trigger == 'printscreen':
+            content = f'{current_user.username} captured the screen (desktop PrintScreen)'
+        else:
+            content = f'{current_user.username} captured the screen'
+
         # Store as system message
         expires_at = session_doc.get('expires_at')
         msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
+        msg_oid = ObjectId()
         msg_doc = {
+            '_id': msg_oid,
             'session_id': ObjectId(session_id),
             'sender_id': ObjectId(current_user.id),
-            'content': f'{current_user.username} may have captured the screen',
+            'content': content,
             'timestamp': now,
             'expires_at': msg_expires,
             'is_system': True
@@ -2418,8 +2439,9 @@ def handle_whisper_screenshot(data=None, *args, **kwargs):
         alert_payload = {
             'session_id': session_id,
             'username': current_user.username,
+            'content': content,
             'timestamp': now.isoformat().replace('+00:00', 'Z'),
-            'id': str(msg_doc['_id'])
+            'id': str(msg_oid)
         }
         emit('whisper_screenshot_detected', alert_payload, room=f"user_{partner_id}")
         emit('whisper_screenshot_detected', alert_payload, room=f"user_{user_id_str}")

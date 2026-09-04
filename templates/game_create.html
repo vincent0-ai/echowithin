@@ -5,11 +5,10 @@
   <div class="ew-header-row">
     <div>
       <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Create Game</h2>
-      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Set up an interactive game lobby and get a shareable link.</div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Set up a game lobby and share the link.</div>
     </div>
     <a href="{{ url_for('notes.personal_space') }}#games" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Games</a>
   </div>
-  <div class="ew-info-banner">Share your game link with friends to play together in real time.</div>
   <form method="POST" class="ew-card" id="create-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="ew-form-label">Title *</label>
@@ -17,49 +16,54 @@
 
     <label class="ew-form-label">Game type</label>
     <select name="game_type" id="game_type" class="form-input" style="margin-bottom:0.8rem;" onchange="toggleFields()">
-      <option value="poll">Poll: Community reflection</option>
-      <option value="trivia">Trivia: Accuracy quiz</option>
-      <option value="wyr">Would You Rather: A vs B choice</option>
+      <option value="poll">Poll</option>
+      <option value="trivia">Trivia</option>
+      <option value="wyr">Would You Rather</option>
       <option value="ttal">Two Truths and a Lie</option>
-      <option value="story">Story Chain: Collaborative storytelling</option>
-      <option value="caption">Caption This: Best caption contest</option>
+      <option value="story">Story Chain</option>
+      <option value="caption">Caption This</option>
     </select>
 
-    <!-- Poll / Trivia / WYR fields -->
-    <div id="fields-question">
+    <!-- Multi-question builder for Poll / Trivia -->
+    <div id="fields-multi-q" style="border-top:1px solid var(--border-color); margin:0.8rem 0; padding-top:1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem; flex-wrap:wrap; gap:0.5rem;">
+        <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">Questions</div>
+      </div>
+      <input type="hidden" name="questions_json" id="questions_json">
+      <div id="mq-container"></div>
+      <button type="button" onclick="addMQ()" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer; margin-top:0.5rem;">Add Question</button>
+    </div>
+
+    <!-- WYR: single question + 2 options -->
+    <div id="fields-question" style="display:none;">
       <label class="ew-form-label">Question *</label>
       <input type="text" name="question" maxlength="200" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., One word for your week?">
     </div>
-    <div id="fields-options">
-      <label class="ew-form-label">Options (<span id="opts-range">2-5</span>)</label>
+    <div id="fields-options" style="display:none;">
+      <label class="ew-form-label">Options</label>
       <div id="opts">
-        <input type="text" name="options" placeholder="Option 1" class="form-input" style="margin-bottom:0.4rem;">
-        <input type="text" name="options" placeholder="Option 2" class="form-input" style="margin-bottom:0.4rem;">
+        <input type="text" name="options" placeholder="Option A" class="form-input" style="margin-bottom:0.4rem;">
+        <input type="text" name="options" placeholder="Option B" class="form-input" style="margin-bottom:0.4rem;">
       </div>
-      <button type="button" id="add-opt-btn" onclick="addOption()" class="ew-btn--outline ew-btn--sm" style="margin-bottom:0.8rem; display:inline-block; cursor:pointer;">+ Add option</button>
-    </div>
-    <div id="fields-correct" style="display:none; margin-bottom:0.8rem;">
-      <label class="ew-form-label">Correct option (trivia only)</label>
-      <input type="text" name="correct_option" placeholder="Must match an option exactly" class="form-input">
     </div>
 
     <!-- Story Chain fields -->
     <div id="fields-story" style="display:none;">
       <label class="ew-form-label">Starter sentence *</label>
       <textarea name="starter_sentence" maxlength="280" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="Once upon a time in a quiet village..."></textarea>
-      <div class="ew-info-banner" style="font-size:0.8rem;">Write the first sentence. Players take turns adding sentences to build the story together.</div>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Write the first sentence. Players take turns adding sentences.</div>
     </div>
 
     <!-- Caption This fields -->
     <div id="fields-caption" style="display:none;">
       <label class="ew-form-label">Prompt / Scenario *</label>
       <textarea name="prompt" maxlength="200" rows="2" class="form-input" style="margin-bottom:0.8rem;" placeholder="e.g., You walk into the office and find a surprise celebration..."></textarea>
-      <div class="ew-info-banner" style="font-size:0.8rem;">Players each submit a caption for this scenario, then vote for their favorite.</div>
+      <div class="ew-info-banner" style="font-size:0.8rem;">Players submit captions, then vote for their favorite.</div>
     </div>
 
     <!-- TTAL info -->
     <div id="fields-ttal" style="display:none;">
-      <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed. Players will submit their statements after joining the lobby.</div>
+      <div class="ew-info-banner" style="font-size:0.8rem;">No setup needed. Players submit their statements after joining.</div>
     </div>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; margin-bottom:1rem;">
@@ -73,7 +77,7 @@
         </select>
       </div>
       <div>
-        <label class="ew-form-label">Player Participation</label>
+        <label class="ew-form-label">Player access</label>
         <select name="allow_anonymous" class="form-input">
           <option value="1" selected>Allow anonymous players</option>
           <option value="0">Require EchoWithin account</option>
@@ -84,45 +88,90 @@
   </form>
 </div>
 <script nonce="{{ csp_nonce }}">
+let mqQuestions = [];
+
+function addMQ(){
+  const gt = document.getElementById('game_type').value;
+  mqQuestions.push({label:'', options:['',''], correct_option:''});
+  renderMQ();
+}
+
+function renderMQ(){
+  const c = document.getElementById('mq-container');
+  const gt = document.getElementById('game_type').value;
+  if(mqQuestions.length === 0){
+    c.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-muted); font-size:0.9rem;">No questions added yet. Click "Add Question" below.</div>';
+    return;
+  }
+  c.innerHTML = mqQuestions.map((q, idx) => `
+    <div class="ew-card" style="background:var(--surface-bg); margin-bottom:0.8rem; border:1px solid var(--border-color); padding:1rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.6rem;">
+        <div style="display:flex; align-items:center; gap:0.4rem;">
+          <span class="ew-q-number">${idx+1}</span>
+        </div>
+        <button type="button" onclick="mqQuestions.splice(${idx},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
+      </div>
+      <input type="text" placeholder="Question *" value="${(q.label||'').replace(/"/g,'&quot;')}" oninput="mqQuestions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
+      <div style="margin-top:0.4rem;">
+        <div style="font-size:0.78rem; font-weight:600; margin-bottom:0.3rem; color:var(--text-secondary);">Options</div>
+        ${q.options.map((o, oi) => `
+          <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.3rem;">
+            <input type="text" value="${(o||'').replace(/"/g,'&quot;')}" oninput="mqQuestions[${idx}].options[${oi}]=this.value" class="form-input" style="flex:1; padding:0.35rem 0.6rem; font-size:0.85rem;" placeholder="Option ${oi+1}">
+            ${q.options.length > 2 ? `<button type="button" onclick="mqQuestions[${idx}].options.splice(${oi},1); renderMQ()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1rem; padding:0.2rem 0.4rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove option">&times;</button>` : ''}
+          </div>
+        `).join('')}
+        ${q.options.length < 5 ? `<button type="button" onclick="if(mqQuestions[${idx}].options.length<5){mqQuestions[${idx}].options.push(''); renderMQ()}" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.2rem; cursor:pointer;">Add option</button>` : ''}
+      </div>
+      ${gt === 'trivia' ? `
+        <div style="margin-top:0.6rem;">
+          <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary);">Correct answer</label>
+          <select onchange="mqQuestions[${idx}].correct_option=this.value" class="form-input" style="padding:0.3rem 0.5rem; font-size:0.82rem; margin-top:0.2rem;">
+            <option value="">Select correct answer</option>
+            ${q.options.filter(o=>o.trim()).map(o => `<option value="${o.replace(/"/g,'&quot;')}" ${q.correct_option===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
 function toggleFields(){
   const gt = document.getElementById('game_type').value;
   const show = (id, v) => { const el = document.getElementById(id); if(el) el.style.display = v ? '' : 'none'; };
-  // Poll/Trivia/WYR share question + options
-  const hasQO = ['poll','trivia','wyr'].includes(gt);
-  show('fields-question', hasQO);
-  show('fields-options', hasQO);
-  show('fields-correct', gt === 'trivia');
+  const isMultiQ = ['poll','trivia'].includes(gt);
+  show('fields-multi-q', isMultiQ);
+  show('fields-question', gt === 'wyr');
+  show('fields-options', gt === 'wyr');
   show('fields-story', gt === 'story');
   show('fields-caption', gt === 'caption');
   show('fields-ttal', gt === 'ttal');
-  // WYR: exactly 2 options, hide add button
-  const optRange = document.getElementById('opts-range');
-  const addBtn = document.getElementById('add-opt-btn');
-  if(gt === 'wyr'){
-    if(optRange) optRange.textContent = 'exactly 2';
-    if(addBtn) addBtn.style.display = 'none';
-    // Trim to 2
-    const inputs = document.querySelectorAll('#opts [name=options]');
-    for(let i=2; i<inputs.length; i++) inputs[i].remove();
-  } else {
-    if(optRange) optRange.textContent = '2-5';
-    if(addBtn) addBtn.style.display = '';
-  }
   // Set required attributes
-  document.querySelectorAll('[name=question]').forEach(el => el.required = hasQO);
+  document.querySelectorAll('[name=question]').forEach(el => el.required = gt === 'wyr');
   document.querySelectorAll('[name=starter_sentence]').forEach(el => el.required = gt === 'story');
   document.querySelectorAll('[name=prompt]').forEach(el => el.required = gt === 'caption');
 }
-function addOption(){
+
+document.getElementById('create-form').addEventListener('submit', (e) => {
   const gt = document.getElementById('game_type').value;
-  const max = gt === 'wyr' ? 2 : 5;
-  const count = document.querySelectorAll('#opts [name=options]').length;
-  if(count >= max) return;
-  const i = document.createElement('input');
-  i.name = 'options'; i.placeholder = 'Option ' + (count+1);
-  i.className = 'form-input'; i.style.marginBottom = '0.4rem';
-  document.getElementById('opts').appendChild(i);
-}
+  if(['poll','trivia'].includes(gt)){
+    if(mqQuestions.length === 0){ e.preventDefault(); alert('Add at least one question'); return; }
+    for(const q of mqQuestions){
+      if(!q.label.trim()){ e.preventDefault(); alert('All questions need a label'); return; }
+      const validOpts = q.options.filter(o => o.trim());
+      if(validOpts.length < 2){ e.preventDefault(); alert('Each question needs at least 2 options'); return; }
+      if(gt === 'trivia' && q.correct_option && !validOpts.includes(q.correct_option)){
+        e.preventDefault(); alert('Correct answer must match one of the options'); return;
+      }
+    }
+    // Clean up empty options before serializing
+    for(const q of mqQuestions){
+      q.options = q.options.filter(o => o.trim());
+    }
+    document.getElementById('questions_json').value = JSON.stringify(mqQuestions);
+  }
+});
+
 toggleFields();
+addMQ();
 </script>
 {% endblock %}

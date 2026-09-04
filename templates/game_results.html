@@ -15,49 +15,73 @@
       <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Back to Lobby</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='csv') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Export CSV</a>
       <a href="{{ url_for('game.lobby_export', lobby_id=lobby.lobby_id, format='json') }}" class="ew-btn--outline ew-btn--sm" style="text-decoration:none;">Export JSON</a>
-      {% if is_host or (current_user.is_authenticated and current_user.is_admin) %}
-        {% if not lobby.deactivated %}
-        <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
-        </form>
-        {% endif %}
-        <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete Lobby</button>
-        </form>
-      {% endif %}
     </div>
-  </div>
-  <div class="ew-card">
-    <div style="font-weight:600; color:var(--primary-color);">{{ lobby.prompt or lobby.question.label }}</div>
-    <div style="font-size:0.8rem; color:var(--text-muted); margin-top: 0.3rem;"><span class="ew-badge">{{ gt }}</span> &bull; {{ total }} votes &bull; Host: {{ lobby.host_username }}</div>
-    {% if gt=='trivia' and lobby.question.correct_option %}<div class="ew-success-banner" style="margin-top:0.4rem; display:inline-block;">Correct: <strong>{{ lobby.question.correct_option }}</strong></div>{% endif %}
   </div>
 
-  {# ─── Poll / Trivia / WYR Chart ─── #}
-  {% if gt in ('poll', 'trivia', 'wyr') and per_option %}
-  <div class="ew-card">
-    <h4 style="margin:0 0 0.6rem 0; color:var(--text-dark-color);">Vote Counts</h4>
-    <canvas id="resultsChart" height="80"></canvas>
-    <script nonce="{{ csp_nonce }}">
-      (function(){
-        const ctx=document.getElementById('resultsChart');
-        if(!ctx || typeof Chart==='undefined') return;
-        const labels = {{ per_option|map(attribute='_id')|list|tojson }};
-        const data = {{ per_option|map(attribute='count')|list|tojson }};
-        const rootStyles = getComputedStyle(document.documentElement);
-        const barColor = rootStyles.getPropertyValue('--primary-color').trim() || '#3e2217';
-        const textColor = rootStyles.getPropertyValue('--text-dark-color').trim() || '#333';
-        new Chart(ctx, {type:'bar', data:{labels, datasets:[{label:'Votes', data, backgroundColor:barColor}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:textColor}}, x:{ticks:{color:textColor}}}}});
-      })();
-    </script>
-    <div style="margin-top:0.6rem; display:flex; gap:0.4rem; flex-wrap:wrap;">
-      {% for row in per_option %}
-        <span class="ew-count-chip">{{ row._id }}: <strong>{{ row.count }}</strong></span>
-      {% endfor %}
+  {# Host/admin actions #}
+  {% if is_host or (current_user.is_authenticated and current_user.is_admin) %}
+  <div class="ew-card" style="padding:0.75rem 1rem;">
+    <div class="ew-host-actions" style="margin-top:0; padding-top:0; border-top:none;">
+      {% if not lobby.deactivated %}
+      <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+      </form>
+      {% endif %}
+      <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
+      </form>
     </div>
   </div>
+  {% endif %}
+
+  {# ─── Poll / Trivia / WYR Results ─── #}
+  {% if gt in ('poll', 'trivia', 'wyr') %}
+    {% set questions = lobby.get('questions', [lobby.question]) %}
+    {% for q in questions %}
+      <div class="ew-card">
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+          {% if questions|length > 1 %}<span class="ew-q-number">{{ loop.index }}</span>{% endif %}
+          <div style="font-weight:600; color:var(--primary-color);">{{ q.label }}</div>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.6rem;">
+          <span class="ew-badge">{{ gt|capitalize }}</span> &bull; {{ total }} total votes &bull; Host: {{ lobby.host_username }}
+          {% if gt=='trivia' and q.correct_option %}<span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct: {{ q.correct_option }}</span>{% endif %}
+        </div>
+
+        {# Vote bars #}
+        {% set qi = loop.index0 %}
+        {% set q_counts = lobby.counts.get(qi|string, lobby.counts) if lobby.counts else {} %}
+        {% set total_q = q_counts.values()|list|sum if q_counts else 0 %}
+        {% for opt in q.options %}
+          {% set cnt = q_counts.get(opt, 0) if q_counts else 0 %}
+          <div class="ew-vote-bar-wrap">
+            <span class="ew-vote-label">{{ opt }}</span>
+            <div class="ew-vote-bar-track"><div class="ew-vote-bar-fill" style="width:{{ (cnt / total_q * 100)|round|int if total_q else 0 }}%;"></div></div>
+            <span class="ew-vote-count">{{ cnt }}</span>
+          </div>
+        {% endfor %}
+
+        {# Chart #}
+        {% if per_option %}
+        <canvas id="resultsChart-{{ qi }}" height="60" style="margin-top:0.8rem;"></canvas>
+        <script nonce="{{ csp_nonce }}">
+          (function(){
+            const ctx=document.getElementById('resultsChart-{{ qi }}');
+            if(!ctx || typeof Chart==='undefined') return;
+            const labels = {{ q.options|tojson }};
+            const qCounts = {{ q_counts|tojson if q_counts else '{}' }};
+            const data = labels.map(l => qCounts[l] || 0);
+            const rootStyles = getComputedStyle(document.documentElement);
+            const barColor = rootStyles.getPropertyValue('--primary-color').trim() || '#3e2217';
+            const textColor = rootStyles.getPropertyValue('--text-dark-color').trim() || '#333';
+            new Chart(ctx, {type:'bar', data:{labels, datasets:[{label:'Votes', data, backgroundColor:barColor}]}, options:{plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, ticks:{color:textColor}}, x:{ticks:{color:textColor}}}}});
+          })();
+        </script>
+        {% endif %}
+      </div>
+    {% endfor %}
   {% endif %}
 
   {# ─── TTAL Results ─── #}
@@ -112,7 +136,7 @@
   {% if votes and gt in ('poll', 'trivia', 'wyr', 'caption') %}
   <div class="ew-table-wrap">
     <table class="ew-table">
-      <thead><tr><th style="width:40px; text-align:center;">#</th><th>Player</th><th>Option</th><th>Time</th></tr></thead>
+      <thead><tr><th style="width:40px; text-align:center;">#</th><th>Player</th><th>Option</th>{% if lobby.get('questions', [])|length > 1 %}<th>Q#</th>{% endif %}<th>Time</th></tr></thead>
       <tbody>
         {% for v in votes %}
           <tr>
@@ -126,6 +150,7 @@
                 <span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>
               {% endif %}
             </td>
+            {% if lobby.get('questions', [])|length > 1 %}<td class="muted">{{ (v.question_index|int + 1) if v.question_index is defined else 1 }}</td>{% endif %}
             <td class="secondary">{{ v.submitted_at|localtime('%b %d, %Y, %I:%M %p') if v.submitted_at else '' }}</td>
           </tr>
         {% endfor %}

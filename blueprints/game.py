@@ -17,7 +17,13 @@ ALLOWED_GAME_TYPES = ('poll', 'trivia', 'wyr', 'ttal', 'story', 'caption')
 
 def _get_lobby(lobby_id):
     import main as m
-    return m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    lobby = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    if lobby and lobby.get('game_type') in ('poll', 'trivia') and 'questions' not in lobby:
+        # Backward compat: wrap single question into questions array
+        q = lobby.get('question', {})
+        if q and q.get('label'):
+            lobby['questions'] = [q]
+    return lobby
 
 def _is_lobby_active(lobby):
     if not lobby:
@@ -81,40 +87,82 @@ def games_create():
 
         # --- Build doc per game type ---
         if game_type in ('poll', 'trivia', 'wyr'):
-            question = (request.form.get('question') or '').strip()
-            if not question or len(question) > MAX_QUESTION_LEN:
-                flash('Question required (max 200).', 'danger')
-                return render_template('game_create.html', active_page='games')
-            opts_raw = request.form.getlist('options') or []
             import json as js
-            if not opts_raw:
+            questions = []
+            questions_json_str = request.form.get('questions_json') or ''
+            
+            if game_type in ('poll', 'trivia') and questions_json_str:
                 try:
-                    qj = request.form.get('options_json') or ''
-                    if qj: opts_raw = js.loads(qj)
-                except: pass
-            opts = [str(o).strip() for o in opts_raw if str(o).strip()]
-
-            # WYR: exactly 2 options
-            if game_type == 'wyr':
-                if len(opts) != 2:
-                    flash('Would You Rather needs exactly 2 options.', 'danger')
+                    parsed_qs = js.loads(questions_json_str)
+                    if not isinstance(parsed_qs, list) or not parsed_qs:
+                        raise ValueError()
+                    
+                    for q in parsed_qs:
+                        q_label = (q.get('label') or '').strip()
+                        if not q_label or len(q_label) > MAX_QUESTION_LEN:
+                            flash('Question required (max 200).', 'danger')
+                            return render_template('game_create.html', active_page='games')
+                        
+                        opts = [str(o).strip() for o in q.get('options', []) if str(o).strip()]
+                        if len(opts) < 2 or len(opts) > MAX_OPTIONS:
+                            flash(f'Need 2-{MAX_OPTIONS} options.', 'danger')
+                            return render_template('game_create.html', active_page='games')
+                        for o in opts:
+                            if len(o) > MAX_OPTION_LEN:
+                                flash('Option too long (max 100).', 'danger')
+                                return render_template('game_create.html', active_page='games')
+                        if len(set(opts)) != len(opts):
+                            flash('Options must be unique.', 'danger')
+                            return render_template('game_create.html', active_page='games')
+                        
+                        correct = (q.get('correct_option') or '').strip() if game_type == 'trivia' else None
+                        if game_type == 'trivia' and correct and correct not in opts:
+                            flash('Correct option must be one of the options.', 'danger')
+                            return render_template('game_create.html', active_page='games')
+                            
+                        questions.append({'label': q_label, 'options': opts, 'correct_option': correct})
+                except Exception as e:
+                    flash('Invalid questions format.', 'danger')
                     return render_template('game_create.html', active_page='games')
             else:
-                if len(opts) < 2 or len(opts) > MAX_OPTIONS:
-                    flash(f'Need 2-{MAX_OPTIONS} options.', 'danger')
+                # Single question fallback
+                question = (request.form.get('question') or '').strip()
+                if not question or len(question) > MAX_QUESTION_LEN:
+                    flash('Question required (max 200).', 'danger')
                     return render_template('game_create.html', active_page='games')
-            for o in opts:
-                if len(o) > MAX_OPTION_LEN:
-                    flash('Option too long (max 100).', 'danger')
+                opts_raw = request.form.getlist('options') or []
+                if not opts_raw:
+                    try:
+                        qj = request.form.get('options_json') or ''
+                        if qj: opts_raw = js.loads(qj)
+                    except: pass
+                opts = [str(o).strip() for o in opts_raw if str(o).strip()]
+    
+                if game_type == 'wyr':
+                    if len(opts) != 2:
+                        flash('Would You Rather needs exactly 2 options.', 'danger')
+                        return render_template('game_create.html', active_page='games')
+                else:
+                    if len(opts) < 2 or len(opts) > MAX_OPTIONS:
+                        flash(f'Need 2-{MAX_OPTIONS} options.', 'danger')
+                        return render_template('game_create.html', active_page='games')
+                for o in opts:
+                    if len(o) > MAX_OPTION_LEN:
+                        flash('Option too long (max 100).', 'danger')
+                        return render_template('game_create.html', active_page='games')
+                if len(set(opts)) != len(opts):
+                    flash('Options must be unique.', 'danger')
                     return render_template('game_create.html', active_page='games')
-            if len(set(opts)) != len(opts):
-                flash('Options must be unique.', 'danger')
-                return render_template('game_create.html', active_page='games')
+    
+                correct = (request.form.get('correct_option') or '').strip() if game_type == 'trivia' else None
+                if game_type == 'trivia' and correct and correct not in opts:
+                    flash('Correct option must be one of the options.', 'danger')
+                    return render_template('game_create.html', active_page='games')
+                    
+                questions.append({'label': question, 'options': opts, 'correct_option': correct})
 
-            correct = (request.form.get('correct_option') or '').strip() if game_type == 'trivia' else None
-            if game_type == 'trivia' and correct and correct not in opts:
-                flash('Correct option must be one of the options.', 'danger')
-                return render_template('game_create.html', active_page='games')
+            # Create counts object, indexed by question index
+            counts = {str(i): {o: 0 for o in q['options']} for i, q in enumerate(questions)}
 
             doc = {
                 'lobby_id': lobby_id,
@@ -122,8 +170,9 @@ def games_create():
                 'host_username': current_user.username,
                 'title': title,
                 'game_type': game_type,
-                'question': {'label': question, 'options': opts, 'correct_option': correct},
-                'counts': {o: 0 for o in opts},
+                'question': questions[0],
+                'questions': questions,
+                'counts': counts,
                 'status': 'active',
                 'max_players': MAX_PLAYERS,
                 'expires_at': expires_at,
@@ -265,14 +314,35 @@ def view_lobby(lobby_id):
     total = m.game_votes_conf.count_documents({'lobby_id': lobby_id})
     ip = (request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr or '')
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
-    has_voted = False
-    my_vote = None
-    if current_user.is_authenticated:
-        v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id)})
-        if v: has_voted=True; my_vote=v.get('option')
-    elif ip_hash:
-        v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash})
-        if v: has_voted=True; my_vote=v.get('option')
+
+    # Multi-question vote state for poll/trivia
+    questions = lobby.get('questions', [])
+    if gt in ('poll', 'trivia') and questions:
+        has_voted = {}
+        my_vote = {}
+        for qi in range(len(questions)):
+            v = None
+            if current_user.is_authenticated:
+                v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'question_index': qi, 'vote_type': {'$exists': False}})
+            elif ip_hash:
+                v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'question_index': qi, 'vote_type': {'$exists': False}})
+            if not v and (qi == 0):
+                # Backward compat: old votes don't have question_index
+                if current_user.is_authenticated:
+                    v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'question_index': {'$exists': False}, 'vote_type': {'$exists': False}})
+                elif ip_hash:
+                    v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'question_index': {'$exists': False}, 'vote_type': {'$exists': False}})
+            has_voted[qi] = bool(v)
+            my_vote[qi] = v.get('option') if v else None
+    else:
+        has_voted = False
+        my_vote = None
+        if current_user.is_authenticated:
+            v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
+            if v: has_voted=True; my_vote=v.get('option')
+        elif ip_hash:
+            v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'vote_type': {'$exists': False}})
+            if v: has_voted=True; my_vote=v.get('option')
 
     # Type-specific context
     extra = {}
@@ -299,6 +369,7 @@ def view_lobby(lobby_id):
         extra = {'captions': subs, 'my_caption': my_caption}
 
     return render_template('game_lobby.html', lobby=lobby, is_host=is_host, has_voted=has_voted, my_vote=my_vote, total_votes=total, **extra)
+
 
 @bp.route('/g/<lobby_id>/vote', methods=['POST'])
 @limits(calls=10, period=60)
@@ -336,12 +407,22 @@ def vote_lobby(lobby_id):
         flash('Pick an option','danger')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
 
+    # Parse question_index for multi-question games
+    qi_raw = (data.get('question_index') if data else request.form.get('question_index')) if (data or request.form) else None
+    question_index = int(qi_raw) if qi_raw is not None else 0
+    questions = lobby.get('questions', [])
+
     # For caption voting, options are dynamic (submitted captions)
     if gt == 'caption':
         valid_captions = [str(s.get('_id')) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'}, {'_id': 1})]
         if option not in valid_captions:
             if data: return jsonify({'error': 'Invalid caption'}), 400
             flash('Invalid caption', 'danger')
+            return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
+    elif gt in ('poll', 'trivia') and questions and question_index < len(questions):
+        if option not in questions[question_index]['options']:
+            if data: return jsonify({'error':'Invalid option'}),400
+            flash('Invalid option','danger')
             return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     else:
         if option not in lobby['question']['options']:
@@ -350,13 +431,21 @@ def vote_lobby(lobby_id):
             return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
 
     ip_hash = hashlib.sha256(ip.encode()).hexdigest()[:16] if ip else ''
-    # one vote per user (or per IP if anonymous) per lobby
+    # one vote per user (or per IP if anonymous) per lobby per question
+    dupe_filter = {'lobby_id': lobby_id, 'vote_type': {'$exists': False}}
+    if gt in ('poll', 'trivia') and questions:
+        dupe_filter['question_index'] = question_index
     if current_user.is_authenticated:
-        existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
+        dupe_filter['user_id'] = ObjectId(current_user.id)
+        existing = m.game_votes_conf.find_one(dupe_filter)
         voter_user_id = ObjectId(current_user.id)
         voter_username = current_user.username
     else:
-        existing = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'vote_type': {'$exists': False}}) if ip_hash else None
+        if ip_hash:
+            dupe_filter['ip_hash'] = ip_hash
+            existing = m.game_votes_conf.find_one(dupe_filter)
+        else:
+            existing = None
         voter_user_id = None
         voter_username = 'Anonymous'
 
@@ -364,9 +453,17 @@ def vote_lobby(lobby_id):
         if data: return jsonify({'error': 'Already voted'}), 409
         flash('You already voted', 'warning')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
-    m.game_votes_conf.insert_one({'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash})
+
+    vote_doc = {'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash}
+    if gt in ('poll', 'trivia') and questions:
+        vote_doc['question_index'] = question_index
+    m.game_votes_conf.insert_one(vote_doc)
     # increment count
-    m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{option}':1}})
+    if gt in ('poll', 'trivia') and questions:
+        m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{question_index}.{option}':1}})
+    else:
+        m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$inc':{f'counts.{option}':1}})
+
     # live broadcast
     try:
         lobby2 = m.game_sessions_conf.find_one({'lobby_id':lobby_id},{'counts':1})

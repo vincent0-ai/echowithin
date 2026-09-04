@@ -51,7 +51,7 @@
     </div>
 
     <div style="background:var(--surface-bg); border:1px solid var(--border-color); border-radius:10px; padding:1rem; margin-bottom:1.2rem;">
-      <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color); margin-bottom:0.5rem;">Add Question — Choose Input Format:</div>
+      <div style="font-size:0.85rem; font-weight:700; color:var(--text-dark-color); margin-bottom:0.5rem;">Add Question</div>
       <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
         <button type="button" onclick="addQuestion('short_text')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Short text</button>
         <button type="button" onclick="addQuestion('paragraph')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Paragraph</button>
@@ -59,10 +59,9 @@
         <button type="button" onclick="addQuestion('multiple_choice')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Multiple choice</button>
         <button type="button" onclick="addQuestion('rating')" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor:pointer;">+ Rating (1-5)</button>
       </div>
-      <div style="font-size:0.76rem; color:var(--text-muted); margin-top:0.45rem;">You can also switch any question's format at any time using the format dropdown on the question card.</div>
     </div>
 
-    <button type="submit" class="ew-btn" style="width:100%; padding:0.75rem;">Create and get link</button>
+    <button type="submit" class="ew-btn" style="width:100%; padding:0.75rem;">Create Form</button>
   </form>
 </div>
 <script nonce="{{ csp_nonce }}">
@@ -94,7 +93,6 @@ function render(){
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.7rem; flex-wrap:wrap; gap:0.5rem;">
         <div style="display:flex; align-items:center; gap:0.5rem;">
           <span style="font-weight:700; font-size:0.85rem; color:var(--text-dark-color);">Q${idx+1}</span>
-          <label style="font-size:0.78rem; font-weight:600; color:var(--text-secondary); margin:0;">Format:</label>
           <select onchange="changeQuestionType(${idx}, this.value)" class="form-input" style="padding:0.25rem 0.55rem; font-size:0.82rem; font-weight:600; border-radius:6px; cursor:pointer; width:auto; margin:0;">
             <option value="short_text" ${q.type==='short_text'?'selected':''}>Short text (single line)</option>
             <option value="paragraph" ${q.type==='paragraph'?'selected':''}>Paragraph (long answer)</option>
@@ -103,26 +101,26 @@ function render(){
             <option value="rating" ${q.type==='rating'?'selected':''}>Rating (1 - 5 stars)</option>
           </select>
         </div>
-        <button type="button" onclick="questions.splice(${idx},1); render()" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Remove</button>
+        <button type="button" onclick="questions.splice(${idx},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove question">&times;</button>
       </div>
 
       <input type="text" placeholder="Question label *" value="${(q.label || '').replace(/"/g,'&quot;')}" oninput="questions[${idx}].label=this.value" class="form-input" style="margin-bottom:0.5rem; font-weight:500;">
 
       ${q.type === 'short_text' ? `
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.45rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px;">
-          Preview: Single-line text input field for short answers
+          Preview: Short answer text field
         </div>
       ` : ''}
 
       ${q.type === 'paragraph' ? `
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.55rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px; min-height:45px;">
-          Preview: Multi-line text area for long or detailed answers
+          Preview: Long answer text area
         </div>
       ` : ''}
 
       ${q.type === 'rating' ? `
         <div style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem; padding:0.45rem 0.65rem; background:var(--card-bg); border:1px dashed var(--border-color); border-radius:6px; display:flex; align-items:center; gap:0.6rem;">
-          <span>Preview: Rating scale 1 to 5</span>
+          <span>Preview: Rating</span>
           <span style="display:inline-flex; gap:0.3rem;">
             <span class="ew-badge">1</span><span class="ew-badge">2</span><span class="ew-badge">3</span><span class="ew-badge">4</span><span class="ew-badge">5</span>
           </span>
@@ -138,7 +136,7 @@ function render(){
             <div style="display:flex; gap:0.4rem; align-items:center; margin-bottom:0.35rem;">
               <span style="font-size:0.8rem; color:var(--text-muted);">${q.type==='single_choice'?'&bull;':'&#9633;'}</span>
               <input type="text" value="${(o || '').replace(/"/g,'&quot;')}" oninput="questions[${idx}].options[${oi}]=this.value" class="form-input" style="flex:1; padding:0.35rem 0.6rem; font-size:0.85rem;">
-              <button type="button" onclick="questions[${idx}].options.splice(${oi},1); render()" class="ew-btn--danger ew-btn--sm" style="cursor:pointer; padding:0.25rem 0.5rem;" title="Remove option">&times;</button>
+              <button type="button" onclick="questions[${idx}].options.splice(${oi},1); render()" style="cursor:pointer; background:none; border:none; color:var(--text-muted); font-size:1.1rem; padding:0.2rem 0.5rem; line-height:1; border-radius:4px; transition:color 0.15s;" onmouseover="this.style.color='var(--danger-color, #c0392b)'" onmouseout="this.style.color='var(--text-muted)'" title="Remove option">&times;</button>
             </div>
           `).join('')}
           <button type="button" onclick="if(questions[${idx}].options.length<10){questions[${idx}].options.push('Option '+(questions[${idx}].options.length+1)); render()}" class="ew-btn--outline ew-btn--sm" style="font-size:0.75rem; margin-top:0.3rem; cursor:pointer;">+ Add option</button>

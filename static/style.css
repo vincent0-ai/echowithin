@@ -4418,4 +4418,95 @@ body {
 .ew-rating-label:hover {
     background: var(--surface-bg);
 }
+
+/* Vote result bar — horizontal bar chart for poll/trivia results */
+.ew-vote-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    font-size: 0.85rem;
+}
+
+.ew-vote-bar-wrap .ew-vote-label {
+    flex: 0 0 auto;
+    min-width: 80px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-dark-color);
+    font-weight: 500;
+}
+
+.ew-vote-bar-track {
+    flex: 1;
+    height: 22px;
+    background: var(--surface-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.ew-vote-bar-fill {
+    height: 100%;
+    background: var(--primary-color);
+    border-radius: 5px;
+    transition: width 0.4s ease;
+    min-width: 0;
+}
+
+.ew-vote-bar-wrap .ew-vote-count {
+    flex: 0 0 auto;
+    min-width: 28px;
+    text-align: right;
+    font-weight: 700;
+    color: var(--text-dark-color);
+    font-size: 0.85rem;
+}
+
+/* Host actions row — separated below share link */
+.ew-host-actions {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border-color);
+}
+
+@media (max-width: 600px) {
+    .ew-host-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.4rem;
+    }
+    .ew-host-actions > a,
+    .ew-host-actions > form {
+        width: 100%;
+    }
+    .ew-host-actions a,
+    .ew-host-actions button {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+    }
+}
+
+/* Question card number pill */
+.ew-q-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
 

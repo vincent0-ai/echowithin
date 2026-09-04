@@ -34,25 +34,22 @@
       <div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; align-items:center;">
         <div>
           <h2 style="margin:0 0 0.3rem 0; color:var(--text-dark-color); font-size:1.3rem;">{{ lobby.title }}</h2>
-          <div style="font-size:0.8rem; color:var(--text-secondary);"><span class="ew-badge">{{ gt }}</span> &bull; Host: {{ lobby.host_username }} &bull; <span id="presence-count">—</span> present &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
+          <div style="font-size:0.8rem; color:var(--text-secondary);"><span class="ew-badge">{{ gt|capitalize }}</span> &bull; Host: {{ lobby.host_username }} &bull; <span id="presence-count">0</span> players &bull; <span id="vote-count">{{ total_votes }}</span> votes</div>
         </div>
         {% if is_host %}
           <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
-            {# Reveal button — all types #}
             {% if gt != 'story' %}
             <form method="POST" action="{{ url_for('game.reveal_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="ew-btn ew-btn--sm" {% if lobby.revealed %}disabled style="opacity:0.6; cursor:not-allowed;"{% endif %}>{% if lobby.revealed %}Revealed{% else %}Reveal Results{% endif %}</button>
             </form>
             {% endif %}
-            {# TTAL: start guessing #}
             {% if gt == 'ttal' and lobby.phase == 'submit' %}
             <form method="POST" action="{{ url_for('game.ttal_start_guessing', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="ew-btn ew-btn--sm">Start Guessing</button>
             </form>
             {% endif %}
-            {# Caption: lock submissions #}
             {% if gt == 'caption' and lobby.phase == 'submit' %}
             <form method="POST" action="{{ url_for('game.caption_lock', lobby_id=lobby.lobby_id) }}" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -64,37 +61,69 @@
       </div>
     </div>
 
-    {# ─── POLL / TRIVIA ─── #}
+    {# ─── POLL / TRIVIA (multi-question) ─── #}
     {% if gt in ('poll', 'trivia') %}
-      <div class="ew-card">
-        <div style="font-weight:600; color:var(--primary-color); margin-bottom:0.5rem;">{{ lobby.question.label }}</div>
-        {% if not has_voted and not is_host %}
-          <form method="POST" action="{{ url_for('game.vote_lobby', lobby_id=lobby.lobby_id) }}" id="vote-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div style="position:absolute; left:-9999px;"><input type="text" name="website" autocomplete="off" tabindex="-1"></div>
-            {% for opt in lobby.question.options %}
-              <label class="ew-option-row"><input type="radio" name="option" value="{{ opt }}" required> <span>{{ opt }}</span></label>
-            {% endfor %}
-            <button type="submit" class="ew-btn" style="width:100%; margin-top:0.6rem;">Submit Vote</button>
-          </form>
-        {% elif has_voted %}
-          <div class="ew-success-banner">You voted: <strong>{{ my_vote }}</strong></div>
-          {% if lobby.revealed %}
-            <div style="margin-top:0.6rem;">
-              {% if gt=='trivia' and lobby.question.correct_option %}<div style="margin-bottom:0.4rem;">Correct: <strong style="color:var(--success-color);">{{ lobby.question.correct_option }}</strong> {% if my_vote == lobby.question.correct_option %}<span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct</span>{% else %}<span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>{% endif %}</div>{% endif %}
-              {% for opt in lobby.question.options %}
-                <div style="display:flex; justify-content:space-between; font-size:0.85rem; padding:0.2rem 0;"><span>{{ opt }}</span><strong>{{ lobby.counts[opt] if lobby.counts else 0 }}</strong></div>
+      {% set questions = lobby.get('questions', [lobby.question]) %}
+      {% for q in questions %}
+        {% set qi = loop.index0 %}
+        <div class="ew-card">
+          <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+            {% if questions|length > 1 %}<span class="ew-q-number">{{ loop.index }}</span>{% endif %}
+            <div style="font-weight:600; color:var(--primary-color);">{{ q.label }}</div>
+          </div>
+
+          {# Voting form — not voted and not host #}
+          {% if has_voted is mapping %}
+            {% set q_voted = has_voted.get(qi, false) %}
+            {% set q_my_vote = my_vote.get(qi) %}
+          {% else %}
+            {% set q_voted = has_voted if qi == 0 else false %}
+            {% set q_my_vote = my_vote if qi == 0 else none %}
+          {% endif %}
+
+          {% if not q_voted and not is_host %}
+            <form method="POST" action="{{ url_for('game.vote_lobby', lobby_id=lobby.lobby_id) }}" class="vote-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="question_index" value="{{ qi }}">
+              <div style="position:absolute; left:-9999px;"><input type="text" name="website" autocomplete="off" tabindex="-1"></div>
+              {% for opt in q.options %}
+                <label class="ew-option-row"><input type="radio" name="option" value="{{ opt }}" required> <span>{{ opt }}</span></label>
+              {% endfor %}
+              <button type="submit" class="ew-btn" style="width:100%; margin-top:0.6rem;">Submit Vote</button>
+            </form>
+          {% elif q_voted %}
+            <div class="ew-success-banner">You voted: <strong>{{ q_my_vote }}</strong></div>
+            {% if lobby.revealed %}
+              <div style="margin-top:0.6rem;">
+                {% if gt=='trivia' and q.correct_option %}<div style="margin-bottom:0.5rem;">Correct: <strong style="color:var(--success-color);">{{ q.correct_option }}</strong> {% if q_my_vote == q.correct_option %}<span class="ew-badge ew-badge--success" style="margin-left:4px;">Correct</span>{% else %}<span class="ew-badge ew-badge--danger" style="margin-left:4px;">Incorrect</span>{% endif %}</div>{% endif %}
+                {% set q_counts = lobby.counts.get(qi|string, lobby.counts) if lobby.counts else {} %}
+                {% set total_q = q_counts.values()|list|sum if q_counts else 0 %}
+                {% for opt in q.options %}
+                  {% set cnt = q_counts.get(opt, 0) if q_counts else 0 %}
+                  <div class="ew-vote-bar-wrap">
+                    <span class="ew-vote-label">{{ opt }}</span>
+                    <div class="ew-vote-bar-track"><div class="ew-vote-bar-fill" style="width:{{ (cnt / total_q * 100)|round|int if total_q else 0 }}%;"></div></div>
+                    <span class="ew-vote-count">{{ cnt }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% elif is_host %}
+            <div style="margin-top:0.4rem;">
+              {% set q_counts = lobby.counts.get(qi|string, lobby.counts) if lobby.counts else {} %}
+              {% set total_q = q_counts.values()|list|sum if q_counts else 0 %}
+              {% for opt in q.options %}
+                {% set cnt = q_counts.get(opt, 0) if q_counts else 0 %}
+                <div class="ew-vote-bar-wrap">
+                  <span class="ew-vote-label">{{ opt }}</span>
+                  <div class="ew-vote-bar-track"><div class="ew-vote-bar-fill" style="width:{{ (cnt / total_q * 100)|round|int if total_q else 0 }}%;"></div></div>
+                  <span class="ew-vote-count">{{ cnt }}</span>
+                </div>
               {% endfor %}
             </div>
           {% endif %}
-        {% elif is_host %}
-          <div style="font-size:0.85rem; color:var(--text-secondary);">
-            {% for opt in lobby.question.options %}
-              <div style="display:flex; justify-content:space-between;"><span>{{ opt }}</span><strong>{{ lobby.counts[opt] if lobby.counts else 0 }}</strong></div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </div>
+        </div>
+      {% endfor %}
 
     {# ─── WOULD YOU RATHER ─── #}
     {% elif gt == 'wyr' %}
@@ -160,7 +189,7 @@
               <div style="font-weight:600; color:var(--text-dark-color); margin-bottom:0.5rem;">{{ sub.username }}'s statements:</div>
               {% set target_id = sub.user_id|string %}
               {% if target_id in my_guesses %}
-                <div class="ew-success-banner" style="margin-bottom:0.5rem;"><i class="fas fa-check"></i> You guessed #{{ my_guesses[target_id]|int + 1 }} is the lie.</div>
+                <div class="ew-success-banner" style="margin-bottom:0.5rem;">You guessed #{{ my_guesses[target_id]|int + 1 }} is the lie.</div>
               {% endif %}
               {% for stmt in sub.content.statements %}
                 {% if target_id not in my_guesses %}
@@ -281,13 +310,15 @@
       {% endif %}
     {% endif %}
 
-    {# ─── Share row + Presence (all types) ─── #}
+    {# ─── Share row + Host actions (all types) ─── #}
     <div class="ew-card" style="margin-top:1.2rem; padding:1rem 1.2rem;">
       <div class="ew-share-row" style="align-items:center;">
-        <span style="font-size:0.82rem; font-weight:600; color:var(--text-dark-color); white-space:nowrap;">Share link:</span>
+        <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
         <input type="text" value="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly onclick="this.select()" class="ew-share-input">
         <button type="button" onclick="navigator.clipboard.writeText('{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
-        {% if is_host %}
+      </div>
+      {% if is_host %}
+        <div class="ew-host-actions">
           <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
           {% if not lobby.deactivated %}
           <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
@@ -297,10 +328,10 @@
           {% endif %}
           <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete Lobby</button>
+            <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
           </form>
-        {% endif %}
-      </div>
+        </div>
+      {% endif %}
       <div id="presence-list" style="margin-top:0.6rem; font-size:0.8rem; color:var(--text-secondary);"></div>
     </div>
   {% endif %}
@@ -313,7 +344,7 @@
   socket.on('connect', ()=>{ socket.emit('join_game', {lobby_id: lobbyId}); });
   socket.on('game_presence_update', (data)=>{
     const el=document.getElementById('presence-list');
-    if(el && data.players) el.textContent = data.players.length + ' present: ' + data.players.map(p=>p.name).join(', ');
+    if(el && data.players) el.textContent = data.players.length + ' player' + (data.players.length!==1?'s':'') + ': ' + data.players.map(p=>p.name).join(', ');
     const pc=document.getElementById('presence-count');
     if(pc && data.players) pc.textContent = data.players.length;
   });
@@ -326,25 +357,25 @@
   socket.on('game_phase_change', ()=>{ location.reload(); });
   socket.on('game_story_update', (data)=>{
     if(data.lobby_id!==lobbyId) return;
-    location.reload(); // Simple reload to show new sentence
+    location.reload();
   });
   socket.on('game_ttal_submit', ()=>{ location.reload(); });
   socket.on('game_caption_submit', ()=>{ location.reload(); });
   // offline vote queue
-  const form=document.getElementById('vote-form');
-  if(form){
+  document.querySelectorAll('.vote-form, #vote-form').forEach(form => {
     form.addEventListener('submit', async (e)=>{
       if(!navigator.onLine){
         e.preventDefault();
         try{
           const fd=new FormData(form);
           const opt=fd.get('option');
+          const qi=fd.get('question_index') || '0';
           const openReq=indexedDB.open('echowithin-game-pending',1);
           openReq.onupgradeneeded=e=>e.target.result.createObjectStore('votes',{autoIncrement:true});
           openReq.onsuccess=e=>{
             const db=e.target.result;
             const tx=db.transaction('votes','readwrite');
-            tx.objectStore('votes').add({lobbyId, option:opt, ts:Date.now()});
+            tx.objectStore('votes').add({lobbyId, option:opt, question_index:qi, ts:Date.now()});
             if('serviceWorker' in navigator && 'SyncManager' in window){
               navigator.serviceWorker.ready.then(r=>r.sync.register('sync-pending-game-votes'));
             }
@@ -353,7 +384,7 @@
         }catch(err){ alert('Offline — try again when online.'); }
       }
     });
-  }
+  });
 })();
 </script>
 {% endblock %}

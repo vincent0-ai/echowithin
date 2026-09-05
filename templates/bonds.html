@@ -4440,8 +4440,19 @@
         var cat = bondAlbumState[bondId].category;
         var sort = bondAlbumState[bondId].sort;
         var viewMode = bondAlbumState[bondId].viewMode || 'grid';
+        var cacheKey = bondId + ':album:' + cat + ':' + sort;
         var hasExistingPhotos = bondAlbumState[bondId].photos && bondAlbumState[bondId].photos.length > 0;
         if (!hasExistingPhotos) {
+            getBondCache(cacheKey).then(function(cached) {
+                if (cached && cached.photos && cached.photos.length > 0 && (!bondAlbumState[bondId].photos || bondAlbumState[bondId].photos.length === 0)) {
+                    bondAlbumState[bondId].photos = cached.photos;
+                    var countEl = document.getElementById('album-count-' + bondId);
+                    if (countEl) countEl.textContent = cached.photos.length + ' photo' + (cached.photos.length > 1 ? 's' : '');
+                    checkOnThisDayMemories(bondId, cached.photos);
+                    var el = document.getElementById('album-grid-' + bondId);
+                    if (el) el.innerHTML = renderAlbumContentHtml(bondId, cached.photos, viewMode);
+                }
+            }).catch(function() {});
             container.innerHTML = '<div style="color:#999;font-size:0.85rem;text-align:center;padding:0.8rem;">Loading photos...</div>';
         }
 

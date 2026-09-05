@@ -165,143 +165,10 @@ class TestWhisperEditHandler:
                 msgs.update_one.assert_not_called()
 
 
-class TestWhisperViewOnceHandler:
-    """Tests for the server-enforced view-once state machine (F7, W.6)."""
-
-    def _handlers(self):
-        import main as m
-        handlers = {}
-        for call in m.socketio.on.mock_calls:
-            if len(call.args) > 0 and callable(call.args[0]):
-                handlers[getattr(call.args[0], '__name__', '')] = call.args[0]
-        return handlers
-
-    def _session(self, me, partner, sid):
-        return {'_id': sid, 'initiator_id': ObjectId(me),
-                'recipient_id': ObjectId(partner), 'status': 'active',
-                'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)}
-
-    def test_first_open_starts_destruction_and_reveals_to_opener_only(self, app, mock_user):
-        import main as m
-        from main import User
-        from flask_login import login_user
-        partner = str(ObjectId())
-        me = str(mock_user['_id'])
-        sid, mid = ObjectId(), ObjectId()
-        # I am the recipient opening the partner's view-once photo.
-        msg_doc = {'_id': mid, 'session_id': sid, 'sender_id': ObjectId(partner),
-                   'content': '[Photo]', 'message_type': 'image', 'view_once': True,
-                   'viewed_by': [], 'view_once_opened_at': None,
-                   'image_url': 'https://example.com/img.jpg',
-                   'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)}
-        handlers = self._handlers()
-        assert 'handle_whisper_view_once_open' in handlers
-        with app.test_request_context():
-            login_user(User(mock_user))
-            with patch.object(m, 'whisper_sessions_conf') as sess, \
-                    patch.object(m, 'whisper_messages_conf') as msgs, \
-                    patch.object(m, 'emit') as mock_emit:
-                sess.find_one.return_value = self._session(partner, me, sid)
-                msgs.find_one.return_value = dict(msg_doc)
-                handlers['handle_whisper_view_once_open']({
-                    'session_id': str(sid), 'message_id': str(mid)})
-                set_doc = msgs.update_one.call_args[0][1]['$set']
-                assert me in set_doc['viewed_by']
-                assert set_doc['view_once_opened_at'] is not None
-                # TTL moves earlier only — never past the session window.
-                assert set_doc['expires_at'] <= msg_doc['expires_at']
-                emitted = [(c.args[0], c.args[1], c.kwargs.get('room')) for c in mock_emit.call_args_list]
-                revealed = [e for e in emitted if e[0] == 'whisper_view_once_revealed']
-                assert len(revealed) == 1 and revealed[0][2] == f'user_{me}'
-                assert revealed[0][1].get('image_url') == 'https://example.com/img.jpg'
-                updates = [e for e in emitted if e[0] == 'whisper_view_once_update']
-                assert {u[2] for u in updates} == {f'user_{me}', f'user_{partner}'}
-                assert 'image_url' not in updates[0][1]  # seal-broken notice carries no bytes
-
-    def test_sender_preview_does_not_start_destruction(self, app, mock_user):
-        import main as m
-        from main import User
-        from flask_login import login_user
-        me = str(mock_user['_id'])
-        partner = str(ObjectId())
-        sid, mid = ObjectId(), ObjectId()
-        msg_doc = {'_id': mid, 'session_id': sid, 'sender_id': ObjectId(me),
-                   'content': '[Photo]', 'message_type': 'image', 'view_once': True,
-                   'viewed_by': [], 'image_url': 'https://example.com/img.jpg',
-                   'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=20)}
-        handlers = self._handlers()
-        with app.test_request_context():
-            login_user(User(mock_user))
-            with patch.object(m, 'whisper_sessions_conf') as sess, \
-                    patch.object(m, 'whisper_messages_conf') as msgs, \
-                    patch.object(m, 'emit') as mock_emit:
-                sess.find_one.return_value = self._session(me, partner, sid)
-                msgs.find_one.return_value = dict(msg_doc)
-                handlers['handle_whisper_view_once_open']({
-                    'session_id': str(sid), 'message_id': str(mid)})
-                msgs.update_one.assert_not_called()
-                assert mock_emit.call_count == 1
-                assert mock_emit.call_args[0][0] == 'whisper_view_once_revealed'
-
-    def test_open_of_destroyed_message_reports_destroyed(self, app, mock_user):
-        import main as m
-        from main import User
-        from flask_login import login_user
-        me = str(mock_user['_id'])
-        partner = str(ObjectId())
-        sid, mid = ObjectId(), ObjectId()
-        # Bytes already $unset server-side.
-        msg_doc = {'_id': mid, 'session_id': sid, 'sender_id': ObjectId(partner),
-                   'content': '[Photo]', 'message_type': 'image', 'view_once': True,
-                   'viewed_by': [me], 'view_once_destroyed': True}
-        handlers = self._handlers()
-        with app.test_request_context():
-            login_user(User(mock_user))
-            with patch.object(m, 'whisper_sessions_conf') as sess, \
-                    patch.object(m, 'whisper_messages_conf') as msgs, \
-                    patch.object(m, 'emit') as mock_emit:
-                sess.find_one.return_value = self._session(partner, me, sid)
-                msgs.find_one.return_value = dict(msg_doc)
-                handlers['handle_whisper_view_once_open']({
-                    'session_id': str(sid), 'message_id': str(mid)})
-                assert mock_emit.call_args[0][0] == 'whisper_view_once_destroyed'
-
-    def test_burn_destroys_bytes_immediately_and_emits_to_both(self, app, mock_user):
-        import main as m
-        from main import User
-        from flask_login import login_user
-        me = str(mock_user['_id'])
-        partner = str(ObjectId())
-        sid, mid = ObjectId(), ObjectId()
-        session_doc = {'_id': sid, 'initiator_id': ObjectId(partner),
-                       'recipient_id': ObjectId(me), 'status': 'active'}
-        msg_doc = {'_id': mid, 'session_id': sid, 'sender_id': ObjectId(partner),
-                   'content': '[Photo]', 'message_type': 'image', 'view_once': True,
-                   'image_url': 'https://example.com/photo.jpg'}
-        handlers = self._handlers()
-        assert 'handle_whisper_view_once_burn' in handlers
-        with app.test_request_context():
-            login_user(User(mock_user))
-            with patch.object(m, 'whisper_sessions_conf') as sess, \
-                    patch.object(m, 'whisper_messages_conf') as msgs, \
-                    patch.object(m, 'emit') as mock_emit:
-                sess.find_one.return_value = session_doc
-                msgs.find_one.return_value = dict(msg_doc)
-                handlers['handle_whisper_view_once_burn']({
-                    'session_id': str(sid), 'message_id': str(mid)})
-                msgs.update_one.assert_called_once()
-                unset_doc = msgs.update_one.call_args[0][1]['$unset']
-                assert 'image_url' in unset_doc
-                assert msgs.update_one.call_args[0][1]['$set']['view_once_destroyed'] is True
-                assert mock_emit.call_count == 2
-                rooms = {c.kwargs.get('room') for c in mock_emit.call_args_list}
-                assert rooms == {f'user_{partner}', f'user_{me}'}
-
-
 class TestWhisperHistoryEndpoint:
-    """Tests for history parity: reactions, edited flags, view-once withholding (F4/F5/F7)."""
+    """Tests for history parity: reactions, edited flags."""
 
-    def test_history_withholds_locked_bytes_but_returns_reactions(self, app, mock_user):
+    def test_history_returns_reactions_and_edits(self, app, mock_user):
         import main as m
         from main import User
         from flask_login import login_user
@@ -313,10 +180,6 @@ class TestWhisperHistoryEndpoint:
         session_doc = {'_id': sid, 'initiator_id': me, 'recipient_id': partner,
                        'status': 'active', 'proposed_duration_minutes': 15,
                        'started_at': ts, 'expires_at': ts}
-        locked_vo = {'_id': ObjectId(), 'session_id': sid, 'sender_id': partner,
-                     'content': '[Photo]', 'timestamp': ts, 'message_type': 'image',
-                     'view_once': True, 'viewed_by': [],
-                     'image_url': 'https://example.com/secret.jpg'}
         reacted_text = {'_id': ObjectId(), 'session_id': sid, 'sender_id': partner,
                         'content': 'hello', 'timestamp': ts, 'message_type': 'text',
                         'reactions': {str(partner): '❤️'}, 'edited': True}
@@ -325,49 +188,15 @@ class TestWhisperHistoryEndpoint:
             with patch.object(m, 'whisper_sessions_conf') as sess, \
                     patch.object(m, 'whisper_messages_conf') as msgc:
                 sess.find_one.return_value = session_doc
-                msgc.find.return_value.sort.return_value.limit.return_value = [dict(locked_vo), dict(reacted_text)]
+                msgc.find.return_value.sort.return_value.limit.return_value = [dict(reacted_text)]
                 res = api_whisper_history(str(sid))
         assert res.status_code == 200
         out = res.get_json()['messages']
-        by_id = {x['id']: x for x in out}
-        vo = by_id[str(locked_vo['_id'])]
-        # Server enforcement: no bytes for an unopened view-once.
-        assert vo['locked'] is True
-        assert 'image_url' not in vo
-        assert vo['view_once'] is True and vo['destroyed'] is False
-        txt = by_id[str(reacted_text['_id'])]
+        assert len(out) == 1
+        txt = out[0]
         assert txt['reactions'] == {str(partner): '❤️'}
         assert txt['edited'] is True
-        # DM parity: partner messages marked read on fetch.
         assert msgc.update_many.called
-
-    def test_history_reveals_view_once_to_sender(self, app, mock_user):
-        import main as m
-        from main import User
-        from flask_login import login_user
-        from blueprints.whisper import api_whisper_history
-        me = mock_user['_id']
-        partner = ObjectId()
-        sid = ObjectId()
-        ts = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-        session_doc = {'_id': sid, 'initiator_id': me, 'recipient_id': partner,
-                       'status': 'active', 'proposed_duration_minutes': 15,
-                       'started_at': ts, 'expires_at': ts}
-        own_vo = {'_id': ObjectId(), 'session_id': sid, 'sender_id': me,
-                  'content': '[Photo]', 'timestamp': ts, 'message_type': 'image',
-                  'view_once': True, 'viewed_by': [],
-                  'image_url': 'https://example.com/mine.jpg'}
-        with app.test_request_context():
-            login_user(User(mock_user))
-            with patch.object(m, 'whisper_sessions_conf') as sess, \
-                    patch.object(m, 'whisper_messages_conf') as msgc:
-                sess.find_one.return_value = session_doc
-                msgc.find.return_value.sort.return_value.limit.return_value = [dict(own_vo)]
-                res = api_whisper_history(str(sid))
-        assert res.status_code == 200
-        entry = res.get_json()['messages'][0]
-        assert entry['locked'] is False
-        assert entry['image_url'] == 'https://example.com/mine.jpg'
 
 
 class TestChatEndpointsAuth:
@@ -435,8 +264,7 @@ class TestSocketHandlersPayloadResilience:
                 'handle_send_dm', 'handle_whisper_message', 'handle_whisper_typing',
                 'handle_whisper_stop_typing', 'handle_whisper_read',
                 'handle_whisper_screenshot', 'handle_whisper_react',
-                'handle_whisper_edit', 'handle_whisper_view_once_open',
-                'handle_whisper_view_once_burn'
+                'handle_whisper_edit'
             ]
             for name in target_handlers:
                 assert name in handlers, f"Expected {name} to be registered with socketio.on"

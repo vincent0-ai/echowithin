@@ -1027,11 +1027,11 @@ def _validate_session_token():
             {'user_id': ObjectId(current_user.id), 'user_agent': ua_string},
             sort=[('last_active', -1)]
         )
-        if latest_sess and latest_sess.get('session_token'):
+        if isinstance(latest_sess, dict) and isinstance(latest_sess.get('session_token'), str):
             token = latest_sess['session_token']
             session['ew_session_token'] = token
 
-    if not token:
+    if not token or not isinstance(token, str):
         return
 
     # Check revocation cache

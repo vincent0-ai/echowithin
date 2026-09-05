@@ -30,33 +30,36 @@ import gevent.monkey
 gevent.monkey.patch_all = lambda **kw: None
 
 
-@pytest.fixture(scope='session', autouse=True)
-def _session_mocks():
-    _patches = []
-    _patches.append(patch.object(gevent.monkey, 'patch_all', new=lambda **kw: None))
-    _patches.append(patch('pymongo.MongoClient', autospec=True))
-    _patches.append(patch('redis.Redis', autospec=True))
-    _patches.append(patch('redis.from_url', autospec=True))
-    _patches.append(patch('flask_mail.Mail.send', autospec=True))
-    _patches.append(patch('flask_mail.Mail.connect', autospec=True))
-    _patches.append(patch('flask_socketio.SocketIO', autospec=True))
-    _patches.append(patch('cloudinary.uploader.upload', autospec=True))
-    _patches.append(patch('cloudinary.uploader.destroy', autospec=True))
-    _patches.append(patch('cloudinary.uploader.add_tag', autospec=True))
-    _patches.append(patch('cloudinary.config', autospec=True))
-    _patches.append(patch('pywebpush.webpush', autospec=True))
-    _patches.append(patch('requests.get', autospec=True))
-    _patches.append(patch('requests.post', autospec=True))
-    _patches.append(patch.dict('sys.modules', {
+_patches = [
+    patch.object(gevent.monkey, 'patch_all', new=lambda **kw: None),
+    patch('pymongo.MongoClient', autospec=True),
+    patch('redis.Redis', autospec=True),
+    patch('redis.from_url', autospec=True),
+    patch('flask_mail.Mail.send', autospec=True),
+    patch('flask_mail.Mail.connect', autospec=True),
+    patch('flask_socketio.SocketIO', autospec=True),
+    patch('cloudinary.uploader.upload', autospec=True),
+    patch('cloudinary.uploader.destroy', autospec=True),
+    patch('cloudinary.uploader.add_tag', autospec=True),
+    patch('cloudinary.config', autospec=True),
+    patch('pywebpush.webpush', autospec=True),
+    patch('requests.get', autospec=True),
+    patch('requests.post', autospec=True),
+    patch.dict('sys.modules', {
         'firebase_admin': MagicMock(),
         'firebase_admin.credentials': MagicMock(),
         'firebase_admin.messaging': MagicMock(),
-    }))
-    for p in _patches:
-        p.start()
+    }),
+]
+for _p in _patches:
+    _p.start()
+
+
+@pytest.fixture(scope='session', autouse=True)
+def _session_mocks():
     yield
-    for p in _patches:
-        p.stop()
+    for _p in _patches:
+        _p.stop()
 
 
 @pytest.fixture(scope='session')

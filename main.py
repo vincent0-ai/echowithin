@@ -645,9 +645,12 @@ game_submissions_conf = db['game_submissions']  # TTAL statements, captions
 
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
-user_sessions_conf.create_index('user_id')
-user_sessions_conf.create_index('session_token', unique=True)
-user_sessions_conf.create_index('last_active', expireAfterSeconds=30 * 24 * 3600)  # Auto-expire after 30 days
+try:
+    user_sessions_conf.create_index('user_id')
+    user_sessions_conf.create_index('session_token', unique=True)
+    user_sessions_conf.create_index('last_active', expireAfterSeconds=30 * 24 * 3600)  # Auto-expire after 30 days
+except Exception as e:
+    app.logger.warning(f"user_sessions index creation deferred or failed: {e}")
 
 # Sync update manifest between DB and static file on startup
 # Keeps the latest version (by versionCode) in both places

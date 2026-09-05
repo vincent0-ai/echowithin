@@ -2,12 +2,11 @@ import datetime
 from bson.objectid import ObjectId
 from unittest.mock import patch, MagicMock
 import pytest
-import database
-import main as m
 from utils import _remove_stale_push_subscription
 
 
 def test_remove_stale_push_subscription_records_revocation():
+    import database
     sub_doc = {
         '_id': ObjectId(),
         'user_id': ObjectId(),
@@ -31,6 +30,7 @@ def test_remove_stale_push_subscription_records_revocation():
 
 
 def test_push_status_with_valid_endpoint(auth_client, mock_user):
+    import main as m
     test_endpoint = 'https://fcm.googleapis.com/fcm/send/valid-endpoint'
     mock_push_conf = MagicMock()
     mock_push_conf.count_documents.return_value = 1
@@ -46,6 +46,7 @@ def test_push_status_with_valid_endpoint(auth_client, mock_user):
 
 
 def test_push_status_with_revoked_endpoint(auth_client, mock_user):
+    import main as m
     test_endpoint = 'https://fcm.googleapis.com/fcm/send/revoked-endpoint'
     mock_push_conf = MagicMock()
     mock_push_conf.count_documents.return_value = 0
@@ -64,6 +65,7 @@ def test_push_status_with_revoked_endpoint(auth_client, mock_user):
 
 
 def test_push_subscribe_blocks_revoked_endpoint(auth_client, mock_user):
+    import main as m
     test_endpoint = 'https://fcm.googleapis.com/fcm/send/revoked-endpoint'
     mock_revoked_conf = MagicMock()
     mock_revoked_conf.find_one.return_value = {'endpoint': test_endpoint, 'reason': 'status=403 after 3 consecutive failures'}

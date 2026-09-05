@@ -131,6 +131,9 @@ def run_anniversary_check():
     except subprocess.TimeoutExpired:
         print("Warning: anniversary_check.py timed out after 120 seconds")
     except FileNotFoundError:
+        print(f"Error: The script at {script_path} was not found.")
+
+
 def run_calendar_reminders():
     """
     Runs the calendar_reminders.py script to send upcoming event push notifications.

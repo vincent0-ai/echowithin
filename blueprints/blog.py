@@ -2087,25 +2087,16 @@ def delete_post(post_id):
 
     # Delete the image from Cloudinary if it exists
     if post_to_delete.get('image_public_id'):
-        try:
-            m.cloudinary.uploader.destroy(post_to_delete['image_public_id'])
-        except Exception as e:
-            current_app.logger.error(f"Failed to delete Cloudinary image {post_to_delete.get('image_public_id')}: {e}")
+        m.destroy_cloudinary_media(post_to_delete['image_public_id'], resource_type='image', delivery_type='upload')
 
     # Support multiple images list deletion
     if post_to_delete.get('image_public_ids'):
         for pid in post_to_delete['image_public_ids']:
-            try:
-                m.cloudinary.uploader.destroy(pid)
-            except Exception as e:
-                current_app.logger.error(f"Failed to delete Cloudinary image {pid}: {e}")
+            m.destroy_cloudinary_media(pid, resource_type='image', delivery_type='upload')
 
     # Delete the video from Cloudinary if it exists
     if post_to_delete.get('video_public_id'):
-        try:
-            m.cloudinary.uploader.destroy(post_to_delete['video_public_id'], resource_type='video')
-        except Exception as e:
-            current_app.logger.error(f"Failed to delete Cloudinary video {post_to_delete.get('video_public_id')}: {e}")
+        m.destroy_cloudinary_media(post_to_delete['video_public_id'], resource_type='video', delivery_type='upload')
 
     # Back up comments before deleting
     from utils import backup_before_delete

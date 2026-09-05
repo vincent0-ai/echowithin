@@ -90,7 +90,7 @@ from security import (is_safe_url, is_same_origin_request, parse_iso_utc,
     limits, safe_object_id, admin_required, owner_required,
     _derive_fernet_key, _get_notes_encryption_key, get_notes_fernet,
     _get_user_fernet, _get_dm_fernet, encrypt_dm, decrypt_dm,
-    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, encrypt_form_response, decrypt_form_response, encrypt_game_data, decrypt_game_data, generate_signed_cloudinary_url, re_sign_cloudinary_url, _candidate_user_ids,
+    encrypt_note, decrypt_note, encrypt_bond_data, decrypt_bond_data, encrypt_form_response, decrypt_form_response, encrypt_game_data, decrypt_game_data, generate_signed_cloudinary_url, re_sign_cloudinary_url, destroy_cloudinary_media, _candidate_user_ids,
     encrypt_media_bytes, decrypt_media_bytes, build_media_serve_url, media_serve_token_valid, is_media_proxy_url,
     _decrypt_with_candidate_ids, _note_decryption_candidates,
     _decrypt_note_record, _decrypt_note_metadata, _get_community_fernet,
@@ -2234,7 +2234,12 @@ def handle_whisper_message(data=None, *args, **kwargs):
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
             if now >= expires_at:
-                # Session expired — clean up
+                # Session expired — clean up media and messages
+                try:
+                    from blueprints.whisper import _cleanup_whisper_session_media
+                    _cleanup_whisper_session_media(session_id, session_doc)
+                except Exception as cleanup_err:
+                    app.logger.warning(f"Error cleaning up whisper media on timeout: {cleanup_err}")
                 whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
                 whisper_sessions_conf.update_one(
                     {'_id': ObjectId(session_id)},

@@ -878,6 +878,12 @@ def api_delete_community_note(note_id):
     if not (is_author or is_admin):
         return jsonify({'error': 'Unauthorized'}), 403
         
+    # Destroy attached Cloudinary media
+    if note.get('valentine_photo_public_id'):
+        m.destroy_cloudinary_media(note['valentine_photo_public_id'], resource_type='raw', delivery_type='authenticated')
+    if note.get('valentine_audio_public_id'):
+        m.destroy_cloudinary_media(note['valentine_audio_public_id'], resource_type='raw', delivery_type='authenticated')
+
     # Delete note and its reactions
     m.community_notes_conf.delete_one({'_id': note_obj_id})
     m.community_reactions_conf.delete_many({'note_id': note_obj_id})
@@ -1460,12 +1466,8 @@ def api_delete_resource(community_id, resource_id):
     is_uploader = str(resource.get('uploader_id')) == current_user.id
     if not is_admin and not is_uploader:
         return jsonify({'error': 'Unauthorized'}), 403
-    try:
-        import cloudinary.uploader
-        if resource.get('public_id'):
-            cloudinary.uploader.destroy(resource['public_id'], resource_type=resource.get('resource_type', 'image'), type='authenticated')
-    except Exception:
-        pass
+    if resource.get('public_id'):
+        m.destroy_cloudinary_media(resource['public_id'], resource_type=resource.get('resource_type', 'raw'), delivery_type='authenticated')
     m.community_resources_conf.delete_one({'_id': res_obj_id})
     return jsonify({'success': True})
 

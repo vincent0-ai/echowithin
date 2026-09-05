@@ -1500,6 +1500,13 @@ def delete_personal_post(post_id):
         for post in target_posts:
             m.cleanup_post_media(post)
 
+        # 1.8. Cleanup note attachments and their Cloudinary media
+        for att in m.note_attachments_conf.find({'note_id': {'$in': target_ids}}):
+            if att.get('public_id'):
+                res_type = att.get('storage_resource_type', 'raw')
+                m.destroy_cloudinary_media(att['public_id'], resource_type=res_type, delivery_type='authenticated')
+        m.note_attachments_conf.delete_many({'note_id': {'$in': target_ids}})
+
         # 2. Cleanup all versions for target notes
         m.note_versions_conf.delete_many({'note_id': {'$in': target_ids}})
 

@@ -658,11 +658,8 @@ def api_delete_note_attachment(share_id, attachment_id):
 
     # Delete from Cloudinary
     if att.get('public_id'):
-        try:
-            res_type = att.get('storage_resource_type', 'video' if att.get('file_type') == 'audio' else 'image')
-            m.cloudinary.uploader.destroy(att['public_id'], resource_type=res_type, type='authenticated')
-        except Exception as e:
-            current_app.logger.error(f"Failed to delete note attachment from Cloudinary: {e}")
+        res_type = att.get('storage_resource_type', 'raw')
+        m.destroy_cloudinary_media(att['public_id'], resource_type=res_type, delivery_type='authenticated')
 
     m.note_attachments_conf.delete_one({'_id': obj_id})
     return jsonify({'success': True})

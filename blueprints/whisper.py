@@ -61,6 +61,60 @@ def _expire_stale_pending():
     return result.modified_count
 
 
+def _cleanup_whisper_session_media(session_id, session_doc=None):
+    """Destroys all Cloudinary media attached to messages in a whisper session."""
+    import main as m
+    try:
+        sess_oid = ObjectId(session_id)
+        if not session_doc:
+            session_doc = m.whisper_sessions_conf.find_one({'_id': sess_oid})
+        u1 = str(session_doc['initiator_id']) if session_doc and session_doc.get('initiator_id') else ''
+        u2 = str(session_doc['recipient_id']) if session_doc and session_doc.get('recipient_id') else ''
+
+        msgs_with_media = list(m.whisper_messages_conf.find({
+            'session_id': sess_oid,
+            '$or': [
+                {'image_public_id': {'$exists': True, '$ne': ''}},
+                {'image_url': {'$exists': True, '$ne': ''}}
+            ]
+        }))
+        for wm in msgs_with_media:
+            raw_pub = wm.get('image_public_id')
+            plain_pub = None
+            if raw_pub:
+                if raw_pub.startswith('gAAAAA') and u1 and u2:
+                    try:
+                        plain_pub = m.decrypt_dm(raw_pub, u1, u2)
+                    except Exception:
+                        try:
+                            plain_pub = m.decrypt_dm(raw_pub, u2, u1)
+                        except Exception:
+                            plain_pub = None
+                else:
+                    plain_pub = raw_pub
+
+            if not plain_pub and wm.get('image_url'):
+                raw_url = wm['image_url']
+                plain_url = raw_url
+                if raw_url.startswith('gAAAAA') and u1 and u2:
+                    try:
+                        plain_url = m.decrypt_dm(raw_url, u1, u2)
+                    except Exception:
+                        try:
+                            plain_url = m.decrypt_dm(raw_url, u2, u1)
+                        except Exception:
+                            plain_url = None
+                if plain_url:
+                    plain_pub = m.extract_cloudinary_public_id(plain_url)
+
+            if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+                res_type = 'raw' if wm.get('media_encrypted') else 'image'
+                del_type = 'authenticated' if wm.get('media_encrypted') else 'upload'
+                m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+    except Exception as e:
+        current_app.logger.warning(f"Error cleaning up whisper session media for {session_id}: {e}")
+
+
 def _get_active_session(user_oid):
     """Return any active whisper session involving this user, or None.
     
@@ -86,6 +140,7 @@ def _get_active_session(user_oid):
                 {'_id': session['_id']},
                 {'$set': {'status': 'expired', 'pending_extension': None}}
             )
+            _cleanup_whisper_session_media(session['_id'], session)
             m.whisper_messages_conf.delete_many({'session_id': session['_id']})
             return None
     return session
@@ -518,6 +573,9 @@ def api_whisper_end(session_id):
             'is_system': True
         }, room=f"user_{user_id_str}")
 
+        # Clean up any Cloudinary media attached to whisper messages
+        _cleanup_whisper_session_media(session_id, session_doc)
+
         # Delete all whisper messages immediately
         m.whisper_messages_conf.delete_many({'session_id': ObjectId(session_id)})
 
@@ -811,6 +869,39 @@ def api_whisper_view_once_burn(message_id):
         recipient_str = str(session_doc['recipient_id'])
         if user_id_str not in (initiator_str, recipient_str):
             return jsonify({'error': 'Unauthorized'}), 403
+
+        # Destroy Cloudinary media asset if attached
+        raw_pub = msg.get('image_public_id')
+        plain_pub = None
+        if raw_pub:
+            if raw_pub.startswith('gAAAAA'):
+                try:
+                    plain_pub = m.decrypt_dm(raw_pub, initiator_str, recipient_str)
+                except Exception:
+                    try:
+                        plain_pub = m.decrypt_dm(raw_pub, recipient_str, initiator_str)
+                    except Exception:
+                        plain_pub = None
+            else:
+                plain_pub = raw_pub
+        if not plain_pub and msg.get('image_url'):
+            raw_url = msg['image_url']
+            plain_url = raw_url
+            if raw_url.startswith('gAAAAA'):
+                try:
+                    plain_url = m.decrypt_dm(raw_url, initiator_str, recipient_str)
+                except Exception:
+                    try:
+                        plain_url = m.decrypt_dm(raw_url, recipient_str, initiator_str)
+                    except Exception:
+                        plain_url = None
+            if plain_url:
+                plain_pub = m.extract_cloudinary_public_id(plain_url)
+
+        if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+            res_type = 'raw' if msg.get('media_encrypted') else 'image'
+            del_type = 'authenticated' if msg.get('media_encrypted') else 'upload'
+            m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
 
         m.whisper_messages_conf.update_one(
             {'_id': msg_oid},

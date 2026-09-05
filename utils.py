@@ -23,7 +23,7 @@ from bson.objectid import ObjectId
 
 from config import TIER_LIMITS, PREMIUM_TRIAL_DAYS, _TAG_KEYWORDS
 import database
-from security import decrypt_note, get_active_achievements, decrypt_dm, re_sign_cloudinary_url, build_media_serve_url
+from security import decrypt_note, get_active_achievements, decrypt_dm, re_sign_cloudinary_url, build_media_serve_url, destroy_cloudinary_media
 
 _APP = None
 _T = None
@@ -356,31 +356,54 @@ def optimize_cloudinary_url(url):
 
 def extract_cloudinary_public_id(url):
     """
-    Extracts the public_id from a Cloudinary URL.
-    Example: https://res.cloudinary.com/demo/image/upload/v12345678/folder/sample.jpg
-    Returns: 'folder/sample'
+    Extracts the public_id from a Cloudinary URL or media proxy URL.
+    Supports upload, authenticated, transformations, signatures, and versioning.
+    Example: https://res.cloudinary.com/demo/image/upload/v12345678/folder/sample.jpg -> 'folder/sample'
+    Example: https://domain/serve_encrypted_media/dm_images%2Fxyz?mime=image/jpeg -> 'dm_images/xyz'
     """
-    if not url or 'res.cloudinary.com' not in url:
+    if not url or not isinstance(url, str):
         return None
-    
-    # Split by '/upload/' and remove version (v...) and extension
-    try:
-        parts = url.split('/upload/')
-        if len(parts) < 2:
+    url = url.strip()
+    if not url:
+        return None
+
+    # Check for media proxy routes
+    match_proxy = re.search(r'/(?:serve_encrypted_media|__media|media)/([^?&#]+)', url)
+    if match_proxy:
+        from urllib.parse import unquote
+        return unquote(match_proxy.group(1)).strip()
+
+    if 'res.cloudinary.com' in url:
+        try:
+            # Strip query string and fragment
+            clean_url = url.split('?')[0].split('#')[0]
+            # Split after /upload/ or /authenticated/
+            parts = re.split(r'/(?:upload|authenticated)/', clean_url)
+            if len(parts) >= 2:
+                path = parts[1]
+                segments = [s for s in path.split('/') if s]
+                meaningful = []
+                for seg in segments:
+                    if seg.startswith('s--') and seg.endswith('--'):
+                        continue
+                    if re.match(r'^v\d+$', seg):
+                        continue
+                    meaningful.append(seg)
+
+                # Strip known Cloudinary transformation segments (e.g. c_fill,w_300, fl_attachment)
+                _transform_re = re.compile(r'^(?:(?:c|w|h|q|f|e|b|r|a|t|o|l|u|fl|g|co|bo|dn|dpr|pg|so|eo|du|ar|z)_[a-zA-Z0-9_.-]+,?)+$')
+                while meaningful and _transform_re.match(meaningful[0]):
+                    meaningful.pop(0)
+
+                if meaningful:
+                    pid = '/'.join(meaningful)
+                    if '.' in pid:
+                        pid = pid.rsplit('.', 1)[0]
+                    return pid.strip()
+        except Exception:
             return None
-        
-        path = parts[1]
-        # Skip version if present (e.g., v12345678/)
-        if path.startswith('v') and '/' in path:
-            path = path.split('/', 1)[1]
-        
-        # Remove extension
-        if '.' in path:
-            path = path.rsplit('.', 1)[0]
-        
-        return path
-    except Exception:
-        return None
+
+    return None
 
 
 def cleanup_share_media(share):
@@ -423,13 +446,12 @@ def cleanup_share_media(share):
                         field: encrypted_url
                     })
                 if not other_usage and not other_post:
-                    cloudinary.uploader.destroy(
+                    destroy_cloudinary_media(
                         direct_public_id,
                         resource_type="raw",
-                        type="authenticated",
+                        delivery_type="authenticated",
                         invalidate=True
                     )
-                    _get_app().logger.info(f"Deleted orphaned encrypted media: {direct_public_id}")
             except Exception as e:
                 _get_app().logger.warning(f"Failed to delete encrypted media {direct_public_id}: {e}")
             continue
@@ -466,8 +488,7 @@ def cleanup_share_media(share):
                 public_id = extract_cloudinary_public_id(url)
                 if public_id:
                     res_type = "video" if field == 'valentine_audio' else "image"
-                    cloudinary.uploader.destroy(public_id, resource_type=res_type)
-                    _get_app().logger.info(f"Deleted orphaned Cloudinary media: {public_id} (Type: {res_type})")
+                    destroy_cloudinary_media(public_id, resource_type=res_type, delivery_type="upload")
         except Exception as e:
             _get_app().logger.error(f"Failed to cleanup media: {e}")
 
@@ -487,6 +508,39 @@ def cleanup_post_media(post):
         media_hash = post.get(hash_field)
         encrypted_url = post.get(field)
         if not encrypted_url:
+            continue
+
+        # Encrypted-at-rest uploads store a public_id directly.
+        direct_public_id = post.get(field + '_public_id')
+        if direct_public_id:
+            try:
+                other_post = None
+                other_share = None
+                if media_hash:
+                    other_post = database.personal_posts_conf.find_one({
+                        hash_field: media_hash,
+                        '_id': {'$ne': post['_id']}
+                    })
+                    other_share = database.note_shares_conf.find_one({
+                        hash_field: media_hash
+                    })
+                else:
+                    other_post = database.personal_posts_conf.find_one({
+                        field: encrypted_url,
+                        '_id': {'$ne': post['_id']}
+                    })
+                    other_share = database.note_shares_conf.find_one({
+                        field: encrypted_url
+                    })
+                if not other_post and not other_share:
+                    destroy_cloudinary_media(
+                        direct_public_id,
+                        resource_type="raw",
+                        delivery_type="authenticated",
+                        invalidate=True
+                    )
+            except Exception as e:
+                _get_app().logger.warning(f"Failed to delete encrypted media {direct_public_id}: {e}")
             continue
 
         # Decrypt URL to get the actual Cloudinary URL for deletion
@@ -521,8 +575,7 @@ def cleanup_post_media(post):
                 public_id = extract_cloudinary_public_id(url)
                 if public_id:
                     res_type = "video" if field == 'valentine_audio' else "image"
-                    cloudinary.uploader.destroy(public_id, resource_type=res_type)
-                    _get_app().logger.info(f"Deleted orphaned Cloudinary media from post: {public_id} (Type: {res_type})")
+                    destroy_cloudinary_media(public_id, resource_type=res_type, delivery_type="upload")
         except Exception as e:
             _get_app().logger.error(f"Failed to cleanup post media: {e}")
 
@@ -951,45 +1004,127 @@ def cascade_delete_user_data(user_id):
     m.fcm_tokens_conf.delete_many({'user_id': uid})
     m.push_subscriptions_conf.delete_many({'user_id': uid})
 
+    # User avatar
+    if user_doc.get('profile_image_public_id'):
+        destroy_cloudinary_media(user_doc['profile_image_public_id'], resource_type='image', delivery_type='upload')
+
     # Blog content
     my_posts = list(m.posts_conf.find({'author_id': uid}, {'_id': 1, 'image_public_id': 1, 'image_public_ids': 1, 'video_public_id': 1}))
     m.posts_conf.delete_many({'author_id': uid})
     for p in my_posts:
         for pid in [p.get('image_public_id')] + list(p.get('image_public_ids', [])):
             if pid:
-                try:
-                    m.cloudinary.uploader.destroy(pid, resource_type='image')
-                except Exception:
-                    pass
+                destroy_cloudinary_media(pid, resource_type='image', delivery_type='upload')
         if p.get('video_public_id'):
-            try:
-                m.cloudinary.uploader.destroy(p['video_public_id'], resource_type='video')
-            except Exception:
-                pass
+            destroy_cloudinary_media(p['video_public_id'], resource_type='video', delivery_type='upload')
     m.comments_conf.delete_many({'author_id': uid})
     m.comment_votes_conf.delete_many({'user_id': uid})
     m.user_post_views_conf.delete_many({'user_id': uid})
     m.unlock_notifications_conf.delete_many({'user_id': uid})
 
     # Private notes & shares
+    my_personal_posts = list(m.personal_posts_conf.find({'user_id': uid}))
+    for post in my_personal_posts:
+        try:
+            cleanup_post_media(post)
+        except Exception:
+            pass
     m.personal_posts_conf.delete_many({'user_id': uid})
+
+    my_attachments = list(m.note_attachments_conf.find({'uploader_id': uid}))
+    for att in my_attachments:
+        if att.get('public_id'):
+            destroy_cloudinary_media(att['public_id'], resource_type='raw', delivery_type='authenticated')
     m.note_attachments_conf.delete_many({'uploader_id': uid})
     m.note_shares_conf.delete_many({'$or': [{'owner_id': uid}, {'collaborator_ids': uid}]})
     m.note_versions_conf.delete_many({'author_id': uid})
     m.note_discussions_conf.delete_many({'author_id': uid})
 
     # Messaging: delete what the user sent; redact messages others sent to them.
+    sent_dms = list(m.direct_messages_conf.find({
+        'sender_id': uid,
+        '$or': [{'image_public_id': {'$exists': True, '$ne': ''}}, {'image_url': {'$exists': True, '$ne': ''}}]
+    }))
+    for dm in sent_dms:
+        try:
+            s_id, r_id = str(dm.get('sender_id')), str(dm.get('recipient_id'))
+            raw_pub = dm.get('image_public_id')
+            plain_pub = None
+            if raw_pub:
+                if raw_pub.startswith('gAAAAA'):
+                    try:
+                        plain_pub = decrypt_dm(raw_pub, s_id, r_id)
+                    except Exception:
+                        plain_pub = None
+                else:
+                    plain_pub = raw_pub
+            if not plain_pub and dm.get('image_url'):
+                raw_url = dm['image_url']
+                plain_url = raw_url
+                if raw_url.startswith('gAAAAA'):
+                    try:
+                        plain_url = decrypt_dm(raw_url, s_id, r_id)
+                    except Exception:
+                        plain_url = None
+                if plain_url:
+                    plain_pub = extract_cloudinary_public_id(plain_url)
+            if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+                res_type = 'raw' if dm.get('media_encrypted') else ('video' if dm.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+                del_type = 'authenticated' if dm.get('media_encrypted') else 'upload'
+                destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+        except Exception:
+            pass
     m.direct_messages_conf.delete_many({'sender_id': uid})
     m.direct_messages_conf.update_many(
         {'recipient_id': uid},
         {'$set': {'sender_id': None, 'content': '', 'image_url': '', 'image_public_id': '', 'link_preview': {}, 'deleted_for_recipient': True}}
     )
     m.dm_permissions_conf.delete_many({'$or': [{'requester_id': uid}, {'target_id': uid}]})
+
+    sched_msgs = list(m.scheduled_messages_conf.find({
+        'sender_id': uid,
+        '$or': [{'image_public_id': {'$exists': True, '$ne': ''}}, {'image_url': {'$exists': True, '$ne': ''}}]
+    }))
+    for sm in sched_msgs:
+        try:
+            s_id, r_id = str(sm.get('sender_id')), str(sm.get('recipient_id'))
+            raw_pub = sm.get('image_public_id')
+            plain_pub = None
+            if raw_pub:
+                if raw_pub.startswith('gAAAAA'):
+                    try:
+                        plain_pub = decrypt_dm(raw_pub, s_id, r_id)
+                    except Exception:
+                        plain_pub = None
+                else:
+                    plain_pub = raw_pub
+            if not plain_pub and sm.get('image_url'):
+                raw_url = sm['image_url']
+                plain_url = raw_url
+                if raw_url.startswith('gAAAAA'):
+                    try:
+                        plain_url = decrypt_dm(raw_url, s_id, r_id)
+                    except Exception:
+                        plain_url = None
+                if plain_url:
+                    plain_pub = extract_cloudinary_public_id(plain_url)
+            if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+                res_type = 'raw' if sm.get('media_encrypted') else ('video' if sm.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+                del_type = 'authenticated' if sm.get('media_encrypted') else 'upload'
+                destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+        except Exception:
+            pass
     m.scheduled_messages_conf.delete_many({'sender_id': uid})
     m.hidden_chats_conf.delete_many({'user_id': uid})
 
     # Whisper data
-    my_whisper_sessions = list(m.whisper_sessions_conf.find({'$or': [{'initiator_id': uid}, {'partner_id': uid}]}, {'_id': 1}))
+    my_whisper_sessions = list(m.whisper_sessions_conf.find({'$or': [{'initiator_id': uid}, {'partner_id': uid}]}))
+    try:
+        from blueprints.whisper import _cleanup_whisper_session_media
+        for s in my_whisper_sessions:
+            _cleanup_whisper_session_media(s['_id'], s)
+    except Exception:
+        pass
     m.whisper_sessions_conf.delete_many({'$or': [{'initiator_id': uid}, {'partner_id': uid}]})
     if my_whisper_sessions:
         m.whisper_messages_conf.delete_many({'session_id': {'$in': [s['_id'] for s in my_whisper_sessions]}})
@@ -1001,6 +1136,15 @@ def cascade_delete_user_data(user_id):
     m.bonds_conf.delete_many({'$or': [{'user_a_id': uid}, {'user_b_id': uid}]})
     bond_ids = [b['_id'] for b in my_bonds]
     if bond_ids:
+        for photo in m.bond_album_photos_conf.find({'bond_id': {'$in': bond_ids}}):
+            pid = photo.get('image_public_id') or photo.get('public_id')
+            if pid:
+                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+        for rec in m.bond_recommendations_conf.find({'bond_id': {'$in': bond_ids}}):
+            pid = rec.get('image_public_id') or rec.get('public_id')
+            if pid:
+                destroy_cloudinary_media(pid, resource_type='raw', delivery_type='authenticated')
+
         m.bond_goals_conf.delete_many({'bond_id': {'$in': bond_ids}})
         m.bond_journal_conf.delete_many({'bond_id': {'$in': bond_ids}})
         m.bond_moods_conf.delete_many({'bond_id': {'$in': bond_ids}})
@@ -1016,6 +1160,11 @@ def cascade_delete_user_data(user_id):
     m.communities_conf.update_many({'admin_id': uid}, {'$set': {'admin_id': None}})
     m.communities_conf.update_many({}, {'$pull': {'members': uid, 'moderators': uid}})
     m.community_memberships_conf.delete_many({'user_id': uid})
+    for cnote in m.community_notes_conf.find({'author_id': uid}):
+        if cnote.get('valentine_photo_public_id'):
+            destroy_cloudinary_media(cnote['valentine_photo_public_id'], resource_type='raw', delivery_type='authenticated')
+        if cnote.get('valentine_audio_public_id'):
+            destroy_cloudinary_media(cnote['valentine_audio_public_id'], resource_type='raw', delivery_type='authenticated')
     m.community_notes_conf.delete_many({'author_id': uid})
     m.community_reactions_conf.delete_many({'user_id': uid})
     m.community_reports_conf.delete_many({'reporter_id': uid})

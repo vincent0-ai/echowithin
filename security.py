@@ -662,6 +662,67 @@ def re_sign_cloudinary_url(public_id, resource_type='image', delivery_type='auth
     return fallback_url or ''
 
 
+def destroy_cloudinary_media(public_id: str, resource_type: str = 'raw', delivery_type: str = 'authenticated', invalidate: bool = True) -> bool:
+    """Safely destroys an asset in Cloudinary without throwing or blocking database deletions.
+
+    Tries the specified resource_type and delivery_type. If Cloudinary returns 'not found'
+    and delivery_type was 'authenticated', it tries fallback combinations (e.g. 'upload'
+    or image/video types) to cleanly handle legacy pre-encryption uploads.
+    Logs warnings on failure, but always returns False gracefully instead of raising.
+    """
+    if not public_id or not isinstance(public_id, str):
+        return False
+    public_id = public_id.strip()
+    if not public_id:
+        return False
+
+    try:
+        import cloudinary.uploader
+        res_type = resource_type or 'raw'
+        del_type = delivery_type or 'authenticated'
+
+        res = cloudinary.uploader.destroy(
+            public_id,
+            resource_type=res_type,
+            type=del_type,
+            invalidate=invalidate
+        )
+        if isinstance(res, dict) and res.get('result') == 'ok':
+            _get_app().logger.info(f"Destroyed Cloudinary asset: {public_id} ({res_type}:{del_type})")
+            return True
+
+        if isinstance(res, dict) and res.get('result') == 'not found':
+            fallbacks = []
+            if del_type == 'authenticated':
+                fallbacks.append((res_type, 'upload'))
+            if res_type == 'raw':
+                fallbacks.extend([('image', del_type), ('video', del_type), ('image', 'upload'), ('video', 'upload')])
+            elif res_type in ('image', 'video'):
+                fallbacks.append(('raw', del_type))
+
+            for fb_res, fb_del in fallbacks:
+                if (fb_res, fb_del) == (res_type, del_type):
+                    continue
+                try:
+                    fb_out = cloudinary.uploader.destroy(
+                        public_id,
+                        resource_type=fb_res,
+                        type=fb_del,
+                        invalidate=invalidate
+                    )
+                    if isinstance(fb_out, dict) and fb_out.get('result') == 'ok':
+                        _get_app().logger.info(f"Destroyed Cloudinary asset via fallback: {public_id} ({fb_res}:{fb_del})")
+                        return True
+                except Exception:
+                    pass
+
+        _get_app().logger.warning(f"Cloudinary destroy returned non-ok for {public_id}: {res}")
+        return False
+    except Exception as e:
+        _get_app().logger.warning(f"Cloudinary destroy failed for {public_id}: {e}")
+        return False
+
+
 # ---------------------------------------------------------------------------
 # SERVER-SIDE MEDIA ENCRYPTION-AT-REST
 # ---------------------------------------------------------------------------

@@ -166,10 +166,7 @@ def profile_settings(username):
         update_data['bio_encrypted'] = True
         if request.form.get('remove_profile_picture'):
             if user.get('profile_image_public_id'):
-                try:
-                    m.cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
-                except Exception as e:
-                    current_app.logger.error(f"Cloudinary avatar deletion failed for user {username}: {e}")
+                m.destroy_cloudinary_media(user['profile_image_public_id'], resource_type="image", delivery_type="upload")
             update_data['profile_image_url'] = None
             update_data['profile_image_public_id'] = None
         profile_image_file = request.files.get('profile_image')
@@ -177,7 +174,7 @@ def profile_settings(username):
             if '.' in profile_image_file.filename and profile_image_file.filename.rsplit('.', 1)[1].lower() in m.ALLOWED_IMAGE_EXTENSIONS:
                 try:
                     if user.get('profile_image_public_id') and not request.form.get('remove_profile_picture'):
-                        m.cloudinary.uploader.destroy(user['profile_image_public_id'], resource_type="image")
+                        m.destroy_cloudinary_media(user['profile_image_public_id'], resource_type="image", delivery_type="upload")
                     upload_result = m.cloudinary.uploader.upload(profile_image_file, folder="echowithin_avatars")
                     update_data['profile_image_url'] = upload_result.get('secure_url')
                     update_data['profile_image_public_id'] = upload_result.get('public_id')

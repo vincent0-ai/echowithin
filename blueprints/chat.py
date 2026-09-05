@@ -696,6 +696,35 @@ def api_delete_message(message_id):
         recipient_id_str = str(msg['recipient_id'])
         from utils import backup_before_delete
         backup_before_delete('direct_messages', msg, current_user.id)
+
+        # Destroy Cloudinary media if attached
+        raw_pub = msg.get('image_public_id')
+        sender_id_str = str(msg['sender_id'])
+        plain_pub = None
+        if raw_pub:
+            if raw_pub.startswith('gAAAAA'):
+                try:
+                    plain_pub = m.decrypt_dm(raw_pub, sender_id_str, recipient_id_str)
+                except Exception:
+                    plain_pub = None
+            else:
+                plain_pub = raw_pub
+        if not plain_pub and msg.get('image_url'):
+            raw_url = msg['image_url']
+            plain_url = raw_url
+            if raw_url.startswith('gAAAAA'):
+                try:
+                    plain_url = m.decrypt_dm(raw_url, sender_id_str, recipient_id_str)
+                except Exception:
+                    plain_url = None
+            if plain_url:
+                plain_pub = m.extract_cloudinary_public_id(plain_url)
+
+        if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+            res_type = 'raw' if msg.get('media_encrypted') else ('video' if msg.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+            del_type = 'authenticated' if msg.get('media_encrypted') else 'upload'
+            m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+
         m.direct_messages_conf.delete_one({'_id': ObjectId(message_id)})
         m.socketio.emit('message_deleted', {'id': message_id}, room=f"user_{recipient_id_str}")
         m.socketio.emit('message_deleted', {'id': message_id}, room=f"user_{current_user.id}")
@@ -728,6 +757,34 @@ def api_delete_chat(other_user_id):
             }))
             if messages:
                 for msg in messages:
+                    # Destroy Cloudinary media if attached
+                    raw_pub = msg.get('image_public_id')
+                    s_id, r_id = str(msg.get('sender_id')), str(msg.get('recipient_id'))
+                    plain_pub = None
+                    if raw_pub:
+                        if raw_pub.startswith('gAAAAA'):
+                            try:
+                                plain_pub = m.decrypt_dm(raw_pub, s_id, r_id)
+                            except Exception:
+                                pass
+                        else:
+                            plain_pub = raw_pub
+                    if not plain_pub and msg.get('image_url'):
+                        raw_url = msg['image_url']
+                        plain_url = raw_url
+                        if raw_url.startswith('gAAAAA'):
+                            try:
+                                plain_url = m.decrypt_dm(raw_url, s_id, r_id)
+                            except Exception:
+                                plain_url = None
+                        if plain_url:
+                            plain_pub = m.extract_cloudinary_public_id(plain_url)
+
+                    if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+                        res_type = 'raw' if msg.get('media_encrypted') else ('video' if msg.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+                        del_type = 'authenticated' if msg.get('media_encrypted') else 'upload'
+                        m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+
                     msg['original_collection'] = 'direct_messages'
                     msg['_id'] = ObjectId()
                     msg['expires_at'] = expires_at
@@ -936,6 +993,34 @@ def api_schedule_cancel(msg_id):
         })
         if not msg:
             return jsonify({'error': 'Scheduled message not found or already processed'}), 404
+        # Destroy attached Cloudinary media
+        raw_pub = msg.get('image_public_id')
+        s_id, r_id = str(msg.get('sender_id')), str(msg.get('recipient_id'))
+        plain_pub = None
+        if raw_pub:
+            if raw_pub.startswith('gAAAAA'):
+                try:
+                    plain_pub = m.decrypt_dm(raw_pub, s_id, r_id)
+                except Exception:
+                    plain_pub = None
+            else:
+                plain_pub = raw_pub
+        if not plain_pub and msg.get('image_url'):
+            raw_url = msg['image_url']
+            plain_url = raw_url
+            if raw_url.startswith('gAAAAA'):
+                try:
+                    plain_url = m.decrypt_dm(raw_url, s_id, r_id)
+                except Exception:
+                    plain_url = None
+            if plain_url:
+                plain_pub = m.extract_cloudinary_public_id(plain_url)
+
+        if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
+            res_type = 'raw' if msg.get('media_encrypted') else ('video' if msg.get('message_type') == 'audio' or str(plain_pub).startswith('dm_voice') else 'image')
+            del_type = 'authenticated' if msg.get('media_encrypted') else 'upload'
+            m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
+
         m.scheduled_messages_conf.update_one(
             {'_id': obj_id},
             {'$set': {'status': 'cancelled', 'cancelled_at': datetime.datetime.now(datetime.timezone.utc)}}

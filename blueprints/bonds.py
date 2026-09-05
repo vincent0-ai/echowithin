@@ -5513,11 +5513,9 @@ def api_bond_album_delete(photo_id):
             return jsonify({'error': 'Only the uploader can delete this photo.'}), 403
 
         # Remove the private asset from Cloudinary (authenticated delivery type)
-        if photo.get('public_id'):
-            try:
-                m.cloudinary.uploader.destroy(photo['public_id'], resource_type=photo.get('resource_type', 'image'), type='authenticated')
-            except Exception as del_err:
-                current_app.logger.warning(f"Cloudinary destroy failed for album photo {photo_id}: {del_err}")
+        pid = photo.get('public_id') or photo.get('image_public_id')
+        if pid:
+            m.destroy_cloudinary_media(pid, resource_type=photo.get('resource_type', 'raw'), delivery_type='authenticated')
 
         m.bond_album_photos_conf.delete_one({'_id': ObjectId(photo_id)})
 
@@ -6015,10 +6013,7 @@ def api_bond_recommendations_delete(rec_id):
 
         # Remove the private asset from Cloudinary (authenticated delivery type)
         if rec.get('image_public_id'):
-            try:
-                m.cloudinary.uploader.destroy(rec['image_public_id'], resource_type=rec.get('image_resource_type', 'image'), type='authenticated')
-            except Exception as del_err:
-                current_app.logger.warning(f"Cloudinary destroy failed for rec image {rec_id}: {del_err}")
+            m.destroy_cloudinary_media(rec['image_public_id'], resource_type=rec.get('image_resource_type', 'raw'), delivery_type='authenticated')
 
         m.bond_recommendations_conf.delete_one({'_id': ObjectId(rec_id)})
         return jsonify({'success': True})

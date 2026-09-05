@@ -61,11 +61,58 @@ def _validate_questions(raw):
     return cleaned, None
 
 
+def _encrypt_form_definition(form_id_str, title, description, questions):
+    """Encrypt creator-authored form text at rest (per-form key, same as answers).
+
+    Returns (enc_title, enc_description, enc_questions). Structure/keys
+    (id/type/required) stay plaintext — only human-readable text is encrypted.
+    """
+    enc_questions = []
+    for q in questions or []:
+        enc_questions.append({
+            'id': q.get('id'),
+            'label': encrypt_form_response(q.get('label') or '', form_id_str),
+            'type': q.get('type'),
+            'required': bool(q.get('required')),
+            'options': [encrypt_form_response(o, form_id_str) for o in (q.get('options') or [])],
+        })
+    return (
+        encrypt_form_response(title or '', form_id_str),
+        encrypt_form_response(description or '', form_id_str),
+        enc_questions,
+    )
+
+
+def _decrypt_form_definition(form):
+    """Return a copy of a form doc with definition text decrypted for render/validate.
+
+    Legacy plaintext rows pass through (decrypt falls back when not a Fernet
+    token). Never mutates the stored doc — callers must not write this back.
+    """
+    if not form or not isinstance(form, dict):
+        return form
+    form = dict(form)
+    fid = str(form.get('_id', ''))
+    if form.get('title'):
+        form['title'] = decrypt_form_response(form['title'], fid)
+    if form.get('description'):
+        form['description'] = decrypt_form_response(form['description'], fid)
+    dec_q = []
+    for q in (form.get('questions') or []):
+        q = dict(q)
+        if q.get('label'):
+            q['label'] = decrypt_form_response(q['label'], fid)
+        q['options'] = [decrypt_form_response(o, fid) for o in (q.get('options') or [])]
+        dec_q.append(q)
+    form['questions'] = dec_q
+    return form
+
+
 @bp.route('/forms')
 @login_required
 def forms_list():
     import main as m
-    forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1))
+    forms = [_decrypt_form_definition(f) for f in m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1)]
     # enrich with response counts already stored
     return render_template('forms_list.html', forms=forms, active_page='forms')
 
@@ -117,12 +164,16 @@ def forms_create():
         allow_anon_raw = (request.form.get('allow_anonymous') or '1').strip()
         allow_anonymous = allow_anon_raw != '0'
         share_id = secrets.token_urlsafe(16)
+        # Pre-generate _id so the per-form key exists before insert (single write).
+        form_oid = ObjectId()
+        enc_title, enc_description, enc_questions = _encrypt_form_definition(str(form_oid), title, description, questions)
         doc = {
+            '_id': form_oid,
             'owner_id': ObjectId(current_user.id),
             'owner_username': current_user.username,
-            'title': title,
-            'description': description,
-            'questions': questions,
+            'title': enc_title,
+            'description': enc_description,
+            'questions': enc_questions,
             'share_id': share_id,
             'created_at': datetime.datetime.now(datetime.timezone.utc),
             'expires_at': expires_at,
@@ -170,12 +221,16 @@ def api_create_form():
         except Exception:
             max_responses = None
     share_id = secrets.token_urlsafe(16)
+    # Pre-generate _id so the per-form key exists before insert (single write).
+    form_oid = ObjectId()
+    enc_title, enc_description, enc_questions = _encrypt_form_definition(str(form_oid), title, description, questions)
     doc = {
+        '_id': form_oid,
         'owner_id': ObjectId(current_user.id),
         'owner_username': current_user.username,
-        'title': title,
-        'description': description,
-        'questions': questions,
+        'title': enc_title,
+        'description': enc_description,
+        'questions': enc_questions,
         'share_id': share_id,
         'created_at': datetime.datetime.now(datetime.timezone.utc),
         'expires_at': expires_at,
@@ -196,7 +251,7 @@ def api_create_form():
 @limits(calls=30, period=60)
 def view_form(share_id):
     import main as m
-    form = m.forms_conf.find_one({'share_id': share_id})
+    form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
         return render_template('form_submit.html', expired=True, msg='Form not found'), 404
     is_owner = current_user.is_authenticated and (str(form['owner_id']) == str(current_user.id) or getattr(current_user, 'is_admin', False))
@@ -224,7 +279,9 @@ def submit_form(share_id):
     # Honeypot
     if (request.form.get('website') or (request.get_json(silent=True) or {}).get('website')):
         return jsonify({'error': 'Bot detected'}), 400
-    form = m.forms_conf.find_one({'share_id': share_id})
+    # Decrypt in memory for validation/rendering; response_count updates below are
+    # targeted $inc writes so the decrypted copy is never persisted.
+    form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
         return jsonify({'error': 'Form not found'}), 404
     if form.get('deactivated'):
@@ -429,7 +486,7 @@ def submit_form(share_id):
 @login_required
 def form_responses_view(share_id):
     import main as m
-    form = m.forms_conf.find_one({'share_id': share_id})
+    form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
         flash('Form not found', 'danger')
         return redirect(url_for('forms.forms_list'))
@@ -488,7 +545,7 @@ def form_responses_view(share_id):
 def form_responses_export(share_id):
     import main as m
     import csv, io, json
-    form = m.forms_conf.find_one({'share_id': share_id})
+    form = _decrypt_form_definition(m.forms_conf.find_one({'share_id': share_id}))
     if not form:
         return jsonify({'error':'Form not found'}),404
     if str(form['owner_id']) != str(current_user.id) and not getattr(current_user, 'is_admin', False):

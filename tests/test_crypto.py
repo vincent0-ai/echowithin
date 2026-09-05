@@ -355,3 +355,54 @@ class TestGameDataEncryption:
             enc2 = encrypt_game_data('Paris', 'test_lobby_abc123')
             assert enc1 != enc2
 
+
+class TestFormDefinitionEncryption:
+    """Tests for encrypted form definitions (title/description/questions)."""
+
+    def _sample_questions(self):
+        return [
+            {'id': 'q1', 'label': 'Your name?', 'type': 'short_text', 'required': True, 'options': []},
+            {'id': 'q2', 'label': 'Pick one', 'type': 'single_choice', 'required': False, 'options': ['Alpha', 'Beta']},
+        ]
+
+    def test_form_definition_roundtrip(self, app):
+        from blueprints.forms import _encrypt_form_definition, _decrypt_form_definition
+        from bson.objectid import ObjectId
+        form_oid = ObjectId()
+        with app.app_context():
+            enc_title, enc_desc, enc_qs = _encrypt_form_definition(str(form_oid), 'Secret Survey', 'Be honest', self._sample_questions())
+            assert enc_title.startswith('gAAAAA')
+            assert enc_qs[0]['label'].startswith('gAAAAA')
+            assert enc_qs[1]['options'][0].startswith('gAAAAA')
+            # structure keys stay plaintext
+            assert enc_qs[1]['id'] == 'q2' and enc_qs[1]['type'] == 'single_choice' and enc_qs[1]['required'] is False
+            stored = {'_id': form_oid, 'title': enc_title, 'description': enc_desc, 'questions': enc_qs}
+            plain = _decrypt_form_definition(stored)
+            assert plain['title'] == 'Secret Survey'
+            assert plain['description'] == 'Be honest'
+            assert plain['questions'][0]['label'] == 'Your name?'
+            assert plain['questions'][1]['options'] == ['Alpha', 'Beta']
+            # stored doc untouched by decrypt
+            assert stored['title'] == enc_title
+
+    def test_form_definition_legacy_passthrough(self, app):
+        """Pre-encryption forms stored raw must still render unchanged."""
+        from blueprints.forms import _decrypt_form_definition
+        from bson.objectid import ObjectId
+        legacy = {'_id': ObjectId(), 'title': 'Old Form', 'description': 'desc',
+                  'questions': [{'id': 'q1', 'label': 'Q?', 'type': 'short_text', 'required': True, 'options': []}]}
+        with app.app_context():
+            plain = _decrypt_form_definition(legacy)
+            assert plain['title'] == 'Old Form'
+            assert plain['questions'][0]['label'] == 'Q?'
+
+    def test_form_definition_empty_fields(self, app):
+        from blueprints.forms import _encrypt_form_definition, _decrypt_form_definition
+        from bson.objectid import ObjectId
+        form_oid = ObjectId()
+        with app.app_context():
+            enc_title, enc_desc, enc_qs = _encrypt_form_definition(str(form_oid), '', '', [])
+            assert enc_title == '' and enc_desc == '' and enc_qs == []
+            plain = _decrypt_form_definition({'_id': form_oid, 'title': '', 'description': '', 'questions': []})
+            assert plain['title'] == '' and plain['questions'] == []
+

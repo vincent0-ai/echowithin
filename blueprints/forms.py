@@ -388,6 +388,35 @@ def submit_form(share_id):
         m.socketio.emit('form_response', {'share_id': share_id, 'form_id': str(form['_id']), 'count': (form.get('response_count',0)+1)}, room=f"form_{share_id}")
     except Exception:
         pass
+
+    # Notify form owner via push and user socket room
+    owner_id = form.get('owner_id')
+    if owner_id and (not submitter_id or str(owner_id) != str(submitter_id)):
+        form_title = form.get('title', 'Untitled Form')
+        submitter_disp = submitter_username or (submitter_name if submitter_name else 'Someone')
+        owner_id_str = str(owner_id)
+        try:
+            responses_url = url_for('forms.form_responses_view', share_id=share_id, _external=True)
+            m.send_push_notification_to_user(
+                owner_id_str,
+                f"New response: {form_title}",
+                f"{submitter_disp} just submitted a response.",
+                url=responses_url,
+                tag=f"form-response-{form['_id']}",
+                category='forms'
+            )
+        except Exception as e:
+            current_app.logger.warning(f"Failed to dispatch form response push: {e}")
+
+        try:
+            m.socketio.emit('form_new_submission', {
+                'share_id': share_id,
+                'form_id': str(form['_id']),
+                'form_title': form_title,
+                'submitter': submitter_disp
+            }, room=f"user_{owner_id_str}")
+        except Exception:
+            pass
     if data:
         return jsonify({'success': True, 'message': 'Response recorded'})
     flash('Response recorded. Thank you!', 'success')

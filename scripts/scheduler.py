@@ -131,6 +131,18 @@ def run_anniversary_check():
     except subprocess.TimeoutExpired:
         print("Warning: anniversary_check.py timed out after 120 seconds")
     except FileNotFoundError:
+def run_calendar_reminders():
+    """
+    Runs the calendar_reminders.py script to send upcoming event push notifications.
+    """
+    script_path = os.path.join(os.path.dirname(__file__), 'calendar_reminders.py')
+    try:
+        subprocess.run(['python', script_path], check=True, timeout=120)
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing calendar_reminders.py: {e}")
+    except subprocess.TimeoutExpired:
+        print("Warning: calendar_reminders.py timed out after 120 seconds")
+    except FileNotFoundError:
         print(f"Error: The script at {script_path} was not found.")
 
 
@@ -153,12 +165,13 @@ if __name__ == '__main__':
     backup_job = schedule.every(30).minutes.do(run_backup_to_atlas)
     cleanup_job = schedule.every().hour.do(run_cleanup_expired_auth)
     messages_job = schedule.every(1).minutes.do(run_scheduled_messages)
+    calendar_job = schedule.every(5).minutes.do(run_calendar_reminders)
 
     # Stagger first runs: backup in 2 min, cleanup in 5 min,
-    # scheduled messages in 1 min (these are short-interval so a brief
-    # initial delay is fine).
+    # scheduled messages in 1 min, calendar reminders in 1 min.
     now = datetime.datetime.now()
     messages_job.next_run = now + datetime.timedelta(minutes=1)
+    calendar_job.next_run = now + datetime.timedelta(minutes=1)
     backup_job.next_run = now + datetime.timedelta(minutes=2)
     cleanup_job.next_run = now + datetime.timedelta(minutes=5)
 
@@ -171,6 +184,7 @@ if __name__ == '__main__':
     print(f"  - Auth cleanup: Every hour (first run in ~5 min)")
     print(f"  - Atlas backup: Every 30 minutes (first run in ~2 min)")
     print(f"  - Scheduled messages: Every minute (first run in ~1 min)")
+    print(f"  - Calendar reminders: Every 5 minutes (first run in ~1 min)")
     while True:
         schedule.run_pending()
         time.sleep(60)  # Check every 60 seconds

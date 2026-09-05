@@ -437,26 +437,35 @@ def send_weekly_newsletter():
 
 
 @rq.job
-def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None, extra_data=None):
+def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None, extra_data=None, category=None):
     """Send a push notification (Web Push and FCM) to all devices of a user."""
     try:
         # Check granular notification preferences if set
         user_doc = database.users_conf.find_one({'_id': ObjectId(user_id_str)}, {'notification_preferences': 1})
         if user_doc and 'notification_preferences' in user_doc:
             prefs = user_doc.get('notification_preferences') or {}
-            tag_str = str(tag or '').lower()
-            if 'dm' in tag_str or 'message' in tag_str:
-                if prefs.get('dms') is False:
-                    return
-            elif 'anniversary' in tag_str or 'milestone' in tag_str:
-                if prefs.get('anniversaries') is False:
-                    return
-            elif 'whisper' in tag_str:
-                if prefs.get('whispers') is False:
-                    return
-            elif 'bond' in tag_str:
-                if prefs.get('bonds') is False:
-                    return
+            cat = category
+            if not cat:
+                tag_str = str(tag or '').lower()
+                if 'dm' in tag_str or 'message' in tag_str:
+                    cat = 'dms'
+                elif 'anniversary' in tag_str or 'milestone' in tag_str:
+                    cat = 'anniversaries'
+                elif 'whisper' in tag_str:
+                    cat = 'whispers'
+                elif 'calendar' in tag_str or 'event' in tag_str:
+                    cat = 'calendar'
+                elif 'form' in tag_str:
+                    cat = 'forms'
+                elif 'game' in tag_str:
+                    cat = 'games'
+                elif 'community' in tag_str or 'post' in tag_str or 'comment' in tag_str:
+                    cat = 'community'
+                elif 'bond' in tag_str:
+                    cat = 'bonds'
+
+            if cat and prefs.get(cat) is False:
+                return
 
         if VAPID_PRIVATE_KEY and VAPID_PUBLIC_KEY:
             subscriptions = list(database.push_subscriptions_conf.find({'user_id': ObjectId(user_id_str)}))

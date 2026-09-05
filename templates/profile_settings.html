@@ -180,6 +180,83 @@
             <li>Come back here to enable notifications</li>
           </ol>
         </div>
+
+        <!-- Granular Push Notification Preferences -->
+        <div id="notification-preferences-section" style="margin-top: 1.5rem; padding-top: 1.2rem; border-top: 1px solid #eee;">
+          <label style="font-weight: 600; margin-bottom: 0.3rem; display: block;">Notification Categories</label>
+          <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.8rem;">Choose which types of push notifications you want to receive.</p>
+
+          <div id="notification-prefs-loading" style="font-size: 0.85rem; color: #888;">
+            <i class="fas fa-spinner fa-spin"></i> Loading preferences...
+          </div>
+
+          <div id="notification-prefs-container" style="display: none; flex-direction: column; gap: 0.75rem;">
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-dms" onchange="updateNotificationPref('dms', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Direct Messages</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">New messages and chat replies</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-whispers" onchange="updateNotificationPref('whispers', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Whisper Mode</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Whisper messages and security alerts</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-bonds" onchange="updateNotificationPref('bonds', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Bonds &amp; Partner Activity</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Nudges, streak shields, and shared album updates</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-calendar" onchange="updateNotificationPref('calendar', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Calendar Event Reminders</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Reminders before upcoming shared bond events</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-anniversaries" onchange="updateNotificationPref('anniversaries', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Milestones &amp; Anniversaries</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Bond milestone and anniversary notifications</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-forms" onchange="updateNotificationPref('forms', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Form Responses</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Alerts when someone submits a response to your forms</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-games" onchange="updateNotificationPref('games', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Multiplayer Game Invites</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Game invites and turn notifications</p>
+              </div>
+            </label>
+
+            <label style="display: flex; align-items: flex-start; gap: 0.6rem; cursor: pointer;">
+              <input type="checkbox" id="pref-community" onchange="updateNotificationPref('community', this.checked)" style="margin-top: 0.2rem;">
+              <div>
+                <span style="font-weight: 500; font-size: 0.9rem;">Community &amp; Posts</span>
+                <p style="font-size: 0.8rem; color: #666; margin: 0;">Comments, replies, and community updates</p>
+              </div>
+            </label>
+          </div>
+          <div id="pref-save-status" style="font-size: 0.8rem; color: #28a745; margin-top: 0.4rem; display: none;"></div>
+        </div>
       </div>
 
       <div class="form-group" style="display: flex; gap: 1rem; align-items: center;">
@@ -1686,6 +1763,56 @@
       }
     }
   }
+
+  // ========== Granular Notification Preferences ==========
+  async function loadNotificationPreferences() {
+    const loadingEl = document.getElementById('notification-prefs-loading');
+    const container = document.getElementById('notification-prefs-container');
+    if (!container) return;
+    try {
+      const res = await echoFetch('/api/push/preferences');
+      if (res.ok) {
+        const data = await res.json();
+        const prefs = data.preferences || {};
+        const categories = ['dms', 'whispers', 'bonds', 'calendar', 'anniversaries', 'forms', 'games', 'community'];
+        categories.forEach(cat => {
+          const el = document.getElementById('pref-' + cat);
+          if (el) el.checked = prefs[cat] !== false;
+        });
+        if (loadingEl) loadingEl.style.display = 'none';
+        container.style.display = 'flex';
+      }
+    } catch (e) {
+      if (loadingEl) loadingEl.textContent = 'Could not load preferences.';
+    }
+  }
+
+  async function updateNotificationPref(cat, isChecked) {
+    const statusEl = document.getElementById('pref-save-status');
+    try {
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+      const payload = {};
+      payload[cat] = isChecked;
+      const res = await echoFetch('/api/push/preferences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok && statusEl) {
+        statusEl.textContent = 'Preference saved';
+        statusEl.style.display = 'block';
+        setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
+      }
+    } catch (e) {
+      console.error('Failed to save notification preference:', e);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', loadNotificationPreferences);
 
   // ========== Login Activity / Active Sessions ==========
   (function loadSessions() {

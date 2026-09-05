@@ -374,6 +374,13 @@
                                 <i class="far fa-clock"></i>
                             </button>
 
+                            <!-- Game Invite Button -->
+                            <button type="button" class="action-btn" id="game-invite-btn" onclick="openGameInviteModal()"
+                                title="Invite to Game"
+                                style="width: 36px; height: 36px; min-width: 36px; background: #f5ebe7; border: none; color: #3e2217; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex: 0 0 36px; touch-action: manipulation;">
+                                <i class="fas fa-gamepad"></i>
+                            </button>
+
                             <button type="submit" class="btn" id="send-btn"
                                 style="background: #3e2217; color: white; width: 42px; height: 42px; min-width: 42px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(62, 34, 23, 0.2); transition: transform 0.2s; flex: 0 0 42px; touch-action: manipulation;">
                                 <i class="fas fa-paper-plane"></i>
@@ -1946,6 +1953,39 @@
     <img id="lightbox-img" src="" alt="Zoomed image">
 </div>
 
+<!-- Game Invite Modal -->
+<div class="schedule-overlay" id="game-invite-overlay" onclick="if(event.target===this)closeGameInviteModal()">
+    <div class="schedule-modal" style="max-width: 440px;">
+        <div class="schedule-modal-header" style="background: #3e2217;">
+            <h3><i class="fas fa-gamepad" style="margin-right: 8px;"></i>Invite to Game</h3>
+            <button onclick="closeGameInviteModal()"
+                style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;">&times;</button>
+        </div>
+        <div class="schedule-modal-body" style="padding: 1.2rem;">
+            <div id="game-invite-loading" style="text-align: center; color: #666; font-size: 0.9rem; padding: 1rem 0;">
+                <i class="fas fa-spinner fa-spin"></i> Loading your active game lobbies...
+            </div>
+            <div id="game-invite-list" style="display: none; max-height: 240px; overflow-y: auto; margin-bottom: 1rem; flex-direction: column; gap: 0.6rem;">
+            </div>
+            <div id="game-invite-empty" style="display: none; text-align: center; color: #666; font-size: 0.85rem; padding: 0.8rem 0;">
+                No active games found. Create one or enter a lobby code below!
+            </div>
+            <div style="border-top: 1px solid #eee; padding-top: 0.8rem; margin-top: 0.5rem;">
+                <label style="font-size:0.8rem; font-weight:600; color:#3e2217; display:block; margin-bottom:4px;">Or share by lobby code / link:</label>
+                <div style="display: flex; gap: 0.4rem;">
+                    <input type="text" id="game-custom-lobby-input" placeholder="Enter lobby ID or link..." class="schedule-custom-input" style="margin-bottom:0; flex: 1;">
+                    <button class="btn" style="background:#3e2217; color:#fff; font-size:0.85rem; padding:0 0.8rem; border-radius:8px;" onclick="sendCustomGameInvite()">Send</button>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 1rem;">
+                <a href="/games/create" target="_blank" style="font-size: 0.85rem; color: #3e2217; font-weight: 600; text-decoration: none;">
+                    + Create a New Game Lobby
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Theme Picker Modal (Premium) -->
 <div class="schedule-overlay" id="theme-overlay" onclick="if(event.target===this)closeThemePicker()">
     <div class="schedule-modal" style="max-width: 400px;">
@@ -2930,6 +2970,24 @@
                     <button class="audio-play-btn" onclick="toggleAudio(this)"><i class="fas fa-play"></i></button>
                     <div class="audio-progress"><div class="audio-progress-fill"></div></div>
                     <span style="font-size: 0.7rem; color: inherit; opacity: 0.8;" class="audio-time">0:00</span>
+                </div>`;
+            } else if (msgData.message_type === 'game_invite' || (msgData.game_data && msgData.game_data.lobby_id)) {
+                const gd = msgData.game_data || {};
+                const gLobby = gd.lobby_id || '';
+                const gTitle = gd.title || 'Game Lobby';
+                const gType = gd.game_type || 'multiplayer';
+                contentHTML = `
+                <div class="game-invite-card" style="background: rgba(62, 34, 23, 0.05); border: 1px solid rgba(62, 34, 23, 0.15); border-radius: 12px; padding: 0.8rem; margin: 0.2rem 0; min-width: 200px; max-width: 280px;">
+                    <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem;">
+                        <span style="font-size:1.5rem; line-height:1;">🎮</span>
+                        <div style="overflow:hidden;">
+                            <div style="font-weight:600; font-size:0.9rem; color:#3e2217; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(gTitle)}</div>
+                            <div style="font-size:0.7rem; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${escapeHtml(gType)}</div>
+                        </div>
+                    </div>
+                    <a href="/g/${encodeURIComponent(gLobby)}" target="_blank" class="btn" style="display:block; text-align:center; background:#3e2217; color:#fff; padding:0.45rem 0.8rem; border-radius:8px; font-size:0.85rem; font-weight:600; text-decoration:none;">
+                        Join Game
+                    </a>
                 </div>`;
             } else {
                 contentHTML = `<div class="message-content">${formatMessageText(msgData.content || '')}</div>`;
@@ -4600,6 +4658,122 @@
                 document.getElementById('scheduled-banner').style.display = 'none';
             }
         }
+
+        // ==========================================
+        // MULTIPLAYER GAME INVITES
+        // ==========================================
+        window.openGameInviteModal = async function () {
+            if (!activeRecipientId) {
+                if (window.showCustomAlert) showCustomAlert('Select a conversation first.', 'warning');
+                else if (typeof showToast === 'function') showToast('Select a conversation first');
+                return;
+            }
+            const overlay = document.getElementById('game-invite-overlay');
+            const loading = document.getElementById('game-invite-loading');
+            const list = document.getElementById('game-invite-list');
+            const empty = document.getElementById('game-invite-empty');
+            if (!overlay) return;
+
+            overlay.style.display = 'flex';
+            requestAnimationFrame(() => overlay.classList.add('show'));
+
+            if (loading) loading.style.display = 'block';
+            if (list) { list.style.display = 'none'; list.innerHTML = ''; }
+            if (empty) empty.style.display = 'none';
+
+            try {
+                const res = await echoFetch('/api/games/my_lobbies');
+                if (res.ok) {
+                    const data = await res.json();
+                    const lobbies = data.lobbies || [];
+                    if (loading) loading.style.display = 'none';
+                    if (lobbies.length === 0) {
+                        if (empty) empty.style.display = 'block';
+                    } else if (list) {
+                        list.style.display = 'flex';
+                        lobbies.forEach(l => {
+                            const item = document.createElement('div');
+                            item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#fbf8f7; border:1px solid #eedfd8; border-radius:8px; padding:0.6rem 0.8rem;';
+                            item.innerHTML = `
+                                <div style="overflow:hidden; margin-right:0.6rem;">
+                                    <div style="font-weight:600; font-size:0.88rem; color:#3e2217; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(l.title)}</div>
+                                    <div style="font-size:0.72rem; color:#888; text-transform:uppercase;">${escapeHtml(l.game_type)}</div>
+                                </div>
+                                <button type="button" class="btn" style="background:#3e2217; color:#fff; font-size:0.78rem; padding:0.3rem 0.65rem; border-radius:6px; white-space:nowrap; border:none; cursor:pointer;" onclick="sendGameInvite('${escapeHtml(l.lobby_id)}', '${escapeHtml(l.game_type)}', '${escapeHtml(l.title)}')">
+                                    Invite
+                                </button>
+                            `;
+                            list.appendChild(item);
+                        });
+                    }
+                } else {
+                    if (loading) loading.textContent = 'Could not load lobbies.';
+                }
+            } catch (e) {
+                if (loading) loading.textContent = 'Could not load lobbies.';
+            }
+        };
+
+        window.closeGameInviteModal = function () {
+            const overlay = document.getElementById('game-invite-overlay');
+            if (overlay) {
+                overlay.classList.remove('show');
+                setTimeout(() => { overlay.style.display = 'none'; }, 250);
+            }
+        };
+
+        window.sendGameInvite = function (lobbyId, gameType, title) {
+            if (!activeRecipientId) {
+                if (window.showCustomAlert) showCustomAlert('Select a conversation first.', 'warning');
+                return;
+            }
+            const tempId = Date.now().toString();
+            const cleanLobbyId = (lobbyId || '').trim();
+            const cleanTitle = (title || 'Game Lobby').trim();
+            const cleanType = (gameType || 'game').trim();
+            const content = 'Invited you to play ' + cleanTitle;
+
+            const gameData = {
+                lobby_id: cleanLobbyId,
+                game_type: cleanType,
+                title: cleanTitle
+            };
+
+            const payload = {
+                recipient_id: activeRecipientId,
+                content: content,
+                temp_id: tempId,
+                message_type: 'game_invite',
+                game_lobby_id: cleanLobbyId,
+                game_type: cleanType,
+                game_title: cleanTitle,
+                game_data: gameData
+            };
+
+            const msgData = {
+                content: content,
+                temp_id: tempId,
+                timestamp: new Date().toISOString(),
+                message_type: 'game_invite',
+                game_data: gameData
+            };
+
+            if (typeof addPendingMessage === 'function') addPendingMessage(tempId, payload);
+            emitSocket('send_dm', payload);
+            appendMessage(msgData, 'sent', false, null, false, tempId);
+            window.closeGameInviteModal();
+            if (navigator.vibrate) navigator.vibrate(15);
+        };
+
+        window.sendCustomGameInvite = function () {
+            const input = document.getElementById('game-custom-lobby-input');
+            if (!input || !input.value.trim()) return;
+            let code = input.value.trim();
+            const match = code.match(/\/g\/([a-zA-Z0-9_\-]+)/);
+            if (match) code = match[1];
+            window.sendGameInvite(code, 'game', 'Game Lobby');
+            input.value = '';
+        };
 
         // --- Swipe-to-Reply (Touch Devices) ---
         function setupSwipeToReply(bubble, msgId, type) {

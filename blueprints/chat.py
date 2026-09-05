@@ -179,6 +179,8 @@ def api_message_history(other_user_id):
             msg_data['reactions'] = msg['reactions']
         if msg.get('is_pinned'):
             msg_data['is_pinned'] = True
+        if 'game_data' in msg:
+            msg_data['game_data'] = msg['game_data']
         formatted_messages.append(msg_data)
         
     # Socket alert for real-time double checkmarks

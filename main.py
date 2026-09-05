@@ -1887,8 +1887,12 @@ def handle_send_dm(data=None, *args, **kwargs):
     media_encrypted = is_media_proxy_url(image_url)
     message_type = data.get('message_type', 'text')
     
-    if not recipient_id_str or (not content and not image_url):
+    if not recipient_id_str or (not content and not image_url and message_type != 'game_invite'):
         return
+    
+    if message_type == 'game_invite' and not content:
+        g_title_init = data.get('game_title') or (data.get('game_data') or {}).get('title') or 'a game'
+        content = f"Invited you to play {g_title_init}"
     
     try:
         recipient_id = ObjectId(recipient_id_str)
@@ -1982,6 +1986,16 @@ def handle_send_dm(data=None, *args, **kwargs):
                 'description': encrypt_dm(link_preview.get('description', ''), sender_id_str, recipient_id_str),
                 'image': encrypt_dm(link_preview.get('image', ''), sender_id_str, recipient_id_str)
             }
+        if message_type == 'game_invite':
+            g_data = data.get('game_data') or {}
+            lobby_id = str(data.get('game_lobby_id') or g_data.get('lobby_id') or '').strip()
+            g_type = str(data.get('game_type') or g_data.get('game_type') or 'game').strip()
+            g_title = str(data.get('game_title') or g_data.get('title') or 'Game Lobby').strip()
+            message_doc['game_data'] = {
+                'lobby_id': lobby_id,
+                'game_type': g_type,
+                'title': g_title
+            }
         
         # Save to DB
         direct_messages_conf.insert_one(message_doc)
@@ -2018,6 +2032,7 @@ def handle_send_dm(data=None, *args, **kwargs):
             payload['reply_to_preview'] = reply_to_preview
             payload['reply_to_sender'] = reply_to_sender
         if link_preview: payload['link_preview'] = link_preview
+        if 'game_data' in message_doc: payload['game_data'] = message_doc['game_data']
 
         # Broadcast to recipient's private room
         recipient_room = f"user_{recipient_id_str}"
@@ -2034,13 +2049,27 @@ def handle_send_dm(data=None, *args, **kwargs):
                  room=f"user_{sender_id_str}")
         else:
             # Send push notification only if recipient is NOT actively viewing this chat
-            push_body = "📸 Photo" if message_type == 'image' else content[:100] + ('...' if len(content) > 100 else '')
+            if message_type == 'game_invite':
+                g_title = message_doc.get('game_data', {}).get('title', 'a game')
+                push_body = f"🎮 Invited you to play {g_title}!"
+                push_cat = 'games'
+                push_tag = f'game-invite-{current_user.id}'
+            elif message_type == 'image':
+                push_body = "📸 Photo"
+                push_cat = 'dms'
+                push_tag = f'dm-{current_user.id}'
+            else:
+                push_body = content[:100] + ('...' if len(content) > 100 else '')
+                push_cat = 'dms'
+                push_tag = f'dm-{current_user.id}'
+
             send_push_notification_to_user(
                 recipient_id_str,
                 f"New message from {current_user.username}",
                 push_body,
                 url=url_for('chat.messages_page', _external=True),
-                tag=f'dm-{current_user.id}'
+                tag=push_tag,
+                category=push_cat
             )
         
         # Invalidate the recipient's badge cache so the next poll picks up the new DM

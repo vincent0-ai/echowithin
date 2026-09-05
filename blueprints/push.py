@@ -290,14 +290,20 @@ def api_push_preferences():
     import main as m
     DEFAULT_PREFS = {
         'dms': True,
+        'whispers': True,
         'bonds': True,
         'anniversaries': True,
-        'whispers': True,
+        'calendar': True,
+        'forms': True,
+        'games': True,
+        'community': True,
     }
     user_oid = ObjectId(current_user.id)
     if request.method == 'POST':
         data = request.get_json() or {}
-        new_prefs = {}
+        user_doc = m.users_conf.find_one({'_id': user_oid}, {'notification_preferences': 1})
+        existing_prefs = (user_doc.get('notification_preferences') if user_doc else None) or {}
+        new_prefs = dict(existing_prefs)
         for key in DEFAULT_PREFS:
             if key in data:
                 new_prefs[key] = bool(data[key])

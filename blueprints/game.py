@@ -863,3 +863,30 @@ def api_game_stats(lobby_id):
     pipeline=[{'$match':{'lobby_id':lobby_id}}, {'$group':{'_id':'$option','count':{'$sum':1}}}]
     per_option=list(m.game_votes_conf.aggregate(pipeline))
     return jsonify({'total':total,'per_option':per_option,'counts':lobby.get('counts',{}),'revealed':bool(lobby.get('revealed'))})
+
+
+@bp.route('/api/games/my_lobbies')
+@login_required
+def api_my_game_lobbies():
+    """Retrieve active game lobbies hosted by current user for sharing / DM invites."""
+    import main as m
+    lobbies = list(m.game_sessions_conf.find({
+        'host_id': ObjectId(current_user.id),
+        'deactivated': {'$ne': True}
+    }).sort('created_at', -1).limit(25))
+
+    active = []
+    for l in lobbies:
+        if _is_lobby_active(l):
+            created_dt = l.get('created_at')
+            created_str = (created_dt.replace(tzinfo=datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+                           if created_dt and created_dt.tzinfo is None
+                           else (created_dt.isoformat().replace('+00:00', 'Z') if created_dt else ''))
+            active.append({
+                'lobby_id': l['lobby_id'],
+                'game_type': l.get('game_type', 'poll'),
+                'title': l.get('title', 'Game Lobby'),
+                'created_at': created_str
+            })
+    return jsonify({'lobbies': active})
+

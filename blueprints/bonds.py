@@ -4360,6 +4360,7 @@ def _get_aggregated_bond_calendar(bond_doc, start_date_str, end_date_str, curren
                 'badge_label': label,
                 'badge_status': color,
                 'diff_days': diff_days,
+                'reminder_offset': ev.get('reminder_offset', 60) if ev.get('reminder_offset') is not None else None,
                 'created_by': str(ev.get('created_by', '')),
                 'created_at': _format_datetime(ev.get('created_at'))
             })
@@ -4625,6 +4626,16 @@ def api_bond_calendar_create_event(bond_id):
         if surprise and not reveal_date:
             reveal_date = start_date_str
 
+        reminder_offset_raw = data.get('reminder_offset')
+        reminder_offset = 60
+        if reminder_offset_raw in (None, 'none', '', 'null'):
+            reminder_offset = None
+        else:
+            try:
+                reminder_offset = max(0, min(10080, int(reminder_offset_raw)))
+            except (ValueError, TypeError):
+                reminder_offset = 60
+
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         encrypted_title = m.encrypt_bond_data(title, bond_id)
         encrypted_note = m.encrypt_bond_data(note, bond_id) if note else ''
@@ -4637,6 +4648,8 @@ def api_bond_calendar_create_event(bond_id):
             'end_date': end_date_str,
             'time': time_str,
             'recurrence': recurrence,
+            'reminder_offset': reminder_offset,
+            'reminders_sent': [],
             'note': encrypted_note,
             'location': encrypted_location,
             'goal_id': goal_oid,
@@ -4750,6 +4763,15 @@ def api_bond_calendar_edit_event(event_id):
             'goal_id': goal_oid,
             'updated_at': now_utc,
         }
+        if 'reminder_offset' in data:
+            reminder_offset_raw = data.get('reminder_offset')
+            if reminder_offset_raw in (None, 'none', '', 'null'):
+                update_fields['reminder_offset'] = None
+            else:
+                try:
+                    update_fields['reminder_offset'] = max(0, min(10080, int(reminder_offset_raw)))
+                except (ValueError, TypeError):
+                    pass
 
         m.bond_events_conf.update_one({'_id': ObjectId(event_id)}, {'$set': update_fields})
 

@@ -2008,9 +2008,20 @@
                             </select>
                         </div>
                         <div>
-                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Location (optional)</label>
-                            <input type="text" id="event-location-input-{{ bond.id }}" placeholder="e.g. Italian Bistro" maxlength="200" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                            <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Reminder</label>
+                            <select id="event-reminder-input-{{ bond.id }}" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
+                                <option value="none">No reminder</option>
+                                <option value="0">At event time</option>
+                                <option value="15">15 minutes before</option>
+                                <option value="60" selected>1 hour before</option>
+                                <option value="1440">1 day before</option>
+                                <option value="2880">2 days before</option>
+                            </select>
                         </div>
+                    </div>
+                    <div style="margin-bottom:0.4rem;">
+                        <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.1rem;">Location (optional)</label>
+                        <input type="text" id="event-location-input-{{ bond.id }}" placeholder="e.g. Italian Bistro" maxlength="200" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; background:var(--card-bg); color:var(--text-dark-color);">
                     </div>
                     <textarea id="event-note-input-{{ bond.id }}" placeholder="Optional notes or plan details..." maxlength="1000" rows="2" style="width:100%; font-size:0.85rem; padding:0.4rem; box-sizing:border-box; border:1px solid var(--border-color); border-radius:6px; margin-bottom:0.4rem; background:var(--card-bg); color:var(--text-dark-color); resize:vertical;"></textarea>
                     
@@ -6304,6 +6315,7 @@
         var dateInput = document.getElementById('event-date-input-' + bondId);
         var timeInput = document.getElementById('event-time-input-' + bondId);
         var recInput = document.getElementById('event-recurrence-input-' + bondId);
+        var remInput = document.getElementById('event-reminder-input-' + bondId);
         var locInput = document.getElementById('event-location-input-' + bondId);
         var noteInput = document.getElementById('event-note-input-' + bondId);
         var surpriseInput = document.getElementById('event-surprise-input-' + bondId);
@@ -6316,6 +6328,7 @@
             if (dateInput) dateInput.value = editEv.date;
             if (timeInput) timeInput.value = editEv.time || '';
             if (recInput) recInput.value = editEv.recurrence || 'none';
+            if (remInput) remInput.value = (editEv.reminder_offset !== undefined && editEv.reminder_offset !== null) ? String(editEv.reminder_offset) : 'none';
             if (locInput) locInput.value = editEv.location || '';
             if (noteInput) noteInput.value = editEv.note || '';
             if (surpriseInput) surpriseInput.checked = !!editEv.is_surprise;
@@ -6327,6 +6340,7 @@
             if (dateInput) dateInput.value = defDate;
             if (timeInput) timeInput.value = '';
             if (recInput) recInput.value = 'none';
+            if (remInput) remInput.value = '60';
             if (locInput) locInput.value = '';
             if (noteInput) noteInput.value = '';
             if (surpriseInput) surpriseInput.checked = false;
@@ -6345,6 +6359,8 @@
         var date = (document.getElementById('event-date-input-' + bondId) || {}).value || '';
         var time = (document.getElementById('event-time-input-' + bondId) || {}).value || '';
         var recurrence = (document.getElementById('event-recurrence-input-' + bondId) || {}).value || 'none';
+        var reminderVal = (document.getElementById('event-reminder-input-' + bondId) || {}).value;
+        var reminderOffset = (reminderVal === 'none' || reminderVal === undefined || reminderVal === '') ? null : parseInt(reminderVal, 10);
         var location = (document.getElementById('event-location-input-' + bondId) || {}).value || '';
         var note = (document.getElementById('event-note-input-' + bondId) || {}).value || '';
         var surprise = (document.getElementById('event-surprise-input-' + bondId) || {}).checked;
@@ -6363,6 +6379,7 @@
             start_date: date,
             time: time,
             recurrence: recurrence,
+            reminder_offset: reminderOffset,
             location: location.trim(),
             note: note.trim(),
             surprise: surprise

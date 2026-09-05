@@ -5176,7 +5176,7 @@
     </div>
     <div class="whisper-input-area" id="whisper-input-area">
         <input type="file" id="whisper-image-input" accept="image/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
-        <button onclick="document.getElementById('whisper-image-input').click()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo"><i class="fas fa-camera"></i></button>
+        <button onclick="triggerWhisperImagePicker()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo"><i class="fas fa-camera"></i></button>
         <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
         <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
     </div>
@@ -5689,7 +5689,14 @@
         }
     };
 
+    window.triggerWhisperImagePicker = function() {
+        window._whisperExpectingBlur = true;
+        var inp = document.getElementById('whisper-image-input');
+        if (inp) inp.click();
+    };
+
     window.handleWhisperImageUpload = function(input) {
+        window._whisperExpectingBlur = false;
         if (!input.files || !input.files[0]) return;
         const file = input.files[0];
         if (file.size > 5 * 1024 * 1024) {
@@ -5928,7 +5935,7 @@
     }
 
     // --- Hardened Screenshot & Capture Detection ---
-    // Tiered triggers: high-confidence (printscreen, keyboard_shortcut, devtools)
+    // Tiered triggers: high-confidence (printscreen, keyboard_shortcut)
     // alert both parties; low-confidence (visibility_change, window_blur) only
     // blur content locally to prevent false positives from phone calls,
     // notifications, lock screens, etc.
@@ -5938,6 +5945,9 @@
     let _blurHandler = null;
     let _focusHandler = null;
     let _contextMenuHandler = null;
+    let _whisperBlurTimer = null;
+    let _whisperImgCancelBound = false;
+    window._whisperExpectingBlur = false;
 
     function _fireScreenshotAlert(trigger) {
         if (!whisperState.active || !whisperState.sessionId) return;
@@ -5950,13 +5960,30 @@
         });
     }
 
-    function _blurWhisperContent() {
+    function _blurWhisperContent(autoClearMs) {
+        if (_whisperBlurTimer) {
+            clearTimeout(_whisperBlurTimer);
+            _whisperBlurTimer = null;
+        }
         var msgs = document.getElementById('whisper-messages');
         if (msgs) msgs.style.filter = 'blur(20px)';
         var preview = document.getElementById('whisper-image-preview');
         if (preview) preview.style.filter = 'blur(20px)';
+
+        if (autoClearMs && autoClearMs > 0) {
+            _whisperBlurTimer = setTimeout(function() {
+                _whisperBlurTimer = null;
+                if (!document.hidden) {
+                    _unblurWhisperContent();
+                }
+            }, autoClearMs);
+        }
     }
     function _unblurWhisperContent() {
+        if (_whisperBlurTimer) {
+            clearTimeout(_whisperBlurTimer);
+            _whisperBlurTimer = null;
+        }
         var msgs = document.getElementById('whisper-messages');
         if (msgs) msgs.style.filter = '';
         var preview = document.getElementById('whisper-image-preview');
@@ -5973,33 +6000,32 @@
             if (!overlay || !overlay.classList.contains('active')) return;
             // PrintScreen key
             if (e.key === 'PrintScreen') {
-                _blurWhisperContent();
+                _blurWhisperContent(2500);
                 _fireScreenshotAlert('printscreen');
                 return;
             }
             // Ctrl+Shift+S (Snipping Tool), Meta+Shift+S (Win+Shift+S Snip & Sketch)
             if (e.key === 's' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
-                _blurWhisperContent();
+                _blurWhisperContent(2500);
                 _fireScreenshotAlert('keyboard_shortcut');
                 e.preventDefault();
                 return;
             }
             // Meta+Shift+3/4/5 (macOS screenshots)
             if (e.metaKey && e.shiftKey && ['3','4','5'].includes(e.key)) {
-                _blurWhisperContent();
+                _blurWhisperContent(2500);
                 _fireScreenshotAlert('keyboard_shortcut');
                 return;
             }
             // DevTools: F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+            // Block tools and blur content temporarily without firing user warnings
             if (e.key === 'F12') {
-                _blurWhisperContent();
-                _fireScreenshotAlert('devtools');
+                _blurWhisperContent(2500);
                 e.preventDefault();
                 return;
             }
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(e.key.toLowerCase())) {
-                _blurWhisperContent();
-                _fireScreenshotAlert('devtools');
+                _blurWhisperContent(2500);
                 e.preventDefault();
                 return;
             }
@@ -6024,13 +6050,24 @@
         // (Alt+Tab to check messages, taskbar clicks, etc.)
         _blurHandler = function() {
             if (!whisperState.active) return;
+            if (window._whisperExpectingBlur) return;
             _blurWhisperContent();
         };
         _focusHandler = function() {
+            window._whisperExpectingBlur = false;
             if (whisperState.active) _unblurWhisperContent();
         };
         window.addEventListener('blur', _blurHandler);
         window.addEventListener('focus', _focusHandler);
+
+        // Clear expecting blur if photo picker is canceled
+        var imgInp = document.getElementById('whisper-image-input');
+        if (imgInp && !_whisperImgCancelBound) {
+            _whisperImgCancelBound = true;
+            imgInp.addEventListener('cancel', function() {
+                window._whisperExpectingBlur = false;
+            });
+        }
 
         // 4. Disable right-click on entire whisper overlay
         _contextMenuHandler = function(e) {
@@ -6064,6 +6101,7 @@
             if (overlay) overlay.removeEventListener('contextmenu', _contextMenuHandler);
             _contextMenuHandler = null;
         }
+        window._whisperExpectingBlur = false;
         _unblurWhisperContent();
     }
 

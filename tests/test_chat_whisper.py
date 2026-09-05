@@ -497,6 +497,27 @@ class TestWhisperScreenshotAlert:
                 msgs.insert_one.assert_not_called()
                 mock_emit.assert_not_called()
 
+    def test_whisper_screenshot_template_fixes(self):
+        """Verify web template contains expectingBlur flag, auto-clear blur duration, and no devtools alert."""
+        import os
+        template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 1. Photo picker false-positive fix
+        assert 'onclick="triggerWhisperImagePicker()"' in content
+        assert 'window._whisperExpectingBlur' in content
+        assert 'if (window._whisperExpectingBlur) return;' in content
+
+        # 2. Stuck-blur fix
+        assert '_whisperBlurTimer' in content
+        assert '_blurWhisperContent(autoClearMs)' in content or '_blurWhisperContent(2500)' in content
+        assert '_blurWhisperContent(2500)' in content
+
+        # 3. DevTools notification warning removed
+        assert "_fireScreenshotAlert('devtools')" not in content
+
+
 
 
 

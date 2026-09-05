@@ -85,7 +85,6 @@ TIER_LIMITS = {
         'max_share_links_per_note': 3,
         'max_surprise_notes': 20,         # total surprise notes (shared with theme)
         'note_locking': False,
-        'blog_space': False,
         'scheduled_messages': False,
         'note_media_attachments': False,
         'max_note_attachments': 0,
@@ -106,7 +105,6 @@ TIER_LIMITS = {
         'max_share_links_per_note': 99999, # effectively unlimited
         'max_surprise_notes': 99999,
         'note_locking': True,
-        'blog_space': True,
         'scheduled_messages': True,
         'note_media_attachments': True,
         'max_note_attachments': 20,

@@ -23,6 +23,21 @@ def _get_lobby(lobby_id):
         q = lobby.get('question', {})
         if q and q.get('label'):
             lobby['questions'] = [q]
+    if lobby:
+        # Decrypt at-rest-only fields (correct answers, story text) for in-memory use.
+        # Questions/options stay plaintext by design (shown to players). Never written back.
+        try:
+            q0 = lobby.get('question') or {}
+            if q0.get('correct_option'):
+                q0['correct_option'] = m.decrypt_game_data(q0['correct_option'], lobby_id)
+            for q in (lobby.get('questions') or []):
+                if isinstance(q, dict) and q.get('correct_option'):
+                    q['correct_option'] = m.decrypt_game_data(q['correct_option'], lobby_id)
+            for s in (lobby.get('sentences') or []):
+                if isinstance(s, dict) and s.get('text'):
+                    s['text'] = m.decrypt_game_data(s['text'], lobby_id)
+        except Exception:
+            pass
     return lobby
 
 def _is_lobby_active(lobby):
@@ -49,6 +64,29 @@ def _is_host(lobby):
     if not current_user.is_authenticated:
         return False
     return str(lobby.get('host_id')) == str(current_user.id) or getattr(current_user, 'is_admin', False)
+
+def _decrypt_submission(sub, lobby_id):
+    """Return a copy of a game submission with content decrypted for display.
+
+    Legacy plaintext rows pass through unchanged (decrypt_game_data falls back
+    when the value is not a Fernet token). Never mutates the stored doc.
+    """
+    import main as m
+    if not sub or not isinstance(sub, dict):
+        return sub
+    sub = dict(sub)
+    content = dict(sub.get('content') or {})
+    if isinstance(content.get('statements'), list):
+        content['statements'] = [m.decrypt_game_data(s, lobby_id) for s in content['statements']]
+    if 'lie_index' in content and isinstance(content['lie_index'], str):
+        try:
+            content['lie_index'] = int(m.decrypt_game_data(content['lie_index'], lobby_id))
+        except (ValueError, TypeError):
+            pass
+    if isinstance(content.get('caption'), str) and content['caption']:
+        content['caption'] = m.decrypt_game_data(content['caption'], lobby_id)
+    sub['content'] = content
+    return sub
 
 @bp.route('/games')
 @login_required
@@ -124,7 +162,10 @@ def games_create():
                         if game_type == 'trivia' and correct and correct not in opts:
                             flash('Correct option must be one of the options.', 'danger')
                             return render_template('game_create.html', active_page='games')
-                            
+                        if correct:
+                            # At-rest only: decrypted via _get_lobby for host view + reveal
+                            correct = m.encrypt_game_data(correct, lobby_id)
+
                         questions.append({'label': q_label, 'options': opts, 'correct_option': correct})
                 except Exception as e:
                     flash('Invalid questions format.', 'danger')
@@ -163,7 +204,10 @@ def games_create():
                 if game_type == 'trivia' and correct and correct not in opts:
                     flash('Correct option must be one of the options.', 'danger')
                     return render_template('game_create.html', active_page='games')
-                    
+                if correct:
+                    # At-rest only: decrypted via _get_lobby for host view + reveal
+                    correct = m.encrypt_game_data(correct, lobby_id)
+
                 questions.append({'label': question, 'options': opts, 'correct_option': correct})
 
             # Create counts object, indexed by question index
@@ -221,7 +265,7 @@ def games_create():
                 'sentences': [{
                     'user_id': str(current_user.id),
                     'username': current_user.username,
-                    'text': starter,
+                    'text': m.encrypt_game_data(starter, lobby_id),
                     'added_at': now.isoformat().replace('+00:00', 'Z') + 'Z'
                 }],
                 'turn_order': [str(current_user.id)],
@@ -344,39 +388,41 @@ def view_lobby(lobby_id):
                 elif ip_hash:
                     v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'question_index': {'$exists': False}, 'vote_type': {'$exists': False}})
             has_voted[qi] = bool(v)
-            my_vote[qi] = v.get('option') if v else None
+            my_vote[qi] = m.decrypt_game_data(v.get('option'), lobby_id) if v else None
     else:
         has_voted = False
         my_vote = None
         if current_user.is_authenticated:
             v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': {'$exists': False}})
-            if v: has_voted=True; my_vote=v.get('option')
+            if v: has_voted=True; my_vote=m.decrypt_game_data(v.get('option'), lobby_id)
         elif ip_hash:
             v = m.game_votes_conf.find_one({'lobby_id': lobby_id, 'ip_hash': ip_hash, 'vote_type': {'$exists': False}})
-            if v: has_voted=True; my_vote=v.get('option')
+            if v: has_voted=True; my_vote=m.decrypt_game_data(v.get('option'), lobby_id)
 
     # Type-specific context
     extra = {}
     if gt == 'ttal':
-        subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'}))
+        subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'})]
         my_sub = None
         if current_user.is_authenticated:
             my_sub = m.game_submissions_conf.find_one({'lobby_id': lobby_id, 'type': 'ttal', 'user_id': ObjectId(current_user.id)})
+            my_sub = _decrypt_submission(my_sub, lobby_id)
         # Guesses this user has made
         my_guesses = {}
         if current_user.is_authenticated:
             for g in m.game_votes_conf.find({'lobby_id': lobby_id, 'user_id': ObjectId(current_user.id), 'vote_type': 'ttal_guess'}):
-                my_guesses[g.get('target_user_id')] = g.get('option')
+                my_guesses[g.get('target_user_id')] = m.decrypt_game_data(g.get('option'), lobby_id)
         extra = {'submissions': subs, 'my_submission': my_sub, 'my_guesses': my_guesses}
 
     elif gt == 'story':
         extra = {'sentences': lobby.get('sentences', []), 'turn_order': lobby.get('turn_order', []), 'current_turn': lobby.get('current_turn', 0)}
 
     elif gt == 'caption':
-        subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'}))
+        subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'})]
         my_caption = None
         if current_user.is_authenticated:
             my_caption = m.game_submissions_conf.find_one({'lobby_id': lobby_id, 'type': 'caption', 'user_id': ObjectId(current_user.id)})
+            my_caption = _decrypt_submission(my_caption, lobby_id)
         extra = {'captions': subs, 'my_caption': my_caption}
 
     return render_template('game_lobby.html', lobby=lobby, is_host=is_host, has_voted=has_voted, my_vote=my_vote, total_votes=total, **extra)
@@ -465,7 +511,11 @@ def vote_lobby(lobby_id):
         flash('You already voted', 'warning')
         return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
 
-    vote_doc = {'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash}
+    # NOTE: counts keys stay plaintext (atomic $inc tally needs stable keys).
+    # The vote doc option below is encrypted to break the voter↔choice linkage at rest.
+    # Exception: caption votes store a submission _id reference (needed for lookup/tally), not content.
+    stored_option = option if gt == 'caption' else m.encrypt_game_data(option, lobby_id)
+    vote_doc = {'lobby_id': lobby_id, 'user_id': voter_user_id, 'username': voter_username, 'option': stored_option, 'submitted_at': datetime.datetime.now(datetime.timezone.utc), 'ip_hash': ip_hash}
     if gt in ('poll', 'trivia') and questions:
         vote_doc['question_index'] = question_index
     m.game_votes_conf.insert_one(vote_doc)
@@ -509,10 +559,10 @@ def reveal_lobby(lobby_id):
         # For TTAL, include submission data for reveal
         gt = lobby.get('game_type', 'poll')
         if gt == 'ttal':
-            subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'}))
+            subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'})]
             emit_data['submissions'] = [{'username': s.get('username'), 'statements': s.get('content', {}).get('statements', []), 'lie_index': s.get('content', {}).get('lie_index')} for s in subs]
         elif gt == 'caption':
-            subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'}))
+            subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'})]
             caption_votes = {}
             for s in subs:
                 sid = str(s['_id'])
@@ -538,21 +588,29 @@ def lobby_results(lobby_id):
             return redirect(url_for('game.view_lobby', lobby_id=lobby_id))
     total = m.game_votes_conf.count_documents({'lobby_id':lobby_id})
     votes = list(m.game_votes_conf.find({'lobby_id':lobby_id}).sort('submitted_at',-1).limit(100))
-    # per-day for chart
-    pipeline=[{'$match':{'lobby_id':lobby_id}}, {'$group':{'_id':'$option','count':{'$sum':1}}}, {'$sort':{'_id':1}}]
-    per_option=list(m.game_votes_conf.aggregate(pipeline))
+    for v in votes:
+        # Caption options are plaintext submission-_id references and pass through;
+        # poll/trivia/guess options are per-lobby ciphertext decrypted here.
+        v['option'] = m.decrypt_game_data(v.get('option'), lobby_id) if v.get('option') else v.get('option')
+    # per-option chart: Fernet is randomized so Mongo can't group ciphertext — group decrypted values in Python.
+    _counts = {}
+    for v in votes:
+        _counts[v.get('option')] = _counts.get(v.get('option'), 0) + 1
+    per_option=[{'_id':opt,'count':cnt} for opt, cnt in sorted(_counts.items(), key=lambda kv: str(kv[0]))]
 
     # Type-specific results
     extra = {}
     gt = lobby.get('game_type', 'poll')
     if gt == 'ttal':
-        subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'}))
+        subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'ttal'})]
         guesses = list(m.game_votes_conf.find({'lobby_id': lobby_id, 'vote_type': 'ttal_guess'}))
+        for g in guesses:
+            g['option'] = m.decrypt_game_data(g.get('option'), lobby_id) if g.get('option') else g.get('option')
         extra = {'submissions': subs, 'guesses': guesses}
     elif gt == 'story':
         extra = {'sentences': lobby.get('sentences', [])}
     elif gt == 'caption':
-        subs = list(m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'}))
+        subs = [_decrypt_submission(s, lobby_id) for s in m.game_submissions_conf.find({'lobby_id': lobby_id, 'type': 'caption'})]
         extra = {'captions': subs}
 
     return render_template('game_results.html', lobby=lobby, total=total, votes=votes, per_option=per_option, is_host=_is_host(lobby), **extra)
@@ -567,6 +625,8 @@ def lobby_export(lobby_id):
         return jsonify({'error':'Not host'}),403
     fmt = (request.args.get('format') or 'csv').lower()
     votes = list(m.game_votes_conf.find({'lobby_id':lobby_id}).sort('submitted_at',-1))
+    for v in votes:
+        v['option'] = m.decrypt_game_data(v.get('option'), lobby_id) if v.get('option') else v.get('option')
     if fmt=='json':
         out=[{'username':v.get('username'),'option':v.get('option'),'submitted_at': v['submitted_at'].isoformat().replace('+00:00','Z')+'Z' if v.get('submitted_at') else None} for v in votes]
         return jsonify({'lobby':{'title':lobby['title'],'lobby_id':lobby_id,'question':lobby['question']},'count':len(out),'votes':out})
@@ -661,7 +721,10 @@ def ttal_submit(lobby_id):
         'user_id': ObjectId(current_user.id),
         'username': current_user.username,
         'type': 'ttal',
-        'content': {'statements': [s1, s2, s3], 'lie_index': lie_index},
+        'content': {
+            'statements': [m.encrypt_game_data(s, lobby_id) for s in (s1, s2, s3)],
+            'lie_index': m.encrypt_game_data(str(lie_index), lobby_id),
+        },
         'submitted_at': datetime.datetime.now(datetime.timezone.utc)
     })
     # Broadcast update
@@ -729,7 +792,7 @@ def ttal_guess(lobby_id):
         'username': current_user.username,
         'vote_type': 'ttal_guess',
         'target_user_id': target_user_id,
-        'option': str(guess_index),
+        'option': m.encrypt_game_data(str(guess_index), lobby_id),
         'submitted_at': datetime.datetime.now(datetime.timezone.utc)
     })
     flash('Guess recorded!', 'success')
@@ -771,19 +834,25 @@ def story_add(lobby_id):
     entry = {
         'user_id': uid,
         'username': current_user.username,
-        'text': sentence,
+        'text': m.encrypt_game_data(sentence, lobby_id),
         'added_at': now.isoformat().replace('+00:00', 'Z') + 'Z'
     }
     m.game_sessions_conf.update_one({'lobby_id': lobby_id}, {
         '$push': {'sentences': entry},
         '$inc': {'current_turn': 1}
     })
-    # Broadcast
+    # Broadcast (decrypt sentences for the live payload — at rest they stay ciphertext)
     try:
         updated = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+        _live = []
+        for s in (updated.get('sentences', []) if updated else []):
+            s = dict(s)
+            if s.get('text'):
+                s['text'] = m.decrypt_game_data(s['text'], lobby_id)
+            _live.append(s)
         m.socketio.emit('game_story_update', {
             'lobby_id': lobby_id,
-            'sentences': updated.get('sentences', []),
+            'sentences': _live,
             'current_turn': updated.get('current_turn', 0),
             'turn_order': updated.get('turn_order', []),
             'added_by': current_user.username
@@ -819,7 +888,7 @@ def caption_submit(lobby_id):
         'user_id': ObjectId(current_user.id),
         'username': current_user.username,
         'type': 'caption',
-        'content': {'caption': caption},
+        'content': {'caption': m.encrypt_game_data(caption, lobby_id)},
         'submitted_at': datetime.datetime.now(datetime.timezone.utc)
     })
     try:
@@ -860,8 +929,12 @@ def api_game_stats(lobby_id):
     if not lobby or str(lobby['host_id']) != str(current_user.id):
         return jsonify({'error':'Not found'}),404
     total = m.game_votes_conf.count_documents({'lobby_id':lobby_id})
-    pipeline=[{'$match':{'lobby_id':lobby_id}}, {'$group':{'_id':'$option','count':{'$sum':1}}}]
-    per_option=list(m.game_votes_conf.aggregate(pipeline))
+    # Fernet is randomized so Mongo can't group ciphertext — group decrypted values in Python.
+    _opts = [m.decrypt_game_data(v.get('option'), lobby_id) for v in m.game_votes_conf.find({'lobby_id':lobby_id}, {'option': 1}) if v.get('option')]
+    _hist = {}
+    for _o in _opts:
+        _hist[_o] = _hist.get(_o, 0) + 1
+    per_option=[{'_id':opt,'count':cnt} for opt, cnt in _hist.items()]
     return jsonify({'total':total,'per_option':per_option,'counts':lobby.get('counts',{}),'revealed':bool(lobby.get('revealed'))})
 
 

@@ -390,7 +390,7 @@ def view_shared_note(share_id):
                 'id': str(att['_id']),
                 'file_type': att.get('file_type', 'image'),
                 'url': decrypted_url,
-                'filename': att.get('filename', ''),
+                'filename': m.decrypt_note(att.get('filename', ''), user_id=note_owner_id),
                 'uploader_name': att.get('uploader_name', 'Unknown'),
                 'uploader_id': str(att.get('uploader_id', '')),
                 'created_at': att.get('created_at', '').isoformat() if isinstance(att.get('created_at'), datetime.datetime) else ''
@@ -553,6 +553,8 @@ def api_upload_note_attachment(share_id):
 
     now = datetime.datetime.now(datetime.timezone.utc)
     sanitized_filename = m.bleach.clean(file.filename[:120], strip=True)
+    # Filename can be sensitive ("divorce-papers.pdf") — encrypt with the note owner's key like the URL.
+    encrypted_filename = m.encrypt_note(sanitized_filename, user_id=owner_id_str) if owner_id_str and sanitized_filename else sanitized_filename
     doc = {
         'note_id': note_id,
         'share_id': share_id,
@@ -565,7 +567,7 @@ def api_upload_note_attachment(share_id):
         'media_encrypted': media_encrypted,
         'mime_type': mime_type,
         'storage_resource_type': 'raw' if media_encrypted else 'image',
-        'filename': sanitized_filename,
+        'filename': encrypted_filename,
         'size_bytes': size,
         'created_at': now
     }
@@ -621,7 +623,7 @@ def api_list_note_attachments(share_id):
                 'id': str(att['_id']),
                 'file_type': att.get('file_type', 'image'),
                 'url': decrypted_url,
-                'filename': att.get('filename', ''),
+                'filename': m.decrypt_note(att.get('filename', ''), user_id=owner_id_str),
                 'uploader_name': att.get('uploader_name', 'Unknown'),
                 'uploader_id': str(att.get('uploader_id', '')),
                 'created_at': att.get('created_at', '').isoformat() if isinstance(att.get('created_at'), datetime.datetime) else ''

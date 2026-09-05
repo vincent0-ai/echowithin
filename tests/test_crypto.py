@@ -309,3 +309,49 @@ class TestBondDataEncryption:
             assert encrypt_bond_data('', '507f1f77bcf86cd799439077') == ''
             assert decrypt_bond_data(None, '507f1f77bcf86cd799439077') is None
 
+
+class TestGameDataEncryption:
+    """Tests for per-lobby encrypted game data (votes, submissions, answers)."""
+
+    def test_game_encryption_roundtrip(self, app):
+        from security import encrypt_game_data, decrypt_game_data
+        lobby_id = 'test_lobby_abc123'
+        plaintext = 'Paris'
+        with app.app_context():
+            encrypted = encrypt_game_data(plaintext, lobby_id)
+            assert encrypted != plaintext
+            assert encrypted.startswith('gAAAAA')
+            decrypted = decrypt_game_data(encrypted, lobby_id)
+            assert decrypted == plaintext
+
+    def test_game_cross_lobby_decryption_fails(self, app):
+        from security import encrypt_game_data, decrypt_game_data
+        lobby_a = 'test_lobby_aaa'
+        lobby_b = 'test_lobby_bbb'
+        plaintext = 'Secret vote option'
+        with app.app_context():
+            encrypted = encrypt_game_data(plaintext, lobby_a)
+            decrypted = decrypt_game_data(encrypted, lobby_b)
+            assert decrypted == '[Unavailable]'
+
+    def test_game_empty_none_content(self, app):
+        from security import encrypt_game_data, decrypt_game_data
+        with app.app_context():
+            assert encrypt_game_data('', 'test_lobby_abc123') == ''
+            assert decrypt_game_data(None, 'test_lobby_abc123') is None
+
+    def test_game_decrypt_legacy_plaintext_passthrough(self, app):
+        """Pre-encryption rows stored raw must still read back unchanged."""
+        from security import decrypt_game_data
+        with app.app_context():
+            assert decrypt_game_data('Paris', 'test_lobby_abc123') == 'Paris'
+            assert decrypt_game_data('2', 'test_lobby_abc123') == '2'
+
+    def test_game_randomized_ciphertext(self, app):
+        """Same option encrypts differently each time (why tallies stay plaintext)."""
+        from security import encrypt_game_data
+        with app.app_context():
+            enc1 = encrypt_game_data('Paris', 'test_lobby_abc123')
+            enc2 = encrypt_game_data('Paris', 'test_lobby_abc123')
+            assert enc1 != enc2
+

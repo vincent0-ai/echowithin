@@ -582,6 +582,45 @@ def decrypt_form_response(ciphertext: str, form_id: str) -> str:
         return '[Unavailable]'
 
 
+def _get_game_fernet(lobby_id: str) -> Fernet:
+    """Per-lobby Fernet — encrypted at rest with server-held key (not E2E). Reuses per-bond pattern."""
+    cached = database._game_fernet_cache.get(str(lobby_id))
+    if cached:
+        return cached
+    secret = _get_app().config["SECRET_KEY"].encode() if isinstance(_get_app().config["SECRET_KEY"], str) else _get_app().config["SECRET_KEY"]
+    salt = f'echowithin_games_v1_{lobby_id}'.encode()
+    key = _derive_fernet_key(secret, salt, _NOTES_KDF_ITERATIONS)
+    f = Fernet(key)
+    database._game_fernet_cache[str(lobby_id)] = f
+    return f
+
+
+def encrypt_game_data(plaintext: str, lobby_id: str) -> str:
+    """Encrypt a game field (vote option, submission text, correct answer) at rest (per-lobby key)."""
+    if not plaintext:
+        return plaintext
+    try:
+        f = _get_game_fernet(str(lobby_id))
+        return f.encrypt(plaintext.encode('utf-8')).decode('utf-8')
+    except Exception as e:
+        _get_app().logger.error(f"Error encrypting game data {lobby_id}: {e}")
+        raise
+
+
+def decrypt_game_data(ciphertext: str, lobby_id: str) -> str:
+    """Decrypt a game field. Falls back to plaintext if not Fernet (legacy rows)."""
+    if not ciphertext:
+        return ciphertext
+    try:
+        f = _get_game_fernet(str(lobby_id))
+        return f.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
+    except Exception:
+        if not ciphertext.startswith('gAAAAA'):
+            return ciphertext
+        _get_app().logger.warning(f"Game data decryption failed for lobby {lobby_id}")
+        return '[Unavailable]'
+
+
 def generate_signed_cloudinary_url(public_id: str, resource_type: str = 'image', delivery_type: str = 'authenticated', expires_in: int = 14400) -> str:
     """Generates a deterministic signed Cloudinary URL for private/authenticated assets.
 

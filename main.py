@@ -2438,6 +2438,7 @@ def handle_whisper_screenshot(data=None, *args, **kwargs):
         trigger_labels = {
             'printscreen': 'captured the screen (desktop PrintScreen)',
             'keyboard_shortcut': 'used a screenshot keyboard shortcut',
+            'devtools': 'opened browser developer tools',
             'visibility_change': 'switched away from the app',
             'window_blur': 'switched to another window'
         }

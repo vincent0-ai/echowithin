@@ -4797,6 +4797,7 @@
         -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 1rem;
         display: flex; flex-direction: column; gap: 6px;
         position: relative; z-index: 1;
+        user-select: none; -webkit-user-select: none;
     }
     .whisper-msg {
         max-width: 75%; padding: 0.5rem 0.8rem; border-radius: 12px;
@@ -5753,10 +5754,16 @@
     }
 
     // --- Hardened Screenshot & Capture Detection ---
+    // Tiered triggers: high-confidence (printscreen, keyboard_shortcut, devtools)
+    // alert both parties; low-confidence (visibility_change, window_blur) only
+    // blur content locally to prevent false positives from phone calls,
+    // notifications, lock screens, etc.
     let screenshotHandler = null;
     let lastScreenshotAlertTime = 0;
     let _visChangeHandler = null;
     let _blurHandler = null;
+    let _focusHandler = null;
+    let _contextMenuHandler = null;
 
     function _fireScreenshotAlert(trigger) {
         if (!whisperState.active || !whisperState.sessionId) return;
@@ -5785,57 +5792,85 @@
     function setupScreenshotDetection() {
         lastScreenshotAlertTime = 0;
 
-        // 1. Desktop PrintScreen key + screenshot keyboard combos
+        // 1. HIGH-CONFIDENCE: PrintScreen, screenshot combos, DevTools
         screenshotHandler = function(e) {
             if (!whisperState.active || !whisperState.sessionId) return;
             var overlay = document.getElementById('whisper-overlay');
             if (!overlay || !overlay.classList.contains('active')) return;
             // PrintScreen key
             if (e.key === 'PrintScreen') {
+                _blurWhisperContent();
                 _fireScreenshotAlert('printscreen');
                 return;
             }
             // Ctrl+Shift+S (Snipping Tool), Meta+Shift+S (Win+Shift+S Snip & Sketch)
             if (e.key === 's' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+                _blurWhisperContent();
                 _fireScreenshotAlert('keyboard_shortcut');
                 e.preventDefault();
                 return;
             }
             // Meta+Shift+3/4/5 (macOS screenshots)
             if (e.metaKey && e.shiftKey && ['3','4','5'].includes(e.key)) {
+                _blurWhisperContent();
                 _fireScreenshotAlert('keyboard_shortcut');
+                return;
+            }
+            // DevTools: F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C
+            if (e.key === 'F12') {
+                _blurWhisperContent();
+                _fireScreenshotAlert('devtools');
+                e.preventDefault();
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i','j','c'].includes(e.key.toLowerCase())) {
+                _blurWhisperContent();
+                _fireScreenshotAlert('devtools');
+                e.preventDefault();
                 return;
             }
         };
         window.addEventListener('keyup', screenshotHandler);
+        // Also intercept keydown for DevTools to prevent default before the tool opens
+        window.addEventListener('keydown', screenshotHandler);
 
-        // 2. Visibility change (tab switch, screen recording tool, app switch)
+        // 2. LOW-CONFIDENCE: Visibility change — blur only, no alert
+        // (phone calls, notifications, lock screen, etc. all trigger this)
         _visChangeHandler = function() {
             if (!whisperState.active) return;
             if (document.hidden) {
                 _blurWhisperContent();
-                _fireScreenshotAlert('visibility_change');
             } else {
                 _unblurWhisperContent();
             }
         };
         document.addEventListener('visibilitychange', _visChangeHandler);
 
-        // 3. Window blur (Alt+Tab, Snipping Tool focus, another window)
+        // 3. LOW-CONFIDENCE: Window blur — blur only, no alert
+        // (Alt+Tab to check messages, taskbar clicks, etc.)
         _blurHandler = function() {
             if (!whisperState.active) return;
             _blurWhisperContent();
-            _fireScreenshotAlert('window_blur');
+        };
+        _focusHandler = function() {
+            if (whisperState.active) _unblurWhisperContent();
         };
         window.addEventListener('blur', _blurHandler);
-        window.addEventListener('focus', function() {
-            if (whisperState.active) _unblurWhisperContent();
-        });
+        window.addEventListener('focus', _focusHandler);
+
+        // 4. Disable right-click on entire whisper overlay
+        _contextMenuHandler = function(e) {
+            if (!whisperState.active) return;
+            e.preventDefault();
+        };
+        var overlay = document.getElementById('whisper-overlay');
+        if (overlay) overlay.addEventListener('contextmenu', _contextMenuHandler);
     }
 
     function teardownScreenshotDetection() {
         if (screenshotHandler) {
             window.removeEventListener('keyup', screenshotHandler);
+            window.removeEventListener('keydown', screenshotHandler);
             screenshotHandler = null;
         }
         if (_visChangeHandler) {
@@ -5845,6 +5880,15 @@
         if (_blurHandler) {
             window.removeEventListener('blur', _blurHandler);
             _blurHandler = null;
+        }
+        if (_focusHandler) {
+            window.removeEventListener('focus', _focusHandler);
+            _focusHandler = null;
+        }
+        if (_contextMenuHandler) {
+            var overlay = document.getElementById('whisper-overlay');
+            if (overlay) overlay.removeEventListener('contextmenu', _contextMenuHandler);
+            _contextMenuHandler = null;
         }
         _unblurWhisperContent();
     }

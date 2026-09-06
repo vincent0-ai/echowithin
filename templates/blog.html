@@ -124,12 +124,96 @@
         {% endif %}
     </div>
 
-    <!-- Pinned Announcement Section -->
-    {% if pinned_announcement %}
-    <p class="pinned-announcement-section alert alert-info" role="alert"
-        style="padding: 0.5rem 1rem; margin-bottom: 1.5rem; font-size: 0.9rem;">
-        <strong>Announcement:</strong> {{ pinned_announcement.content | urlize(target='_blank') }}
-    </p>
+    <!-- Pinned Announcements Section -->
+    {% if pinned_announcements %}
+    <style>
+        .pinned-announcement-card a {
+            color: #fff !important;
+            text-decoration: underline !important;
+            font-weight: 600;
+        }
+        .announcement-dismiss-btn:hover {
+            opacity: 1 !important;
+        }
+    </style>
+    <script nonce="{{ csp_nonce }}">
+    (function() {
+        try {
+            var dismissed = JSON.parse(localStorage.getItem('dismissed_announcements') || '[]');
+            if (Array.isArray(dismissed) && dismissed.length > 0) {
+                var style = document.createElement('style');
+                style.textContent = dismissed.map(function(id) { return '#announcement-banner-' + id; }).join(', ') + ' { display: none !important; }';
+                document.head.appendChild(style);
+            }
+        } catch(e) {}
+    })();
+    </script>
+    <div class="pinned-announcements-container" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem;">
+        {% for announcement in pinned_announcements %}
+        <div class="pinned-announcement-card alert alert-info" id="announcement-banner-{{ announcement._id }}" data-announcement-id="{{ announcement._id }}" role="alert"
+            style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 0.65rem 1rem; border-radius: 8px; font-size: 0.9rem; margin: 0; color: white;">
+            <div class="pinned-announcement-content" style="flex: 1; word-break: break-word; line-height: 1.45;">
+                <strong style="margin-right: 0.25rem;">Announcement:</strong> {{ announcement.content | urlize(target='_blank') }}
+            </div>
+            <button type="button" class="announcement-dismiss-btn" data-id="{{ announcement._id }}" aria-label="Dismiss announcement" title="Dismiss"
+                style="background: transparent; border: none; font-size: 1.35rem; line-height: 1; color: white; opacity: 0.75; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0; transition: opacity 0.15s;">
+                &times;
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    <script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.announcement-dismiss-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var id = btn.getAttribute('data-id');
+                var card = document.getElementById('announcement-banner-' + id);
+                if (card) {
+                    card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(-4px)';
+                    setTimeout(function() {
+                        card.style.display = 'none';
+                    }, 200);
+                }
+                if (id) {
+                    try {
+                        var dismissed = JSON.parse(localStorage.getItem('dismissed_announcements') || '[]');
+                        if (!Array.isArray(dismissed)) dismissed = [];
+                        if (dismissed.indexOf(id) === -1) {
+                            dismissed.push(id);
+                            localStorage.setItem('dismissed_announcements', JSON.stringify(dismissed));
+                        }
+                    } catch(err) {}
+                }
+            });
+        });
+    });
+    </script>
+    {% elif pinned_announcement %}
+    <style>
+        .pinned-announcement-card a {
+            color: #fff !important;
+            text-decoration: underline !important;
+            font-weight: 600;
+        }
+        .announcement-dismiss-btn:hover {
+            opacity: 1 !important;
+        }
+    </style>
+    <div class="pinned-announcements-container" style="margin-bottom: 1.5rem;">
+        <div class="pinned-announcement-card alert alert-info" id="announcement-banner-{{ pinned_announcement._id }}" data-announcement-id="{{ pinned_announcement._id }}" role="alert"
+            style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; padding: 0.65rem 1rem; border-radius: 8px; font-size: 0.9rem; margin: 0; color: white;">
+            <div class="pinned-announcement-content" style="flex: 1; word-break: break-word; line-height: 1.45;">
+                <strong style="margin-right: 0.25rem;">Announcement:</strong> {{ pinned_announcement.content | urlize(target='_blank') }}
+            </div>
+            <button type="button" class="announcement-dismiss-btn" data-id="{{ pinned_announcement._id }}" aria-label="Dismiss announcement" title="Dismiss"
+                style="background: transparent; border: none; font-size: 1.35rem; line-height: 1; color: white; opacity: 0.75; cursor: pointer; padding: 0 0.25rem; flex-shrink: 0; transition: opacity 0.15s;">
+                &times;
+            </button>
+        </div>
+    </div>
     {% endif %}
 
     {% from '_macros.html' import render_post_item %}

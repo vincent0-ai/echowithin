@@ -1327,21 +1327,32 @@ def add_security_headers(response):
 
 
 
+def invalidate_pinned_announcements_cache():
+    """Invalidates the in-memory and Redis caches for pinned announcements."""
+    _pinned_announcement_cache.clear()
+    if redis_cache:
+        try:
+            redis_cache.delete('pinned_announcements')
+            redis_cache.delete('pinned_announcement')
+        except Exception:
+            pass
+
 
 @app.context_processor
 def inject_pinned_announcement():
-    """Makes the pinned announcement available to all templates (cached for 60s).
+    """Makes pinned announcements available to all templates (cached for 60s).
     
     PERF: Check in-memory cache FIRST (zero-latency, per-process) before Redis.
     This saves ~1ms per request by avoiding a Redis round-trip when the cache is warm.
+    Supports multiple pinned announcements, ordered by creation date descending.
     """
-    cache_key = 'pinned_announcement'
+    cache_key = 'pinned_announcements'
 
     # Try in-memory cache FIRST (zero-latency)
     cached_val = _pinned_announcement_cache.get(cache_key)
     if cached_val is not None:
-        # We store a sentinel '__none__' for "no announcement" to distinguish from cache miss
-        return dict(pinned_announcement=None if cached_val == '__none__' else cached_val)
+        docs = [] if cached_val == '__none__' else cached_val
+        return dict(pinned_announcements=docs, pinned_announcement=docs[0] if docs else None)
 
     # Try Redis cache second
     if redis_cache:
@@ -1350,23 +1361,25 @@ def inject_pinned_announcement():
             if cached:
                 if cached == b'__none__' or cached == '__none__':
                     _pinned_announcement_cache[cache_key] = '__none__'
-                    return dict(pinned_announcement=None)
+                    return dict(pinned_announcements=[], pinned_announcement=None)
                 parsed = json.loads(cached)
                 _pinned_announcement_cache[cache_key] = parsed
-                return dict(pinned_announcement=parsed)
+                return dict(pinned_announcements=parsed, pinned_announcement=parsed[0] if parsed else None)
         except Exception:
             pass
 
     # Fetch from DB (cache miss on both levels)
-    pinned_announcement = announcements_conf.find_one({'is_pinned': True})
+    cursor = announcements_conf.find({'is_pinned': True}).sort('created_at', -1)
+    cache_docs = []
+    for doc in cursor:
+        cache_docs.append({k: str(v) if isinstance(v, ObjectId) else v for k, v in doc.items()})
 
     # Cache the result in both layers
-    if pinned_announcement:
-        cache_doc = {k: str(v) if isinstance(v, ObjectId) else v for k, v in pinned_announcement.items()}
-        _pinned_announcement_cache[cache_key] = cache_doc
+    if cache_docs:
+        _pinned_announcement_cache[cache_key] = cache_docs
         if redis_cache:
             try:
-                redis_cache.setex(cache_key, 60, json.dumps(cache_doc, default=str))
+                redis_cache.setex(cache_key, 60, json.dumps(cache_docs, default=str))
             except Exception:
                 pass
     else:
@@ -1377,7 +1390,7 @@ def inject_pinned_announcement():
             except Exception:
                 pass
 
-    return dict(pinned_announcement=pinned_announcement)
+    return dict(pinned_announcements=cache_docs, pinned_announcement=cache_docs[0] if cache_docs else None)
 
 ## Remark42 removed: internal comments will be used instead.
 

@@ -616,6 +616,8 @@ def admin_announcements():
                 'created_at': datetime.datetime.now(datetime.timezone.utc),
                 'is_pinned': False
             })
+            if hasattr(m, 'invalidate_pinned_announcements_cache'):
+                m.invalidate_pinned_announcements_cache()
             flash('Announcement created.', 'success')
         else:
             flash('Content required.', 'danger')
@@ -650,6 +652,8 @@ def admin_send_push():
 def pin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': True}})
+    if hasattr(m, 'invalidate_pinned_announcements_cache'):
+        m.invalidate_pinned_announcements_cache()
     flash('Announcement pinned.', 'success')
     return redirect(url_for('admin.admin_announcements'))
 
@@ -660,6 +664,8 @@ def pin_announcement(announcement_id):
 def unpin_announcement(announcement_id):
     import main as m
     m.announcements_conf.update_one({'_id': ObjectId(announcement_id)}, {'$set': {'is_pinned': False}})
+    if hasattr(m, 'invalidate_pinned_announcements_cache'):
+        m.invalidate_pinned_announcements_cache()
     flash('Announcement unpinned.', 'success')
     return redirect(url_for('admin.admin_announcements'))
 
@@ -670,6 +676,8 @@ def unpin_announcement(announcement_id):
 def delete_announcement(announcement_id):
     import main as m
     m.announcements_conf.delete_one({'_id': ObjectId(announcement_id)})
+    if hasattr(m, 'invalidate_pinned_announcements_cache'):
+        m.invalidate_pinned_announcements_cache()
     flash('Announcement deleted.', 'success')
     return redirect(url_for('admin.admin_announcements'))
 

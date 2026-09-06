@@ -136,7 +136,6 @@ EchoWithin is a comprehensive platform that combines blogging, encrypted persona
 | Share links per note        | 3          | Unlimited   |
 | Surprise notes              | 20         | Unlimited   |
 | Note locking                | No         | Yes         |
-| Blog space                  | No         | Yes         |
 | Scheduled messages          | No         | Yes         |
 | Note media attachments      | No         | Up to 20    |
 | Version history retention   | 7 days     | 365 days    |

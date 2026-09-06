@@ -243,7 +243,7 @@ def confirm(email):
                         flash("Email confirmed! Your account is active and ready.", "success")
                         if next_url and m.is_safe_url(next_url):
                             return redirect(next_url)
-                        return redirect(url_for('notes.personal_space'))
+                        return redirect(url_for('pages.home'))
                     else:
                         m.auth_conf.update_one({'email': email}, {'$inc': {'attempt_count': 1}})
                         # record graduated failure

@@ -5163,7 +5163,7 @@
     <div class="whisper-watermark" id="whisper-watermark" aria-hidden="true"></div>
     <div class="whisper-overlay-header">
         <span class="whisper-partner" id="whisper-partner-name">Whisper</span>
-        <span class="whisper-timer-text" id="whisper-timer-text">--:--</span>
+        <span class="whisper-timer-text" id="whisper-timer-text" title="Tap to request 15m extension" onclick="requestWhisperExtend()" style="cursor: pointer;">--:--</span>
         <button class="whisper-end-btn" onclick="endWhisperSession()">End</button>
     </div>
     <div class="whisper-timer-bar" id="whisper-timer-bar" style="width: 100%;"></div>
@@ -5988,8 +5988,11 @@
         }).then(r => r.json()).then(d => {
             if (d.success) {
                 const btn = document.getElementById('whisper-extend-trigger');
-                btn.textContent = 'Requested';
-                btn.disabled = true;
+                if (btn) {
+                    btn.textContent = 'Requested';
+                    btn.disabled = true;
+                }
+                if (window.showCustomToast) showCustomToast('Extension requested (+15m)', 'info');
             } else if (window.showCustomAlert) showCustomAlert(d.error, 'danger');
         });
     };
@@ -6008,6 +6011,14 @@
     };
 
     window.closeExtendModal = function() {
+        if (whisperState.sessionId && whisperState.pendingExtendData) {
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            echoFetch('/api/whisper/extend/' + whisperState.sessionId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ action: 'decline' })
+            }).catch(function() {});
+        }
         document.getElementById('whisper-extend-modal').classList.remove('active');
         whisperState.pendingExtendData = null;
     };
@@ -6407,9 +6418,20 @@
             whisperState.warningShown = false;
             document.getElementById('whisper-warning-banner').classList.remove('active');
             const btn = document.getElementById('whisper-extend-trigger');
-            btn.textContent = 'Extend';
-            btn.disabled = false;
+            if (btn) {
+                btn.textContent = 'Extend';
+                btn.disabled = false;
+            }
             appendWhisperMessage({ is_system: true, content: 'Session extended by ' + data.extra_minutes + ' minutes.' });
+        });
+
+        s.on('whisper_extend_declined', function() {
+            const btn = document.getElementById('whisper-extend-trigger');
+            if (btn) {
+                btn.textContent = 'Extend';
+                btn.disabled = false;
+            }
+            if (window.showCustomToast) showCustomToast('Partner declined extension.', 'warning');
         });
 
         s.on('whisper_extend_request', function(data) {

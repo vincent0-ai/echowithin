@@ -448,30 +448,24 @@ def api_whisper_extend(session_id):
 
         partner_id = _get_partner_id(session_doc, user_id_str)
 
-        # Validate extra_minutes bounds against user tier limit
-        user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
-        tier = m.get_user_tier(user_doc)
-        max_duration = m.TIER_LIMITS.get(tier, m.TIER_LIMITS['free']).get('max_whisper_duration', 30)
-
-        # Calculate total duration so far
-        started_at = session_doc['started_at']
-        current_expires = session_doc['expires_at']
-        total_so_far = (current_expires - started_at).total_seconds() / 60
-        if total_so_far + extra_minutes > max_duration:
-            return jsonify({'error': f'Cannot extend beyond {max_duration} minutes total.'}), 400
-
         if action == 'request':
             # Persist the extension request so only the partner can approve it.
             existing = session_doc.get('pending_extension')
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
             if existing:
-                return jsonify({'error': 'An extension request is already pending. Wait for your partner to approve it.'}), 409
+                req_at = existing.get('at')
+                if req_at:
+                    if req_at.tzinfo is None:
+                        req_at = req_at.replace(tzinfo=datetime.timezone.utc)
+                    if (now_utc - req_at).total_seconds() < 60:
+                        return jsonify({'error': 'An extension request is already pending. Wait for your partner to approve it.'}), 409
             m.whisper_sessions_conf.update_one(
                 {'_id': session_doc['_id']},
                 {'$set': {
                     'pending_extension': {
                         'requested_by': ObjectId(user_id_str),
                         'extra_minutes': extra_minutes,
-                        'at': datetime.datetime.now(datetime.timezone.utc)
+                        'at': now_utc
                     }
                 }}
             )
@@ -496,7 +490,11 @@ def api_whisper_extend(session_id):
 
             now = datetime.datetime.now(datetime.timezone.utc)
             extra_minutes = int(pending_extension.get('extra_minutes', extra_minutes))
-            new_expires = current_expires + datetime.timedelta(minutes=extra_minutes)
+            current_expires = session_doc['expires_at']
+            if current_expires.tzinfo is None:
+                current_expires = current_expires.replace(tzinfo=datetime.timezone.utc)
+            base_time = max(current_expires, now)
+            new_expires = base_time + datetime.timedelta(minutes=extra_minutes)
 
             # Also extend TTL on whisper messages
             m.whisper_messages_conf.update_many(
@@ -525,6 +523,19 @@ def api_whisper_extend(session_id):
             m.socketio.emit('whisper_extended', payload, room=f"user_{partner_id}")
             m.socketio.emit('whisper_extended', payload, room=f"user_{user_id_str}")
             return jsonify({'success': True, **payload})
+
+        elif action == 'decline':
+            pending_extension = session_doc.get('pending_extension')
+            if pending_extension:
+                m.whisper_sessions_conf.update_one(
+                    {'_id': session_doc['_id']},
+                    {'$set': {'pending_extension': None}}
+                )
+                m.socketio.emit('whisper_extend_declined', {
+                    'session_id': session_id,
+                    'declined_by': user_id_str
+                }, room=f"user_{partner_id}")
+            return jsonify({'success': True, 'status': 'declined'})
 
         return jsonify({'error': 'Invalid action'}), 400
 

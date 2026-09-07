@@ -438,6 +438,116 @@ class TestWhisperRESTFallbackEndpoints:
             assert '[Content unavailable' not in url
 
 
+class TestWhisperExtend:
+    """Tests for extending whisper sessions beyond 120 minutes with mutual consent."""
+
+    def test_request_extend_beyond_120_minutes(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from blueprints.whisper import api_whisper_extend
+        me = mock_user['_id']
+        partner = ObjectId()
+        sid = ObjectId()
+        # Session already ran for 120 minutes
+        started = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=118)
+        expires = started + datetime.timedelta(minutes=120)
+        session_doc = {
+            '_id': sid,
+            'initiator_id': me,
+            'recipient_id': partner,
+            'status': 'active',
+            'started_at': started,
+            'expires_at': expires
+        }
+        with app.test_request_context(json={'action': 'request', 'extra_minutes': 15}):
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m.socketio, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                res = api_whisper_extend(str(sid))
+                assert res.status_code == 200
+                data = res.get_json()
+                assert data['success'] is True
+                assert data['status'] == 'requested'
+                assert sess.update_one.call_count == 1
+                mock_emit.assert_called_once()
+                assert mock_emit.call_args[0][0] == 'whisper_extend_request'
+
+    def test_approve_extend_beyond_120_minutes(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from blueprints.whisper import api_whisper_extend
+        me = mock_user['_id']
+        partner = ObjectId()
+        sid = ObjectId()
+        started = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=120)
+        expires = started + datetime.timedelta(minutes=120)
+        session_doc = {
+            '_id': sid,
+            'initiator_id': partner,
+            'recipient_id': me,
+            'status': 'active',
+            'started_at': started,
+            'expires_at': expires,
+            'pending_extension': {
+                'requested_by': partner,
+                'extra_minutes': 15,
+                'at': datetime.datetime.now(datetime.timezone.utc)
+            }
+        }
+        with app.test_request_context(json={'action': 'approve', 'extra_minutes': 15}):
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m.socketio, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                res = api_whisper_extend(str(sid))
+                assert res.status_code == 200
+                data = res.get_json()
+                assert data['success'] is True
+                assert data['extra_minutes'] == 15
+                assert 'new_expires_at' in data
+                assert data['new_expires_at'].endswith('Z')
+                assert sess.update_one.call_count == 1
+                assert msgs.update_many.call_count == 1
+                assert mock_emit.call_count == 2
+
+    def test_decline_extend(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from blueprints.whisper import api_whisper_extend
+        me = mock_user['_id']
+        partner = ObjectId()
+        sid = ObjectId()
+        session_doc = {
+            '_id': sid,
+            'initiator_id': partner,
+            'recipient_id': me,
+            'status': 'active',
+            'pending_extension': {
+                'requested_by': partner,
+                'extra_minutes': 15,
+                'at': datetime.datetime.now(datetime.timezone.utc)
+            }
+        }
+        with app.test_request_context(json={'action': 'decline'}):
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m.socketio, 'emit') as mock_emit:
+                sess.find_one.return_value = session_doc
+                res = api_whisper_extend(str(sid))
+                assert res.status_code == 200
+                data = res.get_json()
+                assert data['success'] is True
+                assert data['status'] == 'declined'
+                assert sess.update_one.call_count == 1
+                mock_emit.assert_called_once()
+                assert mock_emit.call_args[0][0] == 'whisper_extend_declined'
+
+
 class TestWhisperScreenshotAlert:
     """Tests for whisper screenshot alerts and session debounce."""
 

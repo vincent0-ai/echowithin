@@ -517,6 +517,17 @@ class TestWhisperScreenshotAlert:
         # 3. DevTools notification warning removed
         assert "_fireScreenshotAlert('devtools')" not in content
 
+        # 4. Mobile reload FAB hidden in whisper mode
+        assert 'body.whisper-open .mobile-fab' in content
+        assert "document.body.classList.add('whisper-open');" in content
+        assert "document.body.classList.remove('whisper-open');" in content
+
+        # 5. Whisper reply quote rendering attaches directly to message bubble
+        assert 'whisper-reply-quote' in content
+        assert 'div.appendChild(quoteDiv);' in content
+        assert 'whisperEscapeHtml' in content
+
+
 
 
 

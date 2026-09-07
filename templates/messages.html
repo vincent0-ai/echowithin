@@ -1350,7 +1350,9 @@
         bottom: 85px !important;
     }
 
-    body.mobile-chat-open .mobile-fab {
+    body.mobile-chat-open .mobile-fab,
+    body.whisper-open .mobile-fab,
+    body:has(#whisper-overlay.active) .mobile-fab {
         display: none !important;
     }
 
@@ -5235,9 +5237,16 @@
     var whisperPending = {};
     var whisperRenderedIds = new Set();
     var WHISPER_SEND_TIMEOUT = 8000;
-    var whisperReplyState = { messageId: null, content: '', senderName: '' };
+    var whisperReplyState = { messageId: null, content: '', senderName: '', senderId: null };
 
     const currentUserId = '{{ current_user.id }}';
+
+    function whisperEscapeHtml(text) {
+        if (!text) return '';
+        var d = document.createElement('div');
+        d.textContent = text;
+        return d.innerHTML;
+    }
 
     // --- Protected image helper (anti-save layers) ---
     function createWhisperProtectedImage(imageUrl) {
@@ -5351,6 +5360,9 @@
         if (_fab) _fab.style.display = 'none';
         document.getElementById('whisper-warning-banner').classList.remove('active');
         document.getElementById('whisper-overlay').classList.add('active');
+        document.body.classList.add('whisper-open');
+        var reloadFab = document.getElementById('mobile-reload-btn');
+        if (reloadFab) reloadFab.style.setProperty('display', 'none', 'important');
         // Lock background scroll so pans drive the message list, not the page (F1).
         document.body.style.overflow = 'hidden';
         document.getElementById('whisper-input').focus();
@@ -5417,22 +5429,38 @@
             if (msg.id) { div.setAttribute('data-msg-id', msg.id); whisperRenderedIds.add(msg.id); }
             if (msg.temp_id) div.setAttribute('data-temp', msg.temp_id);
             if (msg.pending) div.classList.add('whisper-pending');
-            var contentDiv = document.createElement('div');
-            contentDiv.className = 'whisper-content';
             // Reply quote rendering
-            if (msg.reply_to && (msg.reply_preview || msg.reply_sender)) {
+            if (msg.reply_to && (msg.reply_preview || msg.reply_sender || msg.reply_sender_id)) {
                 var quoteDiv = document.createElement('div');
                 quoteDiv.className = 'whisper-reply-quote';
-                var quoteSender = msg.reply_sender || 'Partner';
-                quoteDiv.innerHTML = '<strong>' + quoteSender + '</strong>: ' + (msg.reply_preview || '').substring(0, 80);
-                if (msg.reply_to) {
-                    quoteDiv.onclick = function() {
-                        var target = container.querySelector('[data-msg-id="' + msg.reply_to + '"]');
-                        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    };
+                var quoteSender = msg.reply_sender;
+                if (!quoteSender) {
+                    if (msg.reply_sender_id) {
+                        quoteSender = (msg.reply_sender_id === currentUserId) ? 'You' : (whisperState.partnerUsername || 'Partner');
+                    } else {
+                        quoteSender = 'Partner';
+                    }
                 }
-                contentDiv.appendChild(quoteDiv);
+                quoteDiv.innerHTML = '<div style="font-weight:600;font-size:0.75rem;margin-bottom:2px;">' + whisperEscapeHtml(quoteSender) + '</div><div style="opacity:0.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + whisperEscapeHtml(msg.reply_preview || 'Message') + '</div>';
+                if (msg.reply_to) {
+                    (function(refId) {
+                        quoteDiv.onclick = function(e) {
+                            e.stopPropagation();
+                            var target = container.querySelector('[data-msg-id="' + refId + '"]');
+                            if (target) {
+                                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                target.style.transition = 'background 0.3s';
+                                var origBg = target.style.background;
+                                target.style.background = 'rgba(255, 157, 108, 0.35)';
+                                setTimeout(function() { target.style.background = origBg; }, 1500);
+                            }
+                        };
+                    })(msg.reply_to);
+                }
+                div.appendChild(quoteDiv);
             }
+            var contentDiv = document.createElement('div');
+            contentDiv.className = 'whisper-content';
             if (msg.message_type === 'image' && msg.image_url) {
                 var shield = createWhisperProtectedImage(msg.image_url);
                 contentDiv.appendChild(shield);
@@ -5655,6 +5683,7 @@
             localMsg.reply_to = whisperReplyState.messageId;
             localMsg.reply_preview = whisperReplyState.content;
             localMsg.reply_sender = whisperReplyState.senderName;
+            localMsg.reply_sender_id = whisperReplyState.senderId;
         }
         appendWhisperMessage(localMsg);
         const payload = {
@@ -5670,6 +5699,9 @@
         }
         if (whisperReplyState.messageId) {
             payload.reply_to = whisperReplyState.messageId;
+            payload.reply_preview = whisperReplyState.content;
+            payload.reply_sender = whisperReplyState.senderName;
+            payload.reply_sender_id = whisperReplyState.senderId;
         }
         // DM-parity send queue (F3): timeout separates in-flight from failed.
         whisperPending[tempId] = {
@@ -5840,6 +5872,11 @@
         var wm = document.getElementById('whisper-messages');
         if (wm) wm.style.paddingBottom = '';
         document.body.style.overflow = '';
+        document.body.classList.remove('whisper-open');
+        var reloadFab = document.getElementById('mobile-reload-btn');
+        if (reloadFab && !document.body.classList.contains('mobile-chat-open')) {
+            reloadFab.style.removeProperty('display');
+        }
         var fab = document.getElementById('whisper-scroll-fab');
         if (fab) fab.style.display = 'none';
         Object.keys(whisperPending).forEach(function(t) {
@@ -6107,56 +6144,86 @@
 
     // --- Swipe-to-Reply Gesture ---
     function attachSwipeToReply(div, msg, isSent) {
-        var startX = 0, startY = 0, swiping = false, moved = false;
-        var threshold = 60;
+        if (!div) return;
+        var startX = 0, startY = 0, swiping = false;
         div.addEventListener('touchstart', function(e) {
+            if (e.touches.length !== 1) return;
             var touch = e.touches[0];
-            startX = touch.clientX; startY = touch.clientY;
-            swiping = true; moved = false;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            swiping = false;
         }, { passive: true });
         div.addEventListener('touchmove', function(e) {
-            if (!swiping) return;
+            if (!startX) return;
             var touch = e.touches[0];
             var dx = touch.clientX - startX;
             var dy = Math.abs(touch.clientY - startY);
-            if (dy > 30) { swiping = false; div.style.transform = ''; return; }
-            var allowed = isSent ? dx < 0 : dx > 0;
-            if (!allowed) { div.style.transform = ''; return; }
-            var absDx = Math.min(Math.abs(dx), 80);
-            div.style.transform = 'translateX(' + (isSent ? -absDx : absDx) + 'px)';
-            moved = true;
-            if (absDx > 20) e.preventDefault();
-        });
-        div.addEventListener('touchend', function() {
-            if (!swiping) return;
-            swiping = false;
-            var cur = div.style.transform;
-            div.style.transform = '';
-            if (moved && cur) {
-                var px = parseInt(cur.replace(/[^-\d]/g, ''));
-                if (Math.abs(px) >= threshold) setWhisperReply(msg);
+            if (dy > Math.abs(dx)) return;
+            if (dx > 10 && dx < 80) {
+                swiping = true;
+                div.style.transform = 'translateX(' + (dx * 0.5) + 'px)';
+                div.style.transition = 'none';
             }
-        });
+        }, { passive: true });
+        div.addEventListener('touchend', function(e) {
+            if (!startX) return;
+            var endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : startX;
+            var dx = endX - startX;
+            div.style.transform = '';
+            div.style.transition = 'transform 0.2s ease-out';
+            if (dx > 45 && swiping) {
+                setWhisperReply(div, msg, isSent);
+            }
+            startX = 0;
+            startY = 0;
+            swiping = false;
+        }, { passive: true });
         div.addEventListener('touchcancel', function() {
-            swiping = false; div.style.transform = '';
+            startX = 0;
+            startY = 0;
+            swiping = false;
+            div.style.transform = '';
+            div.style.transition = 'transform 0.2s ease-out';
         });
     }
 
-    function setWhisperReply(msg) {
-        whisperReplyState.messageId = msg.id;
-        whisperReplyState.content = msg.content || '[Photo]';
-        whisperReplyState.senderName = msg.sender_id === currentUserId ? 'You' : (whisperState.partnerUsername || 'Partner');
+    function setWhisperReply(div, msg, isSent) {
+        var msgId = (div && div.getAttribute('data-msg-id')) || (msg && msg.id);
+        if (!msgId) return;
+        var contentNode = div ? (div.querySelector('.whisper-content') || div.querySelector('.whisper-img-shield')) : null;
+        var previewText = '';
+        if (contentNode) {
+            if (contentNode.querySelector('img') || contentNode.classList.contains('whisper-img-shield')) {
+                previewText = '📸 Photo';
+            } else {
+                previewText = (contentNode.textContent || '').trim().substring(0, 80);
+            }
+        } else {
+            previewText = ((msg && msg.content) || '[Photo]').substring(0, 80);
+        }
+        var senderName = (isSent || (msg && msg.sender_id === currentUserId)) ? 'You' : (whisperState.partnerUsername || 'Partner');
+        var senderId = (msg && msg.sender_id) || (isSent ? currentUserId : whisperState.partnerId);
+
+        whisperReplyState.messageId = msgId;
+        whisperReplyState.content = previewText || 'Message';
+        whisperReplyState.senderName = senderName;
+        whisperReplyState.senderId = senderId;
+
         var bar = document.getElementById('whisper-reply-bar');
         var preview = document.getElementById('whisper-reply-preview');
-        preview.innerHTML = '<strong>' + whisperReplyState.senderName + '</strong>: ' + whisperReplyState.content.substring(0, 80);
-        bar.classList.add('active');
-        document.getElementById('whisper-input').focus();
-        if (navigator.vibrate) navigator.vibrate(30);
+        if (preview) {
+            preview.innerHTML = '<strong>' + whisperEscapeHtml(senderName) + '</strong>: ' + whisperEscapeHtml(whisperReplyState.content);
+        }
+        if (bar) bar.classList.add('active');
+        var inp = document.getElementById('whisper-input');
+        if (inp) inp.focus();
+        if (navigator.vibrate) navigator.vibrate(20);
     }
 
     window.cancelWhisperReply = function() {
-        whisperReplyState = { messageId: null, content: '', senderName: '' };
-        document.getElementById('whisper-reply-bar').classList.remove('active');
+        whisperReplyState = { messageId: null, content: '', senderName: '', senderId: null };
+        var bar = document.getElementById('whisper-reply-bar');
+        if (bar) bar.classList.remove('active');
     };
 
     // --- Whisper Input Handling ---
@@ -6240,6 +6307,8 @@
                     editBtn.onclick = function() { startWhisperEdit(data.id); };
                     bubble.appendChild(editBtn);
                 }
+                // Attach swipe-to-reply affordance to confirmed own message
+                attachSwipeToReply(bubble, data, true);
             }
         });
 

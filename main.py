@@ -2328,6 +2328,10 @@ def handle_whisper_message(data=None, *args, **kwargs):
                     msg_doc['reply_preview'] = (reply_content or '[Photo]')[:80]
                     reply_sender_id = str(reply_msg.get('sender_id', ''))
                     msg_doc['reply_sender_id'] = reply_sender_id
+                elif data.get('reply_preview'):
+                    msg_doc['reply_to'] = ObjectId(reply_to_id)
+                    msg_doc['reply_preview'] = str(data.get('reply_preview', ''))[:80]
+                    msg_doc['reply_sender_id'] = str(data.get('reply_sender_id', ''))[:50]
             except Exception:
                 pass  # Invalid reply_to ID, skip silently
         whisper_messages_conf.insert_one(msg_doc)

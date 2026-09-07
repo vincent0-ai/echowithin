@@ -1832,7 +1832,7 @@
       const mins = Math.floor(diff / 60000);
       const hours = Math.floor(diff / 3600000);
       const days = Math.floor(diff / 86400000);
-      if (mins < 1) return 'Just now';
+      if (mins < 1 || diff <= 0) return 'Just now';
       if (mins < 60) return mins + 'm ago';
       if (hours < 24) return hours + 'h ago';
       if (days < 7) return days + 'd ago';
@@ -1847,7 +1847,7 @@
     }
 
     function methodLabel(m) {
-      const labels = { password: 'Password', google: 'Google', mobile_app: 'Mobile App', app_token: 'App Token' };
+      const labels = { password: 'Password', google: 'Google', mobile_app: 'Mobile App', app_token: 'App Token', remember_cookie: 'Persistent Session' };
       return labels[m] || m;
     }
 
@@ -1879,7 +1879,7 @@
               ${s.location ? '<span>' + s.location + '</span>' : ''}
               <span>IP: ${s.ip_address || 'Unknown'}</span>
               <span>Signed in via ${methodLabel(s.login_method)} &middot; ${formatFullDate(s.logged_in_at)}</span>
-              <span>Last active: ${formatRelativeTime(s.last_active)}</span>
+              <span>Last active: ${s.is_current ? '<span style="color: #2e7d32; font-weight: 500;">Active now</span>' : formatRelativeTime(s.last_active)}</span>
             </div>
           </div>
           ${!s.is_current ? `<button type="button" class="btn" onclick="revokeSession('${s.id}', this)" style="

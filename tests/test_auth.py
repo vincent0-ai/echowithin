@@ -294,6 +294,180 @@ class TestActiveSessionsAndRevocation:
         assert session_entry['created_at'].tzinfo == datetime.timezone.utc
         assert session_entry['expires_at'] > session_entry['created_at']
 
+    def test_record_login_session_purges_duplicates_and_sets_permanent(self, app):
+        from bson.objectid import ObjectId
+        import datetime
+        from flask import session
+        from blueprints.auth import _record_login_session
+        import main as m
+
+        user_id = ObjectId()
+        now = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3)
+
+        # Mock user_sessions_conf
+        fake_sessions = [
+            {
+                '_id': ObjectId(),
+                'user_id': user_id,
+                'session_token': 'old_token_1',
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
+                'device_info': 'Chrome on Windows',
+                'logged_in_at': now,
+                'last_active': now
+            }
+        ]
+
+        def fake_delete_many(filter_query):
+            nonlocal fake_sessions
+            u_id = filter_query.get('user_id')
+            or_clauses = filter_query.get('$or', [])
+            matched_uas = [c['user_agent'] for c in or_clauses if 'user_agent' in c]
+            matched_devs = [c['device_info'] for c in or_clauses if 'device_info' in c]
+            fake_sessions = [
+                s for s in fake_sessions
+                if not (s['user_id'] == u_id and (s['user_agent'] in matched_uas or s['device_info'] in matched_devs))
+            ]
+
+        def fake_insert_one(doc):
+            doc['_id'] = ObjectId()
+            fake_sessions.append(doc)
+
+        with app.test_request_context(
+            '/',
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'}
+        ):
+            with mock.patch.object(m.user_sessions_conf, 'delete_many', side_effect=fake_delete_many), \
+                 mock.patch.object(m.user_sessions_conf, 'insert_one', side_effect=fake_insert_one), \
+                 mock.patch.object(m.users_conf, 'update_one'):
+                _record_login_session(str(user_id), 'password')
+
+                assert session.permanent is True
+                assert 'ew_session_token' in session
+                # The old session from 3 days ago should have been purged, leaving only 1 session
+                assert len(fake_sessions) == 1
+                assert fake_sessions[0]['session_token'] == session['ew_session_token']
+                assert fake_sessions[0]['device_info'] == 'Chrome on Windows'
+
+    def test_get_or_create_current_session_recovers_missing_token_and_updates_last_active(self, app):
+        from bson.objectid import ObjectId
+        import datetime
+        from flask import session
+        from blueprints.auth import _get_or_create_current_session
+        import main as m
+
+        user_id = ObjectId()
+        old_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3)
+
+        existing_doc = {
+            '_id': ObjectId(),
+            'user_id': user_id,
+            'session_token': 'existing_active_token',
+            'user_agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/120.0.0.0',
+            'device_info': 'Chrome on Android',
+            'logged_in_at': old_time,
+            'last_active': old_time
+        }
+
+        updated_fields = {}
+
+        def fake_find_one(filter_query, sort=None):
+            if filter_query.get('user_id') == user_id:
+                return existing_doc
+            return None
+
+        def fake_update_one(filter_query, update_query):
+            nonlocal updated_fields
+            updated_fields = update_query.get('$set', {})
+
+        with app.test_request_context(
+            '/',
+            headers={'User-Agent': 'Mozilla/5.0 (Android 14; Mobile) Chrome/121.0.0.0'}  # UA slightly changed
+        ):
+            with mock.patch.object(m.user_sessions_conf, 'find_one', side_effect=fake_find_one), \
+                 mock.patch.object(m.user_sessions_conf, 'update_one', side_effect=fake_update_one), \
+                 mock.patch.object(m.user_sessions_conf, 'delete_many'):
+                # Session cookie is empty (browser reopened)
+                session.clear()
+                token, doc = _get_or_create_current_session(str(user_id))
+
+                assert token == 'existing_active_token'
+                assert session['ew_session_token'] == 'existing_active_token'
+                assert session.permanent is True
+                # last_active should be updated to now, not 3 days ago
+                assert 'last_active' in updated_fields
+                assert updated_fields['last_active'].tzinfo == datetime.timezone.utc
+                diff_seconds = (datetime.datetime.now(datetime.timezone.utc) - updated_fields['last_active']).total_seconds()
+                assert abs(diff_seconds) < 5
+
+    def test_api_list_sessions_marks_current_and_updates_time(self, app):
+        from bson.objectid import ObjectId
+        import datetime
+        from flask import session
+        from flask_login import login_user
+        from blueprints.auth import api_list_sessions
+        from main import User
+        import main as m
+
+        user_id = ObjectId()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        user_doc = {'_id': user_id, 'username': 'testsessionuser', 'is_confirmed': True, 'is_admin': False}
+
+        session_doc = {
+            '_id': ObjectId(),
+            'user_id': user_id,
+            'session_token': 'test_curr_token',
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+            'device_info': 'Chrome on Windows',
+            'logged_in_at': now - datetime.timedelta(days=3),
+            'last_active': now - datetime.timedelta(days=3)
+        }
+
+        class MockCursor:
+            def sort(self, *args, **kwargs):
+                return [session_doc]
+
+        with app.test_request_context('/api/sessions'):
+            login_user(User(user_doc))
+            session['ew_session_token'] = 'test_curr_token'
+
+            with mock.patch.object(m.user_sessions_conf, 'find_one', return_value=session_doc), \
+                 mock.patch.object(m.user_sessions_conf, 'find', return_value=MockCursor()), \
+                 mock.patch.object(m.user_sessions_conf, 'update_one'), \
+                 mock.patch.object(m.users_conf, 'find_one', return_value=user_doc):
+                resp = api_list_sessions()
+                data = resp.get_json()
+                assert len(data['sessions']) == 1
+                s = data['sessions'][0]
+                assert s['is_current'] is True
+                assert s['last_active'].endswith('Z')
+                # Last active should be within seconds of now, not 3 days ago
+                parsed_dt = datetime.datetime.fromisoformat(s['last_active'].replace('Z', '+00:00'))
+                assert (now - parsed_dt).total_seconds() < 10
+
+    def test_validate_session_token_revoked_forces_logout(self, app):
+        from bson.objectid import ObjectId
+        from flask import session
+        from flask_login import login_user
+        from blueprints.auth import _validate_session_token
+        from main import User
+        import main as m
+
+        user_id = ObjectId()
+        user_doc = {'_id': user_id, 'username': 'revokeduser', 'is_confirmed': True, 'is_admin': False}
+
+        with app.test_request_context('/'):
+            login_user(User(user_doc))
+            session['ew_session_token'] = 'revoked_token_123'
+
+            # When token is in session but not in DB, it was revoked
+            with mock.patch.object(m.user_sessions_conf, 'find_one', return_value=None):
+                resp = _validate_session_token()
+                # Should redirect to login
+                assert resp is not None
+                assert resp.status_code == 302
+                assert '/login' in resp.headers.get('Location', '')
+                assert 'ew_session_token' not in session
+
 
 class TestPasswordResetTokens:
     """Tests for password reset token lifecycle and expiration."""

@@ -47,9 +47,9 @@ def _parse_device_info(ua):
         browser = 'Edge'
     elif 'opr/' in ua_lower or 'opera' in ua_lower:
         browser = 'Opera'
-    elif 'chrome' in ua_lower and 'safari' in ua_lower:
+    elif 'chrome' in ua_lower or 'crios' in ua_lower:
         browser = 'Chrome'
-    elif 'firefox' in ua_lower:
+    elif 'firefox' in ua_lower or 'fxios' in ua_lower:
         browser = 'Firefox'
     elif 'safari' in ua_lower:
         browser = 'Safari'
@@ -85,9 +85,22 @@ def _record_login_session(user_id, login_method='password'):
     # Generate a unique session token and store in Flask session
     session_token = secrets.token_urlsafe(32)
     session['ew_session_token'] = session_token
+    session.permanent = True
 
     # Approximate location from IP (async-safe, non-blocking with 3s timeout)
     location = _geolocate_ip(ip)
+
+    # Clean up any stale duplicate sessions for this user on the same device
+    try:
+        m.user_sessions_conf.delete_many({
+            'user_id': ObjectId(user_id),
+            '$or': [
+                {'user_agent': ua_string},
+                {'device_info': device_info}
+            ]
+        })
+    except Exception as e:
+        current_app.logger.warning(f"Failed to clean duplicate sessions: {e}")
 
     try:
         m.user_sessions_conf.insert_one({
@@ -917,6 +930,109 @@ def _format_session_dt(val):
     return str(val)
 
 
+def _get_or_create_current_session(user_id, login_method='remember_cookie'):
+    """Ensures the current request has a valid, active session record in user_sessions_conf.
+    If the Flask session token is missing or points to a revoked/missing document,
+    it attempts to link to an existing session for this user and device, or creates
+    a new one. Also removes stale duplicate sessions for the same device."""
+    import main as m
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr or '')
+    if ip and ',' in ip:
+        ip = ip.split(',')[0].strip()
+    ua_string = request.headers.get('User-Agent', 'Unknown')
+    device_info = _parse_device_info(ua_string)
+
+    token = session.get('ew_session_token')
+    doc = None
+
+    if token and isinstance(token, str):
+        try:
+            doc = m.user_sessions_conf.find_one({
+                'session_token': token,
+                'user_id': ObjectId(user_id)
+            })
+        except Exception:
+            doc = None
+        if not doc:
+            # Token was present in session, but not in DB -> session was revoked!
+            return None, None
+
+    if not doc:
+        # User is authenticated but session token was missing from cookie
+        # (e.g. browser restart restored via remember-me cookie).
+        # First, search by exact User-Agent for this user:
+        try:
+            doc = m.user_sessions_conf.find_one(
+                {'user_id': ObjectId(user_id), 'user_agent': ua_string},
+                sort=[('last_active', -1)]
+            )
+            # If not found by exact UA (e.g. browser minor version update, PWA header change):
+            if not doc:
+                doc = m.user_sessions_conf.find_one(
+                    {'user_id': ObjectId(user_id), 'device_info': device_info},
+                    sort=[('last_active', -1)]
+                )
+        except Exception:
+            doc = None
+
+        if doc and isinstance(doc.get('session_token'), str):
+            token = doc['session_token']
+            session['ew_session_token'] = token
+            session.permanent = True
+            try:
+                m.user_sessions_conf.update_one(
+                    {'_id': doc['_id']},
+                    {'$set': {
+                        'user_agent': ua_string,
+                        'ip_address': ip,
+                        'last_active': now
+                    }}
+                )
+            except Exception:
+                pass
+            doc['last_active'] = now
+            doc['user_agent'] = ua_string
+        else:
+            # Create fresh session record for this device
+            token = secrets.token_urlsafe(32)
+            session['ew_session_token'] = token
+            session.permanent = True
+            location = _geolocate_ip(ip)
+            doc = {
+                'user_id': ObjectId(user_id),
+                'session_token': token,
+                'ip_address': ip,
+                'user_agent': ua_string,
+                'device_info': device_info,
+                'location': location,
+                'login_method': login_method,
+                'logged_in_at': now,
+                'last_active': now,
+            }
+            try:
+                m.user_sessions_conf.insert_one(doc)
+            except Exception as e:
+                current_app.logger.warning(f"Failed to create session in _get_or_create_current_session: {e}")
+
+    # Remove any older orphaned duplicate sessions for this exact device
+    try:
+        if doc and doc.get('_id'):
+            m.user_sessions_conf.delete_many({
+                'user_id': ObjectId(user_id),
+                '_id': {'$ne': doc['_id']},
+                '$or': [
+                    {'user_agent': ua_string},
+                    {'device_info': device_info}
+                ]
+            })
+    except Exception:
+        pass
+
+    session.permanent = True
+    return token, doc
+
+
 @bp.route('/api/sessions')
 @login_required
 @csrf_exempt
@@ -926,7 +1042,19 @@ def api_list_sessions():
     if _user_is_guest(current_user):
         return jsonify({'sessions': [], 'last_login': None})
 
-    current_token = session.get('ew_session_token', '')
+    current_token, current_doc = _get_or_create_current_session(current_user.id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Ensure current session's last_active is updated in DB
+    if current_token:
+        try:
+            m.user_sessions_conf.update_one(
+                {'session_token': current_token},
+                {'$set': {'last_active': now}}
+            )
+        except Exception:
+            pass
+
     sessions_cursor = m.user_sessions_conf.find(
         {'user_id': ObjectId(current_user.id)}
     ).sort('last_active', -1)
@@ -942,6 +1070,9 @@ def api_list_sessions():
         elif loc.get('country'):
             location_str = loc['country']
 
+        is_cur = bool(current_token and s.get('session_token') == current_token)
+        last_act = now if is_cur else s.get('last_active')
+
         sessions.append({
             'id': str(s['_id']),
             'device_info': s.get('device_info', 'Unknown device'),
@@ -949,8 +1080,8 @@ def api_list_sessions():
             'ip_address': s.get('ip_address', ''),
             'login_method': s.get('login_method', 'unknown'),
             'logged_in_at': _format_session_dt(s.get('logged_in_at')),
-            'last_active': _format_session_dt(s.get('last_active')),
-            'is_current': s.get('session_token', '') == current_token
+            'last_active': _format_session_dt(last_act),
+            'is_current': is_cur
         })
 
     user_doc = m.users_conf.find_one({'_id': ObjectId(current_user.id)})
@@ -986,6 +1117,11 @@ def api_revoke_session():
         return jsonify({'error': 'Cannot revoke your current session. Use logout instead.'}), 400
 
     m.user_sessions_conf.delete_one({'_id': doc['_id']})
+    if m.redis_cache and doc.get('session_token'):
+        try:
+            m.redis_cache.setex(f"sess_valid:{doc['session_token']}", 300, '0')
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
@@ -996,6 +1132,18 @@ def api_revoke_all_sessions():
     """Revoke all sessions except the current one."""
     import main as m
     current_token = session.get('ew_session_token', '')
+    other_sessions = list(m.user_sessions_conf.find({
+        'user_id': ObjectId(current_user.id),
+        'session_token': {'$ne': current_token}
+    }, {'session_token': 1}))
+    if m.redis_cache:
+        for os in other_sessions:
+            st = os.get('session_token')
+            if st:
+                try:
+                    m.redis_cache.setex(f"sess_valid:{st}", 300, '0')
+                except Exception:
+                    pass
     result = m.user_sessions_conf.delete_many({
         'user_id': ObjectId(current_user.id),
         'session_token': {'$ne': current_token}
@@ -1018,21 +1166,13 @@ def _validate_session_token():
         return
 
     import main as m
-    token = session.get('ew_session_token')
-
-    # If restored via remember-me cookie without token in session, link to most recent device session
-    if not token:
-        ua_string = request.headers.get('User-Agent', 'Unknown')
-        latest_sess = m.user_sessions_conf.find_one(
-            {'user_id': ObjectId(current_user.id), 'user_agent': ua_string},
-            sort=[('last_active', -1)]
-        )
-        if isinstance(latest_sess, dict) and isinstance(latest_sess.get('session_token'), str):
-            token = latest_sess['session_token']
-            session['ew_session_token'] = token
+    token, doc = _get_or_create_current_session(current_user.id)
 
     if not token or not isinstance(token, str):
-        return
+        logout_user()
+        session.clear()
+        flash('Your session was ended from another device.', 'info')
+        return redirect(url_for('auth.login'))
 
     # Check revocation cache
     cache_key = f"sess_valid:{token}"
@@ -1050,7 +1190,8 @@ def _validate_session_token():
 
     # Check MongoDB if valid status is not cached
     if not (m.redis_cache and m.redis_cache.get(cache_key) == b'1'):
-        doc = m.user_sessions_conf.find_one({'session_token': token}, {'_id': 1})
+        if not doc:
+            doc = m.user_sessions_conf.find_one({'session_token': token}, {'_id': 1})
         if doc:
             if m.redis_cache:
                 try:

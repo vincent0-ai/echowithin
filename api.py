@@ -193,7 +193,16 @@ def api_login():
             # success — clear graduated counter
             brute_force_clear('login', bf_account, bf_ip)
             user_obj = m.User(user)
+            session.permanent = True
             login_user(user_obj, remember=remember)
+
+            # Record login session in user_sessions_conf
+            try:
+                from blueprints.auth import _record_login_session
+                _method = 'mobile_app' if 'echowithinapp' in request.headers.get('User-Agent', '').lower() else 'password'
+                _record_login_session(str(user['_id']), _method)
+            except Exception as e:
+                m.app.logger.warning(f"Failed to record API login session: {e}")
 
             # Clear app lock state on fresh login
             session.pop('app_lock_unlocked_at', None)
@@ -1373,7 +1382,13 @@ def api_auth_refresh():
     new_token = create_app_token(user['_id'])
 
     user_obj = m.User(user)
+    session.permanent = True
     login_user(user_obj, remember=True)
+    try:
+        from blueprints.auth import _record_login_session
+        _record_login_session(str(user['_id']), 'app_token')
+    except Exception:
+        pass
     return jsonify({'success': True, 'username': user['username'], 'x_app_token': new_token})
 
 

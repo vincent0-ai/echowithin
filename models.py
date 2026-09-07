@@ -168,6 +168,34 @@ def load_user_from_request(req):
             print(f"[DEBUG REQ_LOADER] User '{user_data.get('username')}' is banned.", flush=True)
         return None
 
+    # Debounced update of last_active for mobile app session (every 5 mins)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    app_uid = str(doc['user_id'])
+    cache_key = f"app_sess_la:{app_uid}"
+    should_update = True
+    if database.redis_cache:
+        try:
+            if database.redis_cache.get(cache_key):
+                should_update = False
+            else:
+                database.redis_cache.setex(cache_key, 300, '1')
+        except Exception:
+            pass
+
+    if should_update and database.user_sessions_conf is not None:
+        try:
+            sess = database.user_sessions_conf.find_one(
+                {'user_id': doc['user_id'], 'login_method': {'$in': ['mobile_app', 'app_token']}},
+                sort=[('last_active', -1)]
+            )
+            if sess:
+                database.user_sessions_conf.update_one(
+                    {'_id': sess['_id']},
+                    {'$set': {'last_active': now}}
+                )
+        except Exception:
+            pass
+
     if _REQ_LOADER_DEBUG:
         print(f"[DEBUG REQ_LOADER] User authenticated successfully: '{user_data.get('username')}'", flush=True)
     return User(user_data)

@@ -5063,7 +5063,8 @@
     .whisper-edit-row { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
     .whisper-edit-row textarea { flex: 1; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.85rem; font-family: inherit; resize: none; }
     .whisper-edit-row button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
-    .whisper-scroll-fab { display: none; position: absolute; bottom: 96px; right: 16px; z-index: 5; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 20px; padding: 0.35rem 0.8rem; font-size: 0.75rem; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    .whisper-scroll-fab { display: none; position: absolute; bottom: 75px; right: 18px; width: 38px; height: 38px; border-radius: 50%; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.35); align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: transform 0.2s; }
+    .whisper-scroll-fab:active { transform: scale(0.95); }
     /* Whisper image anti-save layers */
     .whisper-img-shield {
         position: relative; display: inline-block;
@@ -5171,7 +5172,7 @@
         <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
         <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
     </div>
-    <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)">New messages &darr;</button>
+    <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)" title="Jump to latest"><i class="fas fa-chevron-down"></i></button>
     <div class="whisper-reply-bar" id="whisper-reply-bar">
         <div id="whisper-reply-preview" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
         <button class="reply-close" onclick="cancelWhisperReply()">&times;</button>
@@ -5540,7 +5541,7 @@
             scrollWhisperToBottom(true);
         } else {
             var fab = document.getElementById('whisper-scroll-fab');
-            if (fab) fab.style.display = 'block';
+            if (fab) fab.style.display = 'flex';
         }
     };
 
@@ -5576,7 +5577,7 @@
             var fab = document.getElementById('whisper-scroll-fab');
             if (!fab) return;
             var diff = list.scrollHeight - list.scrollTop - list.clientHeight;
-            fab.style.display = diff > 200 ? 'block' : 'none';
+            fab.style.display = diff > 300 ? 'flex' : 'none';
         });
     })();
 

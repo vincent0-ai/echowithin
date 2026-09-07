@@ -5065,6 +5065,7 @@
     .whisper-edit-row button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
     .whisper-scroll-fab { display: none; position: absolute; bottom: 75px; right: 18px; width: 38px; height: 38px; border-radius: 50%; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.35); align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: transform 0.2s; }
     .whisper-scroll-fab:active { transform: scale(0.95); }
+    .whisper-unread-badge { position: absolute; top: -4px; right: -4px; background: #d32f2f; color: #fff; border-radius: 10px; padding: 1px 5px; font-size: 0.65rem; font-weight: 700; min-width: 16px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); line-height: 1.2; }
     /* Whisper image anti-save layers */
     .whisper-img-shield {
         position: relative; display: inline-block;
@@ -5172,7 +5173,7 @@
         <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
         <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
     </div>
-    <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)" title="Jump to latest"><i class="fas fa-chevron-down"></i></button>
+    <button id="whisper-scroll-fab" class="whisper-scroll-fab" onclick="scrollWhisperToBottom(true)" title="Jump to latest"><i class="fas fa-chevron-down"></i><span id="whisper-unread-badge" class="whisper-unread-badge" style="display:none;">0</span></button>
     <div class="whisper-reply-bar" id="whisper-reply-bar">
         <div id="whisper-reply-preview" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
         <button class="reply-close" onclick="cancelWhisperReply()">&times;</button>
@@ -5239,6 +5240,7 @@
     var whisperRenderedIds = new Set();
     var WHISPER_SEND_TIMEOUT = 8000;
     var whisperReplyState = { messageId: null, content: '', senderName: '', senderId: null };
+    var whisperUnreadCount = 0;
 
     const currentUserId = '{{ current_user.id }}';
 
@@ -5357,8 +5359,11 @@
         whisperRenderedIds.clear();
         Object.keys(whisperPending).forEach(function(t) { clearTimeout(whisperPending[t].timer); });
         whisperPending = {};
+        whisperUnreadCount = 0;
         var _fab = document.getElementById('whisper-scroll-fab');
         if (_fab) _fab.style.display = 'none';
+        var _badge = document.getElementById('whisper-unread-badge');
+        if (_badge) _badge.style.display = 'none';
         document.getElementById('whisper-warning-banner').classList.remove('active');
         document.getElementById('whisper-overlay').classList.add('active');
         document.body.classList.add('whisper-open');
@@ -5540,7 +5545,13 @@
         if (_nearBottom || msg.sender_id === currentUserId) {
             scrollWhisperToBottom(true);
         } else {
+            whisperUnreadCount++;
             var fab = document.getElementById('whisper-scroll-fab');
+            var badge = document.getElementById('whisper-unread-badge');
+            if (badge) {
+                badge.textContent = whisperUnreadCount > 99 ? '99+' : whisperUnreadCount;
+                badge.style.display = 'block';
+            }
             if (fab) fab.style.display = 'flex';
         }
     };
@@ -5551,6 +5562,9 @@
         if (!container) return;
         requestAnimationFrame(function() {
             container.scrollTop = container.scrollHeight;
+            whisperUnreadCount = 0;
+            var badge = document.getElementById('whisper-unread-badge');
+            if (badge) badge.style.display = 'none';
             var fab = document.getElementById('whisper-scroll-fab');
             if (fab) fab.style.display = 'none';
         });
@@ -5577,7 +5591,16 @@
             var fab = document.getElementById('whisper-scroll-fab');
             if (!fab) return;
             var diff = list.scrollHeight - list.scrollTop - list.clientHeight;
-            fab.style.display = diff > 300 ? 'flex' : 'none';
+            if (diff <= 80) {
+                whisperUnreadCount = 0;
+                var badge = document.getElementById('whisper-unread-badge');
+                if (badge) badge.style.display = 'none';
+                fab.style.display = 'none';
+            } else if (diff > 300 || whisperUnreadCount > 0) {
+                fab.style.display = 'flex';
+            } else {
+                fab.style.display = 'none';
+            }
         });
     })();
 
@@ -5880,6 +5903,9 @@
         }
         var fab = document.getElementById('whisper-scroll-fab');
         if (fab) fab.style.display = 'none';
+        whisperUnreadCount = 0;
+        var badge = document.getElementById('whisper-unread-badge');
+        if (badge) badge.style.display = 'none';
         Object.keys(whisperPending).forEach(function(t) {
             clearTimeout(whisperPending[t].timer);
             markWhisperFailed(t);

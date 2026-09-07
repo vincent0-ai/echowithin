@@ -5063,7 +5063,7 @@
     .whisper-edit-row { display: flex; gap: 0.3rem; margin-top: 0.3rem; }
     .whisper-edit-row textarea { flex: 1; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #fff; border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.85rem; font-family: inherit; resize: none; }
     .whisper-edit-row button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 8px; padding: 0.3rem 0.7rem; font-size: 0.75rem; cursor: pointer; }
-    .whisper-scroll-fab { display: none; position: absolute; bottom: calc(115px + env(safe-area-inset-bottom, 0px)); right: 18px; width: 38px; height: 38px; border-radius: 50%; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.35); align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: transform 0.2s; }
+    .whisper-scroll-fab { display: none; position: absolute; bottom: calc(115px + env(safe-area-inset-bottom, 0px)); right: 18px; width: 38px; height: 38px; border-radius: 50%; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.35); align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: transform 0.2s, bottom 0.15s ease-out; }
     .whisper-scroll-fab:active { transform: scale(0.95); }
     .whisper-unread-badge { position: absolute; top: -4px; right: -4px; background: #d32f2f; color: #fff; border-radius: 10px; padding: 1px 5px; font-size: 0.65rem; font-weight: 700; min-width: 16px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); line-height: 1.2; }
     /* Whisper image anti-save layers */
@@ -5552,8 +5552,27 @@
                 badge.textContent = whisperUnreadCount > 99 ? '99+' : whisperUnreadCount;
                 badge.style.display = 'block';
             }
-            if (fab) fab.style.display = 'flex';
+            if (fab) {
+                if (window.updateWhisperFabPosition) updateWhisperFabPosition();
+                fab.style.display = 'flex';
+            }
         }
+    };
+
+    // Dynamic FAB positioning: floats above input area, reply bar, and image preview as input grows
+    window.updateWhisperFabPosition = function() {
+        var fab = document.getElementById('whisper-scroll-fab');
+        if (!fab) return;
+        var inputArea = document.getElementById('whisper-input-area');
+        var replyBar = document.getElementById('whisper-reply-bar');
+        var imgPreview = document.getElementById('whisper-image-preview');
+
+        var inputH = (inputArea && inputArea.offsetHeight) ? inputArea.offsetHeight : 54;
+        var replyH = (replyBar && replyBar.classList.contains('active') && replyBar.offsetHeight) ? replyBar.offsetHeight : 0;
+        var imgH = (imgPreview && imgPreview.style.display !== 'none' && imgPreview.offsetHeight) ? imgPreview.offsetHeight : 0;
+
+        var totalBottom = Math.max(inputH, 54) + replyH + imgH + 16;
+        fab.style.bottom = totalBottom + 'px';
     };
 
     // Scroll helper shared with the DM keyboard/viewport handler (F1/F2).
@@ -5597,11 +5616,24 @@
                 if (badge) badge.style.display = 'none';
                 fab.style.display = 'none';
             } else if (diff > 300 || whisperUnreadCount > 0) {
+                updateWhisperFabPosition();
                 fab.style.display = 'flex';
             } else {
                 fab.style.display = 'none';
             }
         });
+
+        if (window.ResizeObserver) {
+            var inputArea = document.getElementById('whisper-input-area');
+            var replyBar = document.getElementById('whisper-reply-bar');
+            var imgPrev = document.getElementById('whisper-image-preview');
+            var ro = new ResizeObserver(function() {
+                updateWhisperFabPosition();
+            });
+            if (inputArea) ro.observe(inputArea);
+            if (replyBar) ro.observe(replyBar);
+            if (imgPrev) ro.observe(imgPrev);
+        }
     })();
 
     var _whisperReactPicker = null;
@@ -5697,6 +5729,7 @@
         if (!whisperState.sessionId) return;
         input.value = '';
         input.style.height = 'auto';
+        if (window.updateWhisperFabPosition) updateWhisperFabPosition();
         const tempId = 'wt-' + Date.now();
         const msgType = pendingImgUrl ? 'image' : 'text';
         const meta = window._whisperPendingImageMeta || {};
@@ -6242,6 +6275,7 @@
             preview.innerHTML = '<strong>' + whisperEscapeHtml(senderName) + '</strong>: ' + whisperEscapeHtml(whisperReplyState.content);
         }
         if (bar) bar.classList.add('active');
+        if (window.updateWhisperFabPosition) updateWhisperFabPosition();
         var inp = document.getElementById('whisper-input');
         if (inp) inp.focus();
         if (navigator.vibrate) navigator.vibrate(20);
@@ -6251,6 +6285,7 @@
         whisperReplyState = { messageId: null, content: '', senderName: '', senderId: null };
         var bar = document.getElementById('whisper-reply-bar');
         if (bar) bar.classList.remove('active');
+        if (window.updateWhisperFabPosition) updateWhisperFabPosition();
     };
 
     // --- Whisper Input Handling ---
@@ -6274,6 +6309,7 @@
         whisperInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+            if (window.updateWhisperFabPosition) updateWhisperFabPosition();
         });
     }
 

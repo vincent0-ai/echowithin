@@ -2584,14 +2584,65 @@ def _whisper_image_serve_url(msg_doc, user_id_str, partner_id):
     Returns '' when the bytes were destroyed (view-once) or undecryptable.
     """
     try:
+        u1, u2 = str(user_id_str or ''), str(partner_id or '')
+        # Defensive: if IDs are identical or missing, resolve from the session document
+        if (not u1 or not u2 or u1 == u2) and msg_doc.get('session_id'):
+            sess = whisper_sessions_conf.find_one({'_id': ObjectId(msg_doc['session_id'])})
+            if sess:
+                u1 = str(sess.get('initiator_id', ''))
+                u2 = str(sess.get('recipient_id', ''))
+
+        def _clean_val(val):
+            if not val or str(val).startswith('[Content unavailable'):
+                return ''
+            return str(val)
+
         raw_img = msg_doc.get('image_url', '')
-        plain_url = decrypt_dm(raw_img, user_id_str, partner_id) if raw_img and raw_img.startswith('gAAAAA') else raw_img
+        plain_url = ''
+        if raw_img:
+            if raw_img.startswith('gAAAAA') and u1 and u2:
+                try:
+                    plain_url = decrypt_dm(raw_img, u1, u2)
+                except Exception:
+                    plain_url = ''
+                if not plain_url or str(plain_url).startswith('[Content unavailable'):
+                    try:
+                        plain_url = decrypt_dm(raw_img, u2, u1)
+                    except Exception:
+                        plain_url = ''
+            else:
+                plain_url = raw_img
+        plain_url = _clean_val(plain_url)
+
         raw_pub = msg_doc.get('image_public_id', '')
-        plain_pub = decrypt_dm(raw_pub, user_id_str, partner_id) if raw_pub and raw_pub.startswith('gAAAAA') else raw_pub
+        plain_pub = ''
+        if raw_pub:
+            if raw_pub.startswith('gAAAAA') and u1 and u2:
+                try:
+                    plain_pub = decrypt_dm(raw_pub, u1, u2)
+                except Exception:
+                    plain_pub = ''
+                if not plain_pub or str(plain_pub).startswith('[Content unavailable'):
+                    try:
+                        plain_pub = decrypt_dm(raw_pub, u2, u1)
+                    except Exception:
+                        plain_pub = ''
+            else:
+                plain_pub = raw_pub
+        plain_pub = _clean_val(plain_pub)
+
+        # If public ID is not directly stored or decrypted, extract from URL
+        if not plain_pub and plain_url:
+            plain_pub = extract_cloudinary_public_id(plain_url) or ''
+        plain_pub = _clean_val(plain_pub)
+
         if msg_doc.get('media_encrypted') and plain_pub:
-            return build_media_serve_url(plain_pub, msg_doc.get('mime_type', 'application/octet-stream')) or plain_url
+            serve = build_media_serve_url(plain_pub, msg_doc.get('mime_type', 'application/octet-stream'))
+            if serve:
+                return serve
+            return plain_url or ''
         if plain_pub:
-            return re_sign_cloudinary_url(plain_pub, resource_type='image', delivery_type='authenticated', fallback_url=plain_url) or plain_url
+            return re_sign_cloudinary_url(plain_pub, resource_type='image', delivery_type='authenticated', fallback_url=(plain_url or None)) or plain_url or ''
         return plain_url or ''
     except Exception as e:
         app.logger.warning(f"Whisper image serve-URL error: {e}")

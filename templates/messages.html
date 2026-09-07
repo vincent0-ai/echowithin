@@ -5080,6 +5080,11 @@
         content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
         z-index: 1; background: transparent;
     }
+    .whisper-img-fallback {
+        display: flex; align-items: center; justify-content: center;
+        padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 6px;
+        color: rgba(255,255,255,0.65); font-size: 0.8rem;
+    }
     /* Reply preview bar above input */
     .whisper-reply-bar {
         display: none; padding: 0.4rem 0.8rem;
@@ -5257,18 +5262,29 @@
         shield.className = 'whisper-img-shield';
         var img = document.createElement('img');
         img.src = imageUrl;
+        img.alt = 'Photo';
+        img.loading = 'lazy';
         img.addEventListener('contextmenu', function(e) { e.preventDefault(); });
         img.addEventListener('dragstart', function(e) { e.preventDefault(); });
+        img.onerror = function() {
+            shield.classList.add('whisper-img-failed');
+            shield.innerHTML = '<div class="whisper-img-fallback"><i class="fas fa-image" style="margin-right:6px;opacity:0.7;"></i><span>Photo unavailable</span></div>';
+        };
         shield.appendChild(img);
-        shield.addEventListener('click', function() { openWhisperLightbox(imageUrl); });
+        shield.addEventListener('click', function() {
+            if (!shield.classList.contains('whisper-img-failed')) {
+                openWhisperLightbox(imageUrl);
+            }
+        });
         return shield;
     }
 
     function openWhisperLightbox(url) {
+        if (!url) return;
         var lb = document.getElementById('whisper-lightbox');
         if (!lb) return;
         var viewer = document.getElementById('whisper-lightbox-viewer');
-        viewer.style.backgroundImage = 'url(' + url + ')';
+        viewer.style.backgroundImage = 'url("' + url.replace(/"/g, '\\"') + '")';
         lb.classList.add('active');
         lb.onclick = function(e) {
             if (e.target === lb || e.target === viewer) lb.classList.remove('active');
@@ -5467,9 +5483,16 @@
             }
             var contentDiv = document.createElement('div');
             contentDiv.className = 'whisper-content';
-            if (msg.message_type === 'image' && msg.image_url) {
-                var shield = createWhisperProtectedImage(msg.image_url);
-                contentDiv.appendChild(shield);
+            if (msg.message_type === 'image') {
+                if (msg.image_url) {
+                    var shield = createWhisperProtectedImage(msg.image_url);
+                    contentDiv.appendChild(shield);
+                } else {
+                    var fallback = document.createElement('div');
+                    fallback.className = 'whisper-img-fallback';
+                    fallback.innerHTML = '<i class="fas fa-image" style="margin-right:6px;opacity:0.7;"></i><span>Photo unavailable</span>';
+                    contentDiv.appendChild(fallback);
+                }
                 if (msg.content && msg.content !== '[Photo]') {
                     const caption = document.createElement('div');
                     caption.style.cssText = 'font-size:0.82rem;margin-top:0.3rem;';

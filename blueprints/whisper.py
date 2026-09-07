@@ -730,7 +730,7 @@ def api_whisper_history(session_id):
             if msg_type == 'image' and 'image_url' in msg:
                 # DM parity (F5): re-serve fresh signed URLs on every fetch so
                 # authenticated Cloudinary URLs never go stale after reload.
-                serve = m._whisper_image_serve_url(msg, str(msg['sender_id']), partner_id)
+                serve = m._whisper_image_serve_url(msg, user_id_str, partner_id)
                 if serve:
                     entry['image_url'] = serve
             # Reply-to threading context

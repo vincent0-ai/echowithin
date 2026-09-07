@@ -374,6 +374,69 @@ class TestWhisperRESTFallbackEndpoints:
                 assert msgs.update_one.call_args[0][1]['$set']['view_once_destroyed'] is True
                 assert mock_emit.call_count == 2
 
+    def test_api_whisper_history_serves_partner_image(self, app, mock_user):
+        """Verify whisper image sent by partner resolves with valid URL on history load."""
+        import main as m
+        from main import User, encrypt_dm
+        from flask_login import login_user
+        from blueprints.whisper import api_whisper_history
+        me = str(mock_user['_id'])
+        partner = str(ObjectId())
+        sid = ObjectId()
+        mid = ObjectId()
+        session_doc = {
+            '_id': sid,
+            'initiator_id': ObjectId(partner),
+            'recipient_id': ObjectId(me),
+            'status': 'active'
+        }
+        enc_url = encrypt_dm('https://res.cloudinary.com/demo/image/upload/sample.jpg', partner, me)
+        msg_doc = {
+            '_id': mid,
+            'session_id': sid,
+            'sender_id': ObjectId(partner),
+            'content': '[Photo]',
+            'message_type': 'image',
+            'image_url': enc_url,
+            'timestamp': datetime.datetime.now(datetime.timezone.utc),
+            'is_system': False,
+            'is_read': False
+        }
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m.socketio, 'emit'):
+                sess.find_one.return_value = session_doc
+                mock_cursor = MagicMock()
+                mock_cursor.sort.return_value = mock_cursor
+                mock_cursor.limit.return_value = [msg_doc]
+                msgs.find.return_value = mock_cursor
+                res = api_whisper_history(str(sid))
+                assert res.status_code == 200
+                data = res.get_json()
+                assert len(data['messages']) == 1
+                loaded_msg = data['messages'][0]
+                assert loaded_msg['message_type'] == 'image'
+                assert 'sample.jpg' in loaded_msg['image_url']
+                assert '[Content unavailable' not in loaded_msg['image_url']
+
+    def test_whisper_image_serve_url_defensive(self, app):
+        """Verify _whisper_image_serve_url handles duplicate IDs and corrupted data safely."""
+        import main as m
+        from main import _whisper_image_serve_url
+        msg_doc = {
+            'image_url': 'gAAAAAB_invalid_ciphertext_dummy',
+            'image_public_id': 'gAAAAAB_invalid_ciphertext_dummy',
+            'media_encrypted': True,
+            'mime_type': 'image/jpeg'
+        }
+        # With duplicate IDs and invalid ciphertext, it must return '' not /media/[Content unavailable]
+        with app.test_request_context():
+            url = _whisper_image_serve_url(msg_doc, 'same_id', 'same_id')
+            assert url == ''
+            assert '[Content unavailable' not in url
+
 
 class TestWhisperScreenshotAlert:
     """Tests for whisper screenshot alerts and session debounce."""

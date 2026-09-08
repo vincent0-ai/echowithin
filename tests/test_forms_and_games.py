@@ -329,3 +329,135 @@ class TestPersonalSpaceFormAndGameDecryption:
             assert 'Friday Fun Trivia' in html
             assert enc_title not in html
 
+
+class TestFloppyBirdArcade:
+    """Tests for single-player Floppy Bird integration."""
+
+    def test_floppy_bird_guest_access(self, client):
+        """Unauthenticated visitors can access and play Floppy Bird."""
+        res = client.get('/games/floppy-bird')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert '<canvas id="c"' in html
+        assert 'floppy_bird.js' in html
+        assert 'touch-dash-btn' in html
+        assert 'touch-ghost-btn' in html
+
+    def test_floppy_bird_authenticated_access(self, auth_client):
+        """Logged-in users can access Floppy Bird."""
+        res = auth_client.get('/games/floppy-bird')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Floppy Bird: Super Powers' in html
+        assert '<canvas id="c"' in html
+        assert 'mute-toggle-btn' in html
+
+    def test_games_list_contains_floppy_bird_entry(self, auth_client, app, mock_user):
+        """The /games hub page includes the Floppy Bird arcade card."""
+        import main as m
+        with patch.object(m.game_sessions_conf, 'find') as mock_find:
+            mock_find.return_value.sort.return_value.limit.return_value = []
+            res = auth_client.get('/games')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            assert '/games/floppy-bird' in html
+            assert 'Floppy Bird: Super Powers' in html
+
+
+class TestSlimeVolleyball:
+    """Tests for Slime Volleyball Solo and 1v1 multiplayer integration."""
+
+    def test_slime_volleyball_guest_access(self, client):
+        """Guests can access Slime Volleyball."""
+        res = client.get('/games/slime-volleyball')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Slime Volleyball' in html
+        assert 'slime-canvas' in html
+        assert 'slime_volleyball.js' in html
+        assert 'touch-jump' in html
+
+    def test_slime_volleyball_authenticated_access(self, auth_client):
+        """Logged-in users can access Slime Volleyball."""
+        res = auth_client.get('/games/slime-volleyball')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Slime Volleyball' in html
+        assert 'tab-solo' in html
+        assert 'tab-online' in html
+
+    def test_games_list_contains_slime_volleyball_card(self, auth_client, app, mock_user):
+        """Games list features Slime Volleyball alongside Floppy Bird."""
+        import main as m
+        with patch.object(m.game_sessions_conf, 'find') as mock_find:
+            mock_find.return_value.sort.return_value.limit.return_value = []
+            res = auth_client.get('/games')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            assert '/games/slime-volleyball' in html
+            assert 'Slime Volleyball' in html
+
+    def test_slime_socket_room_lifecycle(self, app):
+        """Test SocketIO handlers for join, sync, input, restart, and leave."""
+        import main as m
+
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                fn = call.args[0]
+                handlers[getattr(fn, '__name__', '')] = fn
+
+        join_handler = handlers.get('handle_join_slime_room')
+        leave_handler = handlers.get('handle_leave_slime_room')
+        sync_handler = handlers.get('handle_slime_host_sync')
+        input_handler = handlers.get('handle_slime_player_input')
+        restart_handler = handlers.get('handle_slime_restart')
+
+        assert join_handler is not None
+        assert leave_handler is not None
+        assert sync_handler is not None
+        assert input_handler is not None
+        assert restart_handler is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'leave_room') as mock_leave, \
+                 patch.object(m, 'emit') as mock_emit:
+                mock_req.sid = 'sid_host_123'
+                room_id = 'test_room_direct'
+
+                # Host joins room
+                join_handler({'room_id': room_id})
+                mock_join.assert_called_with(room_id)
+                assert room_id in m.active_slime_rooms
+                assert m.active_slime_rooms[room_id]['host_sid'] == 'sid_host_123'
+
+                # Host sync relay
+                sync_payload = {
+                    'room_id': room_id,
+                    'ball': {'x': 0, 'y': 10, 'vx': 0, 'vy': 0},
+                    'scores': [1, 0]
+                }
+                sync_handler(sync_payload)
+                mock_emit.assert_called_with('slime_host_sync', sync_payload, room=room_id, include_self=False)
+
+                # Guest input relay
+                input_payload = {
+                    'room_id': room_id,
+                    'p2': {'x': 10, 'y': 1.5, 'vx': 0, 'vy': 0}
+                }
+                input_handler(input_payload)
+                mock_emit.assert_called_with('slime_player_input', input_payload, room=room_id, include_self=False)
+
+                # Restart event
+                restart_handler({'room_id': room_id})
+                mock_emit.assert_called_with('slime_restart', {}, room=room_id)
+
+                # Leave event
+                leave_handler({'room_id': room_id})
+                assert room_id not in m.active_slime_rooms
+
+
+
+

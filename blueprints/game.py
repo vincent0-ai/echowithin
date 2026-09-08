@@ -133,6 +133,14 @@ def games_list():
     lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
     return render_template('games_list.html', lobbies=lobbies, active_page='games')
 
+@bp.route('/games/floppy-bird')
+def floppy_bird():
+    return render_template('floppy_bird.html', active_page='games')
+
+@bp.route('/games/slime-volleyball')
+def slime_volleyball():
+    return render_template('slime_volleyball.html', active_page='games')
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)

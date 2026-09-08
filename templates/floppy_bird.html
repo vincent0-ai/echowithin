@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}<title>Floppy Bird: Super Powers — EchoWithin</title>{% endblock %}
+{% block content %}
+<div class="content-wrapper" style="max-width: 820px; margin: 0 auto; padding-bottom: 2rem;">
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Floppy Bird: Super Powers</h2>
+        <span class="ew-badge">Arcade Solo</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        14-level campaign, Endless, and Daily Flight modes.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Mute Sound
+      </button>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        All Games
+      </a>
+    </div>
+  </div>
+
+  <div class="ew-card" style="padding: 1.25rem; display: flex; flex-direction: column; align-items: center;">
+    <div style="width: 100%; max-width: 480px; position: relative; display: flex; justify-content: center;">
+      <canvas id="c" width="480" height="640" style="display: block; border-radius: 12px; box-shadow: 0 12px 36px rgba(62, 34, 23, 0.16); width: 100%; max-width: 480px; height: auto; aspect-ratio: 480 / 640; touch-action: none; background: #0b1020;"></canvas>
+    </div>
+
+    <!-- On-screen touch buttons for mobile / one-handed touch play -->
+    <div style="display: flex; gap: 0.75rem; justify-content: center; width: 100%; max-width: 480px; margin-top: 0.85rem;">
+      <button type="button" id="touch-dash-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.6rem; font-weight: 600; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation;">
+        Flamingo Dash (J)
+      </button>
+      <button type="button" id="touch-ghost-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.6rem; font-weight: 600; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation;">
+        Ghost Phase (K)
+      </button>
+    </div>
+
+    <!-- Flight Controls Info -->
+    <div style="width: 100%; max-width: 580px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.9rem 1.1rem;">
+      <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color); margin-bottom: 0.5rem;">
+        Flight Controls
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+        <div><strong style="color: var(--text-dark-color);">Space / ↑ / Tap:</strong> Flop</div>
+        <div><strong style="color: var(--text-dark-color);">J / 2-finger:</strong> Flamingo Dash</div>
+        <div><strong style="color: var(--text-dark-color);">K / 3-finger:</strong> Ghost Phase</div>
+        <div><strong style="color: var(--text-dark-color);">R:</strong> Retry run</div>
+        <div><strong style="color: var(--text-dark-color);">Esc:</strong> Back / Menu</div>
+        <div><strong style="color: var(--text-dark-color);">↓ / S:</strong> Steer down (dash)</div>
+      </div>
+      <div style="margin-top: 0.6rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+        ★ Clear goal &bull; ★★ 80% coins &bull; ★★★ No powers used. Stars unlock 6 custom bird skins. Progress is saved locally in your browser.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='floppy_bird.js') }}" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    const muteBtn = document.getElementById('mute-toggle-btn');
+    if (muteBtn) {
+      muteBtn.addEventListener('click', () => {
+        if (window.__floppy) {
+          const isMuted = window.__floppy.toggleMute();
+          muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
+        }
+      });
+    }
+
+    // Touch controls for mobile / tablet
+    const dashBtn = document.getElementById('touch-dash-btn');
+    if (dashBtn) {
+      const triggerDash = (e) => {
+        e.preventDefault();
+        if (window.__floppy) window.__floppy.useDash();
+      };
+      dashBtn.addEventListener('pointerdown', triggerDash);
+    }
+
+    const ghostBtn = document.getElementById('touch-ghost-btn');
+    if (ghostBtn) {
+      const triggerGhost = (e) => {
+        e.preventDefault();
+        if (window.__floppy) window.__floppy.useGhost();
+      };
+      ghostBtn.addEventListener('pointerdown', triggerGhost);
+    }
+  });
+</script>
+{% endblock %}

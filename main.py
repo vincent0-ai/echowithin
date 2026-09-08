@@ -1810,6 +1810,101 @@ def handle_leave_game(data=None, *args, **kwargs):
         else:
             active_game_players.pop(lobby_id, None)
 
+# --- Slime Volleyball 1v1 Real-Time Handlers ---
+active_slime_rooms = {}
+
+@socketio.on('join_slime_room')
+def handle_join_slime_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+
+    room_info = active_slime_rooms.get(room_id)
+    if not room_info:
+        # First player is Host
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None
+        }
+        active_slime_rooms[room_id] = room_info
+        emit('slime_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': user_name,
+            'guest_name': None
+        }, room=sid)
+    else:
+        # Second player is Guest
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_slime_rooms[room_id] = room_info
+        # Notify Guest
+        emit('slime_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name
+        }, room=sid)
+        # Notify Host that opponent joined
+        emit('slime_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name
+        }, room=room_info['host_sid'])
+
+@socketio.on('leave_slime_room')
+def handle_leave_slime_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_slime_rooms.get(room_id)
+    if room_info:
+        if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
+            emit('slime_player_left', {'room_id': room_id}, room=room_id)
+            active_slime_rooms.pop(room_id, None)
+
+@socketio.on('slime_host_sync')
+def handle_slime_host_sync(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('slime_host_sync', data, room=room_id, include_self=False)
+
+@socketio.on('slime_player_input')
+def handle_slime_player_input(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('slime_player_input', data, room=room_id, include_self=False)
+
+@socketio.on('slime_restart')
+def handle_slime_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    if not room_id:
+        return
+    emit('slime_restart', {}, room=room_id)
+
 
 # --- Direct Messaging (DM) Functionality ---
 
@@ -1882,6 +1977,12 @@ def handle_dm_disconnect(*args, **kwargs):
                 emit('game_presence_update', {'players': list(players.values()), 'count': len(players)}, room=lobby_id)
             else:
                 active_game_players.pop(lobby_id, None)
+
+    # Cleanup Slime Volleyball rooms on disconnect
+    for room_id, rinfo in list(active_slime_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('slime_player_left', {'room_id': room_id}, room=room_id)
+            active_slime_rooms.pop(room_id, None)
 
 
 @socketio.on('send_dm')

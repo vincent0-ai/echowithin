@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}<title>Slime Volleyball: 1v1 & Solo — EchoWithin</title>{% endblock %}
+{% block content %}
+<div class="content-wrapper" style="max-width: 860px; margin: 0 auto; padding-bottom: 2rem;">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--text-dark-color);">Slime Volleyball</h2>
+        <span class="ew-badge">1v1 & Solo</span>
+      </div>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Bouncy 2D physics duel. Play offline vs AI, local 2-player, or 1v1 live over WebSockets.
+      </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Mute Sound
+      </button>
+      <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
+        All Games
+      </a>
+    </div>
+  </div>
+
+  <!-- Mode Selector Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <button type="button" id="tab-solo" class="ew-btn ew-btn--sm mode-tab" style="cursor: pointer;">
+      Solo (vs AI)
+    </button>
+    <button type="button" id="tab-local" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Local 2-Player
+    </button>
+    <button type="button" id="tab-online" class="ew-btn--outline ew-btn--sm mode-tab" style="cursor: pointer;">
+      Online 1v1 Duel
+    </button>
+  </div>
+
+  <!-- Online Room Matchmaking Panel (shown when Online tab active) -->
+  <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+      <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+        <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color);">Room:</span>
+        <input type="text" id="room-code-input" placeholder="e.g. game123" style="width: 140px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+        <button type="button" id="join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
+        <button type="button" id="create-room-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create New Room</button>
+      </div>
+      <div id="online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
+        Not connected. Create or join a room.
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Arena Card -->
+  <div class="ew-card" style="padding: 1.25rem; display: flex; flex-direction: column; align-items: center; position: relative;">
+    <div style="width: 100%; max-width: 800px; position: relative; display: flex; justify-content: center;">
+      <canvas id="slime-canvas" width="800" height="500" style="display: block; border-radius: 12px; box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12); width: 100%; max-width: 800px; height: auto; aspect-ratio: 800 / 500; touch-action: none; background: #f7f4ed;"></canvas>
+
+      <!-- Game Over Banner -->
+      <div id="game-over-banner" style="display: none; position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10;">
+        <h3 id="winner-text" style="margin: 0 0 0.8rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
+        <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Rematch</button>
+      </div>
+    </div>
+
+    <!-- On-Screen Mobile Touch Controls -->
+    <div style="display: flex; gap: 0.75rem; justify-content: center; width: 100%; max-width: 500px; margin-top: 1rem;">
+      <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+        ◀ Left
+      </button>
+      <button type="button" id="touch-jump" class="ew-btn ew-btn--sm" style="flex: 1.2; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+        Jump ▲
+      </button>
+      <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+        Right ▶
+      </button>
+    </div>
+
+    <!-- Controls Guide -->
+    <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1.1rem;">
+      <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color); margin-bottom: 0.4rem;">
+        How to Play
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
+        <div><strong style="color: var(--text-dark-color);">Player 1 (Left / Host):</strong> A / D to move, W or Space to Jump</div>
+        <div><strong style="color: var(--text-dark-color);">Player 2 (Right / Local):</strong> ← / → to move, ↑ to Jump</div>
+        <div><strong style="color: var(--text-dark-color);">Mobile Touch:</strong> Use on-screen touch buttons</div>
+        <div><strong style="color: var(--text-dark-color);">Rules:</strong> First to 5 points wins. Ball landing on your floor gives 1 point to opponent.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='slime_volleyball.js') }}" nonce="{{ csp_nonce }}"></script>
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    // Audio mute toggle
+    const muteBtn = document.getElementById('mute-toggle-btn');
+    if (muteBtn && window.__slime) {
+      muteBtn.addEventListener('click', () => {
+        const isMuted = window.__slime.toggleMute();
+        muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
+      });
+    }
+
+    // Mode tabs
+    const tabSolo = document.getElementById('tab-solo');
+    const tabLocal = document.getElementById('tab-local');
+    const tabOnline = document.getElementById('tab-online');
+    const onlinePanel = document.getElementById('online-panel');
+
+    function setActiveTab(activeBtn) {
+      [tabSolo, tabLocal, tabOnline].forEach(btn => {
+        btn.className = (btn === activeBtn) ? 'ew-btn ew-btn--sm mode-tab' : 'ew-btn--outline ew-btn--sm mode-tab';
+      });
+    }
+
+    tabSolo.addEventListener('click', () => {
+      setActiveTab(tabSolo);
+      onlinePanel.style.display = 'none';
+      if (window.__slime) window.__slime.setMode('solo');
+    });
+
+    tabLocal.addEventListener('click', () => {
+      setActiveTab(tabLocal);
+      onlinePanel.style.display = 'none';
+      if (window.__slime) window.__slime.setMode('local');
+    });
+
+    tabOnline.addEventListener('click', () => {
+      setActiveTab(tabOnline);
+      onlinePanel.style.display = 'block';
+    });
+
+    // Online room management
+    const createRoomBtn = document.getElementById('create-room-btn');
+    const joinRoomBtn = document.getElementById('join-room-btn');
+    const roomInput = document.getElementById('room-code-input');
+
+    createRoomBtn.addEventListener('click', () => {
+      const code = Math.random().toString(36).substring(2, 8);
+      roomInput.value = code;
+      if (window.__slime) window.__slime.setMode('online', code);
+    });
+
+    joinRoomBtn.addEventListener('click', () => {
+      const code = (roomInput.value || '').trim();
+      if (!code) {
+        alert('Please enter a room code.');
+        return;
+      }
+      if (window.__slime) window.__slime.setMode('online', code);
+    });
+
+    // Check if room is present in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    if (roomParam) {
+      setActiveTab(tabOnline);
+      onlinePanel.style.display = 'block';
+      roomInput.value = roomParam;
+      if (window.__slime) window.__slime.setMode('online', roomParam);
+    }
+  });
+</script>
+{% endblock %}

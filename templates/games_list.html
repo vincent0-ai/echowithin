@@ -10,6 +10,47 @@
     <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">New Lobby</a>
   </div>
   <div class="ew-info-banner">Share a lobby link with friends to play together.</div>
+
+  <!-- Arcade & 2D Games Section -->
+  <div style="margin-bottom: 1.5rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+      <!-- Floppy Bird -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Floppy Bird: Super Powers</h3>
+            <span class="ew-badge">Solo Arcade</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            14 campaign levels, daily seeded flight, endless skies, and unlockable skins.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.floppy_bird') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play Solo
+          </a>
+        </div>
+      </div>
+
+      <!-- Slime Volleyball -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Slime Volleyball</h3>
+            <span class="ew-badge">1v1 & Solo</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Bouncy 2D physics duel. Play solo vs neural AI, local 2-player, or 1v1 online over WebSockets.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.slime_volleyball') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play 1v1 / Solo
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
   {% if lobbies %}
     <div class="ew-card-grid">
       {% for lobby in lobbies %}

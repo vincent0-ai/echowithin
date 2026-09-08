@@ -557,12 +557,16 @@ def personal_space():
 
     # Forms for personal_space tab
     try:
-        user_forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
+        from blueprints.forms import _decrypt_form_definition
+        raw_forms = list(m.forms_conf.find({'owner_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
+        user_forms = [_decrypt_form_definition(f) for f in raw_forms]
     except Exception:
         user_forms = []
     # Games for personal_space tab (2+ players, anytime)
     try:
-        user_games = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(20))
+        from blueprints.game import _decrypt_lobby
+        raw_games = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(20))
+        user_games = [_decrypt_lobby(g) for g in raw_games]
     except Exception:
         user_games = []
     render_kwargs = {

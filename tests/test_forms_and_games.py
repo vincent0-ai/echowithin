@@ -210,3 +210,122 @@ class TestGameCreateAndLobbyUI:
             assert 'window.toggleQRCode = function' in html
             assert 'id="qr-canvas"' in html
             assert 'id="qr-box"' in html
+
+
+class TestPersonalSpaceFormAndGameDecryption:
+    """Verify that forms and game lobbies are properly decrypted before displaying on personal space and listings."""
+
+    def test_decrypt_lobby_helper_roundtrip_and_passthrough(self, app):
+        from blueprints.game import _decrypt_lobby
+        import main as m
+
+        lobby_id = 'test-lobby-roundtrip-123'
+        enc_title = m.encrypt_game_data('Secret Trivia Night', lobby_id)
+        enc_label = m.encrypt_game_data('What is the secret answer?', lobby_id)
+        enc_correct = m.encrypt_game_data('Secret42', lobby_id)
+        enc_prompt = m.encrypt_game_data('Caption this secret scenario', lobby_id)
+        enc_sentence = m.encrypt_game_data('Once upon a secret time.', lobby_id)
+
+        encrypted_lobby = {
+            'lobby_id': lobby_id,
+            'title': enc_title,
+            'game_type': 'trivia',
+            'question': {'label': enc_label, 'options': ['A', 'Secret42'], 'correct_option': enc_correct},
+            'questions': [{'label': enc_label, 'options': ['A', 'Secret42'], 'correct_option': enc_correct}],
+            'prompt': enc_prompt,
+            'sentences': [{'text': enc_sentence, 'username': 'author'}],
+        }
+
+        decrypted = _decrypt_lobby(encrypted_lobby)
+        assert decrypted['title'] == 'Secret Trivia Night'
+        assert decrypted['question']['label'] == 'What is the secret answer?'
+        assert decrypted['question']['correct_option'] == 'Secret42'
+        assert decrypted['questions'][0]['label'] == 'What is the secret answer?'
+        assert decrypted['questions'][0]['correct_option'] == 'Secret42'
+        assert decrypted['prompt'] == 'Caption this secret scenario'
+        assert decrypted['sentences'][0]['text'] == 'Once upon a secret time.'
+
+        # Passthrough test for legacy plaintext
+        plaintext_lobby = {
+            'lobby_id': lobby_id,
+            'title': 'Plain Trivia Night',
+            'game_type': 'trivia',
+            'question': {'label': 'Plain Question', 'options': ['A', 'B'], 'correct_option': 'A'},
+            'sentences': [{'text': 'Plain sentence', 'username': 'author'}],
+        }
+        dec_plain = _decrypt_lobby(plaintext_lobby)
+        assert dec_plain['title'] == 'Plain Trivia Night'
+        assert dec_plain['question']['label'] == 'Plain Question'
+        assert dec_plain['question']['correct_option'] == 'A'
+        assert dec_plain['sentences'][0]['text'] == 'Plain sentence'
+
+    def test_personal_space_decrypts_encrypted_form_definition(self, auth_client, app, mock_user):
+        import main as m
+        from blueprints.forms import _encrypt_form_definition
+
+        form_oid = ObjectId()
+        form_id_str = str(form_oid)
+        raw_title = "Customer Feedback Questionnaire"
+        raw_desc = "Please share your honest thoughts on our platform."
+        raw_qs = [
+            {'id': 'q1', 'label': 'How satisfied are you?', 'type': 'rating', 'required': True, 'options': []}
+        ]
+
+        enc_title, enc_desc, enc_qs = _encrypt_form_definition(form_id_str, raw_title, raw_desc, raw_qs)
+        assert enc_title.startswith('gAAAAA')
+        assert enc_desc.startswith('gAAAAA')
+
+        form_doc = {
+            '_id': form_oid,
+            'owner_id': mock_user['_id'],
+            'share_id': 'form-share-test123',
+            'title': enc_title,
+            'description': enc_desc,
+            'questions': enc_qs,
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'deactivated': False,
+            'response_count': 3
+        }
+
+        # Mock database queries needed for /personal_space
+        with patch.object(m.forms_conf, 'find') as mock_forms_find:
+            mock_forms_find.return_value.sort.return_value.limit.return_value = [form_doc]
+
+            res = auth_client.get('/personal_space')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+
+            # Plaintext title and description must be present
+            assert raw_title in html
+            assert raw_desc in html
+            # Encrypted ciphertext tokens must NOT be displayed
+            assert enc_title not in html
+            assert enc_desc not in html
+
+    def test_games_list_decrypts_encrypted_lobbies(self, auth_client, app, mock_user):
+        import main as m
+
+        lobby_id = 'test-games-list-decrypt'
+        enc_title = m.encrypt_game_data('Friday Fun Trivia', lobby_id)
+        lobby_doc = {
+            '_id': ObjectId(),
+            'lobby_id': lobby_id,
+            'title': enc_title,
+            'game_type': 'trivia',
+            'host_id': mock_user['_id'],
+            'host_username': mock_user['username'],
+            'created_at': datetime.datetime.now(datetime.timezone.utc),
+            'deactivated': False,
+            'revealed': False,
+            'question': {'label': 'Trivia Q1', 'options': ['A', 'B'], 'correct_option': 'A'}
+        }
+
+        with patch.object(m.game_sessions_conf, 'find') as mock_games_find:
+            mock_games_find.return_value.sort.return_value.limit.return_value = [lobby_doc]
+
+            res = auth_client.get('/games')
+            assert res.status_code == 200
+            html = res.get_data(as_text=True)
+            assert 'Friday Fun Trivia' in html
+            assert enc_title not in html
+

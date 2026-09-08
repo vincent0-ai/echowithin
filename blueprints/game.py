@@ -15,30 +15,67 @@ MAX_SENTENCE_LEN = 280
 MAX_CAPTION_LEN = 200
 ALLOWED_GAME_TYPES = ('poll', 'trivia', 'wyr', 'ttal', 'story', 'caption')
 
-def _get_lobby(lobby_id):
+def _decrypt_lobby(lobby):
+    """Return a copy of a game lobby doc with any at-rest encrypted fields decrypted for display.
+
+    Legacy plaintext rows pass through (decrypt falls back when not a Fernet
+    token). Never mutates the stored doc — callers must not write this back.
+    """
+    if not lobby or not isinstance(lobby, dict):
+        return lobby
     import main as m
-    lobby = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
-    if lobby and lobby.get('game_type') in ('poll', 'trivia') and 'questions' not in lobby:
+    lobby = dict(lobby)
+    lobby_id = str(lobby.get('lobby_id', ''))
+    if lobby.get('game_type') in ('poll', 'trivia') and 'questions' not in lobby:
         # Backward compat: wrap single question into questions array
         q = lobby.get('question', {})
         if q and q.get('label'):
             lobby['questions'] = [q]
-    if lobby:
-        # Decrypt at-rest-only fields (correct answers, story text) for in-memory use.
-        # Questions/options stay plaintext by design (shown to players). Never written back.
-        try:
-            q0 = lobby.get('question') or {}
+    try:
+        if lobby.get('title'):
+            lobby['title'] = m.decrypt_game_data(lobby['title'], lobby_id)
+        q0 = lobby.get('question')
+        if isinstance(q0, dict):
+            q0 = dict(q0)
+            if q0.get('label'):
+                q0['label'] = m.decrypt_game_data(q0['label'], lobby_id)
             if q0.get('correct_option'):
                 q0['correct_option'] = m.decrypt_game_data(q0['correct_option'], lobby_id)
-            for q in (lobby.get('questions') or []):
-                if isinstance(q, dict) and q.get('correct_option'):
+            lobby['question'] = q0
+        dec_qs = []
+        for q in (lobby.get('questions') or []):
+            if isinstance(q, dict):
+                q = dict(q)
+                if q.get('label'):
+                    q['label'] = m.decrypt_game_data(q['label'], lobby_id)
+                if q.get('correct_option'):
                     q['correct_option'] = m.decrypt_game_data(q['correct_option'], lobby_id)
-            for s in (lobby.get('sentences') or []):
-                if isinstance(s, dict) and s.get('text'):
+                dec_qs.append(q)
+            else:
+                dec_qs.append(q)
+        if dec_qs:
+            lobby['questions'] = dec_qs
+        if lobby.get('prompt'):
+            lobby['prompt'] = m.decrypt_game_data(lobby['prompt'], lobby_id)
+        dec_sentences = []
+        for s in (lobby.get('sentences') or []):
+            if isinstance(s, dict):
+                s = dict(s)
+                if s.get('text'):
                     s['text'] = m.decrypt_game_data(s['text'], lobby_id)
-        except Exception:
-            pass
+                dec_sentences.append(s)
+            else:
+                dec_sentences.append(s)
+        if dec_sentences:
+            lobby['sentences'] = dec_sentences
+    except Exception:
+        pass
     return lobby
+
+def _get_lobby(lobby_id):
+    import main as m
+    lobby = m.game_sessions_conf.find_one({'lobby_id': lobby_id})
+    return _decrypt_lobby(lobby)
 
 def _is_lobby_active(lobby):
     if not lobby:
@@ -92,7 +129,8 @@ def _decrypt_submission(sub, lobby_id):
 @login_required
 def games_list():
     import main as m
-    lobbies = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
+    raw_lobbies = list(m.game_sessions_conf.find({'host_id': ObjectId(current_user.id)}).sort('created_at', -1).limit(50))
+    lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
     return render_template('games_list.html', lobbies=lobbies, active_page='games')
 
 @bp.route('/games/create', methods=['GET', 'POST'])
@@ -943,10 +981,11 @@ def api_game_stats(lobby_id):
 def api_my_game_lobbies():
     """Retrieve active game lobbies hosted by current user for sharing / DM invites."""
     import main as m
-    lobbies = list(m.game_sessions_conf.find({
+    raw_lobbies = list(m.game_sessions_conf.find({
         'host_id': ObjectId(current_user.id),
         'deactivated': {'$ne': True}
     }).sort('created_at', -1).limit(25))
+    lobbies = [_decrypt_lobby(l) for l in raw_lobbies]
 
     active = []
     for l in lobbies:

@@ -172,6 +172,51 @@ QUESTION_BANK = {
         "What's a question you wish people asked you more often?",
         "What's a tradition you'd like to start?",
         "If you could swap lives with someone for a week, who would it be?",
+        "What is something you believed about the world as a teenager that turned out to be completely untrue?",
+        "If you had an extra hour every single day with no obligations, how would you spend it?",
+        "What is a compliment you gave to someone else that you felt genuinely good about?",
+        "If you could instantly download one encyclopedic topic into your mind, what would you choose?",
+        "What's a small sensory detail you find immensely comforting?",
+        "What is something you're secretly proud of that rarely comes up in conversation?",
+        "If your mood right now had a weather forecast, what would today's conditions be?",
+        "What's an opinion you used to hold strongly that you completely abandoned?",
+        "If you had to pick a personal theme song to play when you walk into a room, what would it be?",
+        "What is the most memorable rabbit hole you've fallen down recently?",
+        "What's an everyday invention that you think doesn't get enough appreciation?",
+        "If you were granted the ability to ask the universe one question and get an undeniable answer, what would you ask?",
+        "What's a place you visited that felt almost surreal or magical?",
+        "What's something that always brings you back down to earth when you're overwhelmed?",
+        "If you could design a museum exhibit about your life so far, what would be the centerpiece?",
+        "What is a quirky routine or preference that you will defend until the end of time?",
+        "What's something you bought recently that brought you way more joy than expected?",
+        "If you had to describe your personal philosophy in just three words, what would they be?",
+        "What's the kindest reaction someone has ever had to a mistake you made?",
+        "If you could step into the world of any book, film, or game for a single afternoon, where are you going?",
+        "What is a sound that instantly relaxes you?",
+        "What's an unspoken social rule that you wish everyone followed?",
+        "If you could witness the construction of any ancient wonder, which would you pick?",
+        "What's something you used to find boring that you now genuinely appreciate?",
+        "If you were given a blank canvas and one hour, what would you create?",
+        "What's a piece of wisdom you heard recently that made you stop and think?",
+        "What is your go-to comfort meal when your energy is completely depleted?",
+        "If you could give everyone in the world one common trait, what would it be?",
+        "What's a small victory you celebrated silently this week?",
+        "If animals could talk, which species would you want to interview first?",
+        "What's something you're looking forward to this season?",
+        "If you could curate a 3-track playlist to introduce who you are, what songs are on it?",
+        "What's a boundary you set that made your life significantly better?",
+        "What is something that felt like a disaster at the time, but you now laugh about?",
+        "If you could preserve one fleeting moment from this past month in amber, which would it be?",
+        "What's a quality you admire in people who are completely different from you?",
+        "If your subconscious wrote you a letter right now, what do you think it would say?",
+        "What's an aesthetic or vibe that feels most like 'you'?",
+        "If you could live through any decade of the 20th century for just a weekend, which would it be?",
+        "What's something simple that made you feel deeply human recently?",
+        "What's a phrase or quote that you repeat to yourself when things get tough?",
+        "If you had to give a TED talk with zero preparation, what niche topic are you choosing?",
+        "What's the most scenic drive or walk you've ever taken?",
+        "What is something you do purely for the joy of it, with no desire to monetize or optimize it?",
+        "If you could visit Earth 500 years in the future for 10 minutes, what's the first thing you'd check?",
     ],
     'partner': [
         "What's your favourite memory of us together?",
@@ -199,6 +244,35 @@ QUESTION_BANK = {
         "What's a goal we should work toward together this year?",
         "How do you want us to celebrate our next milestone?",
         "What's the silliest thing we've ever done together?",
+        "What is a tiny, quirky habit of mine that you find secretly endearing?",
+        "If we could hit pause on the entire world for 48 hours just for us, how would we spend it?",
+        "What is something about how we communicate that you are especially proud of?",
+        "If our love story had a title, what would it be?",
+        "What's a dream or aspiration of yours that we haven't talked about much yet?",
+        "What's your favorite photo of us, and what memory does it bring back?",
+        "In what subtle ways do you feel we balance each other out best?",
+        "If we could cook an elaborate dinner together tonight with no rush, what are we making?",
+        "What's a small romantic gesture that always makes your heart flutter?",
+        "What is one thing you hope never changes between us as the years pass?",
+        "What's something you were nervous to tell me at first, but are glad you did?",
+        "If we had a secret hideaway cabin anywhere in the world, what would it look like?",
+        "What is a lesson about love or teamwork that our relationship has taught you?",
+        "What's a song that immediately makes you think of holding hands with me?",
+        "How do you feel most comforted when you're having an exhausting day?",
+        "What is a shared inside joke of ours that still makes you grin?",
+        "If we could relive our very first date with what we know now, what would we do?",
+        "What's a tradition you want just the two of us to have every year?",
+        "What is something I did recently that reminded you of why you chose me?",
+        "What's an adventure or bucket-list experience you only want to do with me?",
+        "What's your favourite way for us to wind down together before sleep?",
+        "What is something you feel completely safe discussing with me that you can't with anyone else?",
+        "If we designed our dream home, what would be the one room we'd spend the most time in?",
+        "What's a compliment from me that you treasure the most?",
+        "What is a milestone from our journey together that felt like a turning point?",
+        "How has being with me changed the way you see yourself?",
+        "What's something exciting we have coming up that you can't wait for?",
+        "What's a movie or show you want us to cuddle up and binge-watch this weekend?",
+        "What does growing old together look like in your sweetest daydreams?",
     ],
     'friend': [
         "What's the funniest thing that's happened to you recently?",
@@ -226,6 +300,31 @@ QUESTION_BANK = {
         "What's a trip or experience on your bucket list?",
         "What's the most embarrassing thing that's happened to you in public?",
         "If you could only listen to one artist for the rest of your life, who?",
+        "What is the most chaotic or hilarious situation we've ever navigated together?",
+        "If we were a duo on an obstacle course or escape room, what would be our roles?",
+        "What's a memory of us that you're pretty sure only you remember?",
+        "If you had to describe our friendship using two fictional characters, who are we?",
+        "What is an unwritten rule between us that we've never had to speak aloud?",
+        "What song or album defines a specific era of our friendship?",
+        "If we woke up with 10 million dollars tomorrow, what is the first ridiculous thing we do?",
+        "What is something about me that you can always predict, no matter what?",
+        "What's a debate we could passionately argue about for hours without ever agreeing?",
+        "When was a time you were especially grateful to have me in your corner?",
+        "If we opened a cafe or restaurant together, what would our signature item be called?",
+        "What's a niche inside joke that would sound completely unhinged to an outsider?",
+        "What is a habit of mine you've noticed that I might not even realize I have?",
+        "If we had to survive a zombie apocalypse together, who makes it longer and why?",
+        "What's a memory from when we first became friends that stands out to you?",
+        "What's a personal goal you're working on right now that you want me to cheer you on for?",
+        "What's something you've been putting off that you need me to bully you into doing?",
+        "If we could take an epic road trip with no itinerary, which direction are we driving?",
+        "What's the best piece of advice you've ever given someone else?",
+        "What is a silly hill that you are 100% prepared to die on?",
+        "What's something you think we should celebrate more often?",
+        "If our friendship had an official mascot, what would it be?",
+        "What is a quality in people that immediately makes you want to be their friend?",
+        "What's the most unexpected thing we have in common?",
+        "What's an activity we haven't done in ages that we need to bring back?",
     ],
     'study_mate': [
         "What's the most interesting thing you've learned recently?",
@@ -248,6 +347,16 @@ QUESTION_BANK = {
         "If you could design your own course, what would you teach?",
         "What's the biggest mistake you've made in your studies and what did it teach you?",
         "How do you explain your field to someone who knows nothing about it?",
+        "What study playlist or ambient sound gets you into the deepest focus?",
+        "What's your ideal study environment: silent library, bustling cafe, or desk at home?",
+        "What is a concept you struggled to grasp at first, but had an amazing 'aha!' moment with?",
+        "How do you handle test anxiety or imposter syndrome when it creeps in?",
+        "What's one project or paper you worked on that you are genuinely proud of?",
+        "If you could take a gap semester to master any practical craft, what would it be?",
+        "What's the best tip you've learned for managing reading loads or lecture notes?",
+        "How do we make our study sessions together even more effective and fun?",
+        "What's a book or paper in your field that completely rewired how you think?",
+        "What is your ultimate dream job, even if it feels ambitious or unconventional?",
     ],
     'family': [
         "What's a family tradition you love most?",
@@ -270,6 +379,14 @@ QUESTION_BANK = {
         "If we could all learn something together as a family, what would it be?",
         "What's a holiday memory that stands out the most to you?",
         "What does family mean to you in one sentence?",
+        "What's an heirloom or keepsake that holds the most sentimental value to you?",
+        "What's a phrase or saying that someone in our family always used to say?",
+        "In what ways do you see our ancestors' influence in our daily habits?",
+        "What is something you're grateful that our family supported you through?",
+        "What's the best piece of advice an older family member ever shared with you?",
+        "If we made a family time capsule to open in 25 years, what would you put in it?",
+        "What's a fun quirk about our family that outsiders might find hilarious?",
+        "What is your favorite holiday tradition and what makes it special to you?",
     ],
     'accountability': [
         "What's the one goal you're most focused on right now?",
@@ -292,6 +409,28 @@ QUESTION_BANK = {
         "How do you recover after a day where nothing went right?",
         "What's a distraction you need to eliminate?",
         "What would your future self thank you for starting today?",
+        "What was your single most productive hour this past week?",
+        "How can I best hold you accountable when you feel your motivation slipping?",
+        "What is an excuse you often make to yourself that you want to stop accepting?",
+        "What's a micro-habit (under 2 minutes) that has made a noticeable difference for you?",
+        "What does an intentional, distraction-free day look like for you?",
+        "What's a metric or number you're tracking right now that you want to improve?",
+        "How do you celebrate your wins without falling off track?",
+        "What is one commitment you are making to yourself for tomorrow?",
+    ],
+    'custom': [
+        "What's on your mind today that you haven't said out loud yet?",
+        "What's something you're curious about right now?",
+        "If you could change one thing about your daily routine, what would it be?",
+        "What's a conversation you've been wanting to have?",
+        "What's bringing you peace lately?",
+        "What is an energy drain in your life that you want to cut back on?",
+        "What's something you learned recently that changed how you look at everyday life?",
+        "If you could wake up tomorrow with any new perspective or mindset, what would it be?",
+        "What is a small ritual that anchors your day?",
+        "What's something kind you can do for yourself before this week ends?",
+        "What's a question you wish you had the answer to right now?",
+        "What does feeling truly supported look like for you today?",
     ],
 }
 
@@ -324,9 +463,74 @@ def _get_bond_anniversary(accepted_at):
     return milestone
 
 
+def _normalize_question_hash(text):
+    """Normalize question text and return a SHA-256 hex digest for deduplication."""
+    if not text or not isinstance(text, str):
+        return None
+    normalized = text.strip().strip('"\'`*').lower()
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest()
+
+
+def _get_bond_excluded_question_hashes(bond_id, bond_doc=None):
+    """Collect SHA-256 hashes of all questions ever answered or skipped in this bond.
+
+    Guarantees that partners never see a question they already answered
+    or skipped in the entire lifetime of this bond.
+    """
+    import main as m
+    bond_oid = ObjectId(bond_id) if not isinstance(bond_id, ObjectId) else bond_id
+    excluded_hashes = set()
+
+    # 1. Read pre-aggregated hashes from bond doc if present
+    if bond_doc and isinstance(bond_doc, dict):
+        for h in bond_doc.get('skipped_qotd_hashes') or []:
+            excluded_hashes.add(h)
+        for h in bond_doc.get('answered_qotd_hashes') or []:
+            excluded_hashes.add(h)
+
+    # 2. Query bond_qotd_conf history for this bond
+    try:
+        past_qotds = list(m.bond_qotd_conf.find(
+            {'bond_id': bond_oid},
+            {'question_text': 1, 'encrypted': 1, 'answers': 1, 'skips': 1}
+        ))
+        for qdoc in past_qotds:
+            # Check for skips
+            skips = qdoc.get('skips') or []
+            for s in skips:
+                if isinstance(s, dict):
+                    if s.get('question_hash'):
+                        excluded_hashes.add(s['question_hash'])
+                    elif s.get('question_text'):
+                        h = _normalize_question_hash(s['question_text'])
+                        if h:
+                            excluded_hashes.add(h)
+
+            # Check if answered or had skips
+            answers = qdoc.get('answers') or {}
+            if answers or skips:
+                raw_q = qdoc.get('question_text')
+                if raw_q:
+                    if qdoc.get('encrypted'):
+                        try:
+                            raw_q = m.decrypt_bond_data(raw_q, str(bond_oid))
+                        except Exception:
+                            raw_q = None
+                    if raw_q:
+                        h = _normalize_question_hash(raw_q)
+                        if h:
+                            excluded_hashes.add(h)
+    except Exception as e:
+        from flask import current_app
+        current_app.logger.warning(f"Error fetching excluded QotD hashes for bond {bond_id}: {e}")
+
+    return excluded_hashes
+
+
 def _get_daily_question(bond_doc):
     """Deterministic daily question selection based on bond type + date.
 
+    Excludes ALL previously answered and skipped questions in the bond's history.
     Uses skip feedback history to deprioritize question types that the bond's
     users have repeatedly skipped (e.g., marking questions as 'too_personal').
     """
@@ -365,9 +569,6 @@ def _get_daily_question(bond_doc):
                 if r:
                     reason_counts[r] = reason_counts.get(r, 0) + 1
 
-        # If users frequently skip as 'not_relevant' or 'boring', we reduce
-        # universal questions. If 'too_personal', we reduce type-specific ones.
-        # Threshold: 3+ skips of the same reason triggers deprioritization.
         personal_skips = reason_counts.get('too_personal', 0)
         boring_skips = reason_counts.get('boring', 0) + reason_counts.get('not_relevant', 0)
 
@@ -377,35 +578,37 @@ def _get_daily_question(bond_doc):
         elif boring_skips >= 3 and personal_skips < 3:
             # Boost type-specific weight: use 3:1 ratio
             pool = type_questions + type_questions + type_questions + universal
-        # If both are high, keep default ratio — they may just skip a lot
-
-        if not pool:
-            pool = type_questions + universal or ["What's on your mind today?"]
-
-        # Also try to avoid repeating recently-skipped questions
-        skipped_questions = set()
-        for doc in recent_skips:
-            q = doc.get('question_text', '')
-            if q and not doc.get('encrypted'):
-                skipped_questions.add(q)
-        if skipped_questions and len(pool) > len(skipped_questions):
-            filtered = [q for q in pool if q not in skipped_questions]
-            if filtered:
-                pool = filtered
     except Exception:
-        pass  # If skip query fails, proceed with default pool
+        pass
 
-    # Deterministic selection
-    hash_input = f"{bond_id_str}:{today_str}"
-    hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
-    idx = hash_val % len(pool)
+    # --- Lifetime Exclusion of Answered and Skipped Questions ---
+    excluded_hashes = _get_bond_excluded_question_hashes(bond_id_str, bond_doc)
+    available_pool = [q for q in pool if _normalize_question_hash(q) not in excluded_hashes]
 
-    question = pool[idx]
+    # If the bond-specific pool is running low or exhausted, fall back to other categories
+    if not available_pool:
+        all_other = []
+        for cat, q_list in QUESTION_BANK.items():
+            all_other.extend(q_list)
+        available_pool = [q for q in all_other if _normalize_question_hash(q) not in excluded_hashes]
+
+    # Deterministic selection among un-answered, un-skipped questions
+    if available_pool:
+        hash_input = f"{bond_id_str}:{today_str}"
+        hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
+        idx = hash_val % len(available_pool)
+        question = available_pool[idx]
+    else:
+        # Fallback if all static questions have been exhausted
+        question = "What's on your mind today?"
+
     # Determine category
     if question in type_questions:
         category = BOND_TYPES.get(bond_type, {}).get('label', 'Custom')
-    else:
+    elif question in universal:
         category = 'Universal'
+    else:
+        category = 'Curated Question'
 
     return question, category
 
@@ -862,48 +1065,53 @@ def _generate_ai_question_gemini(relationship_label, recent_questions=None, skip
 
 
 def _get_community_bank_question(bond_type, bond_id):
-    """Pick a random question from the community bank that this bond hasn't used.
+    """Pick a random question from the community bank that this bond hasn't used or skipped.
 
-    Excludes questions by both community_question_id AND question_text hash
-    so that AI-generated questions that were stored without a bank link are
-    also filtered out.
+    Excludes questions by both community_question_id AND question_text hash,
+    checks bond lifetime exclusion history, ensures the question hasn't been
+    skipped by this bond, and filters out questions with non-positive votes.
 
     Returns (question_text, question_id) or (None, None) if no suitable question found.
     """
     import main as m
 
-    # Get ALL questions this bond has ever used (not just 30 days)
-    # to prevent any repeat for the lifetime of the bond.
+    # Lifetime exclusion: get all answered and skipped question hashes for this bond
+    bond_id_str = str(bond_id)
+    used_hashes = set(_get_bond_excluded_question_hashes(bond_id_str))
+
     recent_qotds = list(m.bond_qotd_conf.find(
         {'bond_id': ObjectId(bond_id)},
         {'community_question_id': 1, 'question_text': 1, 'encrypted': 1}
     ))
 
     used_ids = set()
-    used_hashes = set()
     for q in recent_qotds:
         cq_id = q.get('community_question_id')
         if cq_id:
             used_ids.add(cq_id)
-        # Also hash the question text to catch questions not linked to bank
         qt = q.get('question_text', '')
         if qt:
             try:
                 if q.get('encrypted'):
-                    qt = m.decrypt_bond_data(qt, str(bond_id))
+                    qt = m.decrypt_bond_data(qt, bond_id_str)
             except Exception:
                 pass
             if qt and qt.strip():
-                used_hashes.add(hashlib.sha256(qt.strip().lower().encode()).hexdigest())
+                h = _normalize_question_hash(qt)
+                if h:
+                    used_hashes.add(h)
 
-    # Build exclusion query: exclude by _id and by question_hash
-    exclude_conditions = []
+    # Build exclusion query
+    exclude_conditions = [
+        {'skipped_by_bonds': {'$ne': bond_id_str}}
+    ]
     if used_ids:
         exclude_conditions.append({'_id': {'$nin': list(used_ids)}})
     if used_hashes:
         exclude_conditions.append({'question_hash': {'$nin': list(used_hashes)}})
 
-    query = {'bond_type': bond_type}
+    # Require positive votes so downvoted/boring community questions are purged
+    query = {'bond_type': bond_type, 'votes': {'$gt': 0}}
     if exclude_conditions:
         query = {'$and': [query] + exclude_conditions}
 
@@ -2585,6 +2793,20 @@ def api_bond_qotd_answer(bond_id):
             {'$set': {answer_key: {'answer': encrypted_ans, 'encrypted': True, 'answered_at': now}}}
         )
 
+        # Track question hash in bond document to ensure it is never presented again
+        try:
+            raw_q = qotd_doc.get('question_text', '')
+            if raw_q and qotd_doc.get('encrypted'):
+                raw_q = m.decrypt_bond_data(raw_q, bond_id)
+            q_hash = _normalize_question_hash(raw_q)
+            if q_hash:
+                m.bonds_conf.update_one(
+                    {'_id': ObjectId(bond_id)},
+                    {'$addToSet': {'answered_qotd_hashes': q_hash}}
+                )
+        except Exception as ex:
+            current_app.logger.warning(f"Failed to record answered QotD hash for bond {bond_id}: {ex}")
+
         # Answering QotD contributes to streak
         _update_bond_streak(bond_doc)
 
@@ -2720,48 +2942,48 @@ def api_bond_qotd_generate_ai(bond_id):
         # Fetch recent questions so the AI knows what to avoid repeating
         recent_questions = _get_recent_qotd_questions(bond_id)
         skip_insights = _get_bond_skip_insights(bond_id)
+        excluded_hashes = _get_bond_excluded_question_hashes(bond_id, bond_doc)
 
-        # --- Step 1: Check community question bank (free, zero API cost) ---
-        if not force_new:
-            bank_question, bank_id = _get_community_bank_question(bond_type, bond_id)
-            if bank_question:
-                ai_question = bank_question
-                source = 'community_bank'
-                community_question_id = bank_id
-                current_app.logger.info(f'QotD served from community bank for bond {bond_id}')
+        # --- Step 1: Try JigsawStack for fresh AI generation ---
+        try:
+            from jigsawstack import JigsawStack
+            api_key = get_env_variable('JIGSAW_API_KEY')
 
-        # --- Step 2: Try JigsawStack ---
-        if not ai_question:
-            try:
-                from jigsawstack import JigsawStack
-                api_key = get_env_variable('JIGSAW_API_KEY')
+            prompt = _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=skip_insights)
 
-                prompt = _build_qotd_ai_prompt(relationship_label, recent_questions, skip_insights=skip_insights)
+            client = JigsawStack(api_key=api_key)
+            res_data = client.prompt_engine.run_prompt_direct({
+                'prompt': prompt,
+                'inputs': [],
+                'input_values': {}
+            })
 
-                client = JigsawStack(api_key=api_key)
-                res_data = client.prompt_engine.run_prompt_direct({
-                    'prompt': prompt,
-                    'inputs': [],
-                    'input_values': {}
-                })
+            if res_data and isinstance(res_data, dict):
+                result_text = res_data.get('result', '').strip()
+                cleaned = _clean_ai_question(result_text)
+                if cleaned and _normalize_question_hash(cleaned) not in excluded_hashes:
+                    ai_question = cleaned
+                    source = 'ai'
+                    current_app.logger.info(f'QotD generated via JigsawStack for bond {bond_id}')
+        except Exception as jigsaw_err:
+            current_app.logger.warning(f'JigsawStack QotD failed, trying Gemini fallback: {jigsaw_err}')
 
-                if res_data and isinstance(res_data, dict):
-                    result_text = res_data.get('result', '').strip()
-                    cleaned = _clean_ai_question(result_text)
-                    if cleaned:
-                        ai_question = cleaned
-                        source = 'ai'
-                        current_app.logger.info(f'QotD generated via JigsawStack for bond {bond_id}')
-            except Exception as jigsaw_err:
-                current_app.logger.warning(f'JigsawStack QotD failed, trying Gemini fallback: {jigsaw_err}')
-
-        # --- Step 3: Fall back to Gemini API ---
+        # --- Step 2: Fall back to Gemini API ---
         if not ai_question:
             gemini_result = _generate_ai_question_gemini(relationship_label, recent_questions, skip_insights=skip_insights)
-            if gemini_result:
+            if gemini_result and _normalize_question_hash(gemini_result) not in excluded_hashes:
                 ai_question = gemini_result
                 source = 'ai_gemini'
                 current_app.logger.info(f'QotD generated via Gemini fallback for bond {bond_id}')
+
+        # --- Step 3: If AI services fail, check community question bank as a graceful fallback ---
+        if not ai_question:
+            bank_question, bank_id = _get_community_bank_question(bond_type, bond_id)
+            if bank_question and _normalize_question_hash(bank_question) not in excluded_hashes:
+                ai_question = bank_question
+                source = 'community_bank'
+                community_question_id = bank_id
+                current_app.logger.info(f'QotD served from community bank fallback for bond {bond_id}')
 
         # --- All providers failed ---
         if not ai_question:
@@ -2826,7 +3048,7 @@ def api_bond_qotd_generate_ai(bond_id):
 QOTD_REACTIONS = ['❤️', '😂', '🥺', '🤔', '🔥', '💯']
 
 # Valid skip reasons
-QOTD_SKIP_REASONS = ['too_personal', 'already_discussed', 'not_relevant', 'boring']
+QOTD_SKIP_REASONS = ['too_personal', 'already_discussed', 'already_answered', 'not_relevant', 'boring']
 
 
 @bp.route('/api/bonds/<bond_id>/qotd/react', methods=['POST'])
@@ -2897,9 +3119,10 @@ def api_bond_qotd_react(bond_id):
 def api_bond_qotd_skip(bond_id):
     """Skip today's question with a reason and get a new one.
 
-    Body: {"reason": "too_personal"|"already_discussed"|"not_relevant"|"boring"}
+    Body: {"reason": "too_personal"|"already_discussed"|"already_answered"|"not_relevant"|"boring"}
     Only allowed before either partner has answered.
-    Replaces the current question with a new deterministic pick.
+    Replaces the current question with a new pick that has NEVER been answered
+    or skipped in this bond.
     Max 3 skips per bond per day.
     """
     import main as m
@@ -2936,14 +3159,62 @@ def api_bond_qotd_skip(bond_id):
             if skip_count >= 3:
                 return jsonify({'error': 'Maximum 3 skips per day reached. Answer this question or write a custom one.'}), 429
 
-        # Log the skip
+        # Determine what question is currently being skipped
+        current_skipped_q = ''
+        if qotd_doc:
+            current_skipped_q = qotd_doc.get('question_text', '')
+            if current_skipped_q and qotd_doc.get('encrypted'):
+                try:
+                    current_skipped_q = m.decrypt_bond_data(current_skipped_q, bond_id)
+                except Exception:
+                    current_skipped_q = ''
+        if not current_skipped_q:
+            current_skipped_q, _ = _get_daily_question(bond_doc)
+
+        current_skipped_hash = _normalize_question_hash(current_skipped_q)
+
+        # Log the skip with the exact question text and hash
         skip_entry = {
             'by': ObjectId(current_user.id),
             'reason': reason,
             'skipped_at': now,
+            'question_text': current_skipped_q,
+            'question_hash': current_skipped_hash,
         }
 
-        # Generate a new question by appending skip count to the hash seed
+        # Track the skipped question hash directly on the bond document so it never recurs
+        if current_skipped_hash:
+            m.bonds_conf.update_one(
+                {'_id': ObjectId(bond_id)},
+                {'$addToSet': {'skipped_qotd_hashes': current_skipped_hash}}
+            )
+
+        # If this question was from the community bank, mark it skipped by this bond and adjust votes
+        comm_qid = qotd_doc.get('community_question_id') if qotd_doc else None
+        if comm_qid or current_skipped_hash:
+            comm_conditions = []
+            if comm_qid:
+                comm_conditions.append({'_id': comm_qid})
+            if current_skipped_hash:
+                comm_conditions.append({'question_hash': current_skipped_hash})
+            if comm_conditions:
+                comm_update = {
+                    '$addToSet': {'skipped_by_bonds': str(bond_id)},
+                    '$inc': {'skip_count': 1}
+                }
+                if reason in ('boring', 'not_relevant'):
+                    comm_update['$inc']['votes'] = -1
+                m.community_questions_conf.update_one(
+                    {'$or': comm_conditions},
+                    comm_update
+                )
+
+        # Gather ALL excluded hashes for this bond (lifetime answered & skipped)
+        excluded_hashes = set(_get_bond_excluded_question_hashes(bond_id, bond_doc))
+        if current_skipped_hash:
+            excluded_hashes.add(current_skipped_hash)
+
+        # Filter the candidate pool to ensure the question has never been answered or skipped
         skip_num = (qotd_doc.get('skip_count', 0) + 1) if qotd_doc else 1
         bond_type = bond_doc.get('bond_type', 'custom')
         type_questions = QUESTION_BANK.get(bond_type, [])
@@ -2952,12 +3223,42 @@ def api_bond_qotd_skip(bond_id):
         if not pool:
             pool = universal or ["What's on your mind today?"]
 
-        # Use bond_id:date:skip_num as the hash seed for the replacement
-        hash_input = f"{bond_id}:{today_str}:skip{skip_num}"
-        hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
-        idx = hash_val % len(pool)
-        new_question = pool[idx]
-        new_category = BOND_TYPES.get(bond_type, {}).get('label', 'Custom') if new_question in type_questions else 'Universal'
+        available_pool = [q for q in pool if _normalize_question_hash(q) not in excluded_hashes]
+
+        # If pool has run out of unused questions for this bond type, check all other categories
+        if not available_pool:
+            all_other = []
+            for cat, q_list in QUESTION_BANK.items():
+                all_other.extend(q_list)
+            available_pool = [q for q in all_other if _normalize_question_hash(q) not in excluded_hashes]
+
+        new_question = None
+        new_category = None
+        new_source = 'preset'
+
+        # If all static questions are exhausted, try AI generation if both partners consented
+        if not available_pool:
+            consent = _ai_consent_status(bond_doc, user_id_str)
+            if consent['all_consented']:
+                recent_questions = _get_recent_qotd_questions(bond_id)
+                skip_insights = _get_bond_skip_insights(bond_id)
+                type_info = BOND_TYPES.get(bond_type, BOND_TYPES['custom'])
+                relationship_label = type_info['label']
+                ai_q = _generate_ai_question_gemini(relationship_label, recent_questions, skip_insights=skip_insights)
+                if ai_q and _normalize_question_hash(ai_q) not in excluded_hashes:
+                    new_question = ai_q
+                    new_category = f'AI Generated ({relationship_label})'
+                    new_source = 'ai_gemini'
+
+        if not new_question:
+            if not available_pool:
+                available_pool = pool or ["What's on your mind today?"]
+            hash_input = f"{bond_id}:{today_str}:skip{skip_num}"
+            hash_val = int(hashlib.sha256(hash_input.encode()).hexdigest(), 16)
+            idx = hash_val % len(available_pool)
+            new_question = available_pool[idx]
+            new_category = BOND_TYPES.get(bond_type, {}).get('label', 'Custom') if new_question in type_questions else 'Universal'
+            new_source = 'preset'
 
         encrypted_question = m.encrypt_bond_data(new_question, bond_id)
 
@@ -2969,8 +3270,9 @@ def api_bond_qotd_skip(bond_id):
                         'question_text': encrypted_question,
                         'question_category': new_category,
                         'encrypted': True,
-                        'source': 'preset',
+                        'source': new_source,
                     },
+                    '$unset': {'community_question_id': ''},
                     '$inc': {'skip_count': 1},
                     '$push': {'skips': skip_entry},
                 }
@@ -2982,7 +3284,7 @@ def api_bond_qotd_skip(bond_id):
                 'question_text': encrypted_question,
                 'question_category': new_category,
                 'encrypted': True,
-                'source': 'preset',
+                'source': new_source,
                 'answers': {},
                 'created_at': now,
                 'skip_count': 1,

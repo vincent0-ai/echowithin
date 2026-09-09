@@ -3983,12 +3983,12 @@
                 html += '<button class="btn btn-bond-secondary" style="font-size:0.78rem; padding:0.3rem 0.8rem;" onclick="showSkipOptions(\'' + bondId + '\')">Skip and get a new one (' + data.skips_remaining + ' left today)</button>';
                 html += '</div>';
                 html += '<div id="skip-options-' + bondId + '" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--surface-bg);border:1px solid var(--border-color);border-radius:6px;">';
-                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Tell us why so we can pick better questions for you</div>';
+                html += '<div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:0.4rem;">Tell us why so we won\'t show this question to your bond again:</div>';
                 html += '<div style="display:flex;flex-wrap:wrap;gap:0.3rem;justify-content:center;">';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'already_discussed\')">Already Discussed</button>';
-                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'not_relevant\')">Not Relevant</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'already_answered\')">Already Answered</button>';
                 html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'boring\')">Boring</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'too_personal\')">Too Personal</button>';
+                html += '<button class="btn btn-bond-secondary" style="font-size:0.72rem;padding:0.15rem 0.5rem;" onclick="skipQotd(\'' + bondId + '\', \'not_relevant\')">Not Relevant</button>';
                 html += '</div></div></div>';
             }
         }
@@ -4013,7 +4013,7 @@
             body: JSON.stringify({ reason: reason })
         }).then(function(r) { return r.json(); }).then(function(d) {
             if (d.success) {
-                if (window.showCustomToast) showCustomToast('New question loaded!', 'success');
+                if (window.showCustomToast) showCustomToast('Question skipped — won\'t be shown again.', 'success');
                 loadQotd(bondId);
             } else {
                 if (window.showCustomAlert) showCustomAlert(d.error || 'Failed to skip.', 'danger');
@@ -4061,7 +4061,7 @@
     function generateAiQotd(bondId) {
         const container = document.getElementById('qotd-content-' + bondId);
         container.innerHTML = '<div style="color:#999; font-size:0.85rem; text-align:center; padding:0.8rem;">Generating AI Question...</div>';
-        echoFetch('/api/bonds/' + bondId + '/qotd/generate_ai', {
+        echoFetch('/api/bonds/' + bondId + '/qotd/generate_ai?force_new=true', {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken }
         }).then(r => r.json()).then(d => {

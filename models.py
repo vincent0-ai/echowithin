@@ -112,7 +112,7 @@ def load_user_from_request(req):
     authenticate those requests. Website users are unaffected because they
     never send these headers — they rely on the session-based user_loader.
     """
-    if req.path == '/api/messages/schedule/process':
+    if req.path in ('/api/messages/schedule/process', '/api/bonds/calendar/reminders/process'):
         return None
 
     # 1. Check X-App-Token header (preferred for native apps)
@@ -133,7 +133,7 @@ def load_user_from_request(req):
 
     if not token:
         # Don't log normal web requests that have no tokens
-        if req.path.startswith('/api/') and req.path != '/api/messages/schedule/process':
+        if req.path.startswith('/api/') and req.path not in ('/api/messages/schedule/process', '/api/bonds/calendar/reminders/process'):
             # PRIVACY: gate all REQ_LOADER prints behind an explicit dev flag.
             # These prints leak request paths, partial tokens, internal user IDs,
             # and usernames — never run them in production.

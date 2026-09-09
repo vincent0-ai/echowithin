@@ -256,7 +256,7 @@ def api_whisper_invite():
         }, room=f"user_{recipient_id_str}")
 
         # Push notification
-        m.send_push_notification_to_user(
+        m.send_push_notification_async(
             recipient_id_str,
             f"{current_user.username} wants to start a Whisper",
             f"A private {duration}-minute conversation",

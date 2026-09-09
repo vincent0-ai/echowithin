@@ -52,26 +52,62 @@ def send_ntfy_alert(message, title="🚨 CRITICAL: Database Backup Circuit Break
 # Collections that have a reliable timestamp field for incremental sync
 # Maps collection name -> list of timestamp field names to check (in priority order)
 TIMESTAMP_FIELDS = {
-    'users':              ['last_active', 'created_at'],
-    'posts':              ['edited_at', 'timestamp'],
-    'comments':           ['timestamp'],
-    'personal_posts':     ['updated_at', 'created_at'],
-    'note_shares':        ['created_at'],
-    'note_versions':      ['created_at'],
-    'note_discussions':   ['created_at'],
-    'announcements':      ['created_at'],
-    'logs':               ['timestamp'],
-    'newsletter_subs':    ['subscribed_at'],
-    'push_subscriptions': ['created_at'],
-    'fcm_tokens':         ['updated_at', 'created_at'],
-    'user_post_views':    ['last_viewed'],
-    'unlock_notifications': ['created_at'],
-    'weekly_winners':     ['week_start'],
+    'users':                    ['last_active', 'created_at'],
+    'posts':                    ['edited_at', 'timestamp'],
+    'comments':                 ['timestamp'],
+    'personal_posts':           ['updated_at', 'created_at'],
+    'note_shares':              ['created_at'],
+    'note_versions':            ['created_at'],
+    'note_discussions':         ['created_at'],
+    'announcements':            ['created_at'],
+    'logs':                     ['timestamp'],
+    'newsletter_subs':          ['subscribed_at'],
+    'push_subscriptions':       ['created_at'],
+    'fcm_tokens':               ['updated_at', 'created_at'],
+    'user_post_views':          ['last_viewed'],
+    'unlock_notifications':     ['created_at'],
+    'weekly_winners':           ['week_start'],
+    'direct_messages':          ['timestamp'],
+    'bond_journal':             ['created_at', 'timestamp'],
+    'bond_moods':               ['timestamp', 'created_at'],
+    'bond_goals':               ['updated_at', 'created_at'],
+    'bond_habits':              ['updated_at', 'created_at'],
+    'bond_qotd':                ['date', 'created_at'],
+    'bond_pulses':              ['timestamp', 'created_at'],
+    'bond_album_photos':        ['created_at'],
+    'bond_countdowns':          ['target_date', 'created_at'],
+    'bond_events':              ['created_at', 'updated_at', 'start_date'],
+    'bond_bucketlist':          ['updated_at', 'created_at'],
+    'bond_recommendations':     ['created_at'],
+    'bonds':                    ['updated_at', 'created_at', 'accepted_at'],
+    'communities':              ['updated_at', 'created_at'],
+    'community_notes':          ['updated_at', 'created_at'],
+    'community_questions':      ['created_at'],
+    'community_checkins':       ['timestamp', 'created_at'],
+    'community_polls':          ['created_at'],
+    'community_poll_votes':     ['created_at'],
+    'community_reactions':      ['created_at'],
+    'community_reports':        ['created_at'],
+    'community_premium_vouchers': ['created_at'],
+    'forms':                    ['updated_at', 'created_at'],
+    'form_responses':           ['created_at', 'submitted_at'],
+    'game_votes':               ['created_at'],
+    'game_sessions':            ['updated_at', 'created_at'],
+    'arcade_leaderboards':      ['updated_at', 'timestamp'],
+    'dm_permissions':           ['updated_at', 'created_at'],
+    'scheduled_messages':       ['created_at', 'scheduled_at'],
+    'note_attachments':         ['created_at'],
+    'app_tokens':               ['created_at', 'last_used'],
+    'user_sessions':            ['last_active', 'created_at'],
+    'app_updates':              ['release_date', 'created_at'],
+    'auth':                     ['created_at'],
+    'revoked_push_endpoints':   ['revoked_at', 'created_at'],
 }
 
 
 def run_backup():
-    from pymongo import MongoClient
+    from pymongo import MongoClient, ReplaceOne
+    from bson.objectid import ObjectId
 
     local_uri = os.environ.get('MONGODB_CONNECTION')
     atlas_uri = os.environ.get('ATLAS_MONGODB_CONNECTION')
@@ -156,31 +192,43 @@ def run_backup():
             # --- Incremental fetch: only docs modified since last backup ---
             ts_fields = TIMESTAMP_FIELDS.get(coll_name)
             query = {}
-            if last_backup and ts_fields:
-                or_clauses = [{f: {'$gte': last_backup}} for f in ts_fields]
-                query = {'$or': or_clauses}
+            if last_backup:
+                or_clauses = []
+                if ts_fields:
+                    or_clauses.extend([{f: {'$gte': last_backup}} for f in ts_fields])
+                try:
+                    min_oid = ObjectId.from_datetime(last_backup)
+                    or_clauses.append({'_id': {'$gte': min_oid}})
+                except Exception:
+                    pass
+                if or_clauses:
+                    query = {'$or': or_clauses}
 
             docs = list(local_coll.find(query))
-            if not docs and last_backup and ts_fields:
+            if not docs and last_backup:
                 # No changes since last backup for this collection — skip upsert
-                # Still check for deletions below
                 pass
 
-            # Upsert changed documents to Atlas
+            # Upsert changed documents to Atlas in batches
             synced = 0
             errors = 0
-            for doc in docs:
+            batch_size = 100
+            for i in range(0, len(docs), batch_size):
+                batch = docs[i:i + batch_size]
+                operations = [ReplaceOne({'_id': doc['_id']}, doc, upsert=True) for doc in batch]
                 try:
-                    atlas_coll.replace_one(
-                        {'_id': doc['_id']},
-                        doc,
-                        upsert=True
-                    )
-                    synced += 1
+                    atlas_coll.bulk_write(operations, ordered=False)
+                    synced += len(batch)
                 except Exception as e:
-                    errors += 1
-                    if errors <= 3:
-                        print(f"  Error syncing doc in {coll_name}: {e}")
+                    # Fallback to individual replace_one if bulk_write encounters an error
+                    for doc in batch:
+                        try:
+                            atlas_coll.replace_one({'_id': doc['_id']}, doc, upsert=True)
+                            synced += 1
+                        except Exception as doc_err:
+                            errors += 1
+                            if errors <= 3:
+                                print(f"  Error syncing doc in {coll_name}: {doc_err}")
 
             # --- Remove stale documents (deleted locally) ---
             # Only fetch _id fields for comparison to minimize data transfer

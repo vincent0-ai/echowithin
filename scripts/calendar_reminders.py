@@ -9,9 +9,25 @@ reminder_offset and sends push notifications to bond participants when the remin
 import sys
 import os
 import datetime
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
+def get_app_url():
+    """Returns the app's base URL."""
+    if os.environ.get('APP_URL'):
+        return os.environ['APP_URL']
+    mongo_conn = os.environ.get('MONGODB_CONNECTION', '')
+    redis_host = os.environ.get('REDIS_HOST', '')
+    if 'localhost' in mongo_conn or '127.0.0.1' in mongo_conn or 'localhost' in redis_host:
+        return 'http://localhost:8000'
+    return 'https://echowithin.xyz'
+
 
 
 def _get_candidate_occurrence_dates(start_date, recurrence, today, max_end=None):
@@ -65,18 +81,16 @@ def _get_candidate_occurrence_dates(start_date, recurrence, today, max_end=None)
     return candidates
 
 
-def run_calendar_reminders():
-    """Check active calendar events and dispatch due push reminders."""
-    import main as m
-
+def check_and_dispatch_calendar_reminders(bonds_conf, bond_events_conf, decrypt_fn, push_fn, url_fn=None):
+    """Core logic to inspect calendar events and dispatch due reminders."""
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     today = now_utc.date()
 
     # Pre-cache active bonds
-    active_bonds = list(m.bonds_conf.find({'status': 'active'}))
+    active_bonds = list(bonds_conf.find({'status': 'active'}))
     bonds_map = {b['_id']: b for b in active_bonds}
 
-    events = list(m.bond_events_conf.find({
+    events = list(bond_events_conf.find({
         'archived': {'$ne': True},
         'reminder_offset': {'$ne': None, '$exists': True}
     }))
@@ -145,9 +159,9 @@ def run_calendar_reminders():
             if target_reminder_dt <= now_utc <= (target_reminder_dt + datetime.timedelta(hours=2)):
                 # Decrypt title
                 bond_id_str = str(bond['_id'])
-                if ev.get('encrypted'):
+                if ev.get('encrypted') and decrypt_fn:
                     try:
-                        title = m.decrypt_bond_data(ev.get('title', ''), bond_id_str)
+                        title = decrypt_fn(ev.get('title', ''), bond_id_str)
                     except Exception:
                         title = ev.get('title', 'Calendar Event')
                 else:
@@ -174,10 +188,12 @@ def run_calendar_reminders():
                 user2_id = str(bond.get('user2_id', ''))
 
                 sent_any = False
-                try:
-                    bonds_url = m.url_for('bonds.bonds_page', _external=True)
-                except Exception:
-                    bonds_url = '/bonds'
+                bonds_url = '/bonds'
+                if url_fn:
+                    try:
+                        bonds_url = url_fn('bonds.bonds_page', _external=True)
+                    except Exception:
+                        bonds_url = '/bonds'
 
                 for uid in (user1_id, user2_id):
                     if not uid:
@@ -185,7 +201,7 @@ def run_calendar_reminders():
                     if rsvps.get(uid) == 'declined':
                         continue
                     try:
-                        m.send_push_notification_to_user(
+                        push_fn(
                             uid,
                             f"Event Reminder: {title}",
                             body,
@@ -198,7 +214,7 @@ def run_calendar_reminders():
                         print(f"Error sending calendar reminder to user {uid}: {e}")
 
                 # Mark occurrence as notified in DB
-                m.bond_events_conf.update_one(
+                bond_events_conf.update_one(
                     {'_id': ev['_id']},
                     {'$push': {'reminders_sent': occ_key}}
                 )
@@ -206,8 +222,84 @@ def run_calendar_reminders():
                 if sent_any:
                     reminders_dispatched += 1
 
-    print(f"Calendar reminders check complete: {reminders_dispatched} event reminders sent")
     return reminders_dispatched
+
+
+def process_via_api():
+    """Call the internal API endpoint on the web process.
+    Ensures zero re-import overhead and no gevent monkey-patch shutdown conflicts.
+    """
+    secret_key = os.environ.get('SCHEDULER_SECRET')
+    if not secret_key:
+        return None
+
+    app_url = get_app_url()
+    try:
+        response = requests.post(
+            f"{app_url}/api/bonds/calendar/reminders/process",
+            headers={
+                'X-Scheduler-Secret': secret_key,
+                'Content-Type': 'application/json'
+            },
+            timeout=30
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get('reminders_dispatched', 0)
+        else:
+            return None
+    except Exception:
+        return None
+
+
+def run_calendar_reminders():
+    """Check active calendar events and dispatch due push reminders."""
+    # 1. First attempt to delegate to running web worker via internal API
+    api_result = process_via_api()
+    if api_result is not None:
+        print(f"Calendar reminders check complete: {api_result} event reminders sent")
+        return api_result
+
+    # 2. Fallback: check if main is already imported (e.g. during tests or app runtime)
+    if 'main' in sys.modules:
+        m = sys.modules['main']
+        count = check_and_dispatch_calendar_reminders(
+            bonds_conf=m.bonds_conf,
+            bond_events_conf=m.bond_events_conf,
+            decrypt_fn=m.decrypt_bond_data,
+            push_fn=m.send_push_notification_to_user,
+            url_fn=getattr(m, 'url_for', None)
+        )
+        print(f"Calendar reminders check complete: {count} event reminders sent")
+        return count
+
+    # 3. Direct pymongo fallback (offline / standalone execution without importing main)
+    try:
+        from pymongo import MongoClient
+        import security
+        import notifications
+
+        mongo_conn = os.environ.get('MONGODB_CONNECTION')
+        if not mongo_conn:
+            print("ERROR: MONGODB_CONNECTION not set for calendar reminders fallback")
+            return 0
+
+        client = MongoClient(mongo_conn, serverSelectionTimeoutMS=5000)
+        db = client['echowithin_db']
+
+        count = check_and_dispatch_calendar_reminders(
+            bonds_conf=db['bonds'],
+            bond_events_conf=db['bond_events'],
+            decrypt_fn=security.decrypt_bond_data,
+            push_fn=notifications.send_push_notification_to_user,
+            url_fn=None
+        )
+        client.close()
+        print(f"Calendar reminders check complete: {count} event reminders sent")
+        return count
+    except Exception as e:
+        print(f"Error in direct calendar reminders check: {e}")
+        return 0
 
 
 if __name__ == '__main__':

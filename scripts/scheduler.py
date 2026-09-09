@@ -7,6 +7,9 @@ On startup, interval-based jobs are offset so they don't all fire immediately
 (preventing a thundering-herd of missed-job replays after a restart).
 """
 
+import warnings
+warnings.filterwarnings("ignore", message=r".*pkg_resources is deprecated as an API.*", category=UserWarning)
+
 import schedule
 import time
 import subprocess

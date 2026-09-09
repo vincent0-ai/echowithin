@@ -555,6 +555,25 @@ def send_push_notification_to_user(user_id_str, title, body, url=None, tag=None,
         _get_app().logger.error(f"Error in send_push_notification_to_user: {e}", exc_info=True)
 
 
+def send_push_notification_async(user_id_str, title, body, url=None, tag=None, extra_data=None, category=None):
+    """Dispatches send_push_notification_to_user asynchronously via ThreadPoolExecutor.
+    Falls back to synchronous delivery if the executor is unavailable or shut down.
+    """
+    try:
+        if database.executor:
+            database.executor.submit(
+                send_push_notification_to_user,
+                user_id_str, title, body, url=url, tag=tag, extra_data=extra_data, category=category
+            )
+            return
+    except Exception as e:
+        pass
+    send_push_notification_to_user(
+        user_id_str, title, body, url=url, tag=tag, extra_data=extra_data, category=category
+    )
+
+
+
 @rq.job
 def send_admin_broadcast_push(title, body, url=None):
     """

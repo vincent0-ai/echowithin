@@ -5,7 +5,13 @@ import datetime
 import hashlib
 import os
 import random
+import secrets
 from security import limits
+
+def csrf_exempt(view):
+    """Mark view as exempt from CSRF protection."""
+    view._csrf_exempt = True
+    return view
 
 bp = Blueprint('bonds', __name__, template_folder='templates')
 
@@ -6854,4 +6860,26 @@ def api_bond_export(bond_id):
     except Exception as e:
         current_app.logger.error(f"Bond export error for {bond_id}: {e}")
         return jsonify({'error': 'Failed to export memories'}), 500
+
+
+@bp.route('/api/bonds/calendar/reminders/process', methods=['POST'])
+@csrf_exempt
+def api_process_calendar_reminders():
+    """Internal endpoint called by scheduler to check and dispatch calendar reminders."""
+    import main as m
+    auth_header = request.headers.get('X-Scheduler-Secret', '')
+    expected_secret = os.environ.get('SCHEDULER_SECRET')
+    if not auth_header or not expected_secret or not secrets.compare_digest(auth_header, expected_secret):
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    from scripts.calendar_reminders import check_and_dispatch_calendar_reminders
+    dispatched = check_and_dispatch_calendar_reminders(
+        bonds_conf=m.bonds_conf,
+        bond_events_conf=m.bond_events_conf,
+        decrypt_fn=m.decrypt_bond_data,
+        push_fn=m.send_push_notification_to_user,
+        url_fn=url_for
+    )
+    return jsonify({'success': True, 'reminders_dispatched': dispatched})
+
 

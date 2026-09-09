@@ -1,4 +1,7 @@
 
+import warnings
+warnings.filterwarnings("ignore", message=r".*pkg_resources is deprecated as an API.*", category=UserWarning)
+
 try:
     from gevent import monkey
     monkey.patch_all()
@@ -135,7 +138,7 @@ from blueprints.game import bp as game_bp
 from api import api_bp
 
 from notifications import (send_code, send_reset_code, send_account_deletion_code, send_new_post_notifications,
-    send_weekly_newsletter, send_push_notification_to_user,
+    send_weekly_newsletter, send_push_notification_to_user, send_push_notification_async,
     send_admin_broadcast_push, send_push_notifications_for_new_post,
     send_fcm_notification_to_user, send_fcm_notifications_batch,
     send_push_notification_for_comment, process_image_for_nsfw,
@@ -3008,7 +3011,7 @@ def handle_send_dm(data=None, *args, **kwargs):
                 push_cat = 'dms'
                 push_tag = f'dm-{current_user.id}'
 
-            send_push_notification_to_user(
+            send_push_notification_async(
                 recipient_id_str,
                 f"New message from {current_user.username}",
                 push_body,
@@ -3306,7 +3309,7 @@ def handle_whisper_message(data=None, *args, **kwargs):
             # DM parity (F4): redacted push only — never the ephemeral content
             # (push bodies are minimized repo-wide; see DISCOVERY §3.9).
             try:
-                send_push_notification_to_user(
+                send_push_notification_async(
                     partner_id,
                     f"New whisper from {current_user.username}",
                     "A self-destructing message is waiting — open Whisper to view it",

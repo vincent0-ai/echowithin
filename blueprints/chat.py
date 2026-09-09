@@ -350,7 +350,7 @@ def api_send_dm_request(target_user_id):
             'from_avatar': getattr(current_user, 'profile_image_url', None)
         }, room=f"user_{target_user_id}")
         
-        m.send_push_notification_to_user(
+        m.send_push_notification_async(
             target_user_id,
             f"{current_user.username} wants to message you",
             "Tap to view message request",

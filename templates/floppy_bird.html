@@ -102,15 +102,25 @@
 
     <!-- Floppy Bird Leaderboard Card -->
     <div style="width: 100%; max-width: 580px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.1rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
           🏆 Floppy Leaderboard
         </div>
-        <div style="display: flex; gap: 0.35rem;">
+        <div style="display: flex; gap: 0.35rem; align-items: center;">
           <button type="button" class="ew-btn ew-btn--sm floppy-lb-cat" data-cat="campaign_stars" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Campaign Stars</button>
           <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-cat" data-cat="endless_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Endless</button>
+          <button type="button" id="floppy-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;" title="Refresh standings">🔄</button>
         </div>
       </div>
+
+      <!-- Player Personal Stats Preview -->
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div>
+          Your Best: <strong id="my-stats-stars" style="color: var(--text-dark-color);">0 ★</strong> (Campaign) &bull; <strong id="my-stats-endless" style="color: var(--text-dark-color);">0 pts</strong> (Endless)
+        </div>
+        <div id="my-stats-rank" style="font-weight: 600; color: #e06a3b;"></div>
+      </div>
+
       <div style="display: flex; justify-content: flex-end; gap: 0.35rem; margin-bottom: 0.6rem;">
         <button type="button" class="ew-btn ew-btn--sm floppy-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
         <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
@@ -123,7 +133,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='floppy_bird.js') }}" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='floppy_bird.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     // Explicitly remove reload fab if present
@@ -165,10 +175,38 @@
     const catButtons = document.querySelectorAll('.floppy-lb-cat');
     const periodButtons = document.querySelectorAll('.floppy-lb-period');
     const lbBody = document.getElementById('floppy-lb-body');
+    const refreshBtn = document.getElementById('floppy-lb-refresh-btn');
+    const myStarsEl = document.getElementById('my-stats-stars');
+    const myEndlessEl = document.getElementById('my-stats-endless');
+    const myRankEl = document.getElementById('my-stats-rank');
 
-    function renderLeaderboard(entries) {
+    function updateLocalStatsDisplay() {
+      try {
+        const raw = localStorage.getItem('floppy.save.v1');
+        if (raw) {
+          const s = JSON.parse(raw);
+          if (s && s.stars) {
+            let total = 0;
+            for (const k in s.stars) total += (s.stars[k] || 0);
+            if (myStarsEl) myStarsEl.textContent = `${total} ★`;
+          }
+          if (s && s.endlessBest && myEndlessEl) {
+            myEndlessEl.textContent = `${s.endlessBest} pts`;
+          }
+        }
+      } catch (_) {}
+    }
+
+    function renderLeaderboard(entries, userRecord) {
+      updateLocalStatsDisplay();
+      if (userRecord && myRankEl) {
+        myRankEl.textContent = `Your Rank: #${userRecord.rank}`;
+      } else if (myRankEl) {
+        myRankEl.textContent = '';
+      }
+
       if (!entries || entries.length === 0) {
-        lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet for this period. Fly and set a record!</div>';
+        lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores recorded yet for this period. Fly and set a record!</div>';
         return;
       }
       let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
@@ -206,11 +244,8 @@
         lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating standings...</div>';
         const res = await fetch(`/api/games/leaderboard?game=floppy_bird&category=${currentCat}&period=${currentPeriod}`);
         const data = await res.json();
-        if (data && data.entries) {
-          renderLeaderboard(data.entries);
-        } else {
-          lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet.</div>';
-        }
+        const list = data.entries || data.leaders || [];
+        renderLeaderboard(list, data.user_record);
       } catch (err) {
         lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Failed to load leaderboard.</div>';
       }
@@ -222,8 +257,16 @@
     periodButtons.forEach(btn => {
       btn.addEventListener('click', () => fetchFloppyLeaderboard(currentCat, btn.dataset.period));
     });
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        if (window.__floppy && typeof window.__floppy.syncScores === 'function') {
+          window.__floppy.syncScores();
+        }
+        fetchFloppyLeaderboard(currentCat, currentPeriod);
+      });
+    }
 
-    window.__refreshFloppyLeaderboard = () => fetchFloppyLeaderboard(currentCat, currentPeriod);
+    window.__refreshFloppyLeaderboard = (targetCat, targetPeriod) => fetchFloppyLeaderboard(targetCat || currentCat, targetPeriod || currentPeriod);
     fetchFloppyLeaderboard('campaign_stars', 'weekly');
   });
 </script>

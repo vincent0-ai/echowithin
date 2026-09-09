@@ -637,6 +637,28 @@ class TestArcadeMatchmakingAndLeaderboards:
             assert entry['score'] == 36
             assert entry['updated_at'].endswith('Z')
 
+    def test_leaderboard_submit_csrf_exemption(self, client, app):
+        """Verify POST /api/games/leaderboard/submit is exempt from CSRF protection."""
+        import main as m
+        from unittest.mock import MagicMock
+
+        old_csrf = app.config.get('WTF_CSRF_ENABLED', True)
+        app.config['WTF_CSRF_ENABLED'] = True
+        try:
+            mock_col = MagicMock()
+            mock_col.find_one.return_value = None
+            with patch.object(m, 'arcade_leaderboards_conf', mock_col):
+                res = client.post('/api/games/leaderboard/submit', json={
+                    'game': 'floppy_bird',
+                    'category': 'campaign_stars',
+                    'score': 15,
+                    'guest_token': 'g_test_csrf'
+                })
+                assert res.status_code == 200
+                assert res.get_json()['success'] is True
+        finally:
+            app.config['WTF_CSRF_ENABLED'] = old_csrf
+
     def test_slime_socket_matchmaking_queue_and_pairing(self, app):
         """Socket handlers queue solo players and pair waiting opponents automatically."""
         import main as m

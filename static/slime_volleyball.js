@@ -509,17 +509,26 @@
         guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
         localStorage.setItem('arcade_guest_token', guestToken);
       }
-      await fetch('/api/games/leaderboard/submit', {
+      let playerName = localStorage.getItem('arcade_display_name') || '';
+      if (!playerName && guestToken) {
+        playerName = 'Player_' + guestToken.substring(2, 7);
+      }
+      const headers = { 'Content-Type': 'application/json' };
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      if (csrfMeta && csrfMeta.content) headers['X-CSRFToken'] = csrfMeta.content;
+
+      const res = await fetch('/api/games/leaderboard/submit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
           game: 'slime_volleyball',
           category: category,
           score: score,
+          username: playerName,
           guest_token: guestToken
         })
       });
-      if (typeof window.__refreshSlimeLeaderboard === 'function') {
+      if (res.ok && typeof window.__refreshSlimeLeaderboard === 'function') {
         window.__refreshSlimeLeaderboard();
       }
     } catch (_) {}

@@ -141,16 +141,26 @@
 
     <!-- Win Streak Leaderboard Card -->
     <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
           🏆 Win Streak Leaderboard
         </div>
-        <div style="display: flex; gap: 0.35rem;">
+        <div style="display: flex; gap: 0.35rem; align-items: center;">
           <button type="button" class="ew-btn ew-btn--sm slime-lb-tab" data-period="weekly" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">This Week</button>
           <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="daily" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">Today</button>
           <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="all_time" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">All-Time</button>
+          <button type="button" id="slime-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;" title="Refresh standings">🔄</button>
         </div>
       </div>
+
+      <!-- Player Personal Streak Status -->
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div>
+          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong>
+        </div>
+        <div id="my-slime-rank" style="font-weight: 600; color: #e06a3b;"></div>
+      </div>
+
       <div id="slime-lb-body" style="font-size: 0.85rem; min-height: 70px;">
         <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>
       </div>
@@ -158,7 +168,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='slime_volleyball.js') }}" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='slime_volleyball.js') }}?v=1.2" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     // Explicitly remove reload fab if present
@@ -244,8 +254,25 @@
     let currentSlimePeriod = 'weekly';
     const slimeTabs = document.querySelectorAll('.slime-lb-tab');
     const slimeLbBody = document.getElementById('slime-lb-body');
+    const refreshBtn = document.getElementById('slime-lb-refresh-btn');
+    const myStreakEl = document.getElementById('my-slime-streak');
+    const myRankEl = document.getElementById('my-slime-rank');
 
-    function renderLeaderboard(entries) {
+    function updateLocalStreakDisplay() {
+      try {
+        const streak = localStorage.getItem('slime_win_streak') || '0';
+        if (myStreakEl) myStreakEl.textContent = `${streak} wins`;
+      } catch (_) {}
+    }
+
+    function renderLeaderboard(entries, userRecord) {
+      updateLocalStreakDisplay();
+      if (userRecord && myRankEl) {
+        myRankEl.textContent = `Your Rank: #${userRecord.rank}`;
+      } else if (myRankEl) {
+        myRankEl.textContent = '';
+      }
+
       if (!entries || entries.length === 0) {
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No win streaks recorded yet for this period. Be the first!</div>';
         return;
@@ -280,11 +307,8 @@
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating leaderboard...</div>';
         const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=${period}`);
         const data = await res.json();
-        if (data && data.entries) {
-          renderLeaderboard(data.entries);
-        } else {
-          slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet.</div>';
-        }
+        const list = data.entries || data.leaders || [];
+        renderLeaderboard(list, data.user_record);
       } catch (err) {
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Failed to load leaderboard.</div>';
       }
@@ -295,6 +319,12 @@
         fetchSlimeLeaderboard(btn.dataset.period);
       });
     });
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        fetchSlimeLeaderboard(currentSlimePeriod);
+      });
+    }
 
     window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimePeriod);
     fetchSlimeLeaderboard('weekly');

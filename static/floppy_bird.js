@@ -239,19 +239,37 @@ async function submitLeaderboard(category, score) {
       guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('arcade_guest_token', guestToken);
     }
-    await fetch('/api/games/leaderboard/submit', {
+    let playerName = localStorage.getItem('arcade_display_name') || '';
+    if (!playerName && guestToken) {
+      playerName = 'Player_' + guestToken.substring(2, 7);
+    }
+    const headers = { 'Content-Type': 'application/json' };
+    const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfMeta && csrfMeta.content) headers['X-CSRFToken'] = csrfMeta.content;
+
+    const res = await fetch('/api/games/leaderboard/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({
         game: 'floppy_bird',
         category: category,
         score: score,
+        username: playerName,
         guest_token: guestToken
       })
     });
-    if (typeof window.__refreshFloppyLeaderboard === 'function') {
-      window.__refreshFloppyLeaderboard();
+    if (res.ok) {
+      if (typeof window.__refreshFloppyLeaderboard === 'function') {
+        window.__refreshFloppyLeaderboard(category);
+      }
     }
+  } catch (_) {}
+}
+
+function syncAllScores() {
+  try {
+    if (totalStars() > 0) submitLeaderboard('campaign_stars', totalStars());
+    if (save && save.endlessBest > 0) submitLeaderboard('endless_score', save.endlessBest);
   } catch (_) {}
 }
 
@@ -929,5 +947,7 @@ window.__floppy = {
   step(dt, n = 1) { for (let i = 0; i < n; i++) update(dt); draw(); return S; },
   pause(p = true) { running = !p; },
   wipe() { save = blankSave(); persist(); },
+  syncScores: syncAllScores,
+  submitScore: submitLeaderboard
 };
 })();

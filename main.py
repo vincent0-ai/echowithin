@@ -302,6 +302,7 @@ csrf.exempt(app.view_functions['notes.api_mark_activity_read'])
 csrf.exempt(app.view_functions['chat.api_process_scheduled_messages'])
 csrf.exempt(app.view_functions['pages.unsubscribe'])
 csrf.exempt(app.view_functions['forms.submit_form'])
+csrf.exempt(app.view_functions['game.api_leaderboard_submit'])
 
 
 @app.route('/api/csrf-token')

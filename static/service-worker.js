@@ -20,7 +20,9 @@ const STATIC_ASSETS = [
   'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
   '/static/qrcode.min.js',
   '/static/floppy_bird.js',
-  '/static/slime_volleyball.js'
+  '/static/slime_volleyball.js',
+  '/static/tic_tac_toe.js',
+  '/static/connect_four.js'
 ];
 
 // Pages to cache for offline access
@@ -33,7 +35,9 @@ const PAGES_TO_CACHE = [
   '/about',
   '/bonds',
   '/games/floppy-bird',
-  '/games/slime-volleyball'
+  '/games/slime-volleyball',
+  '/games/tic-tac-toe',
+  '/games/connect-four'
 ];
 
 // Minimal offline HTML served when /offline isn't cached

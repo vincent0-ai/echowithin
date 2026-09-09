@@ -831,6 +831,194 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'data-cat="volleys_returned"' in html_sv
         assert 'id="my-slime-volleys"' in html_sv
 
+    def test_tic_tac_toe_routes_and_ui(self, client):
+        """Verify Tic-Tac-Toe route, UI tabs, difficulty options, and clean controls."""
+        res = client.get('/games/tic-tac-toe')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'tic_tac_toe.js' in html
+        assert 'Back to Games' in html
+        assert 'id="tab-solo"' in html
+        assert 'id="tab-local"' in html
+        assert 'id="tab-online"' in html
+        assert 'id="find-match-btn"' in html
+        assert 'id="room-code-input"' in html
+        assert 'data-diff="easy"' in html
+        assert 'data-diff="medium"' in html
+        assert 'data-diff="hard"' in html
+        assert 'id="ttt-turn-indicator"' in html
+
+    def test_connect_four_routes_and_ui(self, client):
+        """Verify Connect Four route, UI tabs, canvas, and clean controls."""
+        res = client.get('/games/connect-four')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'connect_four.js' in html
+        assert 'Back to Games' in html
+        assert 'id="tab-solo"' in html
+        assert 'id="tab-local"' in html
+        assert 'id="tab-online"' in html
+        assert 'id="find-match-btn"' in html
+        assert 'id="room-code-input"' in html
+        assert 'id="c4-canvas"' in html
+        assert 'data-diff="easy"' in html
+        assert 'data-diff="normal"' in html
+        assert 'data-diff="hard"' in html
+
+    def test_games_list_contains_all_arcade_games(self, auth_client):
+        """Verify /games includes cards and weekly champion widgets for all arcade games."""
+        res = auth_client.get('/games')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Floppy Bird' in html
+        assert 'Slime Volleyball' in html
+        assert 'Tic-Tac-Toe' in html
+        assert 'Connect Four' in html
+        assert 'id="fb-champ"' in html
+        assert 'id="slime-champ"' in html
+        assert 'id="ttt-champ"' in html
+        assert 'id="c4-champ"' in html
+
+    def test_tic_tac_toe_and_connect_four_leaderboards(self, client, app):
+        """Verify leaderboard submissions and bounds checking for Tic-Tac-Toe and Connect Four."""
+        import main as m
+        from blueprints.game import VALID_ARCADE_CATEGORIES
+
+        assert 'tic_tac_toe' in VALID_ARCADE_CATEGORIES
+        assert 'win_streak' in VALID_ARCADE_CATEGORIES['tic_tac_toe']
+        assert 'total_wins' in VALID_ARCADE_CATEGORIES['tic_tac_toe']
+
+        assert 'connect_four' in VALID_ARCADE_CATEGORIES
+        assert 'win_streak' in VALID_ARCADE_CATEGORIES['connect_four']
+        assert 'total_wins' in VALID_ARCADE_CATEGORIES['connect_four']
+
+        mock_lb = MagicMock()
+        mock_lb.find_one.return_value = None
+
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            # Valid Tic-Tac-Toe streak
+            res_ttt = client.post('/api/games/leaderboard/submit', json={
+                'game': 'tic_tac_toe',
+                'category': 'win_streak',
+                'score': 7,
+                'guest_token': 'g_test_ttt'
+            })
+            assert res_ttt.status_code == 200
+            assert res_ttt.get_json()['score'] == 7
+
+            # Valid Connect Four total wins
+            res_c4 = client.post('/api/games/leaderboard/submit', json={
+                'game': 'connect_four',
+                'category': 'total_wins',
+                'score': 25,
+                'guest_token': 'g_test_c4'
+            })
+            assert res_c4.status_code == 200
+            assert res_c4.get_json()['score'] == 25
+
+            # Invalid bounds check (> 500 for streak)
+            res_invalid = client.post('/api/games/leaderboard/submit', json={
+                'game': 'connect_four',
+                'category': 'win_streak',
+                'score': 9999,
+                'guest_token': 'g_test_c4'
+            })
+            assert res_invalid.status_code == 400
+
+    def test_win_check_functions(self):
+        """Verify Python server win check logic for Tic-Tac-Toe and Connect Four."""
+        from main import check_ttt_win, check_c4_win, C4_ROWS, C4_COLS
+
+        # TTT horizontal win
+        board_ttt = ['x', 'x', 'x', '', '', '', '', '', '']
+        assert check_ttt_win(board_ttt, 'x') == [0, 1, 2]
+        assert check_ttt_win(board_ttt, 'o') is None
+
+        # C4 horizontal win
+        board_c4 = [[-1] * C4_COLS for _ in range(C4_ROWS)]
+        board_c4[5][0] = 0
+        board_c4[5][1] = 0
+        board_c4[5][2] = 0
+        board_c4[5][3] = 0
+        win_c4 = check_c4_win(board_c4, 5, 3, 0)
+        assert win_c4 is not None
+        assert len(win_c4) >= 4
+
+    def test_tic_tac_toe_socket_events(self, app):
+        """Test Socket.IO room join, turn validation, and matchmaking for Tic-Tac-Toe."""
+        import main as m
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+
+        join_handler = handlers.get('handle_join_ttt_room')
+        move_handler = handlers.get('handle_ttt_move')
+        leave_handler = handlers.get('handle_leave_ttt_room')
+        find_handler = handlers.get('handle_find_ttt_match')
+
+        assert join_handler is not None
+        assert move_handler is not None
+        assert leave_handler is not None
+        assert find_handler is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'emit') as mock_emit:
+
+                room_id = 'test_ttt_room'
+                # Host joins
+                mock_req.sid = 'sid_ttt_host'
+                join_handler({'room_id': room_id})
+                assert room_id in m.active_ttt_rooms
+                assert m.active_ttt_rooms[room_id]['host_sid'] == 'sid_ttt_host'
+
+                # Host makes move
+                move_handler({'room_id': room_id, 'index': 0})
+                assert m.active_ttt_rooms[room_id]['board'][0] == 'x'
+                assert m.active_ttt_rooms[room_id]['turn'] == 'o'
+
+                # Host leaves
+                leave_handler({'room_id': room_id})
+                assert room_id not in m.active_ttt_rooms
+
+    def test_connect_four_socket_events(self, app):
+        """Test Socket.IO room join, piece drop, and matchmaking for Connect Four."""
+        import main as m
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+
+        join_handler = handlers.get('handle_join_c4_room')
+        move_handler = handlers.get('handle_c4_move')
+        leave_handler = handlers.get('handle_leave_c4_room')
+        find_handler = handlers.get('handle_find_c4_match')
+
+        assert join_handler is not None
+        assert move_handler is not None
+        assert leave_handler is not None
+        assert find_handler is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'emit') as mock_emit:
+
+                room_id = 'test_c4_room'
+                # Host joins
+                mock_req.sid = 'sid_c4_host'
+                join_handler({'room_id': room_id})
+                assert room_id in m.active_c4_rooms
+                assert m.active_c4_rooms[room_id]['host_sid'] == 'sid_c4_host'
+
+                # Host drops piece in column 3
+                move_handler({'room_id': room_id, 'col': 3})
+                # Bottom row is 5
+                assert m.active_c4_rooms[room_id]['board'][5][3] == 0
+                assert m.active_c4_rooms[room_id]['turn'] == 1
+
+                # Host leaves
+                leave_handler({'room_id': room_id})
+                assert room_id not in m.active_c4_rooms
+
 
 
 

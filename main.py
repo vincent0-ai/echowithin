@@ -2004,6 +2004,431 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
     emit('slime_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
+# --- Tic-Tac-Toe 1v1 Real-Time Handlers ---
+active_ttt_rooms = {}
+ttt_matchmaking_queue = []
+
+TTT_WIN_PATTERNS = [
+    (0, 1, 2), (3, 4, 5), (6, 7, 8),
+    (0, 3, 6), (1, 4, 7), (2, 5, 8),
+    (0, 4, 8), (2, 4, 6)
+]
+
+def check_ttt_win(board, symbol):
+    for a, b, c in TTT_WIN_PATTERNS:
+        if board[a] == symbol and board[b] == symbol and board[c] == symbol:
+            return [a, b, c]
+    return None
+
+@socketio.on('join_ttt_room')
+def handle_join_ttt_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+
+    room_info = active_ttt_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'board': [''] * 9,
+            'turn': 'x',
+            'scores': {'x': 0, 'o': 0, 'ties': 0}
+        }
+        active_ttt_rooms[room_id] = room_info
+        emit('ttt_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': user_name,
+            'guest_name': None,
+            'symbol': 'x'
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_ttt_rooms[room_id] = room_info
+
+        emit('ttt_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'symbol': 'o'
+        }, room=sid)
+        emit('ttt_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'symbol': 'x'
+        }, room=room_info['host_sid'])
+
+@socketio.on('leave_ttt_room')
+def handle_leave_ttt_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_ttt_rooms.get(room_id)
+    if room_info:
+        if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
+            emit('ttt_player_left', {'room_id': room_id}, room=room_id)
+            active_ttt_rooms.pop(room_id, None)
+
+@socketio.on('ttt_move')
+def handle_ttt_move(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    try:
+        idx = int(data.get('index'))
+    except (ValueError, TypeError):
+        return
+    if not (0 <= idx <= 8):
+        return
+
+    room_info = active_ttt_rooms.get(room_id)
+    if not room_info:
+        return
+
+    sid = request.sid
+    # Verify it's the sender's turn
+    turn = room_info.get('turn', 'x')
+    expected_sid = room_info.get('host_sid') if turn == 'x' else room_info.get('guest_sid')
+    if sid != expected_sid:
+        return
+
+    board = room_info['board']
+    if board[idx] != '':
+        return
+
+    board[idx] = turn
+    win_pattern = check_ttt_win(board, turn)
+    is_draw = (win_pattern is None) and all(cell != '' for cell in board)
+
+    winner = None
+    if win_pattern:
+        winner = turn
+        room_info['scores'][turn] += 1
+    elif is_draw:
+        room_info['scores']['ties'] += 1
+
+    next_turn = 'o' if turn == 'x' else 'x'
+    room_info['turn'] = next_turn
+
+    emit('ttt_move_made', {
+        'index': idx,
+        'symbol': turn,
+        'winner': winner,
+        'win_pattern': win_pattern,
+        'is_draw': is_draw,
+        'next_turn': next_turn,
+        'scores': room_info['scores'],
+        'board': board
+    }, room=room_id)
+
+@socketio.on('ttt_restart')
+def handle_ttt_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_ttt_rooms.get(room_id)
+    if not room_info:
+        return
+    room_info['board'] = [''] * 9
+    room_info['turn'] = 'x'
+    emit('ttt_restarted', {'turn': 'x'}, room=room_id)
+
+@socketio.on('find_ttt_match')
+def handle_find_ttt_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    global ttt_matchmaking_queue
+    ttt_matchmaking_queue = [q for q in ttt_matchmaking_queue if q['sid'] != sid]
+
+    if ttt_matchmaking_queue:
+        opponent = ttt_matchmaking_queue.pop(0)
+        room_id = f"ttt_{secrets.token_hex(4)}"
+
+        active_ttt_rooms[room_id] = {
+            'host_sid': opponent['sid'],
+            'host_name': opponent['user_name'],
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'board': [''] * 9,
+            'turn': 'x',
+            'scores': {'x': 0, 'o': 0, 'ties': 0}
+        }
+
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+
+        emit('ttt_match_found', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'symbol': 'x'
+        }, room=opponent['sid'])
+
+        emit('ttt_match_found', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'symbol': 'o'
+        }, room=sid)
+    else:
+        ttt_matchmaking_queue.append({
+            'sid': sid,
+            'user_name': user_name,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        emit('ttt_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_ttt_matchmaking')
+def handle_cancel_ttt_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global ttt_matchmaking_queue
+    ttt_matchmaking_queue = [q for q in ttt_matchmaking_queue if q['sid'] != sid]
+    emit('ttt_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
+# --- Connect Four 1v1 Real-Time Handlers ---
+active_c4_rooms = {}
+c4_matchmaking_queue = []
+
+C4_ROWS = 6
+C4_COLS = 7
+
+def check_c4_win(board, r, c, player):
+    dirs = [(1, 0), (0, 1), (1, 1), (1, -1)]
+    for dr, dc in dirs:
+        cells = [(r, c)]
+        for s in (1, -1):
+            nr, nc = r + dr * s, c + dc * s
+            while 0 <= nr < C4_ROWS and 0 <= nc < C4_COLS and board[nr][nc] == player:
+                cells.append((nr, nc))
+                nr += dr * s
+                nc += dc * s
+        if len(cells) >= 4:
+            return cells
+    return None
+
+@socketio.on('join_c4_room')
+def handle_join_c4_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+
+    room_info = active_c4_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
+            'turn': 0,
+            'scores': [0, 0, 0] # [p0, p1, draws]
+        }
+        active_c4_rooms[room_id] = room_info
+        emit('c4_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': user_name,
+            'guest_name': None,
+            'player': 0
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_c4_rooms[room_id] = room_info
+
+        emit('c4_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+        emit('c4_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=room_info['host_sid'])
+
+@socketio.on('leave_c4_room')
+def handle_leave_c4_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_c4_rooms.get(room_id)
+    if room_info:
+        if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
+            emit('c4_player_left', {'room_id': room_id}, room=room_id)
+            active_c4_rooms.pop(room_id, None)
+
+@socketio.on('c4_move')
+def handle_c4_move(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    try:
+        col = int(data.get('col'))
+    except (ValueError, TypeError):
+        return
+    if not (0 <= col < C4_COLS):
+        return
+
+    room_info = active_c4_rooms.get(room_id)
+    if not room_info:
+        return
+
+    sid = request.sid
+    turn = room_info.get('turn', 0)
+    expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    if sid != expected_sid:
+        return
+
+    board = room_info['board']
+    # Find lowest available row in column
+    drop_row = -1
+    for r in range(C4_ROWS - 1, -1, -1):
+        if board[r][col] == -1:
+            drop_row = r
+            break
+    if drop_row == -1:
+        return
+
+    board[drop_row][col] = turn
+    win_line = check_c4_win(board, drop_row, col, turn)
+    is_draw = (win_line is None) and all(board[0][c] != -1 for c in range(C4_COLS))
+
+    winner = None
+    if win_line:
+        winner = turn
+        room_info['scores'][turn] += 1
+    elif is_draw:
+        room_info['scores'][2] += 1
+
+    next_turn = 1 - turn
+    room_info['turn'] = next_turn
+
+    emit('c4_move_made', {
+        'row': drop_row,
+        'col': col,
+        'player': turn,
+        'winner': winner,
+        'win_line': win_line,
+        'is_draw': is_draw,
+        'next_turn': next_turn,
+        'scores': room_info['scores'],
+        'board': board
+    }, room=room_id)
+
+@socketio.on('c4_restart')
+def handle_c4_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_c4_rooms.get(room_id)
+    if not room_info:
+        return
+    room_info['board'] = [[-1] * C4_COLS for _ in range(C4_ROWS)]
+    room_info['turn'] = 0
+    emit('c4_restarted', {'turn': 0}, room=room_id)
+
+@socketio.on('find_c4_match')
+def handle_find_c4_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    global c4_matchmaking_queue
+    c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != sid]
+
+    if c4_matchmaking_queue:
+        opponent = c4_matchmaking_queue.pop(0)
+        room_id = f"c4_{secrets.token_hex(4)}"
+
+        active_c4_rooms[room_id] = {
+            'host_sid': opponent['sid'],
+            'host_name': opponent['user_name'],
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
+            'turn': 0,
+            'scores': [0, 0, 0]
+        }
+
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+
+        emit('c4_match_found', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=opponent['sid'])
+
+        emit('c4_match_found', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+    else:
+        c4_matchmaking_queue.append({
+            'sid': sid,
+            'user_name': user_name,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        emit('c4_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_c4_matchmaking')
+def handle_cancel_c4_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global c4_matchmaking_queue
+    c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != sid]
+    emit('c4_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
 # --- Direct Messaging (DM) Functionality ---
 
 @socketio.on('join_inbox')
@@ -2085,6 +2510,26 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Slime Matchmaking queue on disconnect
     global slime_matchmaking_queue
     slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != request.sid]
+
+    # Cleanup Tic-Tac-Toe rooms on disconnect
+    for room_id, rinfo in list(active_ttt_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('ttt_player_left', {'room_id': room_id}, room=room_id)
+            active_ttt_rooms.pop(room_id, None)
+
+    # Cleanup Tic-Tac-Toe Matchmaking queue on disconnect
+    global ttt_matchmaking_queue
+    ttt_matchmaking_queue = [q for q in ttt_matchmaking_queue if q['sid'] != request.sid]
+
+    # Cleanup Connect Four rooms on disconnect
+    for room_id, rinfo in list(active_c4_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('c4_player_left', {'room_id': room_id}, room=room_id)
+            active_c4_rooms.pop(room_id, None)
+
+    # Cleanup Connect Four Matchmaking queue on disconnect
+    global c4_matchmaking_queue
+    c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != request.sid]
 
 
 @socketio.on('send_dm')
@@ -2214,6 +2659,10 @@ def handle_send_dm(data=None, *args, **kwargs):
             if not g_url:
                 if g_type in ('slime_volleyball', 'slime'):
                     g_url = f"/games/slime-volleyball?room={lobby_id}"
+                elif g_type in ('tic_tac_toe', 'tictactoe'):
+                    g_url = f"/games/tic-tac-toe?room={lobby_id}"
+                elif g_type in ('connect_four', 'connectfour'):
+                    g_url = f"/games/connect-four?room={lobby_id}"
                 elif lobby_id:
                     g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {

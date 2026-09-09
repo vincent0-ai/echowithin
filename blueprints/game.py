@@ -141,6 +141,14 @@ def floppy_bird():
 def slime_volleyball():
     return render_template('slime_volleyball.html', active_page='games')
 
+@bp.route('/games/tic-tac-toe')
+def tic_tac_toe():
+    return render_template('tic_tac_toe.html', active_page='games')
+
+@bp.route('/games/connect-four')
+def connect_four():
+    return render_template('connect_four.html', active_page='games')
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)
@@ -1011,10 +1019,12 @@ def api_my_game_lobbies():
     return jsonify({'lobbies': active})
 
 
-# --- 2D Arcade Leaderboards (Floppy Bird & Slime Volleyball) ---
+# --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe & Connect Four) ---
 VALID_ARCADE_CATEGORIES = {
     'floppy_bird': ('campaign_stars', 'endless_score'),
-    'slime_volleyball': ('win_streak', 'volleys_returned')
+    'slime_volleyball': ('win_streak', 'volleys_returned'),
+    'tic_tac_toe': ('win_streak', 'total_wins'),
+    'connect_four': ('win_streak', 'total_wins')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])
@@ -1045,6 +1055,8 @@ def api_leaderboard_submit():
         return jsonify({'error': 'Win streak out of valid bounds'}), 400
     if category == 'volleys_returned' and not (1 <= score <= 1000000):
         return jsonify({'error': 'Volleys returned out of valid bounds'}), 400
+    if category == 'total_wins' and not (1 <= score <= 100000):
+        return jsonify({'error': 'Total wins out of valid bounds'}), 400
 
     metadata = data.get('metadata')
     if not isinstance(metadata, dict):

@@ -49,6 +49,42 @@
           </a>
         </div>
       </div>
+
+      <!-- Tic-Tac-Toe -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Tic-Tac-Toe</h3>
+            <span class="ew-badge">1v1 & Solo</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Classic 3x3 strategy duel. Play solo vs smart AI (Easy/Medium/Hard), local 2-player, or 1v1 online over WebSockets.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.tic_tac_toe') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play 1v1 / Solo
+          </a>
+        </div>
+      </div>
+
+      <!-- Connect Four -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">Connect Four</h3>
+            <span class="ew-badge">1v1 & Solo</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Vertical 7x6 strategy grid. Align 4 discs in a line vs AI with minimax, local 2-player, or 1v1 online matchmaking.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.connect_four') }}" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Play 1v1 / Solo
+          </a>
+        </div>
+      </div>
     </div>
     <!-- Weekly Arcade Champions Preview -->
     <div class="ew-card" style="margin-top: 1rem; padding: 1rem 1.25rem;">
@@ -58,14 +94,22 @@
         </div>
         <span class="ew-badge" style="font-size: 0.72rem;">Resets Weekly</span>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
         <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
           <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Floppy Bird (Stars)</div>
           <div id="fb-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
         </div>
         <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
-          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Slime Volleyball (Win Streak)</div>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Slime Volleyball (Streak)</div>
           <div id="slime-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Tic-Tac-Toe (Streak)</div>
+          <div id="ttt-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Connect Four (Streak)</div>
+          <div id="c4-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
         </div>
       </div>
     </div>
@@ -73,20 +117,28 @@
   <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', async () => {
       try {
-        const [fbRes, slimeRes] = await Promise.all([
+        const [fbRes, slimeRes, tttRes, c4Res] = await Promise.all([
           fetch('/api/games/leaderboard?game=floppy_bird&category=campaign_stars&period=weekly&limit=1'),
-          fetch('/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=weekly&limit=1')
+          fetch('/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=weekly&limit=1'),
+          fetch('/api/games/leaderboard?game=tic_tac_toe&category=win_streak&period=weekly&limit=1'),
+          fetch('/api/games/leaderboard?game=connect_four&category=win_streak&period=weekly&limit=1')
         ]);
         const fbData = await fbRes.json();
         const slimeData = await slimeRes.json();
+        const tttData = await tttRes.json();
+        const c4Data = await c4Res.json();
+
         const fbEl = document.getElementById('fb-champ');
         const slimeEl = document.getElementById('slime-champ');
+        const tttEl = document.getElementById('ttt-champ');
+        const c4El = document.getElementById('c4-champ');
+
         if (fbEl) {
           if (fbData.entries && fbData.entries.length > 0) {
             const top = fbData.entries[0];
             fbEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} stars`;
           } else {
-            fbEl.textContent = 'No records yet this week';
+            fbEl.textContent = 'No records yet';
           }
         }
         if (slimeEl) {
@@ -94,7 +146,23 @@
             const top = slimeData.entries[0];
             slimeEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} streak`;
           } else {
-            slimeEl.textContent = 'No records yet this week';
+            slimeEl.textContent = 'No records yet';
+          }
+        }
+        if (tttEl) {
+          if (tttData.entries && tttData.entries.length > 0) {
+            const top = tttData.entries[0];
+            tttEl.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} streak`;
+          } else {
+            tttEl.textContent = 'No records yet';
+          }
+        }
+        if (c4El) {
+          if (c4Data.entries && c4Data.entries.length > 0) {
+            const top = c4Data.entries[0];
+            c4El.innerHTML = `#1 <strong>${top.username}</strong> — ${top.score} streak`;
+          } else {
+            c4El.textContent = 'No records yet';
           }
         }
       } catch (_) {}

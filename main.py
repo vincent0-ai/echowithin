@@ -2108,10 +2108,17 @@ def handle_send_dm(data=None, *args, **kwargs):
             lobby_id = str(data.get('game_lobby_id') or g_data.get('lobby_id') or '').strip()
             g_type = str(data.get('game_type') or g_data.get('game_type') or 'game').strip()
             g_title = str(data.get('game_title') or g_data.get('title') or 'Game Lobby').strip()
+            g_url = str(data.get('game_url') or g_data.get('game_url') or '').strip()
+            if not g_url:
+                if g_type in ('slime_volleyball', 'slime'):
+                    g_url = f"/games/slime-volleyball?room={lobby_id}"
+                elif lobby_id:
+                    g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {
                 'lobby_id': lobby_id,
                 'game_type': g_type,
-                'title': g_title
+                'title': g_title,
+                'game_url': g_url
             }
         
         # Save to DB

@@ -658,7 +658,21 @@
         GameState.p2.name = data.guest_name || 'Guest';
 
         const statusEl = document.getElementById('online-status');
-        if (statusEl) statusEl.textContent = `Connected in room ${data.room_id} (${data.is_host ? 'Host' : 'Guest'})`;
+        if (statusEl) {
+          if (data.is_host && !data.guest_name) {
+            statusEl.textContent = `Room ${data.room_id} (Host). Waiting for opponent to enter...`;
+          } else {
+            statusEl.textContent = `Connected in room ${data.room_id} (${data.is_host ? 'Host' : 'Guest'}). Ready!`;
+          }
+        }
+
+        // When opponent enters the game room, reset scores so both players start fresh
+        if (data.guest_name) {
+          GameState.p1.score = 0;
+          GameState.p2.score = 0;
+          GameState.gameOver = false;
+          resetServe(-1);
+        }
       });
 
       GameState.socket.on('slime_host_sync', (data) => {

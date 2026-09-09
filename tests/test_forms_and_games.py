@@ -459,5 +459,95 @@ class TestSlimeVolleyball:
                 assert room_id not in m.active_slime_rooms
 
 
+class TestSlimeDMGameInvite:
+    """Tests for DM multiplayer Slime Volleyball auto-lobby invites."""
+
+    def test_dm_game_invite_slime_volleyball_auto_url(self, app, mock_user):
+        """Verify send_dm socket handler automatically generates game_url for Slime Volleyball."""
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from unittest.mock import patch, MagicMock
+        from bson.objectid import ObjectId
+
+        target_id = ObjectId()
+        recipient_user = {'_id': target_id, 'username': 'partner_user', 'dm_privacy': 'everyone'}
+
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                handlers[getattr(call.args[0], '__name__', '')] = call.args[0]
+
+        send_dm_handler = handlers.get('handle_send_dm')
+        assert send_dm_handler is not None
+
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'can_dm', return_value=True), \
+                 patch.object(m, 'users_conf') as mock_users, \
+                 patch.object(m, 'direct_messages_conf') as mock_dms, \
+                 patch.object(m, 'hidden_chats_conf') as mock_hidden, \
+                 patch.object(m, 'emit') as mock_emit:
+
+                def fake_insert(doc):
+                    doc['_id'] = ObjectId()
+                    return MagicMock(inserted_id=doc['_id'])
+                mock_dms.insert_one.side_effect = fake_insert
+
+                mock_users.find_one.return_value = recipient_user
+
+                invite_payload = {
+                    'recipient_id': str(target_id),
+                    'message_type': 'game_invite',
+                    'game_type': 'slime_volleyball',
+                    'game_lobby_id': 'sv-test42',
+                    'game_title': 'Slime Volleyball 1v1',
+                    'temp_id': 'tmp-123'
+                }
+
+                send_dm_handler(invite_payload)
+
+                mock_dms.insert_one.assert_called_once()
+                saved_doc = mock_dms.insert_one.call_args[0][0]
+                assert saved_doc['message_type'] == 'game_invite'
+                assert 'game_data' in saved_doc
+                assert saved_doc['game_data']['game_type'] == 'slime_volleyball'
+                assert saved_doc['game_data']['lobby_id'] == 'sv-test42'
+                assert saved_doc['game_data']['game_url'] == '/games/slime-volleyball?room=sv-test42'
+
+                # Verify emitted new_dm payload
+                assert mock_emit.call_count >= 2
+                new_dm_call = [c for c in mock_emit.call_args_list if c[0][0] == 'new_dm'][0]
+                emitted_payload = new_dm_call[0][1]
+                assert emitted_payload['game_data']['game_url'] == '/games/slime-volleyball?room=sv-test42'
+                assert 'Slime Volleyball' in emitted_payload['content']
+
+    def test_messages_template_slime_game_invite_elements(self):
+        """Verify messages.html contains Slime Volleyball auto-lobby trigger, modal card, and join button."""
+        import os
+        tpl_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(tpl_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert 'inviteSlimeVolleyball' in content
+        assert 'id="slime-auto-invite-btn"' in content
+        assert '1v1 Live' in content
+        assert 'Slime Volleyball' in content
+        assert 'Enter Slime Volleyball' in content
+        assert '/games/slime-volleyball?room=' in content
+
+    def test_slime_js_room_joined_fair_reset_and_status(self):
+        """Verify slime_volleyball.js includes opponent waiting status and score reset on opponent join."""
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'slime_volleyball.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        assert 'Waiting for opponent to enter' in content
+        assert 'GameState.p1.score = 0' in content
+        assert 'resetServe(-1)' in content
+
+
+
 
 

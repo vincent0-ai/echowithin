@@ -58,6 +58,9 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="game-back-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Back
+      </button>
       <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
         Mute Sound
       </button>
@@ -74,6 +77,9 @@
 
     <!-- On-screen touch buttons for mobile / one-handed touch play -->
     <div class="floppy-touch-row">
+      <button type="button" id="touch-back-btn" class="ew-btn--outline ew-btn--sm" style="flex: 0 0 auto; min-width: 72px; padding: 0.8rem 0.9rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px;">
+        Back
+      </button>
       <button type="button" id="touch-dash-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.8rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px;">
         Flamingo Dash (J)
       </button>
@@ -83,40 +89,27 @@
     </div>
 
     <!-- Flight Controls Info -->
-    <div style="width: 100%; max-width: 580px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.9rem 1.1rem;">
-      <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color); margin-bottom: 0.5rem;">
-        Flight Controls
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
-        <div><strong style="color: var(--text-dark-color);">Space / ↑ / Tap:</strong> Flop</div>
-        <div><strong style="color: var(--text-dark-color);">J / 2-finger:</strong> Flamingo Dash</div>
-        <div><strong style="color: var(--text-dark-color);">K / 3-finger:</strong> Ghost Phase</div>
-        <div><strong style="color: var(--text-dark-color);">R:</strong> Retry run</div>
-        <div><strong style="color: var(--text-dark-color);">Esc:</strong> Back / Menu</div>
-        <div><strong style="color: var(--text-dark-color);">↓ / S:</strong> Steer down (dash)</div>
-      </div>
-      <div style="margin-top: 0.6rem; font-size: 0.75rem; color: var(--text-muted); border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
-        ★ Clear goal &bull; ★★ 80% coins &bull; ★★★ No powers used. Stars unlock 6 custom bird skins. Progress is saved locally in your browser.
-      </div>
+    <div style="width: 100%; max-width: 580px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+      Tap or Space to flap &bull; Dash (J) &bull; Ghost (K) &bull; Retry (R) &bull; Back (Esc)
     </div>
 
     <!-- Floppy Bird Leaderboard Card -->
     <div style="width: 100%; max-width: 580px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.1rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
-          🏆 Floppy Leaderboard
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
+          Leaderboard
         </div>
         <div style="display: flex; gap: 0.35rem; align-items: center;">
           <button type="button" class="ew-btn ew-btn--sm floppy-lb-cat" data-cat="campaign_stars" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Campaign Stars</button>
           <button type="button" class="ew-btn--outline ew-btn--sm floppy-lb-cat" data-cat="endless_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Endless</button>
-          <button type="button" id="floppy-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;" title="Refresh standings">🔄</button>
+          <button type="button" id="floppy-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Refresh</button>
         </div>
       </div>
 
       <!-- Player Personal Stats Preview -->
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
         <div>
-          Your Best: <strong id="my-stats-stars" style="color: var(--text-dark-color);">0 ★</strong> (Campaign) &bull; <strong id="my-stats-endless" style="color: var(--text-dark-color);">0 pts</strong> (Endless)
+          Your Best: <strong id="my-stats-stars" style="color: var(--text-dark-color);">0 stars</strong> (Campaign) &bull; <strong id="my-stats-endless" style="color: var(--text-dark-color);">0 pts</strong> (Endless)
         </div>
         <div id="my-stats-rank" style="font-weight: 600; color: #e06a3b;"></div>
       </div>
@@ -147,6 +140,29 @@
           const isMuted = window.__floppy.toggleMute();
           muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
         }
+      });
+    }
+
+    // Mobile & Header Back navigation
+    const handleBack = () => {
+      if (!window.__floppy) return;
+      const sc = window.__floppy.S.screen;
+      if (sc === 'levels') {
+        window.__floppy.goMenu();
+      } else if (sc === 'menu') {
+        window.location.href = "{{ url_for('game.games_list') }}";
+      } else {
+        window.__floppy.goLevels();
+      }
+    };
+    const gameBackBtn = document.getElementById('game-back-btn');
+    if (gameBackBtn) gameBackBtn.addEventListener('click', handleBack);
+
+    const touchBackBtn = document.getElementById('touch-back-btn');
+    if (touchBackBtn) {
+      touchBackBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        handleBack();
       });
     }
 
@@ -188,7 +204,7 @@
           if (s && s.stars) {
             let total = 0;
             for (const k in s.stars) total += (s.stars[k] || 0);
-            if (myStarsEl) myStarsEl.textContent = `${total} ★`;
+            if (myStarsEl) myStarsEl.textContent = `${total} stars`;
           }
           if (s && s.endlessBest && myEndlessEl) {
             myEndlessEl.textContent = `${s.endlessBest} pts`;
@@ -211,13 +227,13 @@
       }
       let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
       entries.forEach(e => {
-        const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`;
-        const scoreLabel = (currentCat === 'campaign_stars') ? `${e.score} ★` : `${e.score} pts`;
+        const rankText = `#${e.rank}`;
+        const scoreLabel = (currentCat === 'campaign_stars') ? `${e.score} stars` : `${e.score} pts`;
         const guestBadge = e.is_guest ? '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem;">Guest</span>' : '';
         html += `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <span style="font-weight: 700; min-width: 24px; text-align: center; font-size: 0.9rem;">${medal}</span>
+              <span style="font-weight: 700; min-width: 28px; text-align: center; font-size: 0.85rem; color: var(--text-secondary);">${rankText}</span>
               <span style="font-weight: 600; color: var(--text-dark-color);">${e.username}</span>
               ${guestBadge}
             </div>

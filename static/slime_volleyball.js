@@ -563,7 +563,7 @@
       const streakTxt = document.getElementById('winner-streak');
       if (streakTxt) {
         if (GameState.winStreak > 0) {
-          streakTxt.textContent = `🔥 Win Streak: ${GameState.winStreak}`;
+          streakTxt.textContent = `Win Streak: ${GameState.winStreak}`;
           streakTxt.style.display = 'block';
         } else {
           streakTxt.textContent = localPlayerWon ? '' : 'Streak reset to 0';
@@ -787,7 +787,7 @@
         if (statusEl) statusEl.textContent = data.message || 'Matchmaking cancelled.';
         const matchBtn = document.getElementById('find-match-btn');
         if (matchBtn) {
-          matchBtn.textContent = '⚡ Find Match';
+          matchBtn.textContent = 'Find Match';
           matchBtn.classList.remove('ew-btn--active');
         }
       });
@@ -811,7 +811,7 @@
         }
         const matchBtn = document.getElementById('find-match-btn');
         if (matchBtn) {
-          matchBtn.textContent = '⚡ Find Match';
+          matchBtn.textContent = 'Find Match';
           matchBtn.classList.remove('ew-btn--active');
         }
       });
@@ -839,7 +839,7 @@
       if (statusEl) statusEl.textContent = 'Entering matchmaking queue...';
       const matchBtn = document.getElementById('find-match-btn');
       if (matchBtn) {
-        matchBtn.textContent = '⏳ Searching... (Cancel)';
+        matchBtn.textContent = 'Searching... (Cancel)';
         matchBtn.classList.add('ew-btn--active');
       }
       GameState.socket.emit('find_slime_match');
@@ -852,7 +852,7 @@
       GameState.socket.emit('cancel_slime_matchmaking');
       const matchBtn = document.getElementById('find-match-btn');
       if (matchBtn) {
-        matchBtn.textContent = '⚡ Find Match';
+        matchBtn.textContent = 'Find Match';
         matchBtn.classList.remove('ew-btn--active');
       }
     }

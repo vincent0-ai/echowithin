@@ -352,6 +352,20 @@ class TestFloppyBirdArcade:
         assert '<canvas id="c"' in html
         assert 'mute-toggle-btn' in html
 
+    def test_floppy_bird_mobile_back_and_clean_controls(self, client):
+        """Floppy Bird page has mobile back buttons and minimal control text without emojis."""
+        res = client.get('/games/floppy-bird')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'touch-back-btn' in html
+        assert 'game-back-btn' in html
+        assert 'Back' in html
+        assert 'Tap or Space to flap' in html
+        assert 'Clear goal' not in html
+        assert '80% coins' not in html
+        assert '🏆' not in html
+        assert '🔄' not in html
+
     def test_games_list_contains_floppy_bird_entry(self, auth_client, app, mock_user):
         """The /games hub page includes the Floppy Bird arcade card."""
         import main as m
@@ -385,6 +399,20 @@ class TestSlimeVolleyball:
         assert 'Slime Volleyball' in html
         assert 'tab-solo' in html
         assert 'tab-online' in html
+
+    def test_slime_volleyball_clean_controls_and_no_emojis(self, client):
+        """Slime Volleyball page has clean minimal controls and no emojis."""
+        res = client.get('/games/slime-volleyball')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'Back to Games' in html
+        assert 'Find Match' in html
+        assert '⚡' not in html
+        assert '🏆' not in html
+        assert '🔄' not in html
+        assert '◀' not in html
+        assert '▲' not in html
+        assert '▶' not in html
 
     def test_games_list_contains_slime_volleyball_card(self, auth_client, app, mock_user):
         """Games list features Slime Volleyball alongside Floppy Bird."""

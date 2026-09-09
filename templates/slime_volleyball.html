@@ -64,7 +64,7 @@
         Mute Sound
       </button>
       <a href="{{ url_for('game.games_list') }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration: none;">
-        All Games
+        Back to Games
       </a>
     </div>
   </div>
@@ -87,7 +87,7 @@
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
       <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
         <button type="button" id="find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
-          ⚡ Find Match
+          Find Match
         </button>
         <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
         <input type="text" id="room-code-input" placeholder="e.g. duel42" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
@@ -116,40 +116,32 @@
     <!-- On-Screen Mobile Touch Controls -->
     <div class="slime-touch-row">
       <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        ◀ Left
+        Left
       </button>
       <button type="button" id="touch-jump" class="ew-btn ew-btn--sm" style="flex: 1.2; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        Jump ▲
+        Jump
       </button>
       <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        Right ▶
+        Right
       </button>
     </div>
 
     <!-- Controls Guide -->
-    <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1.1rem;">
-      <div style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color); margin-bottom: 0.4rem;">
-        How to Play
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);">
-        <div><strong style="color: var(--text-dark-color);">Player 1 (Left / Host):</strong> A / D to move, W or Space to Jump</div>
-        <div><strong style="color: var(--text-dark-color);">Player 2 (Right / Local):</strong> ← / → to move, ↑ to Jump</div>
-        <div><strong style="color: var(--text-dark-color);">Mobile Touch:</strong> Use on-screen touch buttons</div>
-        <div><strong style="color: var(--text-dark-color);">Rules:</strong> First to 5 points wins. Win streaks count towards the leaderboard.</div>
-      </div>
+    <div style="width: 100%; max-width: 680px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
+      A / D or arrows to move &bull; W, Space or Jump button &bull; First to 5 points wins
     </div>
 
     <!-- Win Streak Leaderboard Card -->
     <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
-        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
-          🏆 Win Streak Leaderboard
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
+          Leaderboard
         </div>
         <div style="display: flex; gap: 0.35rem; align-items: center;">
           <button type="button" class="ew-btn ew-btn--sm slime-lb-tab" data-period="weekly" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">This Week</button>
           <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="daily" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">Today</button>
           <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="all_time" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">All-Time</button>
-          <button type="button" id="slime-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;" title="Refresh standings">🔄</button>
+          <button type="button" id="slime-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;">Refresh</button>
         </div>
       </div>
 
@@ -279,12 +271,12 @@
       }
       let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
       entries.forEach(e => {
-        const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`;
+        const rankText = `#${e.rank}`;
         const guestBadge = e.is_guest ? '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem;">Guest</span>' : '';
         html += `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <span style="font-weight: 700; min-width: 24px; text-align: center; font-size: 0.9rem;">${medal}</span>
+              <span style="font-weight: 700; min-width: 28px; text-align: center; font-size: 0.85rem; color: var(--text-secondary);">${rankText}</span>
               <span style="font-weight: 600; color: var(--text-dark-color);">${e.username}</span>
               ${guestBadge}
             </div>

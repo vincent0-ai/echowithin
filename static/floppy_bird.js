@@ -773,8 +773,7 @@ function drawLevels() {
   }
   const i = S.selIdx;
   if (i < LEVELS.length) { const lv = LEVELS[i]; plain(lv.name + ' — ' + (lv.mech.length ? lv.mech.map(k => MECH[k].desc).join(' · ') : lv.sub), W / 2, 508, 11.5, '#ffe9a8'); }
-  plain('★ clear   ★★ 80% coins   ★★★ no powers (or all coins where none)', W / 2, 532, 11, 'rgba(255,255,255,.8)');
-  plain('arrows move · ENTER fly · ESC menu', W / 2, H - 30, 12, 'rgba(255,255,255,.8)');
+  plain('Back to Menu (Esc)', W / 2, H - 30, 12, 'rgba(255,255,255,.85)');
 }
 function drawReady() {
   overlay(0.4);
@@ -796,7 +795,7 @@ function drawReady() {
   if (L.id === 1) { plain('SPACE / click / ↑ to flop.  J = flamingo dash (2× points).  K = ghost.', W / 2, 470, 12.5, '#fff'); }
   if (L.id === 10) { plain('In purple zones the ceiling is the floor. Flap carefully.', W / 2, 470, 12.5, '#fff'); }
   text('SPACE to fly', W / 2, 505 + Math.sin(S.t * 4) * 4, 20, 'rgba(255,255,255,' + (0.6 + Math.sin(S.t * 4) * 0.3) + ')');
-  plain('ESC back', W / 2, H - 30, 12, 'rgba(255,255,255,.8)');
+  plain('Back (Esc)', W / 2, H - 30, 13, 'rgba(255,255,255,.9)');
 }
 function drawDead() {
   overlay(0.45);
@@ -804,7 +803,7 @@ function drawDead() {
   if (L.goal) { text(S.score + ' / ' + L.goal + ' pipes', W / 2, 250, 28); plain('● ' + S.coins + ' coins', W / 2, 284, 15, '#ffe066'); }
   else { text(S.kind === 'daily' ? (S.score + S.coins) + ' points' : S.score + ' pipes', W / 2, 250, 30); plain(S.kind === 'daily' ? S.score + ' pipes + ' + S.coins + ' coins' : '● ' + S.coins + ' coins', W / 2, 284, 15, '#ffe066'); if (S.newBest) text('NEW BEST!', W / 2, 318, 22, '#ffd84d'); }
   text('SPACE  retry', W / 2, 370 + Math.sin(S.t * 4) * 3, 18);
-  plain('ESC  level select', W / 2, 400, 13, 'rgba(255,255,255,.8)');
+  plain('Back to Levels (Esc)', W / 2, 400, 13, 'rgba(255,255,255,.85)');
 }
 function drawClear() {
   overlay(0.45);
@@ -821,7 +820,7 @@ function drawClear() {
   if (S.newSkin) plain('unlocked skin: ' + S.newSkin.name + '  (pick it on the menu)', W / 2, 358, 13, '#a8f1ff');
   if (last) plain('You flew every sky. Endless and Daily await.', W / 2, 400, 13, '#dff4ff');
   text(last ? 'SPACE  level select' : 'SPACE  next level', W / 2, 440 + Math.sin(S.t * 4) * 3, 18);
-  plain('R  replay for stars  ·  ESC  level select', W / 2, 470, 12, 'rgba(255,255,255,.8)');
+  plain('Retry (R)  ·  Back to Levels (Esc)', W / 2, 470, 12, 'rgba(255,255,255,.85)');
 }
 
 function draw() {
@@ -906,10 +905,22 @@ function initGame() {
     if (AC && AC.state === 'suspended') { AC.resume().catch(() => {}); }
     const p = canvasPoint(e), sc = S.screen;
     if (sc === 'menu') { const i = S.menuRects.findIndex(r => inRect(p, r)); if (i >= 0) { S.menuIdx = i; menuSelect(); } return; }
-    if (sc === 'levels') { const i = S.cardRects.findIndex(r => inRect(p, r)); if (i >= 0) selectCard(i); return; }
-    if (sc === 'ready') return beginPlay();
-    if (sc === 'dead') return retry();
-    if (sc === 'clear') return nextLevel();
+    if (sc === 'levels') {
+      if (p.y >= H - 55) { goMenu(); return; }
+      const i = S.cardRects.findIndex(r => inRect(p, r)); if (i >= 0) selectCard(i); return;
+    }
+    if (sc === 'ready') {
+      if (p.y >= H - 60) { goLevels(); return; }
+      return beginPlay();
+    }
+    if (sc === 'dead') {
+      if ((p.y >= 385 && p.y <= 430) || p.y >= H - 55) { goLevels(); return; }
+      return retry();
+    }
+    if (sc === 'clear') {
+      if ((p.y >= 450 && p.y <= 495) || p.y >= H - 55) { goLevels(); return; }
+      return nextLevel();
+    }
     flap();
   });
   canvas.addEventListener('touchstart', e => {

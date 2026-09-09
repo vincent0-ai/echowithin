@@ -5154,7 +5154,7 @@
     .whisper-scroll-fab { display: none; position: absolute; bottom: calc(115px + env(safe-area-inset-bottom, 0px)); right: 18px; width: 38px; height: 38px; border-radius: 50%; background: #3e2217; color: #fff; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 4px 12px rgba(0,0,0,0.35); align-items: center; justify-content: center; cursor: pointer; z-index: 10; transition: transform 0.2s, bottom 0.15s ease-out; }
     .whisper-scroll-fab:active { transform: scale(0.95); }
     .whisper-unread-badge { position: absolute; top: -4px; right: -4px; background: #d32f2f; color: #fff; border-radius: 10px; padding: 1px 5px; font-size: 0.65rem; font-weight: 700; min-width: 16px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.3); line-height: 1.2; }
-    /* Whisper image anti-save layers */
+    /* Whisper image & video anti-save layers */
     .whisper-img-shield {
         position: relative; display: inline-block;
         -webkit-user-select: none; user-select: none;
@@ -5168,10 +5168,19 @@
         content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
         z-index: 1; background: transparent;
     }
-    .whisper-img-fallback {
+    .whisper-img-fallback, .whisper-video-fallback {
         display: flex; align-items: center; justify-content: center;
         padding: 12px 16px; background: rgba(0,0,0,0.25); border-radius: 6px;
         color: rgba(255,255,255,0.65); font-size: 0.8rem;
+    }
+    .whisper-video-shield {
+        position: relative; display: inline-block;
+        -webkit-user-select: none; user-select: none;
+        -webkit-touch-callout: none;
+    }
+    .whisper-video-shield video {
+        display: block; max-width: 260px; max-height: 240px; border-radius: 6px;
+        background: #000; outline: none;
     }
     /* Reply preview bar above input */
     .whisper-reply-bar {
@@ -5262,7 +5271,8 @@
     <div class="whisper-messages" id="whisper-messages"></div>
     <div class="whisper-typing-indicator" id="whisper-typing"></div>
     <div id="whisper-image-preview" style="display:none;padding:0.4rem;background:rgba(255,255,255,0.1);margin:0 0.5rem;border-radius:6px;position:relative;">
-        <img id="whisper-image-preview-img" src="" style="max-height:120px;border-radius:4px;" />
+        <img id="whisper-image-preview-img" src="" style="max-height:120px;border-radius:4px;display:none;" />
+        <video id="whisper-video-preview-vid" src="" style="max-height:120px;max-width:180px;border-radius:4px;display:none;" muted playsinline></video>
         <button onclick="cancelWhisperImage()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:0.7rem;">&times;</button>
         <div id="whisper-image-uploading" style="display:none;font-size:0.7rem;color:rgba(255,255,255,0.6);margin-top:0.2rem;">Uploading...</div>
     </div>
@@ -5272,8 +5282,8 @@
         <button class="reply-close" onclick="cancelWhisperReply()">&times;</button>
     </div>
     <div class="whisper-input-area" id="whisper-input-area">
-        <input type="file" id="whisper-image-input" accept="image/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
-        <button onclick="triggerWhisperImagePicker()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo"><i class="fas fa-camera"></i></button>
+        <input type="file" id="whisper-image-input" accept="image/*,video/*" style="display:none;" onchange="handleWhisperImageUpload(this)">
+        <button onclick="triggerWhisperImagePicker()" style="background:none;border:none;color:rgba(255,255,255,0.6);font-size:1.1rem;cursor:pointer;padding:0 0.3rem;" title="Send photo or video"><i class="fas fa-camera"></i></button>
         <textarea id="whisper-input" placeholder="Type a whisper..." rows="1"></textarea>
         <button class="whisper-send-btn" onclick="sendWhisperMessage()"><i class="fas fa-arrow-up"></i></button>
     </div>
@@ -5364,6 +5374,27 @@
                 openWhisperLightbox(imageUrl);
             }
         });
+        return shield;
+    }
+
+    // --- Protected video helper (anti-save layers & streaming playback) ---
+    function createWhisperProtectedVideo(videoUrl) {
+        var shield = document.createElement('div');
+        shield.className = 'whisper-video-shield';
+        var video = document.createElement('video');
+        video.src = videoUrl;
+        video.controls = true;
+        video.playsInline = true;
+        video.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback');
+        video.setAttribute('disablePictureInPicture', 'true');
+        video.setAttribute('playsinline', 'true');
+        video.preload = 'metadata';
+        video.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+        video.onerror = function() {
+            shield.classList.add('whisper-video-failed');
+            shield.innerHTML = '<div class="whisper-video-fallback"><i class="fas fa-video-slash" style="margin-right:6px;opacity:0.7;"></i><span>Video unavailable</span></div>';
+        };
+        shield.appendChild(video);
         return shield;
     }
 
@@ -5587,6 +5618,23 @@
                     caption.textContent = msg.content;
                     contentDiv.appendChild(caption);
                 }
+            } else if (msg.message_type === 'video') {
+                var vUrl = msg.video_url || msg.image_url;
+                if (vUrl) {
+                    var vshield = createWhisperProtectedVideo(vUrl);
+                    contentDiv.appendChild(vshield);
+                } else {
+                    var vfallback = document.createElement('div');
+                    vfallback.className = 'whisper-video-fallback';
+                    vfallback.innerHTML = '<i class="fas fa-video-slash" style="margin-right:6px;opacity:0.7;"></i><span>Video unavailable</span>';
+                    contentDiv.appendChild(vfallback);
+                }
+                if (msg.content && msg.content !== '[Video]') {
+                    const vcaption = document.createElement('div');
+                    vcaption.style.cssText = 'font-size:0.82rem;margin-top:0.3rem;';
+                    vcaption.textContent = msg.content;
+                    contentDiv.appendChild(vcaption);
+                }
             } else {
                 contentDiv.textContent = msg.content;
             }
@@ -5640,7 +5688,7 @@
             }
             // Own text messages get an edit affordance (F6). Edits overwrite
             // in place, keep no history, and never extend the TTL (W.5).
-            if (isSent && msg.id && msg.message_type !== 'image' && !msg.pending) {
+            if (isSent && msg.id && msg.message_type !== 'image' && msg.message_type !== 'video' && !msg.pending) {
                 var editBtn = document.createElement('button');
                 editBtn.className = 'whisper-edit-btn';
                 editBtn.textContent = 'Edit';
@@ -5842,10 +5890,19 @@
         input.style.height = 'auto';
         if (window.updateWhisperFabPosition) updateWhisperFabPosition();
         const tempId = 'wt-' + Date.now();
-        const msgType = pendingImgUrl ? 'image' : 'text';
         const meta = window._whisperPendingImageMeta || {};
-        const localMsg = { sender_id: currentUserId, content: content || '[Photo]', timestamp: new Date().toISOString(), is_system: false, message_type: msgType, temp_id: tempId, pending: true };
-        if (pendingImgUrl) localMsg.image_url = pendingImgUrl;
+        const isVideo = meta.resource_type === 'video';
+        const msgType = pendingImgUrl ? (isVideo ? 'video' : 'image') : 'text';
+        const defaultPlaceholder = isVideo ? '[Video]' : '[Photo]';
+        const localMsg = { sender_id: currentUserId, content: content || defaultPlaceholder, timestamp: new Date().toISOString(), is_system: false, message_type: msgType, temp_id: tempId, pending: true };
+        if (pendingImgUrl) {
+            if (isVideo) {
+                localMsg.video_url = pendingImgUrl;
+                localMsg.image_url = pendingImgUrl;
+            } else {
+                localMsg.image_url = pendingImgUrl;
+            }
+        }
         // Attach reply context to local echo
         if (whisperReplyState.messageId) {
             localMsg.reply_to = whisperReplyState.messageId;
@@ -5861,8 +5918,17 @@
             message_type: msgType
         };
         if (pendingImgUrl) {
-            payload.image_url = pendingImgUrl;
-            if (meta.public_id) payload.image_public_id = meta.public_id;
+            if (isVideo) {
+                payload.video_url = pendingImgUrl;
+                payload.image_url = pendingImgUrl;
+                if (meta.public_id) {
+                    payload.video_public_id = meta.public_id;
+                    payload.image_public_id = meta.public_id;
+                }
+            } else {
+                payload.image_url = pendingImgUrl;
+                if (meta.public_id) payload.image_public_id = meta.public_id;
+            }
             if (meta.mime) payload.mime_type = meta.mime;
         }
         if (whisperReplyState.messageId) {
@@ -5878,7 +5944,7 @@
             timer: setTimeout(function() { markWhisperFailed(tempId); }, WHISPER_SEND_TIMEOUT)
         };
         emitWhisperSocket('whisper_message', payload);
-        // Clear pending image after each send
+        // Clear pending image/video after each send
         window._whisperPendingImageUrl = '';
         window._whisperPendingImageMeta = null;
         cancelWhisperImage();
@@ -5899,24 +5965,36 @@
         window._whisperExpectingBlur = false;
         if (!input.files || !input.files[0]) return;
         const file = input.files[0];
-        if (file.size > 5 * 1024 * 1024) {
-            alert('Image must be under 5MB');
+        const isVideo = (file.type && file.type.startsWith('video/')) || /\.(mp4|webm|mov|ogg)$/i.test(file.name || '');
+        const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert((isVideo ? 'Video' : 'Image') + ' must be under ' + (isVideo ? '50MB' : '5MB'));
             input.value = '';
             return;
         }
         // Show preview
         const preview = document.getElementById('whisper-image-preview');
         const previewImg = document.getElementById('whisper-image-preview-img');
+        const previewVid = document.getElementById('whisper-video-preview-vid');
         const uploading = document.getElementById('whisper-image-uploading');
         preview.style.display = 'block';
         uploading.style.display = 'block';
-        previewImg.src = URL.createObjectURL(file);
+        const blobUrl = URL.createObjectURL(file);
+        if (isVideo) {
+            if (previewImg) { previewImg.style.display = 'none'; previewImg.src = ''; }
+            if (previewVid) { previewVid.src = blobUrl; previewVid.style.display = 'block'; }
+        } else {
+            if (previewVid) { previewVid.style.display = 'none'; previewVid.src = ''; }
+            if (previewImg) { previewImg.src = blobUrl; previewImg.style.display = 'block'; }
+        }
+        if (window.updateWhisperFabPosition) updateWhisperFabPosition();
 
-        // Upload to existing DM image endpoint
+        // Upload to appropriate DM/whisper media endpoint
         const fd = new FormData();
-        fd.append('image', file);
+        fd.append(isVideo ? 'video' : 'image', file);
+        const endpoint = isVideo ? '/api/messages/upload_video' : '/api/messages/upload_image';
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        echoFetch('/api/messages/upload_image', {
+        echoFetch(endpoint, {
             method: 'POST',
             headers: { 'X-CSRFToken': csrfToken },
             body: fd
@@ -5928,7 +6006,8 @@
                 // URLs on history fetch (DM parity, F5).
                 window._whisperPendingImageMeta = {
                     public_id: d.public_id || '',
-                    mime: d.mime_type || ''
+                    mime: d.mime_type || '',
+                    resource_type: isVideo ? 'video' : 'image'
                 };
             } else {
                 cancelWhisperImage();
@@ -5937,7 +6016,7 @@
         }).catch(err => {
             uploading.style.display = 'none';
             cancelWhisperImage();
-            console.error('Whisper image upload error:', err);
+            console.error('Whisper media upload error:', err);
         });
         input.value = '';
     };
@@ -5945,8 +6024,13 @@
     window.cancelWhisperImage = function() {
         window._whisperPendingImageUrl = '';
         window._whisperPendingImageMeta = null;
-        document.getElementById('whisper-image-preview').style.display = 'none';
-        document.getElementById('whisper-image-preview-img').src = '';
+        var preview = document.getElementById('whisper-image-preview');
+        if (preview) preview.style.display = 'none';
+        var previewImg = document.getElementById('whisper-image-preview-img');
+        if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
+        var previewVid = document.getElementById('whisper-video-preview-vid');
+        if (previewVid) { previewVid.src = ''; previewVid.style.display = 'none'; }
+        if (window.updateWhisperFabPosition) updateWhisperFabPosition();
     };
 
     // --- Whisper message editing (F6; semantics in DISCOVERY W.5) ---
@@ -6488,7 +6572,7 @@
                 var sending = bubble.querySelector('.whisper-sending');
                 if (sending) sending.remove();
                 // Attach edit affordance to confirmed own text messages (F6).
-                if (data.message_type !== 'image' && data.id && !bubble.querySelector('.whisper-edit-btn')) {
+                if (data.message_type !== 'image' && data.message_type !== 'video' && data.id && !bubble.querySelector('.whisper-edit-btn')) {
                     var editBtn = document.createElement('button');
                     editBtn.className = 'whisper-edit-btn';
                     editBtn.textContent = 'Edit';

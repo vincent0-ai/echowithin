@@ -725,6 +725,213 @@ class TestWhisperScreenshotAlert:
         assert "document.getElementById('whisper-extend-modal').classList.remove('active');" in content
 
 
+class TestWhisperVideoSupport:
+    """Tests for video support in whisper and DM sessions."""
+
+    def _handlers(self):
+        import main as m
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                handlers[getattr(call.args[0], '__name__', '')] = call.args[0]
+        return handlers
+
+    def test_video_upload_endpoint_success(self, app, auth_client):
+        import io
+        import main as m
+        fake_video_bytes = b"\x00\x00\x00\x18ftypmp42" + b"A" * 100
+        data = {
+            'video': (io.BytesIO(fake_video_bytes), 'test_video.mp4', 'video/mp4')
+        }
+        mock_upload_res = {
+            'public_id': 'dm_videos/test_vid_123',
+            'secure_url': 'https://res.cloudinary.com/demo/raw/upload/test.mp4'
+        }
+        with patch.object(m.cloudinary.uploader, 'upload', return_value=mock_upload_res):
+            res = auth_client.post('/api/messages/upload_video', data=data, content_type='multipart/form-data')
+            assert res.status_code == 200
+            rj = res.get_json()
+            assert rj['success'] is True
+            assert rj['resource_type'] == 'video'
+            assert rj['public_id'] == 'dm_videos/test_vid_123'
+            assert '/media/' in rj['url']
+
+    def test_video_upload_endpoint_size_limit(self, app, auth_client):
+        import io
+        # 51 MB exceeds 50 MB limit
+        large_bytes = b"0" * (51 * 1024 * 1024)
+        data = {
+            'video': (io.BytesIO(large_bytes), 'big.mp4', 'video/mp4')
+        }
+        res = auth_client.post('/api/messages/upload_video', data=data, content_type='multipart/form-data')
+        assert res.status_code == 400
+        assert 'exceeds' in res.get_json()['error']
+
+    def test_video_upload_endpoint_invalid_extension(self, app, auth_client):
+        import io
+        data = {
+            'video': (io.BytesIO(b"malicious content"), 'danger.exe', 'application/x-msdownload')
+        }
+        res = auth_client.post('/api/messages/upload_video', data=data, content_type='multipart/form-data')
+        assert res.status_code == 400
+        assert 'Unsupported video format' in res.get_json()['error']
+
+    def test_handle_whisper_message_video(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        me = str(mock_user['_id'])
+        partner = str(ObjectId())
+        sid = ObjectId()
+        session_doc = {
+            '_id': sid,
+            'initiator_id': ObjectId(me),
+            'recipient_id': ObjectId(partner),
+            'status': 'active',
+            'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+        }
+        handlers = self._handlers()
+        assert 'handle_whisper_message' in handlers
+
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgs, \
+                    patch.object(m, 'emit') as mock_emit, \
+                    patch.object(m, 'encrypt_dm', side_effect=lambda val, u1, u2: f"ENC_{val}"):
+                sess.find_one.return_value = session_doc
+                msgs.insert_one.side_effect = lambda d: d.setdefault('_id', ObjectId())
+                video_url = 'https://echowithin.test/media/dm_videos/abc?sig=123'
+                handlers['handle_whisper_message']({
+                    'session_id': str(sid),
+                    'message_type': 'video',
+                    'video_url': video_url,
+                    'video_public_id': 'dm_videos/abc',
+                    'temp_id': 'temp-vid-1'
+                })
+
+                msgs.insert_one.assert_called_once()
+                inserted_doc = msgs.insert_one.call_args[0][0]
+                assert inserted_doc['message_type'] == 'video'
+                assert inserted_doc['video_url'] == f"ENC_{video_url}"
+                assert inserted_doc['image_url'] == f"ENC_{video_url}"
+                assert inserted_doc['content'] == 'ENC_[Video]'
+                assert inserted_doc['media_encrypted'] is True
+
+                # Emitted to partner
+                partner_emit = None
+                for c in mock_emit.call_args_list:
+                    if c.args[0] == 'whisper_new_message':
+                        partner_emit = c
+                        break
+                assert partner_emit is not None
+                payload = partner_emit.args[1]
+                assert payload['message_type'] == 'video'
+                assert payload['video_url'] == video_url
+                assert payload['content'] == '[Video]'
+
+    def test_whisper_history_returns_video(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from blueprints.whisper import api_whisper_history
+        me = mock_user['_id']
+        partner = ObjectId()
+        sid = ObjectId()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        session_doc = {
+            '_id': sid,
+            'initiator_id': me,
+            'recipient_id': partner,
+            'status': 'active',
+            'started_at': now,
+            'expires_at': now + datetime.timedelta(minutes=15)
+        }
+        vid_msg = {
+            '_id': ObjectId(),
+            'session_id': sid,
+            'sender_id': partner,
+            'content': '[Video]',
+            'timestamp': now,
+            'message_type': 'video',
+            'video_url': 'gAAAAABsomething',
+            'video_public_id': 'gAAAAABpub'
+        }
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as sess, \
+                    patch.object(m, 'whisper_messages_conf') as msgc, \
+                    patch.object(m, '_whisper_image_serve_url', return_value='https://echowithin.test/fresh_vid.mp4'):
+                sess.find_one.return_value = session_doc
+                msgc.find.return_value.sort.return_value.limit.return_value = [dict(vid_msg)]
+                res = api_whisper_history(str(sid))
+                assert res.status_code == 200
+                messages = res.get_json()['messages']
+                assert len(messages) == 1
+                assert messages[0]['message_type'] == 'video'
+                assert messages[0]['video_url'] == 'https://echowithin.test/fresh_vid.mp4'
+
+    def test_whisper_cleanup_video(self, app):
+        import main as m
+        from blueprints.whisper import _cleanup_whisper_session_media
+        sid = ObjectId()
+        u1, u2 = ObjectId(), ObjectId()
+        session_doc = {'_id': sid, 'initiator_id': u1, 'recipient_id': u2}
+        vid_msg = {
+            '_id': ObjectId(),
+            'session_id': sid,
+            'message_type': 'video',
+            'video_public_id': 'dm_videos/test_vid_xyz',
+            'media_encrypted': True
+        }
+        with patch.object(m, 'whisper_sessions_conf') as sess, \
+                patch.object(m, 'whisper_messages_conf') as msgs, \
+                patch.object(m, 'destroy_cloudinary_media') as mock_destroy:
+            sess.find_one.return_value = session_doc
+            msgs.find.return_value = [vid_msg]
+            _cleanup_whisper_session_media(str(sid), session_doc)
+            mock_destroy.assert_called_once_with('dm_videos/test_vid_xyz', resource_type='raw', delivery_type='authenticated')
+
+    def test_serve_encrypted_media_range_stream(self, app, client):
+        import main as m
+        plain_video = b"0123456789abcdefghijklmnopqrstuvwxyz" # 36 bytes
+        mock_req_res = MagicMock()
+        mock_req_res.status_code = 200
+        mock_req_res.content = b"ENCRYPTED_MEDIA_BYTES"
+
+        with patch('main.media_serve_token_valid', return_value=True), \
+                patch('main.generate_signed_cloudinary_url', return_value='https://example.com/raw_vid'), \
+                patch('requests.get', return_value=mock_req_res), \
+                patch('main.decrypt_media_bytes', return_value=plain_video):
+            # Request byte range 0-9
+            res = client.get('/media/dm_videos_sample?mime=video/mp4&sig=valid', headers={'Range': 'bytes=0-9'})
+            assert res.status_code == 206
+            assert res.headers.get('Content-Range') == 'bytes 0-9/36'
+            assert res.headers.get('Content-Length') == '10'
+            assert res.headers.get('Accept-Ranges') == 'bytes'
+            assert res.data == b"0123456789"
+
+    def test_whisper_video_template_artifacts(self):
+        import os
+        template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # CSS classes
+        assert '.whisper-video-shield' in content
+        assert '.whisper-video-fallback' in content
+
+        # Video preview & file picker accept
+        assert 'id="whisper-video-preview-vid"' in content
+        assert 'accept="image/*,video/*"' in content
+
+        # JS functions
+        assert 'createWhisperProtectedVideo' in content
+        assert "msg.message_type === 'video'" in content
+        assert 'cancelWhisperImage' in content
+        assert 'previewVid' in content
+
+
 
 
 

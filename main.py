@@ -226,6 +226,8 @@ def serve_encrypted_media(public_id):
         'audio/mp4': ('.m4a',),
         'video/mp4': ('.mp4',),
         'video/webm': ('.webm',),
+        'video/ogg': ('.ogv',),
+        'video/quicktime': ('.mov',),
         'application/pdf': ('.pdf',),
         'text/plain': ('.txt',),
         'application/octet-stream': (),
@@ -254,7 +256,33 @@ def serve_encrypted_media(public_id):
     except Exception as e:
         app.logger.error(f"Media serve error for {public_id}: {e}")
         return abort(404)
+
+    # HTTP 206 Partial Content support for video/audio streaming (iOS Safari / mobile seeking requirement)
+    range_header = request.headers.get('Range')
+    if range_header and (mime.startswith('video/') or mime.startswith('audio/')):
+        try:
+            total_size = len(plain)
+            byte_range = range_header.replace('bytes=', '').strip()
+            parts = byte_range.split('-')
+            start = int(parts[0]) if parts[0] else 0
+            end = int(parts[1]) if len(parts) > 1 and parts[1] else total_size - 1
+            start = max(0, min(start, total_size - 1))
+            end = max(start, min(end, total_size - 1))
+            chunk = plain[start:end+1]
+            resp = Response(chunk, status=206, mimetype=mime)
+            resp.headers['Content-Range'] = f'bytes {start}-{end}/{total_size}'
+            resp.headers['Content-Length'] = str(len(chunk))
+            resp.headers['Accept-Ranges'] = 'bytes'
+            resp.headers['Cache-Control'] = 'private, max-age=86400'
+            resp.headers['ETag'] = etag
+            resp.headers['X-Content-Type-Options'] = 'nosniff'
+            resp.headers['Content-Disposition'] = 'inline'
+            return resp
+        except Exception:
+            pass
+
     resp = Response(plain, mimetype=mime)
+    resp.headers['Accept-Ranges'] = 'bytes'
     resp.headers['Cache-Control'] = 'private, max-age=86400, stale-while-revalidate=604800'
     resp.headers['ETag'] = etag
     resp.headers['X-Content-Type-Options'] = 'nosniff'
@@ -2315,16 +2343,16 @@ def handle_whisper_message(data=None, *args, **kwargs):
         return
     session_id = data.get('session_id')
     content = data.get('content', '').strip()
-    message_type = data.get('message_type', 'text')  # 'text' or 'image'
-    image_url = data.get('image_url', '').strip()
-    image_public_id = (data.get('image_public_id') or '').strip()
+    message_type = data.get('message_type', 'text')  # 'text', 'image', or 'video'
+    image_url = (data.get('video_url') or data.get('image_url') or '').strip()
+    image_public_id = (data.get('video_public_id') or data.get('image_public_id') or '').strip()
     mime_type = (data.get('mime_type') or '')[:200]
     reply_to_id = (data.get('reply_to') or '').strip()
 
-    # Require content for text messages, image_url for image messages
+    # Require content for text messages, media url for image/video messages
     if not session_id:
         return
-    if message_type == 'image' and not image_url:
+    if message_type in ('image', 'video') and not image_url:
         return
     if message_type == 'text' and not content:
         return
@@ -2385,10 +2413,11 @@ def handle_whisper_message(data=None, *args, **kwargs):
         # Store message encrypted at rest with TTL
         msg_expires = expires_at + datetime.timedelta(minutes=5) if expires_at else now + datetime.timedelta(hours=1)
 
-        # Encrypt content (text or image URL)
-        if message_type == 'image':
+        # Encrypt content (text, image, or video URL)
+        default_media_placeholder = '[Video]' if message_type == 'video' else '[Photo]'
+        if message_type in ('image', 'video'):
             encrypted_image_url = encrypt_dm(image_url, user_id_str, partner_id)
-            encrypted_content = encrypt_dm(content or '[Photo]', user_id_str, partner_id)
+            encrypted_content = encrypt_dm(content or default_media_placeholder, user_id_str, partner_id)
         else:
             encrypted_image_url = None
             encrypted_content = encrypt_dm(content, user_id_str, partner_id)
@@ -2410,11 +2439,16 @@ def handle_whisper_message(data=None, *args, **kwargs):
         }
         if encrypted_image_url:
             msg_doc['image_url'] = encrypted_image_url
+            if message_type == 'video':
+                msg_doc['video_url'] = encrypted_image_url
         if image_public_id:
-            msg_doc['image_public_id'] = encrypt_dm(image_public_id, user_id_str, partner_id)
+            enc_pub = encrypt_dm(image_public_id, user_id_str, partner_id)
+            msg_doc['image_public_id'] = enc_pub
+            if message_type == 'video':
+                msg_doc['video_public_id'] = enc_pub
         if is_media_proxy_url(image_url):
             msg_doc['media_encrypted'] = True
-            msg_doc['mime_type'] = mime_type or 'image/jpeg'
+            msg_doc['mime_type'] = mime_type or ('video/mp4' if message_type == 'video' else 'image/jpeg')
         elif mime_type:
             msg_doc['mime_type'] = mime_type
         # Reply-to threading
@@ -2433,7 +2467,7 @@ def handle_whisper_message(data=None, *args, **kwargs):
                             reply_content = decrypt_dm(reply_content, user_id_str, partner_id)
                         except Exception:
                             reply_content = '[Message]'
-                    msg_doc['reply_preview'] = (reply_content or '[Photo]')[:80]
+                    msg_doc['reply_preview'] = (reply_content or default_media_placeholder)[:80]
                     reply_sender_id = str(reply_msg.get('sender_id', ''))
                     msg_doc['reply_sender_id'] = reply_sender_id
                 elif data.get('reply_preview'):
@@ -2448,13 +2482,16 @@ def handle_whisper_message(data=None, *args, **kwargs):
             'id': str(msg_doc['_id']),
             'session_id': session_id,
             'sender_id': user_id_str,
-            'content': content or '[Photo]',
+            'content': content or default_media_placeholder,
             'timestamp': now.isoformat().replace('+00:00', 'Z'),
             'temp_id': data.get('temp_id'),
             'message_type': message_type,
             'is_read': is_actively_viewing
         }
         if message_type == 'image':
+            payload['image_url'] = image_url
+        elif message_type == 'video':
+            payload['video_url'] = image_url
             payload['image_url'] = image_url
         # Include reply context in payload
         if msg_doc.get('reply_to'):
@@ -2705,7 +2742,7 @@ def _whisper_image_serve_url(msg_doc, user_id_str, partner_id):
                 return ''
             return str(val)
 
-        raw_img = msg_doc.get('image_url', '')
+        raw_img = msg_doc.get('video_url') or msg_doc.get('image_url', '')
         plain_url = ''
         if raw_img:
             if raw_img.startswith('gAAAAA') and u1 and u2:
@@ -2722,7 +2759,7 @@ def _whisper_image_serve_url(msg_doc, user_id_str, partner_id):
                 plain_url = raw_img
         plain_url = _clean_val(plain_url)
 
-        raw_pub = msg_doc.get('image_public_id', '')
+        raw_pub = msg_doc.get('video_public_id') or msg_doc.get('image_public_id', '')
         plain_pub = ''
         if raw_pub:
             if raw_pub.startswith('gAAAAA') and u1 and u2:
@@ -2750,7 +2787,8 @@ def _whisper_image_serve_url(msg_doc, user_id_str, partner_id):
                 return serve
             return plain_url or ''
         if plain_pub:
-            return re_sign_cloudinary_url(plain_pub, resource_type='image', delivery_type='authenticated', fallback_url=(plain_url or None)) or plain_url or ''
+            res_type = 'video' if msg_doc.get('message_type') == 'video' else 'image'
+            return re_sign_cloudinary_url(plain_pub, resource_type=res_type, delivery_type='authenticated', fallback_url=(plain_url or None)) or plain_url or ''
         return plain_url or ''
     except Exception as e:
         app.logger.warning(f"Whisper image serve-URL error: {e}")

@@ -75,11 +75,13 @@ def _cleanup_whisper_session_media(session_id, session_doc=None):
             'session_id': sess_oid,
             '$or': [
                 {'image_public_id': {'$exists': True, '$ne': ''}},
-                {'image_url': {'$exists': True, '$ne': ''}}
+                {'image_url': {'$exists': True, '$ne': ''}},
+                {'video_public_id': {'$exists': True, '$ne': ''}},
+                {'video_url': {'$exists': True, '$ne': ''}}
             ]
         }))
         for wm in msgs_with_media:
-            raw_pub = wm.get('image_public_id')
+            raw_pub = wm.get('video_public_id') or wm.get('image_public_id')
             plain_pub = None
             if raw_pub:
                 if raw_pub.startswith('gAAAAA') and u1 and u2:
@@ -93,8 +95,8 @@ def _cleanup_whisper_session_media(session_id, session_doc=None):
                 else:
                     plain_pub = raw_pub
 
-            if not plain_pub and wm.get('image_url'):
-                raw_url = wm['image_url']
+            if not plain_pub and (wm.get('video_url') or wm.get('image_url')):
+                raw_url = wm.get('video_url') or wm.get('image_url')
                 plain_url = raw_url
                 if raw_url.startswith('gAAAAA') and u1 and u2:
                     try:
@@ -108,7 +110,8 @@ def _cleanup_whisper_session_media(session_id, session_doc=None):
                     plain_pub = m.extract_cloudinary_public_id(plain_url)
 
             if plain_pub and not str(plain_pub).startswith('[Content unavailable'):
-                res_type = 'raw' if wm.get('media_encrypted') else 'image'
+                is_vid = wm.get('message_type') == 'video'
+                res_type = 'raw' if wm.get('media_encrypted') else ('video' if is_vid else 'image')
                 del_type = 'authenticated' if wm.get('media_encrypted') else 'upload'
                 m.destroy_cloudinary_media(plain_pub, resource_type=res_type, delivery_type=del_type)
     except Exception as e:
@@ -738,12 +741,16 @@ def api_whisper_history(session_id):
             }
             if msg.get('reactions'):
                 entry['reactions'] = msg['reactions']
-            if msg_type == 'image' and 'image_url' in msg:
+            if msg_type in ('image', 'video') and ('image_url' in msg or 'video_url' in msg):
                 # DM parity (F5): re-serve fresh signed URLs on every fetch so
                 # authenticated Cloudinary URLs never go stale after reload.
                 serve = m._whisper_image_serve_url(msg, user_id_str, partner_id)
                 if serve:
-                    entry['image_url'] = serve
+                    if msg_type == 'video':
+                        entry['video_url'] = serve
+                        entry['image_url'] = serve
+                    else:
+                        entry['image_url'] = serve
             # Reply-to threading context
             if msg.get('reply_to'):
                 entry['reply_to'] = str(msg['reply_to'])

@@ -481,27 +481,90 @@ def api_dm_status(target_user_id):
 @limits(calls=30, period=60)
 def api_upload_dm_image():
     import main as m
-    if 'image' not in request.files:
+    if 'image' not in request.files and 'file' not in request.files:
         return jsonify({'error': 'No image provided'}), 400
-    file = request.files['image']
+    file = request.files.get('image') or request.files.get('file')
     if file.filename == '':
         return jsonify({'error': 'No empty filename'}), 400
     try:
         file.seek(0, os.SEEK_END)
         size = file.tell()
         file.seek(0)
-        if size > current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024):
-            return jsonify({'error': 'Image exceeds 5MB limit'}), 400
+        is_video = (file.mimetype or '').startswith('video/')
+        max_size = current_app.config.get('MAX_VIDEO_SIZE', 50 * 1024 * 1024) if is_video else current_app.config.get('MAX_IMAGE_SIZE', 5 * 1024 * 1024)
+        if size > max_size:
+            return jsonify({'error': f"{'Video' if is_video else 'Image'} exceeds allowed limit"}), 400
         upload_result = m.cloudinary.uploader.upload(
-            m.encrypt_media_bytes(file.read()), folder='dm_images', resource_type='raw', type='authenticated'
+            m.encrypt_media_bytes(file.read()),
+            folder='dm_videos' if is_video else 'dm_images',
+            resource_type='raw',
+            type='authenticated'
         )
         public_id = upload_result.get('public_id')
-        mime_type = (file.mimetype or 'image/jpeg')[:200]
+        mime_type = (file.mimetype or ('video/mp4' if is_video else 'image/jpeg'))[:200]
         serve_url = m.build_media_serve_url(public_id, mime_type) if public_id else ''
-        return jsonify({'success': True, 'url': serve_url or upload_result.get('secure_url'), 'public_id': public_id, 'mime_type': mime_type, 'media_encrypted': True})
+        return jsonify({
+            'success': True,
+            'url': serve_url or upload_result.get('secure_url'),
+            'public_id': public_id,
+            'mime_type': mime_type,
+            'resource_type': 'video' if is_video else 'image',
+            'media_encrypted': True
+        })
     except Exception as e:
         current_app.logger.error(f'Image upload failed for DM: {e}')
         return jsonify({'error': 'Failed to upload image'}), 500
+
+
+@bp.route('/api/messages/upload_video', methods=['POST'])
+@login_required
+@limits(calls=20, period=60)
+def api_upload_dm_video():
+    import main as m
+    if 'video' not in request.files and 'image' not in request.files and 'file' not in request.files:
+        return jsonify({'error': 'No video provided'}), 400
+    file = request.files.get('video') or request.files.get('image') or request.files.get('file')
+    if file.filename == '':
+        return jsonify({'error': 'No empty filename'}), 400
+    try:
+        file.seek(0, os.SEEK_END)
+        size = file.tell()
+        file.seek(0)
+        max_size = current_app.config.get('MAX_VIDEO_SIZE', 50 * 1024 * 1024)
+        if size > max_size:
+            return jsonify({'error': f'Video exceeds {max_size // (1024 * 1024)}MB limit'}), 400
+
+        filename_lower = file.filename.lower()
+        ext = filename_lower.rsplit('.', 1)[-1] if '.' in filename_lower else ''
+        if ext and ext not in m.ALLOWED_VIDEO_EXTENSIONS:
+            return jsonify({'error': f'Unsupported video format. Allowed: {", ".join(sorted(m.ALLOWED_VIDEO_EXTENSIONS))}'}), 400
+
+        raw_mime = (file.mimetype or '').split(';')[0].strip().lower()
+        if not raw_mime.startswith('video/'):
+            ext_mimes = {'mp4': 'video/mp4', 'webm': 'video/webm', 'ogg': 'video/ogg', 'mov': 'video/quicktime'}
+            mime_type = ext_mimes.get(ext, 'video/mp4')
+        else:
+            mime_type = raw_mime[:200]
+
+        upload_result = m.cloudinary.uploader.upload(
+            m.encrypt_media_bytes(file.read()),
+            folder='dm_videos',
+            resource_type='raw',
+            type='authenticated'
+        )
+        public_id = upload_result.get('public_id')
+        serve_url = m.build_media_serve_url(public_id, mime_type) if public_id else ''
+        return jsonify({
+            'success': True,
+            'url': serve_url or upload_result.get('secure_url'),
+            'public_id': public_id,
+            'mime_type': mime_type,
+            'resource_type': 'video',
+            'media_encrypted': True
+        })
+    except Exception as e:
+        current_app.logger.error(f'Video upload failed for DM/Whisper: {e}')
+        return jsonify({'error': 'Failed to upload video'}), 500
 
 
 @bp.route('/api/messages/upload_voice', methods=['POST'])

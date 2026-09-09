@@ -4905,7 +4905,7 @@
         height: 100vh;
         height: 100dvh;
         background: rgba(0,0,0,0.6);
-        z-index: 1300;
+        z-index: 1600;
         align-items: center;
         justify-content: center;
         box-sizing: border-box;
@@ -5938,6 +5938,9 @@
         whisperState.active = false;
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
         document.getElementById('whisper-overlay').classList.remove('active');
+        const extModal = document.getElementById('whisper-extend-modal');
+        if (extModal) extModal.classList.remove('active');
+        whisperState.pendingExtendData = null;
         // Release keyboard/viewport overrides + background scroll lock (F1/F2).
         var wo = document.getElementById('whisper-overlay');
         if (wo) wo.style.height = '';
@@ -6417,6 +6420,9 @@
             whisperState.expiresAt = new Date(data.new_expires_at);
             whisperState.warningShown = false;
             document.getElementById('whisper-warning-banner').classList.remove('active');
+            const extModal = document.getElementById('whisper-extend-modal');
+            if (extModal) extModal.classList.remove('active');
+            whisperState.pendingExtendData = null;
             const btn = document.getElementById('whisper-extend-trigger');
             if (btn) {
                 btn.textContent = 'Extend';
@@ -6426,6 +6432,9 @@
         });
 
         s.on('whisper_extend_declined', function() {
+            const extModal = document.getElementById('whisper-extend-modal');
+            if (extModal) extModal.classList.remove('active');
+            whisperState.pendingExtendData = null;
             const btn = document.getElementById('whisper-extend-trigger');
             if (btn) {
                 btn.textContent = 'Extend';

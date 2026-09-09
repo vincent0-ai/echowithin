@@ -700,6 +700,31 @@ class TestWhisperScreenshotAlert:
         assert 'div.appendChild(quoteDiv);' in content
         assert 'whisperEscapeHtml' in content
 
+    def test_whisper_extend_modal_stacking_order(self):
+        """Verify .whisper-modal-overlay has higher z-index than .whisper-overlay so modals appear in front."""
+        import os, re
+        template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Find z-index for .whisper-modal-overlay
+        modal_match = re.search(r'\.whisper-modal-overlay\s*\{[^}]*z-index:\s*(\d+)', content)
+        assert modal_match is not None, ".whisper-modal-overlay z-index not found"
+        modal_z = int(modal_match.group(1))
+
+        # Find z-index for .whisper-overlay
+        overlay_match = re.search(r'\.whisper-overlay\s*\{[^}]*z-index:\s*(\d+)', content)
+        assert overlay_match is not None, ".whisper-overlay z-index not found"
+        overlay_z = int(overlay_match.group(1))
+
+        # Modal overlay must be above the active whisper overlay
+        assert modal_z > overlay_z, f"modal overlay z-index ({modal_z}) must be higher than whisper overlay ({overlay_z})"
+        assert modal_z >= 1600
+
+        # Verify extend modal cleanup on session end
+        assert "document.getElementById('whisper-extend-modal').classList.remove('active');" in content
+
+
 
 
 

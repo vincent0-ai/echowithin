@@ -1014,7 +1014,7 @@ def api_my_game_lobbies():
 # --- 2D Arcade Leaderboards (Floppy Bird & Slime Volleyball) ---
 VALID_ARCADE_CATEGORIES = {
     'floppy_bird': ('campaign_stars', 'endless_score'),
-    'slime_volleyball': ('win_streak',)
+    'slime_volleyball': ('win_streak', 'volleys_returned')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])
@@ -1043,6 +1043,8 @@ def api_leaderboard_submit():
         return jsonify({'error': 'Endless score out of valid bounds'}), 400
     if category == 'win_streak' and not (1 <= score <= 500):
         return jsonify({'error': 'Win streak out of valid bounds'}), 400
+    if category == 'volleys_returned' and not (1 <= score <= 1000000):
+        return jsonify({'error': 'Volleys returned out of valid bounds'}), 400
 
     metadata = data.get('metadata')
     if not isinstance(metadata, dict):

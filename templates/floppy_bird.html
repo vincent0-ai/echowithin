@@ -6,26 +6,55 @@
     display: none !important;
   }
   .floppy-stage-card {
-    padding: 1.25rem;
+    padding: 1.5rem 1rem 1.25rem 1rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     border-radius: 12px;
+    background: #0b1020 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
   }
   .floppy-canvas-wrap {
     width: 100%;
-    max-width: 580px;
-    position: relative;
     display: flex;
     justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+  #c {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    max-height: min(640px, calc(100vh - 150px));
+    max-width: min(480px, 95vw);
+    width: auto;
+    height: auto;
+    aspect-ratio: 480 / 640;
+    touch-action: none;
+    background: #0b1020;
+    margin: 0 auto;
+  }
+  .floppy-hint-bar {
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.65);
+    letter-spacing: 0.04em;
+    margin-top: 0.65rem;
   }
   .floppy-touch-row {
-    display: flex;
+    display: none;
     gap: 0.75rem;
     justify-content: center;
     width: 100%;
-    max-width: 580px;
-    margin-top: 1rem;
+    max-width: 480px;
+    margin-top: 0.85rem;
+  }
+  @media (max-width: 768px) {
+    .floppy-touch-row {
+      display: flex;
+    }
   }
   @media (max-width: 600px) {
     .floppy-page-wrapper {
@@ -72,29 +101,29 @@
 
   <div class="ew-card floppy-stage-card">
     <div class="floppy-canvas-wrap">
-      <canvas id="c" width="480" height="640" style="display: block; border-radius: 12px; box-shadow: 0 12px 36px rgba(62, 34, 23, 0.16); width: 100%; max-width: 580px; height: auto; aspect-ratio: 480 / 640; touch-action: none; background: #0b1020;"></canvas>
+      <canvas id="c" width="480" height="640"></canvas>
     </div>
 
-    <!-- On-screen touch buttons for mobile / one-handed touch play -->
+    <!-- Flight Controls Info (matches original hint) -->
+    <div class="floppy-hint-bar">
+      Tap or Space to flap &bull; J dash &bull; K ghost &bull; &darr; dive (while dashing) &bull; R retry &bull; ESC back
+    </div>
+
+    <!-- On-screen touch buttons for mobile / touch play (hidden on desktop PC) -->
     <div class="floppy-touch-row">
-      <button type="button" id="touch-back-btn" class="ew-btn--outline ew-btn--sm" style="flex: 0 0 auto; min-width: 72px; padding: 0.8rem 0.9rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px;">
+      <button type="button" id="touch-back-btn" class="ew-btn--outline ew-btn--sm" style="flex: 0 0 auto; min-width: 72px; padding: 0.8rem 0.9rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px; color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.06);">
         Back
       </button>
-      <button type="button" id="touch-dash-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.8rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px;">
+      <button type="button" id="touch-dash-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.8rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px; color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.06);">
         Flamingo Dash (J)
       </button>
-      <button type="button" id="touch-ghost-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.8rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px;">
+      <button type="button" id="touch-ghost-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.8rem; font-weight: 700; font-size: 0.95rem; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; border-radius: 8px; color: #fff; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.06);">
         Ghost Phase (K)
       </button>
     </div>
 
-    <!-- Flight Controls Info -->
-    <div style="width: 100%; max-width: 580px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
-      Tap or Space to flap &bull; Dash (J) &bull; Ghost (K) &bull; Retry (R) &bull; Back (Esc)
-    </div>
-
     <!-- Floppy Bird Leaderboard Card -->
-    <div style="width: 100%; max-width: 580px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.1rem;">
+    <div style="width: 100%; max-width: 480px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.1rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
           Leaderboard

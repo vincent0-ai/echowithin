@@ -781,6 +781,57 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'setDifficulty' in js_content
         assert 'getRoundsWon' in js_content
 
+    def test_slime_volleyball_volleys_returned_leaderboard(self, client, app):
+        """Volleys returned is an accepted leaderboard category and ranks successful ball returns."""
+        import main as m
+        from blueprints.game import VALID_ARCADE_CATEGORIES
+        assert 'volleys_returned' in VALID_ARCADE_CATEGORIES['slime_volleyball']
+
+        # Submit a volleys_returned score
+        mock_lb = MagicMock()
+        mock_lb.find_one.return_value = None
+
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            res = client.post('/api/games/leaderboard/submit', json={
+                'game': 'slime_volleyball',
+                'category': 'volleys_returned',
+                'score': 35,
+                'guest_token': 'g_test_volleys'
+            })
+            assert res.status_code == 200
+            data = res.get_json()
+            assert data.get('success') is True
+            assert data.get('score') == 35
+
+            # Invalid bounds check (> 1,000,000)
+            res_invalid = client.post('/api/games/leaderboard/submit', json={
+                'game': 'slime_volleyball',
+                'category': 'volleys_returned',
+                'score': 2000000,
+                'guest_token': 'g_test_volleys'
+            })
+            assert res_invalid.status_code == 400
+
+    def test_arcade_pc_layout_and_canvas_aspect_ratios(self, client):
+        """Verify Floppy Bird and Slime Volleyball templates maintain proper canvas sizing and dark styling for PC."""
+        # Floppy Bird
+        res_fb = client.get('/games/floppy-bird')
+        assert res_fb.status_code == 200
+        html_fb = res_fb.get_data(as_text=True)
+        assert 'aspect-ratio: 480 / 640;' in html_fb
+        assert 'max-height: min(640px, calc(100vh - 150px));' in html_fb
+        assert 'max-width: min(480px, 95vw);' in html_fb
+        assert 'background: #0b1020 !important;' in html_fb
+
+        # Slime Volleyball
+        res_sv = client.get('/games/slime-volleyball')
+        assert res_sv.status_code == 200
+        html_sv = res_sv.get_data(as_text=True)
+        assert 'aspect-ratio: 16 / 9;' in html_sv
+        assert 'data-cat="volleys_returned"' in html_sv
+        assert 'id="my-slime-volleys"' in html_sv
+
+
 
 
 

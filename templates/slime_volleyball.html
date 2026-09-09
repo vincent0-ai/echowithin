@@ -15,18 +15,36 @@
   }
   .slime-canvas-wrap {
     width: 100%;
-    max-width: 960px;
     position: relative;
     display: flex;
     justify-content: center;
+    align-items: center;
+  }
+  #slime-canvas {
+    display: block;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12);
+    width: 100%;
+    max-width: min(960px, 100%);
+    max-height: min(540px, calc(100vh - 180px));
+    height: auto;
+    aspect-ratio: 16 / 9;
+    touch-action: none;
+    background: #f7f4ed;
+    margin: 0 auto;
   }
   .slime-touch-row {
-    display: flex;
+    display: none;
     gap: 0.75rem;
     justify-content: center;
     width: 100%;
     max-width: 580px;
     margin-top: 1rem;
+  }
+  @media (max-width: 768px) {
+    .slime-touch-row {
+      display: flex;
+    }
   }
   @media (max-width: 600px) {
     .slime-page-wrapper {
@@ -139,26 +157,31 @@
       A / D or arrows to move &bull; W, Space or Jump button &bull; First to 5 points wins
     </div>
 
-    <!-- Win Streak Leaderboard Card -->
+    <!-- Leaderboard Card -->
     <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
           Leaderboard
         </div>
         <div style="display: flex; gap: 0.35rem; align-items: center;">
-          <button type="button" class="ew-btn ew-btn--sm slime-lb-tab" data-period="weekly" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">This Week</button>
-          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="daily" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">Today</button>
-          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="all_time" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">All-Time</button>
+          <button type="button" class="ew-btn ew-btn--sm slime-lb-cat" data-cat="win_streak" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Win Streaks</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-cat" data-cat="volleys_returned" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Ball Returns</button>
           <button type="button" id="slime-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;">Refresh</button>
         </div>
       </div>
 
-      <!-- Player Personal Streak Status -->
+      <!-- Player Personal Stats Preview -->
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
         <div>
-          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong> &bull; Rounds Won: <strong id="my-slime-rounds" style="color: #2e86ab;">0</strong>
+          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong> &bull; Ball Returns: <strong id="my-slime-volleys" style="color: #2e86ab;">0</strong> &bull; Rounds Won: <strong id="my-slime-rounds" style="color: #2e86ab;">0</strong>
         </div>
         <div id="my-slime-rank" style="font-weight: 600; color: #e06a3b;"></div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.35rem; margin-bottom: 0.6rem;">
+        <button type="button" class="ew-btn ew-btn--sm slime-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
+        <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
+        <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
       </div>
 
       <div id="slime-lb-body" style="font-size: 0.85rem; min-height: 70px;">
@@ -279,11 +302,14 @@
     }
 
     // Leaderboard logic
+    let currentSlimeCat = 'win_streak';
     let currentSlimePeriod = 'weekly';
-    const slimeTabs = document.querySelectorAll('.slime-lb-tab');
+    const slimeCatTabs = document.querySelectorAll('.slime-lb-cat');
+    const slimePeriodTabs = document.querySelectorAll('.slime-lb-period');
     const slimeLbBody = document.getElementById('slime-lb-body');
     const refreshBtn = document.getElementById('slime-lb-refresh-btn');
     const myStreakEl = document.getElementById('my-slime-streak');
+    const myVolleysEl = document.getElementById('my-slime-volleys');
     const myRoundsEl = document.getElementById('my-slime-rounds');
     const myRankEl = document.getElementById('my-slime-rank');
 
@@ -292,6 +318,7 @@
         const streak = parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
         const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
         const rounds = parseInt(localStorage.getItem('slime_round_wins') || '0', 10);
+        const volleys = parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10);
         if (myStreakEl) {
           if (best > streak && best > 0) {
             myStreakEl.textContent = `${streak} wins (Best: ${best})`;
@@ -302,11 +329,18 @@
         if (myRoundsEl) {
           myRoundsEl.textContent = String(rounds);
         }
+        if (myVolleysEl) {
+          myVolleysEl.textContent = String(volleys);
+        }
       } catch (_) {}
     }
 
     window.__updateSlimeRoundsDisplay = function(rounds) {
       if (myRoundsEl) myRoundsEl.textContent = String(rounds);
+    };
+
+    window.__updateSlimeReturnsDisplay = function(volleys) {
+      if (myVolleysEl) myVolleysEl.textContent = String(volleys);
     };
 
     function renderLeaderboard(entries, userRecord) {
@@ -317,8 +351,10 @@
         myRankEl.textContent = '';
       }
 
+      const unit = (currentSlimeCat === 'volleys_returned') ? 'returns' : 'wins';
+
       if (!entries || entries.length === 0) {
-        slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No win streaks recorded yet for this period. Be the first!</div>';
+        slimeLbBody.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No ${unit} recorded yet for this period. Be the first!</div>`;
         return;
       }
       let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
@@ -333,7 +369,7 @@
               ${guestBadge}
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${e.score} wins</span>
+              <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${e.score} ${unit}</span>
             </div>
           </div>
         `;
@@ -342,14 +378,20 @@
       slimeLbBody.innerHTML = html;
     }
 
-    async function fetchSlimeLeaderboard(period = 'weekly') {
+    async function fetchSlimeLeaderboard(cat = currentSlimeCat, period = currentSlimePeriod) {
       try {
+        currentSlimeCat = cat;
         currentSlimePeriod = period;
-        slimeTabs.forEach(btn => {
-          btn.className = (btn.dataset.period === period) ? 'ew-btn ew-btn--sm slime-lb-tab' : 'ew-btn--outline ew-btn--sm slime-lb-tab';
+
+        slimeCatTabs.forEach(btn => {
+          btn.className = (btn.dataset.cat === cat) ? 'ew-btn ew-btn--sm slime-lb-cat' : 'ew-btn--outline ew-btn--sm slime-lb-cat';
         });
+        slimePeriodTabs.forEach(btn => {
+          btn.className = (btn.dataset.period === period) ? 'ew-btn ew-btn--sm slime-lb-period' : 'ew-btn--outline ew-btn--sm slime-lb-period';
+        });
+
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating leaderboard...</div>';
-        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=${period}`);
+        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=${cat}&period=${period}`);
         const data = await res.json();
         const list = data.entries || data.leaders || [];
         renderLeaderboard(list, data.user_record);
@@ -358,9 +400,15 @@
       }
     }
 
-    slimeTabs.forEach(btn => {
+    slimeCatTabs.forEach(btn => {
       btn.addEventListener('click', () => {
-        fetchSlimeLeaderboard(btn.dataset.period);
+        fetchSlimeLeaderboard(btn.dataset.cat, currentSlimePeriod);
+      });
+    });
+
+    slimePeriodTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        fetchSlimeLeaderboard(currentSlimeCat, btn.dataset.period);
       });
     });
 
@@ -369,7 +417,7 @@
         if (window.__slime && typeof window.__slime.syncScores === 'function') {
           window.__slime.syncScores();
         }
-        fetchSlimeLeaderboard(currentSlimePeriod);
+        fetchSlimeLeaderboard(currentSlimeCat, currentSlimePeriod);
       });
     }
 
@@ -377,11 +425,11 @@
       if (window.__slime && typeof window.__slime.syncScores === 'function') {
         window.__slime.syncScores();
       }
-      fetchSlimeLeaderboard(currentSlimePeriod);
+      fetchSlimeLeaderboard(currentSlimeCat, currentSlimePeriod);
     });
 
-    window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimePeriod);
-    fetchSlimeLeaderboard('weekly');
+    window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimeCat, currentSlimePeriod);
+    fetchSlimeLeaderboard('win_streak', 'weekly');
   });
 </script>
 {% endblock %}

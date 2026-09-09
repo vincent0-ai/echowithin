@@ -407,6 +407,9 @@
     winner: null,
     winStreak: parseInt(localStorage.getItem('slime_win_streak') || '0', 10),
     roundWins: parseInt(localStorage.getItem('slime_round_wins') || '0', 10),
+    volleysReturned: parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10),
+    currentRallyVolleys: 0,
+    bestRallyVolleys: parseInt(localStorage.getItem('slime_best_rally') || '0', 10),
     rallyCount: 0,
     lastAiTime: 0,
     lastAiAction: { forward: false, backward: false, jump: false },
@@ -543,11 +546,28 @@
       // Physics
       GameState.ball.applyGravity();
       GameState.ball.move();
-      GameState.ball.bounceSlime(GameState.p1);
+      const p1Hit = GameState.ball.bounceSlime(GameState.p1);
+      if (p1Hit) {
+        GameState.volleysReturned++;
+        GameState.currentRallyVolleys++;
+        if (GameState.currentRallyVolleys > GameState.bestRallyVolleys) {
+          GameState.bestRallyVolleys = GameState.currentRallyVolleys;
+          localStorage.setItem('slime_best_rally', String(GameState.bestRallyVolleys));
+        }
+        localStorage.setItem('slime_volleys_returned', String(GameState.volleysReturned));
+        if (typeof window.__updateSlimeReturnsDisplay === 'function') {
+          window.__updateSlimeReturnsDisplay(GameState.volleysReturned, GameState.currentRallyVolleys);
+        }
+      }
       GameState.ball.bounceSlime(GameState.p2);
 
       const groundHit = GameState.ball.checkEdges();
       if (groundHit !== 0) {
+        if (GameState.volleysReturned > 0) {
+          submitLeaderboard('volleys_returned', GameState.volleysReturned);
+        }
+        GameState.currentRallyVolleys = 0;
+
         if (groundHit === -1) {
           // Ball hit left ground -> P2 scores
           GameState.p2.score++;
@@ -699,6 +719,10 @@
       const toSync = Math.max(current, best);
       if (toSync > 0) {
         await submitLeaderboard('win_streak', toSync);
+      }
+      const volleys = GameState.volleysReturned || parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10);
+      if (volleys > 0) {
+        await submitLeaderboard('volleys_returned', volleys);
       }
       const raw = localStorage.getItem('arcade_pending_sync');
       if (raw) {
@@ -1133,6 +1157,8 @@
     findMatch: findMatch,
     cancelMatchmaking: cancelMatchmaking,
     getWinStreak: () => GameState.winStreak,
+    getVolleysReturned: () => GameState.volleysReturned,
+    getBestRallyVolleys: () => GameState.bestRallyVolleys,
     syncScores: syncAllScores
   };
 })();

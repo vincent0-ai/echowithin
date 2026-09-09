@@ -22,7 +22,8 @@ const STATIC_ASSETS = [
   '/static/floppy_bird.js',
   '/static/slime_volleyball.js',
   '/static/tic_tac_toe.js',
-  '/static/connect_four.js'
+  '/static/connect_four.js',
+  '/static/dots_and_boxes.js'
 ];
 
 // Pages to cache for offline access
@@ -37,7 +38,8 @@ const PAGES_TO_CACHE = [
   '/games/floppy-bird',
   '/games/slime-volleyball',
   '/games/tic-tac-toe',
-  '/games/connect-four'
+  '/games/connect-four',
+  '/games/dots-and-boxes'
 ];
 
 // Minimal offline HTML served when /offline isn't cached

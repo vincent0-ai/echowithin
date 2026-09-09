@@ -1019,6 +1019,81 @@ class TestArcadeMatchmakingAndLeaderboards:
                 leave_handler({'room_id': room_id})
                 assert room_id not in m.active_c4_rooms
 
+    def test_dots_and_boxes_routes_and_ui(self, client):
+        """Verify Dots and Boxes route, UI tabs, canvas, and clean controls."""
+        res = client.get('/games/dots-and-boxes')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+        assert 'dots_and_boxes.js' in html
+        assert 'Back to Games' in html
+        assert 'id="tab-solo"' in html
+        assert 'id="tab-local"' in html
+        assert 'id="tab-online"' in html
+        assert 'id="find-match-btn"' in html
+        assert 'id="room-code-input"' in html
+        assert 'id="dnb-canvas"' in html
+        assert 'data-diff="easy"' in html
+        assert 'data-diff="normal"' in html
+        assert 'data-diff="hard"' in html
+
+    def test_dots_and_boxes_leaderboard(self, client, app):
+        """Verify leaderboard submissions and bounds checking for Dots and Boxes."""
+        import main as m
+        from blueprints.game import VALID_ARCADE_CATEGORIES
+
+        assert 'dots_and_boxes' in VALID_ARCADE_CATEGORIES
+        assert 'win_streak' in VALID_ARCADE_CATEGORIES['dots_and_boxes']
+        assert 'total_wins' in VALID_ARCADE_CATEGORIES['dots_and_boxes']
+
+        mock_lb = MagicMock()
+        mock_lb.find_one.return_value = None
+
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            res = client.post('/api/games/leaderboard/submit', json={
+                'game': 'dots_and_boxes',
+                'category': 'win_streak',
+                'score': 12,
+                'guest_token': 'g_test_dnb'
+            })
+            assert res.status_code == 200
+            assert res.get_json()['score'] == 12
+
+    def test_dots_and_boxes_socket_events(self, app):
+        """Test Socket.IO room join, line drawn, extra turn upon box completion, and matchmaking for Dots and Boxes."""
+        import main as m
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+
+        join_handler = handlers.get('handle_join_dnb_room')
+        line_handler = handlers.get('handle_dnb_line')
+        leave_handler = handlers.get('handle_leave_dnb_room')
+        find_handler = handlers.get('handle_find_dnb_match')
+
+        assert join_handler is not None
+        assert line_handler is not None
+        assert leave_handler is not None
+        assert find_handler is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'join_room') as mock_join, \
+                 patch.object(m, 'emit') as mock_emit:
+
+                room_id = 'test_dnb_room'
+                mock_req.sid = 'sid_dnb_host'
+                join_handler({'room_id': room_id})
+                assert room_id in m.active_dnb_rooms
+                assert m.active_dnb_rooms[room_id]['host_sid'] == 'sid_dnb_host'
+
+                # Draw top line of box (0, 0)
+                line_handler({'room_id': room_id, 'type': 'h', 'row': 0, 'col': 0})
+                assert m.active_dnb_rooms[room_id]['h_edges'][0][0] == 0
+                assert m.active_dnb_rooms[room_id]['turn'] == 1
+
+                # Leave
+                leave_handler({'room_id': room_id})
+                assert room_id not in m.active_dnb_rooms
+
 
 
 

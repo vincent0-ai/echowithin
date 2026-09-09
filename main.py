@@ -2429,6 +2429,264 @@ def handle_cancel_c4_matchmaking(data=None, *args, **kwargs):
     emit('c4_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
+# --- Dots and Boxes 1v1 Real-Time Handlers ---
+active_dnb_rooms = {}
+dnb_matchmaking_queue = []
+
+DNB_ROWS = 5 # 5x5 dots -> 4x4 boxes (16 total boxes)
+DNB_COLS = 5
+
+def check_dnb_box_complete(h_edges, v_edges, r, c):
+    """Returns True if the 1x1 box at (r, c) has all 4 surrounding edges drawn."""
+    top = h_edges[r][c] is not None
+    bottom = h_edges[r + 1][c] is not None
+    left = v_edges[r][c] is not None
+    right = v_edges[r][c + 1] is not None
+    return top and bottom and left and right
+
+@socketio.on('join_dnb_room')
+def handle_join_dnb_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id or not isinstance(room_id, str):
+        return
+    room_id = room_id.strip()[:32]
+    if not room_id:
+        return
+
+    join_room(room_id)
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    sid = request.sid
+
+    room_info = active_dnb_rooms.get(room_id)
+    if not room_info:
+        room_info = {
+            'host_sid': sid,
+            'host_name': user_name,
+            'guest_sid': None,
+            'guest_name': None,
+            'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
+            'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
+            'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
+            'turn': 0,
+            'scores': [0, 0] # [p0, p1]
+        }
+        active_dnb_rooms[room_id] = room_info
+        emit('dnb_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': user_name,
+            'guest_name': None,
+            'player': 0
+        }, room=sid)
+    else:
+        room_info['guest_sid'] = sid
+        room_info['guest_name'] = user_name
+        active_dnb_rooms[room_id] = room_info
+
+        emit('dnb_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+        emit('dnb_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=room_info['host_sid'])
+
+@socketio.on('leave_dnb_room')
+def handle_leave_dnb_room(data=None, *args, **kwargs):
+    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    if not room_id:
+        return
+    sid = request.sid
+    try:
+        leave_room(room_id)
+    except Exception:
+        pass
+    room_info = active_dnb_rooms.get(room_id)
+    if room_info:
+        if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
+            emit('dnb_player_left', {'room_id': room_id}, room=room_id)
+            active_dnb_rooms.pop(room_id, None)
+
+@socketio.on('dnb_line')
+def handle_dnb_line(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    edge_type = data.get('type') # 'h' or 'v'
+    try:
+        r = int(data.get('row'))
+        c = int(data.get('col'))
+    except (ValueError, TypeError):
+        return
+
+    room_info = active_dnb_rooms.get(room_id)
+    if not room_info:
+        return
+
+    sid = request.sid
+    turn = room_info.get('turn', 0)
+    expected_sid = room_info.get('host_sid') if turn == 0 else room_info.get('guest_sid')
+    if sid != expected_sid:
+        return
+
+    h_edges = room_info['h_edges']
+    v_edges = room_info['v_edges']
+    boxes = room_info['boxes']
+
+    # Validate and set line
+    if edge_type == 'h':
+        if not (0 <= r < DNB_ROWS and 0 <= c < DNB_COLS - 1):
+            return
+        if h_edges[r][c] is not None:
+            return
+        h_edges[r][c] = turn
+    elif edge_type == 'v':
+        if not (0 <= r < DNB_ROWS - 1 and 0 <= c < DNB_COLS):
+            return
+        if v_edges[r][c] is not None:
+            return
+        v_edges[r][c] = turn
+    else:
+        return
+
+    # Check for newly completed boxes
+    completed_boxes = []
+    if edge_type == 'h':
+        # Check top box (r - 1, c)
+        if r > 0 and boxes[r - 1][c] is None and check_dnb_box_complete(h_edges, v_edges, r - 1, c):
+            boxes[r - 1][c] = turn
+            completed_boxes.append({'row': r - 1, 'col': c, 'owner': turn})
+        # Check bottom box (r, c)
+        if r < DNB_ROWS - 1 and boxes[r][c] is None and check_dnb_box_complete(h_edges, v_edges, r, c):
+            boxes[r][c] = turn
+            completed_boxes.append({'row': r, 'col': c, 'owner': turn})
+    else:
+        # Check left box (r, c - 1)
+        if c > 0 and boxes[r][c - 1] is None and check_dnb_box_complete(h_edges, v_edges, r, c - 1):
+            boxes[r][c - 1] = turn
+            completed_boxes.append({'row': r, 'col': c - 1, 'owner': turn})
+        # Check right box (r, c)
+        if c < DNB_COLS - 1 and boxes[r][c] is None and check_dnb_box_complete(h_edges, v_edges, r, c):
+            boxes[r][c] = turn
+            completed_boxes.append({'row': r, 'col': c, 'owner': turn})
+
+    if completed_boxes:
+        room_info['scores'][turn] += len(completed_boxes)
+        # Player keeps turn upon completing at least one box!
+        extra_turn = True
+        next_turn = turn
+    else:
+        extra_turn = False
+        next_turn = 1 - turn
+        room_info['turn'] = next_turn
+
+    total_boxes = (DNB_ROWS - 1) * (DNB_COLS - 1)
+    is_game_over = (room_info['scores'][0] + room_info['scores'][1]) == total_boxes
+    winner = None
+    if is_game_over:
+        if room_info['scores'][0] > room_info['scores'][1]:
+            winner = 0
+        elif room_info['scores'][1] > room_info['scores'][0]:
+            winner = 1
+        else:
+            winner = -1 # draw
+
+    emit('dnb_line_drawn', {
+        'type': edge_type,
+        'row': r,
+        'col': c,
+        'player': turn,
+        'completed_boxes': completed_boxes,
+        'extra_turn': extra_turn,
+        'next_turn': next_turn,
+        'scores': room_info['scores'],
+        'is_game_over': is_game_over,
+        'winner': winner
+    }, room=room_id)
+
+@socketio.on('dnb_restart')
+def handle_dnb_restart(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    room_id = data.get('room_id')
+    room_info = active_dnb_rooms.get(room_id)
+    if not room_info:
+        return
+    room_info['h_edges'] = [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)]
+    room_info['v_edges'] = [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)]
+    room_info['boxes'] = [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)]
+    room_info['turn'] = 0
+    room_info['scores'] = [0, 0]
+    emit('dnb_restarted', {'turn': 0}, room=room_id)
+
+@socketio.on('find_dnb_match')
+def handle_find_dnb_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    global dnb_matchmaking_queue
+    dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != sid]
+
+    if dnb_matchmaking_queue:
+        opponent = dnb_matchmaking_queue.pop(0)
+        room_id = f"dnb_{secrets.token_hex(4)}"
+
+        active_dnb_rooms[room_id] = {
+            'host_sid': opponent['sid'],
+            'host_name': opponent['user_name'],
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
+            'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
+            'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
+            'turn': 0,
+            'scores': [0, 0]
+        }
+
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+
+        emit('dnb_match_found', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 0
+        }, room=opponent['sid'])
+
+        emit('dnb_match_found', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name,
+            'player': 1
+        }, room=sid)
+    else:
+        dnb_matchmaking_queue.append({
+            'sid': sid,
+            'user_name': user_name,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        emit('dnb_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_dnb_matchmaking')
+def handle_cancel_dnb_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global dnb_matchmaking_queue
+    dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != sid]
+    emit('dnb_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+
 # --- Direct Messaging (DM) Functionality ---
 
 @socketio.on('join_inbox')
@@ -2530,6 +2788,16 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Connect Four Matchmaking queue on disconnect
     global c4_matchmaking_queue
     c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != request.sid]
+
+    # Cleanup Dots and Boxes rooms on disconnect
+    for room_id, rinfo in list(active_dnb_rooms.items()):
+        if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
+            emit('dnb_player_left', {'room_id': room_id}, room=room_id)
+            active_dnb_rooms.pop(room_id, None)
+
+    # Cleanup Dots and Boxes Matchmaking queue on disconnect
+    global dnb_matchmaking_queue
+    dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != request.sid]
 
 
 @socketio.on('send_dm')
@@ -2663,6 +2931,8 @@ def handle_send_dm(data=None, *args, **kwargs):
                     g_url = f"/games/tic-tac-toe?room={lobby_id}"
                 elif g_type in ('connect_four', 'connectfour'):
                     g_url = f"/games/connect-four?room={lobby_id}"
+                elif g_type in ('dots_and_boxes', 'dnb', 'dotsandboxes'):
+                    g_url = f"/games/dots-and-boxes?room={lobby_id}"
                 elif lobby_id:
                     g_url = f"/g/{lobby_id}"
             message_doc['game_data'] = {

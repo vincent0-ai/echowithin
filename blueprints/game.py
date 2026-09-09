@@ -149,6 +149,10 @@ def tic_tac_toe():
 def connect_four():
     return render_template('connect_four.html', active_page='games')
 
+@bp.route('/games/dots-and-boxes')
+def dots_and_boxes():
+    return render_template('dots_and_boxes.html', active_page='games')
+
 @bp.route('/games/create', methods=['GET', 'POST'])
 @login_required
 @limits(calls=10, period=60)
@@ -1019,12 +1023,13 @@ def api_my_game_lobbies():
     return jsonify({'lobbies': active})
 
 
-# --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe & Connect Four) ---
+# --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe, Connect Four & Dots-and-Boxes) ---
 VALID_ARCADE_CATEGORIES = {
     'floppy_bird': ('campaign_stars', 'endless_score'),
     'slime_volleyball': ('win_streak', 'volleys_returned'),
     'tic_tac_toe': ('win_streak', 'total_wins'),
-    'connect_four': ('win_streak', 'total_wins')
+    'connect_four': ('win_streak', 'total_wins'),
+    'dots_and_boxes': ('win_streak', 'total_wins')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])

@@ -1010,3 +1010,197 @@ def api_my_game_lobbies():
             })
     return jsonify({'lobbies': active})
 
+
+# --- 2D Arcade Leaderboards (Floppy Bird & Slime Volleyball) ---
+VALID_ARCADE_CATEGORIES = {
+    'floppy_bird': ('campaign_stars', 'endless_score'),
+    'slime_volleyball': ('win_streak',)
+}
+
+@bp.route('/api/games/leaderboard/submit', methods=['POST'])
+@limits(calls=30, period=60)
+def api_leaderboard_submit():
+    """Submit a high score or win streak for 2D arcade games with daily/weekly partitions."""
+    import main as m
+    data = request.get_json(silent=True)
+    if not data or not isinstance(data, dict):
+        return jsonify({'error': 'Invalid payload'}), 400
+
+    game = (data.get('game') or '').strip()
+    category = (data.get('category') or '').strip()
+    if game not in VALID_ARCADE_CATEGORIES or category not in VALID_ARCADE_CATEGORIES[game]:
+        return jsonify({'error': 'Invalid game or category'}), 400
+
+    try:
+        score = int(data.get('score', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Score must be an integer'}), 400
+
+    # Bounds validation to prevent unrealistic / cheated submissions
+    if category == 'campaign_stars' and not (0 <= score <= 42):
+        return jsonify({'error': 'Campaign stars must be between 0 and 42'}), 400
+    if category == 'endless_score' and not (0 <= score <= 1000000):
+        return jsonify({'error': 'Endless score out of valid bounds'}), 400
+    if category == 'win_streak' and not (1 <= score <= 500):
+        return jsonify({'error': 'Win streak out of valid bounds'}), 400
+
+    metadata = data.get('metadata')
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    day_key = now_utc.strftime('%Y-%m-%d')
+    week_key = now_utc.strftime('%Y-W%U')
+
+    is_auth = current_user.is_authenticated
+    user_id = str(current_user.id) if is_auth else None
+    username = (current_user.username if is_auth else (data.get('username') or 'Guest')).strip()[:24] or 'Guest'
+    avatar_url = getattr(current_user, 'profile_image_url', None) if is_auth else None
+    guest_token = (data.get('guest_token') or '').strip()[:64] if not is_auth else None
+
+    if not is_auth and not guest_token:
+        return jsonify({'error': 'Guest token required for unauthenticated submissions'}), 400
+
+    # Upsert across daily, weekly, and all-time partitions
+    partitions = [
+        ('daily', day_key),
+        ('weekly', week_key),
+        ('all_time', 'all')
+    ]
+
+    for p_type, p_key in partitions:
+        query = {
+            'game': game,
+            'category': category,
+            'period_key': p_key
+        }
+        if is_auth:
+            query['user_id'] = user_id
+        elif guest_token:
+            query['guest_token'] = guest_token
+        else:
+            query = None
+
+        if query:
+            existing = m.arcade_leaderboards_conf.find_one(query)
+            if existing and existing.get('score', 0) >= score:
+                continue
+            m.arcade_leaderboards_conf.update_one(
+                query,
+                {
+                    '$set': {
+                        'username': username,
+                        'avatar_url': avatar_url,
+                        'is_guest': not is_auth,
+                        'game': game,
+                        'category': category,
+                        'period': p_type,
+                        'period_key': p_key,
+                        'score': score,
+                        'metadata': metadata,
+                        'updated_at': now_utc
+                    },
+                    '$setOnInsert': {
+                        'created_at': now_utc
+                    }
+                },
+                upsert=True
+            )
+        else:
+            m.arcade_leaderboards_conf.insert_one({
+                'user_id': None,
+                'guest_token': None,
+                'username': username,
+                'avatar_url': None,
+                'is_guest': True,
+                'game': game,
+                'category': category,
+                'period': p_type,
+                'period_key': p_key,
+                'score': score,
+                'metadata': metadata,
+                'created_at': now_utc,
+                'updated_at': now_utc
+            })
+
+    return jsonify({
+        'success': True,
+        'game': game,
+        'category': category,
+        'score': score
+    })
+
+
+@bp.route('/api/games/leaderboard', methods=['GET'])
+def api_leaderboard_get():
+    """Retrieve top 10 leaderboard entries for a given game, category, and period."""
+    import main as m
+    game = (request.args.get('game') or 'floppy_bird').strip()
+    category = (request.args.get('category') or '').strip()
+    if game not in VALID_ARCADE_CATEGORIES:
+        return jsonify({'error': 'Invalid game'}), 400
+    if not category or category not in VALID_ARCADE_CATEGORIES[game]:
+        category = VALID_ARCADE_CATEGORIES[game][0]
+
+    period = (request.args.get('period') or 'weekly').strip()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    if period == 'daily':
+        period_key = now_utc.strftime('%Y-%m-%d')
+    elif period == 'all_time':
+        period_key = 'all'
+    else:
+        period = 'weekly'
+        period_key = now_utc.strftime('%Y-W%U')
+
+    cursor = m.arcade_leaderboards_conf.find({
+        'game': game,
+        'category': category,
+        'period_key': period_key
+    }).sort('score', -1).limit(10)
+
+    leaders = []
+    for idx, doc in enumerate(cursor):
+        dt = doc.get('updated_at') or doc.get('created_at') or now_utc
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        ts = dt.isoformat().replace('+00:00', 'Z')
+        leaders.append({
+            'rank': idx + 1,
+            'username': doc.get('username', 'Anonymous'),
+            'avatar_url': doc.get('avatar_url'),
+            'is_guest': bool(doc.get('is_guest')),
+            'score': doc.get('score', 0),
+            'updated_at': ts
+        })
+
+    user_record = None
+    if current_user.is_authenticated:
+        my_doc = m.arcade_leaderboards_conf.find_one({
+            'user_id': str(current_user.id),
+            'game': game,
+            'category': category,
+            'period_key': period_key
+        })
+        if my_doc:
+            higher = m.arcade_leaderboards_conf.count_documents({
+                'game': game,
+                'category': category,
+                'period_key': period_key,
+                'score': {'$gt': my_doc.get('score', 0)}
+            })
+            user_record = {
+                'rank': higher + 1,
+                'score': my_doc.get('score', 0)
+            }
+
+    return jsonify({
+        'game': game,
+        'category': category,
+        'period': period,
+        'period_key': period_key,
+        'entries': leaders,
+        'leaders': leaders,
+        'user_record': user_record
+    })
+

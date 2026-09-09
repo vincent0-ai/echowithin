@@ -548,6 +548,162 @@ class TestSlimeDMGameInvite:
         assert 'resetServe(-1)' in content
 
 
+class TestArcadeMatchmakingAndLeaderboards:
+    """Tests for Arcade Leaderboards API and Socket Matchmaking."""
+
+    def test_leaderboard_submit_validation(self, client):
+        """API rejects invalid game, category, out-of-bound score, or missing guest token."""
+        # Invalid game
+        res = client.post('/api/games/leaderboard/submit', json={
+            'game': 'unknown_game',
+            'category': 'campaign_stars',
+            'score': 10,
+            'guest_token': 'g_12345'
+        })
+        assert res.status_code == 400
+        assert 'Invalid game or category' in res.get_json()['error']
+
+        # Invalid category
+        res = client.post('/api/games/leaderboard/submit', json={
+            'game': 'floppy_bird',
+            'category': 'invalid_cat',
+            'score': 10,
+            'guest_token': 'g_12345'
+        })
+        assert res.status_code == 400
+        assert 'Invalid game or category' in res.get_json()['error']
+
+        # Score out of bounds (campaign stars > 42)
+        res = client.post('/api/games/leaderboard/submit', json={
+            'game': 'floppy_bird',
+            'category': 'campaign_stars',
+            'score': 100,
+            'guest_token': 'g_12345'
+        })
+        assert res.status_code == 400
+        assert 'Campaign stars must be between 0 and 42' in res.get_json()['error']
+
+        # Missing guest token for anonymous
+        res = client.post('/api/games/leaderboard/submit', json={
+            'game': 'floppy_bird',
+            'category': 'campaign_stars',
+            'score': 10
+        })
+        assert res.status_code == 400
+        assert 'Guest token required for unauthenticated submissions' in res.get_json()['error']
+
+    def test_leaderboard_submit_and_get_flow(self, auth_client, app):
+        """Authenticated score submission upserts partitions and GET returns formatted UTC Z entries."""
+        import main as m
+        from unittest.mock import MagicMock
+
+        mock_col = MagicMock()
+        mock_col.find_one.return_value = None
+        with patch.object(m, 'arcade_leaderboards_conf', mock_col):
+            # Test submit
+            res = auth_client.post('/api/games/leaderboard/submit', json={
+                'game': 'floppy_bird',
+                'category': 'campaign_stars',
+                'score': 36
+            })
+            assert res.status_code == 200
+            assert res.get_json()['success'] is True
+            # Should have updated 3 partitions (daily, weekly, all_time)
+            assert mock_col.update_one.call_count == 3
+
+            # Test get
+            sample_time = datetime.datetime.now(datetime.timezone.utc)
+            mock_find = MagicMock()
+            mock_find.sort.return_value.limit.return_value = [
+                {
+                    'username': 'FlopMaster',
+                    'is_guest': False,
+                    'score': 36,
+                    'updated_at': sample_time
+                }
+            ]
+            mock_col.find.return_value = mock_find
+
+            get_res = auth_client.get('/api/games/leaderboard?game=floppy_bird&category=campaign_stars&period=weekly')
+            assert get_res.status_code == 200
+            data = get_res.get_json()
+            assert data['game'] == 'floppy_bird'
+            assert data['category'] == 'campaign_stars'
+            assert data['period'] == 'weekly'
+            assert len(data['entries']) == 1
+            entry = data['entries'][0]
+            assert entry['rank'] == 1
+            assert entry['username'] == 'FlopMaster'
+            assert entry['score'] == 36
+            assert entry['updated_at'].endswith('Z')
+
+    def test_slime_socket_matchmaking_queue_and_pairing(self, app):
+        """Socket handlers queue solo players and pair waiting opponents automatically."""
+        import main as m
+
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                fn = call.args[0]
+                handlers[getattr(fn, '__name__', '')] = fn
+
+        find_match_handler = handlers.get('handle_find_slime_match')
+        cancel_match_handler = handlers.get('handle_cancel_slime_matchmaking')
+        assert find_match_handler is not None
+        assert cancel_match_handler is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'emit') as mock_emit, \
+                 patch.object(m, 'join_room') as mock_join:
+
+                m.slime_matchmaking_queue.clear()
+
+                # Player 1 enters queue
+                with patch.object(m, 'request') as req1:
+                    req1.sid = 'sid_player_1'
+                    find_match_handler()
+                    assert len(m.slime_matchmaking_queue) == 1
+                    assert m.slime_matchmaking_queue[0]['sid'] == 'sid_player_1'
+                    mock_emit.assert_called_with('slime_matchmaking_waiting', {'status': 'waiting'}, room='sid_player_1')
+
+                mock_emit.reset_mock()
+
+                # Player 1 cancels queue
+                with patch.object(m, 'request') as req1:
+                    req1.sid = 'sid_player_1'
+                    cancel_match_handler()
+                    assert len(m.slime_matchmaking_queue) == 0
+                    mock_emit.assert_called_with('slime_matchmaking_cancelled', {'status': 'cancelled'}, room='sid_player_1')
+
+                mock_emit.reset_mock()
+
+                # Player 1 re-enters queue
+                with patch.object(m, 'request') as req1:
+                    req1.sid = 'sid_player_1'
+                    find_match_handler()
+                    assert len(m.slime_matchmaking_queue) == 1
+
+                # Player 2 enters queue -> pair formed!
+                with patch.object(m, 'request') as req2:
+                    req2.sid = 'sid_player_2'
+                    find_match_handler()
+                    # Queue cleared as they matched
+                    assert len(m.slime_matchmaking_queue) == 0
+
+                    # Both should receive slime_match_found
+                    match_emits = [c for c in mock_emit.call_args_list if c[0][0] == 'slime_match_found']
+                    assert len(match_emits) == 2
+
+                    host_call = [c for c in match_emits if c[1].get('room') == 'sid_player_1'][0]
+                    guest_call = [c for c in match_emits if c[1].get('room') == 'sid_player_2'][0]
+
+                    assert host_call[0][1]['is_host'] is True
+                    assert guest_call[0][1]['is_host'] is False
+                    assert host_call[0][1]['room_id'] == guest_call[0][1]['room_id']
+                    assert host_call[0][1]['room_id'].startswith('duel_')
+
+
+
 
 
 

@@ -50,7 +50,56 @@
         </div>
       </div>
     </div>
+    <!-- Weekly Arcade Champions Preview -->
+    <div class="ew-card" style="margin-top: 1rem; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
+          🏆 Weekly Arcade Champions
+        </div>
+        <span class="ew-badge" style="font-size: 0.72rem;">Resets Weekly</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.75rem; font-size: 0.85rem;">
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Floppy Bird (Stars)</div>
+          <div id="fb-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
+        <div style="padding: 0.6rem 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Slime Volleyball (Win Streak)</div>
+          <div id="slime-champ" style="font-weight: 600; color: var(--text-dark-color);">Loading...</div>
+        </div>
+      </div>
+    </div>
   </div>
+  <script nonce="{{ csp_nonce }}">
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const [fbRes, slimeRes] = await Promise.all([
+          fetch('/api/games/leaderboard?game=floppy_bird&category=campaign_stars&period=weekly&limit=1'),
+          fetch('/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=weekly&limit=1')
+        ]);
+        const fbData = await fbRes.json();
+        const slimeData = await slimeRes.json();
+        const fbEl = document.getElementById('fb-champ');
+        const slimeEl = document.getElementById('slime-champ');
+        if (fbEl) {
+          if (fbData.entries && fbData.entries.length > 0) {
+            const top = fbData.entries[0];
+            fbEl.innerHTML = `🥇 <strong>${top.username}</strong> — ${top.score} ★`;
+          } else {
+            fbEl.textContent = 'No records yet this week';
+          }
+        }
+        if (slimeEl) {
+          if (slimeData.entries && slimeData.entries.length > 0) {
+            const top = slimeData.entries[0];
+            slimeEl.innerHTML = `🥇 <strong>${top.username}</strong> — ${top.score} streak`;
+          } else {
+            slimeEl.textContent = 'No records yet this week';
+          }
+        }
+      } catch (_) {}
+    });
+  </script>
   {% if lobbies %}
     <div class="ew-card-grid">
       {% for lobby in lobbies %}

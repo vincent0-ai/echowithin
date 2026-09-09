@@ -1,7 +1,53 @@
 {% extends "base.html" %}
 {% block title %}<title>Slime Volleyball: 1v1 & Solo — EchoWithin</title>{% endblock %}
 {% block content %}
-<div class="content-wrapper" style="max-width: 860px; margin: 0 auto; padding-bottom: 2rem;">
+<style nonce="{{ csp_nonce }}">
+  #mobile-reload-btn, .mobile-fab {
+    display: none !important;
+  }
+  .slime-stage-card {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    border-radius: 12px;
+  }
+  .slime-canvas-wrap {
+    width: 100%;
+    max-width: 960px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+  }
+  .slime-touch-row {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    width: 100%;
+    max-width: 580px;
+    margin-top: 1rem;
+  }
+  @media (max-width: 600px) {
+    .slime-page-wrapper {
+      padding-left: 0.25rem !important;
+      padding-right: 0.25rem !important;
+    }
+    .slime-stage-card {
+      padding: 0.6rem 0.25rem !important;
+      border-radius: 8px !important;
+    }
+    .slime-canvas-wrap, #slime-canvas {
+      max-width: 100% !important;
+      border-radius: 8px !important;
+    }
+    .slime-touch-row {
+      max-width: 100% !important;
+    }
+  }
+</style>
+
+<div class="content-wrapper slime-page-wrapper" style="max-width: 1080px; margin: 0 auto; padding-bottom: 2rem;">
   <!-- Header Row -->
   <div class="ew-header-row" style="margin-bottom: 1rem;">
     <div>
@@ -40,38 +86,42 @@
   <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
       <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-        <span style="font-weight: 600; font-size: 0.9rem; color: var(--text-dark-color);">Room:</span>
-        <input type="text" id="room-code-input" placeholder="e.g. game123" style="width: 140px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
+        <button type="button" id="find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+          ⚡ Find Match
+        </button>
+        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-secondary); margin: 0 0.25rem;">or Room Code:</span>
+        <input type="text" id="room-code-input" placeholder="e.g. duel42" style="width: 130px; padding: 0.35rem 0.6rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.85rem; background: var(--surface-bg); color: var(--text-dark-color);">
         <button type="button" id="join-room-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Join</button>
-        <button type="button" id="create-room-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create New Room</button>
+        <button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>
       </div>
       <div id="online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
-        Not connected. Create or join a room.
+        Not connected. Use "Find Match" or enter a room code.
       </div>
     </div>
   </div>
 
   <!-- Game Arena Card -->
-  <div class="ew-card" style="padding: 1.25rem; display: flex; flex-direction: column; align-items: center; position: relative;">
-    <div style="width: 100%; max-width: 800px; position: relative; display: flex; justify-content: center;">
-      <canvas id="slime-canvas" width="800" height="500" style="display: block; border-radius: 12px; box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12); width: 100%; max-width: 800px; height: auto; aspect-ratio: 800 / 500; touch-action: none; background: #f7f4ed;"></canvas>
+  <div class="ew-card slime-stage-card">
+    <div class="slime-canvas-wrap">
+      <canvas id="slime-canvas" width="960" height="540" style="display: block; border-radius: 12px; box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12); width: 100%; max-width: 960px; height: auto; aspect-ratio: 16 / 9; touch-action: none; background: #f7f4ed;"></canvas>
 
       <!-- Game Over Banner -->
-      <div id="game-over-banner" style="display: none; position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10;">
-        <h3 id="winner-text" style="margin: 0 0 0.8rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
+      <div id="game-over-banner" style="display: none; position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10; min-width: 260px;">
+        <h3 id="winner-text" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
+        <div id="winner-streak" style="display: none; font-size: 0.95rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.8rem;"></div>
         <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Rematch</button>
       </div>
     </div>
 
     <!-- On-Screen Mobile Touch Controls -->
-    <div style="display: flex; gap: 0.75rem; justify-content: center; width: 100%; max-width: 500px; margin-top: 1rem;">
-      <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+    <div class="slime-touch-row">
+      <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
         ◀ Left
       </button>
-      <button type="button" id="touch-jump" class="ew-btn ew-btn--sm" style="flex: 1.2; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+      <button type="button" id="touch-jump" class="ew-btn ew-btn--sm" style="flex: 1.2; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
         Jump ▲
       </button>
-      <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.75rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1rem;">
+      <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
         Right ▶
       </button>
     </div>
@@ -85,7 +135,24 @@
         <div><strong style="color: var(--text-dark-color);">Player 1 (Left / Host):</strong> A / D to move, W or Space to Jump</div>
         <div><strong style="color: var(--text-dark-color);">Player 2 (Right / Local):</strong> ← / → to move, ↑ to Jump</div>
         <div><strong style="color: var(--text-dark-color);">Mobile Touch:</strong> Use on-screen touch buttons</div>
-        <div><strong style="color: var(--text-dark-color);">Rules:</strong> First to 5 points wins. Ball landing on your floor gives 1 point to opponent.</div>
+        <div><strong style="color: var(--text-dark-color);">Rules:</strong> First to 5 points wins. Win streaks count towards the leaderboard.</div>
+      </div>
+    </div>
+
+    <!-- Win Streak Leaderboard Card -->
+    <div style="width: 100%; max-width: 680px; margin-top: 1.2rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem 1.25rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
+          🏆 Win Streak Leaderboard
+        </div>
+        <div style="display: flex; gap: 0.35rem;">
+          <button type="button" class="ew-btn ew-btn--sm slime-lb-tab" data-period="weekly" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">This Week</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="daily" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">Today</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-tab" data-period="all_time" style="font-size: 0.75rem; padding: 0.2rem 0.6rem; cursor: pointer;">All-Time</button>
+        </div>
+      </div>
+      <div id="slime-lb-body" style="font-size: 0.85rem; min-height: 70px;">
+        <div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Loading standings...</div>
       </div>
     </div>
   </div>
@@ -94,6 +161,10 @@
 <script src="{{ url_for('static', filename='slime_volleyball.js') }}" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
+    // Explicitly remove reload fab if present
+    const reloadFab = document.getElementById('mobile-reload-btn');
+    if (reloadFab) reloadFab.remove();
+
     // Audio mute toggle
     const muteBtn = document.getElementById('mute-toggle-btn');
     if (muteBtn && window.__slime) {
@@ -132,10 +203,17 @@
       onlinePanel.style.display = 'block';
     });
 
-    // Online room management
+    // Online matchmaking & room management
+    const findMatchBtn = document.getElementById('find-match-btn');
     const createRoomBtn = document.getElementById('create-room-btn');
     const joinRoomBtn = document.getElementById('join-room-btn');
     const roomInput = document.getElementById('room-code-input');
+
+    if (findMatchBtn) {
+      findMatchBtn.addEventListener('click', () => {
+        if (window.__slime) window.__slime.findMatch();
+      });
+    }
 
     createRoomBtn.addEventListener('click', () => {
       const code = Math.random().toString(36).substring(2, 8);
@@ -161,6 +239,65 @@
       roomInput.value = roomParam;
       if (window.__slime) window.__slime.setMode('online', roomParam);
     }
+
+    // Leaderboard logic
+    let currentSlimePeriod = 'weekly';
+    const slimeTabs = document.querySelectorAll('.slime-lb-tab');
+    const slimeLbBody = document.getElementById('slime-lb-body');
+
+    function renderLeaderboard(entries) {
+      if (!entries || entries.length === 0) {
+        slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No win streaks recorded yet for this period. Be the first!</div>';
+        return;
+      }
+      let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
+      entries.forEach(e => {
+        const medal = e.rank === 1 ? '🥇' : e.rank === 2 ? '🥈' : e.rank === 3 ? '🥉' : `#${e.rank}`;
+        const guestBadge = e.is_guest ? '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem;">Guest</span>' : '';
+        html += `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span style="font-weight: 700; min-width: 24px; text-align: center; font-size: 0.9rem;">${medal}</span>
+              <span style="font-weight: 600; color: var(--text-dark-color);">${e.username}</span>
+              ${guestBadge}
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${e.score} wins</span>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      slimeLbBody.innerHTML = html;
+    }
+
+    async function fetchSlimeLeaderboard(period = 'weekly') {
+      try {
+        currentSlimePeriod = period;
+        slimeTabs.forEach(btn => {
+          btn.className = (btn.dataset.period === period) ? 'ew-btn ew-btn--sm slime-lb-tab' : 'ew-btn--outline ew-btn--sm slime-lb-tab';
+        });
+        slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating leaderboard...</div>';
+        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=win_streak&period=${period}`);
+        const data = await res.json();
+        if (data && data.entries) {
+          renderLeaderboard(data.entries);
+        } else {
+          slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet.</div>';
+        }
+      } catch (err) {
+        slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Failed to load leaderboard.</div>';
+      }
+    }
+
+    slimeTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        fetchSlimeLeaderboard(btn.dataset.period);
+      });
+    });
+
+    window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimePeriod);
+    fetchSlimeLeaderboard('weekly');
   });
 </script>
 {% endblock %}

@@ -232,11 +232,37 @@ function useGhost() {
   S.ghost.active = T.ghost.dur; S.ghost.cd = T.ghost.dur + T.ghost.cd; S.ghost.lingering = 0;
   puff(T.birdX, S.bird.y, '#7fe9ff', 14, 160, 0.7); popup('GHOST!', '#a8f1ff'); SFX.ghost();
 }
+async function submitLeaderboard(category, score) {
+  try {
+    let guestToken = localStorage.getItem('arcade_guest_token');
+    if (!guestToken) {
+      guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('arcade_guest_token', guestToken);
+    }
+    await fetch('/api/games/leaderboard/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        game: 'floppy_bird',
+        category: category,
+        score: score,
+        guest_token: guestToken
+      })
+    });
+    if (typeof window.__refreshFloppyLeaderboard === 'function') {
+      window.__refreshFloppyLeaderboard();
+    }
+  } catch (_) {}
+}
+
 function die() {
   if (S.screen !== 'play') return;
   S.screen = 'dead'; S.shake = 14; S.hitFlash = 0.25; S.dash.active = 0; S.ghost.active = 0;
   puff(T.birdX, S.bird.y, '#ffd84d', 20, 260, 0.8);
-  if (S.kind === 'endless' && S.score > save.endlessBest) { save.endlessBest = S.score; S.newBest = true; }
+  if (S.kind === 'endless') {
+    if (S.score > save.endlessBest) { save.endlessBest = S.score; S.newBest = true; }
+    if (S.score > 0) submitLeaderboard('endless_score', S.score);
+  }
   if (S.kind === 'daily') { const v = S.score + S.coins; if (v > (save.daily[L.dailyKey] || 0)) { save.daily[L.dailyKey] = v; S.newBest = true; } }
   persist(); SFX.die();
 }
@@ -250,6 +276,7 @@ function levelClear() {
   const prev = save.stars[L.id] || 0, before = totalStars();
   S.newBest = stars > prev;
   save.stars[L.id] = Math.max(prev, stars); persist();
+  submitLeaderboard('campaign_stars', totalStars());
   S.newSkin = SKINS.find(sk => sk.need > before && sk.need <= totalStars()) || null;
   puff(T.birdX, S.bird.y, '#fff', 30, 300, 1.2); SFX.clear();
 }
@@ -877,6 +904,14 @@ function initGame() {
   last = performance.now();
   requestAnimationFrame(frame);
   document.addEventListener('visibilitychange', () => { last = performance.now(); });
+
+  // Sync existing progress to leaderboard on load
+  setTimeout(() => {
+    try {
+      if (totalStars() > 0) submitLeaderboard('campaign_stars', totalStars());
+      if (save && save.endlessBest > 0) submitLeaderboard('endless_score', save.endlessBest);
+    } catch (_) {}
+  }, 1000);
 }
 
 if (document.readyState === 'loading') {

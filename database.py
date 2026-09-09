@@ -82,6 +82,9 @@ form_responses_conf = None
 game_sessions_conf = None
 game_votes_conf = None
 
+# --- 2D Arcade Leaderboards ---
+arcade_leaderboards_conf = None
+
 # Redis cache — set by main.py at startup
 redis_cache = None
 

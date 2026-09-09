@@ -760,6 +760,11 @@
             window.matchMedia('(display-mode: minimal-ui)').matches
         )) show = true;
         if (show) {
+            // Do not inject on games to avoid blocking gameplay or touch controls
+            var path = window.location.pathname || '';
+            if (path.startsWith('/games') || path.startsWith('/game')) {
+                return;
+            }
             var btn = document.createElement('button');
             btn.id = 'mobile-reload-btn';
             btn.className = 'mobile-fab';

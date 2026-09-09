@@ -64,6 +64,7 @@ import re
 import sys
 import time
 import threading
+import secrets
 
 from flask import Flask, g, request, jsonify, render_template, url_for, redirect, session, flash, make_response, Response, send_from_directory, send_file, abort
 import logging
@@ -671,6 +672,14 @@ game_sessions_conf = db['game_sessions']
 game_votes_conf = db['game_votes']
 game_submissions_conf = db['game_submissions']  # TTAL statements, captions
 
+# --- 2D Arcade Leaderboards ---
+arcade_leaderboards_conf = db['arcade_leaderboards']
+try:
+    arcade_leaderboards_conf.create_index([('game', 1), ('category', 1), ('period_key', 1), ('score', -1)])
+    arcade_leaderboards_conf.create_index([('user_id', 1), ('game', 1), ('category', 1), ('period_key', 1)])
+except Exception as e:
+    app.logger.warning(f"arcade_leaderboards index creation deferred or failed: {e}")
+
 # --- User Login Sessions (Active Sessions & Login History) ---
 user_sessions_conf = db['user_sessions']
 try:
@@ -1062,6 +1071,7 @@ database.form_responses_conf = form_responses_conf
 database.game_sessions_conf = game_sessions_conf
 database.game_votes_conf = game_votes_conf
 database.game_submissions_conf = game_submissions_conf
+database.arcade_leaderboards_conf = arcade_leaderboards_conf
 
 
 def purge_guest_user_data(guest_id_str):
@@ -1840,6 +1850,7 @@ def handle_leave_game(data=None, *args, **kwargs):
 
 # --- Slime Volleyball 1v1 Real-Time Handlers ---
 active_slime_rooms = {}
+slime_matchmaking_queue = []
 
 @socketio.on('join_slime_room')
 def handle_join_slime_room(data=None, *args, **kwargs):
@@ -1932,6 +1943,64 @@ def handle_slime_restart(data=None, *args, **kwargs):
     if not room_id:
         return
     emit('slime_restart', {}, room=room_id)
+ 
+@socketio.on('find_slime_match')
+def handle_find_slime_match(data=None, *args, **kwargs):
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    global slime_matchmaking_queue
+    # Filter out self or dead sids
+    slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != sid]
+
+    if slime_matchmaking_queue:
+        # Match with first waiting player
+        opponent = slime_matchmaking_queue.pop(0)
+        room_id = f"duel_{secrets.token_hex(4)}"
+
+        active_slime_rooms[room_id] = {
+            'host_sid': opponent['sid'],
+            'host_name': opponent['user_name'],
+            'guest_sid': sid,
+            'guest_name': user_name
+        }
+
+        # Automatically join both sockets into the room
+        try:
+            join_room(room_id, sid=opponent['sid'])
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+
+        # Notify waiting host
+        emit('slime_match_found', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name
+        }, room=opponent['sid'])
+
+        # Notify joining guest
+        emit('slime_match_found', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': opponent['user_name'],
+            'guest_name': user_name
+        }, room=sid)
+    else:
+        slime_matchmaking_queue.append({
+            'sid': sid,
+            'user_name': user_name,
+            'created_at': datetime.datetime.now(datetime.timezone.utc)
+        })
+        emit('slime_matchmaking_waiting', {'status': 'waiting'}, room=sid)
+
+@socketio.on('cancel_slime_matchmaking')
+def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
+    sid = request.sid
+    global slime_matchmaking_queue
+    slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != sid]
+    emit('slime_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
 # --- Direct Messaging (DM) Functionality ---
@@ -2011,6 +2080,10 @@ def handle_dm_disconnect(*args, **kwargs):
         if rinfo.get('host_sid') == request.sid or rinfo.get('guest_sid') == request.sid:
             emit('slime_player_left', {'room_id': room_id}, room=room_id)
             active_slime_rooms.pop(room_id, None)
+
+    # Cleanup Slime Matchmaking queue on disconnect
+    global slime_matchmaking_queue
+    slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != request.sid]
 
 
 @socketio.on('send_dm')

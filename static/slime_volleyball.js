@@ -10,25 +10,25 @@
 (() => {
   'use strict';
 
-  // Coordinate space & constants (Canonical Slime Volley units)
+  // Coordinate space & constants (Canonical Slime Volley units scaled for high readability)
   const REF_W = 48;
-  const REF_H = 48;
+  const REF_H = 26; // Arena ceiling height
   const REF_U = 1.5; // ground height
-  const REF_WALL_W = 1.0;
-  const REF_WALL_H = 3.8;
-  const SLIME_R = 1.5;
-  const BALL_R = 0.55;
-  const GRAVITY = -29.4;
-  const PLAYER_SPEED_X = 17.5;
-  const PLAYER_SPEED_Y = 13.5;
-  const MAX_BALL_SPEED = 22.5;
+  const REF_WALL_W = 1.2;
+  const REF_WALL_H = 5.2; // Net height proportional to slime
+  const SLIME_R = 3.2; // Big, clear slimes (more than double old 1.5)
+  const BALL_R = 1.05; // Big, easily visible volleyball
+  const GRAVITY = -32.0;
+  const PLAYER_SPEED_X = 18.0;
+  const PLAYER_SPEED_Y = 14.5;
+  const MAX_BALL_SPEED = 24.0;
   const TIMESTEP = 1 / 60;
   const NUDGE = 0.1;
   const FRICTION = 1.0;
   const WIN_SCORE = 5;
 
   let canvas, ctx;
-  let W = 800, H = 500;
+  let W = 960, H = 540;
   let factor = W / REF_W;
 
   function toX(x) { return (x + REF_W / 2) * factor; }
@@ -70,7 +70,7 @@
 
   // Ball class
   class Ball {
-    constructor(x = 0, y = REF_H / 4, vx = 0, vy = 12) {
+    constructor(x = 0, y = 11, vx = 0, vy = 10) {
       this.x = x; this.y = y;
       this.prev_x = x; this.prev_y = y;
       this.vx = vx; this.vy = vy;
@@ -352,12 +352,14 @@
     mode: 'solo', // 'solo', 'local', 'online'
     p1: new Slime(-1, -REF_W / 4, '#e06a3b', 'You'), // Left (Coral)
     p2: new Slime(1, REF_W / 4, '#2e86ab', 'AI Bot'), // Right (Teal)
-    ball: new Ball(0, REF_H / 4, 0, 10),
+    ball: new Ball(0, 11, 0, 8),
     ai: new NeuralAgent(),
     serving: -1, // -1 = Left serves, 1 = Right serves
     delay: 45,
     gameOver: false,
     winner: null,
+    winStreak: parseInt(localStorage.getItem('slime_win_streak') || '0', 10),
+    isFindingMatch: false,
     // Online state
     socket: null,
     roomId: null,
@@ -395,9 +397,9 @@
 
   function resetServe(winnerDir) {
     GameState.ball.x = winnerDir * (REF_W / 4);
-    GameState.ball.y = REF_H / 3;
+    GameState.ball.y = 10;
     GameState.ball.vx = (winnerDir === -1) ? 5 : -5;
-    GameState.ball.vy = 10;
+    GameState.ball.vy = 8;
     GameState.p1.reset();
     GameState.p2.reset();
     GameState.delay = 45;
@@ -500,15 +502,65 @@
     }
   }
 
+  async function submitLeaderboard(category, score) {
+    try {
+      let guestToken = localStorage.getItem('arcade_guest_token');
+      if (!guestToken) {
+        guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('arcade_guest_token', guestToken);
+      }
+      await fetch('/api/games/leaderboard/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          game: 'slime_volleyball',
+          category: category,
+          score: score,
+          guest_token: guestToken
+        })
+      });
+      if (typeof window.__refreshSlimeLeaderboard === 'function') {
+        window.__refreshSlimeLeaderboard();
+      }
+    } catch (_) {}
+  }
+
   function endGame(winner) {
     GameState.gameOver = true;
     GameState.winner = winner;
     SFX.win();
+
+    let localPlayerWon = false;
+    if (GameState.mode === 'solo') {
+      localPlayerWon = (winner === GameState.p1);
+    } else if (GameState.mode === 'online') {
+      localPlayerWon = (GameState.isHost && winner === GameState.p1) || (!GameState.isHost && winner === GameState.p2);
+    }
+
+    if (localPlayerWon) {
+      GameState.winStreak += 1;
+      localStorage.setItem('slime_win_streak', String(GameState.winStreak));
+      submitLeaderboard('win_streak', GameState.winStreak);
+    } else if (GameState.mode === 'solo' || GameState.mode === 'online') {
+      GameState.winStreak = 0;
+      localStorage.setItem('slime_win_streak', '0');
+    }
+
     const modal = document.getElementById('game-over-banner');
     if (modal) {
       modal.style.display = 'block';
       const txt = document.getElementById('winner-text');
       if (txt) txt.textContent = `${winner.name} wins the match!`;
+      const streakTxt = document.getElementById('winner-streak');
+      if (streakTxt) {
+        if (GameState.winStreak > 0) {
+          streakTxt.textContent = `🔥 Win Streak: ${GameState.winStreak}`;
+          streakTxt.style.display = 'block';
+        } else {
+          streakTxt.textContent = localPlayerWon ? '' : 'Streak reset to 0';
+          streakTxt.style.display = localPlayerWon ? 'none' : 'block';
+        }
+      }
     }
   }
 
@@ -575,26 +627,26 @@
 
   function drawScoreboard() {
     ctx.save();
-    ctx.font = '700 24px Poppins, sans-serif';
+    ctx.font = '700 30px Poppins, sans-serif';
     ctx.textAlign = 'center';
 
     // Left score
     ctx.fillStyle = GameState.p1.color;
-    ctx.fillText(`${GameState.p1.score}`, W * 0.25, 42);
-    ctx.font = '500 13px Poppins, sans-serif';
-    ctx.fillText(GameState.p1.name, W * 0.25, 62);
+    ctx.fillText(`${GameState.p1.score}`, W * 0.25, 46);
+    ctx.font = '500 14px Poppins, sans-serif';
+    ctx.fillText(GameState.p1.name, W * 0.25, 68);
 
     // Right score
-    ctx.font = '700 24px Poppins, sans-serif';
+    ctx.font = '700 30px Poppins, sans-serif';
     ctx.fillStyle = GameState.p2.color;
-    ctx.fillText(`${GameState.p2.score}`, W * 0.75, 42);
-    ctx.font = '500 13px Poppins, sans-serif';
-    ctx.fillText(GameState.p2.name, W * 0.75, 62);
+    ctx.fillText(`${GameState.p2.score}`, W * 0.75, 46);
+    ctx.font = '500 14px Poppins, sans-serif';
+    ctx.fillText(GameState.p2.name, W * 0.75, 68);
 
     // Match target in center
-    ctx.font = '600 11px Poppins, sans-serif';
+    ctx.font = '600 12px Poppins, sans-serif';
     ctx.fillStyle = '#8c7365';
-    ctx.fillText(`FIRST TO ${WIN_SCORE}`, W * 0.5, 28);
+    ctx.fillText(`FIRST TO ${WIN_SCORE}`, W * 0.5, 30);
     ctx.restore();
   }
 
@@ -708,9 +760,93 @@
       GameState.socket.on('slime_restart', () => {
         restartMatch();
       });
+
+      GameState.socket.on('slime_matchmaking_waiting', (data) => {
+        GameState.isFindingMatch = true;
+        const statusEl = document.getElementById('online-status');
+        if (statusEl) statusEl.textContent = data.message || 'Searching for an online opponent...';
+        const matchBtn = document.getElementById('find-match-btn');
+        if (matchBtn) {
+          matchBtn.textContent = '⏳ Searching... (Cancel)';
+          matchBtn.classList.add('ew-btn--active');
+        }
+      });
+
+      GameState.socket.on('slime_matchmaking_cancelled', (data) => {
+        GameState.isFindingMatch = false;
+        const statusEl = document.getElementById('online-status');
+        if (statusEl) statusEl.textContent = data.message || 'Matchmaking cancelled.';
+        const matchBtn = document.getElementById('find-match-btn');
+        if (matchBtn) {
+          matchBtn.textContent = '⚡ Find Match';
+          matchBtn.classList.remove('ew-btn--active');
+        }
+      });
+
+      GameState.socket.on('slime_match_found', (data) => {
+        GameState.isFindingMatch = false;
+        GameState.mode = 'online';
+        GameState.roomId = data.room_id;
+        GameState.isHost = data.is_host;
+        GameState.isOnlineConnected = true;
+        GameState.p1.name = data.host_name || 'Host';
+        GameState.p2.name = data.guest_name || 'Guest';
+        GameState.p1.score = 0;
+        GameState.p2.score = 0;
+        GameState.gameOver = false;
+        resetServe(-1);
+
+        const statusEl = document.getElementById('online-status');
+        if (statusEl) {
+          statusEl.textContent = `Match found! Paired in room ${data.room_id} (${data.is_host ? 'Host / Left' : 'Guest / Right'}). Ready!`;
+        }
+        const matchBtn = document.getElementById('find-match-btn');
+        if (matchBtn) {
+          matchBtn.textContent = '⚡ Find Match';
+          matchBtn.classList.remove('ew-btn--active');
+        }
+      });
     }
 
-    GameState.socket.emit('join_slime_room', { room_id: roomId });
+    if (roomId) {
+      GameState.socket.emit('join_slime_room', { room_id: roomId });
+    }
+  }
+
+  function findMatch() {
+    if (typeof io === 'undefined') {
+      alert('Socket connection unavailable.');
+      return;
+    }
+    if (!GameState.socket) {
+      connectSocket(null);
+    }
+    if (GameState.isFindingMatch) {
+      GameState.isFindingMatch = false;
+      GameState.socket.emit('cancel_slime_matchmaking');
+    } else {
+      GameState.isFindingMatch = true;
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) statusEl.textContent = 'Entering matchmaking queue...';
+      const matchBtn = document.getElementById('find-match-btn');
+      if (matchBtn) {
+        matchBtn.textContent = '⏳ Searching... (Cancel)';
+        matchBtn.classList.add('ew-btn--active');
+      }
+      GameState.socket.emit('find_slime_match');
+    }
+  }
+
+  function cancelMatchmaking() {
+    if (GameState.socket && GameState.isFindingMatch) {
+      GameState.isFindingMatch = false;
+      GameState.socket.emit('cancel_slime_matchmaking');
+      const matchBtn = document.getElementById('find-match-btn');
+      if (matchBtn) {
+        matchBtn.textContent = '⚡ Find Match';
+        matchBtn.classList.remove('ew-btn--active');
+      }
+    }
   }
 
   // Initialization
@@ -718,8 +854,8 @@
     canvas = document.getElementById('slime-canvas');
     if (!canvas) return;
     ctx = canvas.getContext('2d');
-    W = canvas.width;
-    H = canvas.height;
+    W = canvas.width = 960;
+    H = canvas.height = 540;
     factor = W / REF_W;
 
     window.addEventListener('keydown', handleKeyDown);
@@ -752,6 +888,13 @@
 
     initNetworkSync();
     requestAnimationFrame(loop);
+
+    // Sync existing win streak to leaderboard on load
+    setTimeout(() => {
+      try {
+        if (GameState.winStreak > 0) submitLeaderboard('win_streak', GameState.winStreak);
+      } catch (_) {}
+    }, 1000);
   }
 
   if (document.readyState === 'loading') {
@@ -763,6 +906,7 @@
   // Public API for templates
   window.__slime = {
     setMode(mode, roomId = null) {
+      if (GameState.isFindingMatch) cancelMatchmaking();
       GameState.mode = mode;
       GameState.gameOver = false;
       GameState.p1.score = 0;
@@ -784,6 +928,9 @@
       soundMuted = !soundMuted;
       return soundMuted;
     },
-    restart: restartMatch
+    restart: restartMatch,
+    findMatch: findMatch,
+    cancelMatchmaking: cancelMatchmaking,
+    getWinStreak: () => GameState.winStreak
   };
 })();

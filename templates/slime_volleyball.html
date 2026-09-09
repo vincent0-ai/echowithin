@@ -82,6 +82,14 @@
     </button>
   </div>
 
+  <!-- AI Difficulty Panel (shown only in Solo mode) -->
+  <div id="ai-difficulty-panel" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">AI Difficulty:</span>
+    <button type="button" class="ew-btn ew-btn--sm slime-diff-btn" data-diff="easy" style="cursor: pointer;">Easy</button>
+    <button type="button" class="ew-btn ew-btn--sm slime-diff-btn" data-diff="normal" style="cursor: pointer;">Normal</button>
+    <button type="button" class="ew-btn ew-btn--sm slime-diff-btn" data-diff="hard" style="cursor: pointer;">Hard</button>
+  </div>
+
   <!-- Online Room Matchmaking Panel (shown when Online tab active) -->
   <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
     <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
@@ -148,7 +156,7 @@
       <!-- Player Personal Streak Status -->
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
         <div>
-          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong>
+          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong> &bull; Rounds Won: <strong id="my-slime-rounds" style="color: #2e86ab;">0</strong>
         </div>
         <div id="my-slime-rank" style="font-weight: 600; color: #e06a3b;"></div>
       </div>
@@ -176,16 +184,44 @@
       });
     }
 
-    // Mode tabs
+    // Mode tabs & AI Difficulty panel
     const tabSolo = document.getElementById('tab-solo');
     const tabLocal = document.getElementById('tab-local');
     const tabOnline = document.getElementById('tab-online');
     const onlinePanel = document.getElementById('online-panel');
+    const aiDiffPanel = document.getElementById('ai-difficulty-panel');
+    const diffButtons = document.querySelectorAll('.slime-diff-btn');
+
+    function updateDifficultyUI(selectedDiff) {
+      diffButtons.forEach(btn => {
+        btn.className = (btn.dataset.diff === selectedDiff)
+          ? 'ew-btn ew-btn--sm slime-diff-btn'
+          : 'ew-btn--outline ew-btn--sm slime-diff-btn';
+      });
+    }
+
+    const initialDiff = (window.__slime && typeof window.__slime.getDifficulty === 'function')
+      ? window.__slime.getDifficulty()
+      : (localStorage.getItem('slime_difficulty') || 'normal');
+    updateDifficultyUI(initialDiff);
+
+    diffButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const diff = btn.dataset.diff;
+        if (window.__slime && typeof window.__slime.setDifficulty === 'function') {
+          window.__slime.setDifficulty(diff);
+        }
+        updateDifficultyUI(diff);
+      });
+    });
 
     function setActiveTab(activeBtn) {
       [tabSolo, tabLocal, tabOnline].forEach(btn => {
         btn.className = (btn === activeBtn) ? 'ew-btn ew-btn--sm mode-tab' : 'ew-btn--outline ew-btn--sm mode-tab';
       });
+      if (aiDiffPanel) {
+        aiDiffPanel.style.display = (activeBtn === tabSolo) ? 'flex' : 'none';
+      }
     }
 
     tabSolo.addEventListener('click', () => {
@@ -248,12 +284,14 @@
     const slimeLbBody = document.getElementById('slime-lb-body');
     const refreshBtn = document.getElementById('slime-lb-refresh-btn');
     const myStreakEl = document.getElementById('my-slime-streak');
+    const myRoundsEl = document.getElementById('my-slime-rounds');
     const myRankEl = document.getElementById('my-slime-rank');
 
     function updateLocalStreakDisplay() {
       try {
         const streak = parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
         const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
+        const rounds = parseInt(localStorage.getItem('slime_round_wins') || '0', 10);
         if (myStreakEl) {
           if (best > streak && best > 0) {
             myStreakEl.textContent = `${streak} wins (Best: ${best})`;
@@ -261,8 +299,15 @@
             myStreakEl.textContent = `${streak} wins`;
           }
         }
+        if (myRoundsEl) {
+          myRoundsEl.textContent = String(rounds);
+        }
       } catch (_) {}
     }
+
+    window.__updateSlimeRoundsDisplay = function(rounds) {
+      if (myRoundsEl) myRoundsEl.textContent = String(rounds);
+    };
 
     function renderLeaderboard(entries, userRecord) {
       updateLocalStreakDisplay();

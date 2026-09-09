@@ -755,6 +755,33 @@ class TestArcadeMatchmakingAndLeaderboards:
                     assert host_call[0][1]['room_id'] == guest_call[0][1]['room_id']
                     assert host_call[0][1]['room_id'].startswith('duel_')
 
+    def test_slime_volleyball_difficulty_ui_and_presets(self, client):
+        """Slime Volleyball renders difficulty controls, rounds counter, and JS includes difficulty presets."""
+        res = client.get('/games/slime-volleyball')
+        assert res.status_code == 200
+        html = res.get_data(as_text=True)
+
+        assert 'id="ai-difficulty-panel"' in html
+        assert 'data-diff="easy"' in html
+        assert 'data-diff="normal"' in html
+        assert 'data-diff="hard"' in html
+        assert 'id="my-slime-rounds"' in html
+        assert 'Rounds Won:' in html
+
+        # Verify JS contains difficulty config and reaction delay logic
+        import os
+        js_path = os.path.join(os.path.dirname(__file__), '..', 'static', 'slime_volleyball.js')
+        with open(js_path, 'r', encoding='utf-8') as f:
+            js_content = f.read()
+
+        assert 'DIFFICULTY_CONFIG' in js_content
+        assert 'reactionDelayMs: 220' in js_content
+        assert 'speedCap: 0.58' in js_content
+        assert 'jitterRange: 1.3' in js_content
+        assert 'setDifficulty' in js_content
+        assert 'getRoundsWon' in js_content
+
+
 
 
 

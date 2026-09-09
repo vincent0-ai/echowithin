@@ -27,6 +27,43 @@
   const FRICTION = 1.0;
   const WIN_SCORE = 5;
 
+  // AI Difficulty & Paddle Physics Presets
+  const DIFFICULTY_CONFIG = {
+    easy: {
+      name: 'Easy',
+      reactionDelayMs: 220,    // 220ms reaction delay before tracking changes
+      speedCap: 0.58,          // AI paddle moves at 58% of max player speed
+      jitterRange: 1.3,        // ±1.3 game units (~26px) random target offset
+      jumpDeadzone: 2.2,       // Only jumps if ball is within tight X proximity
+      missChance: 0.22,        // Occasional human-like error on sharp shots
+      playerSizeBonus: 1.20,   // +20% player paddle size
+      serveSpeedScale: 0.75,   // 75% base serve speed
+      speedUpPerHit: 1.035     // Gentle rally acceleration
+    },
+    normal: {
+      name: 'Normal',
+      reactionDelayMs: 120,    // 120ms reaction delay
+      speedCap: 0.76,          // AI paddle moves at 76% of player speed
+      jitterRange: 0.7,        // ±0.7 game units (~14px) random target offset
+      jumpDeadzone: 1.2,
+      missChance: 0.08,
+      playerSizeBonus: 1.12,   // +12% player paddle size
+      serveSpeedScale: 0.88,   // 88% base serve speed
+      speedUpPerHit: 1.045     // Moderate rally acceleration
+    },
+    hard: {
+      name: 'Hard',
+      reactionDelayMs: 0,      // Pure frame-by-frame neural agent (original)
+      speedCap: 0.95,          // 95% speed
+      jitterRange: 0.0,
+      jumpDeadzone: 0.0,
+      missChance: 0.0,
+      playerSizeBonus: 1.0,    // Standard paddle size
+      serveSpeedScale: 1.0,    // 100% serve speed
+      speedUpPerHit: 1.06      // Standard acceleration
+    }
+  };
+
   let canvas, ctx;
   let W = 960, H = 540;
   let factor = W / REF_W;
@@ -158,7 +195,15 @@
           this.vy = (relVy - 2 * dot * ny) * 0.95 + slime.vy;
           // Add player propulsion
           this.vx += slime.vx * 0.25;
-          this.limitSpeed(5, MAX_BALL_SPEED);
+
+          // Ball Speed Curve: gradual acceleration per rally hit up to MAX_BALL_SPEED
+          GameState.rallyCount = (GameState.rallyCount || 0) + 1;
+          const cfg = (typeof DIFFICULTY_CONFIG !== 'undefined' && DIFFICULTY_CONFIG[GameState.difficulty]) ? DIFFICULTY_CONFIG[GameState.difficulty] : null;
+          if (cfg && cfg.speedUpPerHit) {
+            const mult = Math.min(1.4, Math.pow(cfg.speedUpPerHit, Math.min(12, GameState.rallyCount)));
+            this.vx *= mult;
+          }
+          this.limitSpeed(4.5, MAX_BALL_SPEED);
           SFX.bounce();
           return true;
         }
@@ -220,11 +265,12 @@
       this.vx = 0; this.vy = 0;
       this.desiredVx = 0; this.desiredVy = 0;
     }
-    setInput(left, right, jump) {
+    setInput(left, right, jump, speedScale = 1.0) {
       this.desiredVx = 0;
       this.desiredVy = 0;
-      if (left && !right) this.desiredVx = -PLAYER_SPEED_X;
-      if (right && !left) this.desiredVx = PLAYER_SPEED_X;
+      const speedX = PLAYER_SPEED_X * speedScale;
+      if (left && !right) this.desiredVx = -speedX;
+      if (right && !left) this.desiredVx = speedX;
       if (jump && this.y <= REF_U + 0.05) this.desiredVy = PLAYER_SPEED_Y;
     }
     update(dt = TIMESTEP) {
@@ -350,6 +396,7 @@
   // Main Game State
   const GameState = {
     mode: 'solo', // 'solo', 'local', 'online'
+    difficulty: localStorage.getItem('slime_difficulty') || 'normal',
     p1: new Slime(-1, -REF_W / 4, '#e06a3b', 'You'), // Left (Coral)
     p2: new Slime(1, REF_W / 4, '#2e86ab', 'AI Bot'), // Right (Teal)
     ball: new Ball(0, 11, 0, 8),
@@ -359,6 +406,11 @@
     gameOver: false,
     winner: null,
     winStreak: parseInt(localStorage.getItem('slime_win_streak') || '0', 10),
+    roundWins: parseInt(localStorage.getItem('slime_round_wins') || '0', 10),
+    rallyCount: 0,
+    lastAiTime: 0,
+    lastAiAction: { forward: false, backward: false, jump: false },
+    aiJitter: 0,
     isFindingMatch: false,
     // Online state
     socket: null,
@@ -368,6 +420,15 @@
     latency: 0,
     lastPingTime: 0
   };
+
+  function applyDifficulty(diff) {
+    if (!DIFFICULTY_CONFIG[diff]) diff = 'normal';
+    GameState.difficulty = diff;
+    localStorage.setItem('slime_difficulty', diff);
+    const cfg = DIFFICULTY_CONFIG[diff];
+    GameState.p1.r = SLIME_R * (cfg.playerSizeBonus || 1.0);
+    GameState.p2.r = SLIME_R;
+  }
 
   // Keyboard input tracking
   const keys = {
@@ -396,10 +457,19 @@
   }
 
   function resetServe(winnerDir) {
+    GameState.rallyCount = 0;
+    const cfg = DIFFICULTY_CONFIG[GameState.difficulty] || DIFFICULTY_CONFIG.normal;
+    let serveSpeed = 5 * (cfg.serveSpeedScale || 1.0);
+    // Dynamic Difficulty Adjustment (DDA / Catch-up):
+    // If solo mode and player trails by >= 2 points, soften serve speed by 15%
+    if (GameState.mode === 'solo' && (GameState.p2.score - GameState.p1.score >= 2)) {
+      serveSpeed *= 0.85;
+    }
+
     GameState.ball.x = winnerDir * (REF_W / 4);
     GameState.ball.y = 10;
-    GameState.ball.vx = (winnerDir === -1) ? 5 : -5;
-    GameState.ball.vy = 8;
+    GameState.ball.vx = (winnerDir === -1) ? serveSpeed : -serveSpeed;
+    GameState.ball.vy = 8 * (cfg.serveSpeedScale || 1.0);
     GameState.p1.reset();
     GameState.p2.reset();
     GameState.delay = 45;
@@ -420,9 +490,54 @@
       GameState.p1.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
       GameState.p1.update();
 
-      // Neural AI for Player 2
-      const aiAction = GameState.ai.predict(GameState.p2, GameState.ball);
-      GameState.p2.setInput(aiAction.forward, aiAction.backward, aiAction.jump);
+      // Humanized Neural AI for Player 2
+      const now = performance.now();
+      const cfg = DIFFICULTY_CONFIG[GameState.difficulty] || DIFFICULTY_CONFIG.normal;
+
+      if (now - GameState.lastAiTime >= cfg.reactionDelayMs) {
+        GameState.lastAiTime = now;
+
+        // Target jitter
+        if (cfg.jitterRange > 0) {
+          GameState.aiJitter = (Math.random() * 2 - 1) * cfg.jitterRange;
+        } else {
+          GameState.aiJitter = 0;
+        }
+
+        // Virtual ball with jitter offset so AI doesn't hit the sweet spot every time
+        const virtualBall = {
+          x: GameState.ball.x + GameState.aiJitter,
+          y: GameState.ball.y,
+          vx: GameState.ball.vx,
+          vy: GameState.ball.vy
+        };
+
+        let rawAction = GameState.ai.predict(GameState.p2, virtualBall);
+
+        // Occasional human-like error on sharp shots (easy/normal)
+        if (cfg.missChance > 0 && Math.abs(GameState.ball.vx) > 7.5 && Math.random() < cfg.missChance) {
+          rawAction.forward = false;
+          rawAction.backward = false;
+        }
+
+        // Jump deadzone check: AI shouldn't jump if ball is far away horizontally
+        if (cfg.jumpDeadzone > 0) {
+          const dxToBall = Math.abs(GameState.p2.x - GameState.ball.x);
+          if (dxToBall > cfg.jumpDeadzone + GameState.p2.r) {
+            rawAction.jump = false;
+          }
+        }
+
+        GameState.lastAiAction = rawAction;
+      }
+
+      // Movement speed scaling & DDA catch-up
+      let speedScale = cfg.speedCap;
+      if (GameState.p2.score - GameState.p1.score >= 2) {
+        speedScale *= 0.90; // 10% speed reduction when player trails
+      }
+
+      GameState.p2.setInput(GameState.lastAiAction.forward, GameState.lastAiAction.backward, GameState.lastAiAction.jump, speedScale);
       GameState.p2.update();
 
       // Physics
@@ -441,6 +556,11 @@
         } else {
           // Ball hit right ground -> P1 scores
           GameState.p1.score++;
+          GameState.roundWins++;
+          localStorage.setItem('slime_round_wins', String(GameState.roundWins));
+          if (typeof window.__updateSlimeRoundsDisplay === 'function') {
+            window.__updateSlimeRoundsDisplay(GameState.roundWins);
+          }
           if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
           else resetServe(1);
         }
@@ -716,7 +836,10 @@
     // Match target in center
     ctx.font = '600 12px Poppins, sans-serif';
     ctx.fillStyle = '#8c7365';
-    ctx.fillText(`FIRST TO ${WIN_SCORE}`, W * 0.5, 30);
+    const centerSub = (GameState.mode === 'solo')
+      ? `FIRST TO ${WIN_SCORE} • ${(DIFFICULTY_CONFIG[GameState.difficulty] || DIFFICULTY_CONFIG.normal).name.toUpperCase()}`
+      : `FIRST TO ${WIN_SCORE}`;
+    ctx.fillText(centerSub, W * 0.5, 30);
     ctx.restore();
   }
 
@@ -956,6 +1079,7 @@
     const rematchBtn = document.getElementById('rematch-btn');
     if (rematchBtn) rematchBtn.addEventListener('click', restartMatch);
 
+    applyDifficulty(GameState.difficulty);
     initNetworkSync();
     requestAnimationFrame(loop);
 
@@ -990,6 +1114,16 @@
         if (roomId) connectSocket(roomId);
       }
       resetServe(-1);
+    },
+    setDifficulty(diff) {
+      applyDifficulty(diff);
+      return GameState.difficulty;
+    },
+    getDifficulty() {
+      return GameState.difficulty;
+    },
+    getRoundsWon() {
+      return GameState.roundWins;
     },
     toggleMute() {
       soundMuted = !soundMuted;

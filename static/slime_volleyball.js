@@ -502,8 +502,36 @@
     }
   }
 
+  function queuePendingSync(game, category, score) {
+    try {
+      const raw = localStorage.getItem('arcade_pending_sync');
+      const list = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex(item => item.game === game && item.category === category);
+      if (idx >= 0) {
+        list[idx].score = Math.max(list[idx].score, score);
+      } else {
+        list.push({ game, category, score });
+      }
+      localStorage.setItem('arcade_pending_sync', JSON.stringify(list));
+    } catch (_) {}
+  }
+
+  function clearPendingSync(game, category, score) {
+    try {
+      const raw = localStorage.getItem('arcade_pending_sync');
+      if (!raw) return;
+      let list = JSON.parse(raw);
+      list = list.filter(item => !(item.game === game && item.category === category && item.score <= score));
+      localStorage.setItem('arcade_pending_sync', JSON.stringify(list));
+    } catch (_) {}
+  }
+
   async function submitLeaderboard(category, score) {
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        queuePendingSync('slime_volleyball', category, score);
+        return false;
+      }
       let guestToken = localStorage.getItem('arcade_guest_token');
       if (!guestToken) {
         guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
@@ -528,8 +556,39 @@
           guest_token: guestToken
         })
       });
-      if (res.ok && typeof window.__refreshSlimeLeaderboard === 'function') {
-        window.__refreshSlimeLeaderboard();
+      if (res.ok) {
+        clearPendingSync('slime_volleyball', category, score);
+        if (typeof window.__refreshSlimeLeaderboard === 'function') {
+          window.__refreshSlimeLeaderboard();
+        }
+        return true;
+      } else {
+        queuePendingSync('slime_volleyball', category, score);
+        return false;
+      }
+    } catch (_) {
+      queuePendingSync('slime_volleyball', category, score);
+      return false;
+    }
+  }
+
+  async function syncAllScores() {
+    try {
+      const current = GameState.winStreak || parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
+      const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
+      const toSync = Math.max(current, best);
+      if (toSync > 0) {
+        await submitLeaderboard('win_streak', toSync);
+      }
+      const raw = localStorage.getItem('arcade_pending_sync');
+      if (raw) {
+        const list = JSON.parse(raw);
+        for (const item of list) {
+          if (item.game === 'slime_volleyball') {
+            const ok = await submitLeaderboard(item.category, item.score);
+            if (ok) clearPendingSync(item.game, item.category, item.score);
+          }
+        }
       }
     } catch (_) {}
   }
@@ -549,6 +608,8 @@
     if (localPlayerWon) {
       GameState.winStreak += 1;
       localStorage.setItem('slime_win_streak', String(GameState.winStreak));
+      const best = Math.max(GameState.winStreak, parseInt(localStorage.getItem('slime_best_streak') || '0', 10));
+      localStorage.setItem('slime_best_streak', String(best));
       submitLeaderboard('win_streak', GameState.winStreak);
     } else if (GameState.mode === 'solo' || GameState.mode === 'online') {
       GameState.winStreak = 0;
@@ -898,12 +959,9 @@
     initNetworkSync();
     requestAnimationFrame(loop);
 
-    // Sync existing win streak to leaderboard on load
-    setTimeout(() => {
-      try {
-        if (GameState.winStreak > 0) submitLeaderboard('win_streak', GameState.winStreak);
-      } catch (_) {}
-    }, 1000);
+    // Sync existing or offline win streak to leaderboard on load & when online
+    setTimeout(syncAllScores, 1000);
+    window.addEventListener('online', syncAllScores);
   }
 
   if (document.readyState === 'loading') {
@@ -940,6 +998,7 @@
     restart: restartMatch,
     findMatch: findMatch,
     cancelMatchmaking: cancelMatchmaking,
-    getWinStreak: () => GameState.winStreak
+    getWinStreak: () => GameState.winStreak,
+    syncScores: syncAllScores
   };
 })();

@@ -365,6 +365,7 @@ class TestFloppyBirdArcade:
         assert '80% coins' not in html
         assert '🏆' not in html
         assert '🔄' not in html
+        assert 'addEventListener(\'online\'' in html
 
     def test_games_list_contains_floppy_bird_entry(self, auth_client, app, mock_user):
         """The /games hub page includes the Floppy Bird arcade card."""
@@ -401,7 +402,7 @@ class TestSlimeVolleyball:
         assert 'tab-online' in html
 
     def test_slime_volleyball_clean_controls_and_no_emojis(self, client):
-        """Slime Volleyball page has clean minimal controls and no emojis."""
+        """Slime Volleyball page has clean minimal controls, no emojis, and offline sync handler."""
         res = client.get('/games/slime-volleyball')
         assert res.status_code == 200
         html = res.get_data(as_text=True)
@@ -413,6 +414,8 @@ class TestSlimeVolleyball:
         assert '◀' not in html
         assert '▲' not in html
         assert '▶' not in html
+        assert 'addEventListener(\'online\'' in html
+        assert 'syncScores' in html
 
     def test_games_list_contains_slime_volleyball_card(self, auth_client, app, mock_user):
         """Games list features Slime Volleyball alongside Floppy Bird."""

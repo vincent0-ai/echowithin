@@ -252,8 +252,15 @@
 
     function updateLocalStreakDisplay() {
       try {
-        const streak = localStorage.getItem('slime_win_streak') || '0';
-        if (myStreakEl) myStreakEl.textContent = `${streak} wins`;
+        const streak = parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
+        const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
+        if (myStreakEl) {
+          if (best > streak && best > 0) {
+            myStreakEl.textContent = `${streak} wins (Best: ${best})`;
+          } else {
+            myStreakEl.textContent = `${streak} wins`;
+          }
+        }
       } catch (_) {}
     }
 
@@ -314,9 +321,19 @@
 
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
+        if (window.__slime && typeof window.__slime.syncScores === 'function') {
+          window.__slime.syncScores();
+        }
         fetchSlimeLeaderboard(currentSlimePeriod);
       });
     }
+
+    window.addEventListener('online', () => {
+      if (window.__slime && typeof window.__slime.syncScores === 'function') {
+        window.__slime.syncScores();
+      }
+      fetchSlimeLeaderboard(currentSlimePeriod);
+    });
 
     window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimePeriod);
     fetchSlimeLeaderboard('weekly');

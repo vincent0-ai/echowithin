@@ -282,6 +282,13 @@
       });
     }
 
+    window.addEventListener('online', () => {
+      if (window.__floppy && typeof window.__floppy.syncScores === 'function') {
+        window.__floppy.syncScores();
+      }
+      fetchFloppyLeaderboard(currentCat, currentPeriod);
+    });
+
     window.__refreshFloppyLeaderboard = (targetCat, targetPeriod) => fetchFloppyLeaderboard(targetCat || currentCat, targetPeriod || currentPeriod);
     fetchFloppyLeaderboard('campaign_stars', 'weekly');
   });

@@ -232,8 +232,36 @@ function useGhost() {
   S.ghost.active = T.ghost.dur; S.ghost.cd = T.ghost.dur + T.ghost.cd; S.ghost.lingering = 0;
   puff(T.birdX, S.bird.y, '#7fe9ff', 14, 160, 0.7); popup('GHOST!', '#a8f1ff'); SFX.ghost();
 }
+function queuePendingSync(game, category, score) {
+  try {
+    const raw = localStorage.getItem('arcade_pending_sync');
+    const list = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex(item => item.game === game && item.category === category);
+    if (idx >= 0) {
+      list[idx].score = Math.max(list[idx].score, score);
+    } else {
+      list.push({ game, category, score });
+    }
+    localStorage.setItem('arcade_pending_sync', JSON.stringify(list));
+  } catch (_) {}
+}
+
+function clearPendingSync(game, category, score) {
+  try {
+    const raw = localStorage.getItem('arcade_pending_sync');
+    if (!raw) return;
+    let list = JSON.parse(raw);
+    list = list.filter(item => !(item.game === game && item.category === category && item.score <= score));
+    localStorage.setItem('arcade_pending_sync', JSON.stringify(list));
+  } catch (_) {}
+}
+
 async function submitLeaderboard(category, score) {
   try {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      queuePendingSync('floppy_bird', category, score);
+      return false;
+    }
     let guestToken = localStorage.getItem('arcade_guest_token');
     if (!guestToken) {
       guestToken = 'g_' + Math.random().toString(36).substring(2, 15);
@@ -259,17 +287,36 @@ async function submitLeaderboard(category, score) {
       })
     });
     if (res.ok) {
+      clearPendingSync('floppy_bird', category, score);
       if (typeof window.__refreshFloppyLeaderboard === 'function') {
         window.__refreshFloppyLeaderboard(category);
       }
+      return true;
+    } else {
+      queuePendingSync('floppy_bird', category, score);
+      return false;
     }
-  } catch (_) {}
+  } catch (_) {
+    queuePendingSync('floppy_bird', category, score);
+    return false;
+  }
 }
 
-function syncAllScores() {
+async function syncAllScores() {
   try {
-    if (totalStars() > 0) submitLeaderboard('campaign_stars', totalStars());
-    if (save && save.endlessBest > 0) submitLeaderboard('endless_score', save.endlessBest);
+    const stars = totalStars();
+    if (stars > 0) await submitLeaderboard('campaign_stars', stars);
+    if (save && save.endlessBest > 0) await submitLeaderboard('endless_score', save.endlessBest);
+    const raw = localStorage.getItem('arcade_pending_sync');
+    if (raw) {
+      const list = JSON.parse(raw);
+      for (const item of list) {
+        if (item.game === 'floppy_bird') {
+          const ok = await submitLeaderboard(item.category, item.score);
+          if (ok) clearPendingSync(item.game, item.category, item.score);
+        }
+      }
+    }
   } catch (_) {}
 }
 
@@ -934,13 +981,9 @@ function initGame() {
   requestAnimationFrame(frame);
   document.addEventListener('visibilitychange', () => { last = performance.now(); });
 
-  // Sync existing progress to leaderboard on load
-  setTimeout(() => {
-    try {
-      if (totalStars() > 0) submitLeaderboard('campaign_stars', totalStars());
-      if (save && save.endlessBest > 0) submitLeaderboard('endless_score', save.endlessBest);
-    } catch (_) {}
-  }, 1000);
+  // Sync existing or offline progress to leaderboard on load & when online
+  setTimeout(syncAllScores, 1000);
+  window.addEventListener('online', syncAllScores);
 }
 
 if (document.readyState === 'loading') {

@@ -2381,6 +2381,7 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'guest_sid': None,
             'guest_name': None,
             'board': [''] * 9,
+            'starter': 'x',
             'turn': 'x',
             'scores': {'x': 0, 'o': 0, 'ties': 0}
         }
@@ -2390,7 +2391,8 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': user_name,
             'guest_name': None,
-            'symbol': 'x'
+            'symbol': 'x',
+            'turn': 'x'
         }, room=sid)
     else:
         room_info['guest_sid'] = sid
@@ -2402,14 +2404,16 @@ def handle_join_ttt_room(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'symbol': 'o'
+            'symbol': 'o',
+            'turn': room_info.get('turn', 'x')
         }, room=sid)
         emit('ttt_room_joined', {
             'room_id': room_id,
             'is_host': True,
             'host_name': room_info['host_name'],
             'guest_name': user_name,
-            'symbol': 'x'
+            'symbol': 'x',
+            'turn': room_info.get('turn', 'x')
         }, room=room_info['host_sid'])
 
 @socketio.on('leave_ttt_room')
@@ -2489,8 +2493,11 @@ def handle_ttt_restart(data=None, *args, **kwargs):
     if not room_info:
         return
     room_info['board'] = [''] * 9
-    room_info['turn'] = 'x'
-    emit('ttt_restarted', {'turn': 'x'}, room=room_id)
+    last_starter = room_info.get('starter', 'x')
+    next_starter = 'o' if last_starter == 'x' else 'x'
+    room_info['starter'] = next_starter
+    room_info['turn'] = next_starter
+    emit('ttt_restarted', {'turn': next_starter}, room=room_id)
 
 @socketio.on('find_ttt_match')
 def handle_find_ttt_match(data=None, *args, **kwargs):
@@ -2504,37 +2511,44 @@ def handle_find_ttt_match(data=None, *args, **kwargs):
         opponent = ttt_matchmaking_queue.pop(0)
         room_id = f"ttt_{secrets.token_hex(4)}"
 
+        swap = secrets.randbelow(2) == 1
+        p1_sid, p1_name = (sid, user_name) if swap else (opponent['sid'], opponent['user_name'])
+        p2_sid, p2_name = (opponent['sid'], opponent['user_name']) if swap else (sid, user_name)
+
         active_ttt_rooms[room_id] = {
-            'host_sid': opponent['sid'],
-            'host_name': opponent['user_name'],
-            'guest_sid': sid,
-            'guest_name': user_name,
+            'host_sid': p1_sid,
+            'host_name': p1_name,
+            'guest_sid': p2_sid,
+            'guest_name': p2_name,
             'board': [''] * 9,
+            'starter': 'x',
             'turn': 'x',
             'scores': {'x': 0, 'o': 0, 'ties': 0}
         }
 
         try:
-            join_room(room_id, sid=opponent['sid'])
-            join_room(room_id, sid=sid)
+            join_room(room_id, sid=p1_sid)
+            join_room(room_id, sid=p2_sid)
         except Exception:
             pass
 
         emit('ttt_match_found', {
             'room_id': room_id,
             'is_host': True,
-            'host_name': opponent['user_name'],
-            'guest_name': user_name,
-            'symbol': 'x'
-        }, room=opponent['sid'])
+            'host_name': p1_name,
+            'guest_name': p2_name,
+            'symbol': 'x',
+            'turn': 'x'
+        }, room=p1_sid)
 
         emit('ttt_match_found', {
             'room_id': room_id,
             'is_host': False,
-            'host_name': opponent['user_name'],
-            'guest_name': user_name,
-            'symbol': 'o'
-        }, room=sid)
+            'host_name': p1_name,
+            'guest_name': p2_name,
+            'symbol': 'o',
+            'turn': 'x'
+        }, room=p2_sid)
     else:
         ttt_matchmaking_queue.append({
             'sid': sid,
@@ -2725,8 +2739,11 @@ def handle_c4_restart(data=None, *args, **kwargs):
     if not room_info:
         return
     room_info['board'] = [[-1] * C4_COLS for _ in range(C4_ROWS)]
-    room_info['turn'] = 0
-    emit('c4_restarted', {'turn': 0}, room=room_id)
+    last_starter = room_info.get('starter', 0)
+    next_starter = 1 - last_starter
+    room_info['starter'] = next_starter
+    room_info['turn'] = next_starter
+    emit('c4_restarted', {'turn': next_starter}, room=room_id)
 
 @socketio.on('find_c4_match')
 def handle_find_c4_match(data=None, *args, **kwargs):

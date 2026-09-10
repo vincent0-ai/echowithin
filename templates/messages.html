@@ -1969,23 +1969,106 @@
                 <div style="font-size:0.75rem; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.55rem;">
                     Playable 1v1 Multiplayer
                 </div>
-                <div class="slime-invite-card" style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.9rem; display:flex; flex-direction:column; gap:0.65rem;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
-                        <div>
-                            <div style="display:flex; align-items:center; gap:0.45rem;">
-                                <span style="font-size:1.3rem; line-height:1;">🏐</span>
-                                <span style="font-weight:700; font-size:0.95rem; color:#3e2217;">Slime Volleyball</span>
-                                <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
-                            </div>
-                            <div style="font-size:0.8rem; color:#666; margin-top:0.3rem; line-height:1.35;">
-                                Real-time bouncy 2D duel over WebSockets. Auto-creates a live lobby so both of you enter the game immediately!
+                <div style="display:flex; flex-direction:column; gap:0.65rem; max-height:270px; overflow-y:auto; padding-right:4px;">
+                    <!-- Slime Volleyball -->
+                    <div class="slime-invite-card" style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">🏐</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Slime Volleyball</span>
+                                    <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Real-time bouncy 2D duel over WebSockets.
+                                </div>
                             </div>
                         </div>
+                        <button type="button" class="btn" onclick="inviteSlimeVolleyball()" id="slime-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
+                        </button>
                     </div>
-                    <button type="button" class="btn" onclick="inviteSlimeVolleyball()" id="slime-auto-invite-btn"
-                        style="background:#3e2217; color:#fff; font-size:0.85rem; font-weight:600; padding:0.55rem 1rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.5rem; transition:opacity 0.2s;">
-                        <i class="fas fa-play" style="font-size:0.75rem;"></i> Create Lobby & Invite to Play
-                    </button>
+
+                    <!-- Tic-Tac-Toe -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">❌⭕</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Tic-Tac-Toe</span>
+                                    <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Classic 3x3 strategy duel with alternating starter turns.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="inviteTicTacToe()" id="ttt-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
+                        </button>
+                    </div>
+
+                    <!-- Connect Four -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">🔴🟡</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Connect Four</span>
+                                    <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Vertical 7x6 strategy grid. Align 4 discs to win.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="inviteConnectFour()" id="c4-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
+                        </button>
+                    </div>
+
+                    <!-- Dots and Boxes -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">⏹️</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Dots and Boxes</span>
+                                    <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Classic grid territory strategy. Capture boxes to score.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="inviteDotsAndBoxes()" id="dnb-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
+                        </button>
+                    </div>
+
+                    <!-- Ping Pong -->
+                    <div style="background:#fbf8f7; border:1.5px solid #eedfd8; border-radius:12px; padding:0.75rem 0.9rem; display:flex; flex-direction:column; gap:0.5rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                            <div>
+                                <div style="display:flex; align-items:center; gap:0.45rem;">
+                                    <span style="font-size:1.25rem; line-height:1;">🏓</span>
+                                    <span style="font-weight:700; font-size:0.92rem; color:#3e2217;">Ping Pong</span>
+                                    <span class="ew-badge" style="background:#2ecc71; color:#fff; font-size:0.65rem; padding:2px 6px; border-radius:4px; font-weight:600;">1v1 Live</span>
+                                </div>
+                                <div style="font-size:0.78rem; color:#666; margin-top:0.2rem; line-height:1.35;">
+                                    Real-time paddle table tennis duel over WebSockets.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn" onclick="invitePingPong()" id="pong-auto-invite-btn"
+                            style="background:#3e2217; color:#fff; font-size:0.82rem; font-weight:600; padding:0.45rem 0.8rem; border-radius:8px; border:none; cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:0.4rem; transition:opacity 0.2s;">
+                            <i class="fas fa-play" style="font-size:0.72rem;"></i> Create Lobby & Invite to Play
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -3010,18 +3093,50 @@
                 const gLobby = gd.lobby_id || '';
                 const gTitle = gd.title || 'Game Lobby';
                 const gType = gd.game_type || 'multiplayer';
+                const gTypeNorm = (gType || '').toLowerCase();
+                const isSlime = (gTypeNorm === 'slime_volleyball' || gTypeNorm === 'slime');
+                const isTTT = (gTypeNorm === 'tic_tac_toe' || gTypeNorm === 'tictactoe');
+                const isC4 = (gTypeNorm === 'connect_four' || gTypeNorm === 'connectfour');
+                const isDNB = (gTypeNorm === 'dots_and_boxes' || gTypeNorm === 'dnb' || gTypeNorm === 'dotsandboxes');
+                const isPong = (gTypeNorm === 'ping_pong' || gTypeNorm === 'pong' || gTypeNorm === 'pingpong');
+                const is1v1 = isSlime || isTTT || isC4 || isDNB || isPong;
+
                 let joinUrl = gd.game_url || '';
                 if (!joinUrl) {
-                    if (gType === 'slime_volleyball' || gType === 'slime') {
+                    if (isSlime) {
                         joinUrl = `/games/slime-volleyball?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isTTT) {
+                        joinUrl = `/games/tic-tac-toe?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isC4) {
+                        joinUrl = `/games/connect-four?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isDNB) {
+                        joinUrl = `/games/dots-and-boxes?room=${encodeURIComponent(gLobby)}`;
+                    } else if (isPong) {
+                        joinUrl = `/games/ping-pong?room=${encodeURIComponent(gLobby)}`;
                     } else if (gLobby) {
                         joinUrl = `/g/${encodeURIComponent(gLobby)}`;
                     }
                 }
-                const isSlime = (gType === 'slime_volleyball' || gType === 'slime');
-                const gameIcon = isSlime ? '🏐' : '🎮';
-                const typeLabel = isSlime ? '1v1 Online Duel' : escapeHtml(gType);
-                const btnLabel = isSlime ? 'Enter Slime Volleyball' : 'Join Game';
+
+                let gameIcon = '🎮';
+                let btnLabel = 'Join Game';
+                if (isSlime) {
+                    gameIcon = '🏐';
+                    btnLabel = 'Enter Slime Volleyball';
+                } else if (isTTT) {
+                    gameIcon = '❌⭕';
+                    btnLabel = 'Enter Tic-Tac-Toe';
+                } else if (isC4) {
+                    gameIcon = '🔴🟡';
+                    btnLabel = 'Enter Connect Four';
+                } else if (isDNB) {
+                    gameIcon = '⏹️';
+                    btnLabel = 'Enter Dots & Boxes';
+                } else if (isPong) {
+                    gameIcon = '🏓';
+                    btnLabel = 'Enter Ping Pong';
+                }
+                const typeLabel = is1v1 ? '1v1 Online Duel' : escapeHtml(gType);
                 contentHTML = `
                 <div class="game-invite-card" style="background: rgba(62, 34, 23, 0.05); border: 1px solid rgba(62, 34, 23, 0.15); border-radius: 12px; padding: 0.85rem; margin: 0.2rem 0; min-width: 220px; max-width: 300px;">
                     <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.6rem;">
@@ -4768,23 +4883,42 @@
             }
         };
 
-        window.inviteSlimeVolleyball = function () {
+        function autoCreateDuelInvite(gameType, gameTitle, urlPrefix, roomPrefix) {
             if (!activeRecipientId) {
                 if (window.showCustomAlert) showCustomAlert('Select a conversation first.', 'warning');
                 else if (typeof showToast === 'function') showToast('Select a conversation first');
                 return;
             }
-            // Auto-create room lobby code for 1v1 live multiplayer
-            const roomCode = 'sv-' + Math.random().toString(36).substring(2, 8);
-            const gameUrl = '/games/slime-volleyball?room=' + encodeURIComponent(roomCode);
-            window.sendGameInvite(roomCode, 'slime_volleyball', 'Slime Volleyball 1v1', gameUrl);
+            const roomCode = roomPrefix + '-' + Math.random().toString(36).substring(2, 8);
+            const gameUrl = urlPrefix + '?room=' + encodeURIComponent(roomCode);
+            window.sendGameInvite(roomCode, gameType, gameTitle, gameUrl);
+            const toastMsg = gameTitle + ' lobby created! Opening game...';
             if (window.showCustomToast) {
-                showCustomToast('Slime Volleyball lobby created! Opening game...', 'info');
+                showCustomToast(toastMsg, 'info');
             } else if (typeof showToast === 'function') {
-                showToast('Slime Volleyball lobby created! Opening game...');
+                showToast(toastMsg);
             }
-            // Open host window directly so host enters game immediately
             window.open(gameUrl, '_blank');
+        }
+
+        window.inviteSlimeVolleyball = function () {
+            autoCreateDuelInvite('slime_volleyball', 'Slime Volleyball 1v1', '/games/slime-volleyball', 'sv');
+        };
+
+        window.inviteTicTacToe = function () {
+            autoCreateDuelInvite('tic_tac_toe', 'Tic-Tac-Toe 1v1', '/games/tic-tac-toe', 'ttt');
+        };
+
+        window.inviteConnectFour = function () {
+            autoCreateDuelInvite('connect_four', 'Connect Four 1v1', '/games/connect-four', 'c4');
+        };
+
+        window.inviteDotsAndBoxes = function () {
+            autoCreateDuelInvite('dots_and_boxes', 'Dots and Boxes 1v1', '/games/dots-and-boxes', 'dnb');
+        };
+
+        window.invitePingPong = function () {
+            autoCreateDuelInvite('ping_pong', 'Ping Pong 1v1', '/games/ping-pong', 'pong');
         };
 
         window.sendGameInvite = function (lobbyId, gameType, title, gameUrl) {
@@ -4798,8 +4932,17 @@
             const cleanType = (gameType || 'game').trim();
             let cleanUrl = (gameUrl || '').trim();
             if (!cleanUrl) {
-                if (cleanType === 'slime_volleyball' || cleanType === 'slime') {
+                const normType = cleanType.toLowerCase();
+                if (normType === 'slime_volleyball' || normType === 'slime') {
                     cleanUrl = '/games/slime-volleyball?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'tic_tac_toe' || normType === 'tictactoe') {
+                    cleanUrl = '/games/tic-tac-toe?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'connect_four' || normType === 'connectfour') {
+                    cleanUrl = '/games/connect-four?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'dots_and_boxes' || normType === 'dnb' || normType === 'dotsandboxes') {
+                    cleanUrl = '/games/dots-and-boxes?room=' + encodeURIComponent(cleanLobbyId);
+                } else if (normType === 'ping_pong' || normType === 'pong' || normType === 'pingpong') {
+                    cleanUrl = '/games/ping-pong?room=' + encodeURIComponent(cleanLobbyId);
                 } else if (cleanLobbyId) {
                     cleanUrl = '/g/' + encodeURIComponent(cleanLobbyId);
                 }
@@ -4848,19 +4991,66 @@
             let type = 'game';
             let title = 'Game Lobby';
             let url = '';
+
             const slimeMatch = val.match(/slime-volleyball\?room=([a-zA-Z0-9_\-]+)/i);
+            const tttMatch = val.match(/tic-tac-toe\?room=([a-zA-Z0-9_\-]+)/i);
+            const c4Match = val.match(/connect-four\?room=([a-zA-Z0-9_\-]+)/i);
+            const dnbMatch = val.match(/dots-and-boxes\?room=([a-zA-Z0-9_\-]+)/i);
+            const pongMatch = val.match(/ping-pong\?room=([a-zA-Z0-9_\-]+)/i);
             const gMatch = val.match(/\/g\/([a-zA-Z0-9_\-]+)/i);
+
             if (slimeMatch) {
                 code = slimeMatch[1];
                 type = 'slime_volleyball';
                 title = 'Slime Volleyball 1v1';
                 url = '/games/slime-volleyball?room=' + encodeURIComponent(code);
+            } else if (tttMatch) {
+                code = tttMatch[1];
+                type = 'tic_tac_toe';
+                title = 'Tic-Tac-Toe 1v1';
+                url = '/games/tic-tac-toe?room=' + encodeURIComponent(code);
+            } else if (c4Match) {
+                code = c4Match[1];
+                type = 'connect_four';
+                title = 'Connect Four 1v1';
+                url = '/games/connect-four?room=' + encodeURIComponent(code);
+            } else if (dnbMatch) {
+                code = dnbMatch[1];
+                type = 'dots_and_boxes';
+                title = 'Dots and Boxes 1v1';
+                url = '/games/dots-and-boxes?room=' + encodeURIComponent(code);
+            } else if (pongMatch) {
+                code = pongMatch[1];
+                type = 'ping_pong';
+                title = 'Ping Pong 1v1';
+                url = '/games/ping-pong?room=' + encodeURIComponent(code);
             } else if (gMatch) {
                 code = gMatch[1];
                 type = 'party_game';
                 title = 'Game Lobby';
                 url = '/g/' + encodeURIComponent(code);
+            } else if (/^sv-/i.test(val)) {
+                type = 'slime_volleyball';
+                title = 'Slime Volleyball 1v1';
+                url = '/games/slime-volleyball?room=' + encodeURIComponent(code);
+            } else if (/^ttt-/i.test(val) || /^ttt_/i.test(val)) {
+                type = 'tic_tac_toe';
+                title = 'Tic-Tac-Toe 1v1';
+                url = '/games/tic-tac-toe?room=' + encodeURIComponent(code);
+            } else if (/^c4-/i.test(val) || /^c4_/i.test(val)) {
+                type = 'connect_four';
+                title = 'Connect Four 1v1';
+                url = '/games/connect-four?room=' + encodeURIComponent(code);
+            } else if (/^dnb-/i.test(val) || /^dnb_/i.test(val)) {
+                type = 'dots_and_boxes';
+                title = 'Dots and Boxes 1v1';
+                url = '/games/dots-and-boxes?room=' + encodeURIComponent(code);
+            } else if (/^pong-/i.test(val) || /^pong_/i.test(val)) {
+                type = 'ping_pong';
+                title = 'Ping Pong 1v1';
+                url = '/games/ping-pong?room=' + encodeURIComponent(code);
             }
+
             window.sendGameInvite(code, type, title, url);
             input.value = '';
         };

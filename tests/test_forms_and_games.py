@@ -568,6 +568,111 @@ class TestSlimeDMGameInvite:
         assert 'Enter Slime Volleyball' in content
         assert '/games/slime-volleyball?room=' in content
 
+    def test_messages_template_all_duel_games_auto_invite_and_join(self):
+        """Verify messages.html contains auto-invite buttons and join links for all 5 duel games."""
+        import os
+        tpl_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(tpl_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # All 5 duel trigger buttons
+        assert 'id="slime-auto-invite-btn"' in content
+        assert 'id="ttt-auto-invite-btn"' in content
+        assert 'id="c4-auto-invite-btn"' in content
+        assert 'id="dnb-auto-invite-btn"' in content
+        assert 'id="pong-auto-invite-btn"' in content
+
+        # All 5 duel JS functions
+        assert 'inviteSlimeVolleyball' in content
+        assert 'inviteTicTacToe' in content
+        assert 'inviteConnectFour' in content
+        assert 'inviteDotsAndBoxes' in content
+        assert 'invitePingPong' in content
+
+        # All 5 enter buttons in DM message cards
+        assert 'Enter Slime Volleyball' in content
+        assert 'Enter Tic-Tac-Toe' in content
+        assert 'Enter Connect Four' in content
+        assert 'Enter Dots & Boxes' in content
+        assert 'Enter Ping Pong' in content
+
+        # All 5 direct URLs
+        assert '/games/slime-volleyball?room=' in content
+        assert '/games/tic-tac-toe?room=' in content
+        assert '/games/connect-four?room=' in content
+        assert '/games/dots-and-boxes?room=' in content
+        assert '/games/ping-pong?room=' in content
+
+    def test_dm_game_invite_all_duel_games_auto_url(self, app, mock_user):
+        """Verify send_dm socket handler generates direct game_url for all 5 duel games."""
+        import main as m
+        from main import User
+        from flask_login import login_user
+        from unittest.mock import patch, MagicMock
+        from bson.objectid import ObjectId
+
+        target_id = ObjectId()
+        recipient_user = {'_id': target_id, 'username': 'partner_user', 'dm_privacy': 'everyone'}
+
+        handlers = {getattr(c.args[0], '__name__', ''): c.args[0]
+                    for c in m.socketio.on.mock_calls if len(c.args) > 0 and callable(c.args[0])}
+        send_dm_handler = handlers.get('handle_send_dm')
+        assert send_dm_handler is not None
+
+        game_cases = [
+            ('slime_volleyball', 'sv-123', '/games/slime-volleyball?room=sv-123'),
+            ('tic_tac_toe', 'ttt-456', '/games/tic-tac-toe?room=ttt-456'),
+            ('connect_four', 'c4-789', '/games/connect-four?room=c4-789'),
+            ('dots_and_boxes', 'dnb-012', '/games/dots-and-boxes?room=dnb-012'),
+            ('ping_pong', 'pong-345', '/games/ping-pong?room=pong-345'),
+        ]
+
+        with app.test_request_context():
+            login_user(User(mock_user))
+            for g_type, room_id, expected_url in game_cases:
+                with patch.object(m, 'can_dm', return_value=True), \
+                     patch.object(m, 'users_conf') as mock_users, \
+                     patch.object(m, 'direct_messages_conf') as mock_dms, \
+                     patch.object(m, 'hidden_chats_conf'), \
+                     patch.object(m, 'emit'):
+
+                    def fake_insert(doc):
+                        doc['_id'] = ObjectId()
+                        return MagicMock(inserted_id=doc['_id'])
+                    mock_dms.insert_one.side_effect = fake_insert
+                    mock_users.find_one.return_value = recipient_user
+
+                    invite_payload = {
+                        'recipient_id': str(target_id),
+                        'message_type': 'game_invite',
+                        'game_type': g_type,
+                        'game_lobby_id': room_id,
+                        'game_title': f'{g_type} Duel',
+                        'temp_id': f'tmp-{room_id}'
+                    }
+                    send_dm_handler(invite_payload)
+                    saved_doc = mock_dms.insert_one.call_args[0][0]
+                    assert saved_doc['game_data']['game_url'] == expected_url
+
+    def test_duel_games_create_custom_room_ui_and_js(self):
+        """Verify Tic-Tac-Toe, Connect Four, and Dots and Boxes have Create Custom room button and JS listener."""
+        import os
+        base_dir = os.path.join(os.path.dirname(__file__), '..')
+
+        for tpl_name in ('tic_tac_toe.html', 'connect_four.html', 'dots_and_boxes.html'):
+            path = os.path.join(base_dir, 'templates', tpl_name)
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert 'id="create-room-btn"' in content
+            assert 'Create Custom' in content
+
+        for js_name in ('tic_tac_toe.js', 'connect_four.js', 'dots_and_boxes.js'):
+            path = os.path.join(base_dir, 'static', js_name)
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            assert 'createRoomBtn' in content
+            assert 'Math.random().toString(36)' in content
+
     def test_slime_js_room_joined_fair_reset_and_status(self):
         """Verify slime_volleyball.js includes opponent waiting status and score reset on opponent join."""
         import os
@@ -955,11 +1060,13 @@ class TestArcadeMatchmakingAndLeaderboards:
         move_handler = handlers.get('handle_ttt_move')
         leave_handler = handlers.get('handle_leave_ttt_room')
         find_handler = handlers.get('handle_find_ttt_match')
+        restart_handler = handlers.get('handle_ttt_restart')
 
         assert join_handler is not None
         assert move_handler is not None
         assert leave_handler is not None
         assert find_handler is not None
+        assert restart_handler is not None
 
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
@@ -978,6 +1085,15 @@ class TestArcadeMatchmakingAndLeaderboards:
                 assert m.active_ttt_rooms[room_id]['board'][0] == 'x'
                 assert m.active_ttt_rooms[room_id]['turn'] == 'o'
 
+                # Verify restart alternates starter from 'x' to 'o'
+                restart_handler({'room_id': room_id})
+                assert m.active_ttt_rooms[room_id]['turn'] == 'o'
+                assert m.active_ttt_rooms[room_id]['starter'] == 'o'
+                # Next restart alternates back to 'x'
+                restart_handler({'room_id': room_id})
+                assert m.active_ttt_rooms[room_id]['turn'] == 'x'
+                assert m.active_ttt_rooms[room_id]['starter'] == 'x'
+
                 # Host leaves
                 leave_handler({'room_id': room_id})
                 assert room_id not in m.active_ttt_rooms
@@ -992,11 +1108,13 @@ class TestArcadeMatchmakingAndLeaderboards:
         move_handler = handlers.get('handle_c4_move')
         leave_handler = handlers.get('handle_leave_c4_room')
         find_handler = handlers.get('handle_find_c4_match')
+        restart_c4_handler = handlers.get('handle_c4_restart')
 
         assert join_handler is not None
         assert move_handler is not None
         assert leave_handler is not None
         assert find_handler is not None
+        assert restart_c4_handler is not None
 
         with app.test_request_context():
             with patch.object(m, 'request') as mock_req, \
@@ -1015,6 +1133,12 @@ class TestArcadeMatchmakingAndLeaderboards:
                 # Bottom row is 5
                 assert m.active_c4_rooms[room_id]['board'][5][3] == 0
                 assert m.active_c4_rooms[room_id]['turn'] == 1
+
+                # Verify restart alternates starter from 0 to 1
+                restart_c4_handler({'room_id': room_id})
+                assert m.active_c4_rooms[room_id]['turn'] == 1
+                restart_c4_handler({'room_id': room_id})
+                assert m.active_c4_rooms[room_id]['turn'] == 0
 
                 # Host leaves
                 leave_handler({'room_id': room_id})

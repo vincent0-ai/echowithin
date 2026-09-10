@@ -1025,11 +1025,19 @@
     }
 
     const joinRoomBtn = document.getElementById('join-room-btn');
+    const createRoomBtn = document.getElementById('create-room-btn');
     const roomCodeInput = document.getElementById('room-code-input');
     if (joinRoomBtn && roomCodeInput) {
       joinRoomBtn.addEventListener('click', () => {
         const code = roomCodeInput.value.trim();
         if (code) joinRoom(code);
+      });
+    }
+    if (createRoomBtn && roomCodeInput) {
+      createRoomBtn.addEventListener('click', () => {
+        const code = Math.random().toString(36).substring(2, 8);
+        roomCodeInput.value = code;
+        joinRoom(code);
       });
     }
 

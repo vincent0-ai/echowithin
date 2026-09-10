@@ -114,6 +114,7 @@
     mode: 'solo', // 'solo' | 'local' | 'online'
     board: Array(9).fill(''),
     turn: 'x',
+    starter: 'x',
     playerSymbol: 'x',
     cpuSymbol: 'o',
     difficulty: 'medium',
@@ -162,6 +163,7 @@
     els.findMatchBtn = document.getElementById('find-match-btn');
     els.roomCodeInput = document.getElementById('room-code-input');
     els.joinRoomBtn = document.getElementById('join-room-btn');
+    els.createRoomBtn = document.getElementById('create-room-btn');
     els.copyLinkBtn = document.getElementById('copy-link-btn');
     els.roomStatus = document.getElementById('room-status');
 
@@ -349,7 +351,8 @@
       }
       initOnlineSocket();
     }
-    resetGame();
+    state.starter = 'x';
+    resetGame('x');
   }
 
   // --- Core Game Logic ---
@@ -488,11 +491,24 @@
     }, 400);
   }
 
-  function resetGame() {
+  function resetGame(startingTurn) {
     state.board = Array(9).fill('');
     state.isGameOver = false;
     state.isThinking = false;
-    state.turn = 'x';
+
+    if (startingTurn) {
+      state.starter = startingTurn;
+      state.turn = startingTurn;
+    } else if (state.mode === 'local') {
+      // In local mode, alternate starter each round
+      state.starter = (state.starter === 'x') ? 'o' : 'x';
+      state.turn = state.starter;
+    } else if (state.mode === 'solo') {
+      state.starter = 'x';
+      state.turn = 'x';
+    } else {
+      state.turn = state.starter || 'x';
+    }
     if (els.thinkingIndicator) els.thinkingIndicator.style.display = 'none';
     if (els.resultOverlay) els.resultOverlay.style.display = 'none';
 
@@ -705,9 +721,8 @@
     });
 
     state.socket.on('ttt_restarted', data => {
-      resetGame();
-      state.turn = data.turn || 'x';
-      updateTurnDisplay();
+      const nextTurn = (data && data.turn) ? data.turn : 'x';
+      resetGame(nextTurn);
     });
 
     state.socket.on('ttt_player_left', () => {
@@ -722,9 +737,10 @@
       state.mySymbol = data.symbol;
       state.opponentJoined = true;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
+      const initialTurn = (data && data.turn) ? data.turn : 'x';
 
       setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`, 'found');
-      resetGame();
+      resetGame(initialTurn);
     });
 
     state.socket.on('ttt_matchmaking_waiting', () => {
@@ -853,6 +869,14 @@
       els.joinRoomBtn.addEventListener('click', () => {
         const code = els.roomCodeInput.value.trim();
         if (code) joinRoom(code);
+      });
+    }
+
+    if (els.createRoomBtn) {
+      els.createRoomBtn.addEventListener('click', () => {
+        const code = Math.random().toString(36).substring(2, 8);
+        if (els.roomCodeInput) els.roomCodeInput.value = code;
+        joinRoom(code);
       });
     }
 

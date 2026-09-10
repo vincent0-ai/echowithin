@@ -22,7 +22,11 @@
   const PLAYER_SPEED_X = 18.0;
   const PLAYER_SPEED_Y = 14.5;
   const MAX_BALL_SPEED = 24.0;
-  const TIMESTEP = 1 / 60;
+  const TIMESTEP = 1 / 60; // 60Hz fixed physics step
+  const SUB_STEPS = 4; // 4x sub-stepping for zero collision tunneling
+  const RESTITUTION = 0.82; // Ball-slime bounce coefficient
+  const WALL_RESTITUTION = 0.80; // Ball-wall/net bounce coefficient
+  const PADDLE_MOMENTUM_TRANSFER = 0.25; // Horizontal momentum transfer
   const NUDGE = 0.1;
   const FRICTION = 1.0;
   const WIN_SCORE = 5;
@@ -121,7 +125,7 @@
 
   // Ball class
   class Ball {
-    constructor(x = 0, y = 11, vx = 0, vy = 10) {
+    constructor(x = 0, y = 11, vx = 0, vy = 0) {
       this.x = x; this.y = y;
       this.prev_x = x; this.prev_y = y;
       this.vx = vx; this.vy = vy;
@@ -137,54 +141,70 @@
     applyGravity(dt = TIMESTEP) {
       this.vy += GRAVITY * dt;
     }
-    checkEdges() {
-      // Left / Right bounds
-      if (this.x <= this.r - REF_W / 2) {
-        this.vx = Math.abs(this.vx) * FRICTION;
-        this.x = this.r - REF_W / 2 + NUDGE * TIMESTEP;
+    checkEdges(dt = TIMESTEP) {
+      const halfCourt = REF_W / 2;
+      const halfNet = REF_WALL_W / 2;
+      const topNet = REF_WALL_H;
+
+      // Left Court Wall
+      if (this.x <= -halfCourt + this.r) {
+        this.x = -halfCourt + this.r;
+        this.vx = Math.abs(this.vx) * WALL_RESTITUTION;
         SFX.bounce();
       }
-      if (this.x >= REF_W / 2 - this.r) {
-        this.vx = -Math.abs(this.vx) * FRICTION;
-        this.x = REF_W / 2 - this.r - NUDGE * TIMESTEP;
+      // Right Court Wall
+      if (this.x >= halfCourt - this.r) {
+        this.x = halfCourt - this.r;
+        this.vx = -Math.abs(this.vx) * WALL_RESTITUTION;
         SFX.bounce();
       }
-      // Top ceiling
+      // Top Ceiling
       if (this.y >= REF_H - this.r) {
-        this.vy = -Math.abs(this.vy) * FRICTION;
-        this.y = REF_H - this.r - NUDGE * TIMESTEP;
+        this.y = REF_H - this.r;
+        this.vy = -Math.abs(this.vy) * WALL_RESTITUTION;
         SFX.bounce();
       }
-      // Net / Wall bounce
-      if (this.x <= REF_WALL_W / 2 + this.r && this.prev_x > REF_WALL_W / 2 + this.r && this.y <= REF_WALL_H) {
-        this.vx = Math.abs(this.vx) * FRICTION;
-        this.x = REF_WALL_W / 2 + this.r + NUDGE * TIMESTEP;
-        SFX.net();
-      }
-      if (this.x >= -REF_WALL_W / 2 - this.r && this.prev_x < -REF_WALL_W / 2 - this.r && this.y <= REF_WALL_H) {
-        this.vx = -Math.abs(this.vx) * FRICTION;
-        this.x = -REF_WALL_W / 2 - this.r - NUDGE * TIMESTEP;
-        SFX.net();
-      }
-      // Top of net post stub
-      const stubDist2 = (this.x) * (this.x) + (this.y - REF_WALL_H) * (this.y - REF_WALL_H);
-      const stubR = (REF_WALL_W / 2 + this.r);
-      if (stubDist2 < stubR * stubR) {
-        const d = Math.sqrt(stubDist2) || 1;
-        const nx = this.x / d, ny = (this.y - REF_WALL_H) / d;
-        const dot = this.vx * nx + this.vy * ny;
-        if (dot < 0) {
-          this.vx -= 2 * dot * nx;
-          this.vy -= 2 * dot * ny;
-          this.x += nx * (stubR - d);
-          this.y += ny * (stubR - d);
+
+      // Net Collision
+      // 1. Vertical post rectangular sides (below top of net)
+      if (this.y < topNet) {
+        // Approaching from left side of net
+        if (this.x + this.r >= -halfNet && this.x < 0) {
+          this.x = -halfNet - this.r;
+          this.vx = -Math.abs(this.vx) * WALL_RESTITUTION;
+          SFX.net();
+        }
+        // Approaching from right side of net
+        else if (this.x - this.r <= halfNet && this.x > 0) {
+          this.x = halfNet + this.r;
+          this.vx = Math.abs(this.vx) * WALL_RESTITUTION;
           SFX.net();
         }
       }
-      // Ground check
-      if (this.y <= this.r + REF_U) {
-        this.y = this.r + REF_U;
-        return this.x <= 0 ? -1 : 1; // point to right player if left hits, or vice-versa
+
+      // 2. Rounded net top cap (circle at (0, topNet) with radius halfNet)
+      const stubDx = this.x;
+      const stubDy = this.y - topNet;
+      const stubDist2 = stubDx * stubDx + stubDy * stubDy;
+      const stubR = halfNet + this.r;
+      if (stubDist2 < stubR * stubR && this.y >= topNet) {
+        const d = Math.sqrt(stubDist2) || 1;
+        const nx = stubDx / d;
+        const ny = stubDy / d;
+        this.x = nx * stubR;
+        this.y = topNet + ny * stubR;
+        const dot = this.vx * nx + this.vy * ny;
+        if (dot < 0) {
+          this.vx = (this.vx - 2 * dot * nx) * WALL_RESTITUTION;
+          this.vy = (this.vy - 2 * dot * ny) * WALL_RESTITUTION;
+          SFX.net();
+        }
+      }
+
+      // Ground Floor
+      if (this.y <= REF_U + this.r) {
+        this.y = REF_U + this.r;
+        return this.x <= 0 ? -1 : 1; // -1 = hit left court (P2 point), 1 = hit right court (P1 point)
       }
       return 0;
     }
@@ -193,33 +213,40 @@
       const dy = this.y - slime.y;
       const dist2 = dx * dx + dy * dy;
       const totalR = this.r + slime.r;
-      if (dist2 < totalR * totalR && this.y >= slime.y) {
+
+      // Semicircle collision: center distance < totalR AND upper dome (dy >= -0.1)
+      if (dist2 < totalR * totalR && dy >= -0.1) {
         const d = Math.sqrt(dist2) || 1;
-        const nx = dx / d, ny = dy / d;
-        // Push out of collision
-        this.x = slime.x + nx * totalR;
-        this.y = slime.y + ny * totalR;
+        const nx = dx / d;
+        const ny = dy / d;
 
-        // Relative velocity
-        const relVx = this.vx - slime.vx;
-        const relVy = this.vy - slime.vy;
-        const dot = relVx * nx + relVy * ny;
-        if (dot < 0) {
-          this.vx = (relVx - 2 * dot * nx) * 0.95 + slime.vx;
-          this.vy = (relVy - 2 * dot * ny) * 0.95 + slime.vy;
-          // Add player propulsion
-          this.vx += slime.vx * 0.25;
+        // Ensure collision normal is directed upward (curved dome)
+        if (ny >= 0) {
+          // Positional separation to prevent sticking / sinking
+          this.x = slime.x + nx * totalR;
+          this.y = slime.y + ny * totalR;
 
-          // Ball Speed Curve: gradual acceleration per rally hit up to MAX_BALL_SPEED
-          GameState.rallyCount = (GameState.rallyCount || 0) + 1;
-          const cfg = (typeof DIFFICULTY_CONFIG !== 'undefined' && DIFFICULTY_CONFIG[GameState.difficulty]) ? DIFFICULTY_CONFIG[GameState.difficulty] : null;
-          if (cfg && cfg.speedUpPerHit) {
-            const mult = Math.min(1.4, Math.pow(cfg.speedUpPerHit, Math.min(12, GameState.rallyCount)));
-            this.vx *= mult;
+          // Relative velocity
+          const relVx = this.vx - slime.vx;
+          const relVy = this.vy - slime.vy;
+          const dot = relVx * nx + relVy * ny;
+
+          if (dot < 0) {
+            const e = RESTITUTION;
+            this.vx = (relVx - (1 + e) * dot * nx) + slime.vx + slime.vx * PADDLE_MOMENTUM_TRANSFER;
+            this.vy = (relVy - (1 + e) * dot * ny) + slime.vy;
+
+            // Gradual rally acceleration
+            GameState.rallyCount = (GameState.rallyCount || 0) + 1;
+            const cfg = (typeof DIFFICULTY_CONFIG !== 'undefined' && DIFFICULTY_CONFIG[GameState.difficulty]) ? DIFFICULTY_CONFIG[GameState.difficulty] : null;
+            if (cfg && cfg.speedUpPerHit) {
+              const mult = Math.min(1.35, Math.pow(cfg.speedUpPerHit, Math.min(10, GameState.rallyCount)));
+              this.vx *= mult;
+            }
+            this.limitSpeed(5.0, MAX_BALL_SPEED);
+            SFX.bounce();
+            return true;
           }
-          this.limitSpeed(4.5, MAX_BALL_SPEED);
-          SFX.bounce();
-          return true;
         }
       }
       return false;
@@ -268,30 +295,32 @@
       this.startX = x;
       this.x = x; this.y = REF_U;
       this.vx = 0; this.vy = 0;
-      this.desiredVx = 0; this.desiredVy = 0;
+      this.desiredVx = 0;
       this.r = SLIME_R;
       this.color = color;
       this.name = name;
       this.score = 0;
+      this.isGrounded = true;
     }
     reset() {
       this.x = this.startX; this.y = REF_U;
       this.vx = 0; this.vy = 0;
-      this.desiredVx = 0; this.desiredVy = 0;
+      this.desiredVx = 0;
+      this.isGrounded = true;
     }
     setInput(left, right, jump, speedScale = 1.0) {
       this.desiredVx = 0;
-      this.desiredVy = 0;
       const speedX = PLAYER_SPEED_X * speedScale;
       if (left && !right) this.desiredVx = -speedX;
       if (right && !left) this.desiredVx = speedX;
-      if (jump && this.y <= REF_U + 0.05) this.desiredVy = PLAYER_SPEED_Y;
+      if (jump && this.isGrounded) {
+        this.vy = PLAYER_SPEED_Y;
+        this.isGrounded = false;
+      }
     }
     update(dt = TIMESTEP) {
-      this.vy += GRAVITY * dt;
-      if (this.y <= REF_U + 0.05 && this.desiredVy > 0) {
-        this.vy = this.desiredVy;
-        this.desiredVy = 0;
+      if (!this.isGrounded) {
+        this.vy += GRAVITY * dt;
       }
       this.vx = this.desiredVx;
       this.x += this.vx * dt;
@@ -300,14 +329,18 @@
       if (this.y <= REF_U) {
         this.y = REF_U;
         this.vy = 0;
+        this.isGrounded = true;
       }
-      // Stay on own half of court
+
+      // Net and court boundary clamp: slimes can NEVER cross the net
+      const halfNet = REF_WALL_W / 2;
+      const halfCourt = REF_W / 2;
       if (this.dir === -1) {
-        if (this.x < -REF_W / 2 + this.r) this.x = -REF_W / 2 + this.r;
-        if (this.x > -REF_WALL_W / 2 - this.r) this.x = -REF_WALL_W / 2 - this.r;
+        if (this.x < -halfCourt + this.r) this.x = -halfCourt + this.r;
+        if (this.x > -halfNet - this.r) this.x = -halfNet - this.r;
       } else {
-        if (this.x < REF_WALL_W / 2 + this.r) this.x = REF_WALL_W / 2 + this.r;
-        if (this.x > REF_W / 2 - this.r) this.x = REF_W / 2 - this.r;
+        if (this.x < halfNet + this.r) this.x = halfNet + this.r;
+        if (this.x > halfCourt - this.r) this.x = halfCourt - this.r;
       }
     }
     draw(ctx, ball) {
@@ -461,7 +494,8 @@
     ball: new Ball(0, 11, 0, 8),
     ai: new NeuralAgent(),
     serving: -1, // -1 = Left serves, 1 = Right serves
-    delay: 45,
+    serveState: 'SERVE_COUNTDOWN', // 'SERVE_COUNTDOWN', 'PLAYING'
+    delay: 60, // 60 ticks (~1s) serve countdown
     gameOver: false,
     winner: null,
     isPaused: true, // Paused by default on page load so user can get ready
@@ -513,59 +547,79 @@
         return;
       }
     }
-    const k = e.key.toLowerCase();
-    if (k === 'a') { keys.a = true; e.preventDefault(); }
-    if (k === 'd') { keys.d = true; e.preventDefault(); }
-    if (k === 'w') { keys.w = true; e.preventDefault(); }
-    if (k === 'arrowleft') { keys.left = true; e.preventDefault(); }
-    if (k === 'arrowright') { keys.right = true; e.preventDefault(); }
-    if (k === 'arrowup') { keys.up = true; e.preventDefault(); }
+
+    const code = e.code || '';
+    const k = (e.key || '').toLowerCase();
+
+    if (code === 'KeyA' || k === 'a') { keys.a = true; e.preventDefault(); }
+    if (code === 'KeyD' || k === 'd') { keys.d = true; e.preventDefault(); }
+    if (code === 'KeyW' || k === 'w') { keys.w = true; e.preventDefault(); }
+
+    if (code === 'ArrowLeft' || k === 'arrowleft') { keys.left = true; e.preventDefault(); }
+    if (code === 'ArrowRight' || k === 'arrowright') { keys.right = true; e.preventDefault(); }
+    if (code === 'ArrowUp' || k === 'arrowup') { keys.up = true; e.preventDefault(); }
   }
 
   function handleKeyUp(e) {
-    const k = e.key.toLowerCase();
-    if (k === 'a') keys.a = false;
-    if (k === 'd') keys.d = false;
-    if (k === 'w' || k === ' ') keys.w = false;
-    if (k === 'arrowleft') keys.left = false;
-    if (k === 'arrowright') keys.right = false;
-    if (k === 'arrowup') keys.up = false;
+    const code = e.code || '';
+    const k = (e.key || '').toLowerCase();
+
+    if (code === 'KeyA' || k === 'a') keys.a = false;
+    if (code === 'KeyD' || k === 'd') keys.d = false;
+    if (code === 'KeyW' || k === 'w') keys.w = false;
+
+    if (code === 'ArrowLeft' || k === 'arrowleft') keys.left = false;
+    if (code === 'ArrowRight' || k === 'arrowright') keys.right = false;
+    if (code === 'ArrowUp' || k === 'arrowup') keys.up = false;
   }
 
   function resetServe(winnerDir) {
     GameState.rallyCount = 0;
+    GameState.serving = winnerDir;
+    GameState.serveState = 'SERVE_COUNTDOWN';
+    GameState.delay = 60; // 1.0 second countdown at 60Hz
+
+    // Position slimes cleanly at baseline
+    GameState.p1.reset();
+    GameState.p2.reset();
+
+    // Position ball above server with vx = 0, vy = 0
+    GameState.ball.x = winnerDir * (REF_W / 4);
+    GameState.ball.y = 11;
+    GameState.ball.vx = 0;
+    GameState.ball.vy = 0;
+  }
+
+  function launchServe() {
     const cfg = DIFFICULTY_CONFIG[GameState.difficulty] || DIFFICULTY_CONFIG.normal;
     let serveSpeed = 5 * (cfg.serveSpeedScale || 1.0);
     // Dynamic Difficulty Adjustment (DDA / Catch-up):
-    // If solo mode and player trails by >= 2 points, soften serve speed by 15%
     if (GameState.mode === 'solo' && (GameState.p2.score - GameState.p1.score >= 2)) {
       serveSpeed *= 0.85;
     }
-
-    GameState.ball.x = winnerDir * (REF_W / 4);
-    GameState.ball.y = 10;
-    GameState.ball.vx = (winnerDir === -1) ? serveSpeed : -serveSpeed;
+    GameState.ball.vx = (GameState.serving === -1) ? serveSpeed : -serveSpeed;
     GameState.ball.vy = 8 * (cfg.serveSpeedScale || 1.0);
-    GameState.p1.reset();
-    GameState.p2.reset();
-    GameState.delay = 45;
+    GameState.serveState = 'PLAYING';
     if (!GameState.isPaused) SFX.whistle();
   }
 
-  function update() {
+  function update(dt = TIMESTEP) {
     if (GameState.gameOver) return;
     if (GameState.isPaused && GameState.mode !== 'online') return;
 
-    // Delay before serve begins
-    if (GameState.delay > 0) {
+    // Delay before serve begins (Serve State Machine)
+    if (GameState.serveState === 'SERVE_COUNTDOWN') {
       GameState.delay--;
+      if (GameState.delay <= 0) {
+        launchServe();
+      }
       return;
     }
 
     if (GameState.mode === 'solo') {
       // Player 1 controls
       GameState.p1.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
-      GameState.p1.update();
+      GameState.p1.update(dt);
 
       // Humanized Neural AI for Player 2
       const now = performance.now();
@@ -615,87 +669,69 @@
       }
 
       GameState.p2.setInput(GameState.lastAiAction.forward, GameState.lastAiAction.backward, GameState.lastAiAction.jump, speedScale);
-      GameState.p2.update();
+      GameState.p2.update(dt);
 
-      // Physics
-      GameState.ball.applyGravity();
-      GameState.ball.move();
-      const p1Hit = GameState.ball.bounceSlime(GameState.p1);
-      if (p1Hit) {
-        GameState.volleysReturned++;
-        GameState.currentRallyVolleys++;
-        if (GameState.currentRallyVolleys > GameState.bestRallyVolleys) {
-          GameState.bestRallyVolleys = GameState.currentRallyVolleys;
-          localStorage.setItem('slime_best_rally', String(GameState.bestRallyVolleys));
-        }
-        localStorage.setItem('slime_volleys_returned', String(GameState.volleysReturned));
-        if (typeof window.__updateSlimeReturnsDisplay === 'function') {
-          window.__updateSlimeReturnsDisplay(GameState.volleysReturned, GameState.currentRallyVolleys);
-        }
-      }
-      GameState.ball.bounceSlime(GameState.p2);
-
-      const groundHit = GameState.ball.checkEdges();
-      if (groundHit !== 0) {
-        if (GameState.volleysReturned > 0) {
-          submitLeaderboard('volleys_returned', GameState.volleysReturned);
-        }
-        GameState.currentRallyVolleys = 0;
-
-        if (groundHit === -1) {
-          // Ball hit left ground -> P2 scores
-          GameState.p2.score++;
-          if (GameState.p2.score >= WIN_SCORE) endGame(GameState.p2);
-          else resetServe(-1);
-        } else {
-          // Ball hit right ground -> P1 scores
-          GameState.p1.score++;
-          GameState.roundWins++;
-          localStorage.setItem('slime_round_wins', String(GameState.roundWins));
-          if (typeof window.__updateSlimeRoundsDisplay === 'function') {
-            window.__updateSlimeRoundsDisplay(GameState.roundWins);
+      // Sub-stepped physics for zero tunneling
+      const subDt = dt / SUB_STEPS;
+      for (let s = 0; s < SUB_STEPS; s++) {
+        GameState.ball.applyGravity(subDt);
+        GameState.ball.move(subDt);
+        const p1Hit = GameState.ball.bounceSlime(GameState.p1);
+        if (p1Hit) {
+          GameState.volleysReturned++;
+          GameState.currentRallyVolleys++;
+          if (GameState.currentRallyVolleys > GameState.bestRallyVolleys) {
+            GameState.bestRallyVolleys = GameState.currentRallyVolleys;
+            localStorage.setItem('slime_best_rally', String(GameState.bestRallyVolleys));
           }
-          if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
-          else resetServe(1);
+          localStorage.setItem('slime_volleys_returned', String(GameState.volleysReturned));
+          if (typeof window.__updateSlimeReturnsDisplay === 'function') {
+            window.__updateSlimeReturnsDisplay(GameState.volleysReturned, GameState.currentRallyVolleys);
+          }
+        }
+        GameState.ball.bounceSlime(GameState.p2);
+
+        const groundHit = GameState.ball.checkEdges(subDt);
+        if (groundHit !== 0) {
+          if (GameState.volleysReturned > 0) {
+            submitLeaderboard('volleys_returned', GameState.volleysReturned);
+          }
+          GameState.currentRallyVolleys = 0;
+
+          if (groundHit === -1) {
+            // Ball hit left ground -> P2 scores
+            GameState.p2.score++;
+            if (GameState.p2.score >= WIN_SCORE) endGame(GameState.p2);
+            else resetServe(-1);
+          } else {
+            // Ball hit right ground -> P1 scores
+            GameState.p1.score++;
+            GameState.roundWins++;
+            localStorage.setItem('slime_round_wins', String(GameState.roundWins));
+            if (typeof window.__updateSlimeRoundsDisplay === 'function') {
+              window.__updateSlimeRoundsDisplay(GameState.roundWins);
+            }
+            if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
+            else resetServe(1);
+          }
+          break; // Stop sub-steps once point is scored
         }
       }
     } else if (GameState.mode === 'local') {
       // Local 2-Player: P1 = A/D/W, P2 = Left/Right/Up
       GameState.p1.setInput(keys.a, keys.d, keys.w);
-      GameState.p1.update();
+      GameState.p1.update(dt);
       GameState.p2.setInput(keys.left, keys.right, keys.up);
-      GameState.p2.update();
+      GameState.p2.update(dt);
 
-      GameState.ball.applyGravity();
-      GameState.ball.move();
-      GameState.ball.bounceSlime(GameState.p1);
-      GameState.ball.bounceSlime(GameState.p2);
-
-      const groundHit = GameState.ball.checkEdges();
-      if (groundHit !== 0) {
-        if (groundHit === -1) {
-          GameState.p2.score++;
-          if (GameState.p2.score >= WIN_SCORE) endGame(GameState.p2);
-          else resetServe(-1);
-        } else {
-          GameState.p1.score++;
-          if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
-          else resetServe(1);
-        }
-      }
-    } else if (GameState.mode === 'online') {
-      if (GameState.isHost) {
-        // Host controls Player 1
-        GameState.p1.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
-        GameState.p1.update();
-        GameState.p2.update(); // Guest updated via socket input
-
-        GameState.ball.applyGravity();
-        GameState.ball.move();
+      const subDt = dt / SUB_STEPS;
+      for (let s = 0; s < SUB_STEPS; s++) {
+        GameState.ball.applyGravity(subDt);
+        GameState.ball.move(subDt);
         GameState.ball.bounceSlime(GameState.p1);
         GameState.ball.bounceSlime(GameState.p2);
 
-        const groundHit = GameState.ball.checkEdges();
+        const groundHit = GameState.ball.checkEdges(subDt);
         if (groundHit !== 0) {
           if (groundHit === -1) {
             GameState.p2.score++;
@@ -706,15 +742,48 @@
             if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
             else resetServe(1);
           }
+          break;
+        }
+      }
+    } else if (GameState.mode === 'online') {
+      if (GameState.isHost) {
+        // Host controls Player 1
+        GameState.p1.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
+        GameState.p1.update(dt);
+        GameState.p2.update(dt); // Guest updated via socket input
+
+        const subDt = dt / SUB_STEPS;
+        for (let s = 0; s < SUB_STEPS; s++) {
+          GameState.ball.applyGravity(subDt);
+          GameState.ball.move(subDt);
+          GameState.ball.bounceSlime(GameState.p1);
+          GameState.ball.bounceSlime(GameState.p2);
+
+          const groundHit = GameState.ball.checkEdges(subDt);
+          if (groundHit !== 0) {
+            if (groundHit === -1) {
+              GameState.p2.score++;
+              if (GameState.p2.score >= WIN_SCORE) endGame(GameState.p2);
+              else resetServe(-1);
+            } else {
+              GameState.p1.score++;
+              if (GameState.p1.score >= WIN_SCORE) endGame(GameState.p1);
+              else resetServe(1);
+            }
+            break;
+          }
         }
       } else {
         // Guest controls Player 2
         GameState.p2.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
-        GameState.p2.update();
+        GameState.p2.update(dt);
         // Extrapolate ball movement between network sync packets so motion stays fluid
-        GameState.ball.applyGravity();
-        GameState.ball.move();
-        GameState.ball.bounceSlime(GameState.p2);
+        const subDt = dt / SUB_STEPS;
+        for (let s = 0; s < SUB_STEPS; s++) {
+          GameState.ball.applyGravity(subDt);
+          GameState.ball.move(subDt);
+          GameState.ball.bounceSlime(GameState.p2);
+        }
       }
     }
   }
@@ -1010,9 +1079,25 @@
     drawPauseOverlay();
   }
 
-  // Animation Loop
-  function loop() {
-    update();
+  // Fixed-Timestep Accumulator Loop (60Hz deterministic physics)
+  let lastFrameTime = 0;
+  let physicsAccumulator = 0;
+  const FIXED_DT = 1 / 60;
+  const MAX_ACCUMULATOR = 0.1; // Clamp delta to avoid spiral of death on background tabs
+
+  function loop(timestamp) {
+    if (!lastFrameTime) lastFrameTime = timestamp || (performance.now ? performance.now() : Date.now());
+    const now = timestamp || (performance.now ? performance.now() : Date.now());
+    let delta = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
+    if (delta > MAX_ACCUMULATOR) delta = MAX_ACCUMULATOR;
+
+    physicsAccumulator += delta;
+    while (physicsAccumulator >= FIXED_DT) {
+      update(FIXED_DT);
+      physicsAccumulator -= FIXED_DT;
+    }
+
     render();
     requestAnimationFrame(loop);
   }

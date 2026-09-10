@@ -1185,6 +1185,7 @@
 
       GameState.socket.on('slime_host_sync', (data) => {
         if (!GameState.isHost) {
+          if (!data || data.room_id !== GameState.roomId || !data.ball || !data.p1 || !Array.isArray(data.scores)) return;
           // Linear interpolation for smooth ball movement
           GameState.ball.x = GameState.ball.x * 0.2 + data.ball.x * 0.8;
           GameState.ball.y = GameState.ball.y * 0.2 + data.ball.y * 0.8;
@@ -1194,8 +1195,16 @@
           GameState.p1.y = GameState.p1.y * 0.3 + data.p1.y * 0.7;
           GameState.p1.vx = data.p1.vx;
           GameState.p1.vy = data.p1.vy;
-          GameState.p1.score = data.scores[0];
-          GameState.p2.score = data.scores[1];
+          GameState.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
+          GameState.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
+          // Guest-side match end: the host simulates scoring authoritatively
+          // and emits no winner event, so without this the guest would play
+          // on forever with a stale streak. Derive the result from the synced
+          // scores (first to WIN_SCORE). This handler never emits, so there
+          // is no echo surface; gameOver guards re-entry.
+          if (!GameState.gameOver && (GameState.p1.score >= WIN_SCORE || GameState.p2.score >= WIN_SCORE)) {
+            endGame(GameState.p1.score >= WIN_SCORE ? GameState.p1 : GameState.p2);
+          }
         }
       });
 

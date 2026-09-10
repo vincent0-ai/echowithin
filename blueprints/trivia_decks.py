@@ -5,7 +5,6 @@ import urllib.request
 
 TRIVIA_CATEGORIES = [
     {"id": "any", "name": "Mixed / Any Category"},
-    {"id": "bible", "name": "Bible & Scripture"},
     {"id": "9", "name": "General Knowledge"},
     {"id": "17", "name": "Science & Nature"},
     {"id": "18", "name": "Computers & Tech"},
@@ -17,132 +16,41 @@ TRIVIA_CATEGORIES = [
 ]
 
 CURATED_TRIVIA_PACKS = [
-    # Bible & Scripture
+    # General Knowledge
     {
-        "label": "How many books are in the standard Protestant Bible?",
-        "options": ["66", "73", "60", "70"],
-        "correct_option": "66",
-        "category": "Bible & Scripture",
+        "label": "What is the largest ocean on Earth?",
+        "options": ["Pacific Ocean", "Atlantic Ocean", "Indian Ocean", "Arctic Ocean"],
+        "correct_option": "Pacific Ocean",
+        "category": "General Knowledge",
+        "difficulty": "easy"
+    },
+    {
+        "label": "Who wrote the play 'Romeo and Juliet'?",
+        "options": ["William Shakespeare", "Christopher Marlowe", "Jane Austen", "Charles Dickens"],
+        "correct_option": "William Shakespeare",
+        "category": "General Knowledge",
+        "difficulty": "easy"
+    },
+    {
+        "label": "How many bones are in the adult human body?",
+        "options": ["206", "198", "214", "250"],
+        "correct_option": "206",
+        "category": "General Knowledge",
         "difficulty": "medium"
     },
     {
-        "label": "Who led the Israelites out of Egypt and across the Red Sea?",
-        "options": ["Moses", "Joshua", "Aaron", "Abraham"],
-        "correct_option": "Moses",
-        "category": "Bible & Scripture",
+        "label": "Which country gifted the Statue of Liberty to the United States?",
+        "options": ["France", "United Kingdom", "Spain", "Germany"],
+        "correct_option": "France",
+        "category": "General Knowledge",
         "difficulty": "easy"
     },
     {
-        "label": "In which city was Jesus Christ born?",
-        "options": ["Bethlehem", "Nazareth", "Jerusalem", "Jericho"],
-        "correct_option": "Bethlehem",
-        "category": "Bible & Scripture",
+        "label": "What is the primary currency of Japan?",
+        "options": ["Yen", "Won", "Yuan", "Ringgit"],
+        "correct_option": "Yen",
+        "category": "General Knowledge",
         "difficulty": "easy"
-    },
-    {
-        "label": "Who was swallowed by a great fish after attempting to flee to Tarshish?",
-        "options": ["Jonah", "Elijah", "Elisha", "Daniel"],
-        "correct_option": "Jonah",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "What is the longest book in the Bible by chapter count?",
-        "options": ["Psalms", "Genesis", "Isaiah", "Jeremiah"],
-        "correct_option": "Psalms",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "Which young shepherd defeated the giant Goliath with a sling and a stone?",
-        "options": ["David", "Solomon", "Samson", "Gideon"],
-        "correct_option": "David",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "What is the shortest verse in the English Bible?",
-        "options": ["Jesus wept.", "Rejoice always.", "Pray continually.", "God is love."],
-        "correct_option": "Jesus wept.",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "Who was thrown into the lions' den for praying to God despite the king's decree?",
-        "options": ["Daniel", "Shadrach", "Meshach", "Abednego"],
-        "correct_option": "Daniel",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "Which disciple denied knowing Jesus three times before the rooster crowed?",
-        "options": ["Peter", "John", "Judas", "Thomas"],
-        "correct_option": "Peter",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "On which mount did Moses receive the Ten Commandments from God?",
-        "options": ["Mount Sinai", "Mount Nebo", "Mount Carmel", "Mount of Olives"],
-        "correct_option": "Mount Sinai",
-        "category": "Bible & Scripture",
-        "difficulty": "medium"
-    },
-    {
-        "label": "Which Old Testament queen bravely risked her life to save her Jewish people?",
-        "options": ["Queen Esther", "Queen of Sheba", "Ruth", "Deborah"],
-        "correct_option": "Queen Esther",
-        "category": "Bible & Scripture",
-        "difficulty": "medium"
-    },
-    {
-        "label": "What fruit of the Spirit is listed first in Galatians 5:22?",
-        "options": ["Love", "Joy", "Peace", "Patience"],
-        "correct_option": "Love",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "How many days and nights did it rain upon the earth during Noah's flood?",
-        "options": ["40", "7", "100", "12"],
-        "correct_option": "40",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "What is the final book of the New Testament?",
-        "options": ["Revelation", "Jude", "Hebrews", "Acts"],
-        "correct_option": "Revelation",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "Who was known as the 'weeping prophet'?",
-        "options": ["Jeremiah", "Ezekiel", "Isaiah", "Amos"],
-        "correct_option": "Jeremiah",
-        "category": "Bible & Scripture",
-        "difficulty": "hard"
-    },
-    {
-        "label": "Who was the oldest person recorded in the Bible, living 969 years?",
-        "options": ["Methuselah", "Noah", "Adam", "Enoch"],
-        "correct_option": "Methuselah",
-        "category": "Bible & Scripture",
-        "difficulty": "medium"
-    },
-    {
-        "label": "In the New Testament, who was the Roman governor who sentenced Jesus to be crucified?",
-        "options": ["Pontius Pilate", "Herod Antipas", "Felix", "Caesar Augustus"],
-        "correct_option": "Pontius Pilate",
-        "category": "Bible & Scripture",
-        "difficulty": "easy"
-    },
-    {
-        "label": "What instrument did King David play to soothe King Saul?",
-        "options": ["Harp / Lyre", "Flute", "Trumpet", "Tambourine"],
-        "correct_option": "Harp / Lyre",
-        "category": "Bible & Scripture",
-        "difficulty": "medium"
     },
 
     # General Knowledge
@@ -401,7 +309,6 @@ CURATED_TRIVIA_PACKS = [
 ]
 
 CATEGORY_NAME_MAP = {
-    "bible": "Bible & Scripture",
     "9": "General Knowledge",
     "17": "Science & Nature",
     "18": "Computers & Tech",
@@ -445,13 +352,8 @@ def fetch_community_trivia(amount=10, category=None, difficulty=None):
     """Fetch trivia questions from Open Trivia Database with automatic HTML unescaping,
 
     choice shuffling, and instant fallback to curated trivia packs.
-    If category is 'bible', directly serves from our rich curated Scripture deck!
     """
     amount = max(2, min(20, int(amount or 10)))
-    
-    # If Bible & Scripture is requested, use curated scripture bank directly
-    if category == 'bible':
-        return get_curated_trivia_questions(amount=amount, category='bible', difficulty=difficulty)
 
     url = f"https://opentdb.com/api.php?amount={amount}&type=multiple"
     if category and category != 'any' and str(category).isdigit():

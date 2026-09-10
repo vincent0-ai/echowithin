@@ -30,23 +30,22 @@
         <div style="font-weight:700; color:var(--text-dark-color); font-size:1.05rem;">Questions</div>
       </div>
 
-      <!-- Quick-Fill from Community & Bible Trivia -->
+      <!-- Quick-Fill Trivia Questions -->
       <div id="trivia-gen-panel" style="{% if selected_type != 'trivia' %}display:none;{% endif %} background:rgba(62,34,23,0.03); border:1px solid var(--border-color); border-radius:8px; padding:1rem; margin-bottom:1rem;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem; flex-wrap:wrap; gap:0.4rem;">
           <div style="font-weight:700; font-size:0.95rem; color:var(--text-dark-color);">
-            🎲 Quick-Fill from Community &amp; Bible Trivia
+            🎲 Quick-Fill Trivia Questions
           </div>
           <span class="ew-badge" style="background:rgba(62,34,23,0.08); color:var(--primary-color);">Instant Deck</span>
         </div>
         <div style="font-size:0.82rem; color:var(--text-secondary); margin-bottom:0.75rem;">
-          Generate questions in 1 click from curated Scripture decks or Open Trivia DB.
+          Generate questions in 1 click across popular categories or Open Trivia DB.
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:0.6rem; margin-bottom:0.75rem;">
           <div>
             <label class="ew-form-label" style="font-size:0.75rem;">Category</label>
             <select id="gen-category" class="form-input" style="font-size:0.85rem; padding:0.4rem 0.6rem;">
-              <option value="bible" selected>📖 Bible &amp; Scripture</option>
-              <option value="any">🎲 Mixed / Any</option>
+              <option value="any" selected>🎲 Mixed / Any</option>
               <option value="9">General Knowledge</option>
               <option value="17">Science &amp; Nature</option>
               <option value="18">Computers &amp; Tech</option>
@@ -267,7 +266,7 @@ function renderMQ(){
   const gt = document.getElementById('game_type').value;
   if(mqQuestions.length === 0){
     const msg = (gt === 'trivia')
-      ? 'No questions loaded yet. Use the Quick-Fill panel above to fetch a Bible or curated deck in 1 click, or click "+ Add Custom Question" below.'
+      ? 'No questions loaded yet. Use the Quick-Fill panel above to fetch a trivia deck in 1 click, or click "+ Add Custom Question" below.'
       : 'No questions added yet. Click "+ Add Question" below.';
     c.innerHTML = `<div style="text-align:center; padding:1.5rem 1rem; color:var(--text-muted); font-size:0.9rem; background:rgba(62,34,23,0.02); border-radius:8px; border:1px dashed var(--border-color);">${msg}</div>`;
     return;

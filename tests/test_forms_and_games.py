@@ -1401,20 +1401,22 @@ class TestArcadeMatchmakingAndLeaderboards:
         assert 'id="incoming-challenge-modal"' in html_pong
 
 class TestLiveMultiplayerTriviaAndThumbnails:
-    """Tests for live Kahoot-style multiplayer trivia, Bible decks, PIN entry, and game card thumbnails."""
+    """Tests for live Kahoot-style multiplayer trivia, curated decks, PIN entry, and game card thumbnails."""
 
-    def test_bible_and_community_trivia_deck(self):
+    def test_curated_and_community_trivia_deck(self):
         import json
         from blueprints.trivia_decks import fetch_community_trivia, CURATED_TRIVIA_PACKS, TRIVIA_CATEGORIES
 
-        # 1. Test Bible trivia category is available
-        assert any(c['id'] == 'bible' for c in TRIVIA_CATEGORIES)
+        # 1. Test general trivia categories are available and Bible is not personalized/present
+        assert any(c['id'] == '9' for c in TRIVIA_CATEGORIES)
+        assert any(c['id'] == '17' for c in TRIVIA_CATEGORIES)
+        assert not any(c['id'] == 'bible' for c in TRIVIA_CATEGORIES)
         assert len(CURATED_TRIVIA_PACKS) >= 15
 
-        # 2. Test fetching Bible trivia
-        bible_questions = fetch_community_trivia(category='bible', amount=5)
-        assert len(bible_questions) == 5
-        for q in bible_questions:
+        # 2. Test fetching curated general trivia
+        curated_questions = fetch_community_trivia(category='9', amount=5)
+        assert len(curated_questions) == 5
+        for q in curated_questions:
             assert 'label' in q
             assert 'options' in q
             assert len(q['options']) == 4
@@ -1435,23 +1437,23 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             'response_code': 0,
             'results': [
                 {
-                    'question': 'Which book starts with &quot;In the beginning&quot;?',
-                    'correct_answer': 'Genesis &amp; Torah',
-                    'incorrect_answers': ['Exodus&#039;s story', 'Leviticus', 'Numbers']
+                    'question': 'Which city is nicknamed &quot;The City of Light&quot;?',
+                    'correct_answer': 'Paris &amp; France',
+                    'incorrect_answers': ['Rome&#039;s center', 'Berlin', 'Madrid']
                 },
                 {
-                    'question': 'What was &quot;Noah&#039;s Ark&quot; coated with inside &amp; out?',
-                    'correct_answer': 'Pitch &amp; Tar',
-                    'incorrect_answers': ['Wax', 'Clay', 'Oil']
+                    'question': 'What is the chemical symbol for &quot;Water&quot;?',
+                    'correct_answer': 'H2O &amp; Aqua',
+                    'incorrect_answers': ['CO2', 'NaCl', 'O2']
                 }
             ]
         }).encode('utf-8')
         with patch('urllib.request.urlopen', return_value=mock_resp):
             res = fetch_community_trivia(category='9', amount=2)
             assert len(res) == 2
-            assert 'In the beginning' in res[0]['label']
+            assert 'The City of Light' in res[0]['label']
             assert '&quot;' not in res[0]['label']
-            assert 'Genesis & Torah' in res[0]['options']
+            assert 'Paris & France' in res[0]['options']
             assert '&amp;' not in res[0]['correct_option']
 
     def test_game_pin_generation_and_routes(self, client):

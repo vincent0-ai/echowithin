@@ -94,8 +94,76 @@
     roomId: null,
     opponentName: 'Opponent',
     lastSyncTime: 0,
-    isFindingMatch: false
+    isFindingMatch: false,
+    // Online integrity state (never trust defaults for match results)
+    roomTarget: null,     // shared first-to-N from server; null = local targetScore
+    isResolving: false,   // hard guard: never re-enter match-end handling
+    connLost: false,      // transport down while in an online room
+    wasDropped: false,    // our socket dropped mid-match; rejoin on reconnect
+    rejoinAttempts: 0,    // capped rejoin attempts (initial + 1 retry max)
+    lastPaddleSend: 0,    // throttle clock for paddle sync (~20 Hz)
+    noContestTimer: null  // pending voided-match timer after opponent drop
   };
+
+  const PONG_DEBUG = false;
+  function pongDebug(...args) {
+    if (PONG_DEBUG && typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[pong]', ...args);
+    }
+  }
+
+  // First-to-N that actually governs THIS match: the server-shared room
+  // target while online in a room, otherwise the local setting.
+  function effectiveTarget() {
+    if (state.mode === 'online' && state.roomId
+        && typeof state.roomTarget === 'number' && state.roomTarget > 0) {
+      return state.roomTarget;
+    }
+    return state.targetScore;
+  }
+
+  function setRematchVisible(visible) {
+    const btn = document.getElementById('rematch-btn');
+    if (btn) btn.style.display = visible ? '' : 'none';
+  }
+
+  function clearNoContestTimer() {
+    if (state.noContestTimer) {
+      clearTimeout(state.noContestTimer);
+      state.noContestTimer = null;
+    }
+  }
+
+  // Void a match with NO result: no streak change, no points, no leaderboard
+  // traffic. Used for leaves, drops, and unrecovered disconnects — never a loss.
+  function showNoContest(message) {
+    clearNoContestTimer();
+    state.isGameOver = true;
+    state.isPaused = true;
+    if (typeof window.__updatePongPauseBtn === 'function') {
+      window.__updatePongPauseBtn(true);
+    }
+    const banner = document.getElementById('game-over-banner');
+    const winnerText = document.getElementById('winner-text');
+    const winnerStreak = document.getElementById('winner-streak');
+    const winnerPoints = document.getElementById('winner-points');
+    if (winnerText) winnerText.textContent = 'Match Void — No Contest';
+    if (winnerStreak) {
+      winnerStreak.textContent = message;
+      winnerStreak.style.display = 'block';
+    }
+    if (winnerPoints) winnerPoints.style.display = 'none';
+    setRematchVisible(false);
+    if (banner) banner.style.display = 'block';
+    const findBtn = document.getElementById('find-match-btn');
+    if (findBtn) {
+      findBtn.textContent = 'Find Match';
+      findBtn.disabled = false;
+      findBtn.style.opacity = '1';
+      findBtn.classList.remove('ew-btn--active');
+    }
+    state.isFindingMatch = false;
+  }
 
   function getStreakKey(diff) {
     return `ew_pong_streak_${diff || state.difficulty}`;
@@ -471,6 +539,9 @@
     if (state.isGameOver) return;
     if (state.isPaused) return;
     if (state.mode === 'online' && !state.roomId) return;
+    // Our transport is down: freeze physics rather than simulating (and
+    // scoring) a match the opponent cannot see. Resync happens on rejoin.
+    if (state.mode === 'online' && state.connLost) return;
 
     // In online mode, guest receives positions from host
     if (state.mode === 'online' && !state.isHost) {
@@ -584,7 +655,8 @@
   }
 
   function onPointScored(scoringPlayer) {
-    if (state.targetScore !== Infinity && (state.p1.score >= state.targetScore || state.p2.score >= state.targetScore)) {
+    const target = effectiveTarget();
+    if (target !== Infinity && (state.p1.score >= target || state.p2.score >= target)) {
       finishMatch(scoringPlayer);
     } else {
       resetBall(scoringPlayer === 2);
@@ -599,6 +671,21 @@
   }
 
   function finishMatch(winningPlayer) {
+    // Hard guard: match-end handling must never re-enter while a resolution
+    // is in flight or already recorded (echoed / stale / duplicate events).
+    if (state.isGameOver || state.isResolving) {
+      pongDebug('finishMatch ignored (already over/resolving)', winningPlayer);
+      return;
+    }
+    state.isResolving = true;
+    try {
+      finishMatchInner(winningPlayer);
+    } finally {
+      state.isResolving = false;
+    }
+  }
+
+  function finishMatchInner(winningPlayer) {
     state.isGameOver = true;
     const isPlayer1Winner = winningPlayer === 1;
 
@@ -610,13 +697,19 @@
     const winnerText = document.getElementById('winner-text');
     const winnerStreak = document.getElementById('winner-streak');
 
+    // Perspective-correct result: in solo/local the user is always Player 1;
+    // online, the winner maps through our seat. This ONE flag drives both the
+    // banner and the rewards — a loser must never earn winner points/streak.
+    const myWon = state.mode === 'online'
+      ? ((state.playerIndex === 0) === isPlayer1Winner)
+      : isPlayer1Winner;
+
     let title = 'Match Complete';
     if (state.mode === 'ai') {
       title = isPlayer1Winner ? 'You Win!' : 'AI Wins!';
     } else if (state.mode === 'local') {
       title = isPlayer1Winner ? 'Player 1 Wins!' : 'Player 2 Wins!';
     } else if (state.mode === 'online') {
-      const myWon = (state.playerIndex === 0 && isPlayer1Winner) || (state.playerIndex === 1 && !isPlayer1Winner);
       title = myWon ? 'Victory!' : 'Defeat!';
     }
 
@@ -627,7 +720,7 @@
       const activeDiff = state.mode === 'online' ? 'online' : state.difficulty;
       let streak = getLocalStreak(activeDiff);
 
-      if (isPlayer1Winner || (state.mode === 'online' && ((state.playerIndex === 0 && isPlayer1Winner) || (state.playerIndex === 1 && !isPlayer1Winner)))) {
+      if (myWon) {
         streak++;
         setLocalStreak(activeDiff, streak);
 
@@ -768,6 +861,11 @@
         ctx.font = '500 15px Poppins, sans-serif';
         ctx.fillStyle = '#e8dec8';
         ctx.fillText('Find a match or challenge an opponent below to start', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+      } else if (state.connLost) {
+        ctx.fillText('CONNECTION LOST', V_WIDTH / 2, V_HEIGHT / 2 - 18);
+        ctx.font = '500 15px Poppins, sans-serif';
+        ctx.fillStyle = '#e8dec8';
+        ctx.fillText('Reconnecting… match paused, never forfeited', V_WIDTH / 2, V_HEIGHT / 2 + 20);
       } else {
         ctx.fillText('PAUSED', V_WIDTH / 2, V_HEIGHT / 2 - 18);
         ctx.font = '500 15px Poppins, sans-serif';
@@ -798,15 +896,34 @@
     state.socket = io();
 
     state.socket.on('pong_room_joined', (data) => {
+      data = data || {};
       state.roomId = data.room_id;
       state.isHost = data.is_host;
       state.playerIndex = data.player;
       state.opponentName = data.is_host ? (data.guest_name || 'Opponent') : (data.host_name || 'Host');
+      state.roomTarget = (typeof data.target === 'number' && data.target > 0) ? data.target : null;
+      state.connLost = false;
+      state.wasDropped = false;
+      state.rejoinAttempts = 0;
+      clearNoContestTimer();
+      setRematchVisible(true);
+      pongDebug('room joined', data);
 
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
         statusEl.textContent = `Room ${data.room_id} • Playing vs ${state.opponentName}`;
         statusEl.style.color = '#e06a3b';
+      }
+      if (data.rejoined && Array.isArray(data.scores)) {
+        // Reclaiming our seat after a drop: adopt the live server scores,
+        // never reset to a default — a default must never become a result.
+        state.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
+        state.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
+        state.isGameOver = false;
+        const banner = document.getElementById('game-over-banner');
+        if (banner) banner.style.display = 'none';
+      } else {
+        resetGame();
       }
       if (!data.is_host || data.guest_name) {
         state.isPaused = false;
@@ -814,40 +931,66 @@
           window.__updatePongPauseBtn(false);
         }
       }
-      resetGame();
     });
 
     state.socket.on('pong_paddle_sync', (data) => {
+      // Opponent paddle renders from live, validated sync state only.
+      if (!data || data.room_id !== state.roomId) return;
+      if (data.player === state.playerIndex) return; // ignore our own echo
+      const y = Number(data.y);
+      if (!Number.isFinite(y)) return;
+      const clamped = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, y));
       if (state.playerIndex === 0) {
-        state.p2.y = data.y;
+        state.p2.y = clamped;
       } else {
-        state.p1.y = data.y;
+        state.p1.y = clamped;
       }
     });
 
     state.socket.on('pong_ball_sync', (data) => {
+      if (!data || data.room_id !== state.roomId) return;
       if (!state.isHost) {
-        state.ball.x = data.x;
-        state.ball.y = data.y;
-        state.ball.vx = data.vx;
-        state.ball.vy = data.vy;
-        state.ball.speed = data.speed;
-        state.p1.y = data.p1Y;
-        state.consecutiveVolleys = data.volleys;
+        const num = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+        state.ball.x = num(data.x, state.ball.x);
+        state.ball.y = num(data.y, state.ball.y);
+        state.ball.vx = num(data.vx, state.ball.vx);
+        state.ball.vy = num(data.vy, state.ball.vy);
+        state.ball.speed = num(data.speed, state.ball.speed);
+        const p1Y = Number(data.p1Y);
+        if (Number.isFinite(p1Y)) {
+          state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, p1Y));
+        }
+        const volleys = Math.floor(Number(data.volleys));
+        if (Number.isFinite(volleys) && volleys >= 0) state.consecutiveVolleys = volleys;
       }
     });
 
     state.socket.on('pong_score_update', (data) => {
-      if (data.scores) {
-        state.p1.score = data.scores[0];
-        state.p2.score = data.scores[1];
+      if (!data || data.room_id !== state.roomId) return;
+      if (Array.isArray(data.scores) && data.scores.length >= 2) {
+        state.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
+        state.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
       }
-      if (data.winner) {
-        finishMatch(data.winner);
+      if (data.winner === 1 || data.winner === 2) {
+        // A result is only honored when backed by an actually reached score
+        // (winner ahead, on the shared first-to-N). Anything else is a
+        // phantom/default claim and is dropped — never a forced loss.
+        const w = data.winner;
+        const ws = w === 1 ? state.p1.score : state.p2.score;
+        const ls = w === 1 ? state.p2.score : state.p1.score;
+        const target = effectiveTarget();
+        const reached = ws > 0 && ws >= ls && (!Number.isFinite(target) || ws >= target);
+        if (reached) {
+          finishMatch(w);
+        } else {
+          pongDebug('ignoring phantom winner claim', data);
+        }
       }
     });
 
     state.socket.on('pong_restart', () => {
+      clearNoContestTimer();
+      setRematchVisible(true);
       resetGame();
     });
 
@@ -856,6 +999,11 @@
       state.isHost = data.is_host;
       state.playerIndex = data.player;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
+      state.roomTarget = (data && typeof data.target === 'number' && data.target > 0) ? data.target : null;
+      state.rejoinAttempts = 0;
+      state.wasDropped = false;
+      clearNoContestTimer();
+      setRematchVisible(true);
 
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
@@ -928,22 +1076,43 @@
       }
     });
 
-    state.socket.on('pong_player_left', () => {
+    state.socket.on('pong_player_left', (data) => {
+      data = data || {};
       state.isPaused = true;
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(true);
       }
       const statusEl = document.getElementById('online-status');
+      if (!data.reason || data.reason === 'left') {
+        // Explicit leave voids the match immediately — no result recorded.
+        if (statusEl) {
+          statusEl.textContent = 'Opponent left the match.';
+          statusEl.style.color = 'var(--text-secondary)';
+          statusEl.style.background = 'transparent';
+          statusEl.style.border = 'none';
+          statusEl.style.padding = '0';
+          statusEl.style.fontWeight = 'normal';
+          statusEl.style.fontSize = '0.85rem';
+          statusEl.style.display = 'block';
+        }
+        showNoContest('Opponent left. Match void — no result recorded, streak unchanged.');
+        return;
+      }
+      // Dropped opponent: hold a no-contest wait for the grace window.
+      // This path must NEVER resolve as a win/loss for either side.
+      const grace = Math.max(5, Math.floor(Number(data.reconnect_grace_sec) || 30));
       if (statusEl) {
-        statusEl.textContent = 'Opponent left the match.';
-        statusEl.style.color = 'var(--text-secondary)';
-        statusEl.style.background = 'transparent';
-        statusEl.style.border = 'none';
-        statusEl.style.padding = '0';
-        statusEl.style.fontWeight = 'normal';
-        statusEl.style.fontSize = '0.85rem';
+        statusEl.textContent = `Opponent disconnected. Waiting ${grace}s for reconnect…`;
+        statusEl.style.color = '#b45309';
         statusEl.style.display = 'block';
       }
+      clearNoContestTimer();
+      state.noContestTimer = setTimeout(() => {
+        state.noContestTimer = null;
+        state.roomId = null;
+        showNoContest('Opponent connection lost. Match void — no result recorded, streak unchanged.');
+        if (statusEl) statusEl.textContent = 'Match voided (opponent never returned). Find a new match to play.';
+      }, grace * 1000);
       const findBtn = document.getElementById('find-match-btn');
       if (findBtn) {
         findBtn.textContent = 'Find Match';
@@ -952,10 +1121,93 @@
         findBtn.classList.remove('ew-btn--active');
       }
     });
+
+    state.socket.on('pong_opponent_rejoined', (data) => {
+      data = data || {};
+      if (!state.roomId || data.room_id !== state.roomId) return;
+      pongDebug('opponent rejoined', data);
+      clearNoContestTimer();
+      if (Array.isArray(data.scores)) {
+        state.p1.score = Math.max(0, Math.floor(Number(data.scores[0]) || 0));
+        state.p2.score = Math.max(0, Math.floor(Number(data.scores[1]) || 0));
+      }
+      if (typeof data.target === 'number' && data.target > 0) state.roomTarget = data.target;
+      state.isGameOver = false;
+      state.isPaused = false;
+      const banner = document.getElementById('game-over-banner');
+      if (banner) banner.style.display = 'none';
+      setRematchVisible(true);
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(false);
+      }
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) {
+        statusEl.textContent = `Reconnected • Playing vs ${state.opponentName}`;
+        statusEl.style.color = '#15803d';
+      }
+    });
+
+    state.socket.on('pong_room_error', (data) => {
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) {
+        statusEl.textContent = (data && data.message) || 'Could not join room.';
+        statusEl.style.color = '#b91c1c';
+      }
+    });
+
+    state.socket.on('disconnect', (reason) => {
+      pongDebug('transport disconnect', reason);
+      if (state.mode === 'online' && state.roomId && !state.isGameOver) {
+        // Our own connection dropped mid-match: freeze and surface it.
+        // Never simulate on, never score, never forfeit.
+        state.wasDropped = true;
+        state.connLost = true;
+        state.isPaused = true;
+        if (typeof window.__updatePongPauseBtn === 'function') {
+          window.__updatePongPauseBtn(true);
+        }
+        const statusEl = document.getElementById('online-status');
+        if (statusEl) {
+          statusEl.textContent = 'Connection lost / Reconnecting…';
+          statusEl.style.color = '#b45309';
+        }
+      }
+    });
+
+    state.socket.on('connect', () => {
+      pongDebug('transport connect');
+      if (state.wasDropped && state.mode === 'online' && state.roomId && !state.isGameOver) {
+        // Capped rejoin: one initial attempt + one retry, then stop and let
+        // the player requeue manually. Unbounded retry loops are forbidden.
+        if (state.rejoinAttempts < 2) {
+          state.rejoinAttempts++;
+          pongDebug('rejoin attempt', state.rejoinAttempts);
+          state.socket.emit('join_pong_room', {
+            room_id: state.roomId,
+            rejoin: true,
+            player: state.playerIndex
+          });
+        } else {
+          state.wasDropped = false;
+          state.connLost = false;
+          const statusEl = document.getElementById('online-status');
+          if (statusEl) {
+            statusEl.textContent = 'Could not reconnect. Use "Find Match" to play again.';
+            statusEl.style.color = 'var(--text-secondary)';
+          }
+        }
+      }
+    });
   }
 
   function sendPaddleSync() {
     if (state.mode !== 'online' || !state.socket || !state.roomId) return;
+    // Throttled to ~20 Hz so keyboard, mouse, touch-drag, and on-screen
+    // buttons all emit at the same tick-rate parity (no input starves sync,
+    // no input floods the relay).
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (now - state.lastPaddleSend < 50) return;
+    state.lastPaddleSend = now;
     const y = state.playerIndex === 0 ? state.p1.y : state.p2.y;
     state.socket.emit('pong_paddle_sync', {
       room_id: state.roomId,
@@ -1003,6 +1255,8 @@
     setMode: (mode) => {
       state.mode = mode;
       if (mode === 'online') initSocket();
+      clearNoContestTimer();
+      setRematchVisible(true);
       resetGame();
       state.isPaused = true;
       if (typeof window.__updatePongPauseBtn === 'function') {
@@ -1048,7 +1302,10 @@
         if (statusEl) statusEl.textContent = 'Searching for an opponent...';
         const streak = getLocalStreak('online') || 0;
         const score = getPongRankedScore() || 0;
-        state.socket.emit('find_pong_match', { streak, score });
+        // Share our first-to-N so the server can bind both clients to one
+        // real target (null = endless rally, no winner possible).
+        const target = Number.isFinite(state.targetScore) ? state.targetScore : null;
+        state.socket.emit('find_pong_match', { streak, score, target });
       }
     },
     sendChallenge: sendChallenge,

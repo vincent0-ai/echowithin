@@ -1866,7 +1866,9 @@ def broadcast_matchmaking_queue(queue, event_name):
             for q in queue if q['sid'] != item['sid']
         ]
         try:
-            emit(event_name, {'opponents': opponents, 'total_waiting': len(queue)}, room=item['sid'])
+            # NOTE: 'queue' is a legacy alias of 'opponents'. All game clients
+            # (pong, slime, ttt, c4, dnb) read `data.queue`; keep both keys.
+            emit(event_name, {'opponents': opponents, 'queue': opponents, 'total_waiting': len(queue)}, room=item['sid'])
         except Exception:
             pass
 
@@ -1983,7 +1985,7 @@ def handle_slime_restart(data=None, *args, **kwargs):
     room_id = data.get('room_id')
     if not room_id:
         return
-    emit('slime_restart', {}, room=room_id)
+    emit('slime_restart', {}, room=room_id, include_self=False)
  
 @socketio.on('find_slime_match')
 def handle_find_slime_match(data=None, *args, **kwargs):
@@ -2058,15 +2060,52 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
 active_pong_rooms = {}
 pong_matchmaking_queue = []
 
+# How long a dropped seat is held for rejoin before the room is pruned.
+# A disconnect NEVER resolves a match: the survivor pauses on a no-contest
+# path and the leaver may reclaim their seat (with live scores) in this window.
+PONG_RECONNECT_GRACE_SEC = 90
+
+
+def _prune_stale_pong_rooms():
+    """Drop pong rooms whose disconnected seat aged past the rejoin window."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for stale_id, rinfo in list(active_pong_rooms.items()):
+        stamp = rinfo.get('disconnected_at')
+        if stamp is None:
+            continue
+        try:
+            age = (now - stamp).total_seconds()
+        except Exception:
+            age = PONG_RECONNECT_GRACE_SEC + 1
+        if age > PONG_RECONNECT_GRACE_SEC:
+            active_pong_rooms.pop(stale_id, None)
+
+
+def _pong_joined_payload(room_id, room_info, is_host):
+    """Shared pong_room_joined payload; always carries live scores + target."""
+    return {
+        'room_id': room_id,
+        'is_host': is_host,
+        'host_name': room_info.get('host_name'),
+        'guest_name': room_info.get('guest_name'),
+        'player': 0 if is_host else 1,
+        'scores': list(room_info.get('scores', [0, 0])),
+        'target': room_info.get('target'),
+        'rejoined': bool(room_info.get('just_rejoined')),
+    }
+
+
 @socketio.on('join_pong_room')
 def handle_join_pong_room(data=None, *args, **kwargs):
-    room_id = (data or {}).get('room_id') if isinstance(data, dict) else None
+    payload = data if isinstance(data, dict) else {}
+    room_id = payload.get('room_id')
     if not room_id or not isinstance(room_id, str):
         return
     room_id = room_id.strip()[:32]
     if not room_id:
         return
 
+    _prune_stale_pong_rooms()
     join_room(room_id)
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
     sid = request.sid
@@ -2078,53 +2117,61 @@ def handle_join_pong_room(data=None, *args, **kwargs):
             'host_name': user_name,
             'guest_sid': None,
             'guest_name': None,
-            'scores': [0, 0]
+            'scores': [0, 0],
+            'target': None,
+            'disconnected_at': None,
+            'disconnected_side': None,
+            'just_rejoined': False,
         }
         active_pong_rooms[room_id] = room_info
-        emit('pong_room_joined', {
-            'room_id': room_id,
-            'is_host': True,
-            'host_name': user_name,
-            'guest_name': None,
-            'player': 0
-        }, room=sid)
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
     elif room_info.get('host_sid') == sid:
-        emit('pong_room_joined', {
-            'room_id': room_id,
-            'is_host': True,
-            'host_name': room_info['host_name'],
-            'guest_name': room_info.get('guest_name'),
-            'player': 0
-        }, room=sid)
+        room_info['just_rejoined'] = False
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=sid)
     elif room_info.get('guest_sid') == sid:
-        emit('pong_room_joined', {
-            'room_id': room_id,
-            'is_host': False,
-            'host_name': room_info['host_name'],
-            'guest_name': room_info['guest_name'],
-            'player': 1
-        }, room=sid)
+        room_info['just_rejoined'] = False
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
     elif room_info.get('guest_sid') is not None:
+        # Room is full — unless this is the dropped player reclaiming their
+        # seat inside the grace window (fresh sid after a transport reconnect).
+        claimed = payload.get('player')
+        stamp = room_info.get('disconnected_at')
+        side = room_info.get('disconnected_side')
+        claimed_side = 'host_sid' if claimed == 0 else ('guest_sid' if claimed == 1 else None)
+        if (payload.get('rejoin') and claimed_side and side == claimed_side and stamp is not None):
+            try:
+                age = (datetime.datetime.now(datetime.timezone.utc) - stamp).total_seconds()
+            except Exception:
+                age = PONG_RECONNECT_GRACE_SEC + 1
+            if age <= PONG_RECONNECT_GRACE_SEC:
+                room_info[claimed_side] = sid
+                if claimed_side == 'host_sid':
+                    room_info['host_name'] = user_name
+                else:
+                    room_info['guest_name'] = user_name
+                room_info['disconnected_at'] = None
+                room_info['disconnected_side'] = None
+                room_info['just_rejoined'] = True
+                active_pong_rooms[room_id] = room_info
+                emit('pong_room_joined', _pong_joined_payload(room_id, room_info, claimed == 0), room=sid)
+                other_sid = room_info.get('guest_sid' if claimed == 0 else 'host_sid')
+                if other_sid:
+                    emit('pong_opponent_rejoined', {
+                        'room_id': room_id,
+                        'scores': list(room_info.get('scores', [0, 0])),
+                        'target': room_info.get('target'),
+                    }, room=other_sid)
+                room_info['just_rejoined'] = False
+                return
         emit('pong_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
+        room_info['just_rejoined'] = False
         active_pong_rooms[room_id] = room_info
 
-        emit('pong_room_joined', {
-            'room_id': room_id,
-            'is_host': False,
-            'host_name': room_info['host_name'],
-            'guest_name': user_name,
-            'player': 1
-        }, room=sid)
-        emit('pong_room_joined', {
-            'room_id': room_id,
-            'is_host': True,
-            'host_name': room_info['host_name'],
-            'guest_name': user_name,
-            'player': 0
-        }, room=room_info['host_sid'])
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, False), room=sid)
+        emit('pong_room_joined', _pong_joined_payload(room_id, room_info, True), room=room_info['host_sid'])
 
 @socketio.on('leave_pong_room')
 def handle_leave_pong_room(data=None, *args, **kwargs):
@@ -2139,7 +2186,8 @@ def handle_leave_pong_room(data=None, *args, **kwargs):
     room_info = active_pong_rooms.get(room_id)
     if room_info:
         if room_info.get('host_sid') == sid or room_info.get('guest_sid') == sid:
-            emit('pong_player_left', {'room_id': room_id}, room=room_id)
+            # Explicit leave voids the match (no-contest): no score is recorded.
+            emit('pong_player_left', {'room_id': room_id, 'reason': 'left'}, room=room_id)
             active_pong_rooms.pop(room_id, None)
 
 @socketio.on('pong_paddle_sync')
@@ -2169,8 +2217,30 @@ def handle_pong_score_update(data=None, *args, **kwargs):
         return
     room_info = active_pong_rooms.get(room_id)
     if room_info and 'scores' in data:
-        room_info['scores'] = data['scores']
-    emit('pong_score_update', data, room=room_id)
+        try:
+            room_info['scores'] = [max(0, int(data['scores'][0])), max(0, int(data['scores'][1]))]
+        except Exception:
+            pass
+    winner = data.get('winner')
+    if winner in (1, 2):
+        # Only relay a winner backed by an actually reached score. A phantom
+        # or default winner claim is stripped; scores still relay.
+        try:
+            claimed = [max(0, int(data['scores'][0])), max(0, int(data['scores'][1]))]
+        except Exception:
+            claimed = None
+        target = (room_info or {}).get('target')
+        reached = (claimed is not None and claimed[winner - 1] > 0
+                   and claimed[winner - 1] >= claimed[1 - (winner - 1)]
+                   and (target is None or claimed[winner - 1] >= target))
+        if not reached:
+            data = {k: v for k, v in data.items() if k != 'winner'}
+    elif winner is not None:
+        data = {k: v for k, v in data.items() if k != 'winner'}
+    # NOTE: include_self=False is load-bearing here. Without it the host
+    # receives its own score echo, re-runs finishMatch, re-emits, and the
+    # match self-resolves in a runaway loop. See commit.md.
+    emit('pong_score_update', data, room=room_id, include_self=False)
 
 @socketio.on('pong_restart')
 def handle_pong_restart(data=None, *args, **kwargs):
@@ -2182,7 +2252,7 @@ def handle_pong_restart(data=None, *args, **kwargs):
     room_info = active_pong_rooms.get(room_id)
     if room_info:
         room_info['scores'] = [0, 0]
-    emit('pong_restart', {}, room=room_id)
+    emit('pong_restart', {}, room=room_id, include_self=False)
 
 @socketio.on('find_pong_match')
 def handle_find_pong_match(data=None, *args, **kwargs):
@@ -2192,6 +2262,12 @@ def handle_find_pong_match(data=None, *args, **kwargs):
     streak = int(req_data.get('streak', 0) or 0)
     score = int(req_data.get('score', 0) or 0)
     mode = req_data.get('mode', 'auto')
+    try:
+        target = int(req_data.get('target', 0) or 0)
+        if target <= 0 or target > 99:
+            target = None
+    except (TypeError, ValueError):
+        target = None
 
     global pong_matchmaking_queue
     pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != sid]
@@ -2200,12 +2276,19 @@ def handle_find_pong_match(data=None, *args, **kwargs):
         opponent = pong_matchmaking_queue.pop(0)
         room_id = f"pong_{secrets.token_hex(4)}"
 
+        # Shared first-to-N comes from the host (queued opponent) so both
+        # clients validate the winner against the same actually-reached score.
+        room_target = opponent.get('target')
         active_pong_rooms[room_id] = {
             'host_sid': opponent['sid'],
             'host_name': opponent['user_name'],
             'guest_sid': sid,
             'guest_name': user_name,
-            'scores': [0, 0]
+            'scores': [0, 0],
+            'target': room_target,
+            'disconnected_at': None,
+            'disconnected_side': None,
+            'just_rejoined': False,
         }
 
         try:
@@ -2219,7 +2302,8 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'is_host': True,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 0
+            'player': 0,
+            'target': room_target,
         }, room=opponent['sid'])
 
         emit('pong_match_found', {
@@ -2227,7 +2311,8 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'is_host': False,
             'host_name': opponent['user_name'],
             'guest_name': user_name,
-            'player': 1
+            'player': 1,
+            'target': room_target,
         }, room=sid)
 
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
@@ -2237,6 +2322,7 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'user_name': user_name,
             'streak': streak,
             'score': score,
+            'target': target,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
@@ -3052,20 +3138,25 @@ def handle_accept_game_challenge(data=None, *args, **kwargs):
         c_name = challenger['user_name'] if challenger else 'Challenger'
         pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
         room_id = f"pong_{secrets.token_hex(4)}"
+        challenge_target = (challenger or {}).get('target')
         active_pong_rooms[room_id] = {
             'host_sid': challenger_sid,
             'host_name': c_name,
             'guest_sid': sid,
             'guest_name': user_name,
-            'scores': [0, 0]
+            'scores': [0, 0],
+            'target': challenge_target,
+            'disconnected_at': None,
+            'disconnected_side': None,
+            'just_rejoined': False,
         }
         try:
             join_room(room_id, sid=challenger_sid)
             join_room(room_id, sid=sid)
         except Exception:
             pass
-        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
-        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0, 'target': challenge_target}, room=challenger_sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1, 'target': challenge_target}, room=sid)
         broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
 
     elif game == 'c4':
@@ -3240,6 +3331,25 @@ def handle_dm_disconnect(*args, **kwargs):
     # Cleanup Dots and Boxes Matchmaking queue on disconnect
     global dnb_matchmaking_queue
     dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != request.sid]
+
+    # Cleanup Ping Pong rooms on disconnect. The seat is HELD (not scored):
+    # the survivor is told the opponent disconnected (no-contest, never a
+    # forced loss) and the leaver may reclaim the seat inside the grace window.
+    global pong_matchmaking_queue
+    for room_id, rinfo in list(active_pong_rooms.items()):
+        side = None
+        if rinfo.get('host_sid') == request.sid:
+            side = 'host_sid'
+        elif rinfo.get('guest_sid') == request.sid:
+            side = 'guest_sid'
+        if side is not None and rinfo.get('disconnected_at') is None:
+            rinfo['disconnected_at'] = datetime.datetime.now(datetime.timezone.utc)
+            rinfo['disconnected_side'] = side
+            emit('pong_player_left', {'room_id': room_id, 'reason': 'disconnected',
+                                      'reconnect_grace_sec': PONG_RECONNECT_GRACE_SEC}, room=room_id)
+
+    # Cleanup Ping Pong Matchmaking queue on disconnect
+    pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != request.sid]
 
 
 @socketio.on('send_dm')

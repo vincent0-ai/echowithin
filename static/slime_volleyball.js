@@ -960,7 +960,10 @@
     }
   }
 
-  function restartMatch() {
+  // NOTE: a restart triggered BY a remote event must never re-emit, or two
+  // clients bounce restarts back and forth forever (same echo-loop class as
+  // the pong score storm). Local restarts emit; remote ones only apply.
+  function restartMatch(fromRemote = false) {
     GameState.p1.score = 0;
     GameState.p2.score = 0;
     GameState.gameOver = false;
@@ -970,7 +973,7 @@
     const modal = document.getElementById('game-over-banner');
     if (modal) modal.style.display = 'none';
 
-    if (GameState.mode === 'online' && GameState.socket) {
+    if (!fromRemote && GameState.mode === 'online' && GameState.socket) {
       GameState.socket.emit('slime_restart', { room_id: GameState.roomId });
     }
   }
@@ -1231,7 +1234,7 @@
       });
 
       GameState.socket.on('slime_restart', () => {
-        restartMatch();
+        restartMatch(true);
       });
 
       GameState.socket.on('slime_matchmaking_waiting', (data) => {

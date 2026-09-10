@@ -481,9 +481,10 @@ class TestSlimeVolleyball:
                 input_handler(input_payload)
                 mock_emit.assert_called_with('slime_player_input', input_payload, room=room_id, include_self=False)
 
-                # Restart event
+                # Restart event (must exclude the sender: a remote-triggered
+                # restart never re-emits, so an echo would ping-pong forever)
                 restart_handler({'room_id': room_id})
-                mock_emit.assert_called_with('slime_restart', {}, room=room_id)
+                mock_emit.assert_called_with('slime_restart', {}, room=room_id, include_self=False)
 
                 # Leave event
                 leave_handler({'room_id': room_id})

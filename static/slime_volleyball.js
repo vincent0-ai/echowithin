@@ -72,21 +72,35 @@
   function toY(y) { return H - (y * factor); }
   function toP(r) { return r * factor; }
 
-  // Audio synthesis (Web Audio API)
+  // Audio synthesis (Web Audio API) with master compressor to avoid clipping & distortion
   let AC = null;
+  let masterCompressor = null;
   let soundMuted = false;
+  let lastBeepTime = 0;
   function beep(freq, dur, type = 'sine', gain = 0.06, slide = 0) {
     if (soundMuted) return;
+    const now = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (now - lastBeepTime < 50 && (type === 'square' || type === 'triangle')) return;
+    lastBeepTime = now;
     try {
-      if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+      if (!AC) {
+        AC = new (window.AudioContext || window.webkitAudioContext)();
+        masterCompressor = AC.createDynamicsCompressor();
+        masterCompressor.threshold.setValueAtTime(-12, AC.currentTime);
+        masterCompressor.knee.setValueAtTime(30, AC.currentTime);
+        masterCompressor.ratio.setValueAtTime(12, AC.currentTime);
+        masterCompressor.attack.setValueAtTime(0.003, AC.currentTime);
+        masterCompressor.release.setValueAtTime(0.25, AC.currentTime);
+        masterCompressor.connect(AC.destination);
+      }
       if (AC.state === 'suspended') AC.resume().catch(() => {});
       const o = AC.createOscillator(), g = AC.createGain();
       o.type = type;
       o.frequency.setValueAtTime(freq, AC.currentTime);
       if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), AC.currentTime + dur);
-      g.gain.setValueAtTime(gain, AC.currentTime);
+      g.gain.setValueAtTime(Math.min(gain, 0.08), AC.currentTime);
       g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
-      o.connect(g); g.connect(AC.destination);
+      o.connect(g); g.connect(masterCompressor || AC.destination);
       o.start(); o.stop(AC.currentTime + dur);
     } catch (_) {}
   }
@@ -450,6 +464,7 @@
     delay: 45,
     gameOver: false,
     winner: null,
+    isPaused: true, // Paused by default on page load so user can get ready
     winStreak: getSavedSlimeStreak('solo', localStorage.getItem('slime_difficulty') || 'normal'),
     roundWins: parseInt(localStorage.getItem('slime_round_wins') || '0', 10),
     volleysReturned: parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10),
@@ -488,10 +503,20 @@
   };
 
   function handleKeyDown(e) {
+    if (e.key === ' ' || e.code === 'Space') {
+      if (GameState.mode !== 'online') {
+        e.preventDefault();
+        GameState.isPaused = !GameState.isPaused;
+        if (typeof window.__updateSlimePauseBtn === 'function') {
+          window.__updateSlimePauseBtn(GameState.isPaused);
+        }
+        return;
+      }
+    }
     const k = e.key.toLowerCase();
     if (k === 'a') { keys.a = true; e.preventDefault(); }
     if (k === 'd') { keys.d = true; e.preventDefault(); }
-    if (k === 'w' || k === ' ') { keys.w = true; e.preventDefault(); }
+    if (k === 'w') { keys.w = true; e.preventDefault(); }
     if (k === 'arrowleft') { keys.left = true; e.preventDefault(); }
     if (k === 'arrowright') { keys.right = true; e.preventDefault(); }
     if (k === 'arrowup') { keys.up = true; e.preventDefault(); }
@@ -524,11 +549,12 @@
     GameState.p1.reset();
     GameState.p2.reset();
     GameState.delay = 45;
-    SFX.whistle();
+    if (!GameState.isPaused) SFX.whistle();
   }
 
   function update() {
     if (GameState.gameOver) return;
+    if (GameState.isPaused && GameState.mode !== 'online') return;
 
     // Delay before serve begins
     if (GameState.delay > 0) {
@@ -685,7 +711,10 @@
         // Guest controls Player 2
         GameState.p2.setInput(keys.a || keys.left, keys.d || keys.right, keys.w || keys.up);
         GameState.p2.update();
-        // Host and ball are interpolated from sync packets
+        // Extrapolate ball movement between network sync packets so motion stays fluid
+        GameState.ball.applyGravity();
+        GameState.ball.move();
+        GameState.ball.bounceSlime(GameState.p2);
       }
     }
   }
@@ -845,6 +874,22 @@
           streakTxt.style.display = localPlayerWon ? 'none' : 'block';
         }
       }
+      const pointsTxt = document.getElementById('winner-points');
+      if (pointsTxt) {
+        if (localPlayerWon) {
+          const diffKey = GameState.mode === 'online' ? 'online' : GameState.difficulty;
+          const winPts = DIFF_MULTIPLIERS[diffKey] || 100;
+          const volleysBonus = (GameState.volleysReturned || 0) * (RETURN_POINTS[diffKey] || 10);
+          const totalPts = getSavedSlimeRankedScore();
+          pointsTxt.textContent = `+${winPts + volleysBonus} ranked pts (Total: ${totalPts.toLocaleString()} pts)`;
+          pointsTxt.style.display = 'block';
+        } else {
+          pointsTxt.style.display = 'none';
+        }
+      }
+      if (typeof window.__updateSlimeRankedDisplay === 'function') {
+        window.__updateSlimeRankedDisplay();
+      }
     }
   }
 
@@ -937,6 +982,24 @@
     ctx.restore();
   }
 
+  function drawPauseOverlay() {
+    if (!GameState.isPaused || GameState.mode === 'online') return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(40, 25, 18, 0.45)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 28px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', W / 2, H / 2 - 16);
+
+    ctx.font = '500 14px Poppins, sans-serif';
+    ctx.fillStyle = '#f7f4ed';
+    ctx.fillText('Press Play / Space or Click Canvas to Serve', W / 2, H / 2 + 18);
+    ctx.restore();
+  }
+
   function render() {
     ctx.clearRect(0, 0, W, H);
     drawCourt();
@@ -944,6 +1007,7 @@
     GameState.p2.draw(ctx, GameState.ball);
     GameState.ball.draw(ctx);
     drawScoreboard();
+    drawPauseOverlay();
   }
 
   // Animation Loop
@@ -959,11 +1023,12 @@
       if (GameState.mode !== 'online' || !GameState.socket || !GameState.isOnlineConnected) return;
 
       if (GameState.isHost) {
-        // Host broadcasts state to Guest
+        // Host broadcasts state to Guest (including p2 state to keep sync tight)
         GameState.socket.emit('slime_host_sync', {
           room_id: GameState.roomId,
           ball: { x: GameState.ball.x, y: GameState.ball.y, vx: GameState.ball.vx, vy: GameState.ball.vy },
           p1: { x: GameState.p1.x, y: GameState.p1.y, vx: GameState.p1.vx, vy: GameState.p1.vy },
+          p2: { x: GameState.p2.x, y: GameState.p2.y, vx: GameState.p2.vx, vy: GameState.p2.vy },
           scores: [GameState.p1.score, GameState.p2.score]
         });
       } else {
@@ -1142,6 +1207,24 @@
           matchBtn.classList.remove('ew-btn--active');
         }
       });
+
+      GameState.socket.on('slime_queue_updated', (data) => {
+        if (typeof window.__updateSlimeOpponentsLobby === 'function') {
+          window.__updateSlimeOpponentsLobby(data.queue || []);
+        }
+      });
+
+      GameState.socket.on('game_challenge_received', (data) => {
+        if (data.game === 'slime' && typeof window.__showSlimeChallengeModal === 'function') {
+          window.__showSlimeChallengeModal(data);
+        }
+      });
+
+      GameState.socket.on('game_challenge_declined', (data) => {
+        if (data.game === 'slime') {
+          alert((data.challenger_name || 'Opponent') + ' is unavailable or declined.');
+        }
+      });
     }
 
     if (roomId) {
@@ -1169,7 +1252,43 @@
         matchBtn.textContent = 'Searching... (Cancel)';
         matchBtn.classList.add('ew-btn--active');
       }
-      GameState.socket.emit('find_slime_match');
+      const streak = getSavedSlimeStreak('online', 'online') || 0;
+      const score = getSavedSlimeRankedScore() || 0;
+      GameState.socket.emit('find_slime_match', { streak, score });
+    }
+  }
+
+  function sendChallenge(targetSid, targetName) {
+    if (!GameState.socket) connectSocket(null);
+    const streak = getSavedSlimeStreak('online', 'online') || 0;
+    const score = getSavedSlimeRankedScore() || 0;
+    GameState.socket.emit('send_game_challenge', {
+      game: 'slime',
+      target_sid: targetSid,
+      streak,
+      score
+    });
+    const statusEl = document.getElementById('online-status');
+    if (statusEl) {
+      statusEl.textContent = `Challenged ${targetName}... Waiting for response.`;
+      statusEl.style.color = '#2563eb';
+    }
+  }
+
+  function acceptChallenge(challengerSid, challengerName) {
+    if (!GameState.socket) connectSocket(null);
+    GameState.socket.emit('accept_game_challenge', {
+      game: 'slime',
+      challenger_sid: challengerSid
+    });
+  }
+
+  function declineChallenge(challengerSid) {
+    if (GameState.socket) {
+      GameState.socket.emit('decline_game_challenge', {
+        game: 'slime',
+        challenger_sid: challengerSid
+      });
     }
   }
 
@@ -1196,6 +1315,16 @@
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
+    // Canvas click toggles unpause
+    canvas.addEventListener('click', () => {
+      if (GameState.isPaused && GameState.mode !== 'online') {
+        GameState.isPaused = false;
+        if (typeof window.__updateSlimePauseBtn === 'function') {
+          window.__updateSlimePauseBtn(false);
+        }
+      }
+    });
 
     // Touch button handlers
     const btnLeft = document.getElementById('touch-left');
@@ -1275,12 +1404,27 @@
       soundMuted = !soundMuted;
       return soundMuted;
     },
+    togglePause() {
+      if (GameState.mode === 'online') return false;
+      GameState.isPaused = !GameState.isPaused;
+      if (typeof window.__updateSlimePauseBtn === 'function') {
+        window.__updateSlimePauseBtn(GameState.isPaused);
+      }
+      return GameState.isPaused;
+    },
+    isPaused() {
+      return GameState.isPaused;
+    },
     restart: restartMatch,
     findMatch: findMatch,
     cancelMatchmaking: cancelMatchmaking,
+    sendChallenge: sendChallenge,
+    acceptChallenge: acceptChallenge,
+    declineChallenge: declineChallenge,
     getWinStreak: () => GameState.winStreak,
     getVolleysReturned: () => GameState.volleysReturned,
     getBestRallyVolleys: () => GameState.bestRallyVolleys,
+    getRankedScore: getSavedSlimeRankedScore,
     syncScores: syncAllScores
   };
 })();

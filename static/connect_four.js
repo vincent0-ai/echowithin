@@ -855,6 +855,24 @@
       setMatchStatus('Matchmaking cancelled.', 'normal');
     });
 
+    state.socket.on('c4_queue_updated', data => {
+      if (typeof window.__updateC4OpponentsLobby === 'function') {
+        window.__updateC4OpponentsLobby(data.queue || []);
+      }
+    });
+
+    state.socket.on('game_challenge_received', data => {
+      if (data.game === 'c4' && typeof window.__showC4ChallengeModal === 'function') {
+        window.__showC4ChallengeModal(data);
+      }
+    });
+
+    state.socket.on('game_challenge_declined', data => {
+      if (data.game === 'c4') {
+        alert((data.challenger_name || 'Opponent') + ' is unavailable or declined.');
+      }
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) {
@@ -959,7 +977,9 @@
         if (state.isSearching) {
           state.socket.emit('cancel_c4_matchmaking');
         } else {
-          state.socket.emit('find_c4_match');
+          const streak = state.winStreak || 0;
+          const score = parseInt(localStorage.getItem('ew_c4_ranked_score') || '0', 10);
+          state.socket.emit('find_c4_match', { streak, score });
         }
       });
     }
@@ -990,6 +1010,36 @@
     }
   }
 
+  function sendChallenge(targetSid, targetName) {
+    if (!state.socket) initOnlineSocket();
+    const streak = state.winStreak || 0;
+    const score = parseInt(localStorage.getItem('ew_c4_ranked_score') || '0', 10);
+    state.socket.emit('send_game_challenge', {
+      game: 'c4',
+      target_sid: targetSid,
+      streak,
+      score
+    });
+    setMatchStatus(`Challenged ${targetName}... Waiting for response.`, 'searching');
+  }
+
+  function acceptChallenge(challengerSid) {
+    if (!state.socket) initOnlineSocket();
+    state.socket.emit('accept_game_challenge', {
+      game: 'c4',
+      challenger_sid: challengerSid
+    });
+  }
+
+  function declineChallenge(challengerSid) {
+    if (state.socket) {
+      state.socket.emit('decline_game_challenge', {
+        game: 'c4',
+        challenger_sid: challengerSid
+      });
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initCanvas();
     setupListeners();
@@ -1003,12 +1053,16 @@
     }
   });
 
-  // Export for testing
+  // Export for testing & templates
   window.__c4 = {
     getState: () => ({ ...state }),
     dropPiece,
     resetGame,
     setMode,
-    checkWin
+    checkWin,
+    sendChallenge,
+    acceptChallenge,
+    declineChallenge,
+    getSocketId: () => (state.socket ? state.socket.id : null)
   };
 })();

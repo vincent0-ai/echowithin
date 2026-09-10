@@ -191,6 +191,34 @@
     <div id="room-status" style="margin-top: 0.6rem; font-size: 0.8rem; color: var(--text-secondary);">
       Click "Find Match" for quick pairing or share a room code with a friend.
     </div>
+
+    <!-- Active Opponents Lobby & Direct Challenges -->
+    <div id="online-opponents-section" style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem; margin-top: 0.75rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
+          <span>Waiting Players in Lobby</span>
+          <span id="waiting-opponents-count" style="font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; background: rgba(37, 99, 235, 0.12); color: #2563eb; font-weight: 700;">0</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-secondary);">Click "Challenge" to duel directly</div>
+      </div>
+      <div id="opponents-list" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto;">
+        <div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 0.6rem;">No other players currently waiting. Click "Find Match" to list yourself!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming Challenge Modal -->
+  <div id="incoming-challenge-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.55); z-index: 9999; justify-content: center; align-items: center;">
+    <div class="ew-card" style="max-width: 360px; width: 90%; text-align: center; padding: 1.5rem; border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.3);">
+      <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-dark-color);">Direct Challenge!</h3>
+      <p id="challenge-modal-text" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+        A player wants to challenge you to Connect Four!
+      </p>
+      <div style="display: flex; gap: 0.6rem; justify-content: center;">
+        <button type="button" id="challenge-accept-btn" class="ew-btn ew-btn--sm" style="flex: 1; background: #15803d; border-color: #15803d; font-weight: 600;">Accept</button>
+        <button type="button" id="challenge-decline-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1;">Decline</button>
+      </div>
+    </div>
   </div>
 
   <!-- Stage Card -->
@@ -410,6 +438,80 @@
         fetchLeaderboard();
       });
     });
+
+    window.__updateC4OpponentsLobby = (queue) => {
+      const countEl = document.getElementById('waiting-opponents-count');
+      const listEl = document.getElementById('opponents-list');
+      if (!listEl) return;
+
+      const mySid = (window.__c4 && window.__c4.getSocketId) ? window.__c4.getSocketId() : null;
+      const otherPlayers = (queue || []).filter(p => !mySid || p.sid !== mySid);
+
+      if (countEl) countEl.textContent = String(otherPlayers.length);
+
+      if (otherPlayers.length === 0) {
+        listEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 0.6rem;">No other players currently waiting. Click "Find Match" to list yourself!</div>';
+        return;
+      }
+
+      listEl.innerHTML = otherPlayers.map(p => {
+        const streak = p.streak || 0;
+        const score = p.score || 0;
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.75rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.82rem;">
+            <div>
+              <span style="font-weight: 600; color: var(--text-dark-color);">${p.name || 'Player'}</span>
+              <span style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 0.4rem;">Streak: ${streak} &bull; ${score.toLocaleString()} pts</span>
+            </div>
+            <button type="button" class="ew-btn ew-btn--sm c4-challenge-btn" data-sid="${p.sid}" data-name="${p.name || 'Player'}" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background: #e06a3b; border-color: #c95729; cursor: pointer;">
+              Challenge
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.c4-challenge-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const sid = btn.dataset.sid;
+          const name = btn.dataset.name;
+          if (window.__c4 && typeof window.__c4.sendChallenge === 'function') {
+            window.__c4.sendChallenge(sid, name);
+          }
+        });
+      });
+    };
+
+    let pendingChallengerSid = null;
+    const challengeModal = document.getElementById('incoming-challenge-modal');
+    const challengeText = document.getElementById('challenge-modal-text');
+    const challengeAcceptBtn = document.getElementById('challenge-accept-btn');
+    const challengeDeclineBtn = document.getElementById('challenge-decline-btn');
+
+    window.__showC4ChallengeModal = (data) => {
+      pendingChallengerSid = data.challenger_sid;
+      if (challengeText) {
+        challengeText.textContent = `${data.challenger_name || 'A player'} (Streak: ${data.streak || 0}, ${(data.score || 0).toLocaleString()} pts) challenged you to Connect Four!`;
+      }
+      if (challengeModal) challengeModal.style.display = 'flex';
+    };
+
+    if (challengeAcceptBtn) {
+      challengeAcceptBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (pendingChallengerSid && window.__c4 && typeof window.__c4.acceptChallenge === 'function') {
+          window.__c4.acceptChallenge(pendingChallengerSid);
+        }
+      });
+    }
+
+    if (challengeDeclineBtn) {
+      challengeDeclineBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (pendingChallengerSid && window.__c4 && typeof window.__c4.declineChallenge === 'function') {
+          window.__c4.declineChallenge(pendingChallengerSid);
+        }
+      });
+    }
 
     document.addEventListener('DOMContentLoaded', fetchLeaderboard);
   })();

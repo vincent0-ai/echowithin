@@ -32,6 +32,7 @@
     touch-action: none;
     background: #f7f4ed;
     margin: 0 auto;
+    cursor: pointer;
   }
   .slime-touch-row {
     display: none;
@@ -63,6 +64,106 @@
       max-width: 100% !important;
     }
   }
+
+  /* Immersive Mobile Landscape Mode */
+  body.slime-landscape-active {
+    overflow: hidden !important;
+  }
+  .slime-landscape-mode {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    background: #1a1614 !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+  .slime-landscape-mode .slime-canvas-wrap {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+  .slime-landscape-mode #slime-canvas {
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    width: auto !important;
+    height: 100% !important;
+    aspect-ratio: 16 / 9 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .slime-landscape-mode .slime-touch-row {
+    position: fixed !important;
+    bottom: 16px !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    padding: 0 24px !important;
+    pointer-events: none !important;
+    z-index: 100000 !important;
+    margin: 0 !important;
+  }
+  .slime-landscape-mode .slime-touch-left-group,
+  .slime-landscape-mode .slime-touch-right-group {
+    display: flex !important;
+    gap: 16px !important;
+    pointer-events: auto !important;
+  }
+  .slime-landscape-mode .slime-touch-btn {
+    background: rgba(30, 25, 22, 0.72) !important;
+    color: #ffffff !important;
+    border: 2px solid rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: blur(8px) !important;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    min-width: 68px !important;
+    height: 68px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    touch-action: manipulation !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4) !important;
+  }
+  .slime-landscape-mode .slime-touch-btn:active {
+    background: rgba(224, 106, 59, 0.85) !important;
+    border-color: #ffffff !important;
+    transform: scale(0.95);
+  }
+  .slime-exit-landscape-btn {
+    display: none;
+    position: fixed;
+    top: 14px;
+    right: 18px;
+    z-index: 100002;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+  .slime-landscape-mode .slime-exit-landscape-btn {
+    display: block !important;
+  }
 </style>
 
 <div class="content-wrapper slime-page-wrapper" style="max-width: 1080px; margin: 0 auto; padding-bottom: 2rem;">
@@ -77,7 +178,13 @@
         Bouncy 2D physics duel. Play offline vs AI, local 2-player, or 1v1 live over WebSockets.
       </div>
     </div>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="pause-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+        Play / Serve
+      </button>
+      <button type="button" id="landscape-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
+        Landscape
+      </button>
       <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
         Mute Sound
       </button>
@@ -121,40 +228,71 @@
         <button type="button" id="create-room-btn" class="ew-btn ew-btn--outline ew-btn--sm" style="cursor: pointer;">Create Custom</button>
       </div>
       <div id="online-status" style="font-size: 0.82rem; font-weight: 500; color: var(--text-secondary);">
-        Not connected. Use "Find Match" or enter a room code.
+        Not connected. Use "Find Match" or choose an opponent below.
+      </div>
+    </div>
+
+    <!-- Live Available Opponents Selection Lobby -->
+    <div id="online-opponents-section" style="margin-top: 0.9rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-dark-color);">Available Opponents (Waiting):</span>
+        <span id="waiting-count-badge" class="ew-badge" style="font-size: 0.72rem;">0 waiting</span>
+      </div>
+      <div id="online-opponents-list" style="display: flex; flex-direction: column; gap: 0.45rem; max-height: 180px; overflow-y: auto;">
+        <div style="font-size: 0.82rem; color: var(--text-secondary); font-style: italic; padding: 0.3rem 0;">
+          No other players waiting in queue. Click "Find Match" or invite a friend with a room code!
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming Challenge Modal -->
+  <div id="incoming-challenge-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 999999; align-items: center; justify-content: center; backdrop-filter: blur(3px);">
+    <div style="background: var(--surface-bg, #ffffff); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2rem; max-width: 380px; width: 90%; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.35);">
+      <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-dark-color); margin-bottom: 0.4rem;">Duel Challenge!</div>
+      <div id="challenge-details" style="font-size: 0.92rem; color: var(--text-secondary); margin-bottom: 1.25rem;"></div>
+      <div style="display: flex; gap: 0.75rem; justify-content: center;">
+        <button type="button" id="accept-challenge-btn" class="ew-btn ew-btn--sm" style="background: #15803d; border-color: #166534; font-weight: 700;">Accept</button>
+        <button type="button" id="decline-challenge-btn" class="ew-btn--outline ew-btn--sm">Decline</button>
       </div>
     </div>
   </div>
 
   <!-- Game Arena Card -->
-  <div class="ew-card slime-stage-card">
+  <div class="ew-card slime-stage-card" id="slime-stage-container">
+    <button type="button" id="exit-landscape-btn" class="slime-exit-landscape-btn">✕ Exit Fullscreen</button>
     <div class="slime-canvas-wrap">
-      <canvas id="slime-canvas" width="960" height="540" style="display: block; border-radius: 12px; box-shadow: 0 10px 30px rgba(62, 34, 23, 0.12); width: 100%; max-width: 960px; height: auto; aspect-ratio: 16 / 9; touch-action: none; background: #f7f4ed;"></canvas>
+      <canvas id="slime-canvas" width="960" height="540"></canvas>
 
       <!-- Game Over Banner -->
       <div id="game-over-banner" style="display: none; position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10; min-width: 260px;">
         <h3 id="winner-text" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
-        <div id="winner-streak" style="display: none; font-size: 0.95rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.8rem;"></div>
+        <div id="winner-points" style="font-size: 0.95rem; font-weight: 700; color: #e06a3b; margin-bottom: 0.4rem;"></div>
+        <div id="winner-streak" style="display: none; font-size: 0.92rem; font-weight: 600; color: #2e86ab; margin-bottom: 0.8rem;"></div>
         <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Rematch</button>
       </div>
     </div>
 
-    <!-- On-Screen Mobile Touch Controls -->
+    <!-- On-Screen Mobile Touch Controls (Adapts to dual-thumb in landscape) -->
     <div class="slime-touch-row">
-      <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        Left
-      </button>
-      <button type="button" id="touch-jump" class="ew-btn ew-btn--sm" style="flex: 1.2; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        Jump
-      </button>
-      <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
-        Right
-      </button>
+      <div class="slime-touch-left-group" style="display: flex; gap: 0.75rem; flex: 1.5;">
+        <button type="button" id="touch-left" class="ew-btn--outline ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
+          Left
+        </button>
+        <button type="button" id="touch-right" class="ew-btn--outline ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px;">
+          Right
+        </button>
+      </div>
+      <div class="slime-touch-right-group" style="display: flex; flex: 1;">
+        <button type="button" id="touch-jump" class="ew-btn ew-btn--sm slime-touch-btn" style="flex: 1; padding: 0.85rem; font-weight: 700; text-align: center; cursor: pointer; user-select: none; touch-action: manipulation; font-size: 1.05rem; border-radius: 8px; background: #e06a3b; border-color: #c95729;">
+          Jump
+        </button>
+      </div>
     </div>
 
     <!-- Controls Guide -->
     <div style="width: 100%; max-width: 680px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
-      A / D or arrows to move &bull; W, Space or Jump button &bull; First to 5 points wins
+      A / D or arrows to move &bull; W, Space or Jump button &bull; Space or Pause button toggles pause
     </div>
 
     <!-- Leaderboard Card -->
@@ -171,10 +309,10 @@
         </div>
       </div>
 
-      <!-- Player Personal Stats Preview -->
+      <!-- Player Personal Stats Preview with Prominent Ranked Score -->
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
         <div>
-          Your Active Streak: <strong id="my-slime-streak" style="color: #e06a3b;">0 wins</strong> &bull; Ball Returns: <strong id="my-slime-volleys" style="color: #2e86ab;">0</strong> &bull; Rounds Won: <strong id="my-slime-rounds" style="color: #2e86ab;">0</strong>
+          Ranked Points: <strong id="my-slime-ranked" style="color: #e06a3b; font-size: 0.9rem;">0 pts</strong> &bull; Streak: <strong id="my-slime-streak" style="color: #2e86ab;">0 wins</strong> &bull; Returns: <strong id="my-slime-volleys" style="color: #2e86ab;">0</strong> &bull; Rounds Won: <strong id="my-slime-rounds" style="color: #2e86ab;">0</strong>
         </div>
         <div id="my-slime-rank" style="font-weight: 600; color: #e06a3b;"></div>
       </div>
@@ -325,6 +463,7 @@
     const myVolleysEl = document.getElementById('my-slime-volleys');
     const myRoundsEl = document.getElementById('my-slime-rounds');
     const myRankEl = document.getElementById('my-slime-rank');
+    const myRankedEl = document.getElementById('my-slime-ranked');
 
     function updateLocalStreakDisplay() {
       try {
@@ -334,6 +473,10 @@
         const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
         const rounds = parseInt(localStorage.getItem('slime_round_wins') || '0', 10);
         const volleys = parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10);
+        const ranked = parseInt(localStorage.getItem('slime_ranked_score') || '0', 10);
+        if (myRankedEl) {
+          myRankedEl.textContent = `${ranked.toLocaleString()} pts`;
+        }
         if (myStreakEl) {
           if (best > streak && best > 0) {
             myStreakEl.textContent = `${streak} wins (Best: ${best})`;
@@ -357,6 +500,155 @@
     window.__updateSlimeReturnsDisplay = function(volleys) {
       if (myVolleysEl) myVolleysEl.textContent = String(volleys);
     };
+
+    window.__updateSlimeRankedDisplay = function(points) {
+      if (myRankedEl) myRankedEl.textContent = `${points.toLocaleString()} pts`;
+    };
+
+    // Pause button integration
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        if (window.__slime && typeof window.__slime.togglePause === 'function') {
+          const isPaused = window.__slime.togglePause();
+          pauseBtn.textContent = isPaused ? 'Play / Serve' : 'Pause Game';
+        }
+      });
+    }
+    window.__updateSlimePauseBtn = function(isPaused) {
+      if (pauseBtn) pauseBtn.textContent = isPaused ? 'Play / Serve' : 'Pause Game';
+    };
+
+    // Immersive Landscape Mode Controls
+    const landscapeBtn = document.getElementById('landscape-toggle-btn');
+    const exitLandscapeBtn = document.getElementById('exit-landscape-btn');
+    const stageContainer = document.getElementById('slime-stage-container');
+
+    async function enterLandscape() {
+      if (!stageContainer) return;
+      stageContainer.classList.add('slime-landscape-mode');
+      document.body.classList.add('slime-landscape-active');
+      if (landscapeBtn) landscapeBtn.textContent = 'Exit Fullscreen';
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (_) {}
+      if (window.__slime && typeof window.__slime.onResize === 'function') {
+        window.__slime.onResize();
+      }
+    }
+
+    async function exitLandscape() {
+      if (!stageContainer) return;
+      stageContainer.classList.remove('slime-landscape-mode');
+      document.body.classList.remove('slime-landscape-active');
+      if (landscapeBtn) landscapeBtn.textContent = 'Landscape';
+      try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+        if (screen.orientation && screen.orientation.unlock) {
+          screen.orientation.unlock();
+        }
+      } catch (_) {}
+      if (window.__slime && typeof window.__slime.onResize === 'function') {
+        window.__slime.onResize();
+      }
+    }
+
+    if (landscapeBtn) {
+      landscapeBtn.addEventListener('click', () => {
+        if (stageContainer.classList.contains('slime-landscape-mode')) {
+          exitLandscape();
+        } else {
+          enterLandscape();
+        }
+      });
+    }
+    if (exitLandscapeBtn) {
+      exitLandscapeBtn.addEventListener('click', exitLandscape);
+    }
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && stageContainer && stageContainer.classList.contains('slime-landscape-mode')) {
+        exitLandscape();
+      }
+    });
+
+    // Opponent Selection Lobby & Challenges
+    const opponentsListEl = document.getElementById('online-opponents-list');
+    const waitingBadge = document.getElementById('waiting-count-badge');
+    const challengeModal = document.getElementById('incoming-challenge-modal');
+    const challengeDetails = document.getElementById('challenge-details');
+    const acceptChallengeBtn = document.getElementById('accept-challenge-btn');
+    const declineChallengeBtn = document.getElementById('decline-challenge-btn');
+    let pendingChallengerSid = null;
+
+    window.__renderSlimeOpponents = function(opponents, totalWaiting) {
+      if (waitingBadge) waitingBadge.textContent = `${totalWaiting || 0} waiting`;
+      if (!opponentsListEl) return;
+      if (!opponents || opponents.length === 0) {
+        opponentsListEl.innerHTML = '<div style="font-size: 0.82rem; color: var(--text-secondary); font-style: italic; padding: 0.3rem 0;">No other players waiting in queue. Click "Find Match" or invite a friend with a room code!</div>';
+        return;
+      }
+      let html = '';
+      opponents.forEach(op => {
+        html += `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.75rem; background: rgba(0,0,0,0.03); border: 1px solid var(--border-color); border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+              <span style="font-weight: 700; color: var(--text-dark-color); font-size: 0.9rem;">${op.user_name}</span>
+              <span class="ew-badge" style="font-size: 0.7rem; background: rgba(224, 106, 59, 0.15); color: #e06a3b; border: 1px solid rgba(224, 106, 59, 0.3);">🔥 ${op.streak || 0} streak</span>
+              <span class="ew-badge" style="font-size: 0.7rem; background: rgba(46, 134, 171, 0.15); color: #2e86ab; border: 1px solid rgba(46, 134, 171, 0.3);">⭐ ${(op.score || 0).toLocaleString()} pts</span>
+            </div>
+            <button type="button" class="ew-btn ew-btn--sm slime-challenge-btn" data-sid="${op.sid}" style="font-size: 0.78rem; padding: 0.25rem 0.75rem; background: #e06a3b; border-color: #c95729; font-weight: 700; cursor: pointer;">
+              Challenge
+            </button>
+          </div>
+        `;
+      });
+      opponentsListEl.innerHTML = html;
+
+      opponentsListEl.querySelectorAll('.slime-challenge-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetSid = btn.dataset.sid;
+          btn.textContent = 'Challenging...';
+          btn.disabled = true;
+          if (window.__slime && typeof window.__slime.sendChallenge === 'function') {
+            window.__slime.sendChallenge(targetSid);
+          }
+        });
+      });
+    };
+
+    window.__handleSlimeChallengeReceived = function(data) {
+      pendingChallengerSid = data.challenger_sid;
+      if (challengeDetails) {
+        challengeDetails.innerHTML = `<strong>${data.challenger_name}</strong> has challenged you to a 1v1 duel!<br><small style="color: var(--text-secondary); display: inline-block; margin-top: 0.35rem;">Streak: ${data.streak || 0} wins &bull; Rating: ${(data.score || 0).toLocaleString()} pts</small>`;
+      }
+      if (challengeModal) challengeModal.style.display = 'flex';
+    };
+
+    if (acceptChallengeBtn) {
+      acceptChallengeBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (window.__slime && pendingChallengerSid) {
+          window.__slime.acceptChallenge(pendingChallengerSid);
+        }
+      });
+    }
+
+    if (declineChallengeBtn) {
+      declineChallengeBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (window.__slime && pendingChallengerSid) {
+          window.__slime.declineChallenge(pendingChallengerSid);
+        }
+        pendingChallengerSid = null;
+      });
+    }
 
     function renderLeaderboard(entries, userRecord) {
       updateLocalStreakDisplay();
@@ -400,7 +692,7 @@
               ${diffBadge}
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${e.score} ${unit}</span>
+              <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${(e.score || 0).toLocaleString()} ${unit}</span>
             </div>
           </div>
         `;
@@ -426,7 +718,9 @@
 
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating leaderboard...</div>';
         const diffParam = currentSlimeDiff !== 'all' ? `&difficulty=${encodeURIComponent(currentSlimeDiff)}` : '';
-        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=${cat}&period=${period}${diffParam}`);
+        const guestToken = localStorage.getItem('arcade_guest_token') || '';
+        const guestParam = guestToken ? `&guest_token=${encodeURIComponent(guestToken)}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=${cat}&period=${period}${diffParam}${guestParam}`);
         const data = await res.json();
         const list = data.entries || data.leaders || [];
         renderLeaderboard(list, data.user_record);

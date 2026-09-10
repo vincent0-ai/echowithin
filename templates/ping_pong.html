@@ -78,6 +78,9 @@
       </div>
     </div>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <button type="button" id="pause-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+        Play / Serve
+      </button>
       <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
         Mute Sound
       </button>
@@ -122,7 +125,7 @@
 
   <!-- Online Room Matchmaking Panel (shown when Online tab active) -->
   <div id="online-panel" class="ew-card" style="display: none; margin-bottom: 1rem; padding: 1rem 1.25rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
       <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
         <button type="button" id="find-match-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
           Find Match
@@ -136,6 +139,34 @@
         Not connected. Use "Find Match" or enter a room code.
       </div>
     </div>
+
+    <!-- Active Opponents Lobby & Direct Challenges -->
+    <div id="online-opponents-section" style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem; margin-top: 0.5rem;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-dark-color); display: flex; align-items: center; gap: 0.4rem;">
+          <span>Waiting Players in Lobby</span>
+          <span id="waiting-opponents-count" style="font-size: 0.72rem; padding: 0.1rem 0.45rem; border-radius: 999px; background: rgba(37, 99, 235, 0.12); color: #2563eb; font-weight: 700;">0</span>
+        </div>
+        <div style="font-size: 0.75rem; color: var(--text-secondary);">Click "Challenge" to duel directly</div>
+      </div>
+      <div id="opponents-list" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 180px; overflow-y: auto;">
+        <div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 0.6rem;">No other players currently waiting. Click "Find Match" to list yourself!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming Challenge Modal -->
+  <div id="incoming-challenge-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.55); z-index: 9999; justify-content: center; align-items: center;">
+    <div class="ew-card" style="max-width: 360px; width: 90%; text-align: center; padding: 1.5rem; border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,0.3);">
+      <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-dark-color);">Direct Challenge!</h3>
+      <p id="challenge-modal-text" style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+        A player wants to challenge you to a 1v1 duel!
+      </p>
+      <div style="display: flex; gap: 0.6rem; justify-content: center;">
+        <button type="button" id="challenge-accept-btn" class="ew-btn ew-btn--sm" style="flex: 1; background: #15803d; border-color: #15803d; font-weight: 600;">Accept</button>
+        <button type="button" id="challenge-decline-btn" class="ew-btn--outline ew-btn--sm" style="flex: 1;">Decline</button>
+      </div>
+    </div>
   </div>
 
   <!-- Game Arena Card -->
@@ -146,7 +177,8 @@
       <!-- Game Over Banner -->
       <div id="game-over-banner" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(253, 251, 247, 0.96); border: 2px solid var(--border-color); border-radius: 12px; padding: 1.5rem 2.5rem; text-align: center; box-shadow: 0 12px 36px rgba(0,0,0,0.25); z-index: 10; min-width: 260px;">
         <h3 id="winner-text" style="margin: 0 0 0.4rem 0; font-size: 1.4rem; color: var(--text-dark-color); font-weight: 700;">Match Complete</h3>
-        <div id="winner-streak" style="display: none; font-size: 0.95rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.8rem;"></div>
+        <div id="winner-streak" style="display: none; font-size: 0.95rem; font-weight: 600; color: #e06a3b; margin-bottom: 0.4rem;"></div>
+        <div id="winner-points" style="display: none; font-size: 0.95rem; font-weight: 700; color: #15803d; margin-bottom: 0.8rem;"></div>
         <button type="button" id="rematch-btn" class="ew-btn ew-btn--sm" style="cursor: pointer;">Play Again</button>
       </div>
     </div>
@@ -184,7 +216,7 @@
       <!-- Player Personal Stats Preview -->
       <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.55rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 0.4rem; flex-wrap: wrap; gap: 0.4rem;">
         <div>
-          Your Active Streak: <strong id="my-pong-streak" style="color: #e06a3b;">0 wins</strong> &bull; Volleys: <strong id="my-pong-volleys" style="color: #2e86ab;">0</strong> &bull; Total Wins: <strong id="my-pong-wins" style="color: #2e86ab;">0</strong>
+          Your Active Streak: <strong id="my-pong-streak" style="color: #e06a3b;">0 wins</strong> &bull; Volleys: <strong id="my-pong-volleys" style="color: #2e86ab;">0</strong> &bull; Total Wins: <strong id="my-pong-wins" style="color: #2e86ab;">0</strong> &bull; Ranked Score: <strong id="my-pong-ranked" style="color: #e06a3b;">0 pts</strong>
         </div>
         <div id="my-pong-rank" style="font-weight: 600; color: #e06a3b;"></div>
       </div>
@@ -291,6 +323,104 @@
       if (window.__pong) window.__pong.setMode('online');
     });
 
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn) {
+      pauseBtn.addEventListener('click', () => {
+        if (window.__pong && typeof window.__pong.togglePause === 'function') {
+          window.__pong.togglePause();
+        }
+      });
+    }
+
+    window.__updatePongPauseBtn = (isPaused) => {
+      if (!pauseBtn) return;
+      if (isPaused) {
+        pauseBtn.textContent = 'Play / Serve';
+        pauseBtn.style.background = '#e06a3b';
+        pauseBtn.style.borderColor = '#c95729';
+      } else {
+        pauseBtn.textContent = 'Pause';
+        pauseBtn.style.background = '#6b7280';
+        pauseBtn.style.borderColor = '#4b5563';
+      }
+    };
+
+    // Online Opponents Lobby Handler
+    window.__updatePongOpponentsLobby = (queue) => {
+      const countEl = document.getElementById('waiting-opponents-count');
+      const listEl = document.getElementById('opponents-list');
+      if (!listEl) return;
+
+      const mySid = (window.__pong && window.__pong.getSocketId) ? window.__pong.getSocketId() : null;
+      const otherPlayers = (queue || []).filter(p => !mySid || p.sid !== mySid);
+
+      if (countEl) countEl.textContent = String(otherPlayers.length);
+
+      if (otherPlayers.length === 0) {
+        listEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; text-align: center; padding: 0.6rem;">No other players currently waiting. Click "Find Match" to list yourself!</div>';
+        return;
+      }
+
+      listEl.innerHTML = otherPlayers.map(p => {
+        const streak = p.streak || 0;
+        const score = p.score || 0;
+        return `
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.75rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.82rem;">
+            <div>
+              <span style="font-weight: 600; color: var(--text-dark-color);">${p.name || 'Player'}</span>
+              <span style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 0.4rem;">Streak: ${streak} &bull; ${score.toLocaleString()} pts</span>
+            </div>
+            <button type="button" class="ew-btn ew-btn--sm pong-challenge-btn" data-sid="${p.sid}" data-name="${p.name || 'Player'}" style="padding: 0.2rem 0.6rem; font-size: 0.75rem; background: #e06a3b; border-color: #c95729; cursor: pointer;">
+              Challenge
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.pong-challenge-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const sid = btn.dataset.sid;
+          const name = btn.dataset.name;
+          if (window.__pong && typeof window.__pong.sendChallenge === 'function') {
+            window.__pong.sendChallenge(sid, name);
+          }
+        });
+      });
+    };
+
+    // Incoming Challenge Modal
+    let pendingChallengerSid = null;
+    const challengeModal = document.getElementById('incoming-challenge-modal');
+    const challengeText = document.getElementById('challenge-modal-text');
+    const challengeAcceptBtn = document.getElementById('challenge-accept-btn');
+    const challengeDeclineBtn = document.getElementById('challenge-decline-btn');
+
+    window.__showPongChallengeModal = (data) => {
+      pendingChallengerSid = data.challenger_sid;
+      if (challengeText) {
+        challengeText.textContent = `${data.challenger_name || 'A player'} (Streak: ${data.streak || 0}, ${(data.score || 0).toLocaleString()} pts) challenged you to Ping Pong!`;
+      }
+      if (challengeModal) challengeModal.style.display = 'flex';
+    };
+
+    if (challengeAcceptBtn) {
+      challengeAcceptBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (pendingChallengerSid && window.__pong && typeof window.__pong.acceptChallenge === 'function') {
+          window.__pong.acceptChallenge(pendingChallengerSid);
+        }
+      });
+    }
+
+    if (challengeDeclineBtn) {
+      challengeDeclineBtn.addEventListener('click', () => {
+        if (challengeModal) challengeModal.style.display = 'none';
+        if (pendingChallengerSid && window.__pong && typeof window.__pong.declineChallenge === 'function') {
+          window.__pong.declineChallenge(pendingChallengerSid);
+        }
+      });
+    }
+
     const findMatchBtn = document.getElementById('find-match-btn');
     const joinRoomBtn = document.getElementById('join-room-btn');
     const createRoomBtn = document.getElementById('create-room-btn');
@@ -334,10 +464,17 @@
 
       try {
         const diffParam = currentDiff !== 'all' ? `&difficulty=${currentDiff}` : '';
-        const res = await fetch(`/api/games/leaderboard?game=ping_pong&category=${currentCat}&period=${currentPeriod}${diffParam}`);
+        const guestToken = localStorage.getItem('arcade_guest_token') || '';
+        const guestParam = guestToken ? `&guest_token=${encodeURIComponent(guestToken)}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=ping_pong&category=${currentCat}&period=${currentPeriod}${diffParam}${guestParam}`);
         if (!res.ok) throw new Error('Failed to load');
         const data = await res.json();
         const entries = data.entries || [];
+
+        const rankEl = document.getElementById('my-pong-rank');
+        if (rankEl && data.user_record && data.user_record.rank) {
+          rankEl.textContent = `Your Rank: #${data.user_record.rank} (${(data.user_record.score || 0).toLocaleString()} pts)`;
+        }
 
         if (entries.length === 0) {
           lbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No scores yet for this period. Be the first to rank!</div>';

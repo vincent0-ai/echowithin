@@ -1228,6 +1228,8 @@ def api_leaderboard_get():
         })
 
     user_record = None
+    guest_token = (request.args.get('guest_token') or '').strip()[:64]
+    user_query = None
     if current_user.is_authenticated:
         user_query = {
             'user_id': str(current_user.id),
@@ -1235,6 +1237,14 @@ def api_leaderboard_get():
             'category': category,
             'period_key': period_key
         }
+    elif guest_token:
+        user_query = {
+            'guest_token': guest_token,
+            'game': game,
+            'category': category,
+            'period_key': period_key
+        }
+    if user_query:
         if difficulty and difficulty != 'all':
             user_query['metadata.difficulty'] = difficulty
         my_doc = m.arcade_leaderboards_conf.find_one(user_query)

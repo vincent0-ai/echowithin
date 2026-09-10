@@ -1852,6 +1852,24 @@ def handle_leave_game(data=None, *args, **kwargs):
         else:
             active_game_players.pop(lobby_id, None)
 
+# --- Multiplayer Matchmaking Helper ---
+def broadcast_matchmaking_queue(queue, event_name):
+    """Broadcasts available waiting opponents and their live stats to all players waiting in a game queue."""
+    for item in queue:
+        opponents = [
+            {
+                'sid': q['sid'],
+                'user_name': q.get('user_name', 'Player'),
+                'streak': q.get('streak', 0),
+                'score': q.get('score', 0)
+            }
+            for q in queue if q['sid'] != item['sid']
+        ]
+        try:
+            emit(event_name, {'opponents': opponents, 'total_waiting': len(queue)}, room=item['sid'])
+        except Exception:
+            pass
+
 # --- Slime Volleyball 1v1 Real-Time Handlers ---
 active_slime_rooms = {}
 slime_matchmaking_queue = []
@@ -1885,6 +1903,25 @@ def handle_join_slime_room(data=None, *args, **kwargs):
             'host_name': user_name,
             'guest_name': None
         }, room=sid)
+    elif room_info.get('host_sid') == sid:
+        # Re-joining host: refresh state
+        emit('slime_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name')
+        }, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        # Re-joining guest: refresh state
+        emit('slime_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info['guest_name']
+        }, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        # Room already has both players
+        emit('slime_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         # Second player is Guest
         room_info['guest_sid'] = sid
@@ -1952,12 +1989,16 @@ def handle_slime_restart(data=None, *args, **kwargs):
 def handle_find_slime_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    streak = int(req_data.get('streak', 0) or 0)
+    score = int(req_data.get('score', 0) or 0)
+    mode = req_data.get('mode', 'auto')
 
     global slime_matchmaking_queue
     # Filter out self or dead sids
     slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != sid]
 
-    if slime_matchmaking_queue:
+    if mode == 'auto' and slime_matchmaking_queue:
         # Match with first waiting player
         opponent = slime_matchmaking_queue.pop(0)
         room_id = f"duel_{secrets.token_hex(4)}"
@@ -1991,12 +2032,17 @@ def handle_find_slime_match(data=None, *args, **kwargs):
             'host_name': opponent['user_name'],
             'guest_name': user_name
         }, room=sid)
+
+        broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
     else:
         slime_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'streak': streak,
+            'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
+        broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
         emit('slime_matchmaking_waiting', {'status': 'waiting'}, room=sid)
 
 @socketio.on('cancel_slime_matchmaking')
@@ -2004,6 +2050,7 @@ def handle_cancel_slime_matchmaking(data=None, *args, **kwargs):
     sid = request.sid
     global slime_matchmaking_queue
     slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
     emit('slime_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
@@ -2041,6 +2088,24 @@ def handle_join_pong_room(data=None, *args, **kwargs):
             'guest_name': None,
             'player': 0
         }, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('pong_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name'),
+            'player': 0
+        }, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('pong_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info['guest_name'],
+            'player': 1
+        }, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('pong_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
@@ -2123,11 +2188,15 @@ def handle_pong_restart(data=None, *args, **kwargs):
 def handle_find_pong_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    streak = int(req_data.get('streak', 0) or 0)
+    score = int(req_data.get('score', 0) or 0)
+    mode = req_data.get('mode', 'auto')
 
     global pong_matchmaking_queue
     pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != sid]
 
-    if pong_matchmaking_queue:
+    if mode == 'auto' and pong_matchmaking_queue:
         opponent = pong_matchmaking_queue.pop(0)
         room_id = f"pong_{secrets.token_hex(4)}"
 
@@ -2160,12 +2229,17 @@ def handle_find_pong_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'player': 1
         }, room=sid)
+
+        broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
     else:
         pong_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'streak': streak,
+            'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
+        broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
         emit('pong_matchmaking_waiting', {'status': 'waiting'}, room=sid)
 
 @socketio.on('cancel_pong_matchmaking')
@@ -2173,6 +2247,7 @@ def handle_cancel_pong_matchmaking(data=None, *args, **kwargs):
     sid = request.sid
     global pong_matchmaking_queue
     pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
     emit('pong_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
@@ -2436,6 +2511,24 @@ def handle_join_c4_room(data=None, *args, **kwargs):
             'guest_name': None,
             'player': 0
         }, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('c4_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name'),
+            'player': 0
+        }, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('c4_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info['guest_name'],
+            'player': 1
+        }, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('c4_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
@@ -2546,11 +2639,15 @@ def handle_c4_restart(data=None, *args, **kwargs):
 def handle_find_c4_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    streak = int(req_data.get('streak', 0) or 0)
+    score = int(req_data.get('score', 0) or 0)
+    mode = req_data.get('mode', 'auto')
 
     global c4_matchmaking_queue
     c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != sid]
 
-    if c4_matchmaking_queue:
+    if mode == 'auto' and c4_matchmaking_queue:
         opponent = c4_matchmaking_queue.pop(0)
         room_id = f"c4_{secrets.token_hex(4)}"
 
@@ -2585,12 +2682,17 @@ def handle_find_c4_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'player': 1
         }, room=sid)
+
+        broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
     else:
         c4_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'streak': streak,
+            'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
+        broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
         emit('c4_matchmaking_waiting', {'status': 'waiting'}, room=sid)
 
 @socketio.on('cancel_c4_matchmaking')
@@ -2598,6 +2700,7 @@ def handle_cancel_c4_matchmaking(data=None, *args, **kwargs):
     sid = request.sid
     global c4_matchmaking_queue
     c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
     emit('c4_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
 
 
@@ -2650,6 +2753,24 @@ def handle_join_dnb_room(data=None, *args, **kwargs):
             'guest_name': None,
             'player': 0
         }, room=sid)
+    elif room_info.get('host_sid') == sid:
+        emit('dnb_room_joined', {
+            'room_id': room_id,
+            'is_host': True,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info.get('guest_name'),
+            'player': 0
+        }, room=sid)
+    elif room_info.get('guest_sid') == sid:
+        emit('dnb_room_joined', {
+            'room_id': room_id,
+            'is_host': False,
+            'host_name': room_info['host_name'],
+            'guest_name': room_info['guest_name'],
+            'player': 1
+        }, room=sid)
+    elif room_info.get('guest_sid') is not None:
+        emit('dnb_room_error', {'message': 'Room is already full.'}, room=sid)
     else:
         room_info['guest_sid'] = sid
         room_info['guest_name'] = user_name
@@ -2802,11 +2923,15 @@ def handle_dnb_restart(data=None, *args, **kwargs):
 def handle_find_dnb_match(data=None, *args, **kwargs):
     sid = request.sid
     user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+    req_data = data if isinstance(data, dict) else {}
+    streak = int(req_data.get('streak', 0) or 0)
+    score = int(req_data.get('score', 0) or 0)
+    mode = req_data.get('mode', 'auto')
 
     global dnb_matchmaking_queue
     dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != sid]
 
-    if dnb_matchmaking_queue:
+    if mode == 'auto' and dnb_matchmaking_queue:
         opponent = dnb_matchmaking_queue.pop(0)
         room_id = f"dnb_{secrets.token_hex(4)}"
 
@@ -2843,12 +2968,17 @@ def handle_find_dnb_match(data=None, *args, **kwargs):
             'guest_name': user_name,
             'player': 1
         }, room=sid)
+
+        broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
     else:
         dnb_matchmaking_queue.append({
             'sid': sid,
             'user_name': user_name,
+            'streak': streak,
+            'score': score,
             'created_at': datetime.datetime.now(datetime.timezone.utc)
         })
+        broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
         emit('dnb_matchmaking_waiting', {'status': 'waiting'}, room=sid)
 
 @socketio.on('cancel_dnb_matchmaking')
@@ -2856,7 +2986,147 @@ def handle_cancel_dnb_matchmaking(data=None, *args, **kwargs):
     sid = request.sid
     global dnb_matchmaking_queue
     dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] != sid]
+    broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
     emit('dnb_matchmaking_cancelled', {'status': 'cancelled'}, room=sid)
+
+# --- Unified 1v1 Direct Game Challenge Handlers ---
+
+@socketio.on('send_game_challenge')
+def handle_send_game_challenge(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    game = data.get('game')
+    target_sid = data.get('target_sid')
+    streak = int(data.get('streak', 0) or 0)
+    score = int(data.get('score', 0) or 0)
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    if not game or not target_sid:
+        return
+
+    emit('game_challenge_received', {
+        'game': game,
+        'challenger_sid': sid,
+        'challenger_name': user_name,
+        'streak': streak,
+        'score': score
+    }, room=target_sid)
+
+@socketio.on('accept_game_challenge')
+def handle_accept_game_challenge(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    game = data.get('game')
+    challenger_sid = data.get('challenger_sid')
+    sid = request.sid
+    user_name = getattr(current_user, 'username', 'Guest') if current_user.is_authenticated else 'Guest'
+
+    if not game or not challenger_sid:
+        return
+
+    if game == 'slime':
+        global slime_matchmaking_queue
+        challenger = next((q for q in slime_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        slime_matchmaking_queue = [q for q in slime_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"duel_{secrets.token_hex(4)}"
+        active_slime_rooms[room_id] = {
+            'host_sid': challenger_sid,
+            'host_name': c_name,
+            'guest_sid': sid,
+            'guest_name': user_name
+        }
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('slime_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name}, room=challenger_sid)
+        emit('slime_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name}, room=sid)
+        broadcast_matchmaking_queue(slime_matchmaking_queue, 'slime_queue_updated')
+
+    elif game == 'pong':
+        global pong_matchmaking_queue
+        challenger = next((q for q in pong_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        pong_matchmaking_queue = [q for q in pong_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"pong_{secrets.token_hex(4)}"
+        active_pong_rooms[room_id] = {
+            'host_sid': challenger_sid,
+            'host_name': c_name,
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'scores': [0, 0]
+        }
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('pong_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
+        emit('pong_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        broadcast_matchmaking_queue(pong_matchmaking_queue, 'pong_queue_updated')
+
+    elif game == 'c4':
+        global c4_matchmaking_queue
+        challenger = next((q for q in c4_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        c4_matchmaking_queue = [q for q in c4_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"c4_{secrets.token_hex(4)}"
+        active_c4_rooms[room_id] = {
+            'host_sid': challenger_sid,
+            'host_name': c_name,
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'board': [[-1] * C4_COLS for _ in range(C4_ROWS)],
+            'turn': 0,
+            'scores': [0, 0, 0]
+        }
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('c4_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
+        emit('c4_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        broadcast_matchmaking_queue(c4_matchmaking_queue, 'c4_queue_updated')
+
+    elif game == 'dnb':
+        global dnb_matchmaking_queue
+        challenger = next((q for q in dnb_matchmaking_queue if q['sid'] == challenger_sid), None)
+        c_name = challenger['user_name'] if challenger else 'Challenger'
+        dnb_matchmaking_queue = [q for q in dnb_matchmaking_queue if q['sid'] not in (sid, challenger_sid)]
+        room_id = f"dnb_{secrets.token_hex(4)}"
+        active_dnb_rooms[room_id] = {
+            'host_sid': challenger_sid,
+            'host_name': c_name,
+            'guest_sid': sid,
+            'guest_name': user_name,
+            'h_edges': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS)],
+            'v_edges': [[None] * DNB_COLS for _ in range(DNB_ROWS - 1)],
+            'boxes': [[None] * (DNB_COLS - 1) for _ in range(DNB_ROWS - 1)],
+            'turn': 0,
+            'scores': [0, 0]
+        }
+        try:
+            join_room(room_id, sid=challenger_sid)
+            join_room(room_id, sid=sid)
+        except Exception:
+            pass
+        emit('dnb_match_found', {'room_id': room_id, 'is_host': True, 'host_name': c_name, 'guest_name': user_name, 'player': 0}, room=challenger_sid)
+        emit('dnb_match_found', {'room_id': room_id, 'is_host': False, 'host_name': c_name, 'guest_name': user_name, 'player': 1}, room=sid)
+        broadcast_matchmaking_queue(dnb_matchmaking_queue, 'dnb_queue_updated')
+
+@socketio.on('decline_game_challenge')
+def handle_decline_game_challenge(data=None, *args, **kwargs):
+    if not isinstance(data, dict):
+        return
+    challenger_sid = data.get('challenger_sid')
+    game = data.get('game')
+    user_name = getattr(current_user, 'username', 'Opponent') if current_user.is_authenticated else 'Opponent'
+    if challenger_sid:
+        emit('game_challenge_declined', {'game': game, 'declined_by': user_name}, room=challenger_sid)
 
 
 # --- Direct Messaging (DM) Functionality ---

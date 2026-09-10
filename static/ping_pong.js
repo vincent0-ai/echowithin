@@ -76,6 +76,7 @@
     difficulty: localStorage.getItem('ew_pong_difficulty') || 'normal',
     targetScore: 3, // 3, 5, 11, or Infinity
     isGameOver: false,
+    isPaused: true, // Paused by default on page load so player is in control
     p1: { x: 20, y: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#e06a3b' },
     p2: { x: V_WIDTH - 20 - PADDLE_W, y: V_HEIGHT / 2 - PADDLE_H / 2, width: PADDLE_W, height: PADDLE_H, dy: 0, score: 0, color: '#2e86ab' },
     ball: { x: V_WIDTH / 2, y: V_HEIGHT / 2, radius: 8, vx: BASE_SPEED, vy: 3, speed: BASE_SPEED, color: '#ffffff' },
@@ -92,7 +93,8 @@
     playerIndex: 0, // 0 = left (p1), 1 = right (p2)
     roomId: null,
     opponentName: 'Opponent',
-    lastSyncTime: 0
+    lastSyncTime: 0,
+    isFindingMatch: false
   };
 
   function getStreakKey(diff) {
@@ -107,15 +109,43 @@
     localStorage.setItem(getStreakKey(diff), val.toString());
   }
 
+  function getPongRankedScore() {
+    return parseInt(localStorage.getItem('ew_pong_ranked_score') || '0', 10);
+  }
+
+  function addPongRankedScore(pts) {
+    const current = getPongRankedScore();
+    const updated = current + pts;
+    localStorage.setItem('ew_pong_ranked_score', updated.toString());
+    return updated;
+  }
+
+  async function fetchUserRank() {
+    try {
+      const guestToken = localStorage.getItem('arcade_guest_token') || '';
+      const guestParam = guestToken ? `&guest_token=${encodeURIComponent(guestToken)}` : '';
+      const res = await fetch(`/api/games/leaderboard?game=ping_pong&category=ranked_score&period=all_time${guestParam}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const rankEl = document.getElementById('my-pong-rank');
+      if (rankEl && data.user_record && data.user_record.rank) {
+        rankEl.textContent = `Your Rank: #${data.user_record.rank} (${(data.user_record.score || 0).toLocaleString()} pts)`;
+      }
+    } catch (_) {}
+  }
+
   function updateStatsUI() {
     const streakEl = document.getElementById('my-pong-streak');
     const volleysEl = document.getElementById('my-pong-volleys');
     const winsEl = document.getElementById('my-pong-wins');
+    const rankedEl = document.getElementById('my-pong-ranked');
     const activeStreak = state.mode === 'online' ? getLocalStreak('online') : getLocalStreak(state.difficulty);
     if (streakEl) streakEl.textContent = `${activeStreak} wins`;
     if (volleysEl) volleysEl.textContent = (localStorage.getItem('ew_pong_total_volleys') || '0');
     const totalWinsKey = state.mode === 'online' ? 'ew_pong_wins_online' : `ew_pong_wins_${state.difficulty}`;
     if (winsEl) winsEl.textContent = (localStorage.getItem(totalWinsKey) || '0');
+    if (rankedEl) rankedEl.textContent = `${getPongRankedScore().toLocaleString()} pts`;
+    fetchUserRank();
   }
 
   // Offline Sync Queue
@@ -214,6 +244,8 @@
 
     const banner = document.getElementById('game-over-banner');
     if (banner) banner.style.display = 'none';
+    const winnerPoints = document.getElementById('winner-points');
+    if (winnerPoints) winnerPoints.style.display = 'none';
   }
 
   // Coordinate scaling helper for touch and mouse
@@ -231,25 +263,55 @@
     return (clientX - rect.left) * scaleX;
   }
 
+  // Canvas click toggles unpause
+  canvas.addEventListener('click', () => {
+    initAudio();
+    if (state.isPaused && state.mode !== 'online') {
+      state.isPaused = false;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(false);
+      }
+    }
+  });
+
   // Controls Binding
   window.addEventListener('keydown', (e) => {
     initAudio();
-    if (e.key === 'w' || e.key === 'W') state.p1.dy = -7;
-    if (e.key === 's' || e.key === 'S') state.p1.dy = 7;
+    if (e.key === ' ' || e.code === 'Space') {
+      if (state.mode !== 'online') {
+        e.preventDefault();
+        state.isPaused = !state.isPaused;
+        if (typeof window.__updatePongPauseBtn === 'function') {
+          window.__updatePongPauseBtn(state.isPaused);
+        }
+        return;
+      }
+    }
 
-    if (state.mode === 'local') {
+    const isGuest = (state.mode === 'online' && state.playerIndex === 1);
+    if (e.key === 'w' || e.key === 'W') {
+      if (isGuest) state.p2.dy = -7; else state.p1.dy = -7;
+    }
+    if (e.key === 's' || e.key === 'S') {
+      if (isGuest) state.p2.dy = 7; else state.p1.dy = 7;
+    }
+
+    if (state.mode === 'local' || isGuest) {
       if (e.key === 'ArrowUp') state.p2.dy = -7;
       if (e.key === 'ArrowDown') state.p2.dy = 7;
     } else {
-      // In solo mode, Arrow keys can also move Player 1 for user convenience
+      // In solo/host mode, Arrow keys move Player 1
       if (e.key === 'ArrowUp') state.p1.dy = -7;
       if (e.key === 'ArrowDown') state.p1.dy = 7;
     }
   });
 
   window.addEventListener('keyup', (e) => {
-    if (e.key === 'w' || e.key === 'W' || e.key === 's' || e.key === 'S') state.p1.dy = 0;
-    if (state.mode === 'local') {
+    const isGuest = (state.mode === 'online' && state.playerIndex === 1);
+    if (e.key === 'w' || e.key === 'W' || e.key === 's' || e.key === 'S') {
+      if (isGuest) state.p2.dy = 0; else state.p1.dy = 0;
+    }
+    if (state.mode === 'local' || isGuest) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') state.p2.dy = 0;
     } else {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') state.p1.dy = 0;
@@ -407,18 +469,25 @@
   // Physics & Game Update
   function update(now) {
     if (state.isGameOver) return;
+    if (state.isPaused && state.mode !== 'online') return;
 
     // In online mode, guest receives positions from host
     if (state.mode === 'online' && !state.isHost) {
       // Guest moves their paddle locally
-      state.p2.y += state.p2.dy;
-      state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
+      if (state.p2.dy !== 0) {
+        state.p2.y += state.p2.dy;
+        state.p2.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p2.y));
+        sendPaddleSync();
+      }
       return;
     }
 
     // Update paddle positions
-    state.p1.y += state.p1.dy;
-    state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p1.y));
+    if (state.p1.dy !== 0) {
+      state.p1.y += state.p1.dy;
+      state.p1.y = Math.max(0, Math.min(V_HEIGHT - PADDLE_H, state.p1.y));
+      if (state.mode === 'online' && state.isHost) sendPaddleSync();
+    }
 
     if (state.mode === 'ai') {
       updateAI(now);
@@ -582,10 +651,17 @@
         else if (activeDiff === 'hard') { basePoints = 500; volleyMult = 20; }
         else if (activeDiff === 'online') { basePoints = 750; volleyMult = 30; }
 
-        const rankedScore = basePoints + (state.maxMatchVolleys * volleyMult);
+        const earnedPoints = basePoints + (state.maxMatchVolleys * volleyMult);
+        const totalRankedScore = addPongRankedScore(earnedPoints);
+
+        const winnerPoints = document.getElementById('winner-points');
+        if (winnerPoints) {
+          winnerPoints.textContent = `+${earnedPoints} ranked pts (Total: ${totalRankedScore.toLocaleString()} pts)`;
+          winnerPoints.style.display = 'block';
+        }
 
         // Submit to leaderboards
-        submitScore('ranked_score', rankedScore, { multiplier: volleyMult });
+        submitScore('ranked_score', totalRankedScore, { multiplier: volleyMult, match_pts: earnedPoints });
         submitScore('win_streak', streak);
         submitScore('total_wins', totalWins);
         if (state.maxMatchVolleys > 0) {
@@ -598,6 +674,8 @@
           winnerStreak.textContent = `Streak ended. Best Rally: ${state.maxMatchVolleys}`;
           winnerStreak.style.display = 'block';
         }
+        const winnerPoints = document.getElementById('winner-points');
+        if (winnerPoints) winnerPoints.style.display = 'none';
       }
       updateStatsUI();
     } else {
@@ -668,6 +746,26 @@
       ctx.fillText(p2Label, V_WIDTH - 20, V_HEIGHT - 16);
       ctx.textAlign = 'start';
     }
+
+    drawPauseOverlay();
+  }
+
+  function drawPauseOverlay() {
+    if (!state.isPaused || state.mode === 'online') return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(18, 18, 18, 0.65)';
+    ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 32px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', V_WIDTH / 2, V_HEIGHT / 2 - 18);
+
+    ctx.font = '500 15px Poppins, sans-serif';
+    ctx.fillStyle = '#e8dec8';
+    ctx.fillText('Press Play / Space or Click Canvas to Serve', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+    ctx.restore();
   }
 
   // Main Loop
@@ -759,6 +857,52 @@
       resetGame();
     });
 
+    state.socket.on('pong_matchmaking_waiting', (data) => {
+      state.isFindingMatch = true;
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) {
+        statusEl.textContent = data.message || 'Searching for an opponent...';
+        statusEl.style.color = '#2563eb';
+      }
+      const findBtn = document.getElementById('find-match-btn');
+      if (findBtn) {
+        findBtn.textContent = 'Searching... (Cancel)';
+        findBtn.classList.add('ew-btn--active');
+      }
+    });
+
+    state.socket.on('pong_matchmaking_cancelled', (data) => {
+      state.isFindingMatch = false;
+      const statusEl = document.getElementById('online-status');
+      if (statusEl) {
+        statusEl.textContent = data.message || 'Matchmaking cancelled.';
+        statusEl.style.color = 'var(--text-secondary)';
+      }
+      const findBtn = document.getElementById('find-match-btn');
+      if (findBtn) {
+        findBtn.textContent = 'Find Match';
+        findBtn.classList.remove('ew-btn--active');
+      }
+    });
+
+    state.socket.on('pong_queue_updated', (data) => {
+      if (typeof window.__updatePongOpponentsLobby === 'function') {
+        window.__updatePongOpponentsLobby(data.queue || []);
+      }
+    });
+
+    state.socket.on('game_challenge_received', (data) => {
+      if (data.game === 'pong' && typeof window.__showPongChallengeModal === 'function') {
+        window.__showPongChallengeModal(data);
+      }
+    });
+
+    state.socket.on('game_challenge_declined', (data) => {
+      if (data.game === 'pong') {
+        alert((data.challenger_name || 'Opponent') + ' is unavailable or declined.');
+      }
+    });
+
     state.socket.on('pong_player_left', () => {
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
@@ -776,6 +920,7 @@
         findBtn.textContent = 'Find Match';
         findBtn.disabled = false;
         findBtn.style.opacity = '1';
+        findBtn.classList.remove('ew-btn--active');
       }
     });
   }
@@ -788,6 +933,40 @@
       player: state.playerIndex,
       y: y
     });
+  }
+
+  function sendChallenge(targetSid, targetName) {
+    initSocket();
+    const streak = getLocalStreak('online') || 0;
+    const score = getPongRankedScore() || 0;
+    state.socket.emit('send_game_challenge', {
+      game: 'pong',
+      target_sid: targetSid,
+      streak,
+      score
+    });
+    const statusEl = document.getElementById('online-status');
+    if (statusEl) {
+      statusEl.textContent = `Challenged ${targetName}... Waiting for response.`;
+      statusEl.style.color = '#2563eb';
+    }
+  }
+
+  function acceptChallenge(challengerSid) {
+    initSocket();
+    state.socket.emit('accept_game_challenge', {
+      game: 'pong',
+      challenger_sid: challengerSid
+    });
+  }
+
+  function declineChallenge(challengerSid) {
+    if (state.socket) {
+      state.socket.emit('decline_game_challenge', {
+        game: 'pong',
+        challenger_sid: challengerSid
+      });
+    }
   }
 
   // Public API
@@ -809,6 +988,15 @@
       state.targetScore = target === 'endless' ? Infinity : parseInt(target, 10);
       resetGame();
     },
+    togglePause: () => {
+      if (state.mode === 'online') return false;
+      state.isPaused = !state.isPaused;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(state.isPaused);
+      }
+      return state.isPaused;
+    },
+    isPaused: () => state.isPaused,
     rematch: () => {
       if (state.mode === 'online' && state.socket && state.roomId) {
         state.socket.emit('pong_restart', { room_id: state.roomId });
@@ -817,12 +1005,23 @@
     },
     findOnlineMatch: () => {
       initSocket();
-      if (state.socket) {
+      if (!state.socket) return;
+      if (state.isFindingMatch) {
+        state.isFindingMatch = false;
+        state.socket.emit('cancel_pong_matchmaking');
+      } else {
+        state.isFindingMatch = true;
         const statusEl = document.getElementById('online-status');
         if (statusEl) statusEl.textContent = 'Searching for an opponent...';
-        state.socket.emit('find_pong_match');
+        const streak = getLocalStreak('online') || 0;
+        const score = getPongRankedScore() || 0;
+        state.socket.emit('find_pong_match', { streak, score });
       }
     },
+    sendChallenge: sendChallenge,
+    acceptChallenge: acceptChallenge,
+    declineChallenge: declineChallenge,
+    getSocketId: () => (state.socket ? state.socket.id : null),
     joinOnlineRoom: (roomId) => {
       initSocket();
       if (state.socket) {
@@ -835,7 +1034,8 @@
       isMuted = !isMuted;
       localStorage.setItem('ew_pong_muted', isMuted ? '1' : '0');
       return isMuted;
-    }
+    },
+    getRankedScore: getPongRankedScore
   };
 
   // Start loop & stats UI

@@ -894,6 +894,24 @@
       setMatchStatus('Matchmaking cancelled.', 'normal');
     });
 
+    state.socket.on('dnb_queue_updated', data => {
+      if (typeof window.__updateDnbOpponentsLobby === 'function') {
+        window.__updateDnbOpponentsLobby(data.queue || []);
+      }
+    });
+
+    state.socket.on('game_challenge_received', data => {
+      if (data.game === 'dnb' && typeof window.__showDnbChallengeModal === 'function') {
+        window.__showDnbChallengeModal(data);
+      }
+    });
+
+    state.socket.on('game_challenge_declined', data => {
+      if (data.game === 'dnb') {
+        alert((data.challenger_name || 'Opponent') + ' is unavailable or declined.');
+      }
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) {
@@ -999,7 +1017,9 @@
         if (state.isSearching) {
           state.socket.emit('cancel_dnb_matchmaking');
         } else {
-          state.socket.emit('find_dnb_match');
+          const streak = state.winStreak || 0;
+          const score = parseInt(localStorage.getItem('ew_dnb_ranked_score') || '0', 10);
+          state.socket.emit('find_dnb_match', { streak, score });
         }
       });
     }
@@ -1030,6 +1050,36 @@
     }
   }
 
+  function sendChallenge(targetSid, targetName) {
+    if (!state.socket) initOnlineSocket();
+    const streak = state.winStreak || 0;
+    const score = parseInt(localStorage.getItem('ew_dnb_ranked_score') || '0', 10);
+    state.socket.emit('send_game_challenge', {
+      game: 'dnb',
+      target_sid: targetSid,
+      streak,
+      score
+    });
+    setMatchStatus(`Challenged ${targetName}... Waiting for response.`, 'searching');
+  }
+
+  function acceptChallenge(challengerSid) {
+    if (!state.socket) initOnlineSocket();
+    state.socket.emit('accept_game_challenge', {
+      game: 'dnb',
+      challenger_sid: challengerSid
+    });
+  }
+
+  function declineChallenge(challengerSid) {
+    if (state.socket) {
+      state.socket.emit('decline_game_challenge', {
+        game: 'dnb',
+        challenger_sid: challengerSid
+      });
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     initCanvas();
     setupListeners();
@@ -1043,12 +1093,16 @@
     }
   });
 
-  // Export for testing
+  // Export for testing & templates
   window.__dnb = {
     getState: () => ({ ...state }),
     applyLine,
     resetGame,
     setMode,
-    isBoxComplete
+    isBoxComplete,
+    sendChallenge,
+    acceptChallenge,
+    declineChallenge,
+    getSocketId: () => (state.socket ? state.socket.id : null)
   };
 })();

@@ -1297,6 +1297,110 @@ class TestArcadeMatchmakingAndLeaderboards:
                 find_match_handler()
                 assert len(m.pong_matchmaking_queue) == 0
 
+    def test_1v1_games_overhaul_features(self, app, client):
+        """Test guest leaderboard user_record lookup, direct challenge handlers, and template UI additions."""
+        import main as m
+
+        # 1. Test guest_token lookup returns user_record with rank and score
+        mock_lb = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.sort.return_value.limit.return_value = [
+            {'username': 'Champion', 'score': 1500, 'guest_token': 'g_champ'},
+            {'username': 'Player2', 'score': 1200, 'guest_token': 'g_test_user'},
+            {'username': 'Player3', 'score': 800, 'guest_token': 'g_other'}
+        ]
+        mock_lb.find.return_value = mock_cursor
+        mock_lb.find_one.return_value = {'username': 'Player2', 'score': 1200, 'guest_token': 'g_test_user'}
+        mock_lb.count_documents.return_value = 1 # 1 person ahead -> rank #2
+
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            res = client.get('/api/games/leaderboard?game=slime_volleyball&category=ranked_score&guest_token=g_test_user')
+            assert res.status_code == 200
+            data = res.get_json()
+            assert data['user_record'] is not None
+            assert data['user_record']['rank'] == 2
+            assert data['user_record']['score'] == 1200
+
+        # 2. Test direct challenge socket handlers
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                fn = call.args[0]
+                handlers[getattr(fn, '__name__', '')] = fn
+
+        send_challenge = handlers.get('handle_send_game_challenge')
+        accept_challenge = handlers.get('handle_accept_game_challenge')
+        decline_challenge = handlers.get('handle_decline_game_challenge')
+
+        assert send_challenge is not None
+        assert accept_challenge is not None
+        assert decline_challenge is not None
+
+        with app.test_request_context():
+            with patch.object(m, 'request') as mock_req, \
+                 patch.object(m, 'emit') as mock_emit, \
+                 patch.object(m, 'join_room'):
+
+                # Player A challenges Player B
+                mock_req.sid = 'sid_challenger'
+                send_challenge({
+                    'game': 'slime',
+                    'target_sid': 'sid_target',
+                    'streak': 3,
+                    'score': 850
+                })
+                mock_emit.assert_called_with('game_challenge_received', {
+                    'game': 'slime',
+                    'challenger_sid': 'sid_challenger',
+                    'challenger_name': 'Guest',
+                    'streak': 3,
+                    'score': 850
+                }, room='sid_target')
+
+                # Player B declines
+                mock_req.sid = 'sid_target'
+                decline_challenge({
+                    'game': 'slime',
+                    'challenger_sid': 'sid_challenger'
+                })
+                mock_emit.assert_called_with('game_challenge_declined', {
+                    'game': 'slime',
+                    'declined_by': 'Opponent'
+                }, room='sid_challenger')
+
+                # Queue challenger and accept challenge
+                m.slime_matchmaking_queue = [{
+                    'sid': 'sid_challenger',
+                    'user_name': 'Challenger',
+                    'streak': 3,
+                    'score': 850
+                }]
+                mock_req.sid = 'sid_target'
+                accept_challenge({
+                    'game': 'slime',
+                    'challenger_sid': 'sid_challenger'
+                })
+                assert len(m.slime_matchmaking_queue) == 0
+
+        # 3. Test UI elements on Slime Volleyball and Ping Pong pages
+        res_slime = client.get('/games/slime-volleyball')
+        assert res_slime.status_code == 200
+        html_slime = res_slime.get_data(as_text=True)
+        assert 'id="pause-btn"' in html_slime
+        assert 'id="landscape-toggle-btn"' in html_slime
+        assert 'id="online-opponents-section"' in html_slime
+        assert 'id="incoming-challenge-modal"' in html_slime
+        assert 'id="my-slime-ranked"' in html_slime
+
+        res_pong = client.get('/games/ping-pong')
+        assert res_pong.status_code == 200
+        html_pong = res_pong.get_data(as_text=True)
+        assert 'id="pause-btn"' in html_pong
+        assert 'id="online-opponents-section"' in html_pong
+        assert 'id="incoming-challenge-modal"' in html_pong
+        assert 'id="my-pong-ranked"' in html_pong
+
+
 
 
 

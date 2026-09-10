@@ -1026,16 +1026,16 @@ def api_my_game_lobbies():
 # --- 2D Arcade Leaderboards (Floppy Bird, Slime Volleyball, Tic-Tac-Toe, Connect Four & Dots-and-Boxes) ---
 VALID_ARCADE_CATEGORIES = {
     'floppy_bird': ('campaign_stars', 'endless_score'),
-    'slime_volleyball': ('win_streak', 'volleys_returned'),
-    'tic_tac_toe': ('win_streak', 'total_wins'),
-    'connect_four': ('win_streak', 'total_wins'),
-    'dots_and_boxes': ('win_streak', 'total_wins')
+    'slime_volleyball': ('win_streak', 'volleys_returned', 'ranked_score'),
+    'tic_tac_toe': ('win_streak', 'total_wins', 'ranked_score'),
+    'connect_four': ('win_streak', 'total_wins', 'ranked_score'),
+    'dots_and_boxes': ('win_streak', 'total_wins', 'ranked_score')
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])
 @limits(calls=30, period=60)
 def api_leaderboard_submit():
-    """Submit a high score or win streak for 2D arcade games with daily/weekly partitions."""
+    """Submit a high score, win streak, or ranked score for 2D arcade games with daily/weekly partitions."""
     import main as m
     data = request.get_json(silent=True)
     if not data or not isinstance(data, dict):
@@ -1062,10 +1062,26 @@ def api_leaderboard_submit():
         return jsonify({'error': 'Volleys returned out of valid bounds'}), 400
     if category == 'total_wins' and not (1 <= score <= 100000):
         return jsonify({'error': 'Total wins out of valid bounds'}), 400
+    if category == 'ranked_score' and not (1 <= score <= 10000000):
+        return jsonify({'error': 'Ranked score out of valid bounds'}), 400
 
-    metadata = data.get('metadata')
-    if not isinstance(metadata, dict):
-        metadata = {}
+    raw_metadata = data.get('metadata')
+    if not isinstance(raw_metadata, dict):
+        raw_metadata = {}
+
+    # Disallow local two-player pass-and-play matches from submitting to global leaderboards
+    if raw_metadata.get('mode') == 'local':
+        return jsonify({'error': 'Local two-player scores cannot be submitted to global leaderboards'}), 400
+
+    metadata = {}
+    if 'difficulty' in raw_metadata and isinstance(raw_metadata['difficulty'], str):
+        metadata['difficulty'] = raw_metadata['difficulty'].strip().lower()[:16]
+    if 'mode' in raw_metadata and isinstance(raw_metadata['mode'], str):
+        metadata['mode'] = raw_metadata['mode'].strip().lower()[:16]
+    if 'returns' in raw_metadata and isinstance(raw_metadata['returns'], (int, float)):
+        metadata['returns'] = int(raw_metadata['returns'])
+    if 'multiplier' in raw_metadata and isinstance(raw_metadata['multiplier'], (int, float, str)):
+        metadata['multiplier'] = str(raw_metadata['multiplier'])[:8]
 
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     day_key = now_utc.strftime('%Y-%m-%d')
@@ -1152,7 +1168,7 @@ def api_leaderboard_submit():
 
 @bp.route('/api/games/leaderboard', methods=['GET'])
 def api_leaderboard_get():
-    """Retrieve top 10 leaderboard entries for a given game, category, and period."""
+    """Retrieve top 10 leaderboard entries for a given game, category, and period, with optional difficulty filter."""
     import main as m
     game = (request.args.get('game') or 'floppy_bird').strip()
     category = (request.args.get('category') or '').strip()
@@ -1172,11 +1188,16 @@ def api_leaderboard_get():
         period = 'weekly'
         period_key = now_utc.strftime('%Y-W%U')
 
-    cursor = m.arcade_leaderboards_conf.find({
+    difficulty = (request.args.get('difficulty') or '').strip().lower()
+    query = {
         'game': game,
         'category': category,
         'period_key': period_key
-    }).sort('score', -1).limit(10)
+    }
+    if difficulty and difficulty != 'all':
+        query['metadata.difficulty'] = difficulty
+
+    cursor = m.arcade_leaderboards_conf.find(query).sort('score', -1).limit(10)
 
     leaders = []
     for idx, doc in enumerate(cursor):
@@ -1190,27 +1211,35 @@ def api_leaderboard_get():
             'avatar_url': doc.get('avatar_url'),
             'is_guest': bool(doc.get('is_guest')),
             'score': doc.get('score', 0),
+            'metadata': doc.get('metadata') or {},
             'updated_at': ts
         })
 
     user_record = None
     if current_user.is_authenticated:
-        my_doc = m.arcade_leaderboards_conf.find_one({
+        user_query = {
             'user_id': str(current_user.id),
             'game': game,
             'category': category,
             'period_key': period_key
-        })
+        }
+        if difficulty and difficulty != 'all':
+            user_query['metadata.difficulty'] = difficulty
+        my_doc = m.arcade_leaderboards_conf.find_one(user_query)
         if my_doc:
-            higher = m.arcade_leaderboards_conf.count_documents({
+            count_query = {
                 'game': game,
                 'category': category,
                 'period_key': period_key,
                 'score': {'$gt': my_doc.get('score', 0)}
-            })
+            }
+            if difficulty and difficulty != 'all':
+                count_query['metadata.difficulty'] = difficulty
+            higher = m.arcade_leaderboards_conf.count_documents(count_query)
             user_record = {
                 'rank': higher + 1,
-                'score': my_doc.get('score', 0)
+                'score': my_doc.get('score', 0),
+                'metadata': my_doc.get('metadata') or {}
             }
 
     return jsonify({

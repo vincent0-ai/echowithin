@@ -259,12 +259,25 @@
 
     <!-- Category Tabs -->
     <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-      <button type="button" class="ew-btn ew-btn--sm cat-tab" data-cat="win_streak" style="cursor: pointer;">
+      <button type="button" class="ew-btn ew-btn--sm cat-tab" data-cat="ranked_score" style="cursor: pointer;">
+        Ranked Points
+      </button>
+      <button type="button" class="ew-btn--outline ew-btn--sm cat-tab" data-cat="win_streak" style="cursor: pointer;">
         Win Streaks
       </button>
       <button type="button" class="ew-btn--outline ew-btn--sm cat-tab" data-cat="total_wins" style="cursor: pointer;">
         Total Wins
       </button>
+    </div>
+
+    <!-- Difficulty Filter Tabs -->
+    <div style="display: flex; gap: 0.35rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center;">
+      <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-right: 0.25rem;">Filter:</span>
+      <button type="button" class="ew-btn ew-btn--sm diff-filter-tab" data-diff="all" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.55rem;">All</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm diff-filter-tab" data-diff="hard" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.55rem;">Hard</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm diff-filter-tab" data-diff="normal" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.55rem;">Normal</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm diff-filter-tab" data-diff="easy" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.55rem;">Easy</button>
+      <button type="button" class="ew-btn--outline ew-btn--sm diff-filter-tab" data-diff="online" style="cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.55rem;">Online</button>
     </div>
 
     <!-- Period Tabs -->
@@ -299,26 +312,46 @@
 <script src="{{ url_for('static', filename='dots_and_boxes.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   (function () {
-    let currentCat = 'win_streak';
+    let currentCat = 'ranked_score';
     let currentPeriod = 'daily';
+    let currentDiff = 'all';
 
     async function fetchLeaderboard() {
       const tbody = document.getElementById('leaderboard-body');
       if (!tbody) return;
       try {
-        const res = await fetch(`/api/games/leaderboard?game=dots_and_boxes&category=${currentCat}&period=${currentPeriod}`);
+        const diffParam = currentDiff !== 'all' ? `&difficulty=${encodeURIComponent(currentDiff)}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=dots_and_boxes&category=${currentCat}&period=${currentPeriod}${diffParam}`);
         const data = await res.json();
         if (!data.entries || data.entries.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: var(--text-secondary);">No records yet for this period. Play a match to set one!</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4" style="padding: 1rem; text-align: center; color: var(--text-secondary);">No records yet for this filter. Play a match to set one!</td></tr>';
           return;
         }
         tbody.innerHTML = data.entries.map((entry, idx) => {
-          const dateStr = entry.achieved_at ? new Date(entry.achieved_at).toLocaleDateString() : '—';
-          const scoreLabel = currentCat === 'win_streak' ? `${entry.score} streak` : `${entry.score} wins`;
+          const dateStr = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : '—';
+          let scoreLabel = `${entry.score} pts`;
+          if (currentCat === 'win_streak') scoreLabel = `${entry.score} streak`;
+          else if (currentCat === 'total_wins') scoreLabel = `${entry.score} wins`;
+
+          const diffMeta = (entry.metadata && entry.metadata.difficulty) ? entry.metadata.difficulty : '';
+          let diffBadge = '';
+          if (diffMeta === 'hard') {
+            diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem; background: rgba(224, 106, 59, 0.2); color: #e06a3b; border: 1px solid rgba(224, 106, 59, 0.4);">Hard</span>';
+          } else if (diffMeta === 'medium' || diffMeta === 'normal') {
+            diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem; background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4);">Normal</span>';
+          } else if (diffMeta === 'easy') {
+            diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem; background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); border: 1px solid var(--border-color);">Easy</span>';
+          } else if (diffMeta === 'online') {
+            diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.4rem; margin-left: 0.4rem; background: rgba(46, 134, 171, 0.2); color: #2e86ab; border: 1px solid rgba(46, 134, 171, 0.4);">Online</span>';
+          }
+
           return `
             <tr style="border-bottom: 1px solid rgba(0,0,0,0.04);">
               <td style="padding: 0.6rem 0.75rem; font-weight: 700;">#${idx + 1}</td>
-              <td style="padding: 0.6rem 0.75rem; font-weight: 600;">${entry.username}</td>
+              <td style="padding: 0.6rem 0.75rem; font-weight: 600;">
+                ${entry.username}
+                ${diffBadge}
+              </td>
               <td style="padding: 0.6rem 0.75rem; text-align: right; font-weight: 700; color: #e06a3b;">${scoreLabel}</td>
               <td style="padding: 0.6rem 0.75rem; text-align: right; color: var(--text-secondary);">${dateStr}</td>
             </tr>
@@ -339,6 +372,19 @@
         btn.classList.remove('ew-btn--outline');
         btn.classList.add('ew-btn');
         currentCat = btn.getAttribute('data-cat');
+        fetchLeaderboard();
+      });
+    });
+
+    document.querySelectorAll('.diff-filter-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-filter-tab').forEach(b => {
+          b.classList.remove('ew-btn');
+          b.classList.add('ew-btn--outline');
+        });
+        btn.classList.remove('ew-btn--outline');
+        btn.classList.add('ew-btn');
+        currentDiff = btn.getAttribute('data-diff');
         fetchLeaderboard();
       });
     });

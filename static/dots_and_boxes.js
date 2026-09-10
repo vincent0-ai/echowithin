@@ -70,6 +70,43 @@
   const COLS = 5;
   const TOTAL_BOXES = (ROWS - 1) * (COLS - 1); // 16
 
+  // --- Difficulty & Ranking Scale ---
+  const DIFF_MULTIPLIERS = {
+    easy: 100,
+    normal: 250,
+    hard: 500,
+    online: 750
+  };
+
+  function getStreakKey(mode, difficulty) {
+    if (mode === 'online') return 'ew_dnb_streak_online';
+    return `ew_dnb_streak_${difficulty || 'normal'}`;
+  }
+
+  function getSavedStreak(mode, difficulty) {
+    if (mode === 'local') return 0;
+    return parseInt(localStorage.getItem(getStreakKey(mode, difficulty)) || '0', 10);
+  }
+
+  function setSavedStreak(mode, difficulty, val) {
+    if (mode === 'local') return;
+    localStorage.setItem(getStreakKey(mode, difficulty), String(val));
+  }
+
+  function getRankedScoreKey() {
+    return 'ew_dnb_ranked_score';
+  }
+
+  function getSavedRankedScore() {
+    return parseInt(localStorage.getItem(getRankedScoreKey()) || '0', 10);
+  }
+
+  function addRankedScore(points) {
+    const next = getSavedRankedScore() + points;
+    localStorage.setItem(getRankedScoreKey(), String(next));
+    return next;
+  }
+
   // --- Game State ---
   const state = {
     mode: 'solo', // 'solo' | 'local' | 'online'
@@ -80,8 +117,8 @@
     scores: [0, 0],
     difficulty: 'normal', // 'easy' | 'normal' | 'hard'
     isGameOver: false,
-    winStreak: 0,
-    totalWins: 0,
+    winStreak: getSavedStreak('solo', 'normal'),
+    totalWins: parseInt(localStorage.getItem('ew_dnb_total_wins') || '0', 10),
     isCpuThinking: false,
 
     // Hover state
@@ -137,13 +174,14 @@
     return token;
   }
 
-  function queuePendingSync(category, score) {
+  function queuePendingSync(category, score, metadata = {}) {
     try {
       const items = JSON.parse(localStorage.getItem(STORAGE_PENDING_SYNC) || '[]');
       items.push({
         game: 'dots_and_boxes',
         category,
         score,
+        metadata: metadata || {},
         timestamp: new Date().toISOString()
       });
       localStorage.setItem(STORAGE_PENDING_SYNC, JSON.stringify(items));
@@ -158,11 +196,12 @@
     } catch (_) {}
   }
 
-  async function submitArcadeScore(category, score) {
+  async function submitArcadeScore(category, score, metadata = {}) {
     if (!score || score <= 0) return;
+    if (state.mode === 'local') return; // Strict local isolation
     try {
       if (!navigator.onLine) {
-        queuePendingSync(category, score);
+        queuePendingSync(category, score, metadata);
         return;
       }
       const token = getGuestToken();
@@ -173,6 +212,7 @@
           game: 'dots_and_boxes',
           category,
           score,
+          metadata,
           guest_token: token
         })
       });
@@ -182,10 +222,10 @@
           window.fetchLeaderboard();
         }
       } else {
-        queuePendingSync(category, score);
+        queuePendingSync(category, score, metadata);
       }
     } catch (_) {
-      queuePendingSync(category, score);
+      queuePendingSync(category, score, metadata);
     }
   }
 
@@ -198,7 +238,7 @@
       if (!Array.isArray(items) || items.length === 0) return;
       for (const item of items) {
         if (item.game === 'dots_and_boxes') {
-          await submitArcadeScore(item.category, item.score);
+          await submitArcadeScore(item.category, item.score, item.metadata || {});
         }
       }
     } catch (_) {}
@@ -351,18 +391,37 @@
       playDrawSound();
     } else {
       playWinSound();
+
+      if (state.mode === 'local') {
+        // Local 2-Player mode is pass-and-play only.
+        // Never submit to global leaderboards or alter ranked stats.
+        updateScoreboard();
+        updateTurnDisplay();
+        showResultModal(isDraw, winner);
+        return;
+      }
+
       let didLocalWin = false;
       if (state.mode === 'solo') didLocalWin = winner === 0;
       else if (state.mode === 'online') didLocalWin = winner === state.myPlayer;
-      else didLocalWin = true;
 
+      const diffKey = state.mode === 'online' ? 'online' : state.difficulty;
       if (didLocalWin) {
         state.winStreak++;
+        setSavedStreak(state.mode, state.difficulty, state.winStreak);
         state.totalWins++;
-        submitArcadeScore('win_streak', state.winStreak);
-        submitArcadeScore('total_wins', state.totalWins);
+        localStorage.setItem('ew_dnb_total_wins', String(state.totalWins));
+
+        const pts = DIFF_MULTIPLIERS[diffKey] || 100;
+        const newRankedScore = addRankedScore(pts);
+
+        const meta = { difficulty: diffKey, mode: state.mode, multiplier: pts };
+        submitArcadeScore('win_streak', state.winStreak, meta);
+        submitArcadeScore('total_wins', state.totalWins, meta);
+        submitArcadeScore('ranked_score', newRankedScore, meta);
       } else {
         state.winStreak = 0;
+        setSavedStreak(state.mode, state.difficulty, 0);
       }
     }
 
@@ -674,16 +733,19 @@
       tabSolo.classList.add('ew-btn');
       if (soloPanel) soloPanel.style.display = 'flex';
       if (onlinePanel) onlinePanel.style.display = 'none';
+      state.winStreak = getSavedStreak('solo', state.difficulty);
     } else if (mode === 'local' && tabLocal) {
       tabLocal.classList.remove('ew-btn--outline');
       tabLocal.classList.add('ew-btn');
       if (soloPanel) soloPanel.style.display = 'none';
       if (onlinePanel) onlinePanel.style.display = 'none';
+      state.winStreak = 0;
     } else if (mode === 'online' && tabOnline) {
       tabOnline.classList.remove('ew-btn--outline');
       tabOnline.classList.add('ew-btn');
       if (soloPanel) soloPanel.style.display = 'none';
       if (onlinePanel) onlinePanel.style.display = 'block';
+      state.winStreak = getSavedStreak('online', 'online');
       initOnlineSocket();
     }
     resetGame();
@@ -891,6 +953,9 @@
         });
         btn.classList.remove('ew-btn--outline');
         btn.classList.add('ew-btn');
+        if (state.mode === 'solo') {
+          state.winStreak = getSavedStreak('solo', state.difficulty);
+        }
         resetGame();
       });
     });

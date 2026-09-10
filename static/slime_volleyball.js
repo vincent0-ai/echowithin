@@ -393,6 +393,51 @@
     }
   }
 
+  // --- Difficulty & Ranking Multipliers ---
+  const DIFF_MULTIPLIERS = {
+    easy: 100,
+    normal: 250,
+    hard: 500,
+    online: 750
+  };
+
+  const RETURN_POINTS = {
+    easy: 10,
+    normal: 20,
+    hard: 35,
+    online: 50
+  };
+
+  function getSlimeStreakKey(mode, difficulty) {
+    if (mode === 'online') return 'slime_win_streak_online';
+    return `slime_win_streak_${difficulty || 'normal'}`;
+  }
+
+  function getSavedSlimeStreak(mode, difficulty) {
+    if (mode === 'local') return 0;
+    return parseInt(localStorage.getItem(getSlimeStreakKey(mode, difficulty)) || '0', 10);
+  }
+
+  function setSavedSlimeStreak(mode, difficulty, val) {
+    if (mode === 'local') return;
+    localStorage.setItem(getSlimeStreakKey(mode, difficulty), String(val));
+    localStorage.setItem('slime_win_streak', String(val));
+  }
+
+  function getSlimeRankedScoreKey() {
+    return 'slime_ranked_score';
+  }
+
+  function getSavedSlimeRankedScore() {
+    return parseInt(localStorage.getItem(getSlimeRankedScoreKey()) || '0', 10);
+  }
+
+  function addSlimeRankedScore(points) {
+    const next = getSavedSlimeRankedScore() + points;
+    localStorage.setItem(getSlimeRankedScoreKey(), String(next));
+    return next;
+  }
+
   // Main Game State
   const GameState = {
     mode: 'solo', // 'solo', 'local', 'online'
@@ -405,7 +450,7 @@
     delay: 45,
     gameOver: false,
     winner: null,
-    winStreak: parseInt(localStorage.getItem('slime_win_streak') || '0', 10),
+    winStreak: getSavedSlimeStreak('solo', localStorage.getItem('slime_difficulty') || 'normal'),
     roundWins: parseInt(localStorage.getItem('slime_round_wins') || '0', 10),
     volleysReturned: parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10),
     currentRallyVolleys: 0,
@@ -431,6 +476,9 @@
     const cfg = DIFFICULTY_CONFIG[diff];
     GameState.p1.r = SLIME_R * (cfg.playerSizeBonus || 1.0);
     GameState.p2.r = SLIME_R;
+    if (GameState.mode === 'solo') {
+      GameState.winStreak = getSavedSlimeStreak('solo', diff);
+    }
   }
 
   // Keyboard input tracking
@@ -642,15 +690,16 @@
     }
   }
 
-  function queuePendingSync(game, category, score) {
+  function queuePendingSync(game, category, score, metadata = {}) {
     try {
       const raw = localStorage.getItem('arcade_pending_sync');
       const list = raw ? JSON.parse(raw) : [];
       const idx = list.findIndex(item => item.game === game && item.category === category);
       if (idx >= 0) {
         list[idx].score = Math.max(list[idx].score, score);
+        list[idx].metadata = metadata || list[idx].metadata || {};
       } else {
-        list.push({ game, category, score });
+        list.push({ game, category, score, metadata: metadata || {} });
       }
       localStorage.setItem('arcade_pending_sync', JSON.stringify(list));
     } catch (_) {}
@@ -666,10 +715,11 @@
     } catch (_) {}
   }
 
-  async function submitLeaderboard(category, score) {
+  async function submitLeaderboard(category, score, metadata = {}) {
+    if (GameState.mode === 'local') return false; // Strict local isolation
     try {
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        queuePendingSync('slime_volleyball', category, score);
+        queuePendingSync('slime_volleyball', category, score, metadata);
         return false;
       }
       let guestToken = localStorage.getItem('arcade_guest_token');
@@ -693,7 +743,8 @@
           category: category,
           score: score,
           username: playerName,
-          guest_token: guestToken
+          guest_token: guestToken,
+          metadata: metadata || {}
         })
       });
       if (res.ok) {
@@ -703,33 +754,40 @@
         }
         return true;
       } else {
-        queuePendingSync('slime_volleyball', category, score);
+        queuePendingSync('slime_volleyball', category, score, metadata);
         return false;
       }
     } catch (_) {
-      queuePendingSync('slime_volleyball', category, score);
+      queuePendingSync('slime_volleyball', category, score, metadata);
       return false;
     }
   }
 
   async function syncAllScores() {
+    if (GameState.mode === 'local') return;
     try {
-      const current = GameState.winStreak || parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
-      const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
+      const diffKey = GameState.mode === 'online' ? 'online' : GameState.difficulty;
+      const current = GameState.winStreak || getSavedSlimeStreak(GameState.mode, GameState.difficulty);
+      const best = parseInt(localStorage.getItem(`slime_best_streak_${diffKey}`) || localStorage.getItem('slime_best_streak') || '0', 10);
       const toSync = Math.max(current, best);
+      const meta = { difficulty: diffKey, mode: GameState.mode };
       if (toSync > 0) {
-        await submitLeaderboard('win_streak', toSync);
+        await submitLeaderboard('win_streak', toSync, meta);
       }
       const volleys = GameState.volleysReturned || parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10);
       if (volleys > 0) {
-        await submitLeaderboard('volleys_returned', volleys);
+        await submitLeaderboard('volleys_returned', volleys, meta);
+      }
+      const rankedScore = getSavedSlimeRankedScore();
+      if (rankedScore > 0) {
+        await submitLeaderboard('ranked_score', rankedScore, meta);
       }
       const raw = localStorage.getItem('arcade_pending_sync');
       if (raw) {
         const list = JSON.parse(raw);
         for (const item of list) {
           if (item.game === 'slime_volleyball') {
-            const ok = await submitLeaderboard(item.category, item.score);
+            const ok = await submitLeaderboard(item.category, item.score, item.metadata || {});
             if (ok) clearPendingSync(item.game, item.category, item.score);
           }
         }
@@ -749,15 +807,27 @@
       localPlayerWon = (GameState.isHost && winner === GameState.p1) || (!GameState.isHost && winner === GameState.p2);
     }
 
-    if (localPlayerWon) {
+    if (GameState.mode === 'local') {
+      // Local 2P mode is pass-and-play only.
+      // Never submit to global leaderboards.
+    } else if (localPlayerWon) {
+      const diffKey = GameState.mode === 'online' ? 'online' : GameState.difficulty;
       GameState.winStreak += 1;
-      localStorage.setItem('slime_win_streak', String(GameState.winStreak));
-      const best = Math.max(GameState.winStreak, parseInt(localStorage.getItem('slime_best_streak') || '0', 10));
+      setSavedSlimeStreak(GameState.mode, GameState.difficulty, GameState.winStreak);
+      const best = Math.max(GameState.winStreak, parseInt(localStorage.getItem(`slime_best_streak_${diffKey}`) || '0', 10));
+      localStorage.setItem(`slime_best_streak_${diffKey}`, String(best));
       localStorage.setItem('slime_best_streak', String(best));
-      submitLeaderboard('win_streak', GameState.winStreak);
+
+      const winPts = DIFF_MULTIPLIERS[diffKey] || 100;
+      const volleysBonus = (GameState.volleysReturned || 0) * (RETURN_POINTS[diffKey] || 10);
+      const newRankedScore = addSlimeRankedScore(winPts + volleysBonus);
+
+      const meta = { difficulty: diffKey, mode: GameState.mode, multiplier: winPts, returns: GameState.volleysReturned || 0 };
+      submitLeaderboard('win_streak', GameState.winStreak, meta);
+      submitLeaderboard('ranked_score', newRankedScore, meta);
     } else if (GameState.mode === 'solo' || GameState.mode === 'online') {
       GameState.winStreak = 0;
-      localStorage.setItem('slime_win_streak', '0');
+      setSavedSlimeStreak(GameState.mode, GameState.difficulty, 0);
     }
 
     const modal = document.getElementById('game-over-banner');
@@ -1129,12 +1199,15 @@
       if (mode === 'solo') {
         GameState.p1.name = 'You';
         GameState.p2.name = 'AI Bot';
+        GameState.winStreak = getSavedSlimeStreak('solo', GameState.difficulty);
       } else if (mode === 'local') {
         GameState.p1.name = 'Player 1 (WASD)';
         GameState.p2.name = 'Player 2 (Arrows)';
+        GameState.winStreak = 0;
       } else if (mode === 'online') {
         GameState.p1.name = 'Host';
         GameState.p2.name = 'Guest';
+        GameState.winStreak = getSavedSlimeStreak('online', 'online');
         if (roomId) connectSocket(roomId);
       }
       resetServe(-1);

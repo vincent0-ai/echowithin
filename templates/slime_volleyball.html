@@ -163,8 +163,9 @@
         <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-dark-color);">
           Leaderboard
         </div>
-        <div style="display: flex; gap: 0.35rem; align-items: center;">
-          <button type="button" class="ew-btn ew-btn--sm slime-lb-cat" data-cat="win_streak" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Win Streaks</button>
+        <div style="display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="ew-btn ew-btn--sm slime-lb-cat" data-cat="ranked_score" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Ranked Score</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-cat" data-cat="win_streak" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Win Streaks</button>
           <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-cat" data-cat="volleys_returned" style="font-size: 0.72rem; padding: 0.2rem 0.55rem; cursor: pointer;">Ball Returns</button>
           <button type="button" id="slime-lb-refresh-btn" class="ew-btn--outline ew-btn--sm" style="font-size: 0.72rem; padding: 0.2rem 0.45rem; cursor: pointer;">Refresh</button>
         </div>
@@ -178,10 +179,20 @@
         <div id="my-slime-rank" style="font-weight: 600; color: #e06a3b;"></div>
       </div>
 
-      <div style="display: flex; justify-content: flex-end; gap: 0.35rem; margin-bottom: 0.6rem;">
-        <button type="button" class="ew-btn ew-btn--sm slime-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
-        <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
-        <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; flex-wrap: wrap; gap: 0.4rem;">
+        <div style="display: flex; gap: 0.3rem; align-items: center; flex-wrap: wrap;">
+          <span style="font-size: 0.7rem; font-weight: 600; color: var(--text-secondary);">Filter:</span>
+          <button type="button" class="ew-btn ew-btn--sm slime-diff-filter" data-diff="all" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">All</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-diff-filter" data-diff="hard" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Hard</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-diff-filter" data-diff="normal" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Normal</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-diff-filter" data-diff="easy" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Easy</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-diff-filter" data-diff="online" style="font-size: 0.68rem; padding: 0.15rem 0.45rem; cursor: pointer;">Online</button>
+        </div>
+        <div style="display: flex; gap: 0.35rem;">
+          <button type="button" class="ew-btn ew-btn--sm slime-lb-period" data-period="weekly" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">This Week</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="daily" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">Today</button>
+          <button type="button" class="ew-btn--outline ew-btn--sm slime-lb-period" data-period="all_time" style="font-size: 0.7rem; padding: 0.15rem 0.5rem; cursor: pointer;">All-Time</button>
+        </div>
       </div>
 
       <div id="slime-lb-body" style="font-size: 0.85rem; min-height: 70px;">
@@ -302,10 +313,12 @@
     }
 
     // Leaderboard logic
-    let currentSlimeCat = 'win_streak';
+    let currentSlimeCat = 'ranked_score';
     let currentSlimePeriod = 'weekly';
+    let currentSlimeDiff = 'all';
     const slimeCatTabs = document.querySelectorAll('.slime-lb-cat');
     const slimePeriodTabs = document.querySelectorAll('.slime-lb-period');
+    const slimeDiffFilterTabs = document.querySelectorAll('.slime-diff-filter');
     const slimeLbBody = document.getElementById('slime-lb-body');
     const refreshBtn = document.getElementById('slime-lb-refresh-btn');
     const myStreakEl = document.getElementById('my-slime-streak');
@@ -315,7 +328,9 @@
 
     function updateLocalStreakDisplay() {
       try {
-        const streak = parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
+        const streak = (window.__slime && typeof window.__slime.getWinStreak === 'function')
+          ? window.__slime.getWinStreak()
+          : parseInt(localStorage.getItem('slime_win_streak') || '0', 10);
         const best = parseInt(localStorage.getItem('slime_best_streak') || '0', 10);
         const rounds = parseInt(localStorage.getItem('slime_round_wins') || '0', 10);
         const volleys = parseInt(localStorage.getItem('slime_volleys_returned') || '0', 10);
@@ -351,22 +366,38 @@
         myRankEl.textContent = '';
       }
 
-      const unit = (currentSlimeCat === 'volleys_returned') ? 'returns' : 'wins';
+      let unit = 'pts';
+      if (currentSlimeCat === 'volleys_returned') unit = 'returns';
+      else if (currentSlimeCat === 'win_streak') unit = 'wins';
 
       if (!entries || entries.length === 0) {
-        slimeLbBody.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No ${unit} recorded yet for this period. Be the first!</div>`;
+        slimeLbBody.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">No records found for this filter. Be the first!</div>`;
         return;
       }
       let html = '<div style="display: flex; flex-direction: column; gap: 0.4rem;">';
       entries.forEach(e => {
         const rankText = `#${e.rank}`;
         const guestBadge = e.is_guest ? '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem;">Guest</span>' : '';
+
+        const diffMeta = (e.metadata && e.metadata.difficulty) ? e.metadata.difficulty : '';
+        let diffBadge = '';
+        if (diffMeta === 'hard') {
+          diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem; background: rgba(224, 106, 59, 0.2); color: #e06a3b; border: 1px solid rgba(224, 106, 59, 0.4);">Hard</span>';
+        } else if (diffMeta === 'normal') {
+          diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem; background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.4);">Normal</span>';
+        } else if (diffMeta === 'easy') {
+          diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem; background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); border: 1px solid var(--border-color);">Easy</span>';
+        } else if (diffMeta === 'online') {
+          diffBadge = '<span class="ew-badge" style="font-size: 0.65rem; padding: 0.1rem 0.35rem; margin-left: 0.35rem; background: rgba(46, 134, 171, 0.2); color: #2e86ab; border: 1px solid rgba(46, 134, 171, 0.4);">Online</span>';
+        }
+
         html += `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0.6rem; border-radius: 6px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: center; gap: 0.6rem;">
               <span style="font-weight: 700; min-width: 28px; text-align: center; font-size: 0.85rem; color: var(--text-secondary);">${rankText}</span>
               <span style="font-weight: 600; color: var(--text-dark-color);">${e.username}</span>
               ${guestBadge}
+              ${diffBadge}
             </div>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
               <span style="font-weight: 700; color: #e06a3b; font-size: 0.95rem;">${e.score} ${unit}</span>
@@ -389,9 +420,13 @@
         slimePeriodTabs.forEach(btn => {
           btn.className = (btn.dataset.period === period) ? 'ew-btn ew-btn--sm slime-lb-period' : 'ew-btn--outline ew-btn--sm slime-lb-period';
         });
+        slimeDiffFilterTabs.forEach(btn => {
+          btn.className = (btn.dataset.diff === currentSlimeDiff) ? 'ew-btn ew-btn--sm slime-diff-filter' : 'ew-btn--outline ew-btn--sm slime-diff-filter';
+        });
 
         slimeLbBody.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 1rem;">Updating leaderboard...</div>';
-        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=${cat}&period=${period}`);
+        const diffParam = currentSlimeDiff !== 'all' ? `&difficulty=${encodeURIComponent(currentSlimeDiff)}` : '';
+        const res = await fetch(`/api/games/leaderboard?game=slime_volleyball&category=${cat}&period=${period}${diffParam}`);
         const data = await res.json();
         const list = data.entries || data.leaders || [];
         renderLeaderboard(list, data.user_record);
@@ -412,6 +447,13 @@
       });
     });
 
+    slimeDiffFilterTabs.forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentSlimeDiff = btn.dataset.diff;
+        fetchSlimeLeaderboard(currentSlimeCat, currentSlimePeriod);
+      });
+    });
+
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
         if (window.__slime && typeof window.__slime.syncScores === 'function') {
@@ -429,7 +471,7 @@
     });
 
     window.__refreshSlimeLeaderboard = () => fetchSlimeLeaderboard(currentSlimeCat, currentSlimePeriod);
-    fetchSlimeLeaderboard('win_streak', 'weekly');
+    fetchSlimeLeaderboard('ranked_score', 'weekly');
   });
 </script>
 {% endblock %}

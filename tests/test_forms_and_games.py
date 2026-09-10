@@ -1094,6 +1094,73 @@ class TestArcadeMatchmakingAndLeaderboards:
                 leave_handler({'room_id': room_id})
                 assert room_id not in m.active_dnb_rooms
 
+    def test_fair_scoring_and_difficulty_ranking(self, client):
+        """Test ranked_score category, difficulty metadata, local mode rejection, and difficulty filtering."""
+        from blueprints.game import VALID_ARCADE_CATEGORIES
+        import main as m
+
+        # 1. Category validation
+        for game in ('slime_volleyball', 'tic_tac_toe', 'connect_four', 'dots_and_boxes'):
+            assert 'ranked_score' in VALID_ARCADE_CATEGORIES[game]
+
+        mock_lb = MagicMock()
+        mock_lb.find_one.return_value = None
+
+        with patch.object(m, 'arcade_leaderboards_conf', mock_lb):
+            # 2. Local mode rejection
+            res_local = client.post('/api/games/leaderboard/submit', json={
+                'game': 'tic_tac_toe',
+                'category': 'ranked_score',
+                'score': 250,
+                'guest_token': 'g_test_local',
+                'metadata': {'mode': 'local'}
+            })
+            assert res_local.status_code == 400
+            assert 'Local two-player' in res_local.get_json()['error']
+
+            # 3. Valid submission with difficulty metadata
+            res_valid = client.post('/api/games/leaderboard/submit', json={
+                'game': 'tic_tac_toe',
+                'category': 'ranked_score',
+                'score': 500,
+                'guest_token': 'g_test_hard',
+                'metadata': {'difficulty': 'hard', 'mode': 'solo', 'multiplier': 500}
+            })
+            assert res_valid.status_code == 200
+            assert res_valid.get_json()['score'] == 500
+
+            # 4. Out-of-bounds ranked_score (> 10,000,000)
+            res_oob = client.post('/api/games/leaderboard/submit', json={
+                'game': 'tic_tac_toe',
+                'category': 'ranked_score',
+                'score': 99999999,
+                'guest_token': 'g_test_oob'
+            })
+            assert res_oob.status_code == 400
+
+            # 5. Leaderboard GET with difficulty filter
+            fake_doc = {
+                'username': 'HardPlayer',
+                'score': 500,
+                'is_guest': True,
+                'metadata': {'difficulty': 'hard', 'mode': 'solo'},
+                'created_at': datetime.datetime.now(datetime.timezone.utc)
+            }
+            mock_cursor = MagicMock()
+            mock_cursor.sort.return_value.limit.return_value = [fake_doc]
+            mock_lb.find.return_value = mock_cursor
+
+            res_get = client.get('/api/games/leaderboard?game=tic_tac_toe&category=ranked_score&difficulty=hard')
+            assert res_get.status_code == 200
+            get_data = res_get.get_json()
+            assert len(get_data['entries']) == 1
+            assert get_data['entries'][0]['metadata']['difficulty'] == 'hard'
+
+            # Ensure filter was passed to mongo query
+            find_call_arg = mock_lb.find.call_args[0][0]
+            assert find_call_arg.get('metadata.difficulty') == 'hard'
+
+
 
 
 

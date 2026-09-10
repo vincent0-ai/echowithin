@@ -420,7 +420,7 @@ def view_lobby(lobby_id):
     import main as m
     lobby = _get_lobby(lobby_id)
     if not lobby:
-        return render_template('game_lobby.html', expired=True, msg='Game lobby not found'), 404
+        return render_template('game_lobby.html', lobby=None, expired=True, msg='Game lobby not found'), 404
     is_host = _is_host(lobby)
     if not _is_lobby_active(lobby):
         is_deactivated = bool(lobby.get('deactivated'))
@@ -1043,7 +1043,7 @@ VALID_ARCADE_CATEGORIES = {
 }
 
 @bp.route('/api/games/leaderboard/submit', methods=['POST'])
-@limits(calls=30, period=60)
+@limits(calls=60, period=60)
 def api_leaderboard_submit():
     """Submit a high score, win streak, or ranked score for 2D arcade games with daily/weekly partitions."""
     import main as m

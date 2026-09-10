@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}<title>{{ lobby.title if not expired else 'Lobby' }} — EchoWithin</title>{% endblock %}
+{% block title %}<title>{{ lobby.title if (lobby and not expired) else 'Lobby' }} — EchoWithin</title>{% endblock %}
 {% block extra_head_css %}
 <script src="{{ url_for('static', filename='qrcode.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
@@ -419,10 +419,10 @@ window.toggleQRCode = function(){
 };
 
 (function(){
-  const lobbyId = "{{ lobby.lobby_id if not expired else '' }}";
+  const lobbyId = "{{ lobby.lobby_id if (lobby and not expired) else '' }}";
   if(!lobbyId || typeof io==='undefined') return;
 
-  {% if lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
+  {% if lobby and lobby.timer_seconds and lobby.timer_seconds > 0 and not is_host and not lobby.revealed %}
   (function(){
     const totalSeconds = {{ lobby.timer_seconds }};
     let remaining = totalSeconds;

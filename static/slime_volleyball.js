@@ -605,7 +605,8 @@
 
   function update(dt = TIMESTEP) {
     if (GameState.gameOver) return;
-    if (GameState.isPaused && GameState.mode !== 'online') return;
+    if (GameState.isPaused) return;
+    if (GameState.mode === 'online' && (!GameState.isOnlineConnected || !GameState.roomId)) return;
 
     // Delay before serve begins (Serve State Machine)
     if (GameState.serveState === 'SERVE_COUNTDOWN') {
@@ -693,9 +694,6 @@
 
         const groundHit = GameState.ball.checkEdges(subDt);
         if (groundHit !== 0) {
-          if (GameState.volleysReturned > 0) {
-            submitLeaderboard('volleys_returned', GameState.volleysReturned);
-          }
           GameState.currentRallyVolleys = 0;
 
           if (groundHit === -1) {
@@ -1052,7 +1050,7 @@
   }
 
   function drawPauseOverlay() {
-    if (!GameState.isPaused || GameState.mode === 'online') return;
+    if (!GameState.isPaused) return;
     ctx.save();
     ctx.fillStyle = 'rgba(40, 25, 18, 0.45)';
     ctx.fillRect(0, 0, W, H);
@@ -1061,11 +1059,25 @@
     ctx.font = '700 28px Poppins, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('PAUSED', W / 2, H / 2 - 16);
 
-    ctx.font = '500 14px Poppins, sans-serif';
-    ctx.fillStyle = '#f7f4ed';
-    ctx.fillText('Press Play / Space or Click Canvas to Serve', W / 2, H / 2 + 18);
+    if (GameState.mode === 'online') {
+      if (!GameState.isOnlineConnected || !GameState.roomId) {
+        ctx.fillText('ONLINE 1V1 LOBBY', W / 2, H / 2 - 16);
+        ctx.font = '500 14px Poppins, sans-serif';
+        ctx.fillStyle = '#f7f4ed';
+        ctx.fillText('Find a match or challenge an opponent below to start', W / 2, H / 2 + 18);
+      } else {
+        ctx.fillText('PAUSED', W / 2, H / 2 - 16);
+        ctx.font = '500 14px Poppins, sans-serif';
+        ctx.fillStyle = '#f7f4ed';
+        ctx.fillText('Waiting for players to serve...', W / 2, H / 2 + 18);
+      }
+    } else {
+      ctx.fillText('PAUSED', W / 2, H / 2 - 16);
+      ctx.font = '500 14px Poppins, sans-serif';
+      ctx.fillStyle = '#f7f4ed';
+      ctx.fillText('Press Play / Space or Click Canvas to Serve', W / 2, H / 2 + 18);
+    }
     ctx.restore();
   }
 
@@ -1160,6 +1172,10 @@
           GameState.p1.score = 0;
           GameState.p2.score = 0;
           GameState.gameOver = false;
+          GameState.isPaused = false;
+          if (typeof window.__updateSlimePauseBtn === 'function') {
+            window.__updateSlimePauseBtn(false);
+          }
           resetServe(-1);
         }
       });
@@ -1190,6 +1206,10 @@
       });
 
       GameState.socket.on('slime_player_left', () => {
+        GameState.isPaused = true;
+        if (typeof window.__updateSlimePauseBtn === 'function') {
+          window.__updateSlimePauseBtn(true);
+        }
         const statusEl = document.getElementById('online-status');
         if (statusEl) {
           statusEl.textContent = 'Opponent disconnected.';
@@ -1269,6 +1289,10 @@
         GameState.p1.score = 0;
         GameState.p2.score = 0;
         GameState.gameOver = false;
+        GameState.isPaused = false;
+        if (typeof window.__updateSlimePauseBtn === 'function') {
+          window.__updateSlimePauseBtn(false);
+        }
         resetServe(-1);
 
         const oppName = data.is_host ? (data.guest_name || 'Guest') : (data.host_name || 'Host');
@@ -1436,6 +1460,18 @@
     const rematchBtn = document.getElementById('rematch-btn');
     if (rematchBtn) rematchBtn.addEventListener('click', restartMatch);
 
+    // Automatic pause when leaving browser tab
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (GameState.mode !== 'online' || !GameState.roomId) {
+          GameState.isPaused = true;
+          if (typeof window.__updateSlimePauseBtn === 'function') {
+            window.__updateSlimePauseBtn(true);
+          }
+        }
+      }
+    });
+
     applyDifficulty(GameState.difficulty);
     initNetworkSync();
     requestAnimationFrame(loop);
@@ -1473,6 +1509,10 @@
         GameState.winStreak = getSavedSlimeStreak('online', 'online');
         if (roomId) connectSocket(roomId);
       }
+      GameState.isPaused = true; // Always pause when changing modes/tabs
+      if (typeof window.__updateSlimePauseBtn === 'function') {
+        window.__updateSlimePauseBtn(true);
+      }
       resetServe(-1);
     },
     setDifficulty(diff) {
@@ -1490,7 +1530,9 @@
       return soundMuted;
     },
     togglePause() {
-      if (GameState.mode === 'online') return false;
+      if (GameState.mode === 'online' && GameState.isOnlineConnected && GameState.roomId) {
+        return false;
+      }
       GameState.isPaused = !GameState.isPaused;
       if (typeof window.__updateSlimePauseBtn === 'function') {
         window.__updateSlimePauseBtn(GameState.isPaused);

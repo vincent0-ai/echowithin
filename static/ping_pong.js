@@ -469,7 +469,8 @@
   // Physics & Game Update
   function update(now) {
     if (state.isGameOver) return;
-    if (state.isPaused && state.mode !== 'online') return;
+    if (state.isPaused) return;
+    if (state.mode === 'online' && !state.roomId) return;
 
     // In online mode, guest receives positions from host
     if (state.mode === 'online' && !state.isHost) {
@@ -751,7 +752,7 @@
   }
 
   function drawPauseOverlay() {
-    if (!state.isPaused || state.mode === 'online') return;
+    if (!state.isPaused) return;
     ctx.save();
     ctx.fillStyle = 'rgba(18, 18, 18, 0.65)';
     ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
@@ -760,11 +761,25 @@
     ctx.font = '700 32px Poppins, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('PAUSED', V_WIDTH / 2, V_HEIGHT / 2 - 18);
 
-    ctx.font = '500 15px Poppins, sans-serif';
-    ctx.fillStyle = '#e8dec8';
-    ctx.fillText('Press Play / Space or Click Canvas to Serve', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+    if (state.mode === 'online') {
+      if (!state.roomId) {
+        ctx.fillText('ONLINE 1V1 LOBBY', V_WIDTH / 2, V_HEIGHT / 2 - 18);
+        ctx.font = '500 15px Poppins, sans-serif';
+        ctx.fillStyle = '#e8dec8';
+        ctx.fillText('Find a match or challenge an opponent below to start', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+      } else {
+        ctx.fillText('PAUSED', V_WIDTH / 2, V_HEIGHT / 2 - 18);
+        ctx.font = '500 15px Poppins, sans-serif';
+        ctx.fillStyle = '#e8dec8';
+        ctx.fillText('Waiting for players to serve...', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+      }
+    } else {
+      ctx.fillText('PAUSED', V_WIDTH / 2, V_HEIGHT / 2 - 18);
+      ctx.font = '500 15px Poppins, sans-serif';
+      ctx.fillStyle = '#e8dec8';
+      ctx.fillText('Press Play / Space or Click Canvas to Serve', V_WIDTH / 2, V_HEIGHT / 2 + 20);
+    }
     ctx.restore();
   }
 
@@ -792,6 +807,12 @@
       if (statusEl) {
         statusEl.textContent = `Room ${data.room_id} • Playing vs ${state.opponentName}`;
         statusEl.style.color = '#e06a3b';
+      }
+      if (!data.is_host || data.guest_name) {
+        state.isPaused = false;
+        if (typeof window.__updatePongPauseBtn === 'function') {
+          window.__updatePongPauseBtn(false);
+        }
       }
       resetGame();
     });
@@ -854,6 +875,10 @@
         findBtn.disabled = true;
         findBtn.style.opacity = '0.7';
       }
+      state.isPaused = false;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(false);
+      }
       resetGame();
     });
 
@@ -904,6 +929,10 @@
     });
 
     state.socket.on('pong_player_left', () => {
+      state.isPaused = true;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(true);
+      }
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
         statusEl.textContent = 'Opponent left the match.';
@@ -975,6 +1004,10 @@
       state.mode = mode;
       if (mode === 'online') initSocket();
       resetGame();
+      state.isPaused = true;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(true);
+      }
       updateStatsUI();
     },
     setDifficulty: (diff) => {
@@ -989,7 +1022,7 @@
       resetGame();
     },
     togglePause: () => {
-      if (state.mode === 'online') return false;
+      if (state.mode === 'online' && state.roomId && state.socket) return false;
       state.isPaused = !state.isPaused;
       if (typeof window.__updatePongPauseBtn === 'function') {
         window.__updatePongPauseBtn(state.isPaused);
@@ -1037,6 +1070,18 @@
     },
     getRankedScore: getPongRankedScore
   };
+
+  // Automatic pause when leaving browser tab
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (state.mode !== 'online' || !state.roomId) {
+        state.isPaused = true;
+        if (typeof window.__updatePongPauseBtn === 'function') {
+          window.__updatePongPauseBtn(true);
+        }
+      }
+    }
+  });
 
   // Start loop & stats UI
   updateStatsUI();

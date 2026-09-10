@@ -1407,16 +1407,26 @@ class TestLiveMultiplayerTriviaAndThumbnails:
         import json
         from blueprints.trivia_decks import fetch_community_trivia, CURATED_TRIVIA_PACKS, TRIVIA_CATEGORIES
 
-        # 1. Test general trivia categories are available and Bible is not personalized/present
+        # 1. Test general categories and optional Bible category are available
         assert any(c['id'] == '9' for c in TRIVIA_CATEGORIES)
         assert any(c['id'] == '17' for c in TRIVIA_CATEGORIES)
-        assert not any(c['id'] == 'bible' for c in TRIVIA_CATEGORIES)
-        assert len(CURATED_TRIVIA_PACKS) >= 15
+        assert any(c['id'] == 'bible' for c in TRIVIA_CATEGORIES)
+        assert TRIVIA_CATEGORIES[0]['id'] == 'any'  # Default is general Mixed / Any
+        assert len(CURATED_TRIVIA_PACKS) >= 20
 
-        # 2. Test fetching curated general trivia
-        curated_questions = fetch_community_trivia(category='9', amount=5)
-        assert len(curated_questions) == 5
-        for q in curated_questions:
+        # 2. Test fetching general trivia and optional Bible trivia when selected
+        general_questions = fetch_community_trivia(category='9', amount=5)
+        assert len(general_questions) == 5
+        for q in general_questions:
+            assert 'label' in q
+            assert 'options' in q
+            assert len(q['options']) == 4
+            assert 'correct_option' in q
+            assert q['correct_option'] in q['options']
+
+        bible_questions = fetch_community_trivia(category='bible', amount=5)
+        assert len(bible_questions) == 5
+        for q in bible_questions:
             assert 'label' in q
             assert 'options' in q
             assert len(q['options']) == 4

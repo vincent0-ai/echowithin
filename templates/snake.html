@@ -89,7 +89,10 @@
         Navigate the grid, collect apples, and climb the leaderboard. Adapted for mobile touch and desktop.
       </div>
     </div>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
+    <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <button type="button" id="pause-btn" class="ew-btn ew-btn--sm" style="cursor: pointer; background: #e06a3b; border-color: #c95729; font-weight: 600;">
+        Play
+      </button>
       <button type="button" id="mute-toggle-btn" class="ew-btn--outline ew-btn--sm" style="cursor: pointer;">
         Mute Sound
       </button>
@@ -144,7 +147,7 @@
 
     <!-- Controls Guide -->
     <div style="width: 100%; max-width: 480px; margin-top: 0.8rem; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem 0.9rem; font-size: 0.8rem; color: var(--text-secondary); text-align: center;">
-      Swipe canvas, tap D-pad buttons, or use WASD / Arrow keys
+      Swipe canvas, tap D-pad buttons, or use WASD / Arrow keys &bull; Space or Play button toggles pause
     </div>
 
     <!-- Leaderboard Card -->
@@ -191,7 +194,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='snake.js') }}?v=1.0" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='snake.js') }}?v=1.1" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     const muteBtn = document.getElementById('mute-toggle-btn');
@@ -201,6 +204,28 @@
         muteBtn.textContent = isMuted ? 'Unmute Sound' : 'Mute Sound';
       });
     }
+
+    // Pause button integration
+    const pauseBtn = document.getElementById('pause-btn');
+    if (pauseBtn && window.__snake) {
+      pauseBtn.addEventListener('click', () => {
+        if (typeof window.__snake.togglePause === 'function') {
+          window.__snake.togglePause();
+        }
+      });
+    }
+    window.__updateSnakePauseBtn = function(isPaused) {
+      const btn = document.getElementById('pause-btn');
+      if (!btn) return;
+      btn.textContent = isPaused ? 'Play' : 'Pause';
+      if (isPaused) {
+        btn.style.background = '#e06a3b';
+        btn.style.borderColor = '#c95729';
+      } else {
+        btn.style.background = '#6b7280';
+        btn.style.borderColor = '#4b5563';
+      }
+    };
 
     const diffButtons = document.querySelectorAll('.snake-diff-btn');
     const wallButtons = document.querySelectorAll('.snake-wall-btn');

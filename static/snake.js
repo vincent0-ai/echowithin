@@ -73,6 +73,7 @@
     speed: 180,
     baseSpeed: 180,
     isGameOver: false,
+    isPaused: true, // Paused by default on page load so player can get ready
     timerId: null
   };
 
@@ -245,15 +246,58 @@
   // Keyboard Controls
   window.addEventListener('keydown', (e) => {
     initAudio();
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePauseInternal();
+      return;
+    }
+    if (state.isPaused) return;
     if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') setDirection('UP');
     else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') setDirection('DOWN');
     else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') setDirection('LEFT');
     else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') setDirection('RIGHT');
   });
 
+  // Canvas click unpauses
+  canvas.addEventListener('click', () => {
+    initAudio();
+    if (state.isPaused && !state.isGameOver) {
+      unpauseGame();
+    }
+  });
+
+  // Pause / Unpause Helpers
+  function unpauseGame() {
+    if (!state.isPaused || state.isGameOver) return;
+    state.isPaused = false;
+    clearInterval(state.timerId);
+    state.timerId = setInterval(tick, state.speed);
+    render();
+    if (typeof window.__updateSnakePauseBtn === 'function') {
+      window.__updateSnakePauseBtn(false);
+    }
+  }
+
+  function pauseGame() {
+    if (state.isPaused || state.isGameOver) return;
+    state.isPaused = true;
+    clearInterval(state.timerId);
+    render();
+    if (typeof window.__updateSnakePauseBtn === 'function') {
+      window.__updateSnakePauseBtn(true);
+    }
+  }
+
+  function togglePauseInternal() {
+    if (state.isGameOver) return;
+    if (state.isPaused) unpauseGame();
+    else pauseGame();
+  }
+
   // Game Logic Loop
   function tick() {
     if (state.isGameOver) return;
+    if (state.isPaused) return;
 
     state.direction = state.nextDirection;
     const head = { ...state.snake[0] };
@@ -346,6 +390,7 @@
   function restart() {
     clearInterval(state.timerId);
     state.isGameOver = false;
+    state.isPaused = true;
     state.snake = [{ x: 6, y: 10 }, { x: 5, y: 10 }, { x: 4, y: 10 }];
     state.direction = 'RIGHT';
     state.nextDirection = 'RIGHT';
@@ -357,8 +402,11 @@
     const banner = document.getElementById('game-over-banner');
     if (banner) banner.style.display = 'none';
 
-    render();
-    state.timerId = setInterval(tick, state.speed);
+    render(); // Will draw pause overlay since isPaused = true
+    // Don't start timer — user must press Play / Space / click canvas
+    if (typeof window.__updateSnakePauseBtn === 'function') {
+      window.__updateSnakePauseBtn(true);
+    }
   }
 
   function render() {
@@ -431,6 +479,26 @@
     ctx.textAlign = 'right';
     ctx.fillText(`APPLES: ${state.foodEaten}`, CANVAS_SIZE - 16, 32);
     ctx.textAlign = 'start';
+
+    drawPauseOverlay();
+  }
+
+  function drawPauseOverlay() {
+    if (!state.isPaused) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(18, 18, 18, 0.65)';
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 32px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('PAUSED', CANVAS_SIZE / 2, CANVAS_SIZE / 2 - 18);
+
+    ctx.font = '500 15px Poppins, sans-serif';
+    ctx.fillStyle = '#e8dec8';
+    ctx.fillText('Press Space or Click Canvas to Play', CANVAS_SIZE / 2, CANVAS_SIZE / 2 + 20);
+    ctx.restore();
   }
 
   // Public Interface
@@ -449,6 +517,11 @@
     restart: () => {
       restart();
     },
+    togglePause: () => {
+      togglePauseInternal();
+      return state.isPaused;
+    },
+    isPaused: () => state.isPaused,
     toggleMute: () => {
       isMuted = !isMuted;
       localStorage.setItem('ew_snake_muted', isMuted ? '1' : '0');

@@ -883,8 +883,12 @@
 
   // Main Loop
   function gameLoop(now) {
-    update(now);
-    render();
+    try {
+      update(now);
+      render();
+    } catch (err) {
+      console.error('Pong game loop error:', err);
+    }
     state.animFrameId = requestAnimationFrame(gameLoop);
   }
 
@@ -991,6 +995,10 @@
     state.socket.on('pong_restart', () => {
       clearNoContestTimer();
       setRematchVisible(true);
+      state.isPaused = false;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(false);
+      }
       resetGame();
     });
 
@@ -1287,6 +1295,10 @@
     rematch: () => {
       if (state.mode === 'online' && state.socket && state.roomId) {
         state.socket.emit('pong_restart', { room_id: state.roomId });
+      }
+      state.isPaused = false;
+      if (typeof window.__updatePongPauseBtn === 'function') {
+        window.__updatePongPauseBtn(false);
       }
       resetGame();
     },

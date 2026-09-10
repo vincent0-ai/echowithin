@@ -340,7 +340,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='slime_volleyball.js') }}?v=1.7" nonce="{{ csp_nonce }}"></script>
+<script src="{{ url_for('static', filename='slime_volleyball.js') }}?v=1.8" nonce="{{ csp_nonce }}"></script>
 <script nonce="{{ csp_nonce }}">
   document.addEventListener('DOMContentLoaded', () => {
     // Explicitly remove reload fab if present
@@ -495,15 +495,20 @@
     }
 
     window.__updateSlimeRoundsDisplay = function(rounds) {
-      if (myRoundsEl) myRoundsEl.textContent = String(rounds);
+      if (myRoundsEl) myRoundsEl.textContent = String(rounds ?? 0);
     };
 
     window.__updateSlimeReturnsDisplay = function(volleys) {
-      if (myVolleysEl) myVolleysEl.textContent = String(volleys);
+      if (myVolleysEl) myVolleysEl.textContent = String(volleys ?? 0);
     };
 
     window.__updateSlimeRankedDisplay = function(points) {
-      if (myRankedEl) myRankedEl.textContent = `${points.toLocaleString()} pts`;
+      if (typeof points !== 'number' || isNaN(points)) {
+        points = (window.__slime && typeof window.__slime.getRankedScore === 'function')
+          ? window.__slime.getRankedScore()
+          : parseInt(localStorage.getItem('slime_ranked_score') || '0', 10);
+      }
+      if (myRankedEl) myRankedEl.textContent = `${(points || 0).toLocaleString()} pts`;
     };
 
     // Pause button integration

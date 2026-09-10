@@ -955,7 +955,11 @@
         }
       }
       if (typeof window.__updateSlimeRankedDisplay === 'function') {
-        window.__updateSlimeRankedDisplay();
+        try {
+          window.__updateSlimeRankedDisplay(totalPts);
+        } catch (e) {
+          console.error('Failed to update ranked display:', e);
+        }
       }
     }
   }
@@ -968,6 +972,10 @@
     GameState.p2.score = 0;
     GameState.gameOver = false;
     GameState.winner = null;
+    GameState.isPaused = false;
+    if (typeof window.__updateSlimePauseBtn === 'function') {
+      window.__updateSlimePauseBtn(false);
+    }
     GameState.ai.reset();
     resetServe(-1);
     const modal = document.getElementById('game-over-banner');
@@ -1108,12 +1116,15 @@
     if (delta > MAX_ACCUMULATOR) delta = MAX_ACCUMULATOR;
 
     physicsAccumulator += delta;
-    while (physicsAccumulator >= FIXED_DT) {
-      update(FIXED_DT);
-      physicsAccumulator -= FIXED_DT;
+    try {
+      while (physicsAccumulator >= FIXED_DT) {
+        update(FIXED_DT);
+        physicsAccumulator -= FIXED_DT;
+      }
+      render();
+    } catch (err) {
+      console.error('Slime loop error:', err);
     }
-
-    render();
     requestAnimationFrame(loop);
   }
 
@@ -1555,6 +1566,7 @@
       return GameState.isPaused;
     },
     restart: restartMatch,
+    rematch: restartMatch,
     findMatch: findMatch,
     cancelMatchmaking: cancelMatchmaking,
     sendChallenge: sendChallenge,

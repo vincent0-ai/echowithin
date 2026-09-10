@@ -759,6 +759,8 @@ def reveal_lobby(lobby_id):
     lobby = _get_lobby(lobby_id)
     if not lobby: return jsonify({'error':'Not found'}),404
     if not _is_host(lobby) and not getattr(current_user, 'is_admin', False): return jsonify({'error':'Not host'}),403
+    if lobby.get('game_type') == 'trivia':
+        return live_reveal_question(lobby_id)
     m.game_sessions_conf.update_one({'lobby_id':lobby_id},{'$set':{'revealed':True,'status':'revealed','phase':'revealed','revealed_at':datetime.datetime.now(datetime.timezone.utc)}})
     try:
         lobby_fresh = m.game_sessions_conf.find_one({'lobby_id':lobby_id})

@@ -308,9 +308,9 @@
       cell.classList.remove('win-line');
       const inner = cell.querySelector('.ttt-cell-inner') || cell;
       if (val === 'x') {
-        inner.innerHTML = `<svg viewBox="0 0 32 32" width="48" height="48" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"><line x1="8" y1="8" x2="24" y2="24"/><line x1="24" y1="8" x2="8" y2="24"/></svg>`;
+        inner.innerHTML = `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"><line x1="7" y1="7" x2="25" y2="25"/><line x1="25" y1="7" x2="7" y2="25"/></svg>`;
       } else if (val === 'o') {
-        inner.innerHTML = `<svg viewBox="0 0 32 32" width="48" height="48" fill="none" stroke="currentColor" stroke-width="5"><circle cx="16" cy="16" r="8"/></svg>`;
+        inner.innerHTML = `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="5.5"><circle cx="16" cy="16" r="8.5"/></svg>`;
       } else {
         inner.innerHTML = '';
       }
@@ -344,6 +344,9 @@
       if (els.soloPanel) els.soloPanel.style.display = 'none';
       if (els.onlinePanel) els.onlinePanel.style.display = 'block';
       state.winStreak = getSavedStreak('online', 'online');
+      if (!state.opponentJoined) {
+        setMatchStatus('Click "Find Match" for quick pairing or share a room code with a friend.', 'normal');
+      }
       initOnlineSocket();
     }
     resetGame();
@@ -616,6 +619,52 @@
     return empty[Math.floor(Math.random() * empty.length)];
   }
 
+  function setMatchStatus(msg, type = 'normal') {
+    if (!els.roomStatus) return;
+    els.roomStatus.textContent = msg;
+    if (type === 'found') {
+      els.roomStatus.style.color = '#15803d';
+      els.roomStatus.style.background = 'rgba(34, 197, 94, 0.12)';
+      els.roomStatus.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+      els.roomStatus.style.padding = '0.45rem 0.85rem';
+      els.roomStatus.style.borderRadius = '6px';
+      els.roomStatus.style.fontWeight = '700';
+      els.roomStatus.style.fontSize = '0.92rem';
+      els.roomStatus.style.display = 'inline-block';
+      if (els.findMatchBtn) {
+        els.findMatchBtn.textContent = 'In Match';
+        els.findMatchBtn.disabled = true;
+        els.findMatchBtn.style.opacity = '0.7';
+      }
+    } else if (type === 'searching') {
+      els.roomStatus.style.color = '#2563eb';
+      els.roomStatus.style.background = 'transparent';
+      els.roomStatus.style.border = 'none';
+      els.roomStatus.style.padding = '0';
+      els.roomStatus.style.fontWeight = '600';
+      els.roomStatus.style.fontSize = '0.85rem';
+      els.roomStatus.style.display = 'block';
+      if (els.findMatchBtn) {
+        els.findMatchBtn.textContent = 'Searching... (Cancel)';
+        els.findMatchBtn.disabled = false;
+        els.findMatchBtn.style.opacity = '1';
+      }
+    } else {
+      els.roomStatus.style.color = 'var(--text-secondary)';
+      els.roomStatus.style.background = 'transparent';
+      els.roomStatus.style.border = 'none';
+      els.roomStatus.style.padding = '0';
+      els.roomStatus.style.fontWeight = 'normal';
+      els.roomStatus.style.fontSize = '0.8rem';
+      els.roomStatus.style.display = 'block';
+      if (els.findMatchBtn) {
+        els.findMatchBtn.textContent = 'Find Match';
+        els.findMatchBtn.disabled = false;
+        els.findMatchBtn.style.opacity = '1';
+      }
+    }
+  }
+
   // --- Online 1v1 Networking via Socket.IO ---
   function initOnlineSocket() {
     if (state.socket) return;
@@ -630,10 +679,10 @@
       state.opponentJoined = !!data.guest_name;
       state.opponentName = data.is_host ? (data.guest_name || 'Opponent') : (data.host_name || 'Host');
 
-      if (els.roomStatus) {
-        els.roomStatus.textContent = state.opponentJoined
-          ? `Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`
-          : `Waiting for opponent in room ${state.roomId}...`;
+      if (state.opponentJoined) {
+        setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`, 'found');
+      } else {
+        setMatchStatus(`Waiting for opponent in room ${state.roomId}...`, 'normal');
       }
       updateScoreboard();
       updateTurnDisplay();
@@ -663,48 +712,29 @@
 
     state.socket.on('ttt_player_left', () => {
       state.opponentJoined = false;
-      if (els.roomStatus) {
-        els.roomStatus.textContent = 'Opponent disconnected. Waiting for a player...';
-      }
+      setMatchStatus('Opponent disconnected. Waiting for a player...', 'normal');
     });
 
     state.socket.on('ttt_match_found', data => {
       state.isSearching = false;
-      if (els.findMatchBtn) {
-        els.findMatchBtn.textContent = 'Find Match';
-        els.findMatchBtn.disabled = false;
-      }
       state.roomId = data.room_id;
       state.isHost = data.is_host;
       state.mySymbol = data.symbol;
       state.opponentJoined = true;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
 
-      if (els.roomStatus) {
-        els.roomStatus.textContent = `Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`;
-      }
+      setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.mySymbol.toUpperCase()})`, 'found');
       resetGame();
     });
 
     state.socket.on('ttt_matchmaking_waiting', () => {
       state.isSearching = true;
-      if (els.findMatchBtn) {
-        els.findMatchBtn.textContent = 'Searching... (Cancel)';
-      }
-      if (els.roomStatus) {
-        els.roomStatus.textContent = 'Searching for an opponent...';
-      }
+      setMatchStatus('Searching for an opponent...', 'searching');
     });
 
     state.socket.on('ttt_matchmaking_cancelled', () => {
       state.isSearching = false;
-      if (els.findMatchBtn) {
-        els.findMatchBtn.textContent = 'Find Match';
-        els.findMatchBtn.disabled = false;
-      }
-      if (els.roomStatus) {
-        els.roomStatus.textContent = 'Matchmaking cancelled.';
-      }
+      setMatchStatus('Matchmaking cancelled.', 'normal');
     });
 
     // Check URL room param

@@ -1041,7 +1041,23 @@
 
       GameState.socket.on('slime_player_left', () => {
         const statusEl = document.getElementById('online-status');
-        if (statusEl) statusEl.textContent = 'Opponent disconnected.';
+        if (statusEl) {
+          statusEl.textContent = 'Opponent disconnected.';
+          statusEl.style.color = 'var(--text-secondary)';
+          statusEl.style.background = 'transparent';
+          statusEl.style.border = 'none';
+          statusEl.style.padding = '0';
+          statusEl.style.fontWeight = 'normal';
+          statusEl.style.fontSize = '0.85rem';
+          statusEl.style.display = 'block';
+        }
+        const matchBtn = document.getElementById('find-match-btn');
+        if (matchBtn) {
+          matchBtn.textContent = 'Find Match';
+          matchBtn.disabled = false;
+          matchBtn.style.opacity = '1';
+          matchBtn.classList.remove('ew-btn--active');
+        }
       });
 
       GameState.socket.on('slime_restart', () => {
@@ -1051,10 +1067,21 @@
       GameState.socket.on('slime_matchmaking_waiting', (data) => {
         GameState.isFindingMatch = true;
         const statusEl = document.getElementById('online-status');
-        if (statusEl) statusEl.textContent = data.message || 'Searching for an online opponent...';
+        if (statusEl) {
+          statusEl.textContent = data.message || 'Searching for an online opponent...';
+          statusEl.style.color = '#2563eb';
+          statusEl.style.background = 'transparent';
+          statusEl.style.border = 'none';
+          statusEl.style.padding = '0';
+          statusEl.style.fontWeight = '600';
+          statusEl.style.fontSize = '0.85rem';
+          statusEl.style.display = 'block';
+        }
         const matchBtn = document.getElementById('find-match-btn');
         if (matchBtn) {
-          matchBtn.textContent = '⏳ Searching... (Cancel)';
+          matchBtn.textContent = 'Searching... (Cancel)';
+          matchBtn.disabled = false;
+          matchBtn.style.opacity = '1';
           matchBtn.classList.add('ew-btn--active');
         }
       });
@@ -1062,10 +1089,21 @@
       GameState.socket.on('slime_matchmaking_cancelled', (data) => {
         GameState.isFindingMatch = false;
         const statusEl = document.getElementById('online-status');
-        if (statusEl) statusEl.textContent = data.message || 'Matchmaking cancelled.';
+        if (statusEl) {
+          statusEl.textContent = data.message || 'Matchmaking cancelled.';
+          statusEl.style.color = 'var(--text-secondary)';
+          statusEl.style.background = 'transparent';
+          statusEl.style.border = 'none';
+          statusEl.style.padding = '0';
+          statusEl.style.fontWeight = 'normal';
+          statusEl.style.fontSize = '0.85rem';
+          statusEl.style.display = 'block';
+        }
         const matchBtn = document.getElementById('find-match-btn');
         if (matchBtn) {
           matchBtn.textContent = 'Find Match';
+          matchBtn.disabled = false;
+          matchBtn.style.opacity = '1';
           matchBtn.classList.remove('ew-btn--active');
         }
       });
@@ -1083,13 +1121,24 @@
         GameState.gameOver = false;
         resetServe(-1);
 
+        const oppName = data.is_host ? (data.guest_name || 'Guest') : (data.host_name || 'Host');
         const statusEl = document.getElementById('online-status');
         if (statusEl) {
-          statusEl.textContent = `Match found! Paired in room ${data.room_id} (${data.is_host ? 'Host / Left' : 'Guest / Right'}). Ready!`;
+          statusEl.textContent = `Match Found! Playing vs ${oppName} (${data.is_host ? 'Left' : 'Right'})`;
+          statusEl.style.color = '#15803d';
+          statusEl.style.background = 'rgba(34, 197, 94, 0.12)';
+          statusEl.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+          statusEl.style.padding = '0.45rem 0.85rem';
+          statusEl.style.borderRadius = '6px';
+          statusEl.style.fontWeight = '700';
+          statusEl.style.fontSize = '0.92rem';
+          statusEl.style.display = 'inline-block';
         }
         const matchBtn = document.getElementById('find-match-btn');
         if (matchBtn) {
-          matchBtn.textContent = 'Find Match';
+          matchBtn.textContent = 'In Match';
+          matchBtn.disabled = true;
+          matchBtn.style.opacity = '0.7';
           matchBtn.classList.remove('ew-btn--active');
         }
       });

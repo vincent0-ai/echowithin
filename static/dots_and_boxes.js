@@ -751,6 +751,54 @@
     resetGame();
   }
 
+  function setMatchStatus(msg, type = 'normal') {
+    const roomStatus = document.getElementById('room-status');
+    const findBtn = document.getElementById('find-match-btn');
+    if (!roomStatus) return;
+    roomStatus.textContent = msg;
+    if (type === 'found') {
+      roomStatus.style.color = '#15803d';
+      roomStatus.style.background = 'rgba(34, 197, 94, 0.12)';
+      roomStatus.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+      roomStatus.style.padding = '0.45rem 0.85rem';
+      roomStatus.style.borderRadius = '6px';
+      roomStatus.style.fontWeight = '700';
+      roomStatus.style.fontSize = '0.92rem';
+      roomStatus.style.display = 'inline-block';
+      if (findBtn) {
+        findBtn.textContent = 'In Match';
+        findBtn.disabled = true;
+        findBtn.style.opacity = '0.7';
+      }
+    } else if (type === 'searching') {
+      roomStatus.style.color = '#2563eb';
+      roomStatus.style.background = 'transparent';
+      roomStatus.style.border = 'none';
+      roomStatus.style.padding = '0';
+      roomStatus.style.fontWeight = '600';
+      roomStatus.style.fontSize = '0.85rem';
+      roomStatus.style.display = 'block';
+      if (findBtn) {
+        findBtn.textContent = 'Searching... (Cancel)';
+        findBtn.disabled = false;
+        findBtn.style.opacity = '1';
+      }
+    } else {
+      roomStatus.style.color = 'var(--text-secondary)';
+      roomStatus.style.background = 'transparent';
+      roomStatus.style.border = 'none';
+      roomStatus.style.padding = '0';
+      roomStatus.style.fontWeight = 'normal';
+      roomStatus.style.fontSize = '0.8rem';
+      roomStatus.style.display = 'block';
+      if (findBtn) {
+        findBtn.textContent = 'Find Match';
+        findBtn.disabled = false;
+        findBtn.style.opacity = '1';
+      }
+    }
+  }
+
   // --- Online Socket.IO Handlers ---
   function initOnlineSocket() {
     if (state.socket) return;
@@ -765,11 +813,10 @@
       state.opponentJoined = !!data.guest_name;
       state.opponentName = data.is_host ? (data.guest_name || 'Opponent') : (data.host_name || 'Host');
 
-      const roomStatus = document.getElementById('room-status');
-      if (roomStatus) {
-        roomStatus.textContent = state.opponentJoined
-          ? `Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`
-          : `Waiting for opponent in room ${state.roomId}...`;
+      if (state.opponentJoined) {
+        setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
+      } else {
+        setMatchStatus(`Waiting for opponent in room ${state.roomId}...`, 'normal');
       }
       updateScoreboard();
       updateTurnDisplay();
@@ -822,46 +869,29 @@
 
     state.socket.on('dnb_player_left', () => {
       state.opponentJoined = false;
-      const roomStatus = document.getElementById('room-status');
-      if (roomStatus) {
-        roomStatus.textContent = 'Opponent disconnected. Waiting for a player...';
-      }
+      setMatchStatus('Opponent disconnected. Waiting for a player...', 'normal');
     });
 
     state.socket.on('dnb_match_found', data => {
       state.isSearching = false;
-      const findBtn = document.getElementById('find-match-btn');
-      if (findBtn) {
-        findBtn.textContent = 'Find Match';
-        findBtn.disabled = false;
-      }
       state.roomId = data.room_id;
       state.isHost = data.is_host;
       state.myPlayer = data.player;
       state.opponentJoined = true;
       state.opponentName = data.is_host ? data.guest_name : data.host_name;
 
-      const roomStatus = document.getElementById('room-status');
-      if (roomStatus) {
-        roomStatus.textContent = `Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`;
-      }
+      setMatchStatus(`Match Found! Playing vs ${state.opponentName} (You are ${state.myPlayer === 0 ? 'Amber' : 'Gold'})`, 'found');
       resetGame();
     });
 
     state.socket.on('dnb_matchmaking_waiting', () => {
       state.isSearching = true;
-      const findBtn = document.getElementById('find-match-btn');
-      if (findBtn) findBtn.textContent = 'Searching... (Cancel)';
-      const roomStatus = document.getElementById('room-status');
-      if (roomStatus) roomStatus.textContent = 'Searching for an opponent...';
+      setMatchStatus('Searching for an opponent...', 'searching');
     });
 
     state.socket.on('dnb_matchmaking_cancelled', () => {
       state.isSearching = false;
-      const findBtn = document.getElementById('find-match-btn');
-      if (findBtn) findBtn.textContent = 'Find Match';
-      const roomStatus = document.getElementById('room-status');
-      if (roomStatus) roomStatus.textContent = 'Matchmaking cancelled.';
+      setMatchStatus('Matchmaking cancelled.', 'normal');
     });
 
     const urlParams = new URLSearchParams(window.location.search);

@@ -45,10 +45,10 @@
     color: var(--text-dark-color, #e0e0e0);
   }
   .ttt-turn-badge[data-turn="x"] {
-    color: #e06a3b;
+    color: #ff6b4a;
   }
   .ttt-turn-badge[data-turn="o"] {
-    color: #eab308;
+    color: #d97706;
   }
   .ttt-btn-icon {
     background: rgba(255, 255, 255, 0.08);
@@ -76,7 +76,7 @@
   .ttt-cell {
     background: #1f3641;
     border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
     box-shadow: 0 5px 0 rgba(0, 0, 0, 0.25);
     display: flex;
     align-items: center;
@@ -85,19 +85,44 @@
     user-select: none;
     transition: transform 0.08s ease, background 0.15s ease;
   }
+  .ttt-cell:hover:not([data-symbol="x"]):not([data-symbol="o"]) {
+    background: #254250;
+  }
   .ttt-cell:active {
     transform: translateY(2px);
     box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
   }
+  .ttt-cell-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ttt-cell-inner svg {
+    width: 64%;
+    height: 64%;
+    max-width: 74px;
+    max-height: 74px;
+    display: block;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.35));
+  }
   .ttt-cell[data-symbol="x"] {
-    color: #e06a3b;
+    color: #ff6b4a;
   }
   .ttt-cell[data-symbol="o"] {
-    color: #eab308;
+    color: #facc15;
   }
   .ttt-cell.win-line {
-    background: #254452 !important;
+    background: #284c5e !important;
+    border: 2px solid rgba(255, 255, 255, 0.45) !important;
     animation: winPulse 1s infinite alternate;
+  }
+  .ttt-cell.win-line[data-symbol="x"] {
+    color: #ff8a65 !important;
+  }
+  .ttt-cell.win-line[data-symbol="o"] {
+    color: #fde047 !important;
   }
   @keyframes winPulse {
     from { transform: scale(1); }
@@ -117,9 +142,9 @@
     font-weight: 700;
   }
   .ttt-score-box--x {
-    background: rgba(224, 106, 59, 0.15);
-    color: #e06a3b;
-    border: 1px solid rgba(224, 106, 59, 0.3);
+    background: rgba(255, 107, 74, 0.14);
+    color: #ff6b4a;
+    border: 1px solid rgba(255, 107, 74, 0.35);
   }
   .ttt-score-box--ties {
     background: rgba(255, 255, 255, 0.06);
@@ -127,9 +152,9 @@
     border: 1px solid var(--border-color, rgba(255,255,255,0.1));
   }
   .ttt-score-box--o {
-    background: rgba(234, 179, 8, 0.15);
-    color: #eab308;
-    border: 1px solid rgba(234, 179, 8, 0.3);
+    background: rgba(250, 204, 21, 0.14);
+    color: #d97706;
+    border: 1px solid rgba(250, 204, 21, 0.35);
   }
   .ttt-score-val {
     font-size: 1.25rem;
@@ -260,8 +285,8 @@
     <!-- Turn & Restart Header -->
     <div class="ttt-header-bar">
       <div class="ttt-logo">
-        <span style="color: #e06a3b;">X</span>
-        <span style="color: #eab308;">O</span>
+        <span style="color: #ff6b4a;">X</span>
+        <span style="color: #facc15;">O</span>
       </div>
       <div id="ttt-turn-indicator" class="ttt-turn-badge" data-turn="x">
         <span id="ttt-turn-text">YOUR TURN</span>

@@ -740,8 +740,21 @@
 
       const statusEl = document.getElementById('online-status');
       if (statusEl) {
-        statusEl.textContent = `Match found! Playing vs ${state.opponentName}`;
-        statusEl.style.color = '#e06a3b';
+        statusEl.textContent = `Match Found! Playing vs ${state.opponentName}`;
+        statusEl.style.color = '#15803d';
+        statusEl.style.background = 'rgba(34, 197, 94, 0.12)';
+        statusEl.style.border = '1px solid rgba(34, 197, 94, 0.35)';
+        statusEl.style.padding = '0.45rem 0.85rem';
+        statusEl.style.borderRadius = '6px';
+        statusEl.style.fontWeight = '700';
+        statusEl.style.fontSize = '0.92rem';
+        statusEl.style.display = 'inline-block';
+      }
+      const findBtn = document.getElementById('find-match-btn');
+      if (findBtn) {
+        findBtn.textContent = 'In Match';
+        findBtn.disabled = true;
+        findBtn.style.opacity = '0.7';
       }
       resetGame();
     });
@@ -751,6 +764,18 @@
       if (statusEl) {
         statusEl.textContent = 'Opponent left the match.';
         statusEl.style.color = 'var(--text-secondary)';
+        statusEl.style.background = 'transparent';
+        statusEl.style.border = 'none';
+        statusEl.style.padding = '0';
+        statusEl.style.fontWeight = 'normal';
+        statusEl.style.fontSize = '0.85rem';
+        statusEl.style.display = 'block';
+      }
+      const findBtn = document.getElementById('find-match-btn');
+      if (findBtn) {
+        findBtn.textContent = 'Find Match';
+        findBtn.disabled = false;
+        findBtn.style.opacity = '1';
       }
     });
   }

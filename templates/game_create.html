@@ -271,6 +271,12 @@ document.getElementById('create-form').addEventListener('submit', (e) => {
   }
 });
 
+const urlParams = new URLSearchParams(window.location.search);
+const typeParam = (urlParams.get('type') || urlParams.get('game_type') || '').toLowerCase().trim();
+if (typeParam && document.querySelector(`#game_type option[value="${typeParam}"]`)) {
+  document.getElementById('game_type').value = typeParam;
+}
+
 addMQ();
 toggleFields();
 </script>

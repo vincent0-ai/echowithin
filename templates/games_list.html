@@ -1,18 +1,175 @@
 {% extends "base.html" %}
-{% block title %}<title>Game Lobbies — EchoWithin</title>{% endblock %}
+{% block title %}<title>Games &amp; Party Lobbies — EchoWithin</title>{% endblock %}
 {% block content %}
-<div class="content-wrapper" style="max-width: 900px; margin: 0 auto;">
-  <div class="ew-header-row">
+<div class="content-wrapper" style="max-width: 960px; margin: 0 auto; padding-bottom: 2.5rem;">
+  <!-- Header Row -->
+  <div class="ew-header-row" style="margin-bottom: 1rem;">
     <div>
-      <h2 style="margin: 0; font-size: 1.4rem; font-weight: 700;">Game Lobbies</h2>
-      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;">Your game lobbies</div>
+      <h2 style="margin: 0; font-size: 1.45rem; font-weight: 700; color: var(--text-dark-color);">Games &amp; Party Lobbies</h2>
+      <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+        Play instant arcade games or host live interactive party games with friends.
+      </div>
     </div>
-    <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">New Lobby</a>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">
+        Host Game Lobby
+      </a>
+    </div>
   </div>
-  <div class="ew-info-banner">Share a lobby link with friends to play together.</div>
 
-  <!-- Arcade & 2D Games Section -->
-  <div style="margin-bottom: 1.5rem;">
+  <!-- Category Filter Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+    <button type="button" id="tab-all" class="ew-btn ew-btn--sm games-nav-tab" style="cursor: pointer;">
+      All Games
+    </button>
+    <button type="button" id="tab-party" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
+      Party &amp; Trivia (6)
+    </button>
+    <button type="button" id="tab-arcade" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
+      Arcade &amp; 1v1 (7)
+    </button>
+    <button type="button" id="tab-lobbies" class="ew-btn--outline ew-btn--sm games-nav-tab" style="cursor: pointer;">
+      Active Lobbies{% if lobbies %} ({{ lobbies|length }}){% endif %}
+    </button>
+  </div>
+
+  <!-- SECTION: Party & Social Games -->
+  <section id="section-party" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">
+          Party &amp; Social Game Rooms
+        </h3>
+        <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.15rem;">
+          Host custom interactive lobbies and share a direct link with friends to play or vote together.
+        </div>
+      </div>
+      <a href="{{ url_for('game.games_create') }}" style="font-size: 0.82rem; color: var(--link-color, #3b82f6); text-decoration: none; font-weight: 600;">
+        + Create Custom Room
+      </a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+      <!-- Trivia Challenge -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Trivia Challenge</h4>
+            <span class="ew-badge" style="background: rgba(59, 130, 246, 0.12); color: #2563eb; border-color: rgba(59, 130, 246, 0.3);">Multi-Round</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Host timed knowledge battles. Build multiple-choice questions, track live answers, and crown the winner.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=trivia" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host Trivia
+          </a>
+        </div>
+      </div>
+
+      <!-- Interactive Polls -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Interactive Polls</h4>
+            <span class="ew-badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; border-color: rgba(16, 185, 129, 0.3);">Live Voting</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Real-time group voting and surveys. Gather opinions instantly with clean percentage breakdowns and charts.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=poll" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host Poll
+          </a>
+        </div>
+      </div>
+
+      <!-- Would You Rather -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Would You Rather</h4>
+            <span class="ew-badge" style="background: rgba(245, 158, 11, 0.12); color: #d97706; border-color: rgba(245, 158, 11, 0.3);">Social Debate</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Present hilarious and provocative dilemmas. See who in your room agrees with your picks and ignite friendly debates.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=wyr" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host WYR
+          </a>
+        </div>
+      </div>
+
+      <!-- Two Truths and a Lie -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Two Truths &amp; a Lie</h4>
+            <span class="ew-badge" style="background: rgba(239, 68, 68, 0.12); color: #dc2626; border-color: rgba(239, 68, 68, 0.3);">Deception</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Submit three statements and challenge the lobby to spot the deception. A classic icebreaker for groups.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=ttal" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host TTAL
+          </a>
+        </div>
+      </div>
+
+      <!-- Story Chain -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Story Chain</h4>
+            <span class="ew-badge" style="background: rgba(139, 92, 246, 0.12); color: #7c3aed; border-color: rgba(139, 92, 246, 0.3);">Collaborative</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Start with an opening line and build an unpredictable tale as players take turns writing the next sentence.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=story" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host Story
+          </a>
+        </div>
+      </div>
+
+      <!-- Caption This -->
+      <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
+        <div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem;">
+            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark-color);">Caption This</h4>
+            <span class="ew-badge" style="background: rgba(236, 72, 153, 0.12); color: #db2777; border-color: rgba(236, 72, 153, 0.3);">Creativity</span>
+          </div>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+            Share a quirky scenario or prompt and vote on who submits the funniest, cleverest one-liner caption.
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <a href="{{ url_for('game.games_create') }}?type=caption" class="ew-btn ew-btn--sm" style="text-decoration: none;">
+            Host Caption
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: Arcade & 1v1 Games -->
+  <section id="section-arcade" style="margin-bottom: 2rem;">
+    <div style="margin-bottom: 0.75rem;">
+      <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">
+        Arcade &amp; 1v1 Games
+      </h3>
+      <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.15rem;">
+        Instant play solo games, pass-and-play, and live online 1v1 matchmaking over WebSockets.
+      </div>
+    </div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
       <!-- Floppy Bird -->
       <div class="ew-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 0.85rem; padding: 1.25rem;">
@@ -179,9 +336,137 @@
         </div>
       </div>
     </div>
-  </div>
-  <script nonce="{{ csp_nonce }}">
-    document.addEventListener('DOMContentLoaded', async () => {
+  </section>
+
+  <!-- SECTION: Active Game Lobbies -->
+  <section id="section-lobbies" style="margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+      <div>
+        <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text-dark-color);">
+          Your Active Lobbies
+        </h3>
+        <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.15rem;">
+          Manage open rooms, copy invite links, or view live results.
+        </div>
+      </div>
+    </div>
+
+    {% if lobbies %}
+      <div class="ew-card-grid">
+        {% for lobby in lobbies %}
+          <div class="ew-card" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; line-height:1.3; word-break:break-word;">{{ lobby.title }}</div>
+                <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0;">
+                  <span class="ew-badge">{{ lobby.game_type|capitalize }}</span>
+                  {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">Deactivated</span>{% endif %}
+                  {% if lobby.revealed %}<span class="ew-badge ew-badge--success">Revealed</span>{% endif %}
+                </div>
+              </div>
+              {% if lobby.question and lobby.question.label %}
+                <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.question.label }}</div>
+              {% elif lobby.prompt %}
+                <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.prompt }}</div>
+              {% endif %}
+              <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                <span>Host: <strong>{{ lobby.host_username }}</strong></span>
+                <span>&bull;</span>
+                <span>{{ lobby.created_at|localtime('%b %d, %Y, %I:%M %p') }}</span>
+              </div>
+              <div class="ew-share-row" style="margin-top:0.75rem;">
+                <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
+                {% set _url = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
+                <input type="text" value="{{ _url }}" readonly onclick="this.select()" class="ew-share-input">
+                <button type="button" onclick="navigator.clipboard.writeText('{{ _url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
+              </div>
+            </div>
+            <div class="ew-card-actions">
+              <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Open Lobby</a>
+              <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
+              {% if current_user.is_authenticated and (current_user.id|string == lobby.host_id|string or current_user.is_admin) %}
+                {% if not lobby.deactivated %}
+                <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
+                </form>
+                {% endif %}
+                <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="ew-card" style="text-align:center; padding:2.25rem 1.5rem;">
+        <h4 style="margin:0 0 0.35rem 0; color:var(--text-dark-color); font-size:1.05rem;">No active lobbies created yet</h4>
+        <p style="color:var(--text-secondary); font-size:0.88rem; margin:0 0 1rem 0;">
+          Create a room for Trivia, Polls, Would You Rather, or Story Chain and invite friends with a single link.
+        </p>
+        <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Host a Game Lobby</a>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  document.addEventListener('DOMContentLoaded', () => {
+    // Category Tabs Filter
+    const tabAll = document.getElementById('tab-all');
+    const tabParty = document.getElementById('tab-party');
+    const tabArcade = document.getElementById('tab-arcade');
+    const tabLobbies = document.getElementById('tab-lobbies');
+
+    const secParty = document.getElementById('section-party');
+    const secArcade = document.getElementById('section-arcade');
+    const secLobbies = document.getElementById('section-lobbies');
+
+    const tabs = [tabAll, tabParty, tabArcade, tabLobbies];
+
+    function setFilter(filter) {
+      tabs.forEach(tab => {
+        if (!tab) return;
+        tab.classList.remove('ew-btn');
+        tab.classList.add('ew-btn--outline');
+      });
+
+      if (filter === 'party') {
+        tabParty?.classList.remove('ew-btn--outline');
+        tabParty?.classList.add('ew-btn');
+        if (secParty) secParty.style.display = 'block';
+        if (secArcade) secArcade.style.display = 'none';
+        if (secLobbies) secLobbies.style.display = 'none';
+      } else if (filter === 'arcade') {
+        tabArcade?.classList.remove('ew-btn--outline');
+        tabArcade?.classList.add('ew-btn');
+        if (secParty) secParty.style.display = 'none';
+        if (secArcade) secArcade.style.display = 'block';
+        if (secLobbies) secLobbies.style.display = 'none';
+      } else if (filter === 'lobbies') {
+        tabLobbies?.classList.remove('ew-btn--outline');
+        tabLobbies?.classList.add('ew-btn');
+        if (secParty) secParty.style.display = 'none';
+        if (secArcade) secArcade.style.display = 'none';
+        if (secLobbies) secLobbies.style.display = 'block';
+      } else {
+        tabAll?.classList.remove('ew-btn--outline');
+        tabAll?.classList.add('ew-btn');
+        if (secParty) secParty.style.display = 'block';
+        if (secArcade) secArcade.style.display = 'block';
+        if (secLobbies) secLobbies.style.display = 'block';
+      }
+    }
+
+    tabAll?.addEventListener('click', () => setFilter('all'));
+    tabParty?.addEventListener('click', () => setFilter('party'));
+    tabArcade?.addEventListener('click', () => setFilter('arcade'));
+    tabLobbies?.addEventListener('click', () => setFilter('lobbies'));
+
+    // Weekly Champions Fetch
+    (async () => {
       try {
         const [fbRes, slimeRes, tttRes, c4Res, dnbRes, pongRes, snakeRes] = await Promise.all([
           fetch('/api/games/leaderboard?game=floppy_bird&category=campaign_stars&period=weekly&limit=1'),
@@ -265,63 +550,8 @@
           }
         }
       } catch (_) {}
-    });
-  </script>
-  {% if lobbies %}
-    <div class="ew-card-grid">
-      {% for lobby in lobbies %}
-        <div class="ew-card" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.75rem;">
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
-              <div style="font-weight:700; color:var(--text-dark-color); font-size:1.1rem; line-height:1.3; word-break:break-word;">{{ lobby.title }}</div>
-              <div style="display:flex; gap:0.35rem; align-items:center; flex-shrink:0;">
-                <span class="ew-badge">{{ lobby.game_type|capitalize }}</span>
-                {% if lobby.deactivated %}<span class="ew-badge ew-badge--danger">Deactivated</span>{% endif %}
-                {% if lobby.revealed %}<span class="ew-badge ew-badge--success">Revealed</span>{% endif %}
-              </div>
-            </div>
-            {% if lobby.question and lobby.question.label %}
-              <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.question.label }}</div>
-            {% elif lobby.prompt %}
-              <div style="font-size:0.9rem; color:var(--text-secondary); margin:0.4rem 0 0.2rem 0; line-height:1.4;">{{ lobby.prompt }}</div>
-            {% endif %}
-            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.45rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-              <span>Host: <strong>{{ lobby.host_username }}</strong></span>
-              <span>&bull;</span>
-              <span>{{ lobby.created_at|localtime('%b %d, %Y, %I:%M %p') }}</span>
-            </div>
-            <div class="ew-share-row" style="margin-top:0.75rem;">
-              <span style="font-size:0.75rem; font-weight:600; color:var(--text-secondary); padding:0.45rem 0.75rem; background:var(--surface-bg); border-right:1px solid var(--border-color); display:flex; align-items:center;">Link</span>
-              {% set _url = url_for('game.view_lobby', lobby_id=lobby.lobby_id, _external=True) %}
-              <input type="text" value="{{ _url }}" readonly onclick="this.select()" class="ew-share-input">
-              <button type="button" onclick="navigator.clipboard.writeText('{{ _url }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy', 1500)" class="ew-copy-btn">Copy</button>
-            </div>
-          </div>
-          <div class="ew-card-actions">
-            <a href="{{ url_for('game.view_lobby', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Open Lobby</a>
-            <a href="{{ url_for('game.lobby_results', lobby_id=lobby.lobby_id) }}" class="ew-btn ew-btn--outline ew-btn--sm" style="text-decoration:none;">Results</a>
-            {% if current_user.is_authenticated and (current_user.id|string == lobby.host_id|string or current_user.is_admin) %}
-              {% if not lobby.deactivated %}
-              <form method="POST" action="{{ url_for('game.deactivate_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Deactivate this lobby? Players will no longer be able to join.')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="ew-btn--outline ew-btn--sm" style="cursor:pointer;">Deactivate</button>
-              </form>
-              {% endif %}
-              <form method="POST" action="{{ url_for('game.delete_lobby', lobby_id=lobby.lobby_id) }}" style="display:inline; margin:0;" onsubmit="return confirm('Permanently delete this game lobby and all its votes? This cannot be undone.')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="ew-btn--danger ew-btn--sm" style="cursor:pointer;">Delete</button>
-              </form>
-            {% endif %}
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="ew-card" style="text-align:center; padding:2.5rem 1.5rem;">
-      <h4 style="margin:0 0 0.35rem 0; color:var(--text-dark-color);">No active lobbies</h4>
-      <p style="color:var(--text-secondary); font-size:0.88rem; margin:0 0 1rem 0;">Create a game lobby and invite friends to join.</p>
-      <a href="{{ url_for('game.games_create') }}" class="ew-btn ew-btn--sm" style="text-decoration:none;">Create Game</a>
-    </div>
-  {% endif %}
+    })();
+  });
+</script>
 </div>
 {% endblock %}

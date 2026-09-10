@@ -1512,14 +1512,14 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             'deactivated': False,
             'questions': [
                 {
-                    'label': 'Who led the Israelites out of Egypt?',
-                    'options': ['Moses', 'Aaron', 'Joshua', 'David'],
-                    'correct_option': 'Moses'
+                    'label': 'Which planet is known as the Red Planet?',
+                    'options': ['Mars', 'Venus', 'Jupiter', 'Saturn'],
+                    'correct_option': 'Mars'
                 },
                 {
-                    'label': 'How many days and nights did it rain during the Flood?',
-                    'options': ['40', '30', '50', '100'],
-                    'correct_option': '40'
+                    'label': 'What is the capital city of France?',
+                    'options': ['Paris', 'London', 'Berlin', 'Madrid'],
+                    'correct_option': 'Paris'
                 }
             ],
             'live_scores': {},
@@ -1548,7 +1548,7 @@ class TestLiveMultiplayerTriviaAndThumbnails:
 
             # Fast correct answer: 15s remaining out of 20s
             res_ans = auth_client.post(f'/g/{lobby_id}/live/answer', json={
-                'option': 'Moses',
+                'option': 'Mars',
                 'time_remaining': 15
             })
             assert res_ans.status_code == 200
@@ -1567,7 +1567,7 @@ class TestLiveMultiplayerTriviaAndThumbnails:
              patch.object(m.socketio, 'emit'):
 
             res_wrong = auth_client.post(f'/g/{lobby_id}/live/answer', json={
-                'option': 'Aaron',
+                'option': 'Venus',
                 'time_remaining': 10
             })
             assert res_wrong.status_code == 200
@@ -1579,8 +1579,8 @@ class TestLiveMultiplayerTriviaAndThumbnails:
 
         # Test host reveals answer
         mock_lobby['live_answers'] = {
-            'player_1': {'option': 'Moses', 'points': 875, 'correct': True},
-            'player_2': {'option': 'Aaron', 'points': 0, 'correct': False}
+            'player_1': {'option': 'Mars', 'points': 875, 'correct': True},
+            'player_2': {'option': 'Venus', 'points': 0, 'correct': False}
         }
         with patch.object(m.game_sessions_conf, 'find_one', return_value=mock_lobby), \
              patch.object(m.game_sessions_conf, 'update_one'), \
@@ -1592,9 +1592,9 @@ class TestLiveMultiplayerTriviaAndThumbnails:
             assert res_reveal.status_code == 200
             data_reveal = res_reveal.get_json()
             assert data_reveal['ok'] is True
-            assert data_reveal['correct_option'] == 'Moses'
-            assert data_reveal['counts']['Moses'] == 1
-            assert data_reveal['counts']['Aaron'] == 1
+            assert data_reveal['correct_option'] == 'Mars'
+            assert data_reveal['counts']['Mars'] == 1
+            assert data_reveal['counts']['Venus'] == 1
 
         # Test host transitions to leaderboard
         mock_lobby['live_scores'] = {

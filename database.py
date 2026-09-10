@@ -120,6 +120,8 @@ active_game_players = {}
 
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 active_chat_views = {}
+# sid -> {'user_id': user_id, 'partner_id': partner_id}
+sid_chat_views = {}
 
 # In-memory tracker for shared note viewers (share_id -> {user_id: {name, avatar, id}})
 active_note_viewers = {}

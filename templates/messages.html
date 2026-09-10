@@ -2457,6 +2457,9 @@
                 syncActiveChatHistory();
                 startChatSync();
             }
+            if (window.whisperState && window.whisperState.active && window.whisperState.partnerId) {
+                emitSocket('viewing_chat', { partner_id: window.whisperState.partnerId });
+            }
         }
 
         let _socketListenersAttached = false;
@@ -2477,6 +2480,7 @@
                     hideTypingIndicator();
                     appendMessage(data, 'received', false, data.id, data.is_read);
                     scrollToBottom();
+                    emitSocket('mark_messages_read', { partner_id: activeRecipientId });
                 } else if (data.sender_id === currentUserId && data.recipient_id === activeRecipientId) {
                     appendMessage(data, 'sent', false, data.id, data.is_read);
                     scrollToBottom();
@@ -5677,6 +5681,7 @@
         whisperState.durationMinutes = data.duration_minutes;
         whisperState.warningShown = false;
         whisperState.active = true;
+        emitWhisperSocket('viewing_chat', { partner_id: data.partner_id });
 
         document.getElementById('whisper-partner-name').textContent = data.partner_username;
         document.getElementById('whisper-messages').innerHTML = '';
@@ -6298,6 +6303,12 @@
     window.whisperSessionEnded = function(reason) {
         if (!whisperState.active) return;
         whisperState.active = false;
+        if (whisperState.partnerId) {
+            emitWhisperSocket('leave_chat', { partner_id: whisperState.partnerId });
+        }
+        if (typeof activeRecipientId !== 'undefined' && activeRecipientId) {
+            emitWhisperSocket('viewing_chat', { partner_id: activeRecipientId });
+        }
         if (whisperState.timerInterval) clearInterval(whisperState.timerInterval);
         document.getElementById('whisper-overlay').classList.remove('active');
         const extModal = document.getElementById('whisper-extend-modal');

@@ -257,7 +257,7 @@ class TestSocketHandlersPayloadResilience:
         with app.test_request_context():
             login_user(user_obj)
             target_handlers = [
-                'handle_viewing_chat', 'handle_leave_chat', 'handle_typing',
+                'handle_viewing_chat', 'handle_leave_chat', 'handle_mark_messages_read', 'handle_typing',
                 'handle_stop_typing', 'handle_recording_audio', 'handle_stop_recording',
                 'handle_join_note', 'handle_leave_note', 'handle_acquire_lock',
                 'handle_release_lock', 'handle_note_update', 'handle_discussion_new_comment',
@@ -930,6 +930,169 @@ class TestWhisperVideoSupport:
         assert "msg.message_type === 'video'" in content
         assert 'cancelWhisperImage' in content
         assert 'previewVid' in content
+
+
+class TestRealtimeDeliveryRegressionFixes:
+    """Tests verifying real-time delivery and read receipt fixes in DMs and Whisper."""
+
+    def _handlers(self):
+        import main as m
+        handlers = {}
+        for call in m.socketio.on.mock_calls:
+            if len(call.args) > 0 and callable(call.args[0]):
+                handlers[getattr(call.args[0], '__name__', '')] = call.args[0]
+        return handlers
+
+    def test_handle_mark_messages_read_success(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+
+        me = str(mock_user['_id'])
+        partner_id = str(ObjectId())
+
+        handlers = self._handlers()
+        assert 'handle_mark_messages_read' in handlers
+
+        with app.test_request_context():
+            login_user(User(mock_user))
+
+            with patch.object(m.direct_messages_conf, 'update_many') as mock_update, \
+                 patch.object(m.socketio, 'emit') as mock_emit:
+                handlers['handle_mark_messages_read']({'partner_id': partner_id})
+
+                mock_update.assert_called_once_with(
+                    {
+                        'sender_id': ObjectId(partner_id),
+                        'recipient_id': ObjectId(me),
+                        'is_read': False
+                    },
+                    {'$set': {'is_read': True}}
+                )
+                mock_emit.assert_called_once_with(
+                    'messages_read',
+                    {'reader_id': me, 'sender_id': partner_id},
+                    room=f"user_{partner_id}"
+                )
+
+    def test_multitab_chat_presence_isolation(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+
+        me = str(mock_user['_id'])
+        partner1 = str(ObjectId())
+
+        m.active_chat_views.clear()
+        m.sid_chat_views.clear()
+
+        handlers = self._handlers()
+
+        # Tab 1: views partner 1 with SID 'tab-1-sid'
+        with app.test_request_context() as ctx:
+            login_user(User(mock_user))
+            ctx.request.sid = 'tab-1-sid'
+            handlers['handle_viewing_chat']({'partner_id': partner1})
+            assert partner1 in m.active_chat_views[me]
+            assert m.sid_chat_views['tab-1-sid']['partner_id'] == partner1
+
+        # Tab 2 (e.g. Arcade game): connects with SID 'game-tab-sid', does not view chat
+        with app.test_request_context() as ctx:
+            login_user(User(mock_user))
+            ctx.request.sid = 'game-tab-sid'
+            # Disconnects game tab
+            handlers['handle_dm_disconnect']()
+            # Crucial fix: Tab 1 chat presence MUST NOT be wiped!
+            assert me in m.active_chat_views
+            assert partner1 in m.active_chat_views[me]
+
+        # Tab 3: opens partner 1 in second tab with SID 'tab-3-sid'
+        with app.test_request_context() as ctx:
+            login_user(User(mock_user))
+            ctx.request.sid = 'tab-3-sid'
+            handlers['handle_viewing_chat']({'partner_id': partner1})
+
+        # Disconnect Tab 1: Tab 3 is still viewing partner 1
+        with app.test_request_context() as ctx:
+            login_user(User(mock_user))
+            ctx.request.sid = 'tab-1-sid'
+            handlers['handle_dm_disconnect']()
+            assert partner1 in m.active_chat_views[me]
+
+        # Disconnect Tab 3: now no tabs are viewing partner 1
+        with app.test_request_context() as ctx:
+            login_user(User(mock_user))
+            ctx.request.sid = 'tab-3-sid'
+            handlers['handle_dm_disconnect']()
+            assert me not in m.active_chat_views or partner1 not in m.active_chat_views.get(me, set())
+
+    def test_whisper_presence_and_immediate_read_receipt(self, app, mock_user):
+        import main as m
+        from main import User
+        from flask_login import login_user
+
+        sender_id = mock_user['_id']
+        partner_id = ObjectId()
+        session_id = ObjectId()
+
+        m.active_chat_views.clear()
+        m.sid_chat_views.clear()
+
+        # Partner is actively viewing sender's chat (e.g. from startWhisperSession)
+        m.active_chat_views[str(partner_id)] = {str(sender_id)}
+
+        handlers = self._handlers()
+        assert 'handle_whisper_message' in handlers
+
+        session_doc = {
+            '_id': session_id,
+            'initiator_id': sender_id,
+            'recipient_id': partner_id,
+            'status': 'active',
+            'expires_at': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+        }
+
+        with app.test_request_context():
+            login_user(User(mock_user))
+            with patch.object(m, 'whisper_sessions_conf') as mock_sess, \
+                 patch.object(m, 'whisper_messages_conf') as mock_msgs, \
+                 patch.object(m, 'emit') as mock_emit, \
+                 patch.object(m, 'encrypt_dm', return_value='ENC_SECRET'):
+                mock_sess.find_one.return_value = session_doc
+                mock_msgs.insert_one.side_effect = lambda d: d.setdefault('_id', ObjectId())
+
+                handlers['handle_whisper_message']({
+                    'session_id': str(session_id),
+                    'content': 'Hello in secret'
+                })
+
+                # Check that message was inserted as is_read: True
+                assert mock_msgs.insert_one.called
+                inserted = mock_msgs.insert_one.call_args[0][0]
+                assert inserted['is_read'] is True
+
+                # Check that whisper_read_receipt was emitted immediately to sender
+                emitted_events = [call.args[0] for call in mock_emit.mock_calls if len(call.args) > 0]
+                assert 'whisper_read_receipt' in emitted_events
+
+    def test_messages_template_realtime_artifacts(self):
+        import os
+        template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'messages.html')
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # 1. new_dm sends mark_messages_read ack
+        assert "emitSocket('mark_messages_read', { partner_id: activeRecipientId });" in content
+
+        # 2. startWhisperSession emits viewing_chat
+        assert "emitWhisperSocket('viewing_chat', { partner_id: data.partner_id });" in content
+
+        # 3. whisperSessionEnded emits leave_chat
+        assert "emitWhisperSocket('leave_chat', { partner_id: whisperState.partnerId });" in content
+
+        # 4. onSocketConnect re-emits viewing_chat for active whisper
+        assert "window.whisperState.active" in content
+        assert "emitSocket('viewing_chat', { partner_id: window.whisperState.partnerId });" in content
 
 
 

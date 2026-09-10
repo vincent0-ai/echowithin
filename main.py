@@ -372,6 +372,11 @@ def cleanup_stale_global_state():
         if not partners:
             active_chat_views.pop(user_id, None)
 
+    for sid, view in list(sid_chat_views.items()):
+        uid = view.get('user_id')
+        if not uid or uid not in active_chat_views:
+            sid_chat_views.pop(sid, None)
+
     for share_id in list(active_note_viewers.keys()):
         if not active_note_viewers[share_id]:
             active_note_viewers.pop(share_id, None)
@@ -882,6 +887,9 @@ payment_grants_conf.create_index('user_id')
 # In-memory tracker for active chat views (user_id -> set of partner_ids they're viewing)
 # Used to suppress push notifications when recipient is already in the chat
 active_chat_views = {}
+# Map of socket sid to chat view metadata: sid -> {'user_id': str, 'partner_id': str}
+# Prevents multi-tab / game disconnects from evicting primary chat presence.
+sid_chat_views = {}
 
 # In-memory tracker for shared note viewers (share_id -> {user_id: {name, avatar, id}})
 # Used for real-time "Studying Now" presence avatars
@@ -3271,9 +3279,24 @@ def handle_viewing_chat(data=None, *args, **kwargs):
     partner_id = data.get('partner_id')
     if partner_id:
         user_id = str(current_user.id)
+        partner_id_str = str(partner_id)
+        sid = getattr(request, 'sid', None)
+        if sid:
+            old_view = sid_chat_views.get(sid)
+            if old_view and old_view.get('user_id') == user_id:
+                old_partner = old_view.get('partner_id')
+                if old_partner and old_partner != partner_id_str:
+                    other_viewing_old = any(
+                        s != sid and v.get('user_id') == user_id and v.get('partner_id') == old_partner
+                        for s, v in sid_chat_views.items()
+                    )
+                    if not other_viewing_old and user_id in active_chat_views:
+                        active_chat_views[user_id].discard(old_partner)
+            sid_chat_views[sid] = {'user_id': user_id, 'partner_id': partner_id_str}
+
         if user_id not in active_chat_views:
             active_chat_views[user_id] = set()
-        active_chat_views[user_id].add(partner_id)
+        active_chat_views[user_id].add(partner_id_str)
 
 @socketio.on('leave_chat')
 @authenticated_only
@@ -3284,16 +3307,70 @@ def handle_leave_chat(data=None, *args, **kwargs):
     partner_id = data.get('partner_id')
     if partner_id:
         user_id = str(current_user.id)
-        if user_id in active_chat_views:
-            active_chat_views[user_id].discard(partner_id)
+        partner_id_str = str(partner_id)
+        sid = getattr(request, 'sid', None)
+        if sid and sid in sid_chat_views:
+            if sid_chat_views[sid].get('user_id') == user_id and sid_chat_views[sid].get('partner_id') == partner_id_str:
+                sid_chat_views.pop(sid, None)
+
+        still_viewing = any(
+            v.get('user_id') == user_id and v.get('partner_id') == partner_id_str
+            for v in sid_chat_views.values()
+        )
+        if not still_viewing and user_id in active_chat_views:
+            active_chat_views[user_id].discard(partner_id_str)
+            if not active_chat_views[user_id]:
+                active_chat_views.pop(user_id, None)
+
+@socketio.on('mark_messages_read')
+@authenticated_only
+def handle_mark_messages_read(data=None, *args, **kwargs):
+    """Mark all unread direct messages from partner as read and notify partner in real time."""
+    if not data or not isinstance(data, dict):
+        return
+    partner_id = data.get('partner_id')
+    if not partner_id:
+        return
+    try:
+        reader_id_str = str(current_user.id)
+        partner_id_str = str(partner_id)
+        direct_messages_conf.update_many(
+            {
+                'sender_id': ObjectId(partner_id_str),
+                'recipient_id': ObjectId(reader_id_str),
+                'is_read': False
+            },
+            {'$set': {'is_read': True}}
+        )
+        socketio.emit(
+            'messages_read',
+            {'reader_id': reader_id_str, 'sender_id': partner_id_str},
+            room=f"user_{partner_id_str}"
+        )
+    except Exception as e:
+        app.logger.error(f"Error marking messages read: {e}")
 
 @socketio.on('disconnect')
 def handle_dm_disconnect(*args, **kwargs):
     """Clean up active chat and note presence on disconnect."""
-    user_id = str(current_user.id) if current_user.is_authenticated else request.sid
-    
+    user_id = str(current_user.id) if current_user.is_authenticated else getattr(request, 'sid', 'unknown')
+    sid = getattr(request, 'sid', None)
+
     if current_user.is_authenticated:
-        active_chat_views.pop(user_id, None)
+        if sid and sid in sid_chat_views:
+            closed_view = sid_chat_views.pop(sid, None)
+            if closed_view:
+                closed_partner = closed_view.get('partner_id')
+                still_viewing = any(
+                    v.get('user_id') == user_id and v.get('partner_id') == closed_partner
+                    for v in sid_chat_views.values()
+                )
+                if not still_viewing and user_id in active_chat_views:
+                    active_chat_views[user_id].discard(closed_partner)
+                    if not active_chat_views[user_id]:
+                        active_chat_views.pop(user_id, None)
+        elif not sid:
+            active_chat_views.pop(user_id, None)
     
     # Cleanup note presence
     for share_id, viewers in list(active_note_viewers.items()):
